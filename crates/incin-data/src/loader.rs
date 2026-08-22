@@ -21,45 +21,52 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 /// A recoverable data-pipeline failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// This is the crate's typed error: iteration, collation, and transform
+/// failures return it instead of an untyped stringly error, so callers can
+/// match on the failure category rather than parse text.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DataError {
     /// The dataset reported malformed or otherwise invalid data.
+    #[error("dataset error: {0}")]
     Dataset(String),
     /// A requested index was outside the dataset's declared range.
-    IndexOutOfBounds { index: usize, len: usize },
+    #[error("dataset index {index} is outside length {len}")]
+    IndexOutOfBounds {
+        /// The rejected index.
+        index: usize,
+        /// The dataset length it was checked against.
+        len: usize,
+    },
     /// A worker caught a panic while reading a sample.
+    #[error("worker {worker_id} panicked while {stage}")]
     WorkerPanicked {
+        /// The worker that observed the panic.
         worker_id: usize,
+        /// The pipeline stage the worker was running.
         stage: &'static str,
     },
     /// A worker caught a panic while collating a batch.
-    CollatePanicked { worker_id: usize },
+    #[error("worker {worker_id} panicked while collating")]
+    CollatePanicked {
+        /// The worker that observed the panic.
+        worker_id: usize,
+    },
     /// The samples could not be combined into a batch.
+    #[error("invalid batch: {0}")]
     InvalidBatch(String),
     /// A worker stopped unexpectedly before completing the epoch.
+    #[error("data-loader worker disconnected")]
     WorkerDisconnected,
     /// The configured worker receive timeout elapsed.
-    Timeout { duration: Duration },
-}
-
-impl core::fmt::Display for DataError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Dataset(message) => write!(f, "dataset error: {message}"),
-            Self::IndexOutOfBounds { index, len } => {
-                write!(f, "dataset index {index} is outside length {len}")
-            }
-            Self::WorkerPanicked { worker_id, stage } => {
-                write!(f, "worker {worker_id} panicked while {stage}")
-            }
-            Self::CollatePanicked { worker_id } => {
-                write!(f, "worker {worker_id} panicked while collating")
-            }
-            Self::InvalidBatch(message) => write!(f, "invalid batch: {message}"),
-            Self::WorkerDisconnected => f.write_str("data-loader worker disconnected"),
-            Self::Timeout { duration } => write!(f, "data-loader timed out after {duration:?}"),
-        }
-    }
+    #[error("data-loader timed out after {duration:?}")]
+    Timeout {
+        /// The timeout that elapsed.
+        duration: Duration,
+    },
+    /// A transform or caller-supplied input violated its declared contract.
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
 }
 
 /// A batch result returned by [`DataLoaderIter`].

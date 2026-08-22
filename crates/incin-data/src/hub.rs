@@ -1,5 +1,5 @@
 use hf_hub::api::sync::Api;
-use incin_core::error::Result;
+use incin_core::error::{Error, ErrorMessage, Result};
 use incin_core::nn::save::load_foreign_safetensors_snapshot;
 use incin_core::nn::state::StateSnapshot;
 use std::path::PathBuf;
@@ -23,7 +23,10 @@ impl HubApi {
             builder = builder.with_token(Some(token));
         }
 
-        let api = builder.build().map_err(anyhow::Error::from)?;
+        let api = builder.build().map_err(|error| Error::Io {
+            operation: "hub api",
+            message: ErrorMessage::new(error.to_string()),
+        })?;
         Ok(Self { inner: api })
     }
 
@@ -58,7 +61,10 @@ impl HubRepo {
     /// Downloads a specific file from the repository, returning its local path.
     /// If the file is already cached, it will return the cached path immediately.
     pub fn get(&self, filename: &str) -> Result<PathBuf> {
-        let path = self.inner.get(filename).map_err(anyhow::Error::from)?;
+        let path = self.inner.get(filename).map_err(|error| Error::Io {
+            operation: "hub download",
+            message: ErrorMessage::new(error.to_string()),
+        })?;
         Ok(path)
     }
 
