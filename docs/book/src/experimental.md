@@ -77,14 +77,17 @@ working entry point.
 ## ONNX
 
 Two macros, `model!` and `import_model!`, expand a `.onnx` graph into typed
-Rust at compile time. Support is **partial and fail-closed**: initializers,
-unknown rank, control flow, custom domains, and unsupported node types are all
-macro-expansion errors rather than silently-wrong generated code.
+Rust at compile time.
+
+Dense f32 initializers are embedded into typed `Param` module state with
+exact IEEE-754 bit fidelity. Support remains **fail-closed**: sparse
+initializers, unknown rank, non-f32 initializers, control flow, custom domains,
+and unsupported node types produce macro-expansion compile diagnostics rather
+than fabricating unverified values.
 
 There is also an ONNX *exporter* (`incin_core::onnx_exporter`). Both directions
-should be understood as tooling for a known, simple graph shape rather than
-general ONNX interoperability. If you have an arbitrary model from the wild,
-expect it to be rejected.
+should be understood as tooling for supported graph topologies rather than
+arbitrary model interoperability. Unsupported features fail closed at compile time.
 
 ## The preview `Trainer`
 
