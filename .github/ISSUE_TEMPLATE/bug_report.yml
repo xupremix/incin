@@ -1,0 +1,83 @@
+name: "🐛 Bug Report"
+description: File a report if something behaves incorrectly, crashes, or panics
+title: "[Bug]: "
+labels: ["bug", "type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report! Please provide a minimal reproduction if possible.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component / Subsystem
+      description: Which part of Incin is encountering the issue?
+      options:
+        - "incin (Facade / Pre-lude / Target API)"
+        - "incin-core (Tensor algebra, Autograd Tape, NN layers)"
+        - "incin-backends (CPU / AVX2 SIMD / BLAS)"
+        - "incin-backends (CUDA / GPU autotune)"
+        - "incin-backends (WGPU / WebGPU)"
+        - "incin-backends (Apple Silicon / Metal)"
+        - "incin-macros (ONNX / Safetensors / Codegen)"
+        - "incin-diagnostics / incin-lsp (Editor diagnostics & inlay hints)"
+        - "cargo-incin (CLI / Scaffolding / Telemetry)"
+        - "incin-data / incin-telemetry / incin-viz"
+      multiple: true
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: A clear and concise description of what happened.
+      placeholder: Expected tensor operation X to yield result Y, but got Z / panic instead...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal Reproducible Code
+      description: The smallest self-contained Rust program or test case that reproduces the issue.
+      placeholder: |
+        ```rust
+        use incin::prelude::*;
+
+        fn main() -> Result<(), Box<dyn std::error::Error>> {
+            let x: Tensor<s![2, 3], Cpu> = Cpu.zeros(())?;
+            // ...
+            Ok(())
+        }
+        ```
+      render: rust
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Compiler, Error, or Panic Output
+      description: Paste the exact compiler diagnostic, panic backtrace, or error message here.
+      placeholder: |
+        ```text
+        thread 'main' panicked at ...
+        stack backtrace:
+        ...
+        ```
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment & Toolchain
+      description: "Rust toolchain version (`rustc -V`), OS, CPU/GPU model, and Incin version/commit."
+      placeholder: "rustc 1.88.0, Ubuntu 24.04 x86_64, NVIDIA RTX 4090 (Driver 550.54), Incin 0.1.0"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation & Checklist
+      options:
+        - label: "I have searched existing issues and discussions to confirm this is not a duplicate."
+          required: true
+        - label: "I have tested or reproduced this with the latest `develop` or release version."
+          required: false

@@ -1,0 +1,46 @@
+name: "📐 RFC / Architectural Proposal"
+description: Propose an architectural RFC or change to core invariants (requires Sol architecture review)
+title: "[RFC]: "
+labels: ["rfc", "area:architecture", "type:rfc"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        RFCs propose substantive architectural changes, modifications to frozen foundations, or major public API designs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A brief, one-paragraph explanation of the proposed design.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why are we doing this? What use cases does it enable?
+    validations:
+      required: true
+  - type: textarea
+    id: invariants-impact
+    attributes:
+      label: Invariant & Soundness Impact
+      description: Does this proposal touch Shape, DType, Device, Autograd Tape, or Unsafe soundness contracts?
+      placeholder: "This change introduces new descriptor trait X and ensures no_std compatibility..."
+    validations:
+      required: true
+  - type: textarea
+    id: detailed-design
+    attributes:
+      label: Detailed Design
+      description: Explain the design in sufficient detail to be implemented.
+      placeholder: "Types, traits, public signatures, and execution flow."
+    validations:
+      required: true
+  - type: textarea
+    id: drawbacks-alternatives
+    attributes:
+      label: Drawbacks & Alternatives
+      description: Why should we *not* do this? What alternatives were explored?
+    validations:
+      required: true

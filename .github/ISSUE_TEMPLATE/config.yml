@@ -1,8 +1,14 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Contributing guide
+  - name: The Incin Book
+    url: https://xupremix.github.io/incin/
+    about: Read the official documentation, tutorials, and architecture guides.
+  - name: GitHub Discussions
+    url: https://github.com/xupremix/incin/discussions
+    about: Ask questions, share models, and discuss architecture ideas.
+  - name: Contributing Guide
     url: https://github.com/xupremix/incin/blob/master/CONTRIBUTING.md
-    about: Setup, PR checklist, and where to start.
-  - name: House style / CONVENTIONS.md
+    about: Development setup, PR checklist, and contribution guidelines.
+  - name: Architecture & Conventions
     url: https://github.com/xupremix/incin/blob/master/docs/CONVENTIONS.md
-    about: File organization, doc-comment shape, and book-alignment rules new code should follow.
+    about: File organization, doc-comment shape, and invariants new code must follow.

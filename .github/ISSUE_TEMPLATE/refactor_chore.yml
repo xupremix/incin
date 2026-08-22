@@ -1,0 +1,28 @@
+name: "🧹 Refactor / Codebase Maintenance"
+description: Propose file splits, dead code removal, dependency updates, or internal cleanup
+title: "[Chore]: "
+labels: ["chore", "refactor"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Maintenance Goal
+      description: What file or subsystem needs cleanup or refactoring?
+      placeholder: "Split file X to adhere to the 1,000-line budget in CONVENTIONS.md..."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed Scope & Changes
+      description: List files and functions affected.
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Invariant Checks
+      options:
+        - label: "Preserves existing public API visibility without breaking changes."
+        - label: "Conforms to CONVENTIONS.md (line budgets, single-purpose modules)."
+        - label: "Maintains zero new unshielded unsafe blocks."

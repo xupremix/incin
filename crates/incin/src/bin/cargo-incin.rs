@@ -19,6 +19,15 @@ mod templates {
     pub const MNIST_README: &str = include_str!("templates/mnist/README.md.template");
 }
 
+/// Embedded Incin AI Agent Skills for model developers and framework contributors.
+mod embedded_skills {
+    pub const INCIN_EXPERT: &str = include_str!("../../../../.agents/skills/incin-expert/SKILL.md");
+    pub const INCIN_ENGINEERING: &str =
+        include_str!("../../../../.agents/skills/incin-engineering/SKILL.md");
+    pub const INCIN_REPOSITORY: &str =
+        include_str!("../../../../.agents/skills/incin-repository/SKILL.md");
+}
+
 /// Absolute path to this crate's own manifest directory (`crates/incin`),
 /// baked in at `cargo-incin`'s own compile time. Scaffolded projects use
 /// this to path-depend on the exact incin checkout that built the
@@ -196,6 +205,9 @@ fn print_help() {
     println!("    translate  Translate raw text containing typenum expressions from stdin or arg");
     println!("    new <template> [path]");
     println!("               Scaffold a ready-to-run training project (templates: mnist)");
+    println!(
+        "    skills     Manage and install Incin agent skills for AI assistants (list/install)"
+    );
     println!(
         "    watch      Launch the incin-viz live telemetry TUI ([--run-id ID] or [--run-dir PATH])"
     );
@@ -406,6 +418,137 @@ fn main() -> io::Result<()> {
             target.display()
         );
         println!("    cd {} && cargo run", target.display());
+        return Ok(());
+    }
+
+    if subcommand == "skills" {
+        let action = cargo_args.first().map(|s| s.as_str()).unwrap_or("list");
+        match action {
+            "list" => {
+                println!("Available Incin AI Agent Skills:");
+                println!(
+                    "  • incin-expert        Expert guide for model developers writing neural networks and training loops."
+                );
+                println!(
+                    "  • incin-engineering   Core framework engineering, custom backend implementation, and invariant contracts."
+                );
+                println!(
+                    "  • incin-repository    Repository navigation, verification gates, docs, and test runners."
+                );
+                println!();
+                println!("Usage:");
+                println!(
+                    "  cargo incin skills install [--tool <cursor|antigravity|claude|windsurf|all>] [--dir <path>]"
+                );
+            }
+            "install" => {
+                let mut tool = "all";
+                let mut custom_dir: Option<std::path::PathBuf> = None;
+                let mut iter = cargo_args.iter().skip(1);
+                while let Some(arg) = iter.next() {
+                    if arg == "--tool" || arg == "-t" {
+                        if let Some(t) = iter.next() {
+                            tool = t.as_str();
+                        }
+                    } else if arg == "--dir" || arg == "-d" {
+                        if let Some(d) = iter.next() {
+                            custom_dir = Some(std::path::PathBuf::from(d));
+                        }
+                    }
+                }
+
+                let skills = [
+                    ("incin-expert", embedded_skills::INCIN_EXPERT),
+                    ("incin-engineering", embedded_skills::INCIN_ENGINEERING),
+                    ("incin-repository", embedded_skills::INCIN_REPOSITORY),
+                ];
+
+                let install_skill =
+                    |name: &str, content: &str, dir: &std::path::Path| -> io::Result<()> {
+                        let target_dir = dir.join(name);
+                        std::fs::create_dir_all(&target_dir)?;
+                        let target_file = target_dir.join("SKILL.md");
+                        std::fs::write(&target_file, content)?;
+                        println!("  ✓ Installed skill {} -> {}", name, target_file.display());
+                        Ok(())
+                    };
+
+                let install_cursor_rule =
+                    |name: &str, content: &str, dir: &std::path::Path| -> io::Result<()> {
+                        std::fs::create_dir_all(dir)?;
+                        let target_file = dir.join(format!("{}.mdc", name));
+                        std::fs::write(&target_file, content)?;
+                        println!(
+                            "  ✓ Installed Cursor rule {} -> {}",
+                            name,
+                            target_file.display()
+                        );
+                        Ok(())
+                    };
+
+                if let Some(dir) = custom_dir {
+                    println!("Installing Incin agent skills to {}...", dir.display());
+                    for (name, content) in &skills {
+                        install_skill(name, content, &dir)?;
+                    }
+                } else {
+                    match tool {
+                        "antigravity" | "agy" | "gemini" => {
+                            println!(
+                                "Installing Incin agent skills for Antigravity / Gemini (.agents/skills/)..."
+                            );
+                            let dir = std::path::Path::new(".agents/skills");
+                            for (name, content) in &skills {
+                                install_skill(name, content, dir)?;
+                            }
+                        }
+                        "cursor" => {
+                            println!(
+                                "Installing Incin agent skills for Cursor (.cursor/rules/)..."
+                            );
+                            let dir = std::path::Path::new(".cursor/rules");
+                            for (name, content) in &skills {
+                                install_cursor_rule(name, content, dir)?;
+                            }
+                        }
+                        "claude" => {
+                            println!(
+                                "Installing Incin agent skills for Claude Code (.claude/skills/)..."
+                            );
+                            let dir = std::path::Path::new(".claude/skills");
+                            for (name, content) in &skills {
+                                install_skill(name, content, dir)?;
+                            }
+                        }
+                        "windsurf" => {
+                            println!(
+                                "Installing Incin agent skills for Windsurf (.windsurf/rules/)..."
+                            );
+                            let dir = std::path::Path::new(".windsurf/rules");
+                            for (name, content) in &skills {
+                                install_cursor_rule(name, content, dir)?;
+                            }
+                        }
+                        "all" | _ => {
+                            println!(
+                                "Installing Incin agent skills for all environments (.agents/skills/ and .cursor/rules/)..."
+                            );
+                            let agy_dir = std::path::Path::new(".agents/skills");
+                            let cursor_dir = std::path::Path::new(".cursor/rules");
+                            for (name, content) in &skills {
+                                install_skill(name, content, agy_dir)?;
+                                install_cursor_rule(name, content, cursor_dir)?;
+                            }
+                        }
+                    }
+                }
+                println!("\nSuccessfully installed Incin Agent Skills!");
+            }
+            other => {
+                eprintln!("Error: unknown skills command `{other}` (expected `list` or `install`)");
+                std::process::exit(1);
+            }
+        }
         return Ok(());
     }
 

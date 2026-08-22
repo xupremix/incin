@@ -1,0 +1,41 @@
+name: "⚡ Backend / Hardware Accelerator Request"
+description: Propose or track support for a new hardware target (Vulkan, ROCm, NPU, TPU, FPGA)
+title: "[Backend]: "
+labels: ["backend", "area:backends", "type:proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Incin uses a descriptor-driven, capability-checked backend architecture. Propose new hardware support below.
+  - type: input
+    id: hardware-target
+    attributes:
+      label: Hardware / Accelerator Architecture
+      placeholder: "e.g. AMD ROCm / HIP, Vulkan / SPIR-V, Google TPU, Qualcomm NPU"
+    validations:
+      required: true
+  - type: textarea
+    id: runtime-dependencies
+    attributes:
+      label: Runtime & Driver Dependencies
+      description: What system libraries, C/C++ runtimes, or driver APIs are needed?
+      placeholder: "Requires libhip64.so (ROCm 6.0+) or Vulkan 1.3 SDK..."
+    validations:
+      required: true
+  - type: checkboxes
+    id: operation-coverage
+    attributes:
+      label: Intended Initial Operator Coverage
+      options:
+        - label: "Basic Tensor Allocation & Transfers (Host-to-Device / Device-to-Host)"
+        - label: "Dense GEMM / MatMul"
+        - label: "Elementwise Unary / Binary Operations"
+        - label: "Reductions & Softmax"
+        - label: "2D Convolutions & Pooling"
+        - label: "Compiled Graph / Kernel Fusion"
+  - type: textarea
+    id: memory-model
+    attributes:
+      label: Memory & Buffer Management Model
+      description: How will buffer allocation, strides, zero-copy views, and async stream synchronization be handled?
+      placeholder: "Unified virtual memory / dedicated device memory allocations with non-blocking stream synchronization..."

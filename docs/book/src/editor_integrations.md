@@ -131,3 +131,32 @@ that configuration as `incin-rustrover-external-tool-<version>.tar.gz`.
 Native RustRover LSP support is not verified or shipped. Follow the
 [RustRover integration README](https://github.com/xupremix/incin/tree/master/editors/rustrover)
 for the supported setup.
+
+## AI Agent Skills
+
+Incin packages specialized skills for LLM-powered coding assistants (Google Antigravity, Cursor, Claude Code, Windsurf) to write shape-safe models and idiomatic Rust:
+
+* **`incin-expert`**: For model developers building neural networks, training loops, target-first allocations, and tensor algebra.
+* **`incin-engineering`**: For core developers working on backends, SIMD kernels, and type-system invariants.
+* **`incin-repository`**: For contributors managing docs, verification gates, and CI runners.
+
+### Installing Skills
+
+With `cargo-incin`:
+
+```sh
+# Install skills into your current workspace
+cargo incin skills install
+
+# Or install specifically for your assistant tool
+cargo incin skills install --tool cursor       # Cursor (.cursor/rules/)
+cargo incin skills install --tool antigravity  # Antigravity / Gemini (.agents/skills/)
+cargo incin skills install --tool claude       # Claude Code (.claude/skills/)
+cargo incin skills install --tool windsurf     # Windsurf (.windsurf/rules/)
+```
+
+Or install via the standalone shell script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xupremix/incin/master/tools/install-skills.sh | bash
+```
