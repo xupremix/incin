@@ -608,6 +608,12 @@ body.sidebar-hidden .sidebar {
 
 .chapter {
   min-height: 400px;
+  outline: none;
+}
+
+.chapter:focus,
+.chapter:focus-visible {
+  outline: none;
 }
 
 .chapter h1 {
