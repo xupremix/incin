@@ -1,4 +1,4 @@
-name: "🔍 Shape Diagnostic / Inlay Hint Issue"
+name: "Diagnostic & Inlay Hint Report"
 description: Report an unreadable typenum compiler error or an issue with incin-lsp / editor hints
 title: "[Diag]: "
 labels: ["diagnostics", "area:lsp", "area:diagnostics"]
@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Incin translates raw typenum error expressions (`UInt<UInt<...>>`) into human-readable shape diagnostics.
+        Incin translates raw typenum compiler AST expressions (`UInt<UInt<...>>`) into humanized decimal shape diagnostics.
   - type: dropdown
     id: tool
     attributes:

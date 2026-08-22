@@ -42,9 +42,10 @@ changed.
 
 ## Code of Conduct
 
-Be respectful, keep technical disagreement about the work, and do not harass
-or demean other contributors. Maintainers may remove disruptive contributions
-or participation to keep the project safe and productive.
+Participation in the Incin project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md)
+(Contributor Covenant v2.1). Be respectful, keep technical disagreement about
+the work, and do not harass or demean other contributors. Incidents may be
+reported to **xupremix.me@gmail.com**.
 
 ## Releases
 

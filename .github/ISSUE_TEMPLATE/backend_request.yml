@@ -1,12 +1,12 @@
-name: "⚡ Backend / Hardware Accelerator Request"
-description: Propose or track support for a new hardware target (Vulkan, ROCm, NPU, TPU, FPGA)
+name: "Backend Accelerator Request"
+description: Propose or track support for a new hardware accelerator (Vulkan, ROCm, NPU, TPU, FPGA)
 title: "[Backend]: "
 labels: ["backend", "area:backends", "type:proposal"]
 body:
   - type: markdown
     attributes:
       value: |
-        Incin uses a descriptor-driven, capability-checked backend architecture. Propose new hardware support below.
+        Incin uses a descriptor-driven, capability-checked backend architecture. Specify the target architecture and execution model below.
   - type: input
     id: hardware-target
     attributes:

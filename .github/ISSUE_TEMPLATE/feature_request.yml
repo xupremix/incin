@@ -1,12 +1,12 @@
-name: "✨ Feature Request"
-description: Propose a new operation, layer, target API capability, or tool improvement
+name: "Feature Request"
+description: Propose a new tensor operation, neural network layer, optimizer, or backend feature
 title: "[Feature]: "
 labels: ["enhancement", "type:feature"]
 body:
   - type: markdown
     attributes:
       value: |
-        We welcome feature proposals and API ideas! Please describe the use case and how it fits Incin's compile-time shape safety principles.
+        Describe the feature proposal, target API design, and how it aligns with Incin's compile-time shape safety model.
   - type: dropdown
     id: category
     attributes:

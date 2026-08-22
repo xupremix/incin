@@ -1,4 +1,4 @@
-name: "🏎️ Performance Regression / Optimization"
+name: "Performance & Profiling Report"
 description: Report a slow kernel, unexpected memory allocation, or optimization opportunity
 title: "[Perf]: "
 labels: ["performance", "area:perf"]
@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Incin has strict allocation budgets and performance contracts. Please include benchmark data or profiles.
+        Incin enforces strict zero-allocation budgets and kernel throughput floors. Please include benchmark data or profiling traces.
   - type: dropdown
     id: subsystem
     attributes:

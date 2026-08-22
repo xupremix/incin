@@ -1,12 +1,12 @@
-name: "🐛 Bug Report"
-description: File a report if something behaves incorrectly, crashes, or panics
+name: "Bug Report"
+description: Report an incorrect behavior, kernel crash, unhandled panic, or numerical inaccuracy
 title: "[Bug]: "
 labels: ["bug", "type:bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for filing a bug report! Please provide a minimal reproduction if possible.
+        Please provide a clear description and a minimal, self-contained reproduction for the issue.
   - type: dropdown
     id: component
     attributes:

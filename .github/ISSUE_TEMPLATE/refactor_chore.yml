@@ -1,4 +1,4 @@
-name: "🧹 Refactor / Codebase Maintenance"
+name: "Refactor / Maintenance Chore"
 description: Propose file splits, dead code removal, dependency updates, or internal cleanup
 title: "[Chore]: "
 labels: ["chore", "refactor"]

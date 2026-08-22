@@ -1,5 +1,5 @@
-name: "📚 Documentation / Book Improvement"
-description: Propose an improvement or fix a typo/broken link in the Incin Book or Rustdocs
+name: "Documentation Improvement"
+description: Propose an improvement or fix a typo/broken link in the Incin Book, Rustdocs, or Guides
 title: "[Docs]: "
 labels: ["documentation", "area:docs"]
 body:

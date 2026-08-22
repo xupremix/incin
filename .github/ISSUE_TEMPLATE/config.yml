@@ -9,6 +9,6 @@ contact_links:
   - name: Contributing Guide
     url: https://github.com/xupremix/incin/blob/master/CONTRIBUTING.md
     about: Development setup, PR checklist, and contribution guidelines.
-  - name: Architecture & Conventions
-    url: https://github.com/xupremix/incin/blob/master/docs/CONVENTIONS.md
-    about: File organization, doc-comment shape, and invariants new code must follow.
+  - name: Code of Conduct
+    url: https://github.com/xupremix/incin/blob/master/CODE_OF_CONDUCT.md
+    about: Standards, pledge, and enforcement responsibilities (Contributor Covenant v2.1).

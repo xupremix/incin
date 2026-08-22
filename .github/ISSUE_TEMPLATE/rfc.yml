@@ -1,5 +1,5 @@
-name: "📐 RFC / Architectural Proposal"
-description: Propose an architectural RFC or change to core invariants (requires Sol architecture review)
+name: "RFC / Architectural Proposal"
+description: Propose a substantive architectural RFC or change to core invariants (requires Sol review)
 title: "[RFC]: "
 labels: ["rfc", "area:architecture", "type:rfc"]
 body:
