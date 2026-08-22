@@ -3,8 +3,26 @@ name: Incin CI
 on:
   push:
     branches: [ "main", "master", "develop" ]
+    paths-ignore:
+      - "docs/wiki/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "*.md"
+      - "LICENSE*"
   pull_request:
     branches: [ "main", "master", "develop" ]
+    paths-ignore:
+      - "docs/wiki/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "*.md"
+      - "LICENSE*"
+  schedule:
+    # Nightly 02:00 UTC for deep soundness (Miri, Sanitizers, Powersets)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -147,6 +165,7 @@ jobs:
   # backend and facade powersets are not a CI contract.
   powerset:
     name: Feature Powerset
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -214,6 +233,7 @@ jobs:
   # file that runs them at all.
   soundness:
     name: Miri and Sanitizers
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
