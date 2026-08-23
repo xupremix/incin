@@ -2,7 +2,7 @@
 
 # incin
 
-### Shape errors are compile errors. Your tensor library should have your back at 3 AM, not crash on you then.
+### A Rust deep learning framework with compile-time checks for tensor shapes and dtypes.
 
 [![Incin CI](https://img.shields.io/badge/Incin_CI-passing-brightgreen?logo=github)](https://github.com/xupremix/incin/actions)
 [![crates.io](https://img.shields.io/crates/v/incin.svg?color=orange)](https://crates.io/crates/incin)
@@ -19,8 +19,8 @@ system. A `matmul` between incompatible matrices is a compile error. Training a
 frozen parameter is a compile error. Feeding `f32` where the kernel demands
 `u32` indices? Compile error.
 
-You find all of this out in `cargo check`, seconds after typing, instead of on
-epoch 40 of a Saturday-morning training run.
+You find all of this out in `cargo check`, seconds after typing, instead of in
+a runtime failure days into a training run.
 
 ## The demo
 
@@ -295,6 +295,12 @@ Neovim screenshot for good measure:
 - **docs/GUIDE.md** - how the shape-proof system works internally.
 - Found something? [Open an issue](https://github.com/xupremix/incin/issues/new/choose).
   The templates make it fast.
+
+<div align="center">
+
+<em>Because a shape mismatch belongs in <code>cargo check</code>, not on epoch 40, at 3 AM, on a Saturday.</em>
+
+</div>
 
 <div align="center">
 
