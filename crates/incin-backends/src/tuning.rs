@@ -124,8 +124,11 @@ impl TuningKey {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// One candidate launch configuration measured during tuning.
 pub struct LaunchCandidate {
+    /// Threads per block for this candidate.
     pub block_size: u16,
+    /// Input access pattern for this candidate.
     pub access: KernelAccess,
 }
 

@@ -66,4 +66,5 @@ impl WgpuVar {
     }
 }
 
+/// Alias binding the WGPU tape's gradient map into the backend surface.
 pub type WgpuGrads = crate::wgpu::tape::WgpuGrads;

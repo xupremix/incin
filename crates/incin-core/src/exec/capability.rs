@@ -11,11 +11,14 @@ use crate::tensor::dtype::DTypeDescriptor;
 /// The identity of one operation in the unified execution universe.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum OperationIdentity {
+    /// Query a built-in catalog operation.
     Builtin(OperationKind),
+    /// Query a custom-registered operation key.
     Custom(OperationKey),
 }
 
 impl OperationIdentity {
+    /// Execution site this key runs at, when known.
     pub fn execution_site(&self) -> Option<super::catalog::ExecutionSite> {
         match self {
             Self::Builtin(operation) => {
@@ -48,19 +51,28 @@ impl OperationIdentity {
 /// A complete runtime support question for one physical execution path.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CapabilityQuery {
+    /// Operation identity the row describes.
     pub operation: OperationIdentity,
+    /// Dtype the rule applies to.
     pub dtype: DTypeDescriptor,
+    /// Layout class the rule accepts.
     pub layout: LayoutClass,
+    /// Rank the rule accepts.
     pub rank: usize,
+    /// Whether training-mode execution is covered.
     pub training: bool,
+    /// Math mode the rule was registered under.
     pub math_mode: MathMode,
 }
 
 /// How an advertised operation is implemented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ImplementationKind {
+    /// Executed by the backend's own kernel.
     Native,
+    /// Executed by composing other supported operations.
     Composed,
+    /// Unsupported natively; only a fallback composition exists.
     Fallback,
 }
 
@@ -80,34 +92,56 @@ impl ImplementationKind {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnsupportedReason {
+    /// Query a built-in operation's support.
     Operation {
+        /// Operation this query targets.
         operation: OperationKind,
     },
+    /// Query a custom operation's support.
     CustomOperation {
+        /// Custom operation this query targets.
         operation: OperationKey,
     },
+    /// Ask whether an operation supports one dtype.
     DType {
+        /// Operation this query targets.
         operation: OperationKind,
+        /// Dtype the query asks about.
         dtype: DTypeDescriptor,
     },
+    /// Ask whether an operation supports one layout class.
     Layout {
+        /// Operation this query targets.
         operation: OperationKind,
+        /// Layout class the query asks about.
         layout: LayoutClass,
     },
+    /// Ask whether an operation supports one rank.
     Rank {
+        /// Operation this query targets.
         operation: OperationKind,
+        /// Rank the query asks about.
         rank: usize,
+        /// Inclusive minimum accepted value.
         min: usize,
+        /// Inclusive maximum accepted value.
         max: usize,
     },
+    /// Ask whether an operation supports training execution.
     Training {
+        /// Operation this query targets.
         operation: OperationKind,
     },
+    /// Ask about math-mode support.
     MathMode {
+        /// Operation this query targets.
         operation: OperationKind,
+        /// Math mode asked about.
         math_mode: MathMode,
     },
+    /// The backend lacks a compile-time feature this path needs.
     MissingDeviceFeature {
+        /// Compile-time feature name that is absent.
         feature: &'static str,
     },
 }
@@ -165,19 +199,25 @@ impl fmt::Display for UnsupportedReason {
 /// Result of a capability query.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SupportLevel {
+    /// Executed by the backend's own kernel.
     Native,
+    /// Executed by composing other supported operations.
     Composed,
+    /// Unsupported natively; only a fallback composition exists.
     Fallback,
+    /// Unsupported; the reason states why.
     Unsupported(UnsupportedReason),
 }
 
 impl SupportLevel {
     #[must_use]
+    /// True when native or composed support exists.
     pub fn is_supported(&self) -> bool {
         matches!(self, Self::Native | Self::Composed | Self::Fallback)
     }
 
     #[must_use]
+    /// True when support does not depend on other devices.
     pub fn is_device_local(&self) -> bool {
         matches!(self, Self::Native | Self::Composed)
     }
@@ -201,25 +241,39 @@ pub enum RankSupport {
     /// Supports ranks up to `max`.
     UpTo(usize),
     /// Supports ranks within `[min, max]`.
-    Range { min: usize, max: usize },
+    Range {
+        /// Inclusive minimum accepted value.
+        min: usize,
+        /// Inclusive maximum accepted value.
+        max: usize,
+    },
 }
 
 /// One immutable capability registration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CapabilityRule {
+    /// Operation these rules describe.
     pub operation: OperationKind,
+    /// Dtypes accepted for this operation.
     pub dtypes: &'static [DTypeDescriptor],
+    /// Layout classes accepted for this operation.
     pub layouts: &'static [LayoutClass],
+    /// Inclusive minimum supported rank.
     pub min_rank: usize,
+    /// Inclusive maximum supported rank.
     pub max_rank: usize,
+    /// Whether training-mode execution is covered.
     pub training: bool,
+    /// Math modes accepted for this operation.
     pub math_modes: &'static [MathMode],
+    /// How the backend realizes the operation.
     pub implementation: ImplementationKind,
 }
 
 impl CapabilityRule {
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    /// Creates a rule from every acceptance field.
     pub const fn new(
         operation: OperationKind,
         dtypes: &'static [DTypeDescriptor],
@@ -266,11 +320,13 @@ pub struct CapabilityRegistry {
 
 impl CapabilityRegistry {
     #[must_use]
+    /// Builds a registry from its static rule table.
     pub const fn new(rules: &'static [CapabilityRule]) -> Self {
         Self { rules }
     }
 
     #[must_use]
+    /// Borrows the static rule table backing this registry.
     pub const fn registrations(self) -> &'static [CapabilityRule] {
         self.rules
     }
@@ -284,6 +340,7 @@ impl CapabilityRegistry {
 
 /// Runtime capability inspection implemented by registries and later contexts.
 pub trait Capabilities {
+    /// Answer a capability query against this registry's rules.
     fn support(&self, query: &CapabilityQuery) -> SupportLevel;
 }
 

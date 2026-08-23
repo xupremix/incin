@@ -91,6 +91,7 @@ impl CpuGrads {
         self.grads.insert(id, value);
     }
 
+    /// Borrows a recorded output's storage by tape node id.
     pub fn get(&self, id: TensorId) -> Option<&CpuStorage> {
         self.grads.get(id)
     }

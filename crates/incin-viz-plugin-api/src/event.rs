@@ -51,32 +51,47 @@ pub struct PanelKeyEvent {
 pub enum PanelMouseEvent {
     /// Mouse button press at (x, y).
     Down {
+        /// Column of the press, in terminal cells.
         x: u16,
+        /// Row of the press, in terminal cells.
         y: u16,
+        /// Modifier keys held during the press.
         modifiers: KeyModifiers,
     },
     /// Mouse button release at (x, y).
     Up {
+        /// Column of the release, in terminal cells.
         x: u16,
+        /// Row of the release, in terminal cells.
         y: u16,
+        /// Modifier keys held during the release.
         modifiers: KeyModifiers,
     },
     /// Mouse drag movement at (x, y).
     Drag {
+        /// Column of the drag position, in terminal cells.
         x: u16,
+        /// Row of the drag position, in terminal cells.
         y: u16,
+        /// Modifier keys held while dragging.
         modifiers: KeyModifiers,
     },
     /// Mouse scroll down event.
     ScrollDown {
+        /// Column of the pointer, in terminal cells.
         x: u16,
+        /// Row of the pointer, in terminal cells.
         y: u16,
+        /// Modifier keys held while scrolling.
         modifiers: KeyModifiers,
     },
     /// Mouse scroll up event.
     ScrollUp {
+        /// Column of the pointer, in terminal cells.
         x: u16,
+        /// Row of the pointer, in terminal cells.
         y: u16,
+        /// Modifier keys held while scrolling.
         modifiers: KeyModifiers,
     },
 }

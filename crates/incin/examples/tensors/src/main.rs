@@ -1,3 +1,4 @@
+//! Tour of tensor construction, shapes, dtypes, and device moves.
 #![allow(clippy::type_complexity)]
 
 extern crate alloc;

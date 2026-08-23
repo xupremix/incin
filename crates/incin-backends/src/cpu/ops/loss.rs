@@ -132,6 +132,7 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
 }
 
 impl<D: Device> crate::cpu::CpuBackendImpl<D> {
+    /// Mean squared error over `prediction` versus `target` under `reduction`.
     pub fn mse_loss<K: DType>(
         pred: &CpuStorage,
         target: &CpuStorage,
@@ -141,6 +142,7 @@ impl<D: Device> crate::cpu::CpuBackendImpl<D> {
         mse_loss_storage(pred, target, reduction)
     }
 
+    /// Mean absolute error over `prediction` versus `target` under `reduction`.
     pub fn l1_loss<K: DType>(
         pred: &CpuStorage,
         target: &CpuStorage,
@@ -150,6 +152,7 @@ impl<D: Device> crate::cpu::CpuBackendImpl<D> {
         l1_loss_storage(pred, target, reduction)
     }
 
+    /// Binary cross-entropy with logits fused for numerical stability.
     pub fn bce_with_logits_loss<K: DType>(
         pred: &CpuStorage,
         target: &CpuStorage,
@@ -159,6 +162,7 @@ impl<D: Device> crate::cpu::CpuBackendImpl<D> {
         bce_with_logits_loss_storage(pred, target, reduction)
     }
 
+    /// Cross entropy over class scores and integer targets.
     pub fn cross_entropy_loss<K: DType, KInt: DType>(
         pred: &CpuStorage,
         target: &CpuStorage,

@@ -23,6 +23,7 @@ use super::rules::{
 use incin_core::exec::{CapabilityRule, ImplementationKind, LayoutClass};
 use incin_core::shapes::error::OperationKind;
 
+/// CPU capability rules, generated from the CPU descriptor operation list.
 pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = FLOAT_DTYPES,
@@ -128,6 +129,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     ]
 );
 
+/// CUDA capability rules, generated from the CUDA descriptor operation list.
 pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = FLOAT_DTYPES,
@@ -358,6 +360,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     ]
 );
 
+/// WGPU capability rules, generated from the WGPU descriptor operation list.
 pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = F32_ONLY,
@@ -449,6 +452,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     ]
 );
 
+/// Metal capability rules, generated from the Metal descriptor operation list.
 pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = F32_ONLY,

@@ -12,22 +12,31 @@ use alloc::vec::Vec;
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
 )]
+/// Identifier of one symbolic dimension variable.
 pub struct SymbolId(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// Registration record for a symbol.
 pub struct SymbolInfo {
+    /// Symbol identifier.
     pub id: SymbolId,
+    /// Optional human-readable name.
     pub name: Option<String>,
+    /// Producer identity string, when known.
     pub identity: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Table of symbols and their constraints.
 pub struct SymbolTable {
+    /// Registered symbols in insertion order.
     pub symbols: Vec<SymbolInfo>,
+    /// Constraints binding symbols.
     pub constraints: Vec<Constraint>,
 }
 
 impl SymbolTable {
+    /// Registers a symbol with optional naming.
     pub fn register(&mut self, id: SymbolId, name: Option<String>, identity: Option<String>) {
         if let Some(existing) = self.symbols.iter_mut().find(|symbol| symbol.id == id) {
             if existing.name.is_none() {
@@ -42,17 +51,20 @@ impl SymbolTable {
     }
 
     #[must_use]
+    /// Snapshot of bound symbol values.
     pub fn environment(&self) -> SymbolEnvironment {
         SymbolEnvironment::default()
     }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Environment binding symbols to concrete extents.
 pub struct SymbolEnvironment {
     bindings: BTreeMap<SymbolId, usize>,
 }
 
 impl SymbolEnvironment {
+    /// Binds one symbol, validating against constraints.
     pub fn bind(&mut self, id: SymbolId, value: usize) -> Result<(), String> {
         if let Some(previous) = self.bindings.insert(id, value)
             && previous != value
@@ -67,10 +79,12 @@ impl SymbolEnvironment {
         Ok(())
     }
 
+    /// Bound value of one symbol, when present.
     pub fn get(&self, id: SymbolId) -> Option<usize> {
         self.bindings.get(&id).copied()
     }
 
+    /// Checks one expression against the actual extent.
     pub fn validate_expr(&self, expr: &DimExpr, actual: usize) -> Result<(), String> {
         let value = expr
             .evaluate_env(self)
@@ -88,10 +102,12 @@ impl SymbolEnvironment {
     }
 
     #[must_use]
+    /// Whether the symbol has a binding.
     pub fn is_bound(&self, id: SymbolId) -> bool {
         self.bindings.contains_key(&id)
     }
 
+    /// Checks every constraint in order.
     pub fn validate_constraints(&self, constraints: &[Constraint]) -> Result<(), String> {
         for (index, constraint) in constraints.iter().enumerate() {
             let result = match constraint {
@@ -136,41 +152,65 @@ impl SymbolEnvironment {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// One dimension extent: constant, symbol, alias, or arithmetic combination.
 pub enum DimExpr {
+    /// A fixed extent known at capture time.
     Const(usize),
     /// A frontend-local symbol token. It must be allocated by graph capture
     /// before this expression is used as compiled metadata.
     Fresh(u32),
+    /// Fresh axis minted by a producer during capture.
     NamedFresh {
+        /// Capture-time id of the producing operation.
         source: u32,
+        /// Human-readable name for diagnostics.
         name: String,
+        /// Canonical identity binding this axis to its producer.
         identity: String,
     },
+    /// A named dimension variable resolved at run time.
     Symbol(SymbolId),
+    /// Reference to a registered named symbol.
     NamedSymbol {
+        /// Symbol identifier.
         id: SymbolId,
+        /// Human-readable name for diagnostics.
         name: String,
+        /// Canonical identity binding this axis to its producer.
         identity: String,
     },
     /// A derived dimension that retains the semantic identity of its axis.
     NamedExpr {
+        /// The aliased dimension expression.
         expr: Box<DimExpr>,
+        /// Symbol identifier.
         id: SymbolId,
+        /// Human-readable name for diagnostics.
         name: String,
+        /// Canonical identity binding this axis to its producer.
         identity: String,
     },
+    /// Sum of two dimension expressions.
     Add(Box<DimExpr>, Box<DimExpr>),
+    /// Difference of two dimension expressions.
     Sub(Box<DimExpr>, Box<DimExpr>),
+    /// Product of two dimension expressions.
     Mul(Box<DimExpr>, Box<DimExpr>),
+    /// Division that must divide exactly to be legal.
     ExactDiv(Box<DimExpr>, Box<DimExpr>),
+    /// Right-aligned broadcast combination of two extents.
     Broadcast(Box<DimExpr>, Box<DimExpr>),
+    /// Minimum of two extents.
     Min(Box<DimExpr>, Box<DimExpr>),
+    /// Maximum of two extents.
     Max(Box<DimExpr>, Box<DimExpr>),
+    /// Extent could not be determined symbolically.
     Unknown,
 }
 
 impl DimExpr {
     #[must_use]
+    /// Algebraic simplification to a canonical form.
     pub fn simplify(self) -> Self {
         match self {
             Self::NamedExpr {
@@ -236,6 +276,7 @@ impl DimExpr {
         }
     }
 
+    /// Evaluates to a concrete extent given bindings.
     pub fn evaluate(&self, symbols: &[(SymbolId, usize)]) -> Option<usize> {
         match self {
             Self::Const(value) => Some(*value),
@@ -325,41 +366,82 @@ impl DimExpr {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// Symbolic rank: static or fully dynamic.
 pub enum RankExpr {
+    /// Extent fixed at capture time.
     Static(usize),
+    /// Extent resolved only when data arrives.
     Dynamic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// Predicates binding symbolic extents at validation time.
 pub enum Constraint {
-    Equal { lhs: DimExpr, rhs: DimExpr },
-    LowerBound { value: DimExpr, bound: usize },
-    UpperBound { value: DimExpr, bound: usize },
-    Divisible { value: DimExpr, divisor: usize },
-    BroadcastCompatible { lhs: DimExpr, rhs: DimExpr },
+    /// Two expressions must evaluate equal.
+    Equal {
+        /// Left-hand expression.
+        lhs: DimExpr,
+        /// Right-hand expression.
+        rhs: DimExpr,
+    },
+    /// Expression must be at least the bound.
+    LowerBound {
+        /// Expression being constrained.
+        value: DimExpr,
+        /// Bound it must respect.
+        bound: usize,
+    },
+    /// Expression must not exceed the bound.
+    UpperBound {
+        /// Expression being constrained.
+        value: DimExpr,
+        /// Bound it must respect.
+        bound: usize,
+    },
+    /// Expression must divide exactly.
+    Divisible {
+        /// Expression being constrained.
+        value: DimExpr,
+        /// Divisor that must divide exactly.
+        divisor: usize,
+    },
+    /// Pair must combine under broadcasting.
+    BroadcastCompatible {
+        /// Left-hand expression.
+        lhs: DimExpr,
+        /// Right-hand expression.
+        rhs: DimExpr,
+    },
 }
 
 impl Constraint {
     #[must_use]
+    /// Builds an equality constraint.
     pub fn equal(lhs: DimExpr, rhs: DimExpr) -> Self {
         Self::Equal { lhs, rhs }
     }
 
     #[must_use]
+    /// Builds a broadcast-compatibility constraint.
     pub fn broadcast(lhs: DimExpr, rhs: DimExpr) -> Self {
         Self::BroadcastCompatible { lhs, rhs }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// Symbolic shape: rank, dims, and constraints.
 pub struct ShapeExpr {
+    /// Rank expression.
     pub rank: RankExpr,
+    /// One expression per axis.
     pub dims: Vec<DimExpr>,
+    /// Constraints binding symbols.
     pub constraints: Vec<Constraint>,
 }
 
 impl ShapeExpr {
     #[must_use]
+    /// Builds a fully concrete shape expression.
     pub fn concrete(dims: &[usize]) -> Self {
         Self {
             rank: RankExpr::Static(dims.len()),
@@ -369,6 +451,7 @@ impl ShapeExpr {
     }
 
     #[must_use]
+    /// Builds a shape whose tail dims become fresh symbols.
     pub fn symbolic(dims: &[usize], base: u32) -> Self {
         Self {
             rank: RankExpr::Static(dims.len()),
@@ -380,17 +463,20 @@ impl ShapeExpr {
     }
 
     #[must_use]
+    /// Attaches constraints.
     pub fn with_constraints(mut self, constraints: Vec<Constraint>) -> Self {
         self.constraints = constraints;
         self
     }
 
+    /// Validates actual runtime dimensions against this shape.
     pub fn validate(&self, actual: &[usize]) -> Result<(), String> {
         let mut environment = SymbolEnvironment::default();
         self.bind_and_validate(actual, &mut environment)?;
         environment.validate_constraints(&self.constraints)
     }
 
+    /// Binds symbols from actuals and validates in one step.
     pub fn bind_and_validate(
         &self,
         actual: &[usize],

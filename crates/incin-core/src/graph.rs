@@ -17,9 +17,13 @@ pub type NodeId = usize;
 /// eager tracing; compiler-facing symbolic metadata is attached by capture.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Value {
+    /// Value identifier within the graph.
     pub id: ValueId,
+    /// Concrete extents when statically known.
     pub shape: Vec<usize>,
+    /// Symbolic shape supporting dynamic dims.
     pub shape_expr: ShapeExpr,
+    /// Element dtype of the value.
     pub dtype: DTypeDescriptor,
     /// Logical placement when known at capture time.
     #[serde(default)]
@@ -27,6 +31,7 @@ pub struct Value {
     /// Layout fact when the capture backend can establish one.
     #[serde(default)]
     pub layout: Option<LayoutClass>,
+    /// Human-readable name, when supplied.
     pub name: Option<String>,
 }
 
@@ -34,11 +39,17 @@ pub struct Value {
 /// operation catalog. Custom operations use their namespaced OperationKey.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Node {
+    /// Node identifier.
     pub id: NodeId,
+    /// Operation identity executing here.
     pub operation: OperationIdentity,
+    /// Where the node executes, when resolved.
     pub execution_site: Option<ExecutionSite>,
+    /// Identifiers of consumed values.
     pub inputs: Vec<ValueId>,
+    /// Identifiers of produced values.
     pub outputs: Vec<ValueId>,
+    /// Named operation attributes.
     pub attributes: BTreeMap<String, AttributeValue>,
     /// Versioned bytes of the canonical typed descriptor, when capture runs
     /// with the standard serialization support enabled.
@@ -46,8 +57,11 @@ pub struct Node {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+/// Encoded canonical descriptor carried by a captured node.
 pub struct DescriptorPayload {
+    /// Schema version of the payload.
     pub schema: u32,
+    /// Encoded bytes.
     pub payload: Vec<u8>,
 }
 
@@ -55,21 +69,32 @@ pub struct DescriptorPayload {
 /// of semantic validation; this is its stable graph serialization form.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AttributeValue {
+    /// 64-bit signed integer attribute.
     Int(i64),
+    /// Single-precision float attribute.
     Float(f32),
+    /// UTF-8 string attribute.
     String(String),
+    /// List of signed integers.
     Ints(Vec<i64>),
+    /// List of single-precision floats.
     Floats(Vec<f32>),
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+/// Directed acyclic computation graph.
 pub struct Graph {
     #[serde(with = "string_key_map")]
+    /// All values by id.
     pub values: BTreeMap<ValueId, Value>,
+    /// Topologically ordered nodes.
     pub nodes: Vec<Node>,
+    /// Identifiers of consumed values.
     pub inputs: Vec<ValueId>,
+    /// Identifiers of produced values.
     pub outputs: Vec<ValueId>,
     #[serde(with = "string_key_map")]
+    /// Initializer payloads keyed by value id.
     pub initializers: BTreeMap<ValueId, Vec<u8>>,
     next_value_id: usize,
     next_node_id: usize,
@@ -117,10 +142,12 @@ mod string_key_map {
 }
 
 impl Graph {
+    /// Creates an empty graph.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds a value with shape/dtype validation.
     pub fn add_value<D: Into<DTypeDescriptor>>(
         &mut self,
         shape: Vec<usize>,
@@ -162,6 +189,7 @@ impl Graph {
         Ok(())
     }
 
+    /// Adds a node validating references exist.
     pub fn add_node(
         &mut self,
         operation: OperationKind,
@@ -177,6 +205,7 @@ impl Graph {
         )
     }
 
+    /// Adds a node with an explicit identity override.
     pub fn add_node_with_identity(
         &mut self,
         operation: OperationIdentity,
@@ -199,6 +228,7 @@ impl Graph {
         id
     }
 
+    /// Adds a node carrying an encoded descriptor payload.
     pub fn add_node_with_descriptor_payload(
         &mut self,
         operation: OperationIdentity,
@@ -222,6 +252,7 @@ impl Graph {
         id
     }
 
+    /// Marks a value as a graph input.
     pub fn mark_input(&mut self, value_id: ValueId) {
         if !self.inputs.contains(&value_id) {
             self.inputs.push(value_id);
@@ -252,6 +283,7 @@ impl Graph {
         }
     }
 
+    /// Marks a value as a graph output.
     pub fn mark_output(&mut self, value_id: ValueId) {
         if !self.outputs.contains(&value_id) {
             self.outputs.push(value_id);

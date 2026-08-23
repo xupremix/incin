@@ -10,7 +10,9 @@ use crate::tensor::dtype::{bf16, f16};
 /// Role of precision choice being queried (compute or accumulator).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PrecisionRole {
+    /// Element-wise computation precision.
     Compute,
+    /// Reduction/matmul accumulation precision.
     Accumulator,
 }
 
@@ -368,12 +370,19 @@ impl RuntimePrecisionPolicy {
 /// Precision request passed during operation resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PrecisionRequest {
+    /// Operation the decision was made for.
     pub operation: OperationKind,
+    /// Storage dtype of the inputs.
     pub storage: DTypeDescriptor,
+    /// Dtype produced.
     pub output: DTypeDescriptor,
+    /// Layout class observed.
     pub layout: LayoutClass,
+    /// Rank observed.
     pub rank: usize,
+    /// Training flag observed.
     pub training: bool,
+    /// Math mode observed.
     pub math_mode: MathMode,
 }
 
@@ -418,10 +427,15 @@ impl core::default::Default for PrecisionRequest {
 /// Concrete resolved data types for storage, compute, accumulation, and output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ResolvedPrecision {
+    /// Storage dtype of the inputs.
     pub storage: DTypeDescriptor,
+    /// Dtype kernels compute in.
     pub compute: DTypeDescriptor,
+    /// Dtype reductions accumulate in.
     pub accumulator: DTypeDescriptor,
+    /// Dtype produced.
     pub output: DTypeDescriptor,
+    /// Loss-scaling configuration applied around losses.
     pub loss_scaling: LossScaling,
 }
 

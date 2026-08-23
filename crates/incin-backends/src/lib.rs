@@ -1,3 +1,7 @@
+//! Incin's execution backends: the built-in CPU backend plus feature-gated
+//! CUDA, WGPU, Metal, and external Candle implementations behind one
+//! dispatch surface, with the capability registries and codegen helpers
+//! backend authors share.
 #![cfg_attr(not(feature = "std"), no_std)]
 #[macro_use]
 extern crate alloc;
@@ -92,7 +96,9 @@ pub(crate) mod kernel;
 ))]
 pub mod tuning;
 
+/// Backend parameterized by a target execution engine.
 pub type EngineBackend<E, D> = crate::target::EngineBackend<E, D>;
+/// Backend bound directly to one native device kind.
 pub type NativeBackend<D> = crate::target::NativeBackend<D>;
 
 /// Unified backend selected by device.
@@ -104,6 +110,7 @@ pub type IncinBackend<D = incin_core::tensor::device::Cpu> = NativeBackend<D>;
 pub mod nn_target;
 pub mod target;
 
+/// Single import surface for backend authors.
 pub mod prelude {
     #[cfg(any(feature = "cpu", feature = "wgpu", feature = "cuda"))]
     pub use super::IncinBackend;

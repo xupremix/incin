@@ -13,9 +13,13 @@ use core::marker::PhantomData;
 
 /// Shape traits for RMSNorm.
 pub trait RMSNormShape: Shape + DynShape {
+    /// Channel extent this layer normalizes over.
     type Channels: Dim;
+    /// Argument accepted when building the parameter tensor.
     type BuildArg: crate::tensor::arg_into::NotUnit + Clone;
+    /// Parameter weight shape derived from the channels.
     type ParamShape: Shape<Arg = Self::BuildArg> + DynShape;
+    /// Composes the parameter build argument from the channel argument.
     fn build_args(target: <Self::Channels as Dim>::Arg) -> Self::BuildArg;
 }
 
@@ -52,8 +56,10 @@ pub struct RMSNorm<
     K: DType = f32,
     Train: TrainState = Trainable,
 > {
+    /// Learned scale applied after normalization.
     pub weight: Param<S::ParamShape, B, K, Train>,
     #[module(ignore)]
+    /// Epsilon added inside the square root.
     pub eps: f32,
     #[module(ignore)]
     _phantom: PhantomData<(S, B, K, Train)>,
@@ -93,9 +99,13 @@ impl<S: RMSNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Trai
 /// A builder for constructing an [`RMSNorm`] layer with a target.
 #[derive(Debug, Clone)]
 pub struct RMSNormBuilder<S: RMSNormShape, Train: TrainState = Trainable> {
+    /// Channel extent the layer normalizes over.
     pub shape: ShapeValue<S>,
+    /// Epsilon added inside the square root.
     pub eps: f32,
+    /// Initialization scheme for the scale parameter.
     pub weight_init: crate::nn::init::Init,
+    /// Train-state marker.
     pub _train: PhantomData<Train>,
 }
 
@@ -135,6 +145,7 @@ impl<
     K: DType,
 > RMSNorm<S, B, K, Trainable>
 {
+    /// Builds the layer from channel arguments.
     pub fn build<A>(args: A) -> Result<Self>
     where
         B: SupportsDType<K>,

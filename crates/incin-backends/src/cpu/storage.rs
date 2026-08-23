@@ -263,6 +263,7 @@ impl CpuStorage {
         })
     }
 
+    /// Builds storage from a contiguous buffer, validating shape against element count.
     pub fn try_from_contiguous(data: CpuBuffer, shape: impl AsRef<[usize]>) -> Result<Self> {
         let shape = shape.as_ref();
         let strides = stride::checked_contiguous_strides(shape)?;
@@ -274,6 +275,7 @@ impl CpuStorage {
             .expect("backend-created contiguous CPU storage must match its allocation")
     }
 
+    /// Borrows this storage's validated tensor metadata.
     pub fn metadata(&self) -> &TensorMeta {
         &self.meta
     }

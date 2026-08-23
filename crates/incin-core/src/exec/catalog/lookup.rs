@@ -1,5 +1,6 @@
 use super::*;
 
+/// Looks up the full catalog entry for one operation.
 pub fn catalog_entry(operation: OperationKind) -> Option<&'static OperationCatalogEntry> {
     OPERATION_CATALOG
         .iter()

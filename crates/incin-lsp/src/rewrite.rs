@@ -23,6 +23,7 @@ pub struct PendingRequests {
 }
 
 impl PendingRequests {
+    /// Creates an empty request tracker.
     pub fn new() -> Self {
         Self::default()
     }

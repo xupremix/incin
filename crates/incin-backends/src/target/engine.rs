@@ -93,6 +93,7 @@ impl EngineSpec for Candle {
 /// Runtime engine selection tag.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum RuntimeEngine {
+    /// Executes through the vendor-native kernel path.
     Native,
     #[cfg(feature = "external-candle")]
     Candle,
@@ -104,6 +105,7 @@ impl EngineSpec for Dyn {
 
 /// Maps an execution engine `E` and a physical device `D` to a backend family.
 pub trait EngineOn<D: Device>: EngineSpec {
+    /// The concrete backend this engine drives.
     type Backend: Backend<Device = D> + VariableBackend;
 }
 

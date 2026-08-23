@@ -7,41 +7,67 @@ use incin_core::tensor::dtype::DTypeId;
 /// Unary pointwise mathematical operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
+    /// Absolute value.
     Abs,
+    /// Natural exponential.
     Exp,
+    /// Natural logarithm.
     Log,
+    /// Sine.
     Sin,
+    /// Cosine.
     Cos,
+    /// Square root.
     Sqrt,
+    /// Reciprocal square root.
     Rsqrt,
+    /// Arithmetic negation.
     Neg,
+    /// Rectified linear unit.
     Relu,
+    /// Gaussian error linear unit.
     Gelu,
+    /// Sigmoid linear unit (Swish).
     Silu,
+    /// Logistic sigmoid.
     Sigmoid,
+    /// Hyperbolic tangent.
     Tanh,
+    /// Floor.
     Floor,
+    /// Ceiling.
     Ceil,
+    /// Multiplicative reciprocal.
     Reciprocal,
+    /// Square (`x * x`).
     Square,
 }
 
 /// Binary pointwise mathematical operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
+    /// Addition.
     Add,
+    /// Subtraction.
     Sub,
+    /// Multiplication.
     Mul,
+    /// Division.
     Div,
+    /// Exponentiation (`lhs ^ rhs`).
     Pow,
+    /// Element-wise maximum.
     Maximum,
+    /// Element-wise minimum.
     Minimum,
 }
 
 /// Ternary pointwise mathematical operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TernaryOp {
+    /// Clamps a value into an inclusive low/high range.
     Clamp,
+    /// Fused multiply-add (`a * b + c`) when the target supports it.
     Fma,
 }
 
@@ -296,10 +322,12 @@ pub fn render_cuda(spec: &PointwiseOpSpec) -> String {
     spec.render_cuda()
 }
 
+/// Renders one pointwise op as WGSL source for the WGPU backend.
 pub fn render_wgsl(spec: &PointwiseOpSpec) -> String {
     spec.render_wgsl()
 }
 
+/// Renders one pointwise op as MSL source for the Metal backend.
 pub fn render_msl(spec: &PointwiseOpSpec) -> String {
     spec.render_msl()
 }

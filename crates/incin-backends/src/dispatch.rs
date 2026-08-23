@@ -105,9 +105,11 @@ impl incin_core::backend_authoring::StorageOutput for DispatchStorage {}
 #[derive(Clone)]
 #[non_exhaustive]
 pub enum DispatchVar {
+    /// CPU variable payload.
     #[cfg(feature = "cpu")]
     Cpu(crate::cpu::CpuVar),
     #[cfg(feature = "wgpu")]
+    /// WGPU variable payload.
     Wgpu(crate::wgpu::backend::WgpuVar),
     #[cfg(feature = "cuda")]
     Cuda(crate::cuda::backend::CudaVar),
@@ -122,9 +124,11 @@ impl incin_core::backend_authoring::ExecuteOutput for DispatchVar {}
 /// Gradient collection owned by a runtime-selected backend.
 #[non_exhaustive]
 pub enum DispatchGrads {
+    /// CPU gradient map payload.
     #[cfg(feature = "cpu")]
     Cpu(crate::cpu::CpuGrads),
     #[cfg(feature = "wgpu")]
+    /// WGPU gradient map payload.
     Wgpu(crate::wgpu::backend::WgpuGrads),
     #[cfg(feature = "cuda")]
     Cuda(crate::cuda::backend::CudaGrads),

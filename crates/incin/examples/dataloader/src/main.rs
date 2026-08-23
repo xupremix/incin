@@ -1,3 +1,4 @@
+//! Demonstrates DataLoader iteration, collation, and worker pools.
 extern crate alloc;
 
 use incin::prelude::*;

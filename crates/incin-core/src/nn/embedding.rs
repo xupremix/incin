@@ -114,8 +114,11 @@ impl<S: EmbeddingShape, B: crate::tensor::backend::VariableBackend, K: DType, Tr
 /// A builder for constructing an [`Embedding`] layer with a target.
 #[derive(Debug, Clone)]
 pub struct EmbeddingBuilder<S: EmbeddingShape, Train: TrainState = Trainable> {
+    /// (vocab, embed) table shape.
     pub shape: ShapeValue<S>,
+    /// Initialization scheme for the table.
     pub weight_init: crate::nn::init::Init,
+    /// Train-state marker.
     pub _train: PhantomData<Train>,
 }
 
@@ -155,6 +158,7 @@ impl<
 where
     B: SupportsDType<K>,
 {
+    /// Builds the embedding from vocab/embed arguments.
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(

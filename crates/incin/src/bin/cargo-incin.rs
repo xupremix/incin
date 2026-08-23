@@ -1,3 +1,8 @@
+//! The `cargo incin` CLI: a cargo subcommand that wraps ordinary cargo
+//! invocations with real-time typenum-error translation, and provides the
+//! model inspection (`inspect`), environment diagnosis (`doctor`), and
+//! plan/tune tooling documented in the Book. See `--help` for the
+//! subcommand surface.
 use incin_diagnostics::{
     humanize_diagnostic, parse_broadcast_mismatch, parse_concat_mismatch, parse_conv1d_mismatch,
     parse_conv2d_mismatch, parse_flatten_mismatch, parse_matmul_mismatch,

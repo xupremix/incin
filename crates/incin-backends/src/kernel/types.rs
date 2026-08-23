@@ -1,10 +1,15 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Family of kernels sharing launch structure.
 pub enum KernelFamily {
+    /// One input, element-wise compute.
     PointwiseUnary,
+    /// Two inputs combined element-wise.
     PointwiseBinary,
+    /// Collapses axes into aggregates.
     Reduction,
+    /// Normalizes over a feature set.
     Normalization,
 }
 
@@ -20,10 +25,21 @@ impl KernelFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// How a kernel accesses its inputs.
 pub enum KernelAccess {
-    Scalar { unroll_width: u8 },
-    Packed { vector_width: u8 },
+    /// Scalar access with an unroll width.
+    Scalar {
+        /// How many scalar iterations to unroll.
+        unroll_width: u8,
+    },
+    /// Packed vector access with a vector width.
+    Packed {
+        /// SIMD lanes per packed load.
+        vector_width: u8,
+    },
+    /// Warp-level reduction pattern.
     WarpReduction,
+    /// Welford-style online variance pattern.
     Welford,
 }
 
@@ -107,24 +123,34 @@ impl KernelIndexWidth {
 use crate::tuning::signature::{AlignmentClass, RankClass, ShapeBucket};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Stable cache key identifying one compiled kernel variant.
 pub struct KernelKey {
     schema_version: u8,
+    /// Kernel family of this variant.
     pub family: KernelFamily,
+    /// Operation name the kernel implements.
     pub operation: String,
     storage: KernelDType,
     compute: KernelDType,
     pub(super) accumulator: KernelDType,
     output: KernelDType,
+    /// Layout class the kernel was specialized for.
     pub layout: LayoutClass,
+    /// Input access pattern of this variant.
     pub access: KernelAccess,
     pub(crate) index_width: KernelIndexWidth,
+    /// Math mode this variant was compiled under.
     pub math_mode: MathMode,
+    /// Rank class the shape was bucketed into.
     pub rank_class: RankClass,
+    /// Shape bucket used for tile selection.
     pub shape_bucket: ShapeBucket,
+    /// Alignment class of the operands.
     pub alignment: AlignmentClass,
 }
 
 impl KernelKey {
+    /// Builds a CUDA kernel key from launch parameters.
     pub fn cuda(
         _policy_family: OperationKind,
         family: KernelFamily,
@@ -147,6 +173,7 @@ impl KernelKey {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Builds a CUDA kernel key including an explicit signature.
     pub fn cuda_with_signature(
         _policy_family: OperationKind,
         family: KernelFamily,
@@ -204,6 +231,7 @@ impl KernelKey {
         })
     }
 
+    /// Canonical string id used by the persistent tuning cache.
     pub fn cache_id(&self) -> String {
         format!(
             "k{}/cuda/{}/{}/s={}/c={}/a={}/o={}/layout={}/access={}/index={}/math={}/rank={}/bucket={}/align={}",

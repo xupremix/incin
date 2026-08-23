@@ -318,6 +318,7 @@ impl<In: Shape, Target: SliceSpec> SliceTarget<In> for Target {
 pub struct Here;
 
 impl Here {
+    /// Resolves this selector against a concrete rank.
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[0]).normalize(rank)
     }
@@ -328,8 +329,10 @@ impl Here {
 pub struct Next<I>(pub core::marker::PhantomData<I>);
 
 impl<I> Next<I> {
+    /// Default next-position selector.
     pub const DEFAULT: Self = Next(core::marker::PhantomData);
 
+    /// Resolves this selector against a concrete rank.
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>>
     where
         Self: StaticCursor,
@@ -343,12 +346,15 @@ impl<I> Next<I> {
 pub struct FromEnd<I>(pub core::marker::PhantomData<I>);
 
 impl<I> FromEnd<I> {
+    /// Default from-end selector instance.
     pub const DEFAULT: Self = FromEnd(core::marker::PhantomData);
 }
 
 impl<I: StaticCursor> FromEnd<I> {
+    /// Next-from-end signed index.
     pub const INDEX: isize = -(1 + I::INDEX);
 
+    /// Resolves this selector against a concrete rank.
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[Self::INDEX]).normalize(rank)
     }
@@ -358,6 +364,7 @@ impl<I: StaticCursor> FromEnd<I> {
 pub trait StaticCursor:
     'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
+    /// Signed index this cursor contributes.
     const INDEX: isize;
 }
 
@@ -366,6 +373,7 @@ pub trait StaticCursor:
 pub trait AxisCursor:
     'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
+    /// Signed index this cursor contributes.
     const INDEX: isize;
 }
 
@@ -390,8 +398,10 @@ impl<I: StaticCursor> StaticCursor for Next<I> {
 pub struct StaticAxis<I: StaticCursor>(core::marker::PhantomData<I>);
 
 impl<I: StaticCursor> StaticAxis<I> {
+    /// Default selector instance.
     pub const DEFAULT: Self = Self(core::marker::PhantomData);
 
+    /// Resolves this selector against a concrete rank.
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[I::INDEX]).normalize(rank)
     }
@@ -403,8 +413,10 @@ impl<I: StaticCursor> StaticAxis<I> {
 pub struct ForwardAxis<I: crate::shapes::shape::ForwardCursor>(core::marker::PhantomData<I>);
 
 impl<I: crate::shapes::shape::ForwardCursor> ForwardAxis<I> {
+    /// Default forward selector instance.
     pub const DEFAULT: Self = ForwardAxis(core::marker::PhantomData);
 
+    /// Resolves this selector against a concrete rank.
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[I::INDEX]).normalize(rank)
     }
@@ -415,8 +427,10 @@ impl<I: crate::shapes::shape::ForwardCursor> ForwardAxis<I> {
 pub struct ReverseAxis<I: StaticCursor>(core::marker::PhantomData<I>);
 
 impl<I: StaticCursor> ReverseAxis<I> {
+    /// Default reverse selector instance.
     pub const DEFAULT: Self = ReverseAxis(core::marker::PhantomData);
 
+    /// Resolves this selector against a concrete rank.
     pub fn normalize(&self, rank: usize) -> crate::err::Result<Vec<usize>> {
         AxisSelector::new(&[FromEnd::<I>::INDEX]).normalize(rank)
     }
@@ -482,10 +496,12 @@ impl<Tag: crate::shapes::AxisTag, S: Shape + NamedAxisMetadata> NamedAxisLookup<
 /// Canonical runtime/static axis selector sequence.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AxisSelector {
+    /// Raw signed axes as supplied.
     pub raw_axes: Vec<isize>,
 }
 
 impl AxisSelector {
+    /// Collects signed axes into a selector list.
     pub fn new(axes: &[isize]) -> Self {
         Self {
             raw_axes: axes.to_vec(),
@@ -536,6 +552,7 @@ impl AxisSelector {
 
 /// Trait allowing numbers and static cursors to be converted to signed axis indices.
 pub trait ToAxisIndex {
+    /// Signed axis position after resolution.
     fn to_axis_index(&self) -> isize;
 }
 

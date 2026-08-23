@@ -2,26 +2,47 @@ use super::*;
 
 /// One immutable row derived from the authoritative operation declaration.
 pub struct OperationCatalogEntry {
+    /// Exact catalog operation this row describes.
     pub operation: OperationKind,
+    /// Snake_case catalog name.
     pub name: &'static str,
+    /// Family grouping used for dispatch profiles.
     pub family: OperationKind,
+    /// Compute profile classification.
     pub profile: SemanticProfile,
+    /// Descriptor type name owning this row.
     pub descriptor: &'static str,
+    /// Attribute type name for this row.
     pub attributes: &'static str,
+    /// Accepted input count range.
     pub input_arity: core::ops::RangeInclusive<usize>,
+    /// Produced output count range.
     pub output_arity: core::ops::RangeInclusive<usize>,
+    /// Supported rank range.
     pub accepted_ranks: core::ops::RangeInclusive<usize>,
+    /// How inputs combine element-wise.
     pub broadcasting: BroadcastingRule,
+    /// Input dtype policy.
     pub dtype: DTypeRule,
+    /// Output dtype policy.
     pub output: OutputRule,
+    /// Whether all inputs must share one device.
     pub same_device: bool,
+    /// Behavior on zero-element inputs.
     pub empty: EmptyRule,
+    /// Numeric-domain guarantees.
     pub numeric: NumericRule,
+    /// Derivative contract.
     pub gradient: GradientRule,
+    /// Whether repeated runs are bitwise reproducible.
     pub deterministic: bool,
+    /// Output layout behavior.
     pub layout: LayoutRule,
+    /// Legacy method this row superseded.
     pub legacy_source: &'static str,
+    /// Whether the op can be captured into compiled plans.
     pub capture_eligible: bool,
+    /// Where the operation executes.
     pub site: ExecutionSite,
 }
 
@@ -485,6 +506,7 @@ macro_rules! define_catalog {
         pub mod op {
             $(
                 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+                /// Unit struct marker generated per descriptor variant.
                 pub struct $variant;
             )*
         }

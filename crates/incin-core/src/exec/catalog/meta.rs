@@ -3,13 +3,17 @@ use super::*;
 /// Logical metadata used before a backend storage handle exists.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogicalTensorMeta {
+    /// Declared shape, when pinned.
     pub shape: Option<ShapeBuf>,
+    /// Declared dtype, when pinned.
     pub dtype: Option<DTypeDescriptor>,
+    /// Declared device, when pinned.
     pub device: Option<DeviceId>,
 }
 
 impl LogicalTensorMeta {
     #[must_use]
+    /// Metadata carrying no declarations.
     pub const fn unknown() -> Self {
         Self {
             shape: None,
@@ -23,12 +27,14 @@ macro_rules! attributes {
     ($($name:ident { $($field:ident: $ty:ty),* $(,)? })*) => {
         $(
             #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-            pub struct $name { $(pub $field: $ty,)* }
+            /// Attribute struct generated per catalog row.
+            pub struct $name { $(#[doc = concat!("The `", stringify!($field), "` attribute.")] pub $field: $ty,)* }
         )*
     };
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Attribute set for operations with no parameters.
 pub struct NoAttributes;
 
 attributes! {
@@ -93,17 +99,23 @@ attributes! {
 /// payload and never become part of the semantic descriptor.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CreationPayload {
+    /// Typed creation payload carrying element count and dtype.
     Typed {
+        /// Total byte length of the created buffer.
         byte_len: usize,
+        /// Dtype of the created elements.
         dtype: DTypeDescriptor,
     },
+    /// Byte-oriented creation payload validated only by length.
     Bytes {
+        /// Total byte length of the created buffer.
         byte_len: usize,
     },
 }
 
 impl CreationPayload {
     #[must_use]
+    /// Total byte length implied by this payload.
     pub const fn byte_len(&self) -> usize {
         match self {
             Self::Typed { byte_len, .. } | Self::Bytes { byte_len } => *byte_len,
@@ -112,22 +124,32 @@ impl CreationPayload {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Policy for duplicate indices in scatter-style ops.
 pub enum DuplicateIndexRule {
+    /// Conflicting writes resolve by last writer wins.
     LastWriteWins,
+    /// Conflicting writes are rejected as an error.
     Reject,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Loss reduction modes.
 pub enum LossReduction {
+    /// No loss reduction applies.
     None,
+    /// Loss is averaged over remaining axes.
     Mean,
+    /// Loss is summed over remaining axes.
     Sum,
 }
 
 /// Stable identity for an operation outside the built-in catalog.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct OperationKey {
+    /// Namespace owning the operation.
     pub namespace: Cow<'static, str>,
+    /// Operation name inside the namespace.
     pub name: Cow<'static, str>,
+    /// Version for compatibility tracking.
     pub version: u32,
 }

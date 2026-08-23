@@ -76,6 +76,7 @@ impl<O: Operation> ValidatedInvocation<O> {
     }
 
     #[must_use]
+    /// Borrows the validated descriptor this handle wraps.
     pub const fn descriptor(&self) -> &Descriptor<O> {
         self.validated.descriptor()
     }

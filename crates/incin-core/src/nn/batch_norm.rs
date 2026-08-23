@@ -139,13 +139,21 @@ impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Tr
 /// A builder for constructing a [`BatchNorm2d`] layer with a target.
 #[derive(Debug, Clone)]
 pub struct BatchNorm2dBuilder<S: BatchNormShape, Train: TrainState = Trainable> {
+    /// Channel extent normalized over.
     pub shape: ShapeValue<S>,
+    /// Epsilon added inside the square root.
     pub eps: f32,
+    /// Running-statistics momentum.
     pub momentum: f32,
+    /// Initialization scheme for the scale weight.
     pub weight_init: crate::nn::init::Init,
+    /// Initialization scheme for the shift bias.
     pub bias_init: crate::nn::init::Init,
+    /// Initialization for running mean.
     pub running_mean_init: crate::nn::init::Init,
+    /// Initialization for running variance.
     pub running_var_init: crate::nn::init::Init,
+    /// Train-state marker.
     pub _train: PhantomData<Train>,
 }
 
@@ -207,6 +215,7 @@ where
     <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,
 {
+    /// Builds the layer from channel arguments.
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(

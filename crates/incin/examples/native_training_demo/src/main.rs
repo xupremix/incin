@@ -23,11 +23,15 @@ type NB = CpuBackendImpl;
 /// A small CNN classifier: conv2d -> batch_norm -> relu -> max_pool2d -> flatten -> linear.
 #[module(no_shape_info)]
 pub struct SimpleCnn<B: VariableBackend> {
+    /// First convolutional block.
     #[allow(clippy::type_complexity)]
     pub conv1: incin_core::prelude::Conv2d<s![dyn, dyn, 3, 1, 1, 1], B, incin_core::prelude::False>,
+    /// Batch normalization after the first block.
     pub bn1: incin::BatchNorm2d<s![dyn], B>,
     #[module(ignore)]
+    /// Pooling layer (excluded from module state).
     pub pool: incin::MaxPool2d<typenum::U2, typenum::U2>,
+    /// Fully connected classifier head.
     pub fc: incin::Linear<Dyn, B>,
 }
 
@@ -36,6 +40,7 @@ where
     B: SupportsDType<f32> + SupportsDType<u32>,
     B::Device: ConstDevice,
 {
+    /// Builds the network with the given channel and class counts.
     pub fn new(
         in_channels: usize,
         conv_out_channels: usize,
@@ -78,6 +83,7 @@ where
     <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<f32>>,
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<f32>>,
 {
+    /// Runs the network: conv → bn → pool → conv chain, flatten, then linear head.
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B, f32, Grad>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;

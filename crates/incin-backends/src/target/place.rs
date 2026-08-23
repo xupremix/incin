@@ -84,6 +84,7 @@ impl<T, K: DType> DtypeView<T, K> {
         Self { target, field }
     }
 
+    /// Borrows the placed backend value.
     pub fn target(&self) -> &T {
         &self.target
     }

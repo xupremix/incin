@@ -1,3 +1,4 @@
+//! Benchmarks eager matmul through the facade on the CPU backend.
 #![allow(clippy::type_complexity)]
 
 extern crate alloc;

@@ -264,14 +264,20 @@ struct StateWireEntry {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Serialization formats modules understand.
 pub enum Format {
+    /// Hugging Face safetensors archive.
     Safetensors,
+    /// Compact postcard binary (incin envelopes).
     Postcard,
+    /// ONNX model export.
     ONNX,
 }
 
 #[cfg(feature = "std")]
+/// Save/load conveniences implemented for modules.
 pub trait ModelExt<B: Backend + crate::tensor::backend::VariableBackend> {
+    /// Writes module state to `path` in `format`.
     fn save(&self, format: Format, path: &std::path::Path) -> Result<()>
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default;

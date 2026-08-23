@@ -48,6 +48,7 @@ impl TrainState for Frozen {
 /// This is implemented automatically for backends that provide the exact
 /// variable-creation and scalar operation descriptors used by `InitPlan`.
 pub trait ParameterInit<K: DType>: VariableBackend + SupportsDType<K> {
+    /// Executes an initializer plan without typed wrappers.
     fn execute_plan_raw(
         dims: &[usize],
         dtype_field: &<K as DType>::Field,
@@ -172,6 +173,7 @@ where
     }
 }
 
+/// Executes a plan producing initialized parameter storage.
 pub fn execute_plan_raw<B, K: DType>(
     dims: &[usize],
     dtype_field: &<K as DType>::Field,
@@ -927,6 +929,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B
         })
     }
 
+    /// Borrows the parameter as a plain no-grad tensor.
     pub fn as_tensor(&self) -> Result<Tensor<S, B, K, NoGrad>> {
         let inner_tensor = B::var_as_tensor(&self.inner)?;
         Ok(Tensor {
@@ -941,6 +944,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B
 }
 
 impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B, K> {
+    /// Extents of the parameter shape as a vector.
     pub fn shape_dims(&self) -> Vec<usize> {
         self._shape.shape_buf().as_ref().to_vec()
     }
@@ -1049,6 +1053,7 @@ where
     (S, K, B::Device, Grad): TensorArgs<S, K, B::Device, Grad>,
 {
     #[allow(clippy::type_complexity)]
+    /// Creates a parameter from raw parts with an init scheme.
     pub fn new_init_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
         init: crate::nn::init::Init,
@@ -1071,6 +1076,7 @@ where
         })
     }
 
+    /// Creates a parameter initialized by `init`.
     pub fn new_init<A>(args: A, init: crate::nn::init::Init) -> Result<Self>
     where
         B: SupportsDType<K>,
@@ -1080,6 +1086,7 @@ where
     }
 
     #[allow(clippy::type_complexity)]
+    /// Creates a zero-initialized parameter from raw parts.
     pub fn zeros_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
@@ -1102,6 +1109,7 @@ where
         })
     }
 
+    /// Creates a zero-initialized parameter.
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,
@@ -1110,6 +1118,7 @@ where
     }
 
     #[allow(clippy::type_complexity)]
+    /// Creates a one-initialized parameter from raw parts.
     pub fn ones_raw(
         args: <(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args,
     ) -> Result<Self> {
@@ -1132,6 +1141,7 @@ where
         })
     }
 
+    /// Creates a one-initialized parameter.
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, Grad) as TensorArgs<S, K, B::Device, Grad>>::Args>,

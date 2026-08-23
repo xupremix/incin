@@ -19,6 +19,7 @@ pub struct ConstantLR {
 }
 
 impl ConstantLR {
+    /// Starts from one constant learning rate.
     pub fn new(lr: f64) -> Self {
         Self { lr }
     }
@@ -41,6 +42,7 @@ pub struct LinearLR {
 }
 
 impl LinearLR {
+    /// Linearly decays to final_lr over total_steps.
     pub fn new(initial_lr: f64, final_lr: f64, total_steps: usize) -> Self {
         Self {
             initial_lr,
@@ -76,6 +78,7 @@ pub struct CosineAnnealingLR {
 
 #[cfg(feature = "std")]
 impl CosineAnnealingLR {
+    /// Cosine-anneals to min_lr over t_max steps.
     pub fn new(initial_lr: f64, min_lr: f64, t_max: usize) -> Self {
         Self {
             initial_lr,
@@ -111,6 +114,7 @@ pub struct StepLR {
 
 #[cfg(feature = "std")]
 impl StepLR {
+    /// Steps gamma decay every step_size epochs.
     pub fn new(initial_lr: f64, step_size: usize, gamma: f64) -> Self {
         Self {
             initial_lr,

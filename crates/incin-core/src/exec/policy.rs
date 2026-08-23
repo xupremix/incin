@@ -15,12 +15,15 @@
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MathMode {
     #[default]
+    /// Favor numerical precision even when slower paths are required.
     Precise,
+    /// Favor throughput; precision shortcuts become available.
     Fast,
 }
 
 impl MathMode {
     #[must_use]
+    /// Stable string spelling used in reports.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Precise => "precise",
@@ -37,12 +40,15 @@ impl MathMode {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Determinism {
     #[default]
+    /// Determinism may be relaxed where documented.
     Permitted,
+    /// Determinism required; non-deterministic kernels refuse to launch.
     Required,
 }
 
 impl Determinism {
     #[must_use]
+    /// Stable string spelling used in reports.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Permitted => "permitted",
@@ -78,6 +84,7 @@ pub enum FallbackPolicy {
 
 impl FallbackPolicy {
     #[must_use]
+    /// Stable string spelling used in reports.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Deny => "deny",
@@ -125,6 +132,7 @@ pub enum GradMode {
 
 impl GradMode {
     #[must_use]
+    /// Stable string spelling used in reports.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Enabled => "enabled",
@@ -241,6 +249,7 @@ pub enum NanPolicy {
 
 impl NanPolicy {
     #[must_use]
+    /// Stable string spelling used in reports.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Permit => "permit",
@@ -283,11 +292,17 @@ impl NanPolicy {
 /// exactly that part.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExecutionPolicy {
+    /// Math mode in force.
     pub math_mode: MathMode,
+    /// Fallback policy in force.
     pub fallback: FallbackPolicy,
+    /// Training flag in force.
     pub training: bool,
+    /// Gradient recording mode in force.
     pub grad_mode: GradMode,
+    /// NaN handling policy in force.
     pub nan_policy: NanPolicy,
+    /// Runtime precision policy in force.
     pub precision: crate::exec::RuntimePrecisionPolicy,
 }
 
@@ -313,42 +328,49 @@ impl ExecutionPolicy {
     }
 
     #[must_use]
+    /// Sets one math mode.
     pub const fn with_math_mode(mut self, math_mode: MathMode) -> Self {
         self.math_mode = math_mode;
         self
     }
 
     #[must_use]
+    /// Sets one fallback policy.
     pub const fn with_fallback(mut self, fallback: FallbackPolicy) -> Self {
         self.fallback = fallback;
         self
     }
 
     #[must_use]
+    /// Sets one training flag.
     pub const fn with_training(mut self, training: bool) -> Self {
         self.training = training;
         self
     }
 
     #[must_use]
+    /// Sets one gradient-recording mode.
     pub const fn with_grad_mode(mut self, grad_mode: GradMode) -> Self {
         self.grad_mode = grad_mode;
         self
     }
 
     #[must_use]
+    /// Sets one NaN policy.
     pub const fn with_nan_policy(mut self, nan_policy: NanPolicy) -> Self {
         self.nan_policy = nan_policy;
         self
     }
 
     #[must_use]
+    /// Sets one precision policy.
     pub const fn with_precision(mut self, precision: crate::exec::RuntimePrecisionPolicy) -> Self {
         self.precision = precision;
         self
     }
 
     #[must_use]
+    /// Reads the precision policy.
     pub const fn precision(&self) -> crate::exec::RuntimePrecisionPolicy {
         self.precision
     }

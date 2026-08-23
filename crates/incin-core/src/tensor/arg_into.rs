@@ -93,6 +93,7 @@ impl_self_arginto! {
     ShapeBuf
 }
 
+/// Marker for argument types that mean no argument.
 pub trait UnitTree: Default + Copy + Clone + core::fmt::Debug {}
 impl UnitTree for () {}
 impl<T: UnitTree> UnitTree for ((), T) {}

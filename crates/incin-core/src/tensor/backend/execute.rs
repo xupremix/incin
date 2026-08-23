@@ -12,9 +12,12 @@ pub trait StorageBackend<P: Placement = Local>: Sized {
     /// How this backend names itself when it refuses work.
     const BACKEND_NAME: &'static str;
 
+    /// Storage type handed to kernels, cloneable for views.
     type Storage<K: DType>: Clone;
+    /// Device type this backend executes on.
     type Device: Device;
 
+    /// Validated metadata describing one storage value.
     fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta;
 
     /// Returns the authoritative logical shape of a storage handle.
@@ -55,8 +58,11 @@ where
     O: crate::exec::catalog::Operation,
     B: StorageBackend,
 {
+    /// Validated descriptor being executed.
     pub operation: &'a Validated<crate::exec::catalog::Descriptor<O>>,
+    /// Validated input handles.
     pub inputs: &'a [TensorHandle<'a>],
+    /// Execution policy context for the invocation.
     pub context: &'a ExecutionContext<B>,
     /// Borrowed execution data kept outside the semantic descriptor.
     pub payload: Option<crate::exec::request::ExecutionPayload<'a>>,
@@ -65,6 +71,7 @@ where
 /// A value returned by a backend executor.
 pub trait ExecuteOutput {}
 
+/// Marker binding Execute::Output to storage conversion.
 pub trait StorageOutput {}
 
 impl<T: StorageOutput> ExecuteOutput for T {}
@@ -85,12 +92,15 @@ pub trait Execute<O>: StorageBackend + Sized
 where
     O: crate::exec::catalog::Operation,
 {
+    /// Execution result convertible into backend storage.
     type Output: ExecuteOutput;
 
+    /// Capability answer for custom operations; default declines.
     fn supports_custom(&self, _query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
         crate::exec::SupportLevel::Native
     }
 
+    /// Answers capability queries for custom operations.
     fn supports_custom_operation(
         &self,
         _operation: &crate::exec::OperationIdentity,

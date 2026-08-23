@@ -59,6 +59,7 @@ pub mod batch_norm;
 pub mod conv1d;
 /// `conv2d`.
 pub mod conv2d;
+/// Randomly zeroes activations during training.
 pub mod dropout;
 /// `embedding`.
 pub mod embedding;
@@ -84,6 +85,7 @@ pub mod optional;
 pub mod param;
 /// `rnn`.
 pub mod rms_norm;
+/// Elman recurrent layer family.
 pub mod rnn;
 #[cfg(feature = "std")]
 /// `save`.

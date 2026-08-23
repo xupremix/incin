@@ -50,12 +50,19 @@ use crate::tensor::dtype::DType;
 /// Backend authors satisfy this profile by implementing the exact operation
 /// descriptors listed in the blanket implementation below.
 pub trait OptimizerBackend<K: DType>: VariableBackend {
+    /// Adds two storages element-wise.
     fn optimizer_add(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    /// Subtracts rhs from lhs element-wise.
     fn optimizer_sub(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    /// Multiplies two storages element-wise.
     fn optimizer_mul(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    /// Divides lhs by rhs element-wise.
     fn optimizer_div(lhs: &Self::Storage<K>, rhs: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    /// Element-wise square root.
     fn optimizer_sqrt(storage: &Self::Storage<K>) -> Result<Self::Storage<K>>;
+    /// Scales a storage by a scalar.
     fn optimizer_mul_scalar(storage: &Self::Storage<K>, value: f64) -> Result<Self::Storage<K>>;
+    /// Shifts a storage by a scalar.
     fn optimizer_add_scalar(storage: &Self::Storage<K>, value: f64) -> Result<Self::Storage<K>>;
 }
 

@@ -245,7 +245,9 @@ impl<'de> serde::Deserialize<'de> for AxisSet {
     }
 }
 
+/// Conversion into the internal axis-set representation.
 pub trait IntoAxisSet {
+    /// Performs the conversion.
     fn into_axis_set(self) -> AxisSet;
 }
 
@@ -263,8 +265,10 @@ impl IntoAxisSet for AxisMask {
 }
 
 impl AxisSet {
+    /// An empty axis set.
     pub const EMPTY: Self = Self(AxisSetRepr::Empty);
 
+    /// Whether one axis participates.
     pub fn contains(&self, axis: usize) -> bool {
         match &self.0 {
             AxisSetRepr::Empty => false,
@@ -273,6 +277,7 @@ impl AxisSet {
         }
     }
 
+    /// Number of participating axes.
     pub fn count(&self) -> usize {
         match &self.0 {
             AxisSetRepr::Empty => 0,
@@ -281,6 +286,7 @@ impl AxisSet {
         }
     }
 
+    /// Whether no axes participate.
     pub fn is_empty(&self) -> bool {
         match &self.0 {
             AxisSetRepr::Empty => true,
@@ -289,6 +295,7 @@ impl AxisSet {
         }
     }
 
+    /// Iterates participating axes.
     pub fn axes(&self) -> alloc::vec::IntoIter<usize> {
         match &self.0 {
             AxisSetRepr::Empty => alloc::vec::Vec::new().into_iter(),
@@ -297,16 +304,19 @@ impl AxisSet {
         }
     }
 
+    /// Every axis below rank.
     pub fn all_below(rank: usize) -> Self {
         (0..rank).fold(Self::EMPTY, |set, axis| set.insert(axis))
     }
 
+    /// Whether axes form one contiguous ascending run.
     pub fn is_contiguous_run(&self) -> bool {
         let axes: alloc::vec::Vec<_> = self.axes().collect();
         axes.windows(2)
             .all(|pair| pair[0].checked_add(1) == Some(pair[1]))
     }
 
+    /// Builds from arbitrary axes, rejecting duplicates or disorder.
     pub fn try_from_axes(
         operation: OperationKind,
         rank: usize,
@@ -326,6 +336,7 @@ impl AxisSet {
         Ok(set)
     }
 
+    /// Adds one axis, keeping the set canonical.
     pub fn insert(self, axis: usize) -> Self {
         match self.0 {
             AxisSetRepr::Empty => {
