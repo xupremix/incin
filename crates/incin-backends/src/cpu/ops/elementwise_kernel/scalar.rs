@@ -34,6 +34,7 @@ pub(super) fn map_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32>
     #[cfg(target_arch = "aarch64")]
     {
         if lhs.len() < DENSE_PARALLEL_GRAIN {
+            // SAFETY: small-input path; NEON kernel writes exactly lhs.len() lanes.
             return unsafe { neon_binary_f32(op, lhs, rhs) };
         }
         #[cfg(feature = "std")]
@@ -71,6 +72,7 @@ pub(super) fn map_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64>
     #[cfg(target_arch = "aarch64")]
     {
         if lhs.len() < DENSE_PARALLEL_GRAIN {
+            // SAFETY: small-input path; NEON kernel writes exactly lhs.len() lanes.
             return unsafe { neon_binary_f64(op, lhs, rhs) };
         }
         #[cfg(feature = "std")]
@@ -113,6 +115,7 @@ pub(super) fn map_scalar_f32(
     #[cfg(target_arch = "aarch64")]
     {
         if dense.len() < DENSE_PARALLEL_GRAIN {
+            // SAFETY: small-input path; NEON kernel writes exactly dense.len() lanes.
             return unsafe { neon_scalar_f32(op, dense, scalar, scalar_left) };
         }
         #[cfg(feature = "std")]
@@ -159,6 +162,7 @@ pub(super) fn map_scalar_f64(
     #[cfg(target_arch = "aarch64")]
     {
         if dense.len() < DENSE_PARALLEL_GRAIN {
+            // SAFETY: small-input path; NEON kernel writes exactly dense.len() lanes.
             return unsafe { neon_scalar_f64(op, dense, scalar, scalar_left) };
         }
         #[cfg(feature = "std")]

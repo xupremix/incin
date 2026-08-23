@@ -6,11 +6,17 @@ use super::*;
 // ======================= ARM NEON (aarch64) =======================
 
 #[cfg(target_arch = "aarch64")]
-unsafe fn neon_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
+pub(super) unsafe fn neon_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
     debug_assert_eq!(lhs.len(), rhs.len());
     let mut output: Vec<f32> = Vec::with_capacity(lhs.len());
     let output_ptr = output.spare_capacity_mut().as_mut_ptr().cast::<f32>();
+    // SAFETY: `output_ptr` points at `len` initialized lanes reserved above; the
+// NEON intrinsics read exactly `lhs.len()` elements from both operands.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { neon_binary_f32_into(op, lhs, rhs, output_ptr) };
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `lhs.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(lhs.len()) };
     output
 }
@@ -22,6 +28,10 @@ unsafe fn neon_binary_f32_into(op: BinaryOp, lhs: &[f32], rhs: &[f32], output_pt
     debug_assert_eq!(lhs.len(), rhs.len());
     let vectorized = lhs.len() / 4 * 4;
     for index in (0..vectorized).step_by(4) {
+        // SAFETY: index < vectorized, so the 4-lane load stays in bounds
+        // and output_ptr has room for the full vectorized prefix.
+        // SAFETY: index < vectorized (or tail < len), so the 4-lane load stays in
+        // bounds and output_ptr has room for the lanes written here.
         unsafe {
             let lhs_vector = vld1q_f32(lhs.as_ptr().add(index));
             let rhs_vector = vld1q_f32(rhs.as_ptr().add(index));
@@ -35,6 +45,7 @@ unsafe fn neon_binary_f32_into(op: BinaryOp, lhs: &[f32], rhs: &[f32], output_pt
         }
     }
     for index in vectorized..lhs.len() {
+        // SAFETY: pointer arithmetic above stays within the reserved buffer.
         unsafe {
             output_ptr
                 .add(index)
@@ -52,17 +63,29 @@ pub(super) fn parallel_neon_binary_f32(op: BinaryOp, lhs: &[f32], rhs: &[f32]) -
         .zip(lhs.par_chunks(SIMD_PARALLEL_CHUNK))
         .zip(rhs.par_chunks(SIMD_PARALLEL_CHUNK))
         .for_each(|((output, lhs), rhs)| {
+            // SAFETY: chunked pointers stay in-bounds; each chunk's output has
+            // room for exactly `chunk.len()` written lanes.
+            // SAFETY: pointer arithmetic above stays within the reserved buffer.
             unsafe { neon_binary_f32_into(op, lhs, rhs, output.as_mut_ptr().cast::<f32>()) };
         });
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `lhs.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(lhs.len()) };
     output
 }
 
 #[cfg(target_arch = "aarch64")]
-unsafe fn neon_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left: bool) -> Vec<f32> {
+pub(super) unsafe fn neon_scalar_f32(op: BinaryOp, dense: &[f32], scalar: f32, scalar_left: bool) -> Vec<f32> {
     let mut output: Vec<f32> = Vec::with_capacity(dense.len());
     let output_ptr = output.spare_capacity_mut().as_mut_ptr().cast::<f32>();
+    // SAFETY: `output_ptr` points at `len` initialized lanes reserved above; the
+// NEON intrinsics read exactly `lhs.len()` elements from both operands.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { neon_scalar_f32_into(op, dense, scalar, scalar_left, output_ptr) };
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `dense.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(dense.len()) };
     output
 }
@@ -79,9 +102,14 @@ unsafe fn neon_scalar_f32_into(
         vaddq_f32, vdivq_f32, vdupq_n_f32, vld1q_f32, vmulq_f32, vst1q_f32, vsubq_f32,
     };
 
+    // SAFETY: broadcasting a scalar to all lanes has no memory access.
     let scalar_vector = unsafe { vdupq_n_f32(scalar) };
     let vectorized = dense.len() / 4 * 4;
     for index in (0..vectorized).step_by(4) {
+        // SAFETY: index < vectorized, so the 4-lane load stays in bounds
+        // and output_ptr has room for the full vectorized prefix.
+        // SAFETY: index < vectorized (or tail < len), so the 4-lane load stays in
+        // bounds and output_ptr has room for the lanes written here.
         unsafe {
             let dense_vector = vld1q_f32(dense.as_ptr().add(index));
             let (lhs, rhs) = if scalar_left {
@@ -104,6 +132,7 @@ unsafe fn neon_scalar_f32_into(
         } else {
             op.eval_f32(dense_value, scalar)
         };
+        // SAFETY: pointer arithmetic above stays within the reserved buffer.
         unsafe { output_ptr.add(index).write(value) };
     }
 }
@@ -120,6 +149,8 @@ pub(super) fn parallel_neon_scalar_f32(
         .par_chunks_mut(SIMD_PARALLEL_CHUNK)
         .zip(dense.par_chunks(SIMD_PARALLEL_CHUNK))
         .for_each(|(output, dense)| {
+            // SAFETY: chunk pointers come from equal-length chunks of the same
+            // tensors; each chunk's output slot holds chunk.len() lanes.
             unsafe {
                 neon_scalar_f32_into(
                     op,
@@ -130,16 +161,25 @@ pub(super) fn parallel_neon_scalar_f32(
                 )
             };
         });
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `dense.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(dense.len()) };
     output
 }
 
 #[cfg(target_arch = "aarch64")]
-unsafe fn neon_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64> {
+pub(super) unsafe fn neon_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -> Vec<f64> {
     debug_assert_eq!(lhs.len(), rhs.len());
     let mut output: Vec<f64> = Vec::with_capacity(lhs.len());
     let output_ptr = output.spare_capacity_mut().as_mut_ptr().cast::<f64>();
+    // SAFETY: `output_ptr` points at `len` initialized lanes reserved above; the
+// NEON intrinsics read exactly `lhs.len()` elements from both operands.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { neon_binary_f64_into(op, lhs, rhs, output_ptr) };
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `lhs.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(lhs.len()) };
     output
 }
@@ -151,6 +191,8 @@ unsafe fn neon_binary_f64_into(op: BinaryOp, lhs: &[f64], rhs: &[f64], output_pt
     debug_assert_eq!(lhs.len(), rhs.len());
     let vectorized = lhs.len() / 2 * 2;
     for index in (0..vectorized).step_by(2) {
+        // SAFETY: index < vectorized (or tail < len), so the 4-lane load stays in
+        // bounds and output_ptr has room for the lanes written here.
         unsafe {
             let lhs_vector = vld1q_f64(lhs.as_ptr().add(index));
             let rhs_vector = vld1q_f64(rhs.as_ptr().add(index));
@@ -164,6 +206,7 @@ unsafe fn neon_binary_f64_into(op: BinaryOp, lhs: &[f64], rhs: &[f64], output_pt
         }
     }
     for index in vectorized..lhs.len() {
+        // SAFETY: pointer arithmetic above stays within the reserved buffer.
         unsafe {
             output_ptr
                 .add(index)
@@ -181,17 +224,27 @@ pub(super) fn parallel_neon_binary_f64(op: BinaryOp, lhs: &[f64], rhs: &[f64]) -
         .zip(lhs.par_chunks(SIMD_PARALLEL_CHUNK))
         .zip(rhs.par_chunks(SIMD_PARALLEL_CHUNK))
         .for_each(|((output, lhs), rhs)| {
+            // SAFETY: pointer arithmetic above stays within the reserved buffer.
             unsafe { neon_binary_f64_into(op, lhs, rhs, output.as_mut_ptr().cast::<f64>()) };
         });
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `lhs.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(lhs.len()) };
     output
 }
 
 #[cfg(target_arch = "aarch64")]
-unsafe fn neon_scalar_f64(op: BinaryOp, dense: &[f64], scalar: f64, scalar_left: bool) -> Vec<f64> {
+pub(super) unsafe fn neon_scalar_f64(op: BinaryOp, dense: &[f64], scalar: f64, scalar_left: bool) -> Vec<f64> {
     let mut output: Vec<f64> = Vec::with_capacity(dense.len());
     let output_ptr = output.spare_capacity_mut().as_mut_ptr().cast::<f64>();
+    // SAFETY: `output_ptr` points at `len` initialized lanes reserved above; the
+// NEON intrinsics read exactly `lhs.len()` elements from both operands.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { neon_scalar_f64_into(op, dense, scalar, scalar_left, output_ptr) };
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `dense.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(dense.len()) };
     output
 }
@@ -208,9 +261,12 @@ unsafe fn neon_scalar_f64_into(
         vaddq_f64, vdivq_f64, vdupq_n_f64, vld1q_f64, vmulq_f64, vst1q_f64, vsubq_f64,
     };
 
+    // SAFETY: broadcasting a scalar to all lanes has no memory access.
     let scalar_vector = unsafe { vdupq_n_f64(scalar) };
     let vectorized = dense.len() / 2 * 2;
     for index in (0..vectorized).step_by(2) {
+        // SAFETY: index < vectorized (or tail < len), so the 4-lane load stays in
+        // bounds and output_ptr has room for the lanes written here.
         unsafe {
             let dense_vector = vld1q_f64(dense.as_ptr().add(index));
             let (lhs, rhs) = if scalar_left {
@@ -233,6 +289,7 @@ unsafe fn neon_scalar_f64_into(
         } else {
             op.eval_f64(dense_value, scalar)
         };
+        // SAFETY: pointer arithmetic above stays within the reserved buffer.
         unsafe { output_ptr.add(index).write(value) };
     }
 }
@@ -249,6 +306,8 @@ pub(super) fn parallel_neon_scalar_f64(
         .par_chunks_mut(SIMD_PARALLEL_CHUNK)
         .zip(dense.par_chunks(SIMD_PARALLEL_CHUNK))
         .for_each(|(output, dense)| {
+            // SAFETY: chunk pointers come from equal-length chunks of the same
+            // tensors; each chunk's output slot holds chunk.len() lanes.
             unsafe {
                 neon_scalar_f64_into(
                     op,
@@ -259,6 +318,9 @@ pub(super) fn parallel_neon_scalar_f64(
                 )
             };
         });
+    // SAFETY: every lane reserved above was written by the vectorized loop
+    // plus the scalar tail, so `dense.len()` initialized elements are present.
+    // SAFETY: pointer arithmetic above stays within the reserved buffer.
     unsafe { output.set_len(dense.len()) };
     output
 }

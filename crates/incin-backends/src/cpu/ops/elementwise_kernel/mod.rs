@@ -46,7 +46,10 @@ mod util;
 mod wasm;
 
 pub(crate) use dispatch::{execute_binary, execute_unary};
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
 pub(crate) use types::{BinaryOp, UnaryOp, avx2_f32_available, avx2_f64_available};
+#[cfg(not(all(feature = "std", target_arch = "x86_64")))]
+pub(crate) use types::{BinaryOp, UnaryOp};
 pub(crate) use util::dense_range;
 
 // Cross-submodule wiring: `dispatch` calls into every SIMD/scalar/strided
@@ -63,6 +66,10 @@ use avx2::{
     avx2_binary_f32, avx2_binary_f64, avx2_scalar_f32, avx2_scalar_f64, map_iteration_avx2_f32,
     map_iteration_avx2_f64, parallel_avx2_binary_f32, parallel_avx2_binary_f64,
     parallel_avx2_scalar_f32, parallel_avx2_scalar_f64,
+};
+#[cfg(target_arch = "aarch64")]
+use neon::{
+    neon_binary_f32, neon_binary_f64, neon_scalar_f32, neon_scalar_f64,
 };
 #[cfg(all(feature = "std", target_arch = "aarch64"))]
 use neon::{
