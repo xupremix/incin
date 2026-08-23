@@ -1,3 +1,4 @@
+//! Integration coverage for `main` on the documented public surface.
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::prelude::{Dyn, Tensor};
 

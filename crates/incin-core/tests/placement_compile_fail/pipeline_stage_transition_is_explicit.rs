@@ -1,3 +1,4 @@
+//! Integration coverage for `main` on the documented public surface.
 use incin_core::dist::{LegalTransition, PipelineStage, Placement};
 use incin_core::dist::mesh::{Data, MeshSpec, Pipeline, TensorParallel};
 use incin_core::typenum::{U1, U2};

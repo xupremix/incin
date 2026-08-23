@@ -1,3 +1,4 @@
+//! Integration coverage for `wrong_world` on the documented public surface.
 use incin_core::dist::mesh::{Data, DeviceMesh, MeshSpec, Pipeline, TensorParallel};
 use incin_core::dist::TwoRankPlanningTopology;
 use incin_core::typenum::U1;

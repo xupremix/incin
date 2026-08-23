@@ -1,3 +1,4 @@
+//! Integration coverage for `unsupported` on the documented public surface.
 use incin_core::dist::mesh::{Data, MeshAxis, MeshSpec, TensorParallel};
 use incin_core::dist::{CollectivePlanBuilder, Replicated, Sharded, StreamId};
 use incin_core::prelude::Q8_0;

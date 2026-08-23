@@ -1,3 +1,4 @@
+//! Integration coverage for `main` on the documented public surface.
 use incin_core::dist::mesh::{ValidMesh, mesh};
 
 fn main() {

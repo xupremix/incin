@@ -1,3 +1,4 @@
+//! Integration coverage for `odd_all_to_all` on the documented public surface.
 use incin_backends::dist::{CollectiveTuningProblem, TuneAllToAll};
 use incin_core::dist::mesh::TopologyFingerprint;
 use incin_core::dist::GroupId;

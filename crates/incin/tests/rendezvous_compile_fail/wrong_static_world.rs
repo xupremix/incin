@@ -1,3 +1,4 @@
+//! Integration coverage for `main` on the documented public surface.
 use incin::experimental::distributed::mesh::{Data, MeshSpec, Pipeline, TensorParallel};
 use incin::experimental::distributed::{RunId, TwoRankLaunchPlan};
 use incin::typenum::{U1, U3};

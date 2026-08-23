@@ -1,3 +1,4 @@
+//! Integration coverage for `integer_dtype` on the documented public surface.
 use incin_core::dist::{
     HybridPlanner, MemoryLimit, PlanObjective, ShardRemainderPolicy, StaticParallelOptions,
     TwoRankPlanningTopology,

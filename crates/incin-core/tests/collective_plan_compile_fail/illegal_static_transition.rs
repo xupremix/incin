@@ -1,3 +1,4 @@
+//! Integration coverage for `illegal` on the documented public surface.
 use incin_core::dist::mesh::{Data, MeshAxis, MeshSpec, TensorParallel};
 use incin_core::dist::{CollectivePlanBuilder, Sharded, StreamId};
 use incin_core::typenum::{U0, U1, U2};

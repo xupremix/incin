@@ -1,3 +1,4 @@
+//! Integration coverage for `cross_mesh` on the documented public surface.
 use incin_core::dist::mesh::{Data, MeshAxis, MeshSpec, TensorParallel};
 use incin_core::dist::{CollectivePlanBuilder, Replicated, Sharded, StreamId};
 use incin_core::typenum::{U1, U2};

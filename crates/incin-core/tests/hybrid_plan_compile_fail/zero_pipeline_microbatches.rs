@@ -1,3 +1,4 @@
+//! Integration coverage for `zero_pipeline_microbatches` on the documented public surface.
 use incin_core::dist::{
     GPipe, HybridPlanner, MemoryLimit, PlanObjective, ShardRemainderPolicy,
     StaticParallelOptions, TwoRankPlanningTopology,

@@ -1,3 +1,4 @@
+//! Integration coverage for `local_selection_is_not_a_collective` on the documented public surface.
 use incin_core::dist::mesh::{Data, DeviceMesh, MeshAxis, MeshSpec, TensorParallel};
 use incin_core::dist::{CollectivePlanBuilder, Replicated, Sharded, StreamId};
 use incin_core::typenum::{U1, U2};

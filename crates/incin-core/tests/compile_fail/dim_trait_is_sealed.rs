@@ -1,3 +1,4 @@
+//! Integration coverage for `Forged` on the documented public surface.
 use incin_core::prelude::{Dim, ShapeError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

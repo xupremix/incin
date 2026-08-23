@@ -1,3 +1,4 @@
+//! Integration coverage for `main` on the documented public surface.
 use incin_core::dist::{LegalTransition, Partial, Placement, Sharded, Sum};
 use incin_core::dist::mesh::{Data, MeshSpec};
 use incin_core::typenum::{U0, U1};

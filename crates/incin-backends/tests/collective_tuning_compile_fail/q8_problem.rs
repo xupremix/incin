@@ -1,3 +1,4 @@
+//! Integration coverage for `q8_problem` on the documented public surface.
 use incin_backends::dist::{CollectiveTuningProblem, TuneAllGather};
 use incin_core::dist::mesh::TopologyFingerprint;
 use incin_core::dist::GroupId;

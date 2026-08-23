@@ -1,3 +1,4 @@
+//! Integration coverage for `main` on the documented public surface.
 use core::marker::PhantomData;
 use incin_core::exec::catalog::{Descriptor, LogicalTensorMeta, NoAttributes, op};
 

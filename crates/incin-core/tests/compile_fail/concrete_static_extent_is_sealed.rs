@@ -1,3 +1,4 @@
+//! Integration coverage for `Forged` on the documented public surface.
 use incin_core::prelude::{ConcreteStaticExtent, Dim};
 
 fn require<T: ConcreteStaticExtent>() {}

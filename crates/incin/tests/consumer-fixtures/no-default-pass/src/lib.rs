@@ -1,3 +1,4 @@
+//! Integration coverage for `lib` on the documented public surface.
 use incin::{Dyn, Error, Result, Shape};
 use core::marker::PhantomData;
 

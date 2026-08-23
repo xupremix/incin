@@ -1,3 +1,4 @@
+//! Integration coverage for `odd_data_batch` on the documented public surface.
 use incin_core::dist::{
     HybridPlanner, MemoryLimit, PlanObjective, ShardRemainderPolicy, StaticParallelOptions,
     TwoRankPlanningTopology,

@@ -1,3 +1,4 @@
+//! Integration coverage for `Batch` on the documented public surface.
 extern crate incin_core as incin;
 use incin_core::{advanced::{Here, Next}, prelude::*};
 use incin_backends::cpu::CpuBackendImpl;
