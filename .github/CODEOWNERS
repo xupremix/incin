@@ -1,0 +1,10 @@
+# Default owner for everything; review requests route here automatically.
+*       @xupremix
+# Contract-sensitive surfaces always need the maintainer's explicit review.
+/docs/security/         @xupremix
+/docs/public-api/       @xupremix
+/docs/FROZEN_FOUNDATIONS.md            @xupremix
+/docs/API_DESIGN.md                    @xupremix
+/docs/ERROR_CONTRACT.md                @xupremix
+/docs/INVARIANT_TYPES.md               @xupremix
+PROPOSALS.md                           @xupremix
