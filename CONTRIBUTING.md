@@ -52,3 +52,27 @@ reported to **xupremix.me@gmail.com**.
 Release tags build and upload a draft containing the Book, editor integrations,
 `incin-lsp`, and `cargo-incin`. Publishing that draft is a separate protected
 action. See [docs/RELEASING.md](docs/RELEASING.md) for the full procedure.
+
+## Engineering workflow
+
+The branching and release model mirrors mainstream OSS projects (PyTorch,
+TensorFlow):
+
+- **Trunk-based.** `master` is the integration branch and must stay green.
+  Work happens on short-lived feature branches named for their issue
+  (`fix/issue-43-typed-errors`, `feat/issue-18-api-freeze`). Delete branches
+  once their PR merges.
+- **Pull requests only.** Direct pushes to `master` are not part of the
+  workflow. Every change lands through a PR that closes a tracked issue,
+  with CI green before merge.
+- **PR titles** follow Conventional Commits (`feat:`, `fix:`, `docs:`,
+  `chore:`, `test:`), optionally scoped - `fix(data): ...`. This matches the
+  commit style in history and keeps the CHANGELOG diffable.
+- **Release stabilization** uses `release/X.Y` branches cut at the release
+  candidate; final tags come from the branch, not from master.
+- **Backports**: fixes land on master first, then are cherry-picked to the
+  active release branch through a PR labeled `backport`. Patch versions
+  (`X.Y.Z`) tag from the release branch. See
+  [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for the full policy.
+- **Deprecations** (post-1.0) are announced one minor release before
+  removal; pre-1.0 carries no cross-version guarantee (pin exact versions).

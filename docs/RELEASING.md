@@ -122,3 +122,19 @@ checked in at `crates/incin-core/src/generated/onnx.rs`, regenerated with
 `cargo xtask onnx`, and verified against `proto/onnx.proto` by `cargo xtask
 onnx --check` in CI (the only job in the repository that installs a
 protobuf compiler).
+
+## Patch releases and backports
+
+After X.Y.0 ships, the stabilization branch `release/X.Y` remains the source
+for patch trains:
+
+1. Fix lands on `master` through the normal PR path.
+2. A cherry-pick PR targets `release/X.Y` and carries the `backport` label;
+   its description links both the master PR and the issue it fixes.
+3. After review, bump the patch version on the release branch, tag
+   `vX.Y.Z+1` there (the release workflow accepts any `v*` ref), and publish
+   the resulting draft.
+
+The full version-stamping rules from the RC section apply to patch tags
+unchanged. Compatibility promises for what a patch may contain are stated in
+[COMPATIBILITY.md](COMPATIBILITY.md).
