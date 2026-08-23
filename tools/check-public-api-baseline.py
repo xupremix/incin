@@ -9,11 +9,17 @@ one baseline in the same commit.
 
 from pathlib import Path
 import difflib
+import os
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 API_DIR = ROOT / "docs/public-api"
+
+# rustdoc's JSON rendering of generic bounds changes across nightlies, so
+# baseline generation pins one dated nightly. Override with
+# PUBLIC_API_TOOLCHAIN only while regenerating after a deliberate pin bump.
+PINNED_TOOLCHAIN = os.environ.get("PUBLIC_API_TOOLCHAIN", "nightly-2026-07-28")
 
 # (crate, baseline file, cargo feature arguments)
 BASELINES = [
@@ -31,7 +37,7 @@ BASELINES = [
 
 
 def generate(crate: str, features: list[str]) -> list[str]:
-    command = ["cargo", "public-api", "-sss", "--color", "never", "-p", crate]
+    command = ["cargo", f"+{PINNED_TOOLCHAIN}", "public-api", "-sss", "--color", "never", "-p", crate]
     command.extend(features)
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
     if result.returncode:

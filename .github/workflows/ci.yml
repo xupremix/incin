@@ -89,13 +89,11 @@ jobs:
     # changes across nightlies, which would otherwise rewrite every baseline
     # whenever CI installed a fresh nightly. Bump this together with a
     # deliberate baseline regeneration.
-    - name: Install pinned nightly toolchain for cargo-public-api
-      run: |
-        rustup toolchain install nightly-2026-07-28 --profile minimal
-        # cargo-public-api shells out to `cargo +nightly`; link the pinned
-        # dated toolchain under that name so `+nightly` resolves to it.
-        rustup toolchain link nightly \
-          "$HOME/.rustup/toolchains/nightly-2026-07-28-x86_64-unknown-linux-gnu"
+    - name: Install pinned nightly toolchain for public API baselines
+      # The baseline checker invokes `cargo +nightly-2026-07-28 public-api`
+      # directly; rustdoc's JSON rendering of generic bounds changes across
+      # nightlies, so the date is pinned together with the baselines.
+      run: rustup toolchain install nightly-2026-07-28 --profile minimal
 
     - name: Check reviewed public API
       run: |
