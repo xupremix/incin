@@ -1,4 +1,3 @@
-//! Integration coverage for `integer_mean` on the documented public surface.
 use incin_backends::dist::{CollectiveTuningProblem, TuneAllReduce};
 use incin_core::dist::mesh::TopologyFingerprint;
 use incin_core::dist::{GroupId, Mean};

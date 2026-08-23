@@ -1,4 +1,3 @@
-//! Integration coverage for `zero_microbatches` on the documented public surface.
 use incin_core::dist::{
     ActivationCheckpoint, GPipe, PipelineBoundaryId, PipelinePlanBuilder, StreamId,
     TwoRankPipeline,

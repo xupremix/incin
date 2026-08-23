@@ -1,4 +1,3 @@
-//! Integration coverage for `integer_mean` on the documented public surface.
 use incin_core::dist::mesh::{Data, DeviceMesh, MeshAxis, MeshSpec, TensorParallel};
 use incin_core::dist::{CollectivePlanBuilder, Mean, Partial, Replicated, StreamId};
 use incin_core::typenum::{U1, U2};

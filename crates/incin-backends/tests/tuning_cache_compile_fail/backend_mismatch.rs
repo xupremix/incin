@@ -1,4 +1,3 @@
-//! Integration coverage for `requires_cuda` on the documented public surface.
 use incin_backends::tuning::{
     cache::CacheKey,
     identity::{

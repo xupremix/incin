@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin_backends::tuning::identity::{
     ProcessLayoutFingerprint, SoftwareVersion, StaticWorld, TransportFingerprint,
     TuningTopologyFingerprint,

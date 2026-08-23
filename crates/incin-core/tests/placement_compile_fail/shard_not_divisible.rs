@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin_core::dist::ShardDivisible;
 use incin_core::typenum::{U3, U10};
 

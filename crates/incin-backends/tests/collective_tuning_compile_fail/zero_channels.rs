@@ -1,4 +1,3 @@
-//! Integration coverage for `zero_channels` on the documented public surface.
 use incin_backends::dist::{CollectiveTuningCandidate, Ring, Simple};
 use incin_core::typenum::{U0, U16};
 

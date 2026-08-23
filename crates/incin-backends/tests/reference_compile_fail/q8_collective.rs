@@ -1,4 +1,3 @@
-//! Integration coverage for `rejected` on the documented public surface.
 use incin_backends::dist::{
     CollectiveBackend, GroupId, ReferenceBuffer, ReferenceTransport, StreamId,
 };

@@ -1,4 +1,3 @@
-//! Integration coverage for `ConflictModel` on the documented public surface.
 use incin::experimental::mesh;
 use incin::prelude::*;
 

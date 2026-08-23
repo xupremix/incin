@@ -1,4 +1,3 @@
-//! Integration coverage for `Probe` on the documented public surface.
 extern crate incin_core as incin;
 
 use incin::backend_authoring::{Execute, ExecutionRequest, StorageBackend};

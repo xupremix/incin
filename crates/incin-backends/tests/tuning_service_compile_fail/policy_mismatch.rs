@@ -1,4 +1,3 @@
-//! Integration coverage for `requires_warmup` on the documented public surface.
 use incin_backends::tuning::service::{
     CoordinatedWarmupTuning, DisabledTuning, TuningService,
 };

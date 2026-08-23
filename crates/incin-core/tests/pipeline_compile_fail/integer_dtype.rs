@@ -1,4 +1,3 @@
-//! Integration coverage for `integer_pipeline` on the documented public surface.
 use incin_core::dist::{
     ActivationCheckpoint, GPipe, PipelineBoundaryId, PipelinePlanBuilder, StreamId,
     TwoRankPipeline,

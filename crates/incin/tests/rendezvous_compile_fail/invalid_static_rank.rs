@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin::experimental::distributed::{RunId, TwoRankDataParallel, TwoRankLaunchPlan};
 use incin::typenum::U2;
 

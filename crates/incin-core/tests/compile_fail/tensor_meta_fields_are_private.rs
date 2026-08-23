@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::prelude::{DTypeId, DeviceId, ShapeBuf};
 

@@ -1,4 +1,3 @@
-//! Integration coverage for `wrong_mesh` on the documented public surface.
 use incin_core::dist::{
     ActivationCheckpoint, GPipe, PipelineBoundaryId, PipelinePlanBuilder, StreamId,
     TwoRankDataParallel,

@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin::experimental::distributed::{RunId, StaticRendezvousConfig};
 use incin::typenum::U1;
 

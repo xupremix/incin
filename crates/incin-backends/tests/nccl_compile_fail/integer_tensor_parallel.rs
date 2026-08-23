@@ -1,4 +1,3 @@
-//! Integration coverage for `integer_tensor_parallel` on the documented public surface.
 use incin_backends::cuda::CudaBackendImpl;
 use incin_backends::dist::NcclTransport;
 use incin_core::dist::{TensorParallelCollective, TensorParallelId};

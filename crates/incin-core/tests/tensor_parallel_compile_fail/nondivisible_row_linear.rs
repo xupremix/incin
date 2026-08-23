@@ -1,4 +1,3 @@
-//! Integration coverage for `three_input_features` on the documented public surface.
 use incin_core::dist::{StreamId, TensorParallelId, TensorParallelPlanBuilder};
 use incin_core::typenum::U3;
 

@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin_core::dist::{CompletePlacement, Partial, Sum};
 use incin_core::dist::mesh::{Data, MeshSpec};
 use incin_core::typenum::U1;

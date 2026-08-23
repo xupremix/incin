@@ -1,4 +1,3 @@
-//! Integration coverage for `synchronize` on the documented public surface.
 use incin_backends::cuda::{CudaBackendImpl, CudaGrads};
 use incin_backends::dist::{NcclTransport};
 use incin_core::dist::GradientId;

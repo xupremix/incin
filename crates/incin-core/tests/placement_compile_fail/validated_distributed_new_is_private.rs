@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 use incin_core::dist::{
     PlacementBuf, PlacementKind, PlacementTransition, ValidatedDistributed,
 };

@@ -1,4 +1,3 @@
-//! Integration coverage for `integer_gradient` on the documented public surface.
 use incin_core::dist::{DataParallelPlanBuilder, GradientId, StreamId};
 
 fn integer_gradient(builder: &mut DataParallelPlanBuilder<'_>) {

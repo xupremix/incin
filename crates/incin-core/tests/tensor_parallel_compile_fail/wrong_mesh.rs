@@ -1,4 +1,3 @@
-//! Integration coverage for `wrong_mesh` on the documented public surface.
 use incin_core::dist::mesh::{Data, DeviceMesh, MeshSpec};
 use incin_core::dist::TensorParallelPlanBuilder;
 use incin_core::typenum::U2;

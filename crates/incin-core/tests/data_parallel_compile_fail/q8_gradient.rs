@@ -1,4 +1,3 @@
-//! Integration coverage for `quantized_gradient` on the documented public surface.
 use incin_core::dist::{DataParallelPlanBuilder, GradientId, StreamId};
 use incin_core::prelude::Q8_0;
 

@@ -1,4 +1,3 @@
-//! Integration coverage for `requires_collective` on the documented public surface.
 use incin_backends::tuning::{
     identity::{CompilerFingerprint, DeviceFingerprint, SoftwareVersion, TuningEnvironmentFingerprint},
     service::{CollectiveTuning, KernelTuning, TuningContext},

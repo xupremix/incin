@@ -1,4 +1,3 @@
-//! Integration coverage for `main` on the documented public surface.
 extern crate incin_core as incin;
 use incin_core::{advanced::Here, prelude::*};
 use incin_backends::cpu::CpuBackendImpl;
