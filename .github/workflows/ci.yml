@@ -6,14 +6,12 @@ on:
     paths-ignore:
       - "docs/wiki/**"
       - ".github/ISSUE_TEMPLATE/**"
-      - "*.md"
       - "LICENSE*"
   pull_request:
     branches: [ "main", "master", "develop" ]
     paths-ignore:
       - "docs/wiki/**"
       - ".github/ISSUE_TEMPLATE/**"
-      - "*.md"
       - "LICENSE*"
   schedule:
     # Nightly 02:00 UTC for deep soundness (Miri, Sanitizers, Powersets)
