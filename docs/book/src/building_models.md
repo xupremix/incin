@@ -25,6 +25,26 @@ assert_eq!(flat.dims().as_ref(), &[32, 784]);
 # Ok::<(), incin::Error>(())
 ```
 
+## Initializing layer parameters
+
+Every layer builder takes an `Init` scheme per parameter. The defaults are
+deliberate (Kaiming for weights, zeros for biases); override them when you know
+better:
+
+```rust,ignore
+use incin::prelude::*;
+
+let layer = incin_core::nn::linear::linear(shape![128, 10])
+    .weight_init(incin_core::nn::init::kaiming_uniform())   // the default
+    .bias_init(incin_core::nn::init::zeros())
+    .init(&Cpu)?;
+```
+
+`Init` covers `Zeros`, `Ones`, `Rand`, `Randn`, `Constant(f64)`,
+`Uniform { bound }`, and both Kaiming variants with a gain parameter. The same
+fields exist on conv, normalization, embedding, and RNN builders, so one enum
+is the whole initialization story.
+
 ## Linear
 
 ```rust,no_run

@@ -34,6 +34,7 @@
 # Backends
 
 - [CPU, and what actually runs on GPU today](./backends.md)
+- [Devices, dtypes, and support checks](./devices_and_dtypes.md)
 - [The target API and canonical dispatch](./target_api.md)
 - [Backend authoring](./backend_authoring.md)
 - [From proofs to execution](./proofs_to_execution.md)
