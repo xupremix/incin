@@ -1,0 +1,121 @@
+impl core::default::Default for incin_viz::panels::graph::GraphModuleListPanel
+impl core::fmt::Debug for incin_viz::err::Error
+impl incin_viz::app::App
+impl incin_viz::panels::graph::GraphModuleListPanel
+impl incin_viz::panels::loss::LossPanel
+impl incin_viz::panels::norms::NormsPanel
+impl incin_viz::panels::scalar::ScalarPanel
+impl incin_viz::panels::system::MemoryPanel
+impl incin_viz::transport_reader::FileTransportReader
+impl incin_viz::transport_reader::TransportReader for incin_viz::transport_reader::FileTransportReader
+impl incin_viz_plugin_api::keymap::KeymapProvider for incin_viz::app::DefaultKeymap
+impl incin_viz_plugin_api::keymap::KeymapProvider for incin_viz::app::VimKeymap
+impl incin_viz_plugin_api::panel::Panel for incin_viz::panels::graph::GraphModuleListPanel
+impl incin_viz_plugin_api::panel::Panel for incin_viz::panels::loss::LossPanel
+impl incin_viz_plugin_api::panel::Panel for incin_viz::panels::norms::NormsPanel
+impl incin_viz_plugin_api::panel::Panel for incin_viz::panels::panic_test::PanicTestPanel
+impl incin_viz_plugin_api::panel::Panel for incin_viz::panels::scalar::ScalarPanel
+impl incin_viz_plugin_api::panel::Panel for incin_viz::panels::system::MemoryPanel
+pub async fn incin_viz::app::run(incin_viz::app::App, ratatui::init::DefaultTerminal, alloc::boxed::Box<dyn incin_viz_plugin_api::keymap::KeymapProvider>) -> anyhow::Result<()>
+pub enum incin_viz::app::LayoutMode
+pub enum incin_viz::dispatch::DispatchOutcome<T>
+pub enum incin_viz::err::Error
+pub enum incin_viz::panels::graph::ViewMode
+pub enum incin_viz::panels::norms::NormType
+pub fn incin_viz::app::App::handle_key(&mut self, incin_viz_plugin_api::keymap::Action)
+pub fn incin_viz::app::App::handle_panel_local_event(&mut self, incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::app::App::new(alloc::boxed::Box<dyn incin_viz::transport_reader::TransportReader>, alloc::string::String) -> Self
+pub fn incin_viz::app::App::poll_transport(&mut self)
+pub fn incin_viz::app::App::register_panel(&mut self, alloc::boxed::Box<dyn incin_viz_plugin_api::panel::Panel>)
+pub fn incin_viz::app::App::render(&mut self, &mut ratatui_core::terminal::frame::Frame<'_>)
+pub fn incin_viz::app::DefaultKeymap::resolve(&self, incin_viz_plugin_api::event::PanelKeyEvent) -> core::option::Option<incin_viz_plugin_api::keymap::Action>
+pub fn incin_viz::app::VimKeymap::resolve(&self, incin_viz_plugin_api::event::PanelKeyEvent) -> core::option::Option<incin_viz_plugin_api::keymap::Action>
+pub fn incin_viz::dispatch::dispatch_handle_event(&mut dyn incin_viz_plugin_api::panel::Panel, &incin_viz_plugin_api::event::PanelEvent) -> incin_viz::dispatch::DispatchOutcome<bool>
+pub fn incin_viz::dispatch::dispatch_render(&mut dyn incin_viz_plugin_api::panel::Panel, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>) -> incin_viz::dispatch::DispatchOutcome<()>
+pub fn incin_viz::dispatch::dispatch_reset(&mut dyn incin_viz_plugin_api::panel::Panel) -> incin_viz::dispatch::DispatchOutcome<()>
+pub fn incin_viz::dispatch::dispatch_update(&mut dyn incin_viz_plugin_api::panel::Panel, &incin_telemetry::events::Event) -> incin_viz::dispatch::DispatchOutcome<()>
+pub fn incin_viz::err::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_viz::panels::graph::GraphModuleListPanel::default() -> Self
+pub fn incin_viz::panels::graph::GraphModuleListPanel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::panels::graph::GraphModuleListPanel::id(&self) -> &'static str
+pub fn incin_viz::panels::graph::GraphModuleListPanel::new() -> Self
+pub fn incin_viz::panels::graph::GraphModuleListPanel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz::panels::graph::GraphModuleListPanel::reset(&mut self)
+pub fn incin_viz::panels::graph::GraphModuleListPanel::title(&self) -> &str
+pub fn incin_viz::panels::graph::GraphModuleListPanel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz::panels::loss::LossPanel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::panels::loss::LossPanel::id(&self) -> &'static str
+pub fn incin_viz::panels::loss::LossPanel::new() -> Self
+pub fn incin_viz::panels::loss::LossPanel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz::panels::loss::LossPanel::reset(&mut self)
+pub fn incin_viz::panels::loss::LossPanel::title(&self) -> &str
+pub fn incin_viz::panels::loss::LossPanel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz::panels::norms::NormsPanel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::panels::norms::NormsPanel::id(&self) -> &'static str
+pub fn incin_viz::panels::norms::NormsPanel::new(incin_viz::panels::norms::NormType, &str, &'static str, core::option::Option<f64>) -> Self
+pub fn incin_viz::panels::norms::NormsPanel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz::panels::norms::NormsPanel::reset(&mut self)
+pub fn incin_viz::panels::norms::NormsPanel::title(&self) -> &str
+pub fn incin_viz::panels::norms::NormsPanel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz::panels::panic_test::PanicTestPanel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::panels::panic_test::PanicTestPanel::id(&self) -> &'static str
+pub fn incin_viz::panels::panic_test::PanicTestPanel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz::panels::panic_test::PanicTestPanel::reset(&mut self)
+pub fn incin_viz::panels::panic_test::PanicTestPanel::title(&self) -> &str
+pub fn incin_viz::panels::panic_test::PanicTestPanel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz::panels::scalar::ScalarPanel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::panels::scalar::ScalarPanel::id(&self) -> &'static str
+pub fn incin_viz::panels::scalar::ScalarPanel::new(&str, &str, &'static str) -> Self
+pub fn incin_viz::panels::scalar::ScalarPanel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz::panels::scalar::ScalarPanel::reset(&mut self)
+pub fn incin_viz::panels::scalar::ScalarPanel::title(&self) -> &str
+pub fn incin_viz::panels::scalar::ScalarPanel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz::panels::system::MemoryPanel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz::panels::system::MemoryPanel::id(&self) -> &'static str
+pub fn incin_viz::panels::system::MemoryPanel::new(&str, &'static str, core::option::Option<f64>) -> Self
+pub fn incin_viz::panels::system::MemoryPanel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz::panels::system::MemoryPanel::reset(&mut self)
+pub fn incin_viz::panels::system::MemoryPanel::title(&self) -> &str
+pub fn incin_viz::panels::system::MemoryPanel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz::transport_reader::FileTransportReader::open(&std::path::Path) -> incin_viz::err::Result<Self>
+pub fn incin_viz::transport_reader::FileTransportReader::poll_new_events(&mut self) -> incin_viz::err::Result<alloc::vec::Vec<incin_telemetry::events::Event>>
+pub fn incin_viz::transport_reader::TransportReader::poll_new_events(&mut self) -> incin_viz::err::Result<alloc::vec::Vec<incin_telemetry::events::Event>>
+pub incin_viz::app::App::conflicts: alloc::vec::Vec<alloc::string::String>
+pub incin_viz::app::App::hover_text: core::option::Option<alloc::string::String>
+pub incin_viz::app::LayoutMode::Grid
+pub incin_viz::app::LayoutMode::Maximized
+pub incin_viz::dispatch::DispatchOutcome::Ok(T)
+pub incin_viz::dispatch::DispatchOutcome::Panicked
+pub incin_viz::err::Error::Io(core::io::error::Error)
+pub incin_viz::err::Error::Msg(alloc::string::String)
+pub incin_viz::err::Error::Serialize(serde_json::error::Error)
+pub incin_viz::err::Error::Transport(alloc::string::String)
+pub incin_viz::panels::graph::ViewMode::Canvas2D
+pub incin_viz::panels::graph::ViewMode::Canvas3D
+pub incin_viz::panels::graph::ViewMode::List
+pub incin_viz::panels::norms::NormType::Gradient
+pub incin_viz::panels::norms::NormType::Weight
+pub mod incin_viz
+pub mod incin_viz::app
+pub mod incin_viz::dispatch
+pub mod incin_viz::err
+pub mod incin_viz::panels
+pub mod incin_viz::panels::graph
+pub mod incin_viz::panels::loss
+pub mod incin_viz::panels::norms
+pub mod incin_viz::panels::panic_test
+pub mod incin_viz::panels::scalar
+pub mod incin_viz::panels::system
+pub mod incin_viz::transport_reader
+pub struct incin_viz::app::App
+pub struct incin_viz::app::DefaultKeymap
+pub struct incin_viz::app::VimKeymap
+pub struct incin_viz::panels::graph::GraphModuleListPanel
+pub struct incin_viz::panels::loss::LossPanel
+pub struct incin_viz::panels::norms::NormsPanel
+pub struct incin_viz::panels::panic_test::PanicTestPanel
+pub struct incin_viz::panels::scalar::ScalarPanel
+pub struct incin_viz::panels::system::MemoryPanel
+pub struct incin_viz::transport_reader::FileTransportReader
+pub trait incin_viz::transport_reader::TransportReader: core::marker::Send
+pub type incin_viz::err::Result<T> = core::result::Result<T, incin_viz::err::Error>

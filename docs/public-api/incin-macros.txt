@@ -1,0 +1,10 @@
+pub mod incin_macros
+pub proc macro incin_macros::#[module]
+pub proc macro incin_macros::axis!()
+pub proc macro incin_macros::i!()
+pub proc macro incin_macros::idx!()
+pub proc macro incin_macros::import_model!()
+pub proc macro incin_macros::model!()
+pub proc macro incin_macros::s!()
+pub proc macro incin_macros::shape!()
+pub proc macro incin_macros::tensor!()

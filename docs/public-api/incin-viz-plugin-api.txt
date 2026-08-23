@@ -1,0 +1,160 @@
+impl core::fmt::Debug for incin_viz_plugin_api::err::Error
+impl incin_viz_plugin_api::render_ctx::HitId
+impl<'a, 'b> incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>
+pub const fn incin_viz_plugin_api::render_ctx::HitId::get(self) -> u32
+pub const fn incin_viz_plugin_api::render_ctx::HitId::new(u32) -> Self
+pub enum incin_viz_plugin_api::err::Error
+pub enum incin_viz_plugin_api::event::KeyCode
+pub enum incin_viz_plugin_api::event::PanelEvent
+pub enum incin_viz_plugin_api::event::PanelMouseEvent
+pub enum incin_viz_plugin_api::keymap::Action
+pub enum incin_viz_plugin_api::prelude::Action
+pub enum incin_viz_plugin_api::prelude::Error
+pub enum incin_viz_plugin_api::prelude::KeyCode
+pub enum incin_viz_plugin_api::prelude::PanelEvent
+pub enum incin_viz_plugin_api::prelude::PanelMouseEvent
+pub fn incin_viz_plugin_api::err::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_viz_plugin_api::keymap::KeymapProvider::resolve(&self, incin_viz_plugin_api::event::PanelKeyEvent) -> core::option::Option<incin_viz_plugin_api::keymap::Action>
+pub fn incin_viz_plugin_api::panel::Panel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz_plugin_api::panel::Panel::hover_text(&self, incin_viz_plugin_api::render_ctx::HitId) -> core::option::Option<alloc::string::String>
+pub fn incin_viz_plugin_api::panel::Panel::id(&self) -> &'static str
+pub fn incin_viz_plugin_api::panel::Panel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz_plugin_api::panel::Panel::reset(&mut self)
+pub fn incin_viz_plugin_api::panel::Panel::title(&self) -> &str
+pub fn incin_viz_plugin_api::panel::Panel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz_plugin_api::plugin::Plugin::panels(&self) -> alloc::vec::Vec<alloc::boxed::Box<dyn incin_viz_plugin_api::panel::Panel>>
+pub fn incin_viz_plugin_api::prelude::KeymapProvider::resolve(&self, incin_viz_plugin_api::event::PanelKeyEvent) -> core::option::Option<incin_viz_plugin_api::keymap::Action>
+pub fn incin_viz_plugin_api::prelude::Panel::handle_event(&mut self, &incin_viz_plugin_api::event::PanelEvent) -> bool
+pub fn incin_viz_plugin_api::prelude::Panel::hover_text(&self, incin_viz_plugin_api::render_ctx::HitId) -> core::option::Option<alloc::string::String>
+pub fn incin_viz_plugin_api::prelude::Panel::id(&self) -> &'static str
+pub fn incin_viz_plugin_api::prelude::Panel::render(&mut self, &mut incin_viz_plugin_api::render_ctx::RenderCtx<'_, '_>)
+pub fn incin_viz_plugin_api::prelude::Panel::reset(&mut self)
+pub fn incin_viz_plugin_api::prelude::Panel::title(&self) -> &str
+pub fn incin_viz_plugin_api::prelude::Panel::update(&mut self, &incin_telemetry::events::Event)
+pub fn incin_viz_plugin_api::prelude::Plugin::panels(&self) -> alloc::vec::Vec<alloc::boxed::Box<dyn incin_viz_plugin_api::panel::Panel>>
+pub fn incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>::area(&self) -> ratatui_core::layout::rect::Rect
+pub fn incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>::frame_mut(&mut self) -> &mut ratatui_core::terminal::frame::Frame<'b>
+pub fn incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>::new(&'a mut ratatui_core::terminal::frame::Frame<'b>, ratatui_core::layout::rect::Rect, &'a mut alloc::vec::Vec<(ratatui_core::layout::rect::Rect, incin_viz_plugin_api::render_ctx::HitId)>) -> Self
+pub fn incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>::register_hit_region(&mut self, ratatui_core::layout::rect::Rect, incin_viz_plugin_api::render_ctx::HitId)
+pub fn incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>::set_alert(&mut self, alloc::string::String)
+pub fn incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>::take_alert(&mut self) -> core::option::Option<alloc::string::String>
+pub incin_viz_plugin_api::err::Error::Io(core::io::error::Error)
+pub incin_viz_plugin_api::err::Error::Msg(alloc::string::String)
+pub incin_viz_plugin_api::event::KeyCode::BackTab
+pub incin_viz_plugin_api::event::KeyCode::Char(char)
+pub incin_viz_plugin_api::event::KeyCode::Down
+pub incin_viz_plugin_api::event::KeyCode::Enter
+pub incin_viz_plugin_api::event::KeyCode::Esc
+pub incin_viz_plugin_api::event::KeyCode::Left
+pub incin_viz_plugin_api::event::KeyCode::Right
+pub incin_viz_plugin_api::event::KeyCode::Tab
+pub incin_viz_plugin_api::event::KeyCode::Up
+pub incin_viz_plugin_api::event::KeyModifiers::alt: bool
+pub incin_viz_plugin_api::event::KeyModifiers::ctrl: bool
+pub incin_viz_plugin_api::event::KeyModifiers::shift: bool
+pub incin_viz_plugin_api::event::PanelEvent::Key(incin_viz_plugin_api::event::PanelKeyEvent)
+pub incin_viz_plugin_api::event::PanelEvent::Mouse(incin_viz_plugin_api::event::PanelMouseEvent)
+pub incin_viz_plugin_api::event::PanelKeyEvent::code: incin_viz_plugin_api::event::KeyCode
+pub incin_viz_plugin_api::event::PanelKeyEvent::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::event::PanelMouseEvent::Down
+pub incin_viz_plugin_api::event::PanelMouseEvent::Down::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::event::PanelMouseEvent::Down::x: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::Down::y: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::Drag
+pub incin_viz_plugin_api::event::PanelMouseEvent::Drag::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::event::PanelMouseEvent::Drag::x: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::Drag::y: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollDown
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollDown::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollDown::x: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollDown::y: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollUp
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollUp::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollUp::x: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::ScrollUp::y: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::Up
+pub incin_viz_plugin_api::event::PanelMouseEvent::Up::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::event::PanelMouseEvent::Up::x: u16
+pub incin_viz_plugin_api::event::PanelMouseEvent::Up::y: u16
+pub incin_viz_plugin_api::keymap::Action::FocusDown
+pub incin_viz_plugin_api::keymap::Action::FocusLeft
+pub incin_viz_plugin_api::keymap::Action::FocusNext
+pub incin_viz_plugin_api::keymap::Action::FocusPrev
+pub incin_viz_plugin_api::keymap::Action::FocusRight
+pub incin_viz_plugin_api::keymap::Action::FocusUp
+pub incin_viz_plugin_api::keymap::Action::PanelLocal
+pub incin_viz_plugin_api::keymap::Action::Quit
+pub incin_viz_plugin_api::keymap::Action::RetryPanel
+pub incin_viz_plugin_api::keymap::Action::ToggleLayout
+pub incin_viz_plugin_api::prelude::Action::FocusDown
+pub incin_viz_plugin_api::prelude::Action::FocusLeft
+pub incin_viz_plugin_api::prelude::Action::FocusNext
+pub incin_viz_plugin_api::prelude::Action::FocusPrev
+pub incin_viz_plugin_api::prelude::Action::FocusRight
+pub incin_viz_plugin_api::prelude::Action::FocusUp
+pub incin_viz_plugin_api::prelude::Action::PanelLocal
+pub incin_viz_plugin_api::prelude::Action::Quit
+pub incin_viz_plugin_api::prelude::Action::RetryPanel
+pub incin_viz_plugin_api::prelude::Action::ToggleLayout
+pub incin_viz_plugin_api::prelude::Error::Io(core::io::error::Error)
+pub incin_viz_plugin_api::prelude::Error::Msg(alloc::string::String)
+pub incin_viz_plugin_api::prelude::KeyCode::BackTab
+pub incin_viz_plugin_api::prelude::KeyCode::Char(char)
+pub incin_viz_plugin_api::prelude::KeyCode::Down
+pub incin_viz_plugin_api::prelude::KeyCode::Enter
+pub incin_viz_plugin_api::prelude::KeyCode::Esc
+pub incin_viz_plugin_api::prelude::KeyCode::Left
+pub incin_viz_plugin_api::prelude::KeyCode::Right
+pub incin_viz_plugin_api::prelude::KeyCode::Tab
+pub incin_viz_plugin_api::prelude::KeyCode::Up
+pub incin_viz_plugin_api::prelude::KeyModifiers::alt: bool
+pub incin_viz_plugin_api::prelude::KeyModifiers::ctrl: bool
+pub incin_viz_plugin_api::prelude::KeyModifiers::shift: bool
+pub incin_viz_plugin_api::prelude::PanelEvent::Key(incin_viz_plugin_api::event::PanelKeyEvent)
+pub incin_viz_plugin_api::prelude::PanelEvent::Mouse(incin_viz_plugin_api::event::PanelMouseEvent)
+pub incin_viz_plugin_api::prelude::PanelKeyEvent::code: incin_viz_plugin_api::event::KeyCode
+pub incin_viz_plugin_api::prelude::PanelKeyEvent::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Down
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Down::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Down::x: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Down::y: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Drag
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Drag::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Drag::x: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Drag::y: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollDown
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollDown::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollDown::x: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollDown::y: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollUp
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollUp::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollUp::x: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::ScrollUp::y: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Up
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Up::modifiers: incin_viz_plugin_api::event::KeyModifiers
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Up::x: u16
+pub incin_viz_plugin_api::prelude::PanelMouseEvent::Up::y: u16
+pub mod incin_viz_plugin_api
+pub mod incin_viz_plugin_api::err
+pub mod incin_viz_plugin_api::event
+pub mod incin_viz_plugin_api::keymap
+pub mod incin_viz_plugin_api::panel
+pub mod incin_viz_plugin_api::plugin
+pub mod incin_viz_plugin_api::prelude
+pub mod incin_viz_plugin_api::render_ctx
+pub struct incin_viz_plugin_api::event::KeyModifiers
+pub struct incin_viz_plugin_api::event::PanelKeyEvent
+pub struct incin_viz_plugin_api::prelude::HitId(_)
+pub struct incin_viz_plugin_api::prelude::KeyModifiers
+pub struct incin_viz_plugin_api::prelude::PanelKeyEvent
+pub struct incin_viz_plugin_api::prelude::RenderCtx<'a, 'b>
+pub struct incin_viz_plugin_api::render_ctx::HitId(_)
+pub struct incin_viz_plugin_api::render_ctx::RenderCtx<'a, 'b>
+pub trait incin_viz_plugin_api::keymap::KeymapProvider
+pub trait incin_viz_plugin_api::panel::Panel: core::marker::Send
+pub trait incin_viz_plugin_api::plugin::Plugin
+pub trait incin_viz_plugin_api::prelude::KeymapProvider
+pub trait incin_viz_plugin_api::prelude::Panel: core::marker::Send
+pub trait incin_viz_plugin_api::prelude::Plugin
+pub type incin_viz_plugin_api::err::Result<T> = core::result::Result<T, incin_viz_plugin_api::err::Error>
+pub type incin_viz_plugin_api::prelude::Result<T> = core::result::Result<T, incin_viz_plugin_api::err::Error>

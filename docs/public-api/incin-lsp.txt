@@ -1,0 +1,20 @@
+impl incin_lsp::config::Config
+impl incin_lsp::rewrite::PendingRequests
+pub const incin_lsp::config::HINTS_VAR: &str
+pub const incin_lsp::config::RA_PATH_VAR: &str
+pub const incin_lsp::config::SHORTEN_BACKEND_VAR: &str
+pub fn incin_lsp::config::Config::from_env() -> Self
+pub fn incin_lsp::frame::read_frame<R: alloc::io::buf_read::BufRead>(&mut R) -> core::io::error::Result<core::option::Option<alloc::vec::Vec<u8>>>
+pub fn incin_lsp::frame::write_frame<W: core::io::write::Write>(&mut W, &[u8]) -> core::io::error::Result<()>
+pub fn incin_lsp::rewrite::PendingRequests::new() -> Self
+pub fn incin_lsp::rewrite::PendingRequests::observe_outgoing_to_server(&mut self, &serde_json::value::Value)
+pub fn incin_lsp::rewrite::rewrite_incoming_from_server(&serde_json::value::Value, &mut incin_lsp::rewrite::PendingRequests, bool, bool) -> core::option::Option<serde_json::value::Value>
+pub incin_lsp::config::Config::hints_enabled: bool
+pub incin_lsp::config::Config::ra_path: alloc::string::String
+pub incin_lsp::config::Config::shorten_backend: bool
+pub mod incin_lsp
+pub mod incin_lsp::config
+pub mod incin_lsp::frame
+pub mod incin_lsp::rewrite
+pub struct incin_lsp::config::Config
+pub struct incin_lsp::rewrite::PendingRequests
