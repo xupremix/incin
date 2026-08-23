@@ -10,6 +10,7 @@ use incin_core::tensor::device::DeviceKind;
 
 static EMPTY_CAPABILITIES: &[CapabilityRule] = &[];
 
+/// Returns the capability registry compiled for `device`'s backend family.
 #[must_use]
 pub fn registry(device: DeviceKind) -> CapabilityRegistry {
     let rules = match device {
@@ -22,6 +23,7 @@ pub fn registry(device: DeviceKind) -> CapabilityRegistry {
     CapabilityRegistry::new(rules)
 }
 
+/// Queries the device's registry for its support level of one capability.
 #[must_use]
 pub fn support(device: DeviceKind, query: &CapabilityQuery) -> SupportLevel {
     registry(device).support(query)
@@ -32,13 +34,19 @@ pub fn support(device: DeviceKind, query: &CapabilityQuery) -> SupportLevel {
 /// migration-blocked decision, never an omitted row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackendCoverageRow {
+    /// The operation whose rule count is reported on this row.
     pub operation: OperationKind,
+    /// Number of capability rules the CPU registry declares for the operation.
     pub cpu_rules: usize,
+    /// Number of capability rules the CUDA registry declares for the operation.
     pub cuda_rules: usize,
+    /// Number of capability rules the WGPU registry declares for the operation.
     pub wgpu_rules: usize,
+    /// Number of capability rules the Metal registry declares for the operation.
     pub metal_rules: usize,
 }
 
+/// Builds one coverage row per catalog operation across every compiled backend registry.
 #[must_use]
 pub fn coverage_report() -> alloc::vec::Vec<BackendCoverageRow> {
     OPERATION_CATALOG

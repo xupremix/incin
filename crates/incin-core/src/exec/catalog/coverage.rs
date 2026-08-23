@@ -2,9 +2,13 @@ use super::*;
 
 /// Counts derived directly from the canonical operation catalog.
 pub struct OperationCoverage {
+    /// Operations carrying canonical descriptors.
     pub canonical: usize,
+    /// Operations any backend may execute.
     pub backend_executable: usize,
+    /// Catalog rows that never execute directly.
     pub non_backend_executable: usize,
+    /// Row counts grouped by execution site.
     pub by_site: [(ExecutionSite, usize); 7],
 }
 

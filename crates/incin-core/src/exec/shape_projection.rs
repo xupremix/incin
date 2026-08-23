@@ -17,7 +17,9 @@ use crate::shapes::dim::{
 use crate::shapes::shape::{DimCons, Nil, Ranked, Shape};
 use typenum::{Bit, UInt, UTerm, Unsigned};
 
+/// Projects one extent through a symbolic projection rule.
 pub trait DimProjection {
+    /// Projects one axis's base extent.
     fn project(axis: usize, base: u32) -> DimExpr;
 }
 
@@ -96,7 +98,9 @@ impl<Tag: crate::shapes::dim::AxisTag, Extent: DimProjection> DimProjection
     }
 }
 
+/// Projects a whole shape through a symbolic rule.
 pub trait ShapeProjection {
+    /// Projects the base shape to its output form.
     fn project(base: u32) -> ShapeExpr;
 }
 

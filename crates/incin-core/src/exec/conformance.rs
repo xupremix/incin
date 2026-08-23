@@ -9,37 +9,59 @@ use crate::shapes::error::OperationKind;
 /// Semantic edge represented by a vector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConformanceClass {
+    /// Ordinary values with no special edge.
     Normal,
+    /// Rank-zero scalar input.
     ScalarRank,
+    /// Differing-shape operands combining under broadcasting.
     Broadcasting,
+    /// Zero-element input.
     ZeroLength,
+    /// Shapes that cannot legally combine.
     InvalidShape,
+    /// An axis argument at or beyond the rank.
     InvalidAxis,
+    /// A value at the edge of what the destination dtype can represent.
     DTypeBoundary,
+    /// A not-a-number input.
     NaN,
+    /// An infinity input.
     Infinity,
+    /// A derivative-contract case exercised by finite differences.
     Gradient,
 }
 
 /// Expected disposition independent of a backend implementation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExpectedDisposition {
+    /// Computes successfully with the recorded expected values.
     Succeeds,
+    /// Must fail with the framework's typed error.
     TypedError,
+    /// NaN/Infinity flows through unchanged in class.
     IeeePropagates,
+    /// Validated against the analytic gradient via central differences.
     FiniteDifference,
 }
 
 /// One storage-free semantic case reusable by every backend suite.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ConformanceVector {
+    /// Unique case name.
     pub name: &'static str,
+    /// Operation under test.
     pub operation: OperationKind,
+    /// Semantic edge class exercised.
     pub class: ConformanceClass,
+    /// Input value sets, row-major per tensor.
     pub inputs: &'static [&'static [f64]],
+    /// Shape of each input tensor.
     pub input_shapes: &'static [&'static [usize]],
+    /// Expected flat output values.
     pub expected: &'static [f64],
+    /// Expected output shape.
     pub expected_shape: &'static [usize],
+    /// What outcome correctness means here.
     pub disposition: ExpectedDisposition,
 }
 

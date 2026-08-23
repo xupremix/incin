@@ -1,3 +1,4 @@
+//! Feeds a demo graph into the incin-viz TUI for interactive inspection.
 #[macro_use]
 extern crate alloc;
 use incin::backend_authoring::{SupportsDType, VariableBackend};

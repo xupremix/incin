@@ -28,7 +28,9 @@ pub trait RnnShape: Shape + DynShape {
     type In: Dim;
     /// `Out`.
     type Out: Dim;
+    /// Input-to-hidden projection geometry.
     type IhShape: LinearShape<InF = Self::In, OutF = Self::Out>;
+    /// Hidden-to-hidden recurrence geometry.
     type HhShape: LinearShape<InF = Self::Out, OutF = Self::Out>;
 }
 
@@ -84,6 +86,7 @@ pub struct RNNCellBuilder<
     pub input_bias_init: Init,
     /// Initializer for the hidden-to-hidden bias vector (`b_hh`).
     pub hidden_bias_init: Init,
+    /// Bias-presence and train-state markers.
     pub _phantom: core::marker::PhantomData<(BiasIh, BiasHh, Train)>,
 }
 

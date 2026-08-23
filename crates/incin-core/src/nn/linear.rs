@@ -180,9 +180,13 @@ pub struct LinearBuilder<
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
     Train: TrainState = Trainable,
 > {
+    /// (in_features, out_features) geometry.
     pub shape: ShapeValue<S>,
+    /// Weight initialization scheme.
     pub weight_init: crate::nn::init::Init,
+    /// Bias initialization scheme.
     pub bias_init: crate::nn::init::Init,
+    /// Bias-presence and train-state markers.
     pub _phantom: core::marker::PhantomData<(Bias, Train)>,
 }
 

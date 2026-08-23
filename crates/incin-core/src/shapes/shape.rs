@@ -124,7 +124,9 @@ impl Shape for Nil {
 /// Cons-cell node for canonical recursive fixed-rank shapes (`DimCons<Head, Tail>`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct DimCons<H, T> {
+    /// First dimension of the pair.
     pub head: H,
+    /// Remaining dimensions.
     pub tail: T,
 }
 
@@ -198,6 +200,7 @@ impl<H: Dim, T: Shape + DynShape> DynShape for DimCons<H, T> {
 
 /// Prepends a dimension to a structural shape.
 pub trait PrependDim<D: Dim>: Shape {
+    /// The resulting shape of [`PrependDim`].
     type Output: Shape;
 }
 
@@ -222,6 +225,7 @@ where
 
 /// Concatenates two structural shapes.
 pub trait StructuralConcatShape<Rhs: Shape>: Shape {
+    /// The resulting shape of [`StructuralConcatShape`].
     type Output: Shape;
 }
 
@@ -238,6 +242,7 @@ where
 
 /// Accesses the dimension at structural cursor `Cursor`.
 pub trait At<Cursor>: Shape {
+    /// The dimension at the resolved position.
     type Output: Dim;
 }
 
@@ -252,7 +257,9 @@ where
     type Output = <T as At<SubCursor>>::Output;
 }
 
+/// Positional access counting from the end.
 pub trait AtFromEnd<Cursor>: Shape {
+    /// The dimension at the from-end position.
     type Output: Dim;
 }
 
@@ -289,6 +296,7 @@ where
 
 /// Removes the dimension at structural cursor `Cursor`.
 pub trait RemoveAt<Cursor>: Shape {
+    /// The resulting shape of [`RemoveAt`].
     type Output: Shape;
 }
 
@@ -311,7 +319,9 @@ impl<SubCursor> RemoveAt<crate::shapes::idx::Next<SubCursor>> for Dyn {
     type Output = Dyn;
 }
 
+/// Removal counting from the end.
 pub trait RemoveFromEnd<Cursor>: Shape {
+    /// The resulting shape of [`RemoveFromEnd`].
     type Output: Shape;
 }
 
@@ -347,6 +357,7 @@ where
 
 /// Replaces the dimension at structural cursor `Cursor` with `NewDim`.
 pub trait ReplaceAt<Cursor, NewDim: Dim>: Shape {
+    /// The resulting shape of [`ReplaceAt`].
     type Output: Shape;
 }
 
@@ -371,7 +382,9 @@ where
     type Output = DimCons<H, <T as ReplaceAt<SubCursor, NewDim>>::Output>;
 }
 
+/// Replacement counting from the end.
 pub trait ReplaceFromEnd<Cursor, NewDim: Dim>: Shape {
+    /// The resulting shape of [`ReplaceFromEnd`].
     type Output: Shape;
 }
 
@@ -392,6 +405,7 @@ where
 
 /// Inserts `NewDim` before structural cursor `Cursor`.
 pub trait InsertAt<Cursor, NewDim: Dim>: Shape {
+    /// The resulting shape of [`InsertAt`].
     type Output: Shape;
 }
 
@@ -413,6 +427,7 @@ where
 
 /// Inserts a dimension at a static axis, including from-end cursors.
 pub trait InsertAxis<Cursor, NewDim: Dim>: Shape {
+    /// The resulting shape of [`InsertAxis`].
     type Output: Shape;
 }
 
@@ -444,6 +459,7 @@ where
 /// generated rank ladder, and moves each complete dimension type (including
 /// any semantic name metadata) rather than reconstructing it from a size.
 pub trait SwapAt<Left, Right>: Shape {
+    /// The resulting shape of [`SwapAt`].
     type Output: Shape;
 }
 
@@ -481,7 +497,9 @@ where
 // From-end selectors use a separate algebra.  The helper traits below make
 // the two edge cases explicit, so a proof of a forward cursor never explores
 // an unconstrained reverse cursor candidate.
+/// Swap counting both positions from the end.
 pub trait SwapFromEndAt<Left, Right>: Shape {
+    /// The resulting shape of [`SwapFromEndAt`].
     type Output: Shape;
 }
 
@@ -565,6 +583,7 @@ where
 
 /// Multiplies all dimensions in a structural shape into a single product dimension.
 pub trait ProductDims: Shape {
+    /// The dimension resulting from the product.
     type Output: Dim;
 }
 
@@ -573,12 +592,14 @@ pub trait ProductDims: Shape {
 /// The recursion consumes the selected prefix and then rebuilds the untouched
 /// suffix, so this operation has no rank-specific implementations.
 pub trait FlattenAt<Start, End>: Shape {
+    /// The resulting shape of [`FlattenAt`].
     type Output: Shape;
 }
 
 /// From-end flattening has separate dispatch to keep reverse recursion out of
 /// the positive-axis implementation.
 pub trait FlattenFromEndAt<Start, End>: Shape {
+    /// The resulting shape of [`FlattenFromEndAt`].
     type Output: Shape;
 }
 
@@ -704,8 +725,11 @@ where
 
 /// Structural suffix decomposition for the last 2 dimensions.
 pub trait SplitLast2: Shape {
+    /// All dimensions before the final two.
     type Prefix: Shape;
+    /// Second-to-last dimension.
     type Penultimate: Dim;
+    /// Final dimension.
     type Last: Dim;
 }
 
@@ -726,9 +750,13 @@ where
 
 /// Structural suffix decomposition for the last 3 dimensions.
 pub trait SplitLast3: Shape {
+    /// All dimensions before the final three.
     type Prefix: Shape;
+    /// Third-from-last dimension.
     type ThirdLast: Dim;
+    /// Second-from-last dimension.
     type SecondLast: Dim;
+    /// Final dimension.
     type Last: Dim;
 }
 
@@ -812,6 +840,7 @@ impl CheckedNumel {
     }
 
     #[inline]
+    /// Concrete extent value.
     pub fn get(self) -> usize {
         self.0
     }
@@ -899,21 +928,25 @@ impl<S: Shape> ShapeValue<S> {
     }
 
     #[inline]
+    /// Borrows the shape buffer.
     pub fn shape_buf(&self) -> &crate::shapes::ShapeBuf {
         &self.dims
     }
 
     #[inline]
+    /// Copies extents as a vector.
     pub fn dims(&self) -> Vec<usize> {
         self.dims.as_ref().to_vec()
     }
 
     #[inline]
+    /// Proof level proven for this shape.
     pub fn proof_level(&self) -> crate::shapes::ProofLevel {
         S::PROOF
     }
 
     #[inline]
+    /// Checked element count over possibly symbolic extents.
     pub fn checked_numel(
         &self,
         op: crate::shapes::error::OperationKind,
@@ -1100,7 +1133,9 @@ impl<D: Dim> HasChannels2D<D> for Dyn {}
 impl<NewDim: Dim> ReplaceLastDim<NewDim> for Nil {
     type Output = Nil;
 }
+/// Replaces only the trailing dimension.
 pub trait ReplaceLastTail<NewDim: Dim>: Shape {
+    /// The resulting shape of [`ReplaceLastTail`].
     type Output: Shape;
 }
 impl<NewDim: Dim> ReplaceLastTail<NewDim> for Nil {

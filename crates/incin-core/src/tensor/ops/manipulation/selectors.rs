@@ -11,35 +11,44 @@ use alloc::string::ToString;
 /// Public axis-pair selector used by transpose. Static pairs retain the exact
 /// `SwapAxes` output, while runtime and named pairs retain the input rank.
 pub trait AxisPairSelector<S: Shape, L, R> {
+    /// The resulting shape of [`AxisPairSelector`].
     type Output: Shape;
 
+    /// Resolves both axes of the pair against rank.
     fn resolve(pair: &(L, R), rank: usize) -> Result<(usize, usize)>;
 }
 
 /// Public static selector pair for flattening an inclusive axis range.
 pub trait FlattenSelector<S: Shape, L, R> {
+    /// The resulting shape of [`FlattenSelector`].
     type Output: Shape;
 
+    /// Resolves both axes of the pair against rank.
     fn resolve(pair: &(L, R), rank: usize) -> Result<(usize, usize)>;
 }
 
 /// Selects the axis used by a two-tensor concatenation.
 pub trait ConcatSelector<S: Shape, S2: Shape> {
+    /// The resulting shape of [`ConcatSelector`].
     type Output: Shape;
 
+    /// Resolves this selector against a concrete rank.
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
 /// Selects the insertion axis for stacking two tensors.
 pub trait StackSelector<S: Shape> {
+    /// The resulting shape of [`StackSelector`].
     type Output: Shape;
 
+    /// Resolves this selector against a concrete rank.
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
 /// Selects one axis for operations whose output geometry does not depend on
 /// the selector's proof type.
 pub trait AxisSelectorArg<S: Shape> {
+    /// Resolves this selector against a concrete rank.
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
@@ -47,8 +56,10 @@ pub trait AxisSelectorArg<S: Shape> {
 /// Static selectors preserve all unaffected dimensions; runtime selectors
 /// preserve the input rank.
 pub trait ReplaceAxisSelector<S: Shape> {
+    /// The resulting shape of [`ReplaceAxisSelector`].
     type Output: Shape;
 
+    /// Resolves this selector against a concrete rank.
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 
@@ -163,8 +174,10 @@ where
 /// Selects the insertion axis for unsqueeze while retaining the strongest
 /// shape proof available from the input and selector.
 pub trait UnsqueezeSelector<S: Shape> {
+    /// The resulting shape of [`UnsqueezeSelector`].
     type Output: Shape;
 
+    /// Resolves this selector against a concrete rank.
     fn resolve(&self, rank: usize) -> Result<usize>;
 }
 

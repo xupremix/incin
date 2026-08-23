@@ -300,6 +300,7 @@ pub fn shape(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+/// Procedural macro `tensor!` building a typed tensor literal with static shape checking.
 pub fn tensor(input: TokenStream) -> TokenStream {
     tensor::tensor(input)
 }
@@ -446,6 +447,7 @@ pub fn model(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+/// Attribute-style entry: `#[distributed_main]` selects and wraps a process-rank main.
 pub fn import_model(input: TokenStream) -> TokenStream {
     safetensors::import_model(TokenStream::new(), input)
 }

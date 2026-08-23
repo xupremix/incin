@@ -112,6 +112,7 @@ pub trait Distribution<K: DType = f32> {
 /// operation sequence. The protocol keeps that resource contract explicit
 /// without adding distribution operations to the core operation catalog.
 pub trait DistributionExecutor<D: ?Sized, K: DType>: Backend + SupportsDType<K> {
+    /// Samples a tensor from this distribution on the implementing backend.
     fn sample_distribution<S: Shape + DynShape, G: RequiresGrad>(
         distribution: &D,
         shape: ShapeBuf,
@@ -150,7 +151,9 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> TensorDistribut
 /// Uniform probability distribution over `[low, high)`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Uniform<K = f32> {
+    /// Lower bound of the uniform range.
     pub low: K,
+    /// Upper bound of the uniform range.
     pub high: K,
 }
 
@@ -216,7 +219,9 @@ impl Distribution<f32> for Uniform<f32> {
 /// Normal (Gaussian) probability distribution N(mean, std^2).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Normal<K = f32> {
+    /// Mean of the normal distribution.
     pub mean: K,
+    /// Standard deviation of the normal distribution.
     pub std: K,
 }
 
@@ -280,6 +285,7 @@ impl Distribution<f32> for Normal<f32> {
 /// Bernoulli probability distribution with success probability `p` in `[0, 1]`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bernoulli<K = f32> {
+    /// Success probability of the Bernoulli draw.
     pub p: K,
 }
 
@@ -340,6 +346,7 @@ impl Distribution<f32> for Bernoulli<f32> {
 /// Exponential probability distribution with rate parameter `lambda` > 0.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Exponential<K = f32> {
+    /// Rate parameter of the exponential draw.
     pub lambda: K,
 }
 
@@ -404,7 +411,9 @@ impl Distribution<f32> for Exponential<f32> {
 /// Gumbel probability distribution G(loc, scale).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Gumbel<K = f32> {
+    /// Location parameter of the Gumbel draw.
     pub loc: K,
+    /// Scale parameter of the Gumbel draw.
     pub scale: K,
 }
 

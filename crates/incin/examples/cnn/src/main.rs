@@ -1,3 +1,4 @@
+//! Trains a small convolutional network end to end on CPU.
 extern crate alloc;
 
 use incin::prelude::*;

@@ -1,3 +1,4 @@
+//! Runs one computation across every compiled backend family.
 extern crate alloc;
 use incin::Tensor;
 use incin::prelude::*;

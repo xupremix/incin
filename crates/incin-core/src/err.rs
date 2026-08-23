@@ -105,27 +105,34 @@ pub enum BackendError {
     ///
     /// [`StorageBackend::BACKEND_NAME`]: crate::tensor::backend::StorageBackend::BACKEND_NAME
     Unsupported {
+        /// Name of the backend involved.
         backend: &'static str,
+        /// Structured reason the capability is unsupported.
         reason: crate::exec::capability::UnsupportedReason,
     },
 
     #[error("invalid input for {operation}: {reason}")]
     /// A checked handle could not be interpreted by the selected backend.
     InvalidInput {
+        /// Operation involved in the failure.
         operation: crate::shapes::error::OperationKind,
+        /// Bounded explanation of the failure.
         reason: &'static str,
     },
 
     #[error("backend execution failed for {operation}: {message}")]
     /// A device or native library failed after validation.
     Execution {
+        /// Operation involved in the failure.
         operation: crate::shapes::error::OperationKind,
+        /// Bounded diagnostic message.
         message: ErrorMessage,
     },
 
     #[error("device {device:?} was lost during execution")]
     /// The fingerprinted device disappeared or was reset.
     DeviceLost {
+        /// Device the failure names.
         device: crate::tensor::device::DeviceId,
     },
 }
@@ -242,14 +249,20 @@ pub enum Error {
     Backward(#[from] BackwardError),
 
     #[error("Backend '{backend}' is unavailable in this build")]
-    /// A runtime-selected backend was not enabled.
-    BackendUnavailable { backend: &'static str },
+    /// A runtime-selected backend was not enabled in this build.
+    BackendUnavailable {
+        /// Name of the backend involved.
+        backend: &'static str,
+    },
 
     #[error("Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'")]
     /// The backend or operation cannot represent the requested dtype.
     UnsupportedDType {
+        /// Dtype the query asks about.
         dtype: DTypeDescriptor,
+        /// Name of the backend involved.
         backend: &'static str,
+        /// Operation identity string.
         op: &'static str,
     },
 
@@ -258,17 +271,24 @@ pub enum Error {
     )]
     /// Requested precision choice cannot be honored by the backend.
     UnsupportedPrecision {
+        /// Operation this query targets.
         operation: OperationKind,
+        /// Storage dtype observed on the tensor.
         storage: DTypeDescriptor,
+        /// Precision the caller requested.
         requested: DTypeDescriptor,
+        /// Role (compute vs accumulator) the request applies to.
         role: crate::exec::PrecisionRole,
+        /// Name of the backend involved.
         backend: &'static str,
     },
 
     #[error("Tensor dtype metadata {expected:?} does not match storage {got:?}")]
     /// Logical dtype differs from physical storage.
     DTypeStorageMismatch {
+        /// Dtype metadata promised.
         expected: DTypeDescriptor,
+        /// Dtype storage actually held.
         got: DTypeDescriptor,
     },
 
@@ -289,50 +309,79 @@ pub enum Error {
     #[error("{operation}: dtype mismatch: expected {expected:?}, got {actual:?}")]
     /// An operation received a dtype outside its declared contract.
     DTypeMismatch {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Dtype metadata promised.
         expected: DTypeDescriptor,
+        /// Dtype actually present.
         actual: DTypeDescriptor,
     },
 
     #[error("Tensor device metadata {expected:?} does not match storage {got:?}")]
     /// Logical device differs from physical storage.
-    DeviceStorageMismatch { expected: DeviceId, got: DeviceId },
-
+    DeviceStorageMismatch {
+        /// Value the contract expects.
+        expected: DeviceId,
+        /// Value actually present.
+        got: DeviceId,
+    },
     #[error("Device mismatch: left {left:?}, right {right:?}")]
     /// Inputs reside on different devices.
-    DeviceMismatch { left: DeviceId, right: DeviceId },
+    DeviceMismatch {
+        /// First device in the mismatch.
+        left: DeviceId,
+        /// Second device in the mismatch.
+        right: DeviceId,
+    },
 
     #[error("{operation}: device or placement mismatch: expected {expected:?}, got {actual:?}")]
     /// An operation received storage on a different device or placement.
     PlacementMismatch {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Device the contract requires.
         expected: DeviceId,
+        /// Device storage actually resides on.
         actual: DeviceId,
     },
 
     #[error("Invalid byte length: expected {expected}, got {got}")]
     /// Byte payload length does not match shape and dtype.
-    InvalidByteLength { expected: usize, got: usize },
+    /// Byte length disagrees with the element contract.
+    InvalidByteLength {
+        /// Value the contract expects.
+        expected: usize,
+        /// Value actually present.
+        got: usize,
+    },
+    /// Byte length disagrees with the element contract.
 
     #[error("Invalid {backend} device ordinal {ordinal}")]
     /// Device ordinal could not be selected.
     InvalidDeviceOrdinal {
+        /// Name of the backend involved.
         backend: &'static str,
+        /// Zero-based position among same-kind backends.
         ordinal: usize,
     },
 
     #[error("{operation}: arithmetic overflow evaluating '{expression}'")]
     /// Checked non-shape arithmetic overflowed.
     ArithmeticOverflow {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Named expression that overflowed or failed.
         expression: &'static str,
     },
 
     #[error("{operation}: allocation of {requested} bytes exceeds limit {limit}")]
     /// An allocation request exceeded address-space or resource limits.
     AllocationOverflow {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Requested size or value.
         requested: u64,
+        /// Configured bound that was exceeded.
         limit: u64,
     },
 
@@ -390,38 +439,51 @@ pub enum Error {
     #[error("{operation}: invalid module or state dictionary: {reason}")]
     /// Module parameters or serialized state violate the module contract.
     InvalidModuleState {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Bounded explanation attached to the failure.
         reason: ErrorMessage,
     },
 
     #[error("{operation}: malformed {artifact}: {reason}")]
     /// A model, dataset, cache, or compiled artifact is malformed.
     MalformedArtifact {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Artifact kind being parsed.
         artifact: &'static str,
+        /// Bounded explanation attached to the failure.
         reason: ErrorMessage,
     },
 
     #[error("{operation}: resource '{resource}' value {actual} exceeds limit {limit}")]
     /// Untrusted input exceeded a configured resource bound.
     ResourceLimit {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Resource whose limit was exceeded.
         resource: &'static str,
+        /// Observed size or value.
         actual: u64,
+        /// Configured bound that was exceeded.
         limit: u64,
     },
 
     #[error("{operation}: I/O failure: {message}")]
     /// A filesystem or stream operation failed.
     Io {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Bounded diagnostic message.
         message: ErrorMessage,
     },
 
     #[error("{operation}: internal invariant violation: {reason}")]
     /// A value that had already crossed validation contradicted its proof.
     InternalInvariant {
+        /// Operation that failed validation or execution.
         operation: &'static str,
+        /// Bounded explanation of the failure.
         reason: &'static str,
     },
 

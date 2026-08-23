@@ -9,18 +9,28 @@ use std::path::Path;
 /// Information summary of an inspected model file.
 #[derive(Debug, Clone)]
 pub struct ModelInfo {
+    /// Source format identifier.
     pub format: String,
+    /// File path as inspected.
     pub path: String,
+    /// Total file size.
     pub file_size_bytes: u64,
+    /// Number of tensors stored.
     pub tensor_count: usize,
+    /// Per-tensor metadata rows.
     pub tensors: Vec<TensorMetaInfo>,
 }
 
 #[derive(Debug, Clone)]
+/// Metadata for one stored tensor.
 pub struct TensorMetaInfo {
+    /// Tensor name.
     pub name: String,
+    /// Tensor shape.
     pub shape: Vec<usize>,
+    /// Tensor dtype name.
     pub dtype: String,
+    /// Storage size in bytes.
     pub size_bytes: usize,
 }
 

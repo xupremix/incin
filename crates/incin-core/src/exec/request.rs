@@ -25,6 +25,7 @@ pub type ExecutionPayload<'a> = &'a [u8];
 
 impl<'a> TensorHandle<'a> {
     #[must_use]
+    /// Wraps storage borrowed from a backend.
     pub fn from_storage<B, K, P>(storage: &'a <B as StorageBackend<P>>::Storage<K>) -> Self
     where
         B: StorageBackend<P>,
@@ -42,10 +43,12 @@ impl<'a> TensorHandle<'a> {
     }
 
     #[must_use]
+    /// Validated metadata of the wrapped storage.
     pub const fn metadata(&self) -> &TensorMeta {
         self.metadata
     }
 
+    /// Downcasts to a concrete handle type when possible.
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         self.storage.downcast_ref()
     }

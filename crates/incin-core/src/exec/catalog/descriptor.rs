@@ -2,6 +2,7 @@ use super::*;
 
 /// Open operation contract for downstream static execution.
 pub trait Operation: Clone + fmt::Debug + 'static {
+    /// Typed attribute payload carried by this descriptor.
     type Attributes: Clone
         + fmt::Debug
         + PartialEq
@@ -9,6 +10,7 @@ pub trait Operation: Clone + fmt::Debug + 'static {
         + serde::Serialize
         + for<'de> serde::Deserialize<'de>;
 
+    /// Stable key identifying this operation across registries.
     const KEY: OperationKey;
 
     /// Infers output metadata from checked logical input metadata.
@@ -47,6 +49,7 @@ mod private {
 
 /// A catalog operation with its exact typed attribute set.
 pub trait CanonicalOperation: private::Sealed + Operation {
+    /// Exact catalog identity of this operation.
     const ID: OperationKind;
 }
 
@@ -85,9 +88,11 @@ impl<O: Operation> crate::exec::spec::ExecutionDescriptor for Descriptor<O> {
 /// This is derived from the same canonical operation identity as capability
 /// admission and descriptor execution. It is not a second operation catalog.
 pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
+    /// Identity recorded into telemetry traces.
     fn trace_identity(&self) -> crate::exec::OperationIdentity;
 
     #[cfg(feature = "std")]
+    /// Renders attributes for telemetry consumption.
     fn trace_attributes(
         &self,
     ) -> core::result::Result<
@@ -95,10 +100,12 @@ pub trait TraceDescriptor: crate::exec::spec::ExecutionDescriptor {
         &'static str,
     >;
 
+    /// Serializes the descriptor body for trace replay.
     fn trace_descriptor_payload(
         &self,
     ) -> core::result::Result<Option<crate::graph::DescriptorPayload>, &'static str>;
 
+    /// Names the output dtype for trace consumers.
     fn trace_output_dtype(
         &self,
         inputs: &[crate::exec::request::TensorHandle<'_>],
@@ -173,26 +180,31 @@ impl<O: Operation> TraceDescriptor for Descriptor<O> {
 
 impl<O: Operation> Descriptor<O> {
     #[must_use]
+    /// Stable key of the captured operation.
     pub const fn key(&self) -> OperationKey {
         O::KEY
     }
 
     #[must_use]
+    /// Typed attribute payload.
     pub const fn attributes(&self) -> &O::Attributes {
         &self.attributes
     }
 
     #[must_use]
+    /// Validated output metadata.
     pub fn outputs(&self) -> &[LogicalTensorMeta] {
         &self.outputs
     }
 
     #[must_use]
+    /// Validated input metadata.
     pub fn inputs(&self) -> &[LogicalTensorMeta] {
         &self.inputs
     }
 
     #[must_use]
+    /// Operation identity proven at construction.
     pub const fn identity(&self) -> &crate::exec::OperationIdentity {
         &self.identity
     }
@@ -203,6 +215,7 @@ where
     O::Attributes: AttributeContract,
 {
     #[must_use]
+    /// Operation this payload belongs to.
     pub const fn operation(&self) -> OperationKind {
         O::ID
     }
@@ -262,20 +275,32 @@ pub struct CapturedDescriptor {
 
 #[cfg(feature = "std")]
 #[derive(Debug)]
+/// Failures while capturing or decoding a descriptor payload.
 pub enum DescriptorCaptureError {
+    /// Descriptor identity disagrees with the requested operation.
     Identity {
+        /// Operation the payload claims to be.
         expected: OperationKind,
+        /// Operation the caller asked for.
         actual: OperationKind,
     },
+    /// A custom-operation key collided with a builtin expectation.
     CustomIdentity {
+        /// Operation the payload claims to be.
         expected: OperationKind,
+        /// Custom key the payload carries.
         actual: OperationKey,
     },
+    /// Descriptor schema version mismatch.
     Schema {
+        /// Schema version this build speaks.
         expected: u32,
+        /// Schema version found in the payload.
         actual: u32,
     },
+    /// Payload failed to serialize.
     Encode(postcard::Error),
+    /// Payload failed to deserialize.
     Decode(postcard::Error),
 }
 
@@ -306,6 +331,7 @@ impl std::error::Error for DescriptorCaptureError {}
 
 #[cfg(feature = "std")]
 impl CapturedDescriptor {
+    /// Wraps raw bytes as a capture for later decoding.
     pub fn from_payload(operation: OperationKind, schema: u32, payload: Vec<u8>) -> Self {
         Self {
             operation,
@@ -314,6 +340,7 @@ impl CapturedDescriptor {
         }
     }
 
+    /// Captures a validated descriptor into a portable payload.
     pub fn capture<O: CanonicalOperation>(
         descriptor: &Descriptor<O>,
     ) -> Result<Self, DescriptorCaptureError>
@@ -329,20 +356,24 @@ impl CapturedDescriptor {
     }
 
     #[must_use]
+    /// Operation this payload belongs to.
     pub const fn operation(&self) -> OperationKind {
         self.operation
     }
 
     #[must_use]
+    /// Schema version the payload was encoded with.
     pub const fn schema(&self) -> u32 {
         self.schema
     }
 
     #[must_use]
+    /// Raw encoded descriptor bytes.
     pub fn payload(&self) -> &[u8] {
         &self.payload
     }
 
+    /// Decodes the payload back into a validated descriptor.
     pub fn decode<O: CanonicalOperation>(&self) -> Result<Descriptor<O>, DescriptorCaptureError>
     where
         O::Attributes: AttributeContract,

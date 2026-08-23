@@ -1,3 +1,4 @@
+//! Debug harness rendering viz panel layouts without a terminal UI.
 extern crate alloc;
 use alloc::collections::BTreeMap;
 use incin::backend_authoring::{SupportsDType, VariableBackend};

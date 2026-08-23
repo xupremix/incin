@@ -24,6 +24,7 @@ pub struct CheckpointDType {
 
 #[cfg(feature = "std")]
 impl CheckpointDType {
+    /// Maps one dtype descriptor onto checkpoint encoding.
     pub fn from_descriptor(dtype: DTypeDescriptor) -> Self {
         Self {
             key: dtype.key(),
@@ -69,11 +70,15 @@ impl CheckpointDType {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+/// Placement-aware metadata for one saved tensor.
 pub struct TensorCheckpointMeta {
+    /// State-path name of the tensor.
     pub name: String,
+    /// Global logical shape.
     pub global_shape: Vec<usize>,
     /// Explicit semantic and physical dtype record; schema version is independent.
     pub dtype: CheckpointDType,
+    /// Placement kind as text.
     pub placement_kind: String,
 }
 
@@ -89,8 +94,11 @@ pub const CHECKPOINT_MANIFEST_VERSION: u32 = 1;
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct GlobalCheckpointManifest {
+    /// Checkpoint envelope format version.
     pub version: u32,
+    /// World size that wrote the checkpoint.
     pub world_size: usize,
+    /// Tensors by state-path name.
     pub tensors: BTreeMap<String, TensorCheckpointMeta>,
 }
 

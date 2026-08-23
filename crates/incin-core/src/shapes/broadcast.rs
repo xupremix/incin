@@ -433,6 +433,7 @@ impl<H: Dim, T: Shape + DynShape> BroadcastShape<Dyn> for DimCons<H, T> {
 /// from the trailing axis, so reversing lets the type-level algorithm follow
 /// the same right-aligned order as the runtime validator.
 pub trait ReverseShape: Shape {
+    /// The resulting shape of [`ReverseShape`].
     type Output: Shape;
 }
 

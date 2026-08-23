@@ -19,7 +19,9 @@ use crate::tensor::backend::StorageBackend;
 /// policy that execution runs under.
 #[derive(Debug, Clone)]
 pub struct ExecutionContext<B: StorageBackend> {
+    /// Backend this context executes against.
     pub backend: B,
+    /// Ambient execution policy installed for the scope.
     pub policy: ExecutionPolicy,
 }
 
@@ -71,31 +73,37 @@ impl<B: StorageBackend> ExecutionContext<B> {
     }
 
     #[must_use]
+    /// Borrows the backend.
     pub const fn backend(&self) -> &B {
         &self.backend
     }
 
     #[must_use]
+    /// Mutably borrows the backend.
     pub fn backend_mut(&mut self) -> &mut B {
         &mut self.backend
     }
 
     #[must_use]
+    /// Consumes the context, returning the backend.
     pub fn into_backend(self) -> B {
         self.backend
     }
 
     #[must_use]
+    /// Reads the ambient policy.
     pub const fn policy(&self) -> ExecutionPolicy {
         self.policy
     }
 
     #[must_use]
+    /// Math mode currently in force.
     pub const fn math_mode(&self) -> MathMode {
         self.policy.math_mode
     }
 
     #[must_use]
+    /// Fallback policy currently in force.
     pub const fn fallback(&self) -> FallbackPolicy {
         self.policy.fallback
     }
@@ -111,40 +119,47 @@ impl<B: StorageBackend> ExecutionContext<B> {
     }
 
     #[must_use]
+    /// Whether training-mode execution is enabled.
     pub const fn training(&self) -> bool {
         self.policy.training
     }
 
     #[must_use]
+    /// Returns a copy pinned to one math mode.
     pub const fn with_math_mode(mut self, math_mode: MathMode) -> Self {
         self.policy.math_mode = math_mode;
         self
     }
 
     #[must_use]
+    /// Returns a copy pinned to one fallback policy.
     pub const fn with_fallback(mut self, fallback: FallbackPolicy) -> Self {
         self.policy.fallback = fallback;
         self
     }
 
     #[must_use]
+    /// Returns a copy pinned to one gradient-recording mode.
     pub const fn with_grad_mode(mut self, grad_mode: GradMode) -> Self {
         self.policy.grad_mode = grad_mode;
         self
     }
 
     #[must_use]
+    /// Returns a copy pinned to one training flag.
     pub const fn with_training(mut self, training: bool) -> Self {
         self.policy.training = training;
         self
     }
 
     #[must_use]
+    /// Runtime precision policy currently in force.
     pub const fn precision_policy(&self) -> crate::exec::RuntimePrecisionPolicy {
         self.policy.precision
     }
 
     #[must_use]
+    /// Returns a copy pinned to one runtime precision policy.
     pub const fn with_precision_policy(
         mut self,
         precision: crate::exec::RuntimePrecisionPolicy,

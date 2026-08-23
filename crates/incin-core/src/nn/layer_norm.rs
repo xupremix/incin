@@ -124,10 +124,15 @@ impl<S: LayerNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Tr
 /// A builder for constructing a [`LayerNorm`] layer with a target.
 #[derive(Debug, Clone)]
 pub struct LayerNormBuilder<S: LayerNormShape, Train: TrainState = Trainable> {
+    /// Normalized feature extent.
     pub shape: ShapeValue<S>,
+    /// Epsilon added inside the square root.
     pub eps: f32,
+    /// Initialization for the scale.
     pub weight_init: crate::nn::init::Init,
+    /// Initialization for the shift.
     pub bias_init: crate::nn::init::Init,
+    /// Train-state marker.
     pub _train: PhantomData<Train>,
 }
 
@@ -179,6 +184,7 @@ where
     <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,
 {
+    /// Builds the layer from channel arguments.
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(

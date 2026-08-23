@@ -11,15 +11,22 @@ pub use incin_core::shapes::error::OperationKind;
 /// Classification of tensor rank for legal-candidate pruning and specialization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RankClass {
+    /// Rank-0/1: scalar workloads.
     Scalar,
+    /// Rank up to 2: vectorizable rows.
     Vector,
+    /// Matrix-shaped workloads.
     Matrix,
+    /// Rank-3 volumetric workloads.
     Volume,
+    /// Rank-4 tensor (NCHW-style) workloads.
     Tensor4,
+    /// Rank five and above, carrying the rank.
     Higher(u8),
 }
 
 impl RankClass {
+    /// Buckets a concrete rank into this class.
     pub fn from_rank(rank: usize) -> Self {
         match rank {
             0 => Self::Scalar,
@@ -31,6 +38,7 @@ impl RankClass {
         }
     }
 
+    /// Short tag used inside tuning signatures.
     pub fn tag(self) -> &'static str {
         match self {
             Self::Scalar => "rank0",
@@ -42,6 +50,7 @@ impl RankClass {
         }
     }
 
+    /// Whether shapes of this class can use vectorized loads.
     pub fn is_supported_for_vectorization(self) -> bool {
         matches!(
             self,
@@ -53,12 +62,16 @@ impl RankClass {
 /// Shape dimension and size bucket for workload keying and candidate pruning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ShapeBucket {
+    /// log2 of total element count.
     pub numel_log2: u8,
+    /// log2 of the primary dimension.
     pub primary_dim_log2: u8,
+    /// log2 of the secondary dimension.
     pub secondary_dim_log2: u8,
 }
 
 impl ShapeBucket {
+    /// Buckets a total element count into this class.
     pub fn from_numel(numel: usize) -> Self {
         Self {
             numel_log2: log2_bucket(numel),
@@ -67,6 +80,7 @@ impl ShapeBucket {
         }
     }
 
+    /// Buckets a matrix shape into this class.
     pub fn from_matrix(rows: usize, cols: usize) -> Self {
         Self {
             numel_log2: log2_bucket(rows.saturating_mul(cols)),
@@ -75,6 +89,7 @@ impl ShapeBucket {
         }
     }
 
+    /// Buckets GEMM dimensions into this class.
     pub fn from_gemm(m: usize, n: usize, k: usize) -> Self {
         Self {
             numel_log2: log2_bucket(m.saturating_mul(n)),
@@ -83,6 +98,7 @@ impl ShapeBucket {
         }
     }
 
+    /// Tag string embedding all three buckets.
     pub fn tag(self) -> String {
         format!("p{}_s{}", self.primary_dim_log2, self.secondary_dim_log2)
     }
@@ -99,14 +115,20 @@ fn log2_bucket(size: usize) -> u8 {
 /// Classification of memory pointer and stride byte alignment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AlignmentClass {
+    /// Byte alignment.
     Byte,
+    /// 2-byte (short) alignment.
     Short,
+    /// 4-byte word alignment.
     Word,
+    /// 8-byte quadword alignment.
     Quad,
+    /// 256-byte alignment for vector kernels.
     Align256,
 }
 
 impl AlignmentClass {
+    /// Classifies a byte count into this alignment class.
     pub fn from_bytes(bytes: usize) -> Self {
         if bytes == 0 || bytes.is_multiple_of(256) {
             Self::Align256
@@ -121,6 +143,7 @@ impl AlignmentClass {
         }
     }
 
+    /// Byte count of this alignment class.
     pub fn bytes(self) -> usize {
         match self {
             Self::Byte => 1,
@@ -131,11 +154,13 @@ impl AlignmentClass {
         }
     }
 
+    /// Whether this alignment supports the requested vector width and dtype.
     pub fn is_vector_compatible(self, vector_width: u8, element_size: usize) -> bool {
         let required = (vector_width as usize) * element_size;
         self.bytes() >= required
     }
 
+    /// Short tag used inside tuning signatures.
     pub fn tag(self) -> &'static str {
         match self {
             Self::Byte => "align1",
@@ -150,13 +175,18 @@ impl AlignmentClass {
 /// Structured identifier for storage, compute, accumulator, and output data types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DTypePolicyId {
+    /// Dtype elements are stored in.
     pub storage: DTypeId,
+    /// Dtype compute runs in.
     pub compute: DTypeId,
+    /// Dtype accumulators use.
     pub accumulator: DTypeId,
+    /// Dtype outputs are written in.
     pub output: DTypeId,
 }
 
 impl DTypePolicyId {
+    /// Creates a dtype signature from its four roles.
     pub fn new(storage: DTypeId, compute: DTypeId, accumulator: DTypeId, output: DTypeId) -> Self {
         Self {
             storage,
@@ -166,6 +196,7 @@ impl DTypePolicyId {
         }
     }
 
+    /// Tag string embedding the four dtypes.
     pub fn tag(self) -> String {
         format!(
             "s{:?}_c{:?}_a{:?}_o{:?}",
@@ -200,15 +231,22 @@ impl Ord for DTypePolicyId {
 /// Shape and layout driven workload signature.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct KernelSignature {
+    /// Registered dtype policy identifier.
     pub policy_id: DTypePolicyId,
+    /// Rank class of the workload.
     pub rank_class: RankClass,
+    /// Shape bucket of the workload.
     pub shape_bucket: ShapeBucket,
+    /// Alignment class of the operands.
     pub alignment: AlignmentClass,
+    /// Layout class of the operands.
     pub layout: LayoutClass,
+    /// Operation kind being tuned.
     pub op_kind: OperationKind,
 }
 
 impl KernelSignature {
+    /// Creates a full signature from every axis.
     pub fn new(
         policy_id: DTypePolicyId,
         rank_class: RankClass,
@@ -258,13 +296,18 @@ impl Ord for KernelSignature {
 /// Candidate GEMM / MatMul tiling parameters for tuning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MatMulTileCandidate {
+    /// GEMM tile height M.
     pub tile_m: u16,
+    /// GEMM tile width N.
     pub tile_n: u16,
+    /// GEMM tile depth K.
     pub tile_k: u16,
+    /// Launch block size.
     pub block_size: u16,
 }
 
 impl MatMulTileCandidate {
+    /// Creates a launch config from tiles plus block size.
     pub fn new(tile_m: u16, tile_n: u16, tile_k: u16, block_size: u16) -> Self {
         Self {
             tile_m,

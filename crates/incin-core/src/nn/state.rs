@@ -107,12 +107,15 @@ impl fmt::Display for StatePath {
 /// Whether a state value is trainable or a persistent non-trainable buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum StateRole {
+    /// Role marker: learnable parameter.
     Parameter,
+    /// Role marker: non-trainable buffer.
     Buffer,
 }
 
 /// Receives typed state leaves during module traversal.
 pub trait StateVisitor<B: crate::tensor::backend::VariableBackend> {
+    /// Visits one parameter leaf.
     fn visit_param<S, K, Train>(
         &mut self,
         path: &StatePath,
@@ -126,6 +129,7 @@ pub trait StateVisitor<B: crate::tensor::backend::VariableBackend> {
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState;
 
+    /// Visits one buffer leaf.
     fn visit_buffer<S, K>(
         &mut self,
         path: &StatePath,
@@ -149,6 +153,7 @@ pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
         1
     }
 
+    /// Walks this module's leaves through a visitor.
     fn visit_state<V: StateVisitor<B>>(&self, path: &StatePath, visitor: &mut V) -> Result<()>;
 
     /// Visits this subtree at a flat positional index under `parent`.
@@ -167,6 +172,7 @@ pub trait VisitState<B: crate::tensor::backend::VariableBackend> {
 
 /// Receives mutable typed state leaves while restoring a snapshot.
 pub trait StateMutVisitor<B: crate::tensor::backend::VariableBackend> {
+    /// Visits one parameter leaf.
     fn visit_param<S, K, Train>(
         &mut self,
         path: &StatePath,
@@ -180,6 +186,7 @@ pub trait StateMutVisitor<B: crate::tensor::backend::VariableBackend> {
             + crate::tensor::backend::HostInterop,
         Train: crate::nn::param::TrainState;
 
+    /// Visits one buffer leaf.
     fn visit_buffer<S, K>(
         &mut self,
         path: &StatePath,
@@ -203,6 +210,7 @@ pub trait VisitStateMut<B: crate::tensor::backend::VariableBackend> {
         1
     }
 
+    /// Walks leaves mutably through a visitor.
     fn visit_state_mut<V: StateMutVisitor<B>>(
         &mut self,
         path: &StatePath,
@@ -231,11 +239,13 @@ pub struct StateSnapshotVisitor {
 
 impl StateSnapshotVisitor {
     #[must_use]
+    /// Creates an empty collector.
     pub fn new() -> Self {
         Self::default()
     }
 
     #[must_use]
+    /// Converts collected leaves into a snapshot.
     pub fn into_snapshot(self) -> StateSnapshot {
         self.snapshot
     }

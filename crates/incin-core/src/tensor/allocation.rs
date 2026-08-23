@@ -29,6 +29,7 @@ impl CheckedByteLen {
     }
 
     #[inline]
+    /// Alignment in bytes.
     pub fn get(self) -> usize {
         self.0
     }

@@ -37,6 +37,7 @@ mod sealed {
     pub trait ConcreteStaticExtent {}
 }
 
+/// A single tensor dimension: static extent, named marker, or runtime value.
 pub trait Dim:
     sealed::Dim + 'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
@@ -230,6 +231,7 @@ where
 pub trait AxisTag:
     'static + Copy + Clone + core::fmt::Debug + Send + Sync + Eq + PartialEq
 {
+    /// Human-readable name used by diagnostics.
     const NAME: &'static str;
 
     /// Returns the durable semantic key for this axis. The key is supplied by
@@ -258,17 +260,21 @@ pub struct AxisKey {
 }
 
 impl AxisKey {
+    /// Creates an identifier from schema and name.
     pub const fn new(schema: &'static str, name: &'static str) -> Self {
         Self { schema, name }
     }
 
+    /// Schema namespace this identifier belongs to.
     pub const fn schema(self) -> &'static str {
         self.schema
     }
+    /// Name inside its schema.
     pub const fn name(self) -> &'static str {
         self.name
     }
 
+    /// Renders `schema::name` for diagnostics.
     pub fn qualified(self) -> alloc::string::String {
         alloc::format!("{}::{}", self.schema, self.name)
     }
@@ -286,12 +292,15 @@ pub struct AxisSchema<Root>(core::marker::PhantomData<Root>);
 /// deliberately not inferred from this trait alone; callers that cannot prove
 /// a unique structural match must resolve the name at runtime.
 pub trait AxisIdentity: AxisTag {
+    /// Marker type naming this dimension's schema.
     type Schema: 'static;
+    /// Compile-time schema identifier.
     type Id: typenum::Unsigned;
 }
 
 /// Semantic proof boundary for comparing two dimensions statically or dynamically.
 pub trait DimCompatible<Rhs: Dim>: Dim {
+    /// Compile-time assertion over paired static extents.
     const STATIC_ASSERT: () = match (Self::STATIC, Rhs::STATIC) {
         (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => {
             panic!("Invalid static dimension expression");
@@ -398,6 +407,7 @@ macro_rules! dim {
 macro_rules! __incin_dim_declare {
     (@first $(#[$first_meta:meta])* $first:ident $(, $(#[$rest_meta:meta])* $rest:ident)* ) => {
         $(#[$first_meta])*
+        #[doc = concat!("Named dimension `", stringify!($first), "`.")]
         #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $first;
 
@@ -417,6 +427,7 @@ macro_rules! __incin_dim_declare {
     (@rest $schema:ty; $schema_name:expr; $id:ty; ) => {};
     (@rest $schema:ty; $schema_name:expr; $id:ty; $(#[$meta:meta])* $name:ident $(, $(#[$rest_meta:meta])* $rest:ident)* ) => {
         $(#[$meta])*
+        #[doc = concat!("Named dimension `", stringify!($name), "`.")]
         #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $name;
 
@@ -492,6 +503,7 @@ const fn static_exact_div(lhs: StaticExtent, rhs: StaticExtent) -> StaticExtent 
 macro_rules! static_op_dim {
     ( $name:ident $op:ident $symbolic:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+        /// Binary dimension combinator generated per operator pair.
         pub struct $name<A, B>(pub core::marker::PhantomData<(A, B)>);
 
         impl<A: Dim, B: Dim> Dim for $name<A, B> {

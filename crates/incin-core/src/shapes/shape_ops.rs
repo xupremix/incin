@@ -6,8 +6,10 @@ use crate::shapes::{Dim, DimCons, Dyn, RemoveAt, RemoveFromEnd};
 /// Unified selector-facing swap operation. Both positive and from-end
 /// selectors use the one structural `SwapAt` algebra.
 pub trait SwapAxes<Left, Right>: Shape {
+    /// The resulting shape of [`SwapAxes`].
     type Output: Shape;
 
+    /// Applies this transpose rule to concrete dims.
     fn swap_shape(dims: &crate::shapes::ShapeBuf) -> crate::err::Result<crate::shapes::ShapeBuf>
     where
         Left: crate::shapes::idx::StaticCursor,
@@ -53,8 +55,10 @@ where
 
 /// Structural reduction which removes one axis.
 pub trait ReduceAt<Cursor>: Shape {
+    /// The resulting shape of [`ReduceAt`].
     type Output: Shape;
 
+    /// Applies this reduction rule to concrete dims.
     fn reduce_shape(dims: &crate::shapes::ShapeBuf) -> crate::err::Result<crate::shapes::ShapeBuf>
     where
         Cursor: crate::shapes::idx::AxisCursor,
@@ -99,6 +103,7 @@ where
 /// Structural keepdim reduction. Rebinding is owned by the dimension, so a
 /// semantic axis name is preserved while its extent becomes one.
 pub trait ReduceKeepAt<Cursor>: Shape {
+    /// The resulting shape of [`ReduceKeepAt`].
     type Output: Shape;
 }
 

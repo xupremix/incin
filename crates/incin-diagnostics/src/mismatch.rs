@@ -143,13 +143,18 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
 /// A `concat` shape mismatch, parsed from the `ConcatShape` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConcatMismatch {
+    /// The left-hand operand's shape, one dimension per entry.
     pub lhs: Vec<String>,
+    /// The right-hand operand's shape, one dimension per entry.
     pub rhs: Vec<String>,
+    /// The concatenation axis the shapes disagreed on.
     pub axis: usize,
+    /// Index into both `lhs` and `rhs` of the first disagreeing dimension.
     pub mismatch_index: usize,
 }
 
 impl ConcatMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         let lhs_val = &self.lhs[self.mismatch_index];
@@ -177,6 +182,7 @@ impl ConcatMismatch {
     }
 }
 
+/// Parses a `concat` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_concat_mismatch(text: &str) -> Option<ConcatMismatch> {
     let start = text.find("Cannot concatenate shape `")?;
     let after_prefix = &text[start + "Cannot concatenate shape `".len()..];
@@ -218,13 +224,18 @@ pub fn parse_concat_mismatch(text: &str) -> Option<ConcatMismatch> {
 /// A `broadcast` shape mismatch, parsed from the `BroadcastShape` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BroadcastMismatch {
+    /// The left-hand operand's shape, one dimension per entry.
     pub lhs: Vec<String>,
+    /// The right-hand operand's shape, one dimension per entry.
     pub rhs: Vec<String>,
+    /// Index into `lhs` of the first disagreeing dimension.
     pub lhs_mismatch_index: usize,
+    /// Index into `rhs` of the first disagreeing dimension.
     pub rhs_mismatch_index: usize,
 }
 
 impl BroadcastMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         let lhs_val = &self.lhs[self.lhs_mismatch_index];
@@ -251,6 +262,7 @@ impl BroadcastMismatch {
     }
 }
 
+/// Parses a `broadcast` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_broadcast_mismatch(text: &str) -> Option<BroadcastMismatch> {
     let start = text.find("Cannot broadcast shape `")?;
     let after_prefix = &text[start + "Cannot broadcast shape `".len()..];
@@ -290,13 +302,18 @@ pub fn parse_broadcast_mismatch(text: &str) -> Option<BroadcastMismatch> {
 /// A `reshape` shape mismatch, parsed from the `ReshapeShape` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReshapeMismatch {
+    /// The source shape, one dimension per entry.
     pub src: Vec<String>,
+    /// The requested target shape, one entry per dimension (`?` where inferred).
     pub target: Vec<String>,
+    /// Element count implied by `src`.
     pub src_count: usize,
+    /// Element count implied by `target`.
     pub target_count: usize,
 }
 
 impl ReshapeMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -311,6 +328,7 @@ impl ReshapeMismatch {
     }
 }
 
+/// Parses a `reshape` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_reshape_mismatch(text: &str) -> Option<ReshapeMismatch> {
     let start = text.find("Cannot reshape from `")?;
     let after_prefix = &text[start + "Cannot reshape from `".len()..];
@@ -352,13 +370,18 @@ pub fn parse_reshape_mismatch(text: &str) -> Option<ReshapeMismatch> {
 /// A `conv2d` shape mismatch, parsed from the `Conv2dShape` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conv2dMismatch {
+    /// The input tensor's shape, one dimension per entry.
     pub input: Vec<String>,
+    /// The kernel/weight shape, one dimension per entry.
     pub kernel: Vec<String>,
+    /// Index into `input` of the channel dimension.
     pub input_channel_idx: usize,
+    /// Index into `kernel` of the channel dimension.
     pub kernel_channel_idx: usize,
 }
 
 impl Conv2dMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         let in_c = &self.input[self.input_channel_idx];
@@ -385,6 +408,7 @@ impl Conv2dMismatch {
     }
 }
 
+/// Parses a `conv2d` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_conv2d_mismatch(text: &str) -> Option<Conv2dMismatch> {
     let start = text.find("Cannot apply Conv2D: input shape `")?;
     let after_prefix = &text[start + "Cannot apply Conv2D: input shape `".len()..];
@@ -421,13 +445,18 @@ pub fn parse_conv2d_mismatch(text: &str) -> Option<Conv2dMismatch> {
 /// A `transpose` shape mismatch, parsed from the `Transpose` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransposeMismatch {
+    /// The transposed tensor's shape, one dimension per entry.
     pub shape: Vec<String>,
+    /// First axis of the transpose pair.
     pub d1: usize,
+    /// Second axis of the transpose pair.
     pub d2: usize,
+    /// Rank the axes were checked against.
     pub rank: usize,
 }
 
 impl TransposeMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -442,6 +471,7 @@ impl TransposeMismatch {
     }
 }
 
+/// Parses a `transpose` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_transpose_mismatch(text: &str) -> Option<TransposeMismatch> {
     let start = text.find("Cannot transpose dimensions `")?;
     let after_prefix = &text[start + "Cannot transpose dimensions `".len()..];
@@ -476,12 +506,16 @@ pub fn parse_transpose_mismatch(text: &str) -> Option<TransposeMismatch> {
 /// A `reduce` shape mismatch, parsed from the `ReduceDim` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReduceDimMismatch {
+    /// The transposed tensor's shape, one dimension per entry.
     pub shape: Vec<String>,
+    /// The axis whose extent was rejected.
     pub dim: usize,
+    /// Rank the axes were checked against.
     pub rank: usize,
 }
 
 impl ReduceDimMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -495,6 +529,7 @@ impl ReduceDimMismatch {
     }
 }
 
+/// Parses a `reduce_dim` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_reduce_dim_mismatch(text: &str) -> Option<ReduceDimMismatch> {
     let start = text.find("Cannot reduce dimension `")?;
     let after_prefix = &text[start + "Cannot reduce dimension `".len()..];
@@ -523,13 +558,18 @@ pub fn parse_reduce_dim_mismatch(text: &str) -> Option<ReduceDimMismatch> {
 /// A `flatten` shape mismatch, parsed from the `Flatten` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlattenMismatch {
+    /// The transposed tensor's shape, one dimension per entry.
     pub shape: Vec<String>,
+    /// First flattened axis.
     pub start_dim: usize,
+    /// Last flattened axis, inclusive.
     pub end_dim: usize,
+    /// Rank the axes were checked against.
     pub rank: usize,
 }
 
 impl FlattenMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -544,6 +584,7 @@ impl FlattenMismatch {
     }
 }
 
+/// Parses a `flatten` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_flatten_mismatch(text: &str) -> Option<FlattenMismatch> {
     let start = text.find("Cannot flatten shape `")?;
     let after_prefix = &text[start + "Cannot flatten shape `".len()..];
@@ -578,11 +619,14 @@ pub fn parse_flatten_mismatch(text: &str) -> Option<FlattenMismatch> {
 /// A `Module::forward` input shape mismatch, parsed from compiler output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleForwardMismatch {
+    /// The input shape text the diagnostic reported.
     pub actual_input: String,
+    /// The input shape text the trait expected.
     pub expected_input: String,
 }
 
 impl ModuleForwardMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -595,6 +639,7 @@ impl ModuleForwardMismatch {
     }
 }
 
+/// Parses a `module_forward` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_module_forward_mismatch(text: &str) -> Option<ModuleForwardMismatch> {
     let mut search = text;
     let mut actual_raw = None;
@@ -645,11 +690,14 @@ pub fn parse_module_forward_mismatch(text: &str) -> Option<ModuleForwardMismatch
 /// A slice target shape mismatch, parsed from the `SliceTarget` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SliceMismatch {
+    /// The slice specification text the caller supplied.
     pub slice_spec: String,
+    /// The input shape, one dimension per entry as text.
     pub in_shape: String,
 }
 
 impl SliceMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -662,6 +710,7 @@ impl SliceMismatch {
     }
 }
 
+/// Parses a `slice` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_slice_mismatch(text: &str) -> Option<SliceMismatch> {
     let start = text.find("Cannot slice dimension with `")?;
     let after = &text[start + "Cannot slice dimension with `".len()..];
@@ -688,10 +737,12 @@ pub fn parse_slice_mismatch(text: &str) -> Option<SliceMismatch> {
 /// A `conv1d` shape mismatch, parsed from the `SpatialConv1d` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conv1dMismatch {
+    /// The input shape text the diagnostic reported.
     pub input_shape: String,
 }
 
 impl Conv1dMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -702,6 +753,7 @@ impl Conv1dMismatch {
     }
 }
 
+/// Parses a `conv1d` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_conv1d_mismatch(text: &str) -> Option<Conv1dMismatch> {
     let start = text.find("Cannot apply 1D convolution to shape `")?;
     let after = &text[start + "Cannot apply 1D convolution to shape `".len()..];
@@ -714,10 +766,12 @@ pub fn parse_conv1d_mismatch(text: &str) -> Option<Conv1dMismatch> {
 /// A 2D pooling shape mismatch, parsed from the `Pool2dShape` trait's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pool2dMismatch {
+    /// The input shape text the diagnostic reported.
     pub input_shape: String,
 }
 
 impl Pool2dMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -728,6 +782,7 @@ impl Pool2dMismatch {
     }
 }
 
+/// Parses a `pool2d` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_pool2d_mismatch(text: &str) -> Option<Pool2dMismatch> {
     let start = text.find("Cannot apply 2D pooling to shape `")?;
     let after = &text[start + "Cannot apply 2D pooling to shape `".len()..];
@@ -740,16 +795,19 @@ pub fn parse_pool2d_mismatch(text: &str) -> Option<Pool2dMismatch> {
 /// A shape equality mismatch, parsed from the `ShapeEq` trait's compile-time error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShapeEqMismatch {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl ShapeEqMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!("{INDENT}shape mismatch \u{2192} {msg}", msg = self.message,)
     }
 }
 
+/// Parses a `shape_eq` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_shape_eq_mismatch(text: &str) -> Option<ShapeEqMismatch> {
     if let Some(start) = text.find("Shape Mismatch:") {
         let after = &text[start + "Shape Mismatch:".len()..];
@@ -764,16 +822,19 @@ pub fn parse_shape_eq_mismatch(text: &str) -> Option<ShapeEqMismatch> {
 /// A `bmm` rank or shape mismatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BmmMismatch {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl BmmMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!("{INDENT}bmm mismatch \u{2192} {msg}", msg = self.message)
     }
 }
 
+/// Parses a `bmm` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_bmm_mismatch(text: &str) -> Option<BmmMismatch> {
     if text.contains("bmm") || text.contains("batched matrix multiplication") {
         Some(BmmMismatch {
@@ -787,16 +848,19 @@ pub fn parse_bmm_mismatch(text: &str) -> Option<BmmMismatch> {
 /// An `unfold` dimension bound mismatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnfoldMismatch {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl UnfoldMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!("{INDENT}unfold mismatch \u{2192} {msg}", msg = self.message)
     }
 }
 
+/// Parses a `unfold` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_unfold_mismatch(text: &str) -> Option<UnfoldMismatch> {
     if text.contains("unfold size cannot exceed dimension length") {
         Some(UnfoldMismatch {
@@ -810,10 +874,12 @@ pub fn parse_unfold_mismatch(text: &str) -> Option<UnfoldMismatch> {
 /// A `pixel_shuffle` channel divisibility mismatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PixelShuffleMismatch {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl PixelShuffleMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -823,6 +889,7 @@ impl PixelShuffleMismatch {
     }
 }
 
+/// Parses a `pixel_shuffle` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_pixel_shuffle_mismatch(text: &str) -> Option<PixelShuffleMismatch> {
     if text.contains("pixel_shuffle channels must be divisible") {
         Some(PixelShuffleMismatch {
@@ -836,10 +903,12 @@ pub fn parse_pixel_shuffle_mismatch(text: &str) -> Option<PixelShuffleMismatch> 
 /// A `group_norm` channel divisibility mismatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupNormMismatch {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl GroupNormMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -849,6 +918,7 @@ impl GroupNormMismatch {
     }
 }
 
+/// Parses a `group_norm` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_group_norm_mismatch(text: &str) -> Option<GroupNormMismatch> {
     if text.contains("group_norm: channels must be divisible by groups") {
         Some(GroupNormMismatch {
@@ -862,10 +932,12 @@ pub fn parse_group_norm_mismatch(text: &str) -> Option<GroupNormMismatch> {
 /// A math domain error diagnostic (e.g., asin/acos out of bounds, rsqrt non-positive).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MathDomainError {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl MathDomainError {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -875,6 +947,7 @@ impl MathDomainError {
     }
 }
 
+/// Parses a `math_domain_error` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_math_domain_error(text: &str) -> Option<MathDomainError> {
     if text.contains("out of domain")
         || text.contains("NaN domain")
@@ -891,10 +964,12 @@ pub fn parse_math_domain_error(text: &str) -> Option<MathDomainError> {
 /// An in-place shape mismatch diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InPlaceShapeMismatch {
+    /// The verbatim diagnostic message this explanation annotates.
     pub message: String,
 }
 
 impl InPlaceShapeMismatch {
+    /// Renders the humanized explanation rustc should append to the diagnostic.
     pub fn render(&self) -> String {
         const INDENT: &str = "      ";
         format!(
@@ -904,6 +979,7 @@ impl InPlaceShapeMismatch {
     }
 }
 
+/// Parses a `inplace_shape` mismatch from diagnostic text; `None` when the text is not this message.
 pub fn parse_inplace_shape_mismatch(text: &str) -> Option<InPlaceShapeMismatch> {
     if text.contains("in-place operand shape mismatch") || text.contains("cannot mutate in-place") {
         Some(InPlaceShapeMismatch {

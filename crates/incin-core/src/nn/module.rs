@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 
 /// Receives trainable parameter leaves without exposing backend handle maps.
 pub trait ParameterVisitor<B: VariableBackend> {
+    /// Visits one parameter tensor with its state path.
     fn visit_param<S, K, Train>(
         &mut self,
         path: &crate::nn::StatePath,
@@ -30,6 +31,7 @@ pub trait VisitParameters<B: VariableBackend> {
         1
     }
 
+    /// Walks every parameter via the visitor.
     fn visit_parameters<V: ParameterVisitor<B>>(
         &self,
         path: &crate::nn::StatePath,

@@ -52,6 +52,7 @@ pub fn tracing_mark_output(value_id: ValueId) {
 use crate::exec::capability::Capabilities;
 
 #[derive(Clone)]
+/// Wraps a backend, forwarding calls while emitting telemetry.
 pub struct TracingBackend<B: Backend> {
     _marker: core::marker::PhantomData<B>,
 }

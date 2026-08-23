@@ -56,7 +56,9 @@ use incin_core::tensor::dtype::DTypeId;
 /// to be relative to. A value passes if it is within *either*.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tolerance {
+    /// Absolute error allowed before failure, in value units.
     pub absolute: f64,
+    /// Relative error allowed before failure, as a fraction of magnitude.
     pub relative: f64,
 }
 
@@ -154,18 +156,22 @@ pub trait Subject {
 /// What one check concluded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
+    /// The check held.
     Passed,
     /// The backend does not claim this operation, so there was nothing to
     /// check. Not a failure: sec. 2.9 says a backend implements only the
     /// descriptors it supports.
     Skipped(String),
+    /// The check failed with a human-readable description of the divergence.
     Failed(String),
 }
 
 /// One named check and its outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
+    /// Stable check name used in reports.
     pub name: &'static str,
+    /// Whether the check passed or how it failed.
     pub outcome: Outcome,
 }
 
@@ -178,7 +184,9 @@ impl Check {
 /// The result of running the suite against one backend.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
+    /// Display name of the backend that ran the suite.
     pub backend: String,
+    /// Every check executed, in execution order.
     pub checks: Vec<Check>,
 }
 

@@ -58,17 +58,29 @@ impl QuantScheme {
 /// Key-Value metadata entry for GGUF headers.
 #[derive(Debug, Clone)]
 pub enum GgufValue {
+    /// GGUF `Uint8` metadata value.
     Uint8(u8),
+    /// GGUF `Int8` metadata value.
     Int8(i8),
+    /// GGUF `Uint16` metadata value.
     Uint16(u16),
+    /// GGUF `Int16` metadata value.
     Int16(i16),
+    /// GGUF `Uint32` metadata value.
     Uint32(u32),
+    /// GGUF `Int32` metadata value.
     Int32(i32),
+    /// GGUF `Float32` metadata value.
     Float32(f32),
+    /// GGUF `Bool` metadata value.
     Bool(bool),
+    /// GGUF string metadata value.
     Str(String),
+    /// GGUF `Uint64` metadata value.
     Uint64(u64),
+    /// GGUF `Int64` metadata value.
     Int64(i64),
+    /// GGUF `Float64` metadata value.
     Float64(f64),
 }
 
@@ -119,10 +131,12 @@ impl GgufValue {
 /// GGUF metadata container for model architecture properties.
 #[derive(Debug, Clone, Default)]
 pub struct GgufMetadata {
+    /// Metadata entries keyed by name.
     pub entries: BTreeMap<String, GgufValue>,
 }
 
 impl GgufMetadata {
+    /// Creates metadata for one architecture.
     pub fn new(arch: &str) -> Self {
         let mut meta = Self::default();
         meta.set("general.architecture", GgufValue::Str(arch.to_string()));
@@ -134,6 +148,7 @@ impl GgufMetadata {
         meta
     }
 
+    /// Sets one metadata entry.
     pub fn set(&mut self, key: impl Into<String>, val: GgufValue) {
         self.entries.insert(key.into(), val);
     }

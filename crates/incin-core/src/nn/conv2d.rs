@@ -165,10 +165,15 @@ pub struct Conv2dBuilder<
     Bias: crate::nn::optional::OptionalField = crate::nn::optional::True,
     Train: TrainState = Trainable,
 > {
+    /// Convolution geometry (out_channels plus kernel dims).
     pub shape: ShapeValue<S>,
+    /// Initialization scheme for weights.
     pub weight_init: crate::nn::init::Init,
+    /// Initialization scheme for bias.
     pub bias_init: crate::nn::init::Init,
+    /// Bias-presence marker.
     pub _bias: core::marker::PhantomData<Bias>,
+    /// Train-state marker.
     pub _train: core::marker::PhantomData<Train>,
 }
 
@@ -232,6 +237,7 @@ where
     <K as DType>::Arg: Clone,
     <B::Device as Device>::Arg: Clone,
 {
+    /// Builds the layer from channel arguments.
     pub fn build<A>(args: A) -> Result<Self>
     where
         A: crate::tensor::arg_into::LayerArgInto<(

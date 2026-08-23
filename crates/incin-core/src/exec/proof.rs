@@ -62,14 +62,17 @@ impl ShapeEvidence {
     }
 
     #[must_use]
+    /// Proof level proven at construction.
     pub const fn proof(self) -> ProofLevel {
         self.proof
     }
 
+    /// Static rank, when fully static.
     pub const fn static_rank(self) -> Option<usize> {
         self.static_rank
     }
 
+    /// Static element count, when derivable.
     pub const fn static_numel(self) -> Option<usize> {
         self.static_numel
     }

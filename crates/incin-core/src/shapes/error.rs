@@ -427,11 +427,17 @@ pub enum ShapeError {
 
     /// A named selector did not occur in the current structural shape.
     #[error("named axis '{name}' is not present in the shape")]
-    MissingNamedAxis { name: &'static str },
+    MissingNamedAxis {
+        /// Axis name referenced.
+        name: &'static str,
+    },
 
     /// A named selector occurred more than once and cannot be resolved implicitly.
     #[error("named axis '{name}' is ambiguous: it occurs more than once")]
-    AmbiguousNamedAxis { name: &'static str },
+    AmbiguousNamedAxis {
+        /// Axis name referenced.
+        name: &'static str,
+    },
 
     /// Two positionally paired broadcast axes carry different semantic names.
     #[error("broadcast axis {axis} has conflicting names '{lhs}' and '{rhs}'")]

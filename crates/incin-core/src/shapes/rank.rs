@@ -14,6 +14,7 @@ pub struct Ranked<R: Unsigned + core::fmt::Debug + Eq + Send + Sync + 'static>(
 
 /// Rank-preserving transformation for generic known-rank shapes.
 pub trait PreserveRank {
+    /// The resulting shape of [`PreserveRank`].
     type Output: Shape;
 }
 
@@ -26,6 +27,7 @@ where
 
 /// Generic known-rank reduction/axis removal.
 pub trait RemoveOneRank {
+    /// The resulting shape of [`RemoveOneRank`].
     type Output: Shape;
 }
 
@@ -39,6 +41,7 @@ where
 
 /// Generic known-rank insertion/stacking.
 pub trait AddOneRank {
+    /// The resulting shape of [`AddOneRank`].
     type Output: Shape;
 }
 
@@ -87,7 +90,9 @@ where
 /// Runtime-axis projection for shapes whose rank is known structurally.
 /// Extents are erased, but the rank change remains in the public tensor type.
 pub trait RuntimeRankProjection: Shape {
+    /// Runtime-resolved shape keeping reduced axes.
     type Keep: Shape;
+    /// Runtime-resolved shape retaining only the reduced axes.
     type Drop: Shape;
 }
 

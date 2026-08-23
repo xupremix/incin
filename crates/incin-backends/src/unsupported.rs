@@ -28,6 +28,7 @@ macro_rules! unsupported_float_ops {
         binary: $($binary:ident),* $(,)?;
     ) => {
         $(
+            /// Refuses a unary op with the registry's unsupported error.
             pub fn $unary<K: DType>(
                 _t: &<Self as StorageBackend>::Storage<K>,
             ) -> Result<<Self as StorageBackend>::Storage<K>> {
@@ -35,6 +36,7 @@ macro_rules! unsupported_float_ops {
             }
         )*
         $(
+            /// Refuses an exponent-style op with the registry's unsupported error.
             pub fn $exponent<K: DType>(
                 _t: &<Self as StorageBackend>::Storage<K>,
                 _exponent: f64,
@@ -43,6 +45,7 @@ macro_rules! unsupported_float_ops {
             }
         )*
         $(
+            /// Refuses a bounds-checking op with the registry's unsupported error.
             pub fn $bounds<K: DType>(
                 _t: &<Self as StorageBackend>::Storage<K>,
                 _min: f64,
@@ -52,6 +55,7 @@ macro_rules! unsupported_float_ops {
             }
         )*
         $(
+            /// Refuses a binary op with the registry's unsupported error.
             pub fn $binary<K: DType>(
                 _lhs: &<Self as StorageBackend>::Storage<K>,
                 _rhs: &<Self as StorageBackend>::Storage<K>,

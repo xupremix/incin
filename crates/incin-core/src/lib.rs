@@ -21,9 +21,11 @@ pub mod error {
     };
 }
 pub mod exec;
+/// Capture-level graph representation shared by import and compiled previews.
 pub mod graph;
 mod graph_recording;
 
+/// Bounded model-file readers (GGUF metadata, format inspection).
 pub mod io;
 pub mod metrics;
 pub mod nn;
@@ -47,6 +49,7 @@ pub mod onnx {
 pub mod shapes;
 
 pub mod autograd;
+/// The tensor frontend: construction, operations, and device plumbing.
 pub mod tensor;
 pub use typenum;
 
