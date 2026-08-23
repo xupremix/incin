@@ -2,7 +2,7 @@
 
 # incin
 
-### A Rust deep learning framework with compile-time checks for tensor shapes and dtypes.
+### If it compiles, the math is proven. Incin turns tensor shapes, dtypes, devices, and gradient state into compiler facts.
 
 [![Incin CI](https://img.shields.io/badge/Incin_CI-passing-brightgreen?logo=github)](https://github.com/xupremix/incin/actions)
 [![crates.io](https://img.shields.io/crates/v/incin.svg?color=orange)](https://crates.io/crates/incin)
@@ -55,7 +55,9 @@ error[E0277]: Cannot contract dimension `[4, 8]` with `MatMulShape<[3, 8]>`
       • 3  <= UInt<UInt<UTerm, B1>, B1>
 ```
 
-Same error, readable shapes, zero runtime cost. And with
+Same error, readable shapes, zero runtime cost. The types prove the shapes; the
+numbers are covered too - every operation comes from one canonical catalog
+backed by generated conformance vectors and gradcheck suites. And with
 [incin-lsp](#editor-support), rust-analyzer shows shapes as decimal hints
 directly in your editor while you type.
 
@@ -99,20 +101,33 @@ Define a model, train it, keep every shape known at compile time:
 use incin::prelude::*;
 
 #[module]
-pub struct Mlp<B: Backend> {
-    pub fc1: Linear<s![784, 128], B>,
-    pub fc2: Linear<s![128, 10], B>,
+pub struct Mlp {
+    fc1: Linear<s![784, 128]>,
+    fc2: Linear<s![128, 10]>,
 }
 
-impl<B: Backend> Mlp<B> {
-    pub fn forward(&self, x: Tensor<s![dyn, 784], B>) -> Result<Tensor<s![dyn, 10], B>> {
+impl Mlp {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            fc1: Linear::build(())?,
+            fc2: Linear::build(())?,
+        })
+    }
+
+    pub fn forward(
+        &self,
+        x: Tensor<s![dyn, 784]>,
+    ) -> Result<Tensor<s![dyn, 10], DefaultBackend, f32, Grad>> {
         Ok(self.fc2.forward(self.fc1.forward(x)?.relu()?)?)
     }
 }
 ```
 
 `s![dyn, 784]` is the batch axis left dynamic; everything else is proven at
-compile time. Swap in `AdamW`, add a loss from `incin::nn`, iterate a
+compile time. The output spells out `f32` and `Grad` because a forward pass
+through parameters joins their gradient state into the result type. Swap in
+`AdamW`, add a loss from
+[`incin::nn`](https://docs.rs/incin/latest/incin/nn/index.html), iterate a
 [`DataLoader`](https://github.com/xupremix/incin/blob/master/docs/book/src/data_loading.md),
 and you have a training loop.
 
