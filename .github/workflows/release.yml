@@ -125,7 +125,7 @@ jobs:
           npm ci
           npm audit --audit-level=high
           xvfb-run -a npm test
-          npx --yes "@vscode/vsce@${VSCE_VERSION}" package --out "incin-lsp-vscode-${{ needs.preflight.outputs.version }}.vsix"
+          npx --yes "@vscode/vsce@${VSCE_VERSION}" package --out "../../incin-lsp-vscode-${{ needs.preflight.outputs.version }}.vsix"
 
       - name: Archive editor integrations
         run: |
@@ -138,7 +138,7 @@ jobs:
         with:
           name: release-editors
           path: |
-            editors/vscode/incin-lsp-vscode-*.vsix
+            incin-lsp-vscode-*.vsix
             incin-lsp-nvim-*.tar.gz
             incin-rustrover-external-tool-*.tar.gz
           if-no-files-found: error
