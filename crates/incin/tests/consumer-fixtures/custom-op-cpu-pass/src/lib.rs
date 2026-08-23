@@ -1,3 +1,4 @@
+//! Integration coverage for `CompanyOp` on the documented public surface.
 use incin::backend_authoring::{
     Backend, Execute, ExecutionRequest, LogicalTensorMeta, Operation, OperationKey,
     StorageBackend,

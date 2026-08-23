@@ -1,3 +1,4 @@
+//! Integration coverage for `test_param` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

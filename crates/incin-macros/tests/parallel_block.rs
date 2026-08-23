@@ -1,3 +1,4 @@
+//! Integration coverage for `test_parallel_block_simple` on the documented public surface.
 use incin_macros::parallel;
 
 #[test]

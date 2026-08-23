@@ -1,3 +1,4 @@
+//! Integration coverage for `placement_expansion_and_projections` on the documented public surface.
 use incin_core::dist::{ConstPlacement, PlacementKind};
 use incin_macros::{mesh, placement};
 

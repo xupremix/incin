@@ -7,6 +7,7 @@ use crate::compiled::CompiledPlan;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Marker result when no tuning data exists for a kernel.
 pub struct TuningUnavailable;
 
 impl core::fmt::Display for TuningUnavailable {
@@ -18,21 +19,31 @@ impl core::fmt::Display for TuningUnavailable {
 /// Reserved report shape for a future measured tuner; no report is produced today.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlanTuningReport {
+    /// Untuned latency in microseconds.
     pub baseline_latency_us: f64,
+    /// Best measured latency in microseconds.
     pub tuned_latency_us: f64,
+    /// baseline / tuned, when both exist.
     pub speedup_ratio: f64,
+    /// Candidates actually measured.
     pub iterations_evaluated: usize,
+    /// Whether the candidate sweep completed within budget.
     pub is_bounded: bool,
 }
+
+/// Upper bound on candidates measured per kernel.
 
 /// Placeholder interface for a future bounded, measured plan tuner.
 #[derive(Debug, Clone)]
 pub struct BoundedPlanTuner {
+    /// Upper bound on candidates measured per kernel.
     pub max_iterations: usize,
+    /// Speedup below which tuning stops early.
     pub min_speedup_target: f64,
 }
 
 impl BoundedPlanTuner {
+    /// Creates a bounded tuning policy.
     pub fn new(max_iterations: usize, min_speedup_target: f64) -> Self {
         Self {
             max_iterations,

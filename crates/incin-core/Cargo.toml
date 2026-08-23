@@ -78,7 +78,7 @@ serde_json = { tier = "internal", owner = "core", prerequisites = ["std"], hardw
 
 [dependencies]
 spin = { version = "0.12.2", default-features = false, features = ["mutex", "spin_mutex", "lazy"] }
-incin-macros = { path = "../incin-macros", version = "0.1.0", default-features = false }
+incin-macros = { path = "../incin-macros", version = "0.1.0-rc.1", default-features = false }
 thiserror = { workspace = true, default-features = false }
 half = { workspace = true, default-features = false }
 bytemuck = { workspace = true, default-features = false }

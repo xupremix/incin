@@ -1,3 +1,4 @@
+//! Integration coverage for `preview_cpu_relu` on the documented public surface.
 use incin::experimental::compiled::{
     CapturedDescriptor, CapturedGraph, CompileOptions, CompiledPlan, CpuBuffer,
     CpuCompiledFunction, CpuCompiledInvocation, CpuStorage, DTypeId, Descriptor, DeviceId, Graph,

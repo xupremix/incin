@@ -1,3 +1,4 @@
+//! Integration coverage for `test_comparisons_and_logical` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

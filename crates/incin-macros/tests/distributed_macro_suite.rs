@@ -1,3 +1,4 @@
+//! Integration coverage for `DistributedTransformer` on the documented public surface.
 #![cfg(feature = "distributed")]
 
 use incin::prelude::*;

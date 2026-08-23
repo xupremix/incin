@@ -112,8 +112,10 @@ pub enum DispatchVar {
     /// WGPU variable payload.
     Wgpu(crate::wgpu::backend::WgpuVar),
     #[cfg(feature = "cuda")]
+    /// CUDA variable payload.
     Cuda(crate::cuda::backend::CudaVar),
     #[cfg(feature = "metal")]
+    /// Metal variable payload.
     Metal(crate::metal::backend::MetalVar),
     #[doc(hidden)]
     Unavailable,
@@ -131,8 +133,10 @@ pub enum DispatchGrads {
     /// WGPU gradient map payload.
     Wgpu(crate::wgpu::backend::WgpuGrads),
     #[cfg(feature = "cuda")]
+    /// CUDA gradient map payload.
     Cuda(crate::cuda::backend::CudaGrads),
     #[cfg(feature = "metal")]
+    /// Metal gradient map payload.
     Metal(crate::metal::tape::MetalGrads),
     #[doc(hidden)]
     Unavailable,

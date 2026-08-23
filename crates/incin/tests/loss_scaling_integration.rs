@@ -1,3 +1,4 @@
+//! Integration coverage for `test_static_loss_scaling_numeric_parity` on the documented public surface.
 use incin::experimental::training::Trainer;
 use incin::prelude::*;
 use incin_core::backend_authoring::{AutogradBackend, HostReadback};

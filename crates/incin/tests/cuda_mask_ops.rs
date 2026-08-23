@@ -1,3 +1,4 @@
+//! Integration coverage for `a_cuda_comparison_feeds_where_cond` on the documented public surface.
 #![cfg(feature = "cuda")]
 //! End-to-end check that a `bool` mask CUDA produces is actually reachable
 //! from the public `Tensor` API, not just admitted by the capability

@@ -1,3 +1,4 @@
+//! Integration coverage for `ConsumerModule` on the documented public surface.
 use incin::prelude::*;
 
 #[module]

@@ -1,3 +1,4 @@
+//! Integration coverage for `one_d_float_tensor_prints_like_pytorch` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

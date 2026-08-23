@@ -1,3 +1,4 @@
+//! Integration coverage for `test_dataset` on the documented public surface.
 use incin::prelude::*;
 use incin_data::{DataError, DataLoader, Dataset};
 

@@ -1,3 +1,4 @@
+//! Integration coverage for `Storage` on the documented public surface.
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;

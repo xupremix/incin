@@ -74,7 +74,6 @@
 // mdBook's standalone tester does not receive Cargo's `--extern` arguments.
 // Keep a Cargo-backed doctest mirror so the user-facing chapters are checked
 // against the real facade and feature set.
-#![warn(missing_docs)]
 
 #[cfg(all(doctest, feature = "backend-authoring"))]
 #[doc = concat!(

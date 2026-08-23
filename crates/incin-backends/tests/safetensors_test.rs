@@ -1,3 +1,4 @@
+//! Integration coverage for `test_safetensors_save_and_load_roundtrip_cpu` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 extern crate incin_core as incin;

@@ -1,3 +1,4 @@
+//! Integration coverage for `test_global_checkpoint_manifest_serialization` on the documented public surface.
 #![cfg(feature = "std")]
 
 use incin_backends::cpu::CpuBackendImpl;

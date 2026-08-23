@@ -1,3 +1,4 @@
+//! Integration coverage for `BatchTag` on the documented public surface.
 #![cfg(feature = "std")]
 #![recursion_limit = "512"]
 

@@ -1,3 +1,4 @@
+//! Integration coverage for `Batch` on the documented public surface.
 use incin::prelude::*;
 use incin::prelude::axis;
 

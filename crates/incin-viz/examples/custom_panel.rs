@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `CustomMetricPanel`.
 use incin_telemetry::events::{Event, ScalarEvent};
 use incin_viz::app::{App, DefaultKeymap};
 use incin_viz_plugin_api::prelude::*;

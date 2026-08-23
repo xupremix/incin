@@ -1,3 +1,4 @@
+//! Integration coverage for `test_simple_linear_regression` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

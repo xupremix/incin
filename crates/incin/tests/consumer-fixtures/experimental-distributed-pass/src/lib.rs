@@ -1,3 +1,4 @@
+//! Integration coverage for `experimental_contract` on the documented public surface.
 use incin::experimental::distributed::mesh::ValidMesh;
 use incin::experimental::{mesh, placement};
 

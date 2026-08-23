@@ -8,15 +8,22 @@ use serde::{Deserialize, Serialize};
 /// Reproducibility manifest capturing execution environmental parameters, static graph hashes, and seed configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReproducibilityManifest {
+    /// Framework version that produced this plan.
     pub incin_version: String,
+    /// Determinism seed recorded for replay.
     pub seed: u64,
+    /// Precision policy as text.
     pub precision: String,
+    /// Mesh topology description.
     pub mesh_spec: String,
+    /// Tuning environment fingerprint as text.
     pub environment: String,
+    /// Hash binding this manifest to one plan.
     pub plan_hash: String,
 }
 
 impl ReproducibilityManifest {
+    /// Records every reproducibility field for one plan.
     pub fn new(
         seed: u64,
         precision: impl Into<String>,

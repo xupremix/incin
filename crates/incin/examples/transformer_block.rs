@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 #![cfg(feature = "cpu")]
 
 // Keep the executable proof and the integration proof on one canonical source.

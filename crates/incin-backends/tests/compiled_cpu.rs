@@ -1,3 +1,4 @@
+//! Integration coverage for `meta` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 use incin_backends::cpu::{

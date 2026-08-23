@@ -1,3 +1,4 @@
+//! Integration coverage for `ParallelModel` on the documented public surface.
 #![allow(clippy::type_complexity)]
 
 use incin::backend_authoring::{Backend, VariableBackend};
@@ -8,6 +9,7 @@ use incin_macros::mesh;
 #[allow(dead_code)]
 type MyMesh = mesh![dp = 2, tp = 4];
 
+/// A two-stage model the `#[parallel]` attribute splits across mesh stages.
 #[module]
 pub struct ParallelModel<B: Backend + VariableBackend> {
     #[parallel(mesh = MyMesh, stage = 0)]

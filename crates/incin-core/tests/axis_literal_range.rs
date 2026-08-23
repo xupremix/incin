@@ -1,3 +1,4 @@
+//! Integration coverage for `arbitrary_static_axis_literals_remain_static` on the documented public surface.
 extern crate incin_core as incin;
 
 use incin_core::advanced::ToAxisIndex;

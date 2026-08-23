@@ -1,3 +1,4 @@
+//! Integration coverage for `test_concat_static_success` on the documented public surface.
 #![allow(clippy::type_complexity)]
 
 extern crate incin_core as incin;

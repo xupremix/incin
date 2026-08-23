@@ -1,3 +1,4 @@
+//! Integration coverage for `graph_round_trips_through_serde_json` on the documented public surface.
 extern crate incin_core as incin;
 
 use incin_core::graph::Graph;

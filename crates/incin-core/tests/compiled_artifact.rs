@@ -1,3 +1,4 @@
+//! Integration coverage for `make_test_plan` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 use incin_core::experimental::compiled::{

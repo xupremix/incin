@@ -1,3 +1,4 @@
+//! Integration coverage for `test_simd_lanes_positive_and_divisible` on the documented public surface.
 #![allow(clippy::assertions_on_constants)]
 
 use half::{bf16, f16};

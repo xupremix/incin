@@ -1,3 +1,4 @@
+//! Integration coverage for `test_liveness_analysis_basic` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 use incin_core::experimental::compiled::{

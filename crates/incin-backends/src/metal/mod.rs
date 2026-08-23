@@ -1,6 +1,7 @@
 //! Native Metal backend for Apple Silicon and macOS devices.
 
 pub mod backend;
+/// Capability registration for the Metal backend.
 pub mod capability;
 pub mod executor;
 /// MPS and MPSGraph structured candidates with explicit native fallback.

@@ -253,6 +253,7 @@ impl KernelKey {
     }
 
     #[cfg(any(feature = "autotune", test))]
+    /// Stable problem id binding this kernel to its tuning record.
     pub fn tuning_problem_id(&self) -> String {
         format!(
             "k{}/cuda/{}/{}/s={}/c={}/a={}/o={}/layout={}/index={}/math={}/rank={}/bucket={}/align={}",

@@ -1,3 +1,4 @@
+//! Integration coverage for `test_linear_permutations` on the documented public surface.
 #![allow(unused_imports)]
 extern crate incin_core as incin;
 

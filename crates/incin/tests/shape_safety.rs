@@ -1,3 +1,4 @@
+//! Integration coverage for `chunk_and_split_reject_invalid_axes_without_panicking` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

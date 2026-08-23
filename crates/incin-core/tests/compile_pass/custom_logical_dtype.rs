@@ -1,3 +1,4 @@
+//! Integration coverage for `CustomLogical` on the documented public surface.
 use core::marker::PhantomData;
 use incin_core::prelude::{ConstDType, DType, DTypeDescriptor, DTypeKey, DTypeKind};
 use incin_core::tensor::dtype::StorageEncoding;

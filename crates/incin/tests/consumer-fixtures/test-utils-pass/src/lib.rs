@@ -1,3 +1,4 @@
+//! Integration coverage for `fault_injection_is_reachable` on the documented public surface.
 // `test-utils` gates deterministic fault injection against the real CPU
 // backend. It no longer carries a stand-in backend: a consumer that needs a
 // backend in a test uses a real one.

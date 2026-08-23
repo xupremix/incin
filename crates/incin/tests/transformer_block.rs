@@ -1,3 +1,4 @@
+//! Integration coverage for `TransformerBlock` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::AdamW;
@@ -73,6 +74,8 @@ fn static_attention_shapes_compile_and_run() -> Result<()> {
     Ok(())
 }
 
+/// Trains the block with AdamW, then round-trips its state.
+#[cfg_attr(test, test)]
 pub fn cpu_transformer_forward_backward_adamw_and_state_roundtrip() -> Result<()> {
     let model = TransformerBlock::build()?;
     let input_values = (0..32).map(|value| value as f32 / 32.0).collect::<Vec<_>>();

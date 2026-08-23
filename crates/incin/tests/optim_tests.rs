@@ -1,3 +1,4 @@
+//! Integration coverage for `optimizer_parameter_groups_collect_through_typed_state_visitors` on the documented public surface.
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 

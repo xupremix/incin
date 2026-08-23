@@ -1,3 +1,4 @@
+//! Integration coverage for `SubModule` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::nn::NamedLayers;

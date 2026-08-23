@@ -1,6 +1,9 @@
 //! End-to-end integration tests for ONNX model import with dense initializers (Issue #11).
 
 #![cfg(feature = "cpu")]
+// The import_model! expansion generates the model struct; its docs live in
+// the macro itself, so the item-level missing_docs gate is relaxed here.
+#![allow(missing_docs)]
 
 use incin::prelude::*;
 

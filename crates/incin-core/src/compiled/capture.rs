@@ -15,8 +15,11 @@ pub struct CapturedNode {
     pub id: NodeId,
     /// Operation type of this node.
     pub operation: OperationIdentity,
+    /// Where the node executes, when resolved.
     pub execution_site: Option<ExecutionSite>,
+    /// Named operation attributes captured with the node.
     pub attributes: alloc::collections::BTreeMap<String, crate::graph::AttributeValue>,
+    /// Encoded canonical descriptor, when capture succeeded.
     pub descriptor_payload: Option<crate::graph::DescriptorPayload>,
     /// Value IDs consumed by this node as inputs.
     pub inputs: Vec<ValueId>,

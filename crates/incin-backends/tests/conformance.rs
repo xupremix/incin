@@ -99,11 +99,13 @@ pub mod template {
         }
 
         #[must_use]
+        /// Borrows the stored f32 values for assertions.
         pub fn values(&self) -> &[f32] {
             &self.values
         }
 
         #[must_use]
+        /// Borrows the validated metadata for assertions.
         pub const fn metadata(&self) -> &TensorMeta {
             &self.meta
         }

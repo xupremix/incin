@@ -1,3 +1,4 @@
+//! Integration coverage for `CompanyAttributes` on the documented public surface.
 use incin::backend_authoring::operations::{
     CreationAttributes, Descriptor, NoAttributes, OPERATION_CATALOG, op,
 };

@@ -1,3 +1,4 @@
+//! Integration coverage for `test_gguf_export_and_inspect_roundtrip` on the documented public surface.
 extern crate incin_core as incin;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::io::{GgufExporter, MlxExporter, QuantScheme, inspect_file};
