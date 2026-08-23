@@ -1,3 +1,4 @@
+//! Integration coverage for `repo_root` on the documented public surface.
 #![cfg(feature = "std")]
 
 use std::path::{Path, PathBuf};

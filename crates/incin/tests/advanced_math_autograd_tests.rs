@@ -1,3 +1,4 @@
+//! Integration coverage for `test_trigonometric_and_transcendental_ops` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

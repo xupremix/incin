@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `BasicBlock`.
 #![allow(clippy::type_complexity)]
 
 use incin::backend_authoring::{Execute, SupportsDType, VariableBackend, operations::op};

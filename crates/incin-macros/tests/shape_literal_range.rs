@@ -1,3 +1,4 @@
+//! Integration coverage for `literals_use_recursive_typenum_without_a_finite_alias_table` on the documented public surface.
 #![recursion_limit = "512"]
 
 use incin_core::prelude::{Shape, s};

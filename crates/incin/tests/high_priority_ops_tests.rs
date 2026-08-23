@@ -1,3 +1,4 @@
+//! Integration coverage for `test_elementwise_math_ops` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

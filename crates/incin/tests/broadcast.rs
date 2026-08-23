@@ -1,3 +1,4 @@
+//! Integration coverage for `test_broadcast_success` on the documented public surface.
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 

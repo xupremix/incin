@@ -1,3 +1,4 @@
+//! Integration coverage for `test_s_macro` on the documented public surface.
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 

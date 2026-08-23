@@ -1,3 +1,4 @@
+//! Integration coverage for `test_fusion_detects_pointwise_chain_candidates` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 use incin_core::experimental::compiled::{CapturedGraph, FusionPass};

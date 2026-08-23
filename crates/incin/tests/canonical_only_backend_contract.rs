@@ -14,9 +14,11 @@ use incin_core::exec::{
 use incin_core::prelude::*;
 use incin_core::shapes::ShapeBuf;
 
+/// Minimal backend proving canonical dispatch refuses unsupported ops.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CanonicalOnlyBackend;
 
+/// Storage value carrying validated metadata for the contract test.
 #[derive(Clone, Debug)]
 pub struct CanonicalStorage<K: DType> {
     meta: TensorMeta,
@@ -219,6 +221,7 @@ fn test_canonical_only_backend_add_and_eq_compile() -> Result<()> {
     Ok(())
 }
 
+/// Backend whose add executor always fails, proving error propagation.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FailingAddBackend;
 

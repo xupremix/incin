@@ -1,3 +1,4 @@
+//! Integration coverage for `static_environment` on the documented public surface.
 #![cfg(feature = "autotune")]
 
 use incin_backends::tuning::{

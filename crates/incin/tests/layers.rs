@@ -1,3 +1,4 @@
+//! Integration coverage for `test_linear_mixed_shapes` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use incin::prelude::*;

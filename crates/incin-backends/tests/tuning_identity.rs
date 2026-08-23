@@ -1,3 +1,4 @@
+//! Integration coverage for `cuda_device` on the documented public surface.
 #![cfg(feature = "autotune")]
 
 use incin_backends::tuning::identity::{

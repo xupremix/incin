@@ -1,3 +1,4 @@
+//! Integration coverage for `to_vec` on the documented public surface.
 #![cfg(feature = "cpu")]
 // These explicit types are the assertions: they verify that selector-based
 // operations retain known dimensions instead of erasing them to `Dyn`.

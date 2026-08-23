@@ -1,3 +1,4 @@
+//! Integration coverage for `rank_class_conversions_and_tags` on the documented public surface.
 #![cfg(feature = "autotune")]
 
 use incin_backends::tuning::signature::{

@@ -1,3 +1,4 @@
+//! Integration coverage for `MixedStateModel` on the documented public surface.
 #![cfg(feature = "cpu")]
 #![allow(clippy::type_complexity)]
 

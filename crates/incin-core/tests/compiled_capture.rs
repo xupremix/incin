@@ -1,3 +1,4 @@
+//! Integration coverage for `Batch` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 extern crate incin_core as incin;

@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 #![allow(clippy::type_complexity)]
 
 use incin::prelude::*;

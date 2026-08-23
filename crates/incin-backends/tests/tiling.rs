@@ -1,3 +1,4 @@
+//! Integration coverage for `test_tile_2d_coverage_square` on the documented public surface.
 #![cfg(any(feature = "cpu", feature = "cuda"))]
 #![allow(clippy::needless_range_loop)]
 

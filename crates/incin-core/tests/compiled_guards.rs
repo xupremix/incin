@@ -1,3 +1,4 @@
+//! Integration coverage for `symbolic_validation_binds_named_symbols_before_composites` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 use incin_core::exec::{Alignment, LayoutClass, TensorMeta};

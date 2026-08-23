@@ -1,3 +1,4 @@
+//! Integration coverage for `every_enabled_backend_storage_uses_tensor_meta` on the documented public surface.
 #![cfg(feature = "cpu")]
 
 use std::ops::Deref;

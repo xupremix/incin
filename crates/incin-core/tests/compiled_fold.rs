@@ -1,3 +1,4 @@
+//! Integration coverage for `incomplete_compiled_passes_fail_closed` on the documented public surface.
 #![cfg(feature = "compiled")]
 
 use incin_core::experimental::compiled::{
