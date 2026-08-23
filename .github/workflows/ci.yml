@@ -90,7 +90,12 @@ jobs:
     # whenever CI installed a fresh nightly. Bump this together with a
     # deliberate baseline regeneration.
     - name: Install pinned nightly toolchain for cargo-public-api
-      run: rustup toolchain install nightly-2026-07-28 --profile minimal
+      run: |
+        rustup toolchain install nightly-2026-07-28 --profile minimal
+        # cargo-public-api shells out to `cargo +nightly`; link the pinned
+        # dated toolchain under that name so `+nightly` resolves to it.
+        rustup toolchain link nightly \
+          "$HOME/.rustup/toolchains/nightly-2026-07-28-x86_64-unknown-linux-gnu"
 
     - name: Check reviewed public API
       run: |
