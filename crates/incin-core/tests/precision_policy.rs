@@ -1,3 +1,4 @@
+//! Integration coverage for `MockCpuBackend` on the documented public surface.
 use incin_core::exec::{
     LossScaleState, LossScaling, PrecisionCapabilities, PrecisionChoice, PrecisionRequest,
     ResolvedPrecision, RuntimePrecisionPolicy, resolve_precision,

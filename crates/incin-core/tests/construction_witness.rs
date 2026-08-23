@@ -1,3 +1,4 @@
+//! Integration coverage for `checked_construction_accepts_matching_storage_metadata` on the documented public surface.
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;

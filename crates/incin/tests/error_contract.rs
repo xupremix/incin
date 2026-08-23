@@ -1,3 +1,4 @@
+//! Integration coverage for `stable_facade_exposes_typed_bounded_failure_contract` on the documented public surface.
 use incin::{
     BackendError, ConversionFailure, DTypeId, Error, ErrorMessage, FloatToIntPolicy,
     convert_f64_to_i64,

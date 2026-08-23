@@ -1,3 +1,4 @@
+//! Integration coverage for `one_d_float_literal_infers_shape_and_f32` on the documented public surface.
 use incin::prelude::*;
 
 #[test]

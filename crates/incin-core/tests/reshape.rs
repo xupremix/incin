@@ -1,3 +1,4 @@
+//! Integration coverage for `test_reshape_static_success` on the documented public surface.
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;

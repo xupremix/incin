@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 use incin::prelude::*;
 
 fn main() -> Result<()> {

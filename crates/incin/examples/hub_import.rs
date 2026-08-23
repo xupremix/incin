@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 // model! reads the safetensors file AT COMPILE TIME to build the nested module struct.
 // For this example to compile, `resnet18.safetensors` must exist locally during compilation.
 // In a real workflow, you would typically download it once in a build.rs script,

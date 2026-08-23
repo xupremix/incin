@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 extern crate incin_core as incin;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::io::{GgufExporter, QuantScheme, inspect_file};

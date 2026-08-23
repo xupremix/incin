@@ -1,3 +1,4 @@
+//! Integration coverage for `shape_literal_range_uses_raw_static_extent_types` on the documented public surface.
 use incin::prelude::*;
 
 #[test]

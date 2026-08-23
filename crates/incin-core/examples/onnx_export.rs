@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::onnx::export_to_onnx;
 use incin_core::prelude::*;

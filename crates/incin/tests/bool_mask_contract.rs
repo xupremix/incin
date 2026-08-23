@@ -1,3 +1,4 @@
+//! Integration coverage for `comparison_mask_feeds_where_cond` on the documented public surface.
 use incin::prelude::*;
 
 #[test]

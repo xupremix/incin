@@ -1,3 +1,4 @@
+//! Integration coverage for `check_fixture` on the documented public surface.
 use std::path::Path;
 use std::process::Command;
 

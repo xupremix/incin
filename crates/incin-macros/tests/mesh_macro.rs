@@ -1,3 +1,4 @@
+//! Integration coverage for `test_mesh_macro_expansion` on the documented public surface.
 use incin_core::dist::mesh::{ValidMesh, mesh};
 
 #[test]

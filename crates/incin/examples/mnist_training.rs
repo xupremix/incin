@@ -1,3 +1,4 @@
+//! Example: exercises the documented API around `main`.
 use incin::MnistTargetExt;
 use incin::prelude::*;
 use incin_data::Dataset;
