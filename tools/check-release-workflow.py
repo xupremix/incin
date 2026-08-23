@@ -14,7 +14,7 @@ REQUIRED = (
     "release-assets.py checksums",
     "release-assets.py verify",
     "release_kind+=(--prerelease)",
-    "gh release create \"$RELEASE_TAG\" --target \"$RELEASE_TAG\" --title \"$RELEASE_TAG\" --generate-notes \"${release_kind[@]}\" --draft",
+    "gh release create \"$RELEASE_TAG\" --target \"${{ github.sha }}\" --title \"$RELEASE_TAG\" --generate-notes \"${release_kind[@]}\" --draft",
     "release-assets.py verify-github",
     "gh release edit \"$RELEASE_TAG\" --draft=false",
     "publish-existing-draft",
