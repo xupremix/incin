@@ -2,7 +2,7 @@
 
 # incin
 
-### If it compiles, the math is proven. Incin turns tensor shapes, dtypes, devices, and gradient state into compiler facts.
+### A Rust deep learning framework with compile-time verification of tensor shapes, dtypes, devices, and gradient state.
 
 [![Incin CI](https://img.shields.io/badge/Incin_CI-passing-brightgreen?logo=github)](https://github.com/xupremix/incin/actions)
 [![crates.io](https://img.shields.io/crates/v/incin.svg?color=orange)](https://crates.io/crates/incin)
