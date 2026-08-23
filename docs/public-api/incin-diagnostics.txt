@@ -1,0 +1,133 @@
+impl incin_diagnostics::BmmMismatch
+impl incin_diagnostics::BroadcastMismatch
+impl incin_diagnostics::ConcatMismatch
+impl incin_diagnostics::Conv1dMismatch
+impl incin_diagnostics::Conv2dMismatch
+impl incin_diagnostics::FlattenMismatch
+impl incin_diagnostics::GroupNormMismatch
+impl incin_diagnostics::InPlaceShapeMismatch
+impl incin_diagnostics::MatMulMismatch
+impl incin_diagnostics::MathDomainError
+impl incin_diagnostics::ModuleForwardMismatch
+impl incin_diagnostics::PixelShuffleMismatch
+impl incin_diagnostics::Pool2dMismatch
+impl incin_diagnostics::ReduceDimMismatch
+impl incin_diagnostics::ReshapeMismatch
+impl incin_diagnostics::ShapeEqMismatch
+impl incin_diagnostics::SliceMismatch
+impl incin_diagnostics::TransposeMismatch
+impl incin_diagnostics::UnfoldMismatch
+pub fn incin_diagnostics::BmmMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::BroadcastMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::ConcatMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::Conv1dMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::Conv2dMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::FlattenMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::GroupNormMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::InPlaceShapeMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::MatMulMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::MathDomainError::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::ModuleForwardMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::PixelShuffleMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::Pool2dMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::ReduceDimMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::ReshapeMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::ShapeEqMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::SliceMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::TransposeMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::UnfoldMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::collapse_dimcons_chains(&str) -> alloc::string::String
+pub fn incin_diagnostics::expand_and_substitute_type_files(&str) -> (alloc::string::String, alloc::vec::Vec<(alloc::string::String, alloc::string::String)>)
+pub fn incin_diagnostics::humanize_diagnostic(&str) -> incin_diagnostics::Translated
+pub fn incin_diagnostics::humanize_inlay_label(&str, bool) -> alloc::string::String
+pub fn incin_diagnostics::humanize_type_signature(&str, bool) -> incin_diagnostics::Translated
+pub fn incin_diagnostics::parse_bmm_mismatch(&str) -> core::option::Option<incin_diagnostics::BmmMismatch>
+pub fn incin_diagnostics::parse_broadcast_mismatch(&str) -> core::option::Option<incin_diagnostics::BroadcastMismatch>
+pub fn incin_diagnostics::parse_concat_mismatch(&str) -> core::option::Option<incin_diagnostics::ConcatMismatch>
+pub fn incin_diagnostics::parse_conv1d_mismatch(&str) -> core::option::Option<incin_diagnostics::Conv1dMismatch>
+pub fn incin_diagnostics::parse_conv2d_mismatch(&str) -> core::option::Option<incin_diagnostics::Conv2dMismatch>
+pub fn incin_diagnostics::parse_flatten_mismatch(&str) -> core::option::Option<incin_diagnostics::FlattenMismatch>
+pub fn incin_diagnostics::parse_group_norm_mismatch(&str) -> core::option::Option<incin_diagnostics::GroupNormMismatch>
+pub fn incin_diagnostics::parse_inplace_shape_mismatch(&str) -> core::option::Option<incin_diagnostics::InPlaceShapeMismatch>
+pub fn incin_diagnostics::parse_math_domain_error(&str) -> core::option::Option<incin_diagnostics::MathDomainError>
+pub fn incin_diagnostics::parse_matmul_mismatch(&str) -> core::option::Option<incin_diagnostics::MatMulMismatch>
+pub fn incin_diagnostics::parse_module_forward_mismatch(&str) -> core::option::Option<incin_diagnostics::ModuleForwardMismatch>
+pub fn incin_diagnostics::parse_pixel_shuffle_mismatch(&str) -> core::option::Option<incin_diagnostics::PixelShuffleMismatch>
+pub fn incin_diagnostics::parse_pool2d_mismatch(&str) -> core::option::Option<incin_diagnostics::Pool2dMismatch>
+pub fn incin_diagnostics::parse_reduce_dim_mismatch(&str) -> core::option::Option<incin_diagnostics::ReduceDimMismatch>
+pub fn incin_diagnostics::parse_reshape_mismatch(&str) -> core::option::Option<incin_diagnostics::ReshapeMismatch>
+pub fn incin_diagnostics::parse_shape_eq_mismatch(&str) -> core::option::Option<incin_diagnostics::ShapeEqMismatch>
+pub fn incin_diagnostics::parse_single_typenum(&str) -> core::option::Option<usize>
+pub fn incin_diagnostics::parse_slice_mismatch(&str) -> core::option::Option<incin_diagnostics::SliceMismatch>
+pub fn incin_diagnostics::parse_transpose_mismatch(&str) -> core::option::Option<incin_diagnostics::TransposeMismatch>
+pub fn incin_diagnostics::parse_unfold_mismatch(&str) -> core::option::Option<incin_diagnostics::UnfoldMismatch>
+pub fn incin_diagnostics::replace_truncated_spans(&str, &[alloc::string::String]) -> alloc::string::String
+pub fn incin_diagnostics::strip_path_qualifiers(&str) -> alloc::string::String
+pub fn incin_diagnostics::translate_typenum_text(&str) -> (alloc::string::String, alloc::vec::Vec<(alloc::string::String, alloc::string::String)>)
+pub incin_diagnostics::BmmMismatch::message: alloc::string::String
+pub incin_diagnostics::BroadcastMismatch::lhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::BroadcastMismatch::lhs_mismatch_index: usize
+pub incin_diagnostics::BroadcastMismatch::rhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::BroadcastMismatch::rhs_mismatch_index: usize
+pub incin_diagnostics::ConcatMismatch::axis: usize
+pub incin_diagnostics::ConcatMismatch::lhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::ConcatMismatch::mismatch_index: usize
+pub incin_diagnostics::ConcatMismatch::rhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::Conv1dMismatch::input_shape: alloc::string::String
+pub incin_diagnostics::Conv2dMismatch::input: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::Conv2dMismatch::input_channel_idx: usize
+pub incin_diagnostics::Conv2dMismatch::kernel: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::Conv2dMismatch::kernel_channel_idx: usize
+pub incin_diagnostics::FlattenMismatch::end_dim: usize
+pub incin_diagnostics::FlattenMismatch::rank: usize
+pub incin_diagnostics::FlattenMismatch::shape: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::FlattenMismatch::start_dim: usize
+pub incin_diagnostics::GroupNormMismatch::message: alloc::string::String
+pub incin_diagnostics::InPlaceShapeMismatch::message: alloc::string::String
+pub incin_diagnostics::MatMulMismatch::lhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::MatMulMismatch::lhs_inner_index: usize
+pub incin_diagnostics::MatMulMismatch::rhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::MatMulMismatch::rhs_inner_index: usize
+pub incin_diagnostics::MathDomainError::message: alloc::string::String
+pub incin_diagnostics::ModuleForwardMismatch::actual_input: alloc::string::String
+pub incin_diagnostics::ModuleForwardMismatch::expected_input: alloc::string::String
+pub incin_diagnostics::PixelShuffleMismatch::message: alloc::string::String
+pub incin_diagnostics::Pool2dMismatch::input_shape: alloc::string::String
+pub incin_diagnostics::ReduceDimMismatch::dim: usize
+pub incin_diagnostics::ReduceDimMismatch::rank: usize
+pub incin_diagnostics::ReduceDimMismatch::shape: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::ReshapeMismatch::src: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::ReshapeMismatch::src_count: usize
+pub incin_diagnostics::ReshapeMismatch::target: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::ReshapeMismatch::target_count: usize
+pub incin_diagnostics::ShapeEqMismatch::message: alloc::string::String
+pub incin_diagnostics::SliceMismatch::in_shape: alloc::string::String
+pub incin_diagnostics::SliceMismatch::slice_spec: alloc::string::String
+pub incin_diagnostics::Translated::hints: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub incin_diagnostics::Translated::text: alloc::string::String
+pub incin_diagnostics::TransposeMismatch::d1: usize
+pub incin_diagnostics::TransposeMismatch::d2: usize
+pub incin_diagnostics::TransposeMismatch::rank: usize
+pub incin_diagnostics::TransposeMismatch::shape: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::UnfoldMismatch::message: alloc::string::String
+pub mod incin_diagnostics
+pub struct incin_diagnostics::BmmMismatch
+pub struct incin_diagnostics::BroadcastMismatch
+pub struct incin_diagnostics::ConcatMismatch
+pub struct incin_diagnostics::Conv1dMismatch
+pub struct incin_diagnostics::Conv2dMismatch
+pub struct incin_diagnostics::FlattenMismatch
+pub struct incin_diagnostics::GroupNormMismatch
+pub struct incin_diagnostics::InPlaceShapeMismatch
+pub struct incin_diagnostics::MatMulMismatch
+pub struct incin_diagnostics::MathDomainError
+pub struct incin_diagnostics::ModuleForwardMismatch
+pub struct incin_diagnostics::PixelShuffleMismatch
+pub struct incin_diagnostics::Pool2dMismatch
+pub struct incin_diagnostics::ReduceDimMismatch
+pub struct incin_diagnostics::ReshapeMismatch
+pub struct incin_diagnostics::ShapeEqMismatch
+pub struct incin_diagnostics::SliceMismatch
+pub struct incin_diagnostics::Translated
+pub struct incin_diagnostics::TransposeMismatch
+pub struct incin_diagnostics::UnfoldMismatch

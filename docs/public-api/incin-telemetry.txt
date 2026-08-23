@@ -1,0 +1,171 @@
+impl core::fmt::Debug for incin_telemetry::err::Error
+impl core::ops::drop::Drop for incin_telemetry::emitter::Emitter
+impl incin_telemetry::emitter::Emitter
+impl incin_telemetry::reporter::Reporter for incin_telemetry::emitter::Emitter
+impl incin_telemetry::transport::Transport for incin_telemetry::transport::file::FileTransport
+impl incin_telemetry::transport::Transport for incin_telemetry::transport::socket::SocketTransport
+impl incin_telemetry::transport::file::FileTransport
+impl incin_telemetry::transport::socket::SocketTransport
+pub const incin_telemetry::events::CURRENT_SCHEMA_VERSION: u32
+pub const incin_telemetry::prelude::CURRENT_SCHEMA_VERSION: u32
+pub enum incin_telemetry::err::Error
+pub enum incin_telemetry::events::Event
+pub enum incin_telemetry::prelude::Event
+pub fn incin_telemetry::emitter::Emitter::drop(&mut self)
+pub fn incin_telemetry::emitter::Emitter::dropped_count(&self) -> u64
+pub fn incin_telemetry::emitter::Emitter::epoch(&self, usize, alloc::collections::btree::map::BTreeMap<alloc::string::String, f32>)
+pub fn incin_telemetry::emitter::Emitter::gradient_norm(&self, usize, &str, f32)
+pub fn incin_telemetry::emitter::Emitter::graph_snapshot(&self, incin_core::graph::Graph)
+pub fn incin_telemetry::emitter::Emitter::hyperparam(&self, alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>)
+pub fn incin_telemetry::emitter::Emitter::log_epoch(&self, incin_telemetry::events::EpochEvent)
+pub fn incin_telemetry::emitter::Emitter::log_gradient_norm(&self, incin_telemetry::events::GradientNormEvent)
+pub fn incin_telemetry::emitter::Emitter::log_graph_snapshot(&self, incin_telemetry::events::GraphSnapshotEvent)
+pub fn incin_telemetry::emitter::Emitter::log_hyperparam(&self, incin_telemetry::events::HyperparamEvent)
+pub fn incin_telemetry::emitter::Emitter::log_memory(&self, incin_telemetry::events::MemoryEvent)
+pub fn incin_telemetry::emitter::Emitter::log_scalar(&self, incin_telemetry::events::ScalarEvent)
+pub fn incin_telemetry::emitter::Emitter::log_weight_norm(&self, incin_telemetry::events::WeightNormEvent)
+pub fn incin_telemetry::emitter::Emitter::memory(&self, usize, u64)
+pub fn incin_telemetry::emitter::Emitter::new(alloc::vec::Vec<alloc::boxed::Box<dyn incin_telemetry::transport::Transport>>) -> Self
+pub fn incin_telemetry::emitter::Emitter::scalar(&self, &str, usize, f64)
+pub fn incin_telemetry::emitter::Emitter::shutdown(self)
+pub fn incin_telemetry::emitter::Emitter::to_run_dir(core::option::Option<&str>) -> incin_telemetry::err::Result<(Self, incin_telemetry::emitter::RunInfo)>
+pub fn incin_telemetry::emitter::Emitter::weight_norm(&self, usize, &str, f32)
+pub fn incin_telemetry::emitter::Emitter::with_capacities(alloc::vec::Vec<alloc::boxed::Box<dyn incin_telemetry::transport::Transport>>, usize, usize) -> Self
+pub fn incin_telemetry::emitter::Emitter::write_error_count(&self) -> u64
+pub fn incin_telemetry::err::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_telemetry::prelude::Reporter::epoch(&self, usize, alloc::collections::btree::map::BTreeMap<alloc::string::String, f32>)
+pub fn incin_telemetry::prelude::Reporter::gradient_norm(&self, usize, &str, f32)
+pub fn incin_telemetry::prelude::Reporter::graph_snapshot(&self, incin_core::graph::Graph)
+pub fn incin_telemetry::prelude::Reporter::hyperparam(&self, alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>)
+pub fn incin_telemetry::prelude::Reporter::log_epoch(&self, incin_telemetry::events::EpochEvent)
+pub fn incin_telemetry::prelude::Reporter::log_gradient_norm(&self, incin_telemetry::events::GradientNormEvent)
+pub fn incin_telemetry::prelude::Reporter::log_graph_snapshot(&self, incin_telemetry::events::GraphSnapshotEvent)
+pub fn incin_telemetry::prelude::Reporter::log_hyperparam(&self, incin_telemetry::events::HyperparamEvent)
+pub fn incin_telemetry::prelude::Reporter::log_memory(&self, incin_telemetry::events::MemoryEvent)
+pub fn incin_telemetry::prelude::Reporter::log_scalar(&self, incin_telemetry::events::ScalarEvent)
+pub fn incin_telemetry::prelude::Reporter::log_weight_norm(&self, incin_telemetry::events::WeightNormEvent)
+pub fn incin_telemetry::prelude::Reporter::memory(&self, usize, u64)
+pub fn incin_telemetry::prelude::Reporter::scalar(&self, &str, usize, f64)
+pub fn incin_telemetry::prelude::Reporter::weight_norm(&self, usize, &str, f32)
+pub fn incin_telemetry::reporter::Reporter::epoch(&self, usize, alloc::collections::btree::map::BTreeMap<alloc::string::String, f32>)
+pub fn incin_telemetry::reporter::Reporter::gradient_norm(&self, usize, &str, f32)
+pub fn incin_telemetry::reporter::Reporter::graph_snapshot(&self, incin_core::graph::Graph)
+pub fn incin_telemetry::reporter::Reporter::hyperparam(&self, alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>)
+pub fn incin_telemetry::reporter::Reporter::log_epoch(&self, incin_telemetry::events::EpochEvent)
+pub fn incin_telemetry::reporter::Reporter::log_gradient_norm(&self, incin_telemetry::events::GradientNormEvent)
+pub fn incin_telemetry::reporter::Reporter::log_graph_snapshot(&self, incin_telemetry::events::GraphSnapshotEvent)
+pub fn incin_telemetry::reporter::Reporter::log_hyperparam(&self, incin_telemetry::events::HyperparamEvent)
+pub fn incin_telemetry::reporter::Reporter::log_memory(&self, incin_telemetry::events::MemoryEvent)
+pub fn incin_telemetry::reporter::Reporter::log_scalar(&self, incin_telemetry::events::ScalarEvent)
+pub fn incin_telemetry::reporter::Reporter::log_weight_norm(&self, incin_telemetry::events::WeightNormEvent)
+pub fn incin_telemetry::reporter::Reporter::memory(&self, usize, u64)
+pub fn incin_telemetry::reporter::Reporter::scalar(&self, &str, usize, f64)
+pub fn incin_telemetry::reporter::Reporter::weight_norm(&self, usize, &str, f32)
+pub fn incin_telemetry::run_dir::default_run_dir() -> incin_telemetry::err::Result<std::path::PathBuf>
+pub fn incin_telemetry::run_dir::default_run_dir_path() -> incin_telemetry::err::Result<std::path::PathBuf>
+pub fn incin_telemetry::run_dir::generate_run_id() -> alloc::string::String
+pub fn incin_telemetry::run_dir::list_runs(&std::path::Path) -> incin_telemetry::err::Result<alloc::vec::Vec<(alloc::string::String, std::path::PathBuf, std::time::SystemTime)>>
+pub fn incin_telemetry::transport::Transport::write_event(&mut self, &incin_telemetry::events::Event) -> incin_telemetry::err::Result<()>
+pub fn incin_telemetry::transport::file::FileTransport::open(&std::path::Path) -> core::io::error::Result<Self>
+pub fn incin_telemetry::transport::file::FileTransport::write_event(&mut self, &incin_telemetry::events::Event) -> incin_telemetry::err::Result<()>
+pub fn incin_telemetry::transport::socket::SocketTransport::bind(&str) -> core::io::error::Result<Self>
+pub fn incin_telemetry::transport::socket::SocketTransport::write_event(&mut self, &incin_telemetry::events::Event) -> incin_telemetry::err::Result<()>
+pub incin_telemetry::emitter::RunInfo::path: std::path::PathBuf
+pub incin_telemetry::emitter::RunInfo::run_id: alloc::string::String
+pub incin_telemetry::err::Error::Io(core::io::error::Error)
+pub incin_telemetry::err::Error::Msg(alloc::string::String)
+pub incin_telemetry::err::Error::Serialize(serde_json::error::Error)
+pub incin_telemetry::err::Error::Socket(alloc::string::String)
+pub incin_telemetry::events::EpochEvent::epoch: usize
+pub incin_telemetry::events::EpochEvent::metrics: alloc::collections::btree::map::BTreeMap<alloc::string::String, f32>
+pub incin_telemetry::events::EpochEvent::schema_version: u32
+pub incin_telemetry::events::Event::Epoch(incin_telemetry::events::EpochEvent)
+pub incin_telemetry::events::Event::GradientNorm(incin_telemetry::events::GradientNormEvent)
+pub incin_telemetry::events::Event::GraphSnapshot(incin_telemetry::events::GraphSnapshotEvent)
+pub incin_telemetry::events::Event::Hyperparam(incin_telemetry::events::HyperparamEvent)
+pub incin_telemetry::events::Event::Memory(incin_telemetry::events::MemoryEvent)
+pub incin_telemetry::events::Event::Scalar(incin_telemetry::events::ScalarEvent)
+pub incin_telemetry::events::Event::Unknown
+pub incin_telemetry::events::Event::WeightNorm(incin_telemetry::events::WeightNormEvent)
+pub incin_telemetry::events::GradientNormEvent::l2_norm: f32
+pub incin_telemetry::events::GradientNormEvent::param_name: alloc::string::String
+pub incin_telemetry::events::GradientNormEvent::schema_version: u32
+pub incin_telemetry::events::GradientNormEvent::step: usize
+pub incin_telemetry::events::GraphSnapshotEvent::graph: incin_core::graph::Graph
+pub incin_telemetry::events::GraphSnapshotEvent::schema_version: u32
+pub incin_telemetry::events::HyperparamEvent::params: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub incin_telemetry::events::HyperparamEvent::schema_version: u32
+pub incin_telemetry::events::MemoryEvent::rss_bytes: u64
+pub incin_telemetry::events::MemoryEvent::schema_version: u32
+pub incin_telemetry::events::MemoryEvent::step: usize
+pub incin_telemetry::events::ScalarEvent::name: alloc::string::String
+pub incin_telemetry::events::ScalarEvent::schema_version: u32
+pub incin_telemetry::events::ScalarEvent::step: usize
+pub incin_telemetry::events::ScalarEvent::value: f64
+pub incin_telemetry::events::WeightNormEvent::l2_norm: f32
+pub incin_telemetry::events::WeightNormEvent::param_name: alloc::string::String
+pub incin_telemetry::events::WeightNormEvent::schema_version: u32
+pub incin_telemetry::events::WeightNormEvent::step: usize
+pub incin_telemetry::prelude::EpochEvent::epoch: usize
+pub incin_telemetry::prelude::EpochEvent::metrics: alloc::collections::btree::map::BTreeMap<alloc::string::String, f32>
+pub incin_telemetry::prelude::EpochEvent::schema_version: u32
+pub incin_telemetry::prelude::Event::Epoch(incin_telemetry::events::EpochEvent)
+pub incin_telemetry::prelude::Event::GradientNorm(incin_telemetry::events::GradientNormEvent)
+pub incin_telemetry::prelude::Event::GraphSnapshot(incin_telemetry::events::GraphSnapshotEvent)
+pub incin_telemetry::prelude::Event::Hyperparam(incin_telemetry::events::HyperparamEvent)
+pub incin_telemetry::prelude::Event::Memory(incin_telemetry::events::MemoryEvent)
+pub incin_telemetry::prelude::Event::Scalar(incin_telemetry::events::ScalarEvent)
+pub incin_telemetry::prelude::Event::Unknown
+pub incin_telemetry::prelude::Event::WeightNorm(incin_telemetry::events::WeightNormEvent)
+pub incin_telemetry::prelude::GradientNormEvent::l2_norm: f32
+pub incin_telemetry::prelude::GradientNormEvent::param_name: alloc::string::String
+pub incin_telemetry::prelude::GradientNormEvent::schema_version: u32
+pub incin_telemetry::prelude::GradientNormEvent::step: usize
+pub incin_telemetry::prelude::GraphSnapshotEvent::graph: incin_core::graph::Graph
+pub incin_telemetry::prelude::GraphSnapshotEvent::schema_version: u32
+pub incin_telemetry::prelude::HyperparamEvent::params: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub incin_telemetry::prelude::HyperparamEvent::schema_version: u32
+pub incin_telemetry::prelude::MemoryEvent::rss_bytes: u64
+pub incin_telemetry::prelude::MemoryEvent::schema_version: u32
+pub incin_telemetry::prelude::MemoryEvent::step: usize
+pub incin_telemetry::prelude::ScalarEvent::name: alloc::string::String
+pub incin_telemetry::prelude::ScalarEvent::schema_version: u32
+pub incin_telemetry::prelude::ScalarEvent::step: usize
+pub incin_telemetry::prelude::ScalarEvent::value: f64
+pub incin_telemetry::prelude::WeightNormEvent::l2_norm: f32
+pub incin_telemetry::prelude::WeightNormEvent::param_name: alloc::string::String
+pub incin_telemetry::prelude::WeightNormEvent::schema_version: u32
+pub incin_telemetry::prelude::WeightNormEvent::step: usize
+pub mod incin_telemetry
+pub mod incin_telemetry::emitter
+pub mod incin_telemetry::err
+pub mod incin_telemetry::events
+pub mod incin_telemetry::prelude
+pub mod incin_telemetry::reporter
+pub mod incin_telemetry::run_dir
+pub mod incin_telemetry::transport
+pub mod incin_telemetry::transport::file
+pub mod incin_telemetry::transport::socket
+pub struct incin_telemetry::emitter::Emitter
+pub struct incin_telemetry::emitter::RunInfo
+pub struct incin_telemetry::events::EpochEvent
+pub struct incin_telemetry::events::GradientNormEvent
+pub struct incin_telemetry::events::GraphSnapshotEvent
+pub struct incin_telemetry::events::HyperparamEvent
+pub struct incin_telemetry::events::MemoryEvent
+pub struct incin_telemetry::events::ScalarEvent
+pub struct incin_telemetry::events::WeightNormEvent
+pub struct incin_telemetry::prelude::Emitter
+pub struct incin_telemetry::prelude::EpochEvent
+pub struct incin_telemetry::prelude::GradientNormEvent
+pub struct incin_telemetry::prelude::GraphSnapshotEvent
+pub struct incin_telemetry::prelude::HyperparamEvent
+pub struct incin_telemetry::prelude::MemoryEvent
+pub struct incin_telemetry::prelude::ScalarEvent
+pub struct incin_telemetry::prelude::WeightNormEvent
+pub struct incin_telemetry::transport::file::FileTransport
+pub struct incin_telemetry::transport::socket::SocketTransport
+pub trait incin_telemetry::prelude::Reporter
+pub trait incin_telemetry::reporter::Reporter
+pub trait incin_telemetry::transport::Transport: core::marker::Send
+pub type incin_telemetry::err::Result<T> = core::result::Result<T, incin_telemetry::err::Error>

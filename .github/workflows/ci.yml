@@ -461,6 +461,27 @@ jobs:
     - name: Compile CUDA backend without requiring a GPU
       run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda
 
+  semver:
+    name: SemVer Checks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    - uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2.86.4
+      with:
+        tool: cargo-semver-checks
+    - name: Diff public API against the most recent release tag
+      run: |
+        BASELINE="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+        if [ -z "$BASELINE" ]; then
+          echo "no release tag exists yet; semver-checks becomes the gate at the first tag (v0.1.0)"
+          exit 0
+        fi
+        echo "baseline: $BASELINE"
+        cargo semver-checks --baseline-rev "$BASELINE"
+
   # Every other backend job above enables `cpu` alongside the backend it is
   # named for, so none of them can see an accelerator reaching into the CPU
   # backend for code. Three had: `contiguous_strides`, `broadcast_shape` and

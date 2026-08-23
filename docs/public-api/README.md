@@ -1,23 +1,40 @@
 # Reviewed public API baselines
 
-The CPU facade baseline in `incin-cpu.txt` is produced by `cargo-public-api`
-with blanket, auto-trait, and auto-derived implementations omitted. It is a
-reviewed snapshot of the symbols a normal CPU consumer can observe through
-`incin`.
+Every shipped crate's public API is snapshotted with `cargo-public-api`
+(`-sss`: blanket, auto-trait, and auto-derived implementations omitted)
+and reviewed as a checked-in baseline under this directory:
 
-Run `python3 tools/check-public-api-baseline.py` after changing the facade.
-An addition, removal, or signature change fails the check until the public
-API change is reviewed and the snapshot is updated in the same commit.
+| Baseline | Package | Feature set |
+| --- | --- | --- |
+| `incin-cpu.txt` | `incin` | default CPU facade |
+| `incin-core-std.txt` | `incin-core` | `std` |
+| `incin-backends-cpu.txt` | `incin-backends` | `std,cpu` |
+| `incin-data.txt` | `incin-data` | defaults |
+| `incin-diagnostics.txt` | `incin-diagnostics` | defaults |
+| `incin-telemetry.txt` | `incin-telemetry` | defaults |
+| `incin-macros.txt` | `incin-macros` | n/a (proc-macro surface) |
+| `incin-lsp.txt` | `incin-lsp` | defaults |
+| `incin-viz-plugin-api.txt` | `incin-viz-plugin-api` | defaults |
+| `incin-viz.txt` | `incin-viz` | defaults |
 
-`incin::experimental::compiled` is intentionally excluded from this reviewed
-baseline. It is a feature-gated preview namespace with no compatibility
-guarantee; its CPU reference evaluator and plan-inspection types are tracked by
-the compiled-preview fixtures instead. A future declarative API inventory will
-encode this exclusion mechanically.
+Run `python3 tools/check-public-api-baseline.py` after changing any
+shipped crate's public surface. An addition, removal, or signature
+change fails the check until the change is reviewed and the affected
+baseline is regenerated in the same commit
+(`tools/check-public-api-baseline.py --update <crate>`); a single crate
+can be checked alone by passing its package name.
 
-The baseline intentionally covers the facade first. `incin-core` and
-`incin-backends` expose separate authoring and backend contracts; their
-explicit namespaces and architecture checks remain the review boundary while
-their public surface is being reduced incrementally. Package boundaries are
-checked independently by `tools/check-package.sh` for every top-level shipped
-crate, so this API baseline does not stand in for archive validation.
+Preview surfaces are excluded from these baselines by feature selection,
+not by post-filtering: `incin::experimental::compiled` and the other
+feature-gated namespaces (see `docs/PROJECT_STATUS.md` for the preview
+list) never compile into the baseline feature sets above. Their contracts
+are tracked by their own preview fixtures instead.
+
+SemVer enforcement against these baselines runs in CI through
+`cargo-semver-checks`, diffing each push against the most recent release
+tag; until the first tag exists it records a skip rather than a pass.
+
+The baselines intentionally cover shipped packages only.
+`tools/check-package.sh` independently verifies archive contents for
+exactly that set, so an API baseline cannot stand in for packaging
+validation or vice versa.
