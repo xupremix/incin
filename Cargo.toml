@@ -65,6 +65,10 @@ path_statements = "allow"
 # Every unsafe operation inside an unsafe function must remain visibly scoped.
 # This prevents a future edit from silently inheriting the function's contract.
 unsafe_op_in_unsafe_fn = "deny"
+# Every public item carries a summary. The doctest bar per surface is set by
+# D-108 in PROPOSALS.md Appendix C: examples required on user-facing API,
+# optional on internal proof machinery.
+missing_docs = "deny"
 
 [workspace.lints.clippy]
 # Public generic signatures keep primary trait bounds near parameters and capability bounds in where clauses.

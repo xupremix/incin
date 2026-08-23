@@ -80,8 +80,11 @@ pub enum PlacedTensorError {
         "gradient tracking requires a floating dtype, got {dtype:?} on backend {backend} for {op}"
     )]
     GradientDType {
+        /// Dtype the placement proof requires.
         dtype: DTypeDescriptor,
+        /// Backend name involved in the rejection.
         backend: &'static str,
+        /// Operation identity string.
         op: &'static str,
     },
     /// A sealed proof does not describe the tensor's current placement.

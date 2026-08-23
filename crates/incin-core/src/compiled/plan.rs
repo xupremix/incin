@@ -91,6 +91,7 @@ impl ShapeGuard {
     }
 
     #[must_use]
+    /// Attaches optional device and layout expectations to this guard.
     pub fn with_metadata(mut self, device: Option<DeviceId>, layout: Option<LayoutClass>) -> Self {
         self.expected_device = device;
         self.expected_layout = layout;
@@ -115,6 +116,7 @@ impl ShapeGuard {
         Ok(())
     }
 
+    /// Checks runtime metadata against this guard's expectations.
     pub fn check_metadata(&self, metadata: &TensorMeta) -> Result<()> {
         self.check(metadata.shape.as_ref(), metadata.dtype)?;
         if let Some(expected) = self.expected_device
@@ -150,8 +152,11 @@ pub struct CompiledPlan {
     pub options: CompileOptions,
     /// Dynamic shape guards for graph inputs.
     pub input_guards: Vec<ShapeGuard>,
+    /// Symbol table for dynamic extents.
     pub symbols: SymbolTable,
+    /// Buffer liveness intervals per slot.
     pub liveness: LivenessMap,
+    /// Allocation layout derived from liveness.
     pub memory_plan: MemoryPlan,
 }
 
@@ -232,6 +237,7 @@ impl CompiledPlan {
         guard.check(shape, dtype.into())
     }
 
+    /// Checks shapes and dtypes before invocation.
     pub fn verify_inputs(&self, inputs: &[(Vec<usize>, DTypeDescriptor)]) -> Result<()> {
         if inputs.len() != self.input_guards.len() {
             return Err(Error::Msg(alloc::format!(
@@ -273,6 +279,7 @@ impl CompiledPlan {
             })
     }
 
+    /// Same check against full metadata handles.
     pub fn verify_input_metadata(&self, inputs: &[&TensorMeta]) -> Result<()> {
         if inputs.len() != self.input_guards.len() {
             return Err(Error::Msg(alloc::format!(

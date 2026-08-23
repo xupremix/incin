@@ -69,9 +69,17 @@ impl DistributedContext<Dyn, Dyn> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RendezvousEndpoint {
     /// Rank zero's bind address.
-    Root { bind: SocketAddr },
+    /// Rank zero's bind address.
+    Root {
+        /// Address this rank accepts peers on.
+        bind: SocketAddr,
+    },
     /// Rank zero's address as reachable from rank one.
-    Peer { root: SocketAddr },
+    /// Rank zero's address as reachable from rank one.
+    Peer {
+        /// Root rank's address to connect to.
+        root: SocketAddr,
+    },
 }
 
 impl RendezvousEndpoint {
