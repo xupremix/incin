@@ -188,6 +188,20 @@ These become `"0.1.0"`-style version deps once crates.io publication lands.
 
 </details>
 
+<details>
+<summary><strong>Lower-level crate features</strong></summary>
+
+<!-- BEGIN GENERATED: crate-features -->
+- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
+- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `compiled`, `postcard`, `safetensors`, and `serde_json`.
+- `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
+- `incin-diagnostics`: defaults to `std`.
+- `incin-data`: defaults to `download`; optional `hub`.
+- `incin-telemetry`, `incin-viz`, `incin-viz-plugin-api`, and `incin-lsp` expose no Cargo features.
+<!-- END GENERATED: crate-features -->
+
+</details>
+
 ## What's inside
 
 ```text
