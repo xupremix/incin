@@ -96,6 +96,7 @@ pub enum RuntimeEngine {
     /// Executes through the vendor-native kernel path.
     Native,
     #[cfg(feature = "external-candle")]
+    /// Executes through the Candle adapter.
     Candle,
 }
 

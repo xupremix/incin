@@ -33,7 +33,9 @@ impl<D> Default for MetalBackendImpl<D> {
 }
 
 #[derive(Clone)]
+/// A trainable variable whose bytes live in Metal memory.
 pub struct MetalVar {
+    /// Metal-resident storage backing this variable.
     pub storage: MetalStorage,
 }
 

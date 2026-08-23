@@ -21,9 +21,12 @@ impl<D> Default for CudaBackendImpl<D> {
     }
 }
 
+/// A trainable variable whose bytes live in CUDA memory.
 #[derive(Clone)]
 pub struct CudaVar {
+    /// CUDA-resident storage backing this variable.
     pub storage: CudaStorage,
 }
 
+/// Gradient map type for the CUDA tape.
 pub type CudaGrads = crate::cuda::tape::CudaGrads;

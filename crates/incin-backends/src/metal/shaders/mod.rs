@@ -9,8 +9,11 @@ pub const REDUCTION_MSL: &str = include_str!("reduction.metal");
 /// Descriptor for a Metal pointwise compute kernel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetalPointwiseDescriptor {
+    /// MTL shader function name for unary kernels.
     pub kernel_name: &'static str,
+    /// Numeric op tag passed to the shader.
     pub op_type: u32,
+    /// Number of buffers the kernel expects.
     pub num_buffers: usize,
 }
 
@@ -39,8 +42,11 @@ impl MetalPointwiseDescriptor {
 /// Descriptor for a Metal reduction compute kernel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetalReductionDescriptor {
+    /// MTL shader function name for binary kernels.
     pub kernel_name: &'static str,
+    /// Numeric op tag passed to the shader.
     pub op_type: u32,
+    /// Threads per threadgroup for the launch.
     pub threads_per_group: u32,
 }
 

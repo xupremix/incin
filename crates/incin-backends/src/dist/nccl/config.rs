@@ -32,9 +32,15 @@ pub(crate) const TOPOLOGY_WIRE_BYTES: usize = 8
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootstrapRole {
     /// Rank zero listens at this address and creates the NCCL unique id.
-    Root { bind: SocketAddr },
+    Root {
+        /// Address rank zero listens on.
+        bind: SocketAddr,
+    },
     /// Rank one connects to rank zero at this address.
-    Peer { root: SocketAddr },
+    Peer {
+        /// Root address peers connect to.
+        root: SocketAddr,
+    },
 }
 
 impl BootstrapRole {

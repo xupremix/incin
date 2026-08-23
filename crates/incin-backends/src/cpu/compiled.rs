@@ -58,10 +58,15 @@ cpu_compiled_operations!(supports_cpu_operation);
 /// second operation vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuCompiledSupport {
+    /// Operation these compiled support rows describe.
     pub operation: incin_core::shapes::error::OperationKind,
+    /// Catalog name of the operation.
     pub name: &'static str,
+    /// Descriptor type implementing it.
     pub descriptor: &'static str,
+    /// Where the operation executes.
     pub execution_site: incin_core::exec::ExecutionSite,
+    /// Whether the op can be captured into plans.
     pub capture_eligible: bool,
 }
 
@@ -107,6 +112,7 @@ pub fn compiled_support() -> core::result::Result<Vec<CpuCompiledSupport>, &'sta
 /// Inputs and outputs for one executable CPU compiled invocation.
 #[derive(Debug, Clone)]
 pub struct CpuCompiledInvocation {
+    /// Validated input storages for this invocation.
     pub inputs: Vec<CpuStorage>,
 }
 
@@ -174,6 +180,7 @@ impl CpuCompiledPlan {
         })
     }
 
+    /// Executes the plan and returns one output storage per declared output.
     pub fn run(&self, invocation: CpuCompiledInvocation) -> Result<Vec<CpuStorage>> {
         invocation.run_admitted(&self.plan)
     }

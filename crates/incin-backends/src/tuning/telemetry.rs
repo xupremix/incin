@@ -12,14 +12,23 @@ use crate::tuning::service::{AutotunePolicy, SelectionSource, TuningScope, Tunin
 /// Structured environment and candidate provenance for a tuning decision.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TuningProvenance {
+    /// Cache key this record explains.
     pub key: CacheKey<Dyn>,
+    /// Tuning scope the key belongs to.
     pub scope: TuningScope,
+    /// Environment fingerprint at measurement time.
     pub environment: TuningEnvironmentFingerprint<Dyn>,
+    /// Digest of the legal candidate set.
     pub candidate_digest: u64,
+    /// Hash identifying the winning candidate.
     pub winner_hash: u64,
+    /// Encoding format of the stored winner.
     pub winner_encoding: String,
+    /// How the winner was chosen.
     pub source: SelectionSource,
+    /// Median measured latency in nanoseconds.
     pub median_ns: Option<u64>,
+    /// Number of samples behind the median.
     pub sample_count: u32,
 }
 
@@ -49,9 +58,13 @@ impl TuningProvenance {
 /// Diagnostic explain formatter for human and machine consumption.
 #[derive(Debug, Clone)]
 pub struct TuningExplain {
+    /// Provenance of this selection.
     pub provenance: TuningProvenance,
+    /// Policy that governed tuning.
     pub policy: AutotunePolicy,
+    /// Total candidates considered.
     pub total_candidates: usize,
+    /// Candidates legal under pruning.
     pub legal_candidates: usize,
 }
 

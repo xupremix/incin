@@ -134,6 +134,7 @@ pub mod prelude {
 pub mod cpu;
 
 #[cfg(feature = "cuda")]
+/// Native CUDA backend (preview).
 pub mod cuda;
 
 #[cfg(feature = "wgpu")]

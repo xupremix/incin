@@ -33,87 +33,145 @@ pub enum NcclTransportError {
     Pipeline(#[from] PipelineError),
     /// The requested parameter has no gradient in the completed backward pass.
     #[error("parameter gradient {id:?} was not produced by backward")]
-    MissingGradient { id: GradientId },
+    MissingGradient {
+        /// Gradient identifier involved.
+        id: GradientId,
+    },
     /// Caller and plan disagree on which parameter occupies this sequence.
     #[error("gradient identity is {found}, expected {expected}")]
-    GradientIdentity { expected: u64, found: u64 },
+    GradientIdentity {
+        /// Expected value.
+        expected: u64,
+        /// Actual value.
+        found: u64,
+    },
     /// The next descriptor is not a DP mean all-reduce.
     #[error(
         "gradient descriptor must be Partial<Mean> -> Replicated all-reduce, got {kind:?} from {from_placement:?} to {to_placement:?}"
     )]
     NotDataParallelGradient {
+        /// Collective involved in the mismatch.
         kind: CollectiveKind,
+        /// Placement the transfer starts from.
         from_placement: incin_core::dist::PlacementKind,
+        /// Placement the transfer targets.
         to_placement: incin_core::dist::PlacementKind,
     },
     /// A gradient allocation belongs to another local CUDA ordinal.
     #[error("gradient is on CUDA device {found}, transport owns CUDA device {expected}")]
-    GradientDevice { expected: usize, found: usize },
+    GradientDevice {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// NCCL's scalar buffer path requires a contiguous offset-zero gradient.
     #[error(
         "gradient layout is {layout:?} at element offset {offset}; contiguous offset-zero required"
     )]
     GradientLayout {
+        /// Offset into the buffer where validation failed.
         offset: usize,
+        /// Layout class observed.
         layout: incin_core::exec::LayoutClass,
     },
     /// Caller and plan disagree on the tensor-parallel semantic operation.
     #[error("tensor-parallel operation tag is {found}, expected {expected}")]
-    TensorParallelIdentity { expected: u64, found: u64 },
+    TensorParallelIdentity {
+        /// Expected value.
+        expected: u64,
+        /// Actual value.
+        found: u64,
+    },
     /// The next descriptor does not implement the requested TP operation.
     #[error(
         "tensor-parallel descriptor for {expected:?} got {kind:?} from {from_placement:?} to {to_placement:?}"
     )]
     NotTensorParallelOperation {
+        /// Value the contract expects.
         expected: TensorParallelCollective,
+        /// Collective involved in the mismatch.
         kind: CollectiveKind,
+        /// Placement the transfer starts from.
         from_placement: incin_core::dist::PlacementKind,
+        /// Placement the transfer targets.
         to_placement: incin_core::dist::PlacementKind,
     },
     /// A TP tensor allocation belongs to another local CUDA ordinal.
     #[error(
         "tensor-parallel input is on CUDA device {found}, transport owns CUDA device {expected}"
     )]
-    TensorParallelDevice { expected: usize, found: usize },
+    /// Reported when this precondition is violated.
+    TensorParallelDevice {
+        /// Value the contract expects.
+        expected: usize,
+        /// Value actually present.
+        found: usize,
+    },
     /// Direct NCCL tensor execution requires contiguous offset-zero storage.
     #[error(
         "tensor-parallel input layout is {layout:?} at element offset {offset}; contiguous offset-zero required"
     )]
     TensorParallelLayout {
+        /// Offset into the buffer where validation failed.
         offset: usize,
+        /// Layout class observed.
         layout: incin_core::exec::LayoutClass,
     },
     /// Rank-local tensor shape disagrees with the requested logical shard.
     #[error("tensor-parallel input shape is {found:?}, expected {expected:?}")]
     TensorParallelShape {
+        /// Value the contract expects.
         expected: Vec<usize>,
+        /// Value actually present.
         found: Vec<usize>,
     },
     /// Requested global shape disagrees with the immutable plan.
     #[error("tensor-parallel output has {found} elements, expected {expected}")]
-    TensorParallelOutputElements { expected: usize, found: usize },
+    TensorParallelOutputElements {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// Caller and plan disagree on pipeline boundary, direction, or microbatch.
     #[error("pipeline transfer tag is {found}, expected {expected}")]
-    PipelineIdentity { expected: u64, found: u64 },
+    PipelineIdentity {
+        /// Identity this rank expected from the plan.
+        expected: u64,
+        /// Identity the descriptor actually carried.
+        found: u64,
+    },
     /// The next descriptor does not implement the requested pipeline transfer.
     #[error(
         "pipeline descriptor for {expected:?} got {kind:?} from {from_placement:?} to {to_placement:?}"
     )]
     NotPipelineTransfer {
+        /// Value the contract expects.
         expected: PipelineTransfer,
+        /// Collective involved in the mismatch.
         kind: CollectiveKind,
+        /// Placement the transfer starts from.
         from_placement: incin_core::dist::PlacementKind,
+        /// Placement the transfer targets.
         to_placement: incin_core::dist::PlacementKind,
     },
     /// A pipeline tensor allocation belongs to another local CUDA ordinal.
     #[error("pipeline input is on CUDA device {found}, transport owns CUDA device {expected}")]
-    PipelineDevice { expected: usize, found: usize },
+    PipelineDevice {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// Direct pipeline transfer requires contiguous offset-zero storage.
     #[error(
         "pipeline input layout is {layout:?} at element offset {offset}; contiguous offset-zero required"
     )]
     PipelineLayout {
+        /// Offset into the buffer where validation failed.
         offset: usize,
+        /// Layout class observed.
         layout: incin_core::exec::LayoutClass,
     },
     /// A checked buffer could not be represented.
@@ -121,34 +179,77 @@ pub enum NcclTransportError {
     InvalidBuffer(String),
     /// A CUDA allocation has a different byte count.
     #[error("NCCL buffer has {found} bytes, expected {expected}")]
-    BufferBytes { expected: usize, found: usize },
+    BufferBytes {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// Runtime dtype differs from the next descriptor.
     #[error("NCCL buffer has dtype {found:?}, expected {expected:?}")]
-    DType { expected: DTypeId, found: DTypeId },
+    DType {
+        /// Expected value.
+        expected: DTypeId,
+        /// Actual value.
+        found: DTypeId,
+    },
     /// Runtime element count differs from the next descriptor.
     #[error("NCCL buffer has {found} elements, expected {expected}")]
-    Elements { expected: usize, found: usize },
+    Elements {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// The immutable plan has no next launch.
     #[error("collective plan is exhausted after {collectives} launches")]
-    PlanExhausted { collectives: usize },
+    PlanExhausted {
+        /// Collectives contained in the exhausted plan.
+        collectives: usize,
+    },
     /// Descriptor order is not the canonical zero-based sequence.
     #[error("collective sequence is {found}, expected {expected}")]
-    Sequence { expected: u64, found: u64 },
+    Sequence {
+        /// Expected value.
+        expected: u64,
+        /// Actual value.
+        found: u64,
+    },
     /// This transport is deliberately fixed at two network ranks.
     #[error("NCCL group has {found} ranks, expected {expected}")]
-    GroupCardinality { expected: usize, found: usize },
+    GroupCardinality {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// A newer collective kind is not implemented by this transport version.
     #[error("collective kind is unsupported by this NCCL transport version")]
     UnsupportedCollective,
     /// Bootstrap peer announced another world size.
     #[error("remote bootstrap world is {found}, expected {expected}")]
-    WorldSize { expected: usize, found: usize },
+    WorldSize {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// Bootstrap peer announced the wrong rank.
     #[error("remote bootstrap rank is {found}, expected {expected}")]
-    RemoteRank { expected: usize, found: usize },
+    RemoteRank {
+        /// Expected value.
+        expected: usize,
+        /// Actual value.
+        found: usize,
+    },
     /// This process's configured rank is outside the two-rank world.
     #[error("local rank {rank} is outside a world of {world}")]
-    LocalRank { rank: usize, world: usize },
+    LocalRank {
+        /// Offending rank index.
+        rank: usize,
+        /// World size validated against.
+        world: usize,
+    },
     /// Rank zero did not supply its NCCL id to the protocol.
     #[error("rank zero bootstrap requires an NCCL unique id")]
     MissingRootId,
@@ -161,30 +262,46 @@ pub enum NcclTransportError {
     /// A fixed-size topology field could not carry its value.
     #[error("{field} has {found} bytes, maximum is {maximum}")]
     FieldTooLong {
+        /// Field whose bound was exceeded.
         field: &'static str,
+        /// Configured maximum.
         maximum: usize,
+        /// Value actually present.
         found: usize,
     },
     /// Hosts loaded different transport implementations or versions.
     #[error("transport mismatch: local {local}, remote {remote}")]
-    TransportMismatch { local: String, remote: String },
+    TransportMismatch {
+        /// This rank's transport identity.
+        local: String,
+        /// The peer's transport identity.
+        remote: String,
+    },
     /// Zero or overflowing durations cannot form a deadline.
     #[error("NCCL timeout must be positive and fit Instant")]
     InvalidTimeout,
     /// A bounded phase reached its deadline.
     #[error("{phase} timed out after {timeout:?}")]
     Timeout {
+        /// Handshake phase that timed out.
         phase: &'static str,
+        /// Configured timeout duration.
         timeout: Duration,
     },
     /// Socket I/O reported a timeout.
     #[error("{operation} timed out")]
-    IoTimeout { operation: &'static str },
+    IoTimeout {
+        /// Operation or IO step that failed.
+        operation: &'static str,
+    },
     /// Other socket failure.
     #[error("{operation} failed ({kind:?}): {message}")]
     Io {
+        /// Operation or IO step that failed.
         operation: &'static str,
+        /// Collective involved in the mismatch.
         kind: io::ErrorKind,
+        /// See the variant documentation.
         message: String,
     },
     /// CUDA driver failure.
@@ -196,7 +313,9 @@ pub enum NcclTransportError {
     /// cudarc could not dynamically load the NCCL shared library.
     #[error("cannot {operation}: NCCL is unavailable ({message})")]
     NcclUnavailable {
+        /// Operation or IO step that failed.
         operation: &'static str,
+        /// See the variant documentation.
         message: String,
     },
     /// NCCL returned a negative or otherwise unrepresentable version.

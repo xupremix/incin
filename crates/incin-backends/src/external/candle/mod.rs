@@ -12,6 +12,7 @@ pub use convert::{from_candle_device, from_candle_dtype, to_candle_device, to_ca
 pub use executor::CandleStorage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Backend executing through the Candle crate.
 pub struct CandleBackend<D = Cpu>(core::marker::PhantomData<D>);
 
 impl<D> CandleBackend<D> {
