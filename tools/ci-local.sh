@@ -41,6 +41,7 @@ cargo xtask docs --check || fail "README feature table check failed!"
 cargo xtask feature-matrix || fail "Supported feature contract matrix failed!"
 tools/audit-shapes.sh --check || fail "Shape audit check failed!"
 tools/check-public-api.sh || fail "Reviewed public API check failed!"
+tools/command-smoke.sh || fail "Command smoke checks failed!"
 success "Ledger & Governance OK"
 
 step "3. CPU Clippy Lints"
