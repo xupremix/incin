@@ -259,7 +259,7 @@ jobs:
           if [[ "$RELEASE_TAG" == *-* ]]; then
             release_kind+=(--prerelease)
           fi
-          gh release create "$RELEASE_TAG" --target "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes "${release_kind[@]}" --draft
+          gh release create "$RELEASE_TAG" --target "${{ github.sha }}" --title "$RELEASE_TAG" --generate-notes "${release_kind[@]}" --draft
           gh release upload "$RELEASE_TAG" release-assets/incin-*
 
       - name: Verify uploaded draft assets
