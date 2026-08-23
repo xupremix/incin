@@ -85,8 +85,12 @@ jobs:
     # name. Without it the invocation fails inside cargo-public-api itself,
     # which surfaces as a confusing secondary "virtual manifest" error rather
     # than the actual missing-toolchain cause.
-    - name: Install nightly toolchain for cargo-public-api
-      run: rustup toolchain install nightly --profile minimal
+    # Pinned by date on purpose: rustdoc's JSON rendering of generic bounds
+    # changes across nightlies, which would otherwise rewrite every baseline
+    # whenever CI installed a fresh nightly. Bump this together with a
+    # deliberate baseline regeneration.
+    - name: Install pinned nightly toolchain for cargo-public-api
+      run: rustup toolchain install nightly-2026-07-28 --profile minimal
 
     - name: Check reviewed public API
       run: |

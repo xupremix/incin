@@ -17,6 +17,11 @@ and reviewed as a checked-in baseline under this directory:
 | `incin-viz-plugin-api.txt` | `incin-viz-plugin-api` | defaults |
 | `incin-viz.txt` | `incin-viz` | defaults |
 
+Baselines are generated with the pinned nightly declared in ci.yml
+(`nightly-2026-07-28`) because rustdoc's JSON rendering of generic bounds
+changes across nightlies; bump the pin and regenerate deliberately,
+together.
+
 Run `python3 tools/check-public-api-baseline.py` after changing any
 shipped crate's public surface. An addition, removal, or signature
 change fails the check until the change is reviewed and the affected
