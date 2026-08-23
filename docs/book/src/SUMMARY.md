@@ -48,3 +48,15 @@
 - [Coming from PyTorch](./pytorch_cheatsheet.md)
 - [Planned 0.1.0 release notes](./release_notes.md)
 - [What's not finished yet](./whats_not_finished.md)
+
+# Deep dive
+
+A deeper companion for contributors and the curious - how the pieces in the
+parts above are actually built. Distilled from `docs/GUIDE.md`, the contract
+documents, and the source itself.
+
+- [The layered architecture](./deep_architecture.md)
+- [Type semantics](./deep_type_semantics.md)
+- [Lowering: from descriptor to kernel](./deep_lowering.md)
+- [Proofs: how claims are checked](./deep_proofs.md)
+- [Macro internals](./deep_macros_internals.md)

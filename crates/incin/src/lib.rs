@@ -107,6 +107,11 @@
     include_str!("../../../docs/book/src/pytorch_cheatsheet.md"),
     include_str!("../../../docs/book/src/release_notes.md"),
     include_str!("../../../docs/book/src/whats_not_finished.md"),
+    include_str!("../../../docs/book/src/deep_architecture.md"),
+    include_str!("../../../docs/book/src/deep_type_semantics.md"),
+    include_str!("../../../docs/book/src/deep_lowering.md"),
+    include_str!("../../../docs/book/src/deep_proofs.md"),
+    include_str!("../../../docs/book/src/deep_macros_internals.md"),
 )]
 mod book_docs {}
 

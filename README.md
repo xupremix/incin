@@ -308,6 +308,8 @@ Neovim screenshot for good measure:
 - **[Capability matrix](https://github.com/xupremix/incin/blob/master/docs/capabilities.md)**
   - per-operation, generated from executor registrations, never hand-edited.
 - **docs/GUIDE.md** - how the shape-proof system works internally.
+- **[The deep dive](https://github.com/xupremix/incin/blob/master/docs/book/src/deep_architecture.md)**
+  - architecture, type semantics, lowering, proofs, and macro internals.
 - Found something? [Open an issue](https://github.com/xupremix/incin/issues/new/choose).
   The templates make it fast.
 
