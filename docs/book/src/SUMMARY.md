@@ -46,7 +46,7 @@
 - [Invariants and proof types](./invariants.md)
 - [Experimental surfaces](./experimental.md)
 - [Coming from PyTorch](./pytorch_cheatsheet.md)
-- [Planned 0.1.0 release notes](./release_notes.md)
+- [0.1.0 release notes](./release_notes.md)
 - [What's not finished yet](./whats_not_finished.md)
 
 # Deep dive

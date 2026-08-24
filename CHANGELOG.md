@@ -6,7 +6,7 @@
 All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-08-24
 
 The first release intended for crates.io. CPU is the complete, verified
 backend; the GPU backends, distributed planning, compiled execution, and the
@@ -19,7 +19,21 @@ compiler, deployment target, or portable artifact ABI. Its preview plan
 snapshots require matching artifact format and caller-supplied compatibility
 major/minor values.
 
+
+### Breaking changes
+
+- **incin-data typed errors:** Public `incin-data` APIs no longer return
+  `anyhow::Result`. `Downloader`, `MnistDataset` construction, and the Hugging
+  Face Hub client now return the framework error (`incin_core::error::Result`),
+  classifying failures as `Error::Io`, `Error::MalformedArtifact`,
+  `Error::ResourceLimit`, or `Error::ArithmeticOverflow`. Transform pipelines
+  and collation return the crate's typed `DataError`, which gained an
+  `InvalidInput` variant for rejected transform inputs. Callers matching on
+  error text or constructing `anyhow` errors from these surfaces must switch to
+  the typed variants.
+
 ### Removed
+
 - **`protoc` as a build dependency.** `incin-core`'s build script ran
   `prost-build` unconditionally, making a system protobuf compiler mandatory
   for every crate that depended on the facade. The generated ONNX module is
@@ -40,8 +54,14 @@ major/minor values.
   back.
 - **`tokio` and a duplicate `rustls`** from the default dependency graph; the
   Hub client that pulled them is now behind the `data-hub` feature.
+- **Deprecated `candle` feature alias (`REL-002`, `D-014`):** Removed `candle` feature alias from `incin` and `incin-backends` in favor of explicit `external-candle`.
+- `Backend::backward_with_nan_check` and its four implementations. NaN checking
+  is `NanPolicy` on `ExecutionPolicy`; wrap the ordinary `backward` in
+  `incin_core::exec::check_gradients(|| ..)`, which returns an error where the
+  old method panicked.
 
 ### Added
+
 - **`clip_grad_norm`** - total-norm gradient clipping over a `ParameterGroup`,
   returning the norm before rescaling. The one training primitive the framework
   was missing.
@@ -73,211 +93,6 @@ major/minor values.
   through. A file newer than the reader is refused with both numbers named.
   `CHECKPOINT_MANIFEST_VERSION` does the same for the sharded-checkpoint
   manifest, whose `version` field existed but was never read back.
-
-### Changed
-- **The CPU AVX2 kernels are reachable.** They were gated on
-  `simd_lanes::<f32>() >= 8`, which reads `cfg!(target_feature = "avx2")` - false
-  in any stock `cargo build`, since the default `x86_64` target is the baseline
-  ISA. Every default build therefore dead-code-eliminated the SIMD path and ran
-  a scalar loop. The kernels already carried
-  `#[target_feature(enable = "avx2")]`, so the fix is the runtime detection that
-  attribute exists for: `simd::avx2_detected()`, cached in a relaxed atomic.
-  On an AVX2 machine, `eager/add_f32/65536` goes from 60.7 µs to **6.43 µs**,
-  back inside its recorded budget, and `add_f32/1024` from 1.66 µs to 776 ns.
-  A test now fails if the gate is narrowed back to a compile-time condition.
-- **Whole-tensor reductions read contiguous storage directly.** `sum_all`,
-  `mean_all`, `prod_all`, `max_all`, and `min_all` walked a logical odometer and
-  fetched every element through a stride dot product plus a dtype match - about
-  twenty cycles to read one number. `sum_f32/1024` goes from 6.97 µs to 5.41 µs
-  under the full benchmark suite and from 6.97 µs to 1.32 µs in isolation;
-  `sum_f32/65536` from 399 µs to 306 µs. The `f64` accumulator and the traversal
-  order are unchanged, so reduced values are bit-identical.
-- **Fewer allocations per operation.** The descriptor path inferred each output
-  shape twice, once to derive it and once to verify the derivation against
-  itself; `broadcast_shape` round-tripped its accumulator through a `ShapeBuf`
-  on every operand, and the CPU backend built autograd tape entries even when the
-  effective `GradMode` was going to discard them. A rank-2 elementwise add went
-  from 27 allocations to 5 and a unary from 20 to 5, and the ceilings in
-  `hot_path_allocations.rs` were rebased onto the new counts. Shape inference
-  also produces a `ShapeBuf` throughout rather than a `Vec<usize>` that was then
-  copied into one; `ShapeBuf` stores rank 8 and below inline, so an ordinary
-  rank now reaches the descriptor without touching the heap. No validation was
-  removed. See `docs/benchmarks/runtime-2026-08-17.md`.
-- **`ModelExt::load` no longer takes a device.** The argument was ignored, so
-  the signature described a relocation the call never performed. `load`
-  restores state in place; moving a model between devices stays `ToDevice`.
-- **An optimizer step that reaches no parameter is an error.** `SGD`, `Adam`,
-  and `AdamW` returned `Ok(())` when no parameter in the group received a
-  gradient, so a training loop could run to completion with parameters that
-  never moved - including when `backward` ran on a different thread from the
-  forward pass, since a tape is thread-local. Skipping some parameters remains
-  legal.
-- **`docs/plan/roadmap.md` derives its completion table from
-  `docs/plan/ledger.toml`.** The two disagreed about the same task IDs; a new
-  check keeps them equal, and the roadmap now states what "complete" means and
-  how many rows carry recorded deviations.
-- **README and crate documentation** describe CPU as the complete backend and
-  the GPU backends as previews covering documented subsets, matching the
-  generated capability matrix.
-- **Dependencies:** `rand` 0.8 → 0.10, `rand_distr` 0.4 → 0.6, `hashbrown`
-  0.14 → 0.17, `spin` 0.9 → 0.12, `safetensors` 0.4 → 0.8, `pollster` 0.3 →
-  1.0, `criterion` 0.5 → 0.8.
-
-### Fixed
-- **Candle 0.9.2 element types.** New `I16`, `I32`, and float8 variants are
-  refused by name at the bridge rather than breaking the build or being
-  reinterpreted as a same-width type Incin does have.
-
-## [Unreleased]
-
-### Breaking changes
-- **incin-data typed errors:** Public `incin-data` APIs no longer return
-  `anyhow::Result`. `Downloader`, `MnistDataset` construction, and the Hugging
-  Face Hub client now return the framework error (`incin_core::error::Result`),
-  classifying failures as `Error::Io`, `Error::MalformedArtifact`,
-  `Error::ResourceLimit`, or `Error::ArithmeticOverflow`. Transform pipelines
-  and collation return the crate's typed `DataError`, which gained an
-  `InvalidInput` variant for rejected transform inputs. Callers matching on
-  error text or constructing `anyhow` errors from these surfaces must switch to
-  the typed variants.
-
-### Changed
-- **Advanced indexing facade:** Curated `incin::advanced` to export only the
-  documented type-level indexing selectors and traits.
-- **Core advanced indexing facade:** Applied the same explicit export boundary
-  to `incin_core::advanced`, keeping hidden implementation traits out of the
-  downstream namespace.
-- **Public API guard:** Stable `incin` and `incin-core` facade files now fail
-  validation if a wildcard re-export is reintroduced.
-- **Shape root exports:** Replaced wildcard exports from private shape
-  implementation modules with explicit scalar, storage, proof, and dimension
-  items.
-- **Telemetry graph test:** Updated the graph snapshot test to use the named
-  `incin_core::graph` namespace after removing `Graph` from the ordinary
-  prelude.
-- **Backend-authoring tests:** Updated test consumers to import `Backend` and
-  `VariableBackend` from the explicit authoring namespace.
-- **Transformer CPU test:** Made the gradient assertion deterministic by
-  allowing valid zero-valued individual components while requiring a nonzero
-  gradient somewhere in the model.
-- **Macro fixtures:** Updated compile-pass macro fixtures to use the explicit
-  backend-authoring namespace after the stable root API was narrowed.
-- **Advanced facade:** Removed internal reshape and slice specification traits
-  from the public advanced namespace; the user-facing selector contracts remain.
-- **Core prelude:** Moved backend-authoring, tracing, and storage-encoding
-  contracts to named modules, and added `incin_core::onnx` for ONNX helpers.
-- **Telemetry preludes:** Replaced event-module wildcard exports with explicit
-  event contracts in telemetry and visualization plugin crates.
-- **Core aggregations:** Replaced wildcard exports for indexing, schedulers,
-  and precision policy markers with explicit owning-module contracts.
-- **Neural-network exports:** Replaced the `incin_core::nn` wildcard
-  aggregations with explicit layer, optimizer, state, and statistics contracts.
-- **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
-  out of the public shape prelude and removed the unused public
-  `fold_static_numel` helper.
-- **CPU allocation imports:** Removed unused random and Rayon import
-  suppressions from the CPU creation kernel.
-- **Editor prose:** Replaced dash-heavy comments and user-facing text in the
-  Neovim, VS Code, and RustRover integrations with ordinary punctuation.
-- **Descriptor macro policy:** Removed an obsolete unused-macro suppression
-  from the shared descriptor executor declarations.
-- **Dispatch scaffolding:** Removed the unused multi-operand dispatch macro;
-  all live routes use the module-specific helper or explicit routing path.
-- **Unsupported-operation scaffolding:** Removed unused creation, reduction,
-  and tensor-operation declaration macros; float-operation declarations remain
-  because CUDA, Metal, WGPU, and Candle still use them.
-- **Target feature gating:** Compiled the non-CPU target implementation macro
-  only when one of its target backends is enabled, removing its unused-macro
-  suppression in CPU-only builds.
-- **Capability macro exports:** Feature-gated backend-specific capability macro
-  re-exports so CPU-only builds no longer need unused-import suppressions.
-- **Rust toolchain reproducibility:** Pinned the supported compiler and stable
-  CI, hardware, and release jobs to Rust 1.97.1 to keep diagnostics and builds
-  repeatable.
-- **CPU test helper isolation:** The finite-difference gradient checker is now
-  compiled only for CPU unit tests instead of shipping as dormant production
-  code behind a module-wide dead-code allowance.
-- **CPU operation test cleanup:** Removed unused backend aliases from pooling,
-  convolution, and embedding tests, and removed an obsolete macro forwarding
-  helper that had no callers.
-- **Dispatch dead-code cleanup:** Removed four private variable-creation
-  dispatch wrappers that were never called; the execution registry remains the
-  active path for variable creation operations.
-- **Hidden API inventory:** Refreshed the reviewed source locations for the
-  descriptor transform, paranoid-validation, and macro-support hidden items so
-  the mechanical inventory check matches the current source.
-- **Dummy backend scope:** The shape-only dummy backend is now compiled only
-  for unit tests or the explicit `test-utils` feature, matching its documented
-  role and keeping its test-support suppressions out of normal core builds.
-- **Backend documentation:** Repaired stale placeholder references in the
-  unsupported-operation macro documentation so each explanation names the
-  operation family it describes.
-- **CI package gate:** The ledger job now validates locked Cargo metadata and
-  every publishable package archive, catching omitted sources, binaries, and
-  license metadata before release packaging.
-- **Core rustdoc links:** Removed invalid `GradMode` scope links and clarified
-  the no-`std` policy-scope wording so core rustdoc passes with warnings denied.
-- **Dummy backend dead code:** Removed an unused family of private float
-  operation shims and all stale dead-code allowances from the test backend.
-- **Dynamic marker scope:** Restricted the private `Dyn::marker` test helper to
-  unit-test builds, removing the last production dead-code allowance in core.
-- **Compile-fail diagnostics:** Updated the `Dyn` privacy regression snapshot
-  to reflect that the test-only marker helper is no longer suggested to users.
-- **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
-  helpers are now test-only, with production builds retaining only the
-  candidate conversion and fallback policy they use.
-- **Facade API tiers:** Removed backend-authoring traits from the stable
-  `incin` root and default prelude, and removed `Graph` from the core prelude.
-  The data prelude now also uses an explicit allow-list. The supported
-  migration paths are recorded in `docs/MIGRATION.md`; backend contracts
-  remain under the explicit `backend-authoring` feature.
-- **Editor documentation prose:** Replaced em-dash-heavy phrasing in the
-  VS Code, Neovim, and RustRover integration READMEs with ordinary punctuation
-  so current user-facing documentation follows the repository prose style.
-- **Candle adapter cleanup:** Removed unused unsupported-operation stubs and
-  quantization placeholders from the legacy inherent surface. Unsupported
-  capabilities remain represented by the descriptor capability registry.
-- **`must_use` signal:** Removed 40 redundant method and function annotations
-  whose return types were already `Option` or `Result`, while retaining
-  annotations on builders, constructors, and semantically important values.
-- **CUDA lint and structure:** Grouped internal two-dimensional column-to-image
-  parameters into `Col2Im2dSpec`, kept the shared transposed-convolution
-  backend contract explicit, and moved CUDA backend trait implementations
-  before the test module so the CUDA all-targets lint gate passes with
-  warnings denied.
-- **Dead-code audit:** Removed unused raw conversion and complement helpers
-  from the private axis-mask implementation, and removed a redundant CUDA
-  identity suppression while retaining feature-gated test and dummy-backend
-  helpers.
-- **Rustdoc coverage:** Documented the public plan-report exit status constants
-  so trainer builds remain warning-free under the facade documentation lint.
-- **Architecture and build hygiene:** The shape buffer helpers remain available
-  through the documented `incin_core::shapes` facade while their implementation
-  modules are private. Unreferenced WGPU dispatch paths and CUDA kernel sources
-  were removed, and backend layout and quantized-storage modules are now gated
-  by the features that use them. WGPU lifetime owners and CUDA tuning helpers
-  no longer rely on broad dead-code allowances. The book CI job installs
-  Chromium in the job that runs the browser checks.
-- **Feature isolation:** Distributed context imports and protocol decoding are
-  now gated with `std`, while compiled distributed plans retain their
-  no-std-compatible ownership imports. The supported `compiled,distributed`
-  and `distributed` feature contracts both compile cleanly.
-- **ONNX export surface:** Removed the unreferenced captured-graph export
-  helper from the private exporter module; the reviewed eager-graph exporter
-  remains the supported ONNX path.
-- **Release packaging:** The editor release job now uses pinned Node.js and
-  VS Code packaging-tool versions, and names the IntelliJ-platform archive
-  independently from the RustRover integration directory. Release assets
-  include the book, editor integrations, `incin-lsp`, and `cargo-incin`; the
-  VS Code manifest now identifies the repository for package consumers.
-- **Rustdoc coverage:** The public `incin` facade now enables local
-  `missing_docs` warnings, and CI runs a warning-free facade-only rustdoc gate
-  in addition to the workspace link and warning check.
-- **Tensor byte views:** `Tensor::from_slice` now uses the `bytemuck` checked
-  byte-slice conversion already guaranteed by `TensorElement`, removing a raw
-  pointer reinterpretation from the core tensor boundary.
-
-### Added
 - **Core Stabilization & Migration Guide (`REL-001`):** Completed comprehensive core stabilization review and added `docs/MIGRATION.md` detailing API migration pathways across backend storage decoupling (`EXE-006`..`EXE-009`), unified autograd graph engine (`GRD-001`..`GRD-006`), proof-carrying shape safety (`SHP-001`..`SHP-008`), and distributed placement proofs (`DST-001`..`DST-005`). `docs/MIGRATION.md` section 7 added for the compiled-graph subsystem.
 - **Preview compiled graph tooling (`CMP-001`..`CMP-006`):** The `compiled` feature provides captured-plan inspection, guards, liveness analysis, and a descriptor-backed CPU reference evaluator only through `experimental::compiled`. Folding, prepacking, tuning, and fusion remain fail-closed where no executable semantics exist; no optimization claim is made.
 - **Preview compiled-plan snapshots (`CMP-006`, `incin-core::compiled::artifact`):** `CompiledArtifact` wraps a `CompiledPlan` with an `ArtifactHeader`, caller-supplied compatibility metadata, and an Adler-32 integrity checksum. It is a local preview snapshot, not a deployment format or portable ABI; loading compares the requested compatibility values rather than the running framework version.
@@ -426,10 +241,213 @@ major/minor values.
   checks, the permanent regression class this file exists to catch.
 
 ### Changed
+
+- **The CPU AVX2 kernels are reachable.** They were gated on
+  `simd_lanes::<f32>() >= 8`, which reads `cfg!(target_feature = "avx2")` - false
+  in any stock `cargo build`, since the default `x86_64` target is the baseline
+  ISA. Every default build therefore dead-code-eliminated the SIMD path and ran
+  a scalar loop. The kernels already carried
+  `#[target_feature(enable = "avx2")]`, so the fix is the runtime detection that
+  attribute exists for: `simd::avx2_detected()`, cached in a relaxed atomic.
+  On an AVX2 machine, `eager/add_f32/65536` goes from 60.7 µs to **6.43 µs**,
+  back inside its recorded budget, and `add_f32/1024` from 1.66 µs to 776 ns.
+  A test now fails if the gate is narrowed back to a compile-time condition.
+- **Whole-tensor reductions read contiguous storage directly.** `sum_all`,
+  `mean_all`, `prod_all`, `max_all`, and `min_all` walked a logical odometer and
+  fetched every element through a stride dot product plus a dtype match - about
+  twenty cycles to read one number. `sum_f32/1024` goes from 6.97 µs to 5.41 µs
+  under the full benchmark suite and from 6.97 µs to 1.32 µs in isolation;
+  `sum_f32/65536` from 399 µs to 306 µs. The `f64` accumulator and the traversal
+  order are unchanged, so reduced values are bit-identical.
+- **Fewer allocations per operation.** The descriptor path inferred each output
+  shape twice, once to derive it and once to verify the derivation against
+  itself; `broadcast_shape` round-tripped its accumulator through a `ShapeBuf`
+  on every operand, and the CPU backend built autograd tape entries even when the
+  effective `GradMode` was going to discard them. A rank-2 elementwise add went
+  from 27 allocations to 5 and a unary from 20 to 5, and the ceilings in
+  `hot_path_allocations.rs` were rebased onto the new counts. Shape inference
+  also produces a `ShapeBuf` throughout rather than a `Vec<usize>` that was then
+  copied into one; `ShapeBuf` stores rank 8 and below inline, so an ordinary
+  rank now reaches the descriptor without touching the heap. No validation was
+  removed. See `docs/benchmarks/runtime-2026-08-17.md`.
+- **`ModelExt::load` no longer takes a device.** The argument was ignored, so
+  the signature described a relocation the call never performed. `load`
+  restores state in place; moving a model between devices stays `ToDevice`.
+- **An optimizer step that reaches no parameter is an error.** `SGD`, `Adam`,
+  and `AdamW` returned `Ok(())` when no parameter in the group received a
+  gradient, so a training loop could run to completion with parameters that
+  never moved - including when `backward` ran on a different thread from the
+  forward pass, since a tape is thread-local. Skipping some parameters remains
+  legal.
+- **`docs/plan/roadmap.md` derives its completion table from
+  `docs/plan/ledger.toml`.** The two disagreed about the same task IDs; a new
+  check keeps them equal, and the roadmap now states what "complete" means and
+  how many rows carry recorded deviations.
+- **README and crate documentation** describe CPU as the complete backend and
+  the GPU backends as previews covering documented subsets, matching the
+  generated capability matrix.
+- **Dependencies:** `rand` 0.8 → 0.10, `rand_distr` 0.4 → 0.6, `hashbrown`
+  0.14 → 0.17, `spin` 0.9 → 0.12, `safetensors` 0.4 → 0.8, `pollster` 0.3 →
+  1.0, `criterion` 0.5 → 0.8.
+- **Advanced indexing facade:** Curated `incin::advanced` to export only the
+  documented type-level indexing selectors and traits.
+- **Core advanced indexing facade:** Applied the same explicit export boundary
+  to `incin_core::advanced`, keeping hidden implementation traits out of the
+  downstream namespace.
+- **Public API guard:** Stable `incin` and `incin-core` facade files now fail
+  validation if a wildcard re-export is reintroduced.
+- **Shape root exports:** Replaced wildcard exports from private shape
+  implementation modules with explicit scalar, storage, proof, and dimension
+  items.
+- **Telemetry graph test:** Updated the graph snapshot test to use the named
+  `incin_core::graph` namespace after removing `Graph` from the ordinary
+  prelude.
+- **Backend-authoring tests:** Updated test consumers to import `Backend` and
+  `VariableBackend` from the explicit authoring namespace.
+- **Transformer CPU test:** Made the gradient assertion deterministic by
+  allowing valid zero-valued individual components while requiring a nonzero
+  gradient somewhere in the model.
+- **Macro fixtures:** Updated compile-pass macro fixtures to use the explicit
+  backend-authoring namespace after the stable root API was narrowed.
+- **Advanced facade:** Removed internal reshape and slice specification traits
+  from the public advanced namespace; the user-facing selector contracts remain.
+- **Core prelude:** Moved backend-authoring, tracing, and storage-encoding
+  contracts to named modules, and added `incin_core::onnx` for ONNX helpers.
+- **Telemetry preludes:** Replaced event-module wildcard exports with explicit
+  event contracts in telemetry and visualization plugin crates.
+- **Core aggregations:** Replaced wildcard exports for indexing, schedulers,
+  and precision policy markers with explicit owning-module contracts.
+- **Neural-network exports:** Replaced the `incin_core::nn` wildcard
+  aggregations with explicit layer, optimizer, state, and statistics contracts.
+- **Shape storage boundary:** Kept the internal `InlineOrHeap` representation
+  out of the public shape prelude and removed the unused public
+  `fold_static_numel` helper.
+- **CPU allocation imports:** Removed unused random and Rayon import
+  suppressions from the CPU creation kernel.
+- **Editor prose:** Replaced dash-heavy comments and user-facing text in the
+  Neovim, VS Code, and RustRover integrations with ordinary punctuation.
+- **Descriptor macro policy:** Removed an obsolete unused-macro suppression
+  from the shared descriptor executor declarations.
+- **Dispatch scaffolding:** Removed the unused multi-operand dispatch macro;
+  all live routes use the module-specific helper or explicit routing path.
+- **Unsupported-operation scaffolding:** Removed unused creation, reduction,
+  and tensor-operation declaration macros; float-operation declarations remain
+  because CUDA, Metal, WGPU, and Candle still use them.
+- **Target feature gating:** Compiled the non-CPU target implementation macro
+  only when one of its target backends is enabled, removing its unused-macro
+  suppression in CPU-only builds.
+- **Capability macro exports:** Feature-gated backend-specific capability macro
+  re-exports so CPU-only builds no longer need unused-import suppressions.
+- **Rust toolchain reproducibility:** Pinned the supported compiler and stable
+  CI, hardware, and release jobs to Rust 1.97.1 to keep diagnostics and builds
+  repeatable.
+- **CPU test helper isolation:** The finite-difference gradient checker is now
+  compiled only for CPU unit tests instead of shipping as dormant production
+  code behind a module-wide dead-code allowance.
+- **CPU operation test cleanup:** Removed unused backend aliases from pooling,
+  convolution, and embedding tests, and removed an obsolete macro forwarding
+  helper that had no callers.
+- **Dispatch dead-code cleanup:** Removed four private variable-creation
+  dispatch wrappers that were never called; the execution registry remains the
+  active path for variable creation operations.
+- **Hidden API inventory:** Refreshed the reviewed source locations for the
+  descriptor transform, paranoid-validation, and macro-support hidden items so
+  the mechanical inventory check matches the current source.
+- **Dummy backend scope:** The shape-only dummy backend is now compiled only
+  for unit tests or the explicit `test-utils` feature, matching its documented
+  role and keeping its test-support suppressions out of normal core builds.
+- **Backend documentation:** Repaired stale placeholder references in the
+  unsupported-operation macro documentation so each explanation names the
+  operation family it describes.
+- **CI package gate:** The ledger job now validates locked Cargo metadata and
+  every publishable package archive, catching omitted sources, binaries, and
+  license metadata before release packaging.
+- **Core rustdoc links:** Removed invalid `GradMode` scope links and clarified
+  the no-`std` policy-scope wording so core rustdoc passes with warnings denied.
+- **Dummy backend dead code:** Removed an unused family of private float
+  operation shims and all stale dead-code allowances from the test backend.
+- **Dynamic marker scope:** Restricted the private `Dyn::marker` test helper to
+  unit-test builds, removing the last production dead-code allowance in core.
+- **Compile-fail diagnostics:** Updated the `Dyn` privacy regression snapshot
+  to reflect that the test-only marker helper is no longer suggested to users.
+- **Metal tuning isolation:** Metal benchmark winner selection and cache-claim
+  helpers are now test-only, with production builds retaining only the
+  candidate conversion and fallback policy they use.
+- **Facade API tiers:** Removed backend-authoring traits from the stable
+  `incin` root and default prelude, and removed `Graph` from the core prelude.
+  The data prelude now also uses an explicit allow-list. The supported
+  migration paths are recorded in `docs/MIGRATION.md`; backend contracts
+  remain under the explicit `backend-authoring` feature.
+- **Editor documentation prose:** Replaced em-dash-heavy phrasing in the
+  VS Code, Neovim, and RustRover integration READMEs with ordinary punctuation
+  so current user-facing documentation follows the repository prose style.
+- **Candle adapter cleanup:** Removed unused unsupported-operation stubs and
+  quantization placeholders from the legacy inherent surface. Unsupported
+  capabilities remain represented by the descriptor capability registry.
+- **`must_use` signal:** Removed 40 redundant method and function annotations
+  whose return types were already `Option` or `Result`, while retaining
+  annotations on builders, constructors, and semantically important values.
+- **CUDA lint and structure:** Grouped internal two-dimensional column-to-image
+  parameters into `Col2Im2dSpec`, kept the shared transposed-convolution
+  backend contract explicit, and moved CUDA backend trait implementations
+  before the test module so the CUDA all-targets lint gate passes with
+  warnings denied.
+- **Dead-code audit:** Removed unused raw conversion and complement helpers
+  from the private axis-mask implementation, and removed a redundant CUDA
+  identity suppression while retaining feature-gated test and dummy-backend
+  helpers.
+- **Rustdoc coverage:** Documented the public plan-report exit status constants
+  so trainer builds remain warning-free under the facade documentation lint.
+- **Architecture and build hygiene:** The shape buffer helpers remain available
+  through the documented `incin_core::shapes` facade while their implementation
+  modules are private. Unreferenced WGPU dispatch paths and CUDA kernel sources
+  were removed, and backend layout and quantized-storage modules are now gated
+  by the features that use them. WGPU lifetime owners and CUDA tuning helpers
+  no longer rely on broad dead-code allowances. The book CI job installs
+  Chromium in the job that runs the browser checks.
+- **Feature isolation:** Distributed context imports and protocol decoding are
+  now gated with `std`, while compiled distributed plans retain their
+  no-std-compatible ownership imports. The supported `compiled,distributed`
+  and `distributed` feature contracts both compile cleanly.
+- **ONNX export surface:** Removed the unreferenced captured-graph export
+  helper from the private exporter module; the reviewed eager-graph exporter
+  remains the supported ONNX path.
+- **Release packaging:** The editor release job now uses pinned Node.js and
+  VS Code packaging-tool versions, and names the IntelliJ-platform archive
+  independently from the RustRover integration directory. Release assets
+  include the book, editor integrations, `incin-lsp`, and `cargo-incin`; the
+  VS Code manifest now identifies the repository for package consumers.
+- **Rustdoc coverage:** The public `incin` facade now enables local
+  `missing_docs` warnings, and CI runs a warning-free facade-only rustdoc gate
+  in addition to the workspace link and warning check.
+- **Tensor byte views:** `Tensor::from_slice` now uses the `bytemuck` checked
+  byte-slice conversion already guaranteed by `TensorElement`, removing a raw
+  pointer reinterpretation from the core tensor boundary.
 - `incin_backends::{cpu,wgpu,cuda}::storage::TensorId` are re-exports of
   `incin_core::exec::TensorId`; three independent identity counters became one.
 
 ### Fixed
+
+- **The batched-matmul gradcheck no longer trips on aarch64.** The
+  equal-batch finite-difference check observed f32 cancellation noise of
+  0.0145 on the Apple Silicon hardware runner - over its 1e-2 threshold -
+  purely because the NEON+FMA kernel rounds `f(x)` slightly differently
+  than x86_64's kernels at the test's operand scale; the analytic gradient
+  itself is pinned exactly by the hand-computed forward/backward tests.
+  The three batched gradcheck operands are scaled down one decade, which
+  divides the noise term by ten without weakening what the relative
+  comparison proves, and Hardware Matrix is expected green again.
+- **The deep dive is served inside the book.** README's "where to go next"
+  linked the deep-dive chapters and "What's not finished" as raw GitHub
+  markdown files; they now route to the rendered site pages, the
+  introduction points at the part from inside the book, and all five
+  chapters gained theme-aware diagrams (layer stack, execution route,
+  proof lattice, dispatcher stages with their error taxonomy, the five
+  proof stages, and macro hygiene flow) that follow both mdBook's themes
+  and the Pages site's.
+- **Candle 0.9.2 element types.** New `I16`, `I32`, and float8 variants are
+  refused by name at the bridge rather than breaking the build or being
+  reinterpreted as a same-width type Incin does have.
 - **Every public example is compiled (`UX-013`).** 70 of the workspace's 79 doc
   examples were fenced ```` ```rust,ignore ````, so `cargo test --workspace
   --doc` reported success having compiled nine - and CI never ran it at all,
@@ -472,15 +490,6 @@ major/minor values.
   matched as substrings, so `#[module(no_such_argument)]` was silently accepted
   as `#[module]` and `#[module(not_internal)]` as `#[module(internal)]`. The
   list is parsed against a closed vocabulary and unknown keys are rejected.
-
-### Removed
-- **Deprecated `candle` feature alias (`REL-002`, `D-014`):** Removed `candle` feature alias from `incin` and `incin-backends` in favor of explicit `external-candle`.
-- `Backend::backward_with_nan_check` and its four implementations. NaN checking
-  is `NanPolicy` on `ExecutionPolicy`; wrap the ordinary `backward` in
-  `incin_core::exec::check_gradients(|| ..)`, which returns an error where the
-  old method panicked.
-
-### Fixed
 - **Feature isolation and naming:** a bare install now enables only `std` and `cpu`; CUDA, WGPU, Candle, autotuning, and telemetry are explicit opt-ins. The third-party Candle adapter moved from `legacy::candle` to `external::candle`, and accelerator-only builds no longer reference CPU-only dispatch variants. Candle dtype conversion now returns an error instead of panicking on unsupported types.
 - **C-10:** `Tensor::to_scalar<E>`/`to_vec1<E>` could construct an invalid `bool`
   (Miri-confirmed undefined behavior) when reading non-0/1 byte values from
@@ -500,6 +509,8 @@ major/minor values.
   `cpu/creation.rs`'s `TransferTo<Cpu>` test, and `tests/ops.rs`/
   `tests/gradient_parity.rs` assuming `cpu` was always enabled alongside
   `cuda`/`wgpu`.
+
+---
 
 ## Development snapshot - 2026-07-22
 

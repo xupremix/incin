@@ -87,7 +87,7 @@ distributed-nccl = { tier = "preview", owner = "backends", prerequisites = ["dis
 test-utils = { tier = "test-only", owner = "backends", prerequisites = [], hardware = "none" }
 
 [dependencies]
-incin-core = { path = "../incin-core", default-features = false, version = "0.1.0-rc.1" }
+incin-core = { path = "../incin-core", default-features = false, version = "0.1.0" }
 # `const-generics` supplies typenum's `Const<N>`/`ToUInt`/`U<N>` bridge, which
 # is how `target.rs` turns a Rust array length into the type-level dimension a
 # static shape needs. The feature only adds items, so enabling it here cannot
@@ -103,7 +103,7 @@ half = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
 bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
 ggml-quants = "0.1.0"
-incin-telemetry = { path = "../incin-telemetry", version = "0.1.0-rc.1", optional = true }
+incin-telemetry = { path = "../incin-telemetry", version = "0.1.0", optional = true }
 rayon = "1.10.0"
 matrixmultiply = { version = "0.3.11", optional = true }
 log = "0.4.22"

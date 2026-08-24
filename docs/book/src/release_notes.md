@@ -1,8 +1,8 @@
-# Planned 0.1.0 release notes
+# 0.1.0 release notes
 
 This is the user-facing release note for the first version intended for
-crates.io. It describes the proposed `0.1.0` baseline and must be checked
-against the release tag before publication. `CHANGELOG.md` carries the same
+crates.io. It describes the `0.1.0` baseline and is checked against the
+release tag before publication. `CHANGELOG.md` carries the same
 ground with more detail, and
 `docs/MIGRATION.md` carries the full path-by-path table for anyone moving off a
 `0.0.0` snapshot.
