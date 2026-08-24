@@ -181,7 +181,7 @@ impl<D: Device> crate::cpu::CpuBackendImpl<D> {
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::gradcheck::gradcheck;
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
     use crate::cpu::storage::{CpuBuffer, CpuStorage};
     use crate::cpu::tape;
 
@@ -338,9 +338,9 @@ mod tests {
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             l1_loss_storage(&inputs[0], &t, Reduction::Mean).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[p], 1e-4);
+        let max_rel_err = gradcheck(op, &[p], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "l1 gradcheck too high: {max_rel_err:.6}"
         );
     }
@@ -436,9 +436,9 @@ mod tests {
         let op = |inputs: &[CpuStorage]| -> CpuStorage {
             bce_with_logits_loss_storage(&inputs[0], &z, Reduction::Mean).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[p], 1e-4);
+        let max_rel_err = gradcheck(op, &[p], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "bce gradcheck too high: {max_rel_err:.6}"
         );
     }
@@ -592,9 +592,9 @@ mod tests {
             )
             .unwrap()
         };
-        let max_rel_err = gradcheck(op, &[cross_pred()], 1e-4);
+        let max_rel_err = gradcheck(op, &[cross_pred()], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "cross_entropy_loss gradcheck error too high: {max_rel_err:.6}"
         );
     }

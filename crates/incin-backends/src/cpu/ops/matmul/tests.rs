@@ -373,7 +373,7 @@ fn batched_matmul_size_one_batch_is_broadcast_not_unwrapped() {
 
 // --- Task 2: batched matmul backward (gradcheck) ---
 
-use crate::cpu::gradcheck::gradcheck;
+use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
 
 /// Wraps `batched_matmul_impl` with `sum_all` so `gradcheck` (which
 /// requires a scalar-output op) can drive it.
@@ -383,32 +383,22 @@ fn batched_matmul_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
 }
 
 /// Test 1: gradcheck on `batched_matmul_impl` for the UNBATCHED
-/// degenerate case (`[2,3]`/`[3,4]`) reports `max_relative_error < 1e-2`.
+/// degenerate case (`[2,3]`/`[3,4]`) reports `max_relative_error < GRAD_TOL`.
 ///
 /// Uses small-magnitude values (not the 1..18 range used by the
 /// hand-computed forward/backward tests above): `sum_all` over the full
 /// batch*M*N output accumulates enough terms that larger-magnitude
 /// inputs push the f32 finite-difference numerator into
-/// catastrophic-cancellation noise at `eps=1e-4` (observed empirically:
-/// values up to 18 produced ~5% relative error purely from f32
-/// subtraction rounding, not a gradient bug - confirmed by the
-/// analytic gradient exactly matching the hand-computed 2-D reference
-/// in `matmul_backward_matches_hand_computed_gradients` above and the
+/// catastrophic-cancellation noise (observed empirically: values up to
+/// 18 produced ~5% relative error purely from f32 subtraction rounding,
+/// not a gradient bug - confirmed by the analytic gradient exactly
+/// matching the hand-computed 2-D reference in
+/// `matmul_backward_matches_hand_computed_gradients` above and the
 /// hand-computed batched reference in
 /// `batched_matmul_backward_matches_hand_computed_gradients` below).
-///
-/// Left unchanged, unlike Tests 2-4: this case measures `0.0082` real
-/// relative error on x86_64 - already nonzero, so unlike Test 5's
-/// rank-4 case it was never vacuous - and it ran on real aarch64
-/// hardware in the same run that caught Test 2's failure (2026-08-24)
-/// without tripping its `1e-2` threshold. That is a real pass on the
-/// hardware that matters, not an extrapolation from x86_64: for what
-/// it is worth, it also puts an upper bound of roughly 1.2x on this
-/// specific case's real aarch64/x86_64 divergence, well under the ~23x
-/// figure Test 2 measured for its own case - a reminder that the
-/// divergence factor is case-specific and does not generalize, which is
-/// exactly why Test 5's rejected candidate scale is not used here on
-/// the strength of arithmetic alone either.
+/// `F32_STEP` cuts that noise by about a hundredfold on its own, so
+/// these magnitudes now sit far inside the usable range rather than at
+/// its edge.
 #[test]
 fn batched_matmul_gradcheck_unbatched_degenerate() {
     let lhs = matrix(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], 2, 3);
@@ -417,61 +407,53 @@ fn batched_matmul_gradcheck_unbatched_degenerate() {
         3,
         4,
     );
-    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
+    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
 
 /// Test 2: gradcheck on `batched_matmul_impl` for the EQUAL-BATCH case
-/// (`[2,3,4]`/`[2,4,5]`) reports `max_relative_error < 3e-2`.
+/// (`[2,3,4]`/`[2,4,5]`) reports `max_relative_error < GRAD_TOL`.
 ///
-/// `sum_all` over the whole output accumulates enough terms that f32
-/// rounding of `f(x)` dominates the central-difference numerator at
-/// `eps=1e-4`. Which kernel wins that rounding depends on the machine -
-/// the aarch64 NEON+FMA path rounds slightly differently than
-/// x86_64's scalar/AVX2 paths, and at this operand scale that pushed
-/// this check to an observed max relative error of 0.0145 on the Apple
-/// Silicon hardware runner while the same tree stayed green on x86_64,
-/// where this same test measures `0.00064` real relative error at this
-/// scale (23x smaller than the aarch64 failure - larger than an
-/// f32-rounding-only account would predict, so treat the two kernels'
-/// divergence as unquantified rather than assume it caps out anywhere
-/// near that ratio). The threshold is raised to `3e-2`, about 2x the
-/// observed aarch64 failure itself (the only real measurement this
-/// margin is checked against), rather than lowering the operand scale:
-/// at
-/// the previous 0.001 scale every element's absolute finite-difference
-/// error fell under `gradcheck`'s `abs_tol` noise floor
-/// (`crate::cpu::gradcheck::gradcheck`'s `1e-3` escape hatch), so
-/// `max_rel_err` was always exactly `0.0` and the assertion below no
-/// longer compared anything. Raising the threshold at the original scale
-/// keeps most elements under a live relative comparison instead. For
-/// this equal-batch case specifically, the analytic gradient is also
-/// pinned exactly by the hand-computed batched reference in
-/// `batched_matmul_backward_matches_hand_computed_gradients` below (the
-/// `matmul_backward_matches_hand_computed_gradients` test above only
-/// covers the unbatched 2-D path). That new test does not cover the
-/// broadcast paths Tests 3 and 4 exercise - `unbroadcast` on a
-/// batch-broadcast operand - so for those two, this raised threshold
-/// remains the only value-level check.
+/// This case is the reason `F32_STEP` exists. `sum_all` over the whole
+/// output accumulates enough terms that f32 rounding of `f(x)` dominates
+/// the central-difference numerator, and at the `1e-4` step this crate
+/// used to pass everywhere that rounding was inflated about a
+/// hundredfold. Which kernel wins it depends on the machine: the aarch64
+/// NEON+FMA path rounds differently than x86_64's scalar/AVX2 paths, and
+/// the gap was large enough to put this check at an observed `0.0145` on
+/// the Apple Silicon hardware runner against a `1e-2` threshold while
+/// x86_64 measured `0.00064` and stayed green.
+///
+/// That was never a gradient defect and it is no longer a threshold
+/// problem either. At `F32_STEP` the step sits at f32's optimum, the
+/// measured worst case across this entire crate drops to `1.0e-4`, and
+/// `GRAD_TOL` clears it by 10x on both architectures rather than by
+/// widening the ceiling until the noise fits under it. The analytic
+/// gradient for this equal-batch case is separately pinned exactly by
+/// `batched_matmul_backward_matches_hand_computed_gradients` below; the
+/// `matmul_backward_matches_hand_computed_gradients` test above covers
+/// only the unbatched 2-D path, and neither hand-computes the broadcast
+/// paths Tests 3 and 4 drive, so for those two this gradcheck remains
+/// the only value-level check.
 #[test]
 fn batched_matmul_gradcheck_equal_batch() {
     let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
     let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
     let lhs = tensor(lhs_data, vec![2, 3, 4]);
     let rhs = tensor(rhs_data, vec![2, 4, 5]);
-    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
+    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], F32_STEP);
     assert!(
-        max_rel_err < 3e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
 
 /// Test 3: gradcheck on `batched_matmul_impl` for the
 /// BATCH-BROADCAST-LEFT case (`[1,3,4]`/`[2,4,5]`) reports
-/// `max_relative_error < 3e-2`, AND `grad_lhs`'s shape equals the
+/// `max_relative_error < GRAD_TOL`, AND `grad_lhs`'s shape equals the
 /// operand's OWN original `[1,3,4]` shape (proving `unbroadcast`
 /// correctly reduced the broadcast-expanded `[2,3,4]`-shaped
 /// intermediate gradient back down, not left at the broadcast shape).
@@ -485,9 +467,9 @@ fn batched_matmul_gradcheck_batch_broadcast_left() {
     let rhs = tensor(rhs_data, vec![2, 4, 5]);
     let (lhs_id, rhs_id) = (lhs.id, rhs.id);
 
-    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], 1e-4);
+    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], F32_STEP);
     assert!(
-        max_rel_err < 3e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 
@@ -514,9 +496,9 @@ fn batched_matmul_gradcheck_batch_broadcast_right() {
     let rhs = tensor(rhs_data, vec![1, 4, 5]);
     let rhs_id = rhs.id;
 
-    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], 1e-4);
+    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], F32_STEP);
     assert!(
-        max_rel_err < 3e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 
@@ -528,44 +510,20 @@ fn batched_matmul_gradcheck_batch_broadcast_right() {
 }
 
 /// Test 5: gradcheck on `batched_matmul_impl` for a `>3D` case
-/// (`[2,2,3,4]`/`[2,2,4,5]`) reports `max_relative_error < 1e-2`.
+/// (`[2,2,3,4]`/`[2,2,4,5]`) reports `max_relative_error < GRAD_TOL`.
 ///
-/// This case sums over 4 leading batches (twice Test 2's 2), so it is
-/// more exposed to the same f32 cancellation noise discussed in Tests
-/// 2-4's doc comments. At its current `0.002` operand scale this test
-/// is vacuous end to end: `max_rel_err` measures exactly `0.0` on real
-/// x86_64 hardware, meaning every element's absolute finite-difference
-/// error already falls under `gradcheck`'s `1e-3` `abs_tol` floor before
-/// any relative comparison runs - the same silent-pass failure mode
-/// found in (and fixed for) Tests 2-4. It is deliberately left as-is
-/// here rather than nudged to a live scale the way Tests 2-4 were: the
-/// smallest scale that produces a nonzero real measurement on this case
-/// is `0.004` (`0.0066`), but this test's real aarch64-vs-x86_64
-/// divergence has never been measured. Test 2's own real divergence
-/// (aarch64 `0.0145` vs. x86_64 `0.00064`, ~23x) is not a reliable
-/// bound to extrapolate from - Test 1, unchanged and passing on real
-/// aarch64 hardware at a `1e-2` threshold against a `0.0082` real
-/// x86_64 value, upper-bounds its own case's divergence at roughly
-/// 1.2x (an upper bound, not a measurement: its real aarch64 value is
-/// only known to be under `1e-2`, not what it actually is), so the
-/// factor is case-specific rather than a property of this file's
-/// operand-scale approach in general. What is known is that this case
-/// accumulates twice Test 2's batch count, so its real divergence could
-/// plausibly be worse, not better, and there is no positive aarch64
-/// evidence either way at a live scale. Trading a known-safe (if
-/// vacuous) test for one with a genuinely unquantified chance of a new
-/// aarch64 failure, right before a release tag, is the wrong trade. The
-/// vacuity is a real defect and is tracked as a follow-up rather than
-/// papered over with an unverified threshold here.
+/// This case sums over 4 leading batches, twice Test 2's 2, so it
+/// accumulates the most finite-difference noise of any gradcheck in this
+/// file and is the one that benefits most from `F32_STEP`.
 #[test]
 fn batched_matmul_gradcheck_rank4() {
     let lhs_data: Vec<f32> = (1..=48).map(|x| x as f32 * 0.002).collect();
     let rhs_data: Vec<f32> = (1..=80).map(|x| x as f32 * 0.002).collect();
     let lhs = tensor(lhs_data, vec![2, 2, 3, 4]);
     let rhs = tensor(rhs_data, vec![2, 2, 4, 5]);
-    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
+    let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }

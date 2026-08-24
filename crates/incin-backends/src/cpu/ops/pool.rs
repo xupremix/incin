@@ -442,7 +442,7 @@ fn out_size(
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::gradcheck::gradcheck;
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
     use incin_core::tensor::device::Cpu;
 
     /// `tensor`.
@@ -578,9 +578,9 @@ mod tests {
                 max_pool2d_impl::<Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0), (1, 1)).unwrap();
             crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[input], 1e-4);
+        let max_rel_err = gradcheck(op, &[input], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "max_pool2d gradcheck max relative error too high: {max_rel_err}"
         );
     }
@@ -640,9 +640,9 @@ mod tests {
             let out = avg_pool2d_impl::<Cpu, f32>(&inputs[0], (2, 2), (1, 1), (0, 0)).unwrap();
             crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[input], 1e-4);
+        let max_rel_err = gradcheck(op, &[input], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "avg_pool2d gradcheck max relative error too high: {max_rel_err}"
         );
     }
@@ -706,9 +706,9 @@ mod tests {
             let out = adaptive_avg_pool2d_impl::<Cpu, f32>(&inputs[0], (3, 1)).unwrap();
             crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[input], 1e-4);
+        let max_rel_err = gradcheck(op, &[input], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "adaptive_avg_pool2d gradcheck max relative error too high: {max_rel_err}"
         );
     }

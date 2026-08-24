@@ -6,6 +6,32 @@ use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
 use crate::cpu::tape;
 
+/// The central-difference step that minimizes total error for f32 storage:
+/// `(6 * f32::EPSILON).cbrt()` is approximately `9e-3`, so this rounds to a
+/// readable `1e-2`.
+///
+/// This crate previously used `1e-4` everywhere, roughly a hundredth of the
+/// optimum. Because the rounding term scales as `1/eps`, that inflated the
+/// finite-difference noise floor by about the same factor: measured max
+/// absolute error on `canonical_matmul` fell from `1.1e-2` at `1e-4` to
+/// `1.1e-4` at `1e-2`, and on `sum_of_squares` from `6.2e-3` to `5.7e-6`.
+/// That noise, not any gradient defect, is what the old `abs_tol` skip was
+/// suppressing.
+pub(crate) const F32_STEP: f64 = 1e-2;
+
+/// The relative-error ceiling every gradcheck assertion in this crate uses.
+///
+/// This was `1e-2` per call site (and `3e-2` on three batched-matmul cases
+/// that had drifted up to clear aarch64 noise). At the old `1e-4` step the
+/// measured error on correct gradients already reached `1.3e-2`, so `1e-2`
+/// was not slack, it was roughly the noise itself: a check whose threshold
+/// sits at its own noise floor cannot distinguish a small real defect from a
+/// rounding artifact, which is what made those aarch64 failures look like
+/// gradient bugs. With [`F32_STEP`] the measured worst case across the whole
+/// crate falls to `1.0e-4`, so a `1e-3` ceiling clears real noise by 10x
+/// while catching gradient errors an order of magnitude smaller than before.
+pub(crate) const GRAD_TOL: f64 = 1e-3;
+
 /// Build a fresh, owned copy of `storage` with the scalar at flat buffer
 /// position `flat_idx` perturbed by `delta`. Never mutates the input's
 /// shared `Rc<CpuBuffer>` in place (T-02-01 mitigation) - always
@@ -94,6 +120,14 @@ fn numerical_grad(
 /// at the same position, and returns the MAXIMUM relative error found across
 /// every input/element pair.
 ///
+/// `eps` is the central-difference step. For f32 storage the total error is
+/// minimized near `(6 * f32::EPSILON).cbrt()`, about `9e-3`: below that,
+/// subtractive rounding of `f(x)` divided by `2 * eps` dominates and grows as
+/// `1/eps`. Callers that pass a much smaller step get a correspondingly
+/// noisier estimate, which is why [`F32_STEP`] exists and why domain-sensitive
+/// ops (`log`, `sqrt`, `acosh` near their boundaries, where `x +/- eps` must
+/// stay in-domain) are the only places a smaller value belongs.
+///
 /// # Panics
 ///
 /// Panics with a clear message if `op(inputs)`'s output shape is not scalar
@@ -125,25 +159,33 @@ pub(crate) fn gradcheck(
             let abs_diff = (analytic_val - numeric).abs();
 
             // Absolute-error escape hatch: when the TRUE gradient is exactly
-            // (or near) zero, `numeric` is pure f32 finite-difference
-            // rounding noise (observed up to ~3e-4 magnitude at eps=1e-4 on
-            // scalar outputs near 1.0) rather than a real small gradient. A
-            // purely relative comparison makes `rel_err` blow up toward 1.0
-            // in that regime even though both values correctly agree the
-            // gradient is ~0 (mirrors PyTorch's `gradcheck` atol+rtol
-            // combination, not a bare relative-error ratio). If the absolute
-            // difference itself is below this noise ceiling, treat it as a
-            // pass (contributes 0 to `max_rel_err`) regardless of the ratio
-            // - a genuinely wrong non-zero gradient still produces an
-            // `abs_diff` far above this ceiling and fails loudly via the
-            // relative check below.
-            let abs_tol = 1e-3;
-            if abs_diff < abs_tol {
+            // (or near) zero, `numeric` is pure finite-difference rounding
+            // noise rather than a real small gradient, and a purely relative
+            // comparison would blow `rel_err` up toward 1.0 even though both
+            // values correctly agree the gradient is ~0. Below this ceiling,
+            // treat the element as a pass.
+            //
+            // Skipping here is sound precisely BECAUSE it only fires when the
+            // two values agree: a wrong gradient makes `abs_diff` large, so it
+            // never takes this branch and still fails loudly below. What the
+            // ceiling really sets is this check's ABSOLUTE sensitivity floor,
+            // which is why its value matters.
+            //
+            // It was `1e-3`, chosen to clear the finite-difference noise at
+            // the `1e-4` step every caller used to pass. That step was about a
+            // hundredth of f32's optimum (see `F32_STEP`), so the noise it had
+            // to clear was inflated ~100x. With the step corrected the
+            // measured noise floor drops to ~1e-4 worst case and ~5e-6
+            // typical, so the ceiling comes down 20x with it. On this crate's
+            // gradient magnitudes (0.3 to 9.0) that moves the effective
+            // sensitivity from ~0.1% relative to ~0.005%.
+            const ABS_TOL: f64 = 5e-5;
+            if abs_diff < ABS_TOL {
                 continue;
             }
 
-            let floor = 1e-6;
-            let denom = analytic_val.abs().max(numeric.abs()).max(floor);
+            const DENOM_FLOOR: f64 = 1e-6;
+            let denom = analytic_val.abs().max(numeric.abs()).max(DENOM_FLOOR);
             let rel_err = abs_diff / denom;
             max_rel_err = max_rel_err.max(rel_err);
         }
@@ -174,9 +216,9 @@ mod tests {
             crate::cpu::ops::reduce::sum_all(&squared).unwrap()
         };
 
-        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        let max_rel_err = gradcheck(op, &[x], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "gradcheck max relative error too high: {max_rel_err}"
         );
     }
@@ -217,6 +259,6 @@ mod tests {
             crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0]).unwrap()
         };
 
-        gradcheck(op, &[x], 1e-4);
+        gradcheck(op, &[x], F32_STEP);
     }
 }

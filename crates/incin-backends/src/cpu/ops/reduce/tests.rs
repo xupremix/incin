@@ -1,5 +1,5 @@
 use super::*;
-use crate::cpu::gradcheck::gradcheck;
+use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
 use crate::cpu::tape;
 
 /// `matrix`.
@@ -228,9 +228,9 @@ fn mean_dim_gradcheck_dim0() {
         let reduced = crate::cpu::ops::reduce::mean_dim(&inputs[0], 0).unwrap();
         crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "mean_dim gradcheck max relative error too high: {max_rel_err}"
     );
 }
@@ -243,9 +243,9 @@ fn mean_keepdim_gradcheck_dim1() {
         let reduced = crate::cpu::ops::reduce::mean_keepdim(&inputs[0], 1).unwrap();
         crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "mean_keepdim gradcheck max relative error too high: {max_rel_err}"
     );
 }
@@ -309,9 +309,9 @@ fn max_dim_gradcheck_all_distinct_values() {
         let reduced = crate::cpu::ops::reduce::max_dim(&inputs[0], 0).unwrap();
         crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "max_dim gradcheck max relative error too high: {max_rel_err}"
     );
 }

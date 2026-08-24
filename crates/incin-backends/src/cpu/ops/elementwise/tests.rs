@@ -1,5 +1,5 @@
 use super::*;
-use crate::cpu::gradcheck::gradcheck;
+use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
 use crate::cpu::storage::CpuBuffer;
 use crate::cpu::tape;
 
@@ -267,9 +267,9 @@ fn relu_gradcheck_on_nonzero_input() {
         let r = canonical_relu(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&r).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "relu gradcheck error too high: {max_rel_err}"
     );
 }
@@ -286,9 +286,9 @@ fn abs_forward_and_gradcheck() {
         let a = canonical_abs(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&a).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "abs gradcheck error too high: {max_rel_err}"
     );
 }
@@ -305,9 +305,9 @@ fn neg_forward_and_gradcheck() {
         let n = canonical_neg(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&n).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "neg gradcheck error too high: {max_rel_err}"
     );
 }
@@ -335,9 +335,9 @@ fn exp_forward_and_gradcheck() {
     // the transcendental function rather than the derivative under test.
     // 1e-3 retains negligible O(h^2) truncation error for exp while giving
     // the finite difference ten times more signal above f32 rounding.
-    let max_rel_err = gradcheck(op, &[x], 1e-3);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "exp gradcheck error too high: {max_rel_err}"
     );
 }
@@ -354,9 +354,9 @@ fn sqrt_forward_gradcheck_and_nan_propagation() {
         let s = canonical_sqrt(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&s).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "sqrt gradcheck error too high: {max_rel_err}"
     );
 
@@ -382,9 +382,9 @@ fn log_forward_gradcheck_and_domain_propagation() {
         let l = canonical_log(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&l).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "log gradcheck error too high: {max_rel_err}"
     );
 
@@ -410,9 +410,9 @@ fn tanh_gradcheck() {
         let th = canonical_tanh(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&th).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "tanh gradcheck error too high: {max_rel_err}"
     );
 }
@@ -429,9 +429,9 @@ fn sigmoid_forward_and_gradcheck() {
         let s = canonical_sigmoid(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&s).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "sigmoid gradcheck error too high: {max_rel_err}"
     );
 }
@@ -448,9 +448,9 @@ fn swish_forward_and_gradcheck() {
         let s = canonical_swish(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&s).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "swish gradcheck error too high: {max_rel_err}"
     );
 }
@@ -485,9 +485,9 @@ fn gelu_gradcheck() {
         let g = canonical_gelu(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&g).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "gelu gradcheck error too high: {max_rel_err}"
     );
 }
@@ -570,9 +570,9 @@ fn softmax_gradcheck() {
         let s = canonical_softmax::<incin_core::tensor::device::Cpu>(&inputs[0], 0).unwrap();
         crate::cpu::ops::reduce::sum_all(&s).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "softmax gradcheck error too high: {max_rel_err}"
     );
 }
@@ -663,9 +663,9 @@ fn log_softmax_gradcheck() {
         let ls = log_softmax::<incin_core::tensor::device::Cpu, f32>(&inputs[0], 0).unwrap();
         crate::cpu::ops::reduce::sum_all(&ls).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "log_softmax gradcheck error too high: {max_rel_err}"
     );
 }
@@ -797,9 +797,9 @@ fn trig_and_hyperbolic_gradchecks() {
             let out = f(&inputs[0]).unwrap();
             crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[x], 1e-4);
+        let max_rel_err = gradcheck(op, &[x], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "{name} gradcheck error too high: {max_rel_err}"
         );
     };
@@ -836,9 +836,9 @@ fn acosh_gradcheck() {
         let out = canonical_acosh(&inputs[0]).unwrap();
         crate::cpu::ops::reduce::sum_all(&out).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[x], 1e-4);
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "acosh gradcheck error too high: {max_rel_err}"
     );
 }
@@ -852,9 +852,9 @@ fn atan2_gradcheck() {
         let out = canonical_atan2(&inputs[0], &inputs[1]).unwrap();
         crate::cpu::ops::reduce::sum_all(&out).unwrap()
     };
-    let max_rel_err = gradcheck(op, &[y, x], 1e-4);
+    let max_rel_err = gradcheck(op, &[y, x], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "atan2 gradcheck error too high: {max_rel_err}"
     );
 }

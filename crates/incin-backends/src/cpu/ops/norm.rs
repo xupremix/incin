@@ -259,7 +259,7 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::tensor::device::Device, K:
 /// `tests`.
 mod tests {
     use super::*;
-    use crate::cpu::gradcheck::gradcheck;
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
     use crate::cpu::storage::{CpuBuffer, CpuStorage};
 
     /// `matrix`.
@@ -418,9 +418,9 @@ mod tests {
             .unwrap();
             crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[t], 1e-3);
+        let max_rel_err = gradcheck(op, &[t], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "layer_norm gradcheck too high: {max_rel_err:.6}"
         );
     }
@@ -698,9 +698,9 @@ mod tests {
             .unwrap();
             crate::cpu::ops::reduce::sum_all(&out).unwrap()
         };
-        let max_rel_err = gradcheck(op, &[t], 1e-3);
+        let max_rel_err = gradcheck(op, &[t], F32_STEP);
         assert!(
-            max_rel_err < 1e-2,
+            max_rel_err < GRAD_TOL,
             "batch_norm gradcheck too high: {max_rel_err:.6}"
         );
     }

@@ -428,17 +428,29 @@ major/minor values.
 
 ### Fixed
 
-- **The batched-matmul gradcheck no longer trips on aarch64.** The
-  equal-batch finite-difference check observed f32 cancellation noise of
-  0.0145 on the Apple Silicon hardware runner - over its 1e-2 threshold -
-  purely because the NEON+FMA kernel rounds `f(x)` slightly differently
-  than x86_64's kernels at the test's operand scale. The three affected
-  batched gradcheck thresholds are raised to 3e-2, with margin measured
-  against that observed failure, and a new hand-computed batched backward
-  test pins the analytic gradient exactly for the equal-batch case (the
-  existing hand-computed test only covered the unbatched case), so
-  Hardware Matrix is expected green again without leaving the check
-  unable to catch a real regression.
+- **Every gradcheck uses an f32-appropriate finite-difference step, and
+  catches gradient errors 25x smaller.** All 50 gradcheck call sites in
+  `incin-backends` passed `eps=1e-4`, about a hundredth of the step that
+  minimizes total error for f32 storage (`(6 * f32::EPSILON).cbrt()`, or
+  roughly 9e-3). Because the rounding term grows as `1/eps`, that
+  inflated the finite-difference noise floor by the same factor:
+  measured worst-case error on correct gradients was 1.3e-2, essentially
+  equal to the 1e-2 relative ceiling the assertions used, so those checks
+  could not separate a small real defect from a rounding artifact. This
+  is also what made the aarch64 Hardware Matrix failure (0.0145 observed
+  on Apple Silicon, against x86_64's 0.00064 on the same test) look like
+  a gradient bug rather than the step-size artifact it was. The step is
+  now a shared `F32_STEP`, which drops the measured worst case across the
+  crate to 1.0e-4; the relative ceiling becomes a shared `GRAD_TOL` of
+  1e-3, clearing real noise by 10x instead of sitting on top of it; and
+  the absolute noise floor that guards true-zero gradients falls from
+  1e-3 to 5e-5. Measured by injecting a uniform scaling error into every
+  analytic gradient, the suite previously needed a 5% error before all 38
+  affected tests failed and caught only 3 at 0.1%; it now saturates at
+  0.2% and catches 23 at 0.1%. A new hand-computed batched backward test
+  additionally pins the equal-batch analytic gradient by exact
+  arithmetic, which the existing hand-computed test did only for the
+  unbatched case.
 - **The deep dive is served inside the book.** README's "where to go next"
   linked the deep-dive chapters and "What's not finished" as raw GitHub
   markdown files; they now route to the rendered site pages, the

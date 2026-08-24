@@ -2,7 +2,7 @@ use super::*;
 use incin_core::error::Error;
 use incin_core::tensor::device::Cpu;
 
-use crate::cpu::gradcheck::gradcheck;
+use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::tape;
 
@@ -126,14 +126,14 @@ fn conv1d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
 
 /// Backward test (gradcheck against input AND weight): a small
 /// [1,1,4]/[1,1,2] pair, wrapped in `sum_all`, gradchecked with
-/// `max_relative_error < 1e-2` for BOTH the input and the weight tensor.
+/// `max_relative_error < GRAD_TOL` for BOTH the input and the weight tensor.
 #[test]
 fn conv1d_gradcheck_input_and_weight() {
     let input = tensor(vec![0.1, 0.2, 0.3, 0.4], vec![1, 1, 4]);
     let weight = tensor(vec![0.5, 0.6], vec![1, 1, 2]);
-    let max_rel_err = gradcheck(conv1d_sum_op, &[input, weight], 1e-4);
+    let max_rel_err = gradcheck(conv1d_sum_op, &[input, weight], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
@@ -277,7 +277,7 @@ fn conv2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
 }
 
 /// Backward test: gradcheck on a small [1,1,4,4]/[1,1,2,2] pair
-/// (stride=1,padding=0,dilation=1,groups=1), max_relative_error < 1e-2
+/// (stride=1,padding=0,dilation=1,groups=1), max_relative_error < GRAD_TOL
 /// for both grad_input and grad_weight.
 #[test]
 fn conv2d_gradcheck_input_and_weight() {
@@ -285,9 +285,9 @@ fn conv2d_gradcheck_input_and_weight() {
     let input = tensor(input_data, vec![1, 1, 4, 4]);
     let weight_data: Vec<f32> = (1..=4).map(|x| x as f32 * 0.1).collect();
     let weight = tensor(weight_data, vec![1, 1, 2, 2]);
-    let max_rel_err = gradcheck(conv2d_sum_op, &[input, weight], 1e-4);
+    let max_rel_err = gradcheck(conv2d_sum_op, &[input, weight], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
@@ -391,14 +391,14 @@ fn conv_transpose2d_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
 
 /// Backward test: gradcheck on the basic [1,1,2,2]/[1,1,2,2] case
 /// (stride=1, padding=0, output_padding=0, dilation=1),
-/// max_relative_error < 1e-2 for both grad_input and grad_weight.
+/// max_relative_error < GRAD_TOL for both grad_input and grad_weight.
 #[test]
 fn conv_transpose2d_gradcheck_input_and_weight() {
     let input = tensor(vec![0.1, 0.2, 0.3, 0.4], vec![1, 1, 2, 2]);
     let weight = tensor(vec![0.5, 0.6, 0.7, 0.8], vec![1, 1, 2, 2]);
-    let max_rel_err = gradcheck(conv_transpose2d_sum_op, &[input, weight], 1e-4);
+    let max_rel_err = gradcheck(conv_transpose2d_sum_op, &[input, weight], F32_STEP);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < GRAD_TOL,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
