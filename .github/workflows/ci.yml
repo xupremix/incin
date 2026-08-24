@@ -315,6 +315,14 @@ jobs:
   msrv:
     name: Minimum Supported Rust Version
     runs-on: ubuntu-latest
+    # `RUSTUP_TOOLCHAIN` overrides the repository's `rust-toolchain.toml` pin
+    # (1.97.1) for every step in this job, including `taiki-e/install-action`
+    # and `cargo xtask feature-msrv` below. Without it, `rustup default
+    # 1.88.0` has no effect here: a directory-scoped `rust-toolchain.toml`
+    # always wins over `rustup default`, so `cargo check` silently ran at
+    # 1.97.1 and this job never actually built anything at the declared MSRV.
+    env:
+      RUSTUP_TOOLCHAIN: 1.88.0
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     # Pinned to the exact version `rust-version` claims. A `rust-version` that
