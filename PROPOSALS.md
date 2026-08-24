@@ -843,7 +843,7 @@ The bare top-level dependency enables stable Rust, `std`, and CPU only:
 
 ```toml
 [dependencies]
-incin = "0.0.0"
+incin = "0.1.0"
 ```
 
 This is already true: `default = ["std", "cpu"]` in both `crates/incin` and

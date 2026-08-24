@@ -18,6 +18,29 @@ The `0.1.0` core stabilization milestone establishes key architectural invariant
 These are the changes a reader upgrading from a `0.0.0` development snapshot
 has to act on.
 
+### `incin-data` returns typed errors instead of `anyhow`
+
+```rust,ignore
+// before
+let path: anyhow::Result<PathBuf> = Downloader::download(url, &cache, name);
+// after
+let path: incin_core::error::Result<PathBuf> = Downloader::download(url, &cache, name);
+```
+
+No public `incin-data` API returns `anyhow::Result` any more, and the crate no
+longer depends on `anyhow`. `Downloader`, `MnistDataset` construction, and the
+Hugging Face Hub client return the framework error type, classifying failures
+as `Error::Io`, `Error::MalformedArtifact`, `Error::ResourceLimit`, or
+`Error::ArithmeticOverflow` rather than as one opaque chain.
+
+Transform pipelines and collation return the crate's own `DataError`, which
+gained an `InvalidInput` variant for a transform input it refuses.
+
+Two call patterns have to change. Matching on error *text* stops working,
+because the message is now produced by the typed variant; match the variant
+instead. And `anyhow::Error::from` on one of these results no longer compiles,
+so construct or propagate the typed error directly.
+
 ### Tensor operator syntax is now the panic-on-error convenience boundary
 
 `+`, `-`, `*`, `/`, tensor-scalar forms, and unary `-` now produce tensors

@@ -31,8 +31,6 @@ pub struct PlanTuningReport {
     pub is_bounded: bool,
 }
 
-/// Upper bound on candidates measured per kernel.
-
 /// Placeholder interface for a future bounded, measured plan tuner.
 #[derive(Debug, Clone)]
 pub struct BoundedPlanTuner {
