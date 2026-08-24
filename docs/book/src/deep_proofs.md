@@ -13,6 +13,47 @@ and the paranoid-validation escape hatch. Sources:
 The audit classifies every rule by the earliest stage at which it is actually
 enforced in this tree:
 
+<svg class="incin-diagram" viewBox="0 0 780 150" role="img" aria-label="The five proof stages, earliest first: Type, Lowering, Binding, Native, Unproven. Type means an illegal program does not compile; Unproven means checked ad hoc at runtime." xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .dg5-node { fill: currentColor; fill-opacity: 0.05; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1; }
+    .dg5-strong { stroke: var(--links, #2b79a2); stroke-width: 1.4; }
+    .dg5-letter { font: 700 17px ui-monospace, Menlo, monospace; fill: currentColor; }
+    .dg5-name { font: 600 12px system-ui, sans-serif; fill: currentColor; }
+    .dg5-sub { font: 10.5px system-ui, sans-serif; fill: currentColor; opacity: 0.7; }
+    .dg5-axis { stroke: var(--links, #2b79a2); stroke-width: 1.4; fill: none; marker-end: url(#dg5-arrow); }
+    .dg5-label { font: italic 11.5px system-ui, sans-serif; fill: var(--links, #2b79a2); }
+  </style>
+  <defs>
+    <marker id="dg5-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--links, #2b79a2)"/>
+    </marker>
+  </defs>
+
+  <rect class="dg5-node dg5-strong" x="16" y="24" width="130" height="64" rx="7"/>
+  <text class="dg5-letter" x="81" y="52" text-anchor="middle">T</text>
+  <text class="dg5-name" x="81" y="70" text-anchor="middle">Type</text>
+
+  <rect class="dg5-node" x="170" y="24" width="130" height="64" rx="7"/>
+  <text class="dg5-letter" x="235" y="52" text-anchor="middle">L</text>
+  <text class="dg5-name" x="235" y="70" text-anchor="middle">Lowering</text>
+
+  <rect class="dg5-node" x="324" y="24" width="130" height="64" rx="7"/>
+  <text class="dg5-letter" x="389" y="52" text-anchor="middle">B</text>
+  <text class="dg5-name" x="389" y="70" text-anchor="middle">Binding</text>
+
+  <rect class="dg5-node" x="478" y="24" width="130" height="64" rx="7"/>
+  <text class="dg5-letter" x="543" y="52" text-anchor="middle">N</text>
+  <text class="dg5-name" x="543" y="70" text-anchor="middle">Native</text>
+
+  <rect class="dg5-node" x="632" y="24" width="130" height="64" rx="7"/>
+  <text class="dg5-letter" x="697" y="52" text-anchor="middle">U</text>
+  <text class="dg5-name" x="697" y="70" text-anchor="middle">Unproven</text>
+
+  <path class="dg5-axis" d="M20,116 L740,116"/>
+  <text class="dg5-label" x="20" y="138">earliest enforcement - trait resolution</text>
+  <text class="dg5-label" x="744" y="138" text-anchor="end">ad hoc runtime checks &#8596;</text>
+</svg>
+
 | Stage | Name | Meaning |
 |---|---|---|
 | **T** | Type | Proven by trait resolution. An illegal program does not compile. |

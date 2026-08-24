@@ -128,6 +128,35 @@ pub const fn meet(self, other: Self) -> Self {
 }
 ```
 
+<svg class="incin-diagram" viewBox="0 0 780 190" role="img" aria-label="The ProofLevel semilattice: Static is the top and meet returns the weaker of two proofs. meet(Static, Mixed) is Mixed; meet(Mixed, Dynamic) is Dynamic." xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .dg3-node { fill: currentColor; fill-opacity: 0.05; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1; }
+    .dg3-top { stroke: var(--links, #2b79a2); stroke-width: 1.4; }
+    .dg3-code { font: 600 13px ui-monospace, "Source Code Pro", Menlo, monospace; fill: currentColor; }
+    .dg3-sub { font: 11.5px system-ui, sans-serif; fill: currentColor; opacity: 0.7; }
+    .dg3-order { font: italic 12px system-ui, sans-serif; fill: var(--links, #2b79a2); }
+    .dg3-edge { stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1.2; }
+  </style>
+
+  <!-- Lattice chain -->
+  <rect class="dg3-node dg3-top" x="300" y="16" width="180" height="40" rx="7"/>
+  <text class="dg3-code" x="390" y="41" text-anchor="middle">Static</text>
+  <line class="dg3-edge" x1="390" y1="56" x2="390" y2="76"/>
+  <rect class="dg3-node" x="300" y="80" width="180" height="40" rx="7"/>
+  <text class="dg3-code" x="390" y="105" text-anchor="middle">Mixed</text>
+  <line class="dg3-edge" x1="390" y1="120" x2="390" y2="140"/>
+  <rect class="dg3-node" x="300" y="144" width="180" height="40" rx="7"/>
+  <text class="dg3-code" x="390" y="169" text-anchor="middle">Dynamic</text>
+
+  <!-- Order annotations -->
+  <text class="dg3-sub" x="500" y="41">every axis known at compile time</text>
+  <text class="dg3-sub" x="500" y="105">rank proven, extents partly runtime</text>
+  <text class="dg3-sub" x="500" y="169">only Dyn - runtime rank</text>
+  <text class="dg3-order" x="270" y="130" text-anchor="end">weaker &#8595;</text>
+  <text class="dg3-order" x="270" y="66" text-anchor="end">stronger &#8593;</text>
+  <text class="dg3-order" x="390" y="14" text-anchor="middle">top = identity for meet</text>
+</svg>
+
 `meet` forms a bounded semilattice - commutative, associative, idempotent,
 topped by `Static` - and the test suite proves that property exhaustively
 over all three levels rather than asserting it:

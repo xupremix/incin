@@ -14,17 +14,56 @@ The layering mirrors the c10/aten/torch split of a classic PyTorch stack:
 small core types at the bottom, an operation vocabulary above them,
 concrete device implementations beside that, and one ergonomic facade on top.
 Where PyTorch's layers meet at runtime through C++ dispatch, Incin's meet at
-compile time through traits and type parameters.
+compile time through traits and type parameters. Arrows point at what a layer
+depends on; everything above `incin-core` exists to make one core contract
+ergonomic.
 
-```text
- incin            facade: prelude, nn, optim, data, backend_authoring
-   |                      (what you depend on)
- incin-macros     s! / shape! / tensor! / #[module] / model! ...
-   |
- incin-backends   cpu / cuda / wgpu / metal / external::candle + capability rows
-   |
- incin-core       Tensor, shapes, op catalog, descriptors, dispatch, autograd
-```
+<svg class="incin-diagram" viewBox="0 0 780 300" role="img" aria-label="Layer stack: the incin facade depends on incin-macros and incin-backends, which depend on incin-core." xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .dg1-box { fill: currentColor; fill-opacity: 0.05; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1; rx: 7; }
+    .dg1-box-accent { fill: currentColor; fill-opacity: 0.03; stroke: var(--links, #2b79a2); stroke-width: 1.4; }
+    .dg1-name { font: 600 14px ui-monospace, "Source Code Pro", Menlo, monospace; fill: currentColor; }
+    .dg1-role { font: 12.5px system-ui, sans-serif; fill: currentColor; opacity: 0.75; }
+    .dg1-note { font: italic 11.5px system-ui, sans-serif; fill: var(--links, #2b79a2); }
+    .dg1-edge { stroke: var(--links, #2b79a2); stroke-width: 1.4; fill: none; marker-end: url(#dg1-arrow); }
+  </style>
+  <defs>
+    <marker id="dg1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--links, #2b79a2)"/>
+    </marker>
+  </defs>
+
+  <!-- Facade -->
+  <rect class="dg1-box-accent" x="150" y="16" width="480" height="52" rx="7"/>
+  <text class="dg1-name" x="390" y="38" text-anchor="middle">incin</text>
+  <text class="dg1-role" x="390" y="57" text-anchor="middle">facade: prelude, nn, optim, data, backend_authoring</text>
+
+  <!-- Macros -->
+  <rect class="dg1-box" x="40" y="112" width="330" height="52" rx="7"/>
+  <text class="dg1-name" x="205" y="134" text-anchor="middle">incin-macros</text>
+  <text class="dg1-role" x="205" y="153" text-anchor="middle">s! / shape! / tensor! / #[module] / model!</text>
+
+  <!-- Backends -->
+  <rect class="dg1-box" x="410" y="112" width="330" height="52" rx="7"/>
+  <text class="dg1-name" x="575" y="134" text-anchor="middle">incin-backends</text>
+  <text class="dg1-role" x="575" y="153" text-anchor="middle">cpu / cuda / wgpu / metal / candle + capability rows</text>
+
+  <!-- Core -->
+  <rect class="dg1-box-accent" x="150" y="208" width="480" height="52" rx="7"/>
+  <text class="dg1-name" x="390" y="230" text-anchor="middle">incin-core</text>
+  <text class="dg1-role" x="390" y="249" text-anchor="middle">Tensor, shapes, op catalog, descriptors, dispatch, autograd</text>
+
+  <!-- Edges -->
+  <path class="dg1-edge" d="M240,68 L205,108"/>
+  <path class="dg1-edge" d="M540,68 L575,108"/>
+  <path class="dg1-edge" d="M205,164 L240,204"/>
+  <path class="dg1-edge" d="M575,164 L540,204"/>
+
+  <!-- Annotations -->
+  <text class="dg1-note" x="668" y="45">what you depend on</text>
+  <text class="dg1-note" x="30" y="238" text-anchor="start">one execution</text>
+  <text class="dg1-note" x="30" y="253" text-anchor="start">contract</text>
+</svg>
 
 | Crate | Role |
 |---|---|
@@ -74,25 +113,64 @@ be added to one consumer only, because there are no other places to add rows.
 An ordinary tensor method runs this route (distilled from
 [the lowering chapter](./deep_lowering.md), which walks it line by line):
 
-```text
-Tensor<S, B, K, G>
-  |   compile time: ShapeEq / broadcast rules name Output,
-  |                 B: Execute<O> selects the backend by trait bound
-  v
-TensorHandle::from_storage      checked metadata read off real storage
-  v
-ExecutionContext                grad mode = scope ceiling AND output marker
-  v
-dispatch::execute_shaped::<O, B, S>
-  |   1. infer_invocation_typed - outputs derived, typed shape cross-checked
-  |   2. payload validated against DataAttributes byte length
-  |   3. admit_invocation - exact capability row per operand,
-  |      filtered by the fallback policy
-  v
-Execute<O>::execute(ExecutionRequest)     the backend kernel
-  v
-output storage rebuilt under the derived shape
-```
+<svg class="incin-diagram" viewBox="0 0 780 560" role="img" aria-label="Execution route: a typed tensor method lowers through TensorHandle and ExecutionContext into dispatch::execute_shaped, which infers outputs, validates payloads, admits capabilities, then calls the backend executor." xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .dg2-node { fill: currentColor; fill-opacity: 0.05; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1; }
+    .dg2-code { font: 600 13.5px ui-monospace, "Source Code Pro", Menlo, monospace; fill: currentColor; }
+    .dg2-sub { font: 12px system-ui, sans-serif; fill: currentColor; opacity: 0.75; }
+    .dg2-stage { font: italic 12px system-ui, sans-serif; fill: var(--links, #2b79a2); }
+    .dg2-edge { stroke: var(--links, #2b79a2); stroke-width: 1.4; fill: none; marker-end: url(#dg2-arrow); }
+    .dg2-inner { fill: none; stroke: currentColor; stroke-opacity: 0.25; stroke-dasharray: 4 3; }
+  </style>
+  <defs>
+    <marker id="dg2-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--links, #2b79a2)"/>
+    </marker>
+  </defs>
+
+  <!-- Frontend -->
+  <rect class="dg2-node" x="190" y="14" width="400" height="46" rx="7"/>
+  <text class="dg2-code" x="390" y="35" text-anchor="middle">Tensor&lt;S, B, K, G&gt; method</text>
+  <text class="dg2-sub" x="390" y="52" text-anchor="middle">compile time: shapes resolve Output; B: Execute&lt;O&gt;</text>
+
+  <path class="dg2-edge" d="M390,60 L390,84"/>
+
+  <rect class="dg2-node" x="190" y="88" width="400" height="40" rx="7"/>
+  <text class="dg2-code" x="390" y="108" text-anchor="middle">TensorHandle::from_storage</text>
+  <text class="dg2-sub" x="390" y="122" text-anchor="middle">checked metadata read off real storage</text>
+
+  <path class="dg2-edge" d="M390,128 L390,152"/>
+
+  <rect class="dg2-node" x="190" y="156" width="400" height="40" rx="7"/>
+  <text class="dg2-code" x="390" y="176" text-anchor="middle">ExecutionContext</text>
+  <text class="dg2-sub" x="390" y="190" text-anchor="middle">grad mode = scope ceiling AND output marker</text>
+
+  <path class="dg2-edge" d="M390,196 L390,220"/>
+
+  <!-- Dispatch group -->
+  <rect class="dg2-node" x="120" y="224" width="540" height="150" rx="7"/>
+  <text class="dg2-code" x="390" y="248" text-anchor="middle">dispatch::execute_shaped::&lt;O, B, S&gt;</text>
+  <rect class="dg2-inner" x="140" y="262" width="500" height="100" rx="5"/>
+  <text class="dg2-stage" x="155" y="284">1</text>
+  <text class="dg2-sub" x="172" y="284">infer_invocation_typed - outputs derived, typed shape cross-checked</text>
+  <text class="dg2-stage" x="155" y="310">2</text>
+  <text class="dg2-sub" x="172" y="310">payload validated against DataAttributes byte length</text>
+  <text class="dg2-stage" x="155" y="336">3</text>
+  <text class="dg2-sub" x="172" y="336">admit_invocation - exact capability row per operand,</text>
+  <text class="dg2-sub" x="172" y="352">filtered by the fallback policy</text>
+
+  <path class="dg2-edge" d="M390,374 L390,398"/>
+
+  <rect class="dg2-node" x="190" y="402" width="400" height="40" rx="7"/>
+  <text class="dg2-code" x="390" y="422" text-anchor="middle">Execute&lt;O&gt;::execute(ExecutionRequest)</text>
+  <text class="dg2-sub" x="390" y="436" text-anchor="middle">the backend kernel</text>
+
+  <path class="dg2-edge" d="M390,442 L390,466"/>
+
+  <rect class="dg2-node" x="190" y="470" width="400" height="40" rx="7"/>
+  <text class="dg2-code" x="390" y="490" text-anchor="middle">output storage</text>
+  <text class="dg2-sub" x="390" y="504" text-anchor="middle">rebuilt under the derived shape</text>
+</svg>
 
 Three properties of that route are structural rather than conventional
 (`docs/FROZEN_FOUNDATIONS.md`'s wording):

@@ -302,14 +302,16 @@ Neovim screenshot for good measure:
 
 - **[The Book](https://xupremix.github.io/incin/)** - task-oriented guide from
   five-line tensors up to a Transformer block.
-- **[What's not finished](https://github.com/xupremix/incin/blob/master/docs/book/src/whats_not_finished.md)**
+- **[What's not finished](https://xupremix.github.io/incin/#/whats_not_finished)**
   - the honest list. GPU backends cover a subset; read before planning a CUDA
   training run.
 - **[Capability matrix](https://github.com/xupremix/incin/blob/master/docs/capabilities.md)**
   - per-operation, generated from executor registrations, never hand-edited.
-- **docs/GUIDE.md** - how the shape-proof system works internally.
-- **[The deep dive](https://github.com/xupremix/incin/blob/master/docs/book/src/deep_architecture.md)**
-  - architecture, type semantics, lowering, proofs, and macro internals.
+- **[docs/GUIDE.md](https://github.com/xupremix/incin/blob/master/docs/GUIDE.md)**
+  - how the shape-proof system works internally.
+- **[The deep dive](https://xupremix.github.io/incin/#/deep_architecture)**
+  - five rendered chapters on architecture, type semantics, lowering, proofs,
+  and macro internals - how the pieces above are actually built.
 - Found something? [Open an issue](https://github.com/xupremix/incin/issues/new/choose).
   The templates make it fast.
 

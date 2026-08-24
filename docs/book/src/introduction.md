@@ -27,14 +27,18 @@ state, especially around GPU backends.
   than assumed.
 - **Reference** has a PyTorch-to-Incin cheatsheet and the running list of
   known gaps.
+- **Deep dive** is the contributor's companion: five chapters on how the
+  pieces the rest of the book uses are actually built - the layer stack, the
+  type semantics, descriptor lowering and dispatch, the proof machinery, and
+  macro internals.
 
 ## Where else to look
 
 - The source code, issue tracker, and releases are hosted on [GitHub](https://github.com/xupremix/incin).
-- `docs/GUIDE.md` in the repository is the architectural companion to this
-  book -- the type-level shape system's internals, the canonical execution
-  path, backend authoring, and the idioms the codebase itself follows. This
-  book is task-oriented ("how do I train a model"); `GUIDE.md` is
+- The [Deep dive](./deep_architecture.md) part of this book distills
+  `docs/GUIDE.md`, the contract documents, and the source itself into five
+  chapters; `GUIDE.md` in the repository remains the full prose tour. This
+  book is task-oriented ("how do I train a model"); those are
   concept-oriented ("how does the shape-proof system work"). The generated
   `docs/OPERATION_SEMANTICS.md` and `docs/capabilities.md` are the exhaustive,
   always-current per-operation reference this book does not try to duplicate.

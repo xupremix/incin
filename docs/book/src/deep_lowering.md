@@ -80,6 +80,76 @@ let storage =
 
 Inside, four steps run in order.
 
+<svg class="incin-diagram" viewBox="0 0 780 420" role="img" aria-label="The dispatcher's four ordered checks: logical metadata from handles, output inference cross-checked against the caller's type, payload validation, capability admission filtered by policy - then the backend launch. Each stage has its own error class." xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .dg4-node { fill: currentColor; fill-opacity: 0.05; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1; }
+    .dg4-code { font: 600 13px ui-monospace, "Source Code Pro", Menlo, monospace; fill: currentColor; }
+    .dg4-sub { font: 11.5px system-ui, sans-serif; fill: currentColor; opacity: 0.75; }
+    .dg4-stage { font: italic 12px system-ui, sans-serif; fill: var(--links, #2b79a2); }
+    .dg4-err { font: 11.5px ui-monospace, Menlo, monospace; fill: var(--links, #2b79a2); }
+    .dg4-edge { stroke: var(--links, #2b79a2); stroke-width: 1.4; fill: none; marker-end: url(#dg4-arrow); }
+    .dg4-reject { stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1; stroke-dasharray: 4 3; fill: none; marker-end: url(#dg4-arrow-faint); }
+  </style>
+  <defs>
+    <marker id="dg4-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--links, #2b79a2)"/>
+    </marker>
+    <marker id="dg4-arrow-faint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fill-opacity="0.35"/>
+    </marker>
+  </defs>
+
+  <!-- Step 1 -->
+  <rect class="dg4-node" x="40" y="16" width="480" height="52" rx="7"/>
+  <text class="dg4-stage" x="56" y="34">1</text>
+  <text class="dg4-code" x="280" y="36" text-anchor="middle">logical_meta(handles)</text>
+  <text class="dg4-sub" x="280" y="55" text-anchor="middle">shape/dtype/device read off the storage that will run</text>
+
+  <path class="dg4-edge" d="M280,68 L280,86"/>
+
+  <!-- Step 2 -->
+  <rect class="dg4-node" x="40" y="90" width="480" height="52" rx="7"/>
+  <text class="dg4-stage" x="56" y="108">2</text>
+  <text class="dg4-code" x="280" y="110" text-anchor="middle">infer_invocation_typed</text>
+  <text class="dg4-sub" x="280" y="129" text-anchor="middle">outputs derived; caller's ShapeValue&lt;S&gt; cross-checked</text>
+
+  <path class="dg4-edge" d="M280,142 L280,160"/>
+
+  <!-- Step 3 -->
+  <rect class="dg4-node" x="40" y="164" width="480" height="52" rx="7"/>
+  <text class="dg4-stage" x="56" y="182">3</text>
+  <text class="dg4-code" x="280" y="184" text-anchor="middle">payload &#8960; DataAttributes byte length</text>
+  <text class="dg4-sub" x="280" y="203" text-anchor="middle">missing payload or stray payload is a descriptor error</text>
+
+  <path class="dg4-edge" d="M280,216 L280,234"/>
+
+  <!-- Step 4 -->
+  <rect class="dg4-node" x="40" y="238" width="480" height="60" rx="7"/>
+  <text class="dg4-stage" x="56" y="256">4</text>
+  <text class="dg4-code" x="280" y="260" text-anchor="middle">admit(backend, operation, meta, training, math_mode)</text>
+  <text class="dg4-sub" x="280" y="279" text-anchor="middle">exact capability row per operand, filtered by fallback policy:</text>
+  <text class="dg4-sub" x="280" y="293" text-anchor="middle">Native always; Composed and Fallback only if allowed</text>
+
+  <path class="dg4-edge" d="M280,298 L280,316"/>
+
+  <!-- Launch -->
+  <rect class="dg4-node" x="40" y="320" width="480" height="52" rx="7"/>
+  <text class="dg4-code" x="280" y="340" text-anchor="middle">backend.execute(ExecutionRequest)</text>
+  <text class="dg4-sub" x="280" y="359" text-anchor="middle">the value handed over is the value a capture would record</text>
+
+  <!-- Error taxonomy -->
+  <text class="dg4-stage" x="560" y="34">error taxonomy</text>
+  <text class="dg4-err" x="560" y="112">CanonicalError::Descriptor</text>
+  <text class="dg4-sub" x="560" y="128">request was never legal</text>
+  <text class="dg4-err" x="560" y="262">CanonicalError::Policy</text>
+  <text class="dg4-sub" x="560" y="278">support disallowed before launch</text>
+  <text class="dg4-err" x="560" y="340">CanonicalError::Backend</text>
+  <text class="dg4-sub" x="560" y="356">legal request failed at or after launch</text>
+  <path class="dg4-reject" d="M520,116 C545,116 545,116 556,116"/>
+  <path class="dg4-reject" d="M520,264 C545,264 545,264 556,264"/>
+  <path class="dg4-reject" d="M520,342 C545,342 545,342 556,342"/>
+</svg>
+
 **1. Logical metadata comes from the handles, not the caller.**
 
 ```rust,ignore
