@@ -12,7 +12,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::{fmt, marker::PhantomData, time::Duration};
-use incin_core::prelude::Dyn;
+use incin_core::shapes::dynamic::Dyn;
 use std::path::Path;
 use std::sync::{
     Condvar, Mutex,

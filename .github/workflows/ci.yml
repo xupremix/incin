@@ -303,6 +303,15 @@ jobs:
       run: cargo xtask feature-matrix
     - name: Enforce shape-proof audit budgets
       run: tools/audit-shapes.sh --check
+    # The layering rules in docs/CONVENTIONS.md plus the large-file ownership
+    # ledger in docs/HANDOFF.md. Both scripts existed and both were only
+    # reachable through tools/export-snapshot.sh, which nothing schedules, so
+    # neither ran on a normal change. Two files crossed the 1,200-line
+    # threshold without a ledger entry and a backend module took a dependency
+    # on the public prelude before anyone noticed. Running it here is what
+    # makes these conventions gates rather than documentation.
+    - name: Check architecture layering and the large-file ledger
+      run: bash tools/check-architecture.sh
     - name: Audit unsafe and panic boundaries
       run: |
         python3 tools/check-unsafe-ledger.py

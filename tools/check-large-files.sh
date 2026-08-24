@@ -11,6 +11,8 @@ declare -A explained=(
     [crates/incin-core/src/exec/catalog/tests.rs]=1
     [crates/incin-core/src/generated/onnx.rs]=1
     [crates/incin-macros/src/generated/onnx.rs]=1
+    [crates/incin-core/src/shapes/shape.rs]=1
+    [crates/incin-core/src/nn/param.rs]=1
 )
 
 mapfile -t actual < <(
