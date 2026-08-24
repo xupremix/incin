@@ -10,10 +10,12 @@ of repeating a number that won't.
 ## Blocks real usage today
 
 - **GPU training.** See [Backends](./backends.md) - the previews cover
-  basic arithmetic, reductions, `matmul`, and `conv2d`/pooling, and WGPU adds
-  thirteen unary activations. None of them has normalization, a loss
-  function, `embedding`, or `dropout`, so training anything in this book's
-  [Building models](./building_models.md) chapter is CPU-only right now.
+  basic arithmetic, reductions, `matmul`, and `conv2d`/pooling; WGPU adds
+  thirteen unary activations, and CUDA adds `layer_norm`, `batch_norm`,
+  `rms_norm`, and `softmax`. None of them has a loss function, `embedding`,
+  `dropout`, or `group_norm`, and the missing loss alone is enough to make
+  training anything in this book's [Building models](./building_models.md)
+  chapter CPU-only right now.
 - **No transformer/attention modules.** The raw
   `scaled_dot_product_attention` operation exists; there is no
   `MultiHeadAttention` or `TransformerEncoderLayer` composed module, and no

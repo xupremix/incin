@@ -25,23 +25,25 @@ backend registrations rather than written by hand:
 | Backend | Operations advertised | Tier |
 |---|---:|---|
 | CPU | 158 | complete, and the only one verified by execution |
-| WGPU | 42 | preview |
-| CUDA | 22 | preview |
-| Metal | 21 | preview |
+| CUDA | 70 | preview |
+| WGPU | 46 | preview |
+| Metal | 25 | preview |
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
 `matmul`, and `conv2d`/pooling. WGPU additionally advertises thirteen unary
 activations - `relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
-`sqrt`, `log`, `tanh`, `sigmoid`, `swish` - which CUDA and Metal do not.
+`sqrt`, `log`, `tanh`, `sigmoid`, `swish` - which Metal does not. CUDA
+additionally advertises `layer_norm`, `batch_norm`, `rms_norm`, and
+`softmax`, which neither of the other two has.
 
-What **no** accelerator backend has: normalization (`layer_norm`,
-`batch_norm`, `group_norm`), any loss function, `embedding`, or `dropout`.
+What **no** accelerator backend has: any loss function, `embedding`,
+`dropout`, or `group_norm`.
 
 Concretely: you can allocate tensors, run matrix arithmetic, and apply an
 activation on a GPU today, but you cannot train the models in this book's
-[Building models](./building_models.md) chapter - or a CNN, an RNN, or
-anything with a normalization layer - on one. CPU is where real training
-happens right now.
+[Building models](./building_models.md) chapter on one, because the loss is
+always the missing link even where the layers are present. CPU is where real
+training happens right now.
 
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with

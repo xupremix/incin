@@ -24,9 +24,11 @@ it is not repeated here as if it were a current API description.
 
 - CPU is the verified execution backend in this environment, and the complete
   one: all 158 backend-executable catalog operations have CPU executors.
-- CUDA, WGPU, and Metal are previews. Each advertises a documented subset
-  (arithmetic, reductions, `matmul`, and convolution/pooling, plus the unary
-  activations on WGPU), and none advertises normalization, loss, or embedding.
+- CUDA, WGPU, and Metal are previews advertising 70, 46, and 25 operations
+  respectively. Each covers arithmetic, reductions, `matmul`, and
+  convolution/pooling; WGPU adds the unary activations and CUDA adds
+  `layer_norm`, `batch_norm`, `rms_norm`, and `softmax`. None advertises a
+  loss, `embedding`, `dropout`, or `group_norm`.
   `docs/capabilities.md` is generated from the registrations and is
   authoritative per operation.
 - Building the workspace does not require `protoc`. The ONNX protobuf module is
