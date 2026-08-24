@@ -1861,9 +1861,9 @@ They are alternatives, not stacked layers. `wgpu` remains cross-platform;
 targets. Neither is enabled by default.
 
 ```toml
-incin = { version = "0.0.0", features = ["metal"] }
+incin = { version = "0.1.0", features = ["metal"] }
 # Optional vendor primitives in addition to native MSL fallbacks:
-incin = { version = "0.0.0", features = ["metal-mps"] }
+incin = { version = "0.1.0", features = ["metal-mps"] }
 ```
 
 #### UX

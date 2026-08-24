@@ -19,9 +19,6 @@ of repeating a number that won't.
   `MultiHeadAttention` or `TransformerEncoderLayer` composed module, and no
   `GRU` alongside `LSTM`/`RNN`. Building a transformer means hand-composing
   it from primitives.
-- **No gradient clipping by value.** `clip_grad_norm` clips by total norm;
-  there is no per-element value clip. Learning rate scheduling is complete
-  (`ConstantLR`, `LinearLR`, `CosineAnnealingLR`, `StepLR`).
 
 ## Facade gaps (the functionality exists, but not through `incin`)
 

@@ -89,6 +89,19 @@ println!("gradient norm before clipping: {before}");
 Clip before `step`, never after: the optimizer reads the gradients it is
 given, so clipping afterwards changes nothing that was already applied.
 
+`clip_grad_value` is the other form. It clamps every gradient element
+independently into `[-clip_value, clip_value]` and returns nothing, because
+there is no single "before" number to report:
+
+```rust,ignore
+use incin::optim::clip_grad_value;
+
+clip_grad_value(&group, &mut grads, 1.0)?;
+```
+
+Both reject a clip bound that is not finite and greater than zero, rather
+than silently doing nothing.
+
 ## Learning rate schedulers
 
 A scheduler doesn't own the optimizer; it tracks its own state and you copy

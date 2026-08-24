@@ -28,10 +28,10 @@ rustdoc already shows.
 ## Non-goals
 
 - **Crate boundaries.** The 10 crates stay exactly as they are.
-- **Behavior.** No crate is required to preserve its current public API:
-  nothing beyond the `0.0.0` placeholder versions is published, so breaking
-  changes are free, but none is required to change behavior either. This is
-  about organization and presentation, not semantics.
+- **Behavior.** No crate is required to preserve its current public API. The
+  workspace is pre-1.0, so a breaking change costs a minor bump and nothing
+  more, but none is required to change behavior either. This is about
+  organization and presentation, not semantics.
 - **Enforcement tooling.** No new CI gate, lint, or `xtask` budget check
   accompanies this document. incin already gates aggressively; add
   enforcement once the convention has been applied somewhere real, not

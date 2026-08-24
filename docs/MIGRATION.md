@@ -54,7 +54,7 @@ fn set_grad<K: DType>(
 ) -> Result<()>;
 ```
 
-It exists so that post-backward transforms which rescale a whole gradient set (`clip_grad_norm` is the one in tree) can be written once against the trait
+It exists so that post-backward transforms which rescale a whole gradient set (`clip_grad_norm` and `clip_grad_value` are the two in tree) can be written once against the trait
 rather than once per backend. It is a replacement, not an accumulation; the
 reverse walk's own accumulation has finished before anything calls it.
 
@@ -95,6 +95,25 @@ incin = { version = "0.1.0", features = ["data-hub"] }
 
 Dataset downloading does not need it: that is `incin-data`'s `download`
 feature, which is on by default.
+
+### A non-default loss reduction is built with `with_reduction()`
+
+```rust,ignore
+use incin::nn::Sum; // Mean, Sum, and NoneReduction live here, not the prelude
+
+// before
+let loss = MSELoss::<Sum>::new().forward(&pred, &target)?;
+// after
+let loss = MSELoss::<Sum>::with_reduction().forward(&pred, &target)?;
+```
+
+`MSELoss`, `CrossEntropyLoss`, `L1Loss`, and `BCEWithLogitsLoss` each declare
+`R: ReductionMode = Mean`, but a type-parameter default does not drive
+inference for an associated function, so `MSELoss::new()` failed with `E0283`
+and every call site had to write `MSELoss::<Mean>::new()`. `new()` is now
+defined on the `Mean` instantiation alone, so it resolves by itself and reads
+like `torch.nn.MSELoss()`. The explicit `MSELoss::<Mean>::new()` form is
+unchanged; only a non-default reduction has to be renamed.
 
 ### `ModelExt::load` no longer takes a device
 
@@ -297,7 +316,7 @@ The third-party Candle adapter feature was aliased as `candle`.
 #### New Pattern
 The deprecated `candle` alias is removed. Use explicit `external-candle` in `Cargo.toml`:
 ```toml
-incin = { version = "0.0.0", features = ["external-candle"] }
+incin = { version = "0.1.0", features = ["external-candle"] }
 ```
 
 ---

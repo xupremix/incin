@@ -102,8 +102,10 @@ authoring](./backend_authoring.md) for why it is not defaulted.
 ### Gradient clipping
 
 `clip_grad_norm` clips a parameter group by total L2 norm and returns the norm
-before rescaling. It was the one training primitive the framework was missing.
-See [Losses, optimizers, and schedulers](./training.md).
+before rescaling. `clip_grad_value` clamps every gradient element independently
+into `[-clip_value, clip_value]`. Together they were the training primitives
+the framework was missing. See
+[Losses, optimizers, and schedulers](./training.md).
 
 ### The CPU SIMD kernels became reachable
 

@@ -63,8 +63,11 @@ major/minor values.
 ### Added
 
 - **`clip_grad_norm`** - total-norm gradient clipping over a `ParameterGroup`,
-  returning the norm before rescaling. The one training primitive the framework
-  was missing.
+  returning the norm before rescaling.
+- **`clip_grad_value`** - per-element gradient clamping over a
+  `ParameterGroup`, backed by the `ValueClippingBackend` trait. Together with
+  `clip_grad_norm` these were the training primitives the framework was
+  missing.
 - **`AutogradBackend::set_grad`** - the backend primitive clipping needs.
   Required rather than defaulted; see `docs/MIGRATION.md`.
 - **WGPU unary activations are reachable.** `relu`, `step`, `mish`, `elu`,
