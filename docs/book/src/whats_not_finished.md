@@ -66,6 +66,15 @@ of repeating a number that won't.
   `incin::experimental::compiled`. It has no stable facade contract, optimized
   backend, deployment target, or portable artifact ABI; its serialized plan
   snapshots are local preview data only.
+- **Only Apple Silicon is covered by the scheduled hardware matrix.** The
+  weekly `hardware.yml` run has a registered macOS runner, so the aarch64 CPU
+  path is exercised on real hardware. The CUDA and WGPU native-adapter jobs
+  resolve their runners from repository variables that are currently unset,
+  and report themselves skipped rather than queueing forever. So the native
+  CUDA backend is compile-checked in CI and has no automated execution
+  coverage on an NVIDIA device, and WGPU's execution coverage comes from a
+  software adapter. This is the mechanism behind [Backends](./backends.md)
+  calling CPU the only backend verified by execution.
 
 ## Where the current, generated truth lives
 

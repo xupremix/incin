@@ -4,9 +4,9 @@
 
 ### A Rust deep learning framework with compile-time verification of tensor shapes, dtypes, devices, and gradient state.
 
-[![Incin CI](https://img.shields.io/badge/Incin_CI-passing-brightgreen?logo=github)](https://github.com/xupremix/incin/actions)
+[![Incin CI](https://github.com/xupremix/incin/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/xupremix/incin/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/incin.svg?color=orange)](https://crates.io/crates/incin)
-[![docs](https://img.shields.io/badge/docs-passing-brightgreen)](https://docs.rs/incin)
+[![docs.rs](https://img.shields.io/docsrs/incin?label=docs.rs)](https://docs.rs/incin)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](./LICENSE_MIT)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange)](./Cargo.toml)
 
@@ -24,7 +24,7 @@ a runtime failure days into a training run.
 
 ## The demo
 
-```rust
+```rust,ignore
 use incin::prelude::*;
 
 let x: Tensor<s![4, 8], DefaultBackend> = Tensor::zeros(())?;
@@ -57,7 +57,8 @@ error[E0277]: Cannot contract dimension `[4, 8]` with `MatMulShape<[3, 8]>`
 
 Same error, readable shapes, zero runtime cost. The types prove the shapes; the
 numbers are covered too - every operation comes from one canonical catalog
-backed by generated conformance vectors and gradcheck suites. And with
+backed by generated conformance vectors, and the differentiable ones carry
+finite-difference gradcheck suites. And with
 [incin-lsp](#editor-support), rust-analyzer shows shapes as decimal hints
 directly in your editor while you type.
 
@@ -81,10 +82,11 @@ check to the type system, which means:
   error naming the gap - never a quiet transfer to another device.
 
 Under the hood there's an autograd tape, AdamW/SGD, conv/pool/norm/loss layers,
-safetensors checkpoints, ONNX import for supported graphs, and 158 CPU
-operations backed by gradcheck suites. The full honest status, including what's
-*not* done, lives in
-[what's not finished](https://github.com/xupremix/incin/blob/master/docs/book/src/whats_not_finished.md).
+safetensors checkpoints, ONNX import for supported graphs, and CPU executors for
+all 158 backend-executable catalog operations - checked against generated
+conformance vectors, with finite-difference gradchecks over the differentiable
+kernels. The full honest status, including what's *not* done, lives in
+[what's not finished](https://xupremix.github.io/incin/#/whats_not_finished).
 
 ## Quick start
 
@@ -128,7 +130,7 @@ compile time. The output spells out `f32` and `Grad` because a forward pass
 through parameters joins their gradient state into the result type. Swap in
 `AdamW`, add a loss from
 [`incin::nn`](https://docs.rs/incin/latest/incin/nn/index.html), iterate a
-[`DataLoader`](https://github.com/xupremix/incin/blob/master/docs/book/src/data_loading.md),
+[`DataLoader`](https://xupremix.github.io/incin/#/data_loading),
 and you have a training loop.
 
 Prefer to explore first? The default build needs nothing but a Rust toolchain:
@@ -145,7 +147,7 @@ fn main() -> Result<()> {
 }
 ```
 
-More in [the Book's quickstart](https://xupremix.github.io/incin/quickstart.html),
+More in [the Book's quickstart](https://xupremix.github.io/incin/#/quickstart),
 including slicing with `i![]`, ONNX import via `import_model!`, and Hugging Face
 downloads through the `data-hub` feature.
 
