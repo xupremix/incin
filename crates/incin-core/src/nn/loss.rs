@@ -25,9 +25,23 @@ impl<S: Shape> MSEShape<S> for S {}
 #[derive(Debug, Clone, Default)]
 pub struct MSELoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl<R: ReductionMode> MSELoss<R> {
-    /// Creates a new instance with default (statically inferred) shape arguments.
+impl MSELoss<Mean> {
+    /// Mean reduction, the same default `torch.nn.MSELoss()` uses.
+    ///
+    /// A type-parameter default does not drive inference for an associated
+    /// function, so a single generic `new` would force `MSELoss::<Mean>::new()`
+    /// at every call site. This concrete constructor is what lets
+    /// `MSELoss::new()` resolve on its own. Use
+    /// [`with_reduction`](MSELoss::with_reduction) to choose another reduction.
     pub fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<R: ReductionMode> MSELoss<R> {
+    /// Selects the reduction explicitly, as in
+    /// `MSELoss::<Sum>::with_reduction()`.
+    pub fn with_reduction() -> Self {
         Self(core::marker::PhantomData)
     }
 
@@ -94,9 +108,23 @@ impl<Batch: Dim> CrossEntropyShape<DimCons<Batch, Nil>> for Dyn {}
 #[derive(Debug, Clone, Default)]
 pub struct CrossEntropyLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl<R: ReductionMode> CrossEntropyLoss<R> {
-    /// Creates a new instance with default (statically inferred) shape arguments.
+impl CrossEntropyLoss<Mean> {
+    /// Mean reduction, the same default `torch.nn.CrossEntropyLoss()` uses.
+    ///
+    /// A type-parameter default does not drive inference for an associated
+    /// function, so a single generic `new` would force `CrossEntropyLoss::<Mean>::new()`
+    /// at every call site. This concrete constructor is what lets
+    /// `CrossEntropyLoss::new()` resolve on its own. Use
+    /// [`with_reduction`](CrossEntropyLoss::with_reduction) to choose another reduction.
     pub fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<R: ReductionMode> CrossEntropyLoss<R> {
+    /// Selects the reduction explicitly, as in
+    /// `CrossEntropyLoss::<Sum>::with_reduction()`.
+    pub fn with_reduction() -> Self {
         Self(core::marker::PhantomData)
     }
 
@@ -160,9 +188,23 @@ impl<S: crate::shapes::Shape> L1Shape<S> for S {}
 #[derive(Debug, Clone, Default)]
 pub struct L1Loss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl<R: ReductionMode> L1Loss<R> {
-    /// Creates a new instance with default (statically inferred) shape arguments.
+impl L1Loss<Mean> {
+    /// Mean reduction, the same default `torch.nn.L1Loss()` uses.
+    ///
+    /// A type-parameter default does not drive inference for an associated
+    /// function, so a single generic `new` would force `L1Loss::<Mean>::new()`
+    /// at every call site. This concrete constructor is what lets
+    /// `L1Loss::new()` resolve on its own. Use
+    /// [`with_reduction`](L1Loss::with_reduction) to choose another reduction.
     pub fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<R: ReductionMode> L1Loss<R> {
+    /// Selects the reduction explicitly, as in
+    /// `L1Loss::<Sum>::with_reduction()`.
+    pub fn with_reduction() -> Self {
         Self(core::marker::PhantomData)
     }
 
@@ -218,9 +260,23 @@ impl<S: crate::shapes::Shape> BCEWithLogitsShape<S> for S {}
 #[derive(Debug, Clone, Default)]
 pub struct BCEWithLogitsLoss<R: ReductionMode = Mean>(core::marker::PhantomData<R>);
 
-impl<R: ReductionMode> BCEWithLogitsLoss<R> {
-    /// Creates a new instance with default (statically inferred) shape arguments.
+impl BCEWithLogitsLoss<Mean> {
+    /// Mean reduction, the same default `torch.nn.BCEWithLogitsLoss()` uses.
+    ///
+    /// A type-parameter default does not drive inference for an associated
+    /// function, so a single generic `new` would force `BCEWithLogitsLoss::<Mean>::new()`
+    /// at every call site. This concrete constructor is what lets
+    /// `BCEWithLogitsLoss::new()` resolve on its own. Use
+    /// [`with_reduction`](BCEWithLogitsLoss::with_reduction) to choose another reduction.
     pub fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+impl<R: ReductionMode> BCEWithLogitsLoss<R> {
+    /// Selects the reduction explicitly, as in
+    /// `BCEWithLogitsLoss::<Sum>::with_reduction()`.
+    pub fn with_reduction() -> Self {
         Self(core::marker::PhantomData)
     }
 

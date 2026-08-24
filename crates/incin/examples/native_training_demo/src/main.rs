@@ -8,8 +8,8 @@ extern crate alloc;
 
 use incin::backend_authoring::{AutogradBackend, SupportsDType, VariableBackend};
 use incin::optim::OptimizerBackend;
+use incin::prelude::CrossEntropyLoss;
 use incin::prelude::*;
-use incin::prelude::{CrossEntropyLoss, Mean};
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::backend_authoring::Execute;
 use incin_core::exec::catalog::op;
@@ -191,7 +191,7 @@ where
 
         let logits = model.forward(x).unwrap();
 
-        let loss_fn = CrossEntropyLoss::<Mean>::new();
+        let loss_fn = CrossEntropyLoss::new();
         let loss = loss_fn.forward(&logits, &targets).unwrap();
         let loss_val: f32 = loss.to_vec1().unwrap()[0];
         losses.push(loss_val);

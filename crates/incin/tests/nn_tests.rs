@@ -200,3 +200,22 @@ fn test_embedding() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+/// A loss built without naming its reduction is the `Mean` one, and a
+/// non-default reduction stays reachable through `with_reduction`.
+fn loss_reduction_defaults_to_mean_and_sum_is_reachable() -> Result<()> {
+    let pred = Tensor::<s![2, 2], CpuBackendImpl>::ones(())?;
+    let target = Tensor::<s![2, 2], CpuBackendImpl>::zeros(())?;
+
+    // No turbofish here: `new()` resolves to the `Mean` instantiation on its
+    // own, which a single generic `new` could not do.
+    let mean = MSELoss::new().forward(&pred, &target)?;
+    let sum = MSELoss::<incin::nn::Sum>::with_reduction().forward(&pred, &target)?;
+
+    // Every squared error is 1.0, over four elements.
+    assert_eq!(mean.to_vec1::<f32>()?[0], 1.0);
+    assert_eq!(sum.to_vec1::<f32>()?[0], 4.0);
+
+    Ok(())
+}

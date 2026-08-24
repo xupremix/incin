@@ -62,6 +62,27 @@ a silent success. The case this catches most often is reusing one `Gradients`
 value across two steps: committing a step reassigns parameter storage, so the
 second step matches nothing. Skipping *some* parameters is still fine.
 
+### A non-default loss reduction is built with `with_reduction()`
+
+`MSELoss::new()` now works without naming the reduction, the way
+`torch.nn.MSELoss()` does. It previously failed to compile: the reduction type
+parameter defaults to `Mean`, but a type-parameter default does not drive
+inference for an associated function, so every call site had to write
+`MSELoss::<Mean>::new()`.
+
+That explicit form still compiles. Only a non-default reduction changes:
+
+```text
+use incin::nn::Sum; // Mean, Sum, and NoneReduction live here, not the prelude
+
+// before
+let loss = MSELoss::<Sum>::new().forward(&pred, &target)?;
+// after
+let loss = MSELoss::<Sum>::with_reduction().forward(&pred, &target)?;
+```
+
+The same applies to `CrossEntropyLoss`, `L1Loss`, and `BCEWithLogitsLoss`.
+
 ### `DummyBackend` is gone
 
 The shape-only stand-in behind the `test-utils` feature has been removed. It

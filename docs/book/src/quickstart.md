@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     let mut optim = AdamW::<Backend>::from_module(&model, 1e-2)?;
 
     let pred = model.forward(x.require_grad())?;
-    let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
+    let loss = MSELoss::new().forward(&pred, &target)?;
     let grads = loss.backward()?;
     optim.step(&grads)?;
 

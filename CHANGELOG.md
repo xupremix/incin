@@ -242,6 +242,15 @@ major/minor values.
 
 ### Changed
 
+- **Loss constructors no longer need a reduction turbofish.** `MSELoss`,
+  `CrossEntropyLoss`, `L1Loss`, and `BCEWithLogitsLoss` each declare
+  `R: ReductionMode = Mean`, but a type-parameter default does not drive
+  inference for an associated function, so `MSELoss::new()` failed with `E0283`
+  and every call site had to spell out `MSELoss::<Mean>::new()`. `new()` is now
+  defined on the `Mean` instantiation only, so it resolves on its own and reads
+  like `torch.nn.MSELoss()`. A non-default reduction is constructed with
+  `MSELoss::<Sum>::with_reduction()`, which replaces the generic `new()`.
+
 - **The CPU AVX2 kernels are reachable.** They were gated on
   `simd_lanes::<f32>() >= 8`, which reads `cfg!(target_feature = "avx2")` - false
   in any stock `cargo build`, since the default `x86_64` target is the baseline

@@ -13,8 +13,8 @@ type B = DefaultBackend;
 let pred = Tensor::<s![3, 2], B>::ones(())?;
 let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 
-let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
-let loss2 = L1Loss::<Mean>::new().forward(&pred, &target)?;
+let loss = MSELoss::new().forward(&pred, &target)?;
+let loss2 = L1Loss::new().forward(&pred, &target)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -39,7 +39,7 @@ let x = Tensor::<s![3, 4], B>::ones(())?;
 let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 
 let pred = model.forward(x.require_grad())?;
-let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
+let loss = MSELoss::new().forward(&pred, &target)?;
 let grads = loss.backward()?;
 optim.step(&grads)?;
 # Ok::<(), incin::Error>(())
@@ -77,7 +77,7 @@ let group = ParameterGroup::<B, f32>::from_module(&model)?;
 let x = Tensor::<s![3, 4], B>::ones(())?;
 let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 let pred = model.forward(x.require_grad())?;
-let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
+let loss = MSELoss::new().forward(&pred, &target)?;
 
 let mut grads = loss.backward()?;
 let before = clip_grad_norm(&group, &mut grads, 1.0)?;
@@ -107,7 +107,7 @@ let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 
 for _step in 0..3 {
     let pred = model.forward(x.clone().require_grad())?;
-    let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
+    let loss = MSELoss::new().forward(&pred, &target)?;
     let grads = loss.backward()?;
     optim.step(&grads)?;
 
@@ -139,7 +139,7 @@ fn train() -> Result<()> {
 
     for epoch in 0..10 {
         let pred = model.forward(x.clone().require_grad())?;
-        let loss = MSELoss::<Mean>::new().forward(&pred, &target)?;
+        let loss = MSELoss::new().forward(&pred, &target)?;
         let grads = loss.backward()?;
         optim.step(&grads)?;
         sched.step();
