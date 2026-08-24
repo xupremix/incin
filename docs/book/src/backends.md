@@ -29,20 +29,35 @@ backend registrations rather than written by hand:
 | WGPU | 46 | preview |
 | Metal | 25 | preview |
 
+Those are counts from the `Element types by operation and backend` matrix, so
+they say what each backend *advertises*, which is not the same as what it has
+been observed to compute. Two caveats belong next to the numbers:
+
+- **Advertised is not trainable.** The per-backend tables carry a `Training`
+  column. CUDA marks 66 of its 84 rows trainable; `layer_norm` and
+  `batch_norm` are `Training: no`, so they are forward-only and cannot appear
+  in a backward pass. Metal marks 23 of 39 trainable.
+- **Metal is the least proven of the three.** Its own feature description
+  calls its executors stubs pending MTL-002/003, and every Metal row reports
+  `Implementation: native`, so that column does not distinguish a finished
+  kernel from a placeholder. Read Metal's 25 as a registry claim, not a
+  capability.
+
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
 `matmul`, and `conv2d`/pooling. WGPU additionally advertises thirteen unary
 activations - `relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
 `sqrt`, `log`, `tanh`, `sigmoid`, `swish` - which Metal does not. CUDA
-additionally advertises `layer_norm`, `batch_norm`, `rms_norm`, and
-`softmax`, which neither of the other two has.
+additionally advertises `softmax` and `rms_norm`, both trainable and composed
+from primitives, plus the two forward-only normalizations above.
 
 What **no** accelerator backend has: any loss function, `embedding`,
 `dropout`, or `group_norm`.
 
 Concretely: you can allocate tensors, run matrix arithmetic, and apply an
 activation on a GPU today, but you cannot train the models in this book's
-[Building models](./building_models.md) chapter on one, because the loss is
-always the missing link even where the layers are present. CPU is where real
+[Building models](./building_models.md) chapter on one. Two independent things
+are missing, not one: every loss function is CPU-only, and where a
+normalization layer does exist on CUDA it has no backward. CPU is where real
 training happens right now.
 
 This is not a documentation gap to work around by trying harder; it's
