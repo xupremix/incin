@@ -234,19 +234,19 @@
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:44",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:70",
     "code": "_ => panic!(\"gradcheck: perturbation only supported for F32/F64 buffers\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:114",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:148",
     "code": "let grads = tape::backward(&out).expect(\"gradcheck: backward() must succeed\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:120",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:154",
     "code": ".expect(\"gradcheck: missing analytic gradient for input\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
