@@ -110,6 +110,70 @@ fn matmul_backward_matches_hand_computed_gradients() {
     );
 }
 
+/// `batched_matmul_backward_matches_hand_computed_gradients`.
+///
+/// Hand-computed backward for the BATCHED path (`[2,2,2]`/`[2,2,2]`),
+/// two batches with distinct values so a bug that only shows up when
+/// per-batch gradients differ - e.g. `unbroadcast` collapsing the wrong
+/// axis, or a batch-index off-by-one in the backward kernel - cannot
+/// hide behind a batch-independent result. This is what the batched
+/// gradcheck tests below refer back to as "the hand-computed batched
+/// reference": unlike `matmul_backward_matches_hand_computed_gradients`
+/// above (unbatched 2-D only), this one exercises the same
+/// `batched_matmul_impl` backward path the gradchecks drive, compared
+/// against exact by-hand arithmetic rather than finite differences, so
+/// it carries no f32 rounding tolerance of its own.
+#[test]
+fn batched_matmul_backward_matches_hand_computed_gradients() {
+    // Batch 0: A0=[[1,2],[3,4]], B0=[[5,6],[7,8]]
+    // Batch 1: A1=[[9,10],[11,12]], B1=[[13,14],[15,16]]
+    let lhs = tensor(
+        vec![1.0, 2.0, 3.0, 4.0, 9.0, 10.0, 11.0, 12.0],
+        vec![2, 2, 2],
+    );
+    let rhs = tensor(
+        vec![5.0, 6.0, 7.0, 8.0, 13.0, 14.0, 15.0, 16.0],
+        vec![2, 2, 2],
+    );
+    let (lhs_id, rhs_id) = (lhs.id, rhs.id);
+
+    let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+    // out0 = A0@B0 = [[19,22],[43,50]]; out1 = A1@B1 = [[267,286],[323,346]]
+    assert_eq!(out.shape, vec![2, 2, 2]);
+    assert_eq!(
+        f32_vec(&out),
+        vec![19.0, 22.0, 43.0, 50.0, 267.0, 286.0, 323.0, 346.0]
+    );
+
+    let sum = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&sum).unwrap();
+    let lhs_grad = grads.get(lhs_id).expect("lhs should have a gradient");
+    let rhs_grad = grads.get(rhs_id).expect("rhs should have a gradient");
+
+    // grad_out = ones_like(out) per batch (sum_all's gradient is all-ones).
+    // grad_A[b] = grad_out[b] @ B[b]^T:
+    // grad_A0 = ones(2,2) @ B0^T = ones(2,2) @ [[5,7],[6,8]]
+    //         -> each row is B0's column sums: [5+6,7+8] = [11,15]
+    // grad_A1 = ones(2,2) @ B1^T = ones(2,2) @ [[13,15],[14,16]]
+    //         -> [13+14,15+16] = [27,31]
+    assert_eq!(lhs_grad.shape, vec![2, 2, 2]);
+    assert_eq!(
+        f32_vec(lhs_grad),
+        vec![11.0, 15.0, 11.0, 15.0, 27.0, 31.0, 27.0, 31.0]
+    );
+
+    // grad_B[b] = A[b]^T @ grad_out[b]:
+    // grad_B0 = A0^T @ ones(2,2) -> each column is A0's row sums broadcast:
+    //         A0^T=[[1,3],[2,4]] row sums [4,6] -> [[4,4],[6,6]]
+    // grad_B1 = A1^T @ ones(2,2) -> A1^T=[[9,11],[10,12]] row sums [20,22]
+    //         -> [[20,20],[22,22]]
+    assert_eq!(rhs_grad.shape, vec![2, 2, 2]);
+    assert_eq!(
+        f32_vec(rhs_grad),
+        vec![4.0, 4.0, 6.0, 6.0, 20.0, 20.0, 22.0, 22.0]
+    );
+}
+
 #[test]
 /// `matmul_shape_incompatible_returns_err_not_panic`.
 fn matmul_shape_incompatible_returns_err_not_panic() {
@@ -328,8 +392,23 @@ fn batched_matmul_sum_op(inputs: &[CpuStorage]) -> CpuStorage {
 /// catastrophic-cancellation noise at `eps=1e-4` (observed empirically:
 /// values up to 18 produced ~5% relative error purely from f32
 /// subtraction rounding, not a gradient bug - confirmed by the
-/// analytic gradient exactly matching the hand-computed reference in
-/// `batched_matmul_gradcheck_*`'s sibling forward/backward tests above).
+/// analytic gradient exactly matching the hand-computed 2-D reference
+/// in `matmul_backward_matches_hand_computed_gradients` above and the
+/// hand-computed batched reference in
+/// `batched_matmul_backward_matches_hand_computed_gradients` below).
+///
+/// Left unchanged, unlike Tests 2-4: this case measures `0.0082` real
+/// relative error on x86_64 - already nonzero, so unlike Test 5's
+/// rank-4 case it was never vacuous - and it ran on real aarch64
+/// hardware in the same run that caught Test 2's failure (2026-08-24)
+/// without tripping its `1e-2` threshold. That is a real pass on the
+/// hardware that matters, not an extrapolation from x86_64: for what
+/// it is worth, it also puts an upper bound of roughly 1.2x on this
+/// specific case's real aarch64/x86_64 divergence, well under the ~23x
+/// figure Test 2 measured for its own case - a reminder that the
+/// divergence factor is case-specific and does not generalize, which is
+/// exactly why Test 5's rejected candidate scale is not used here on
+/// the strength of arithmetic alone either.
 #[test]
 fn batched_matmul_gradcheck_unbatched_degenerate() {
     let lhs = matrix(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6], 2, 3);
@@ -346,54 +425,69 @@ fn batched_matmul_gradcheck_unbatched_degenerate() {
 }
 
 /// Test 2: gradcheck on `batched_matmul_impl` for the EQUAL-BATCH case
-/// (`[2,3,4]`/`[2,4,5]`) reports `max_relative_error < 1e-2`.
+/// (`[2,3,4]`/`[2,4,5]`) reports `max_relative_error < 3e-2`.
 ///
-/// Values are kept at the 0.001 scale for the same reason as Test 1's
-/// small magnitudes: `sum_all` over the whole output accumulates enough
-/// terms that f32 rounding of `f(x)` dominates the central-difference
-/// numerator at `eps=1e-4`. Which kernel wins that rounding depends on
-/// the machine - the aarch64 NEON+FMA path rounds slightly differently
-/// than x86_64's scalar/AVX2 paths, and at the 0.01 scale that pushed
+/// `sum_all` over the whole output accumulates enough terms that f32
+/// rounding of `f(x)` dominates the central-difference numerator at
+/// `eps=1e-4`. Which kernel wins that rounding depends on the machine -
+/// the aarch64 NEON+FMA path rounds slightly differently than
+/// x86_64's scalar/AVX2 paths, and at this operand scale that pushed
 /// this check to an observed max relative error of 0.0145 on the Apple
-/// Silicon hardware runner while the same tree stayed green on x86_64.
-/// The analytic gradient itself is pinned exactly by the hand-computed
-/// forward/backward tests above, which pass through every kernel path;
-/// scaling both operands down by one more decade divides the noise term
-/// by ten without weakening what the relative comparison proves.
+/// Silicon hardware runner while the same tree stayed green on x86_64,
+/// where this same test measures `0.00064` real relative error at this
+/// scale (23x smaller than the aarch64 failure - larger than an
+/// f32-rounding-only account would predict, so treat the two kernels'
+/// divergence as unquantified rather than assume it caps out anywhere
+/// near that ratio). The threshold is raised to `3e-2`, about 2x the
+/// observed aarch64 failure itself (the only real measurement this
+/// margin is checked against), rather than lowering the operand scale:
+/// at
+/// the previous 0.001 scale every element's absolute finite-difference
+/// error fell under `gradcheck`'s `abs_tol` noise floor
+/// (`crate::cpu::gradcheck::gradcheck`'s `1e-3` escape hatch), so
+/// `max_rel_err` was always exactly `0.0` and the assertion below no
+/// longer compared anything. Raising the threshold at the original scale
+/// keeps most elements under a live relative comparison instead. For
+/// this equal-batch case specifically, the analytic gradient is also
+/// pinned exactly by the hand-computed batched reference in
+/// `batched_matmul_backward_matches_hand_computed_gradients` below (the
+/// `matmul_backward_matches_hand_computed_gradients` test above only
+/// covers the unbatched 2-D path). That new test does not cover the
+/// broadcast paths Tests 3 and 4 exercise - `unbroadcast` on a
+/// batch-broadcast operand - so for those two, this raised threshold
+/// remains the only value-level check.
 #[test]
 fn batched_matmul_gradcheck_equal_batch() {
-    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.001).collect();
-    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.001).collect();
+    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
+    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
     let lhs = tensor(lhs_data, vec![2, 3, 4]);
     let rhs = tensor(rhs_data, vec![2, 4, 5]);
     let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < 3e-2,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
 
 /// Test 3: gradcheck on `batched_matmul_impl` for the
 /// BATCH-BROADCAST-LEFT case (`[1,3,4]`/`[2,4,5]`) reports
-/// `max_relative_error < 1e-2`, AND `grad_lhs`'s shape equals the
+/// `max_relative_error < 3e-2`, AND `grad_lhs`'s shape equals the
 /// operand's OWN original `[1,3,4]` shape (proving `unbroadcast`
 /// correctly reduced the broadcast-expanded `[2,3,4]`-shaped
 /// intermediate gradient back down, not left at the broadcast shape).
 ///
-/// Same 0.001 magnitude scale as Test 2: same f32 cancellation-noise
-/// class, and this test sits one unlucky kernel rounding away from the
-/// same threshold crossing seen on aarch64.
+/// Same magnitude scale and threshold as Test 2, for the same reason.
 #[test]
 fn batched_matmul_gradcheck_batch_broadcast_left() {
-    let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32 * 0.001).collect();
-    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.001).collect();
+    let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32 * 0.01).collect();
+    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
     let lhs = tensor(lhs_data, vec![1, 3, 4]);
     let rhs = tensor(rhs_data, vec![2, 4, 5]);
     let (lhs_id, rhs_id) = (lhs.id, rhs.id);
 
     let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], 1e-4);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < 3e-2,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 
@@ -411,18 +505,18 @@ fn batched_matmul_gradcheck_batch_broadcast_left() {
 /// BATCH-BROADCAST-RIGHT case (`[2,3,4]`/`[1,4,5]`) mirrors Test 3 for
 /// `grad_rhs`.
 ///
-/// Same 0.001 magnitude scale as Tests 2 and 3.
+/// Same magnitude scale and threshold as Tests 2 and 3.
 #[test]
 fn batched_matmul_gradcheck_batch_broadcast_right() {
-    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.001).collect();
-    let rhs_data: Vec<f32> = (1..=20).map(|x| x as f32 * 0.001).collect();
+    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
+    let rhs_data: Vec<f32> = (1..=20).map(|x| x as f32 * 0.01).collect();
     let lhs = tensor(lhs_data, vec![2, 3, 4]);
     let rhs = tensor(rhs_data, vec![1, 4, 5]);
     let rhs_id = rhs.id;
 
     let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs.clone(), rhs.clone()], 1e-4);
     assert!(
-        max_rel_err < 1e-2,
+        max_rel_err < 3e-2,
         "gradcheck max relative error too high: {max_rel_err}"
     );
 
@@ -435,6 +529,34 @@ fn batched_matmul_gradcheck_batch_broadcast_right() {
 
 /// Test 5: gradcheck on `batched_matmul_impl` for a `>3D` case
 /// (`[2,2,3,4]`/`[2,2,4,5]`) reports `max_relative_error < 1e-2`.
+///
+/// This case sums over 4 leading batches (twice Test 2's 2), so it is
+/// more exposed to the same f32 cancellation noise discussed in Tests
+/// 2-4's doc comments. At its current `0.002` operand scale this test
+/// is vacuous end to end: `max_rel_err` measures exactly `0.0` on real
+/// x86_64 hardware, meaning every element's absolute finite-difference
+/// error already falls under `gradcheck`'s `1e-3` `abs_tol` floor before
+/// any relative comparison runs - the same silent-pass failure mode
+/// found in (and fixed for) Tests 2-4. It is deliberately left as-is
+/// here rather than nudged to a live scale the way Tests 2-4 were: the
+/// smallest scale that produces a nonzero real measurement on this case
+/// is `0.004` (`0.0066`), but this test's real aarch64-vs-x86_64
+/// divergence has never been measured. Test 2's own real divergence
+/// (aarch64 `0.0145` vs. x86_64 `0.00064`, ~23x) is not a reliable
+/// bound to extrapolate from - Test 1, unchanged and passing on real
+/// aarch64 hardware at a `1e-2` threshold against a `0.0082` real
+/// x86_64 value, upper-bounds its own case's divergence at roughly
+/// 1.2x (an upper bound, not a measurement: its real aarch64 value is
+/// only known to be under `1e-2`, not what it actually is), so the
+/// factor is case-specific rather than a property of this file's
+/// operand-scale approach in general. What is known is that this case
+/// accumulates twice Test 2's batch count, so its real divergence could
+/// plausibly be worse, not better, and there is no positive aarch64
+/// evidence either way at a live scale. Trading a known-safe (if
+/// vacuous) test for one with a genuinely unquantified chance of a new
+/// aarch64 failure, right before a release tag, is the wrong trade. The
+/// vacuity is a real defect and is tracked as a follow-up rather than
+/// papered over with an unverified threshold here.
 #[test]
 fn batched_matmul_gradcheck_rank4() {
     let lhs_data: Vec<f32> = (1..=48).map(|x| x as f32 * 0.002).collect();

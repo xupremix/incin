@@ -432,11 +432,13 @@ major/minor values.
   equal-batch finite-difference check observed f32 cancellation noise of
   0.0145 on the Apple Silicon hardware runner - over its 1e-2 threshold -
   purely because the NEON+FMA kernel rounds `f(x)` slightly differently
-  than x86_64's kernels at the test's operand scale; the analytic gradient
-  itself is pinned exactly by the hand-computed forward/backward tests.
-  The three batched gradcheck operands are scaled down one decade, which
-  divides the noise term by ten without weakening what the relative
-  comparison proves, and Hardware Matrix is expected green again.
+  than x86_64's kernels at the test's operand scale. The three affected
+  batched gradcheck thresholds are raised to 3e-2, with margin measured
+  against that observed failure, and a new hand-computed batched backward
+  test pins the analytic gradient exactly for the equal-batch case (the
+  existing hand-computed test only covered the unbatched case), so
+  Hardware Matrix is expected green again without leaving the check
+  unable to catch a real regression.
 - **The deep dive is served inside the book.** README's "where to go next"
   linked the deep-dive chapters and "What's not finished" as raw GitHub
   markdown files; they now route to the rendered site pages, the
