@@ -347,10 +347,23 @@ fn batched_matmul_gradcheck_unbatched_degenerate() {
 
 /// Test 2: gradcheck on `batched_matmul_impl` for the EQUAL-BATCH case
 /// (`[2,3,4]`/`[2,4,5]`) reports `max_relative_error < 1e-2`.
+///
+/// Values are kept at the 0.001 scale for the same reason as Test 1's
+/// small magnitudes: `sum_all` over the whole output accumulates enough
+/// terms that f32 rounding of `f(x)` dominates the central-difference
+/// numerator at `eps=1e-4`. Which kernel wins that rounding depends on
+/// the machine - the aarch64 NEON+FMA path rounds slightly differently
+/// than x86_64's scalar/AVX2 paths, and at the 0.01 scale that pushed
+/// this check to an observed max relative error of 0.0145 on the Apple
+/// Silicon hardware runner while the same tree stayed green on x86_64.
+/// The analytic gradient itself is pinned exactly by the hand-computed
+/// forward/backward tests above, which pass through every kernel path;
+/// scaling both operands down by one more decade divides the noise term
+/// by ten without weakening what the relative comparison proves.
 #[test]
 fn batched_matmul_gradcheck_equal_batch() {
-    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
-    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
+    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.001).collect();
+    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.001).collect();
     let lhs = tensor(lhs_data, vec![2, 3, 4]);
     let rhs = tensor(rhs_data, vec![2, 4, 5]);
     let max_rel_err = gradcheck(batched_matmul_sum_op, &[lhs, rhs], 1e-4);
@@ -366,10 +379,14 @@ fn batched_matmul_gradcheck_equal_batch() {
 /// operand's OWN original `[1,3,4]` shape (proving `unbroadcast`
 /// correctly reduced the broadcast-expanded `[2,3,4]`-shaped
 /// intermediate gradient back down, not left at the broadcast shape).
+///
+/// Same 0.001 magnitude scale as Test 2: same f32 cancellation-noise
+/// class, and this test sits one unlucky kernel rounding away from the
+/// same threshold crossing seen on aarch64.
 #[test]
 fn batched_matmul_gradcheck_batch_broadcast_left() {
-    let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32 * 0.01).collect();
-    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.01).collect();
+    let lhs_data: Vec<f32> = (1..=12).map(|x| x as f32 * 0.001).collect();
+    let rhs_data: Vec<f32> = (1..=40).map(|x| x as f32 * 0.001).collect();
     let lhs = tensor(lhs_data, vec![1, 3, 4]);
     let rhs = tensor(rhs_data, vec![2, 4, 5]);
     let (lhs_id, rhs_id) = (lhs.id, rhs.id);
@@ -393,10 +410,12 @@ fn batched_matmul_gradcheck_batch_broadcast_left() {
 /// Test 4: gradcheck on `batched_matmul_impl` for the
 /// BATCH-BROADCAST-RIGHT case (`[2,3,4]`/`[1,4,5]`) mirrors Test 3 for
 /// `grad_rhs`.
+///
+/// Same 0.001 magnitude scale as Tests 2 and 3.
 #[test]
 fn batched_matmul_gradcheck_batch_broadcast_right() {
-    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.01).collect();
-    let rhs_data: Vec<f32> = (1..=20).map(|x| x as f32 * 0.01).collect();
+    let lhs_data: Vec<f32> = (1..=24).map(|x| x as f32 * 0.001).collect();
+    let rhs_data: Vec<f32> = (1..=20).map(|x| x as f32 * 0.001).collect();
     let lhs = tensor(lhs_data, vec![2, 3, 4]);
     let rhs = tensor(rhs_data, vec![1, 4, 5]);
     let rhs_id = rhs.id;
