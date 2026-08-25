@@ -131,7 +131,7 @@ fn cuda_baselines(c: &mut Criterion) {
 
     let input = Tensor::<Dyn, CudaB>::ones(vec![65_536]).unwrap();
     group.bench_function("cuda/add_f32/65536", |b| {
-        b.iter(|| black_box((black_box(&input) + black_box(&input)).unwrap()))
+        b.iter(|| black_box(&input) + black_box(&input))
     });
 
     let lhs = Tensor::<Dyn, CudaB>::ones(vec![64, 64]).unwrap();
@@ -160,7 +160,7 @@ fn metal_baselines(c: &mut Criterion) {
 
     let input = Tensor::<Dyn, MetalB>::ones(vec![65_536]).unwrap();
     group.bench_function("metal/add_f32/65536", |b| {
-        b.iter(|| black_box((black_box(&input) + black_box(&input)).unwrap()))
+        b.iter(|| black_box(&input) + black_box(&input))
     });
 
     let lhs = Tensor::<Dyn, MetalB>::ones(vec![64, 64]).unwrap();
