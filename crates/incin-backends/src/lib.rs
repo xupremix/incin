@@ -58,8 +58,12 @@ pub(crate) mod bytes;
 ))]
 pub(crate) mod unsupported;
 
+// Loop-tiling and operand-iteration plumbing for CPU kernels. Internal by
+// the `pub(crate)`-is-default rule in docs/API_DESIGN.md: it takes runtime
+// dimensions and sits below the descriptor contract, so it is not part of
+// the backend-authoring surface.
 #[cfg(any(feature = "cpu", feature = "cuda"))]
-pub mod iteration;
+pub(crate) mod iteration;
 
 pub(crate) mod layout;
 
