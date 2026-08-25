@@ -54,9 +54,8 @@
 The ideas underneath everything above: how an operation travels from a typed
 method call to a running kernel, which guarantees hold at which stage, and
 how to extend the system with your own backends, devices, and dtypes.
-Concept-first by design; the hands-on contracts live in
-[backend authoring](./backend_authoring.md) and
-[custom operations](./custom_operations.md).
+Concept-first by design; the hands-on contracts live in the backend
+authoring and custom operations chapters above.
 
 - [The layered architecture](./deep_architecture.md)
 - [Type semantics](./deep_type_semantics.md)
