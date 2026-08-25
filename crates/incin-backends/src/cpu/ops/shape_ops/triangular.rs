@@ -56,7 +56,7 @@ fn diagonal_matrix(t: &CpuStorage, k: i64) -> Result<CpuStorage> {
             }
             Ok(vec![CpuStorage::from_contiguous(
                 grad_out.buffer.from_f64_values(vals)?,
-                &[n],
+                [n],
             )])
         }),
     });
