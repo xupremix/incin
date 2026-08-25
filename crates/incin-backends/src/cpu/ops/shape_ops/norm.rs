@@ -33,7 +33,7 @@ pub(crate) fn group_norm_storage(t: &CpuStorage, groups: usize, eps: f64) -> Res
     let guarded = canonical_add_scalar(&variance, eps)?;
     let std = canonical_sqrt(&guarded)?;
     let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
-    reshape_storage(&normalized, &t.shape.to_vec())
+    reshape_storage(&normalized, &t.shape)
 }
 
 pub(crate) fn instance_norm_storage(t: &CpuStorage, eps: f64) -> Result<CpuStorage> {
