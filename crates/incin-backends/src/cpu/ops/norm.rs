@@ -219,10 +219,15 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::tensor::device::Device, K:
         ));
     }
 
+    // Every reduction here must go through the tape-tracked `sum_keepdim`,
+    // not the raw `sum_axis_keepdim` helper: training-mode batch norm
+    // normalizes by statistics that are functions of the input, so a
+    // tape-silent reduction would cut the mean/variance path out of every
+    // backward pass computed through this composition.
     let sum_over_reduced = |x: &CpuStorage| -> Result<CpuStorage> {
         let mut acc = x.clone();
         for &axis in &reduced_axes {
-            acc = crate::cpu::ops::reduce::sum_axis_keepdim(&acc, axis)?;
+            acc = crate::cpu::ops::reduce::sum_keepdim(&acc, axis)?;
         }
         Ok(acc)
     };
@@ -662,6 +667,46 @@ mod tests {
             (vals[5] - exp_s1c2).abs() < 1e-4,
             "rank2 [1,2]: got {:.6}, expected {exp_s1c2:.6}",
             vals[5]
+        );
+    }
+
+    #[test]
+    /// `batch_norm_training_gradcheck`.
+    fn batch_norm_training_gradcheck() {
+        // Training mode normalizes by statistics computed FROM the input, so
+        // the gradient must flow through the mean and the variance back into
+        // every element of the batch. The reductions inside
+        // `batch_norm_training_impl` must therefore record tape entries; if
+        // any of them is tape-silent, the analytic gradient loses exactly the
+        // statistical path and this finite-difference check diverges.
+        let t = tensor4(
+            vec![
+                0.5, 1.0, -0.5, 0.2, 1.5, -1.0, 0.3, -0.3, 0.8, -0.8, 1.2, -1.2, 0.1, 0.9, -0.1,
+                0.4, 1.1, -0.9, 0.7, -0.7, 0.6, -0.6, 1.3, -1.3,
+            ],
+            2,
+            3,
+            2,
+            2,
+        );
+        let w = vec1(vec![1.3f32, 0.7, 1.1]);
+        let b = vec1(vec![0.2f32, -0.3, 0.1]);
+        let eps = 1e-5f32;
+
+        let op = |inputs: &[CpuStorage]| -> CpuStorage {
+            let out = batch_norm_training_impl::<incin_core::tensor::device::Cpu, f32>(
+                &inputs[0],
+                Some(&w),
+                Some(&b),
+                eps,
+            )
+            .unwrap();
+            crate::cpu::ops::reduce::sum_all(&out).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &[t], F32_STEP);
+        assert!(
+            max_rel_err < GRAD_TOL,
+            "training batch_norm gradcheck too high: {max_rel_err:.6}"
         );
     }
 
