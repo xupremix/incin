@@ -798,3 +798,62 @@ fn lerp_gradcheck_matches_finite_differences_for_both_operands() {
     let err = gradcheck(op, &operands, F32_STEP);
     assert!(err < GRAD_TOL, "lerp gradcheck too high: {err}");
 }
+
+// --- selection/indexing backwards (catalog promises these gradients) ---
+
+#[test]
+/// `masked_fill_backward_passes_through_only_unmasked_positions`.
+fn masked_fill_backward_passes_through_only_unmasked_positions() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0, 1, 0]), vec![4]);
+    let out = masked_fill_storage(&t, &mask, 9.0).unwrap();
+    assert_eq!(f32_vec(&out), vec![9.0, 2.0, 9.0, 4.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![0.0, 1.0, 0.0, 1.0]);
+}
+
+#[test]
+/// `index_select_backward_accumulates_repeated_selections`.
+fn index_select_backward_accumulates_repeated_selections() {
+    // Rows of the input selected by index [2, 0, 2]: row 2 is chosen twice,
+    // so its cotangent accumulates both contributions.
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+    let index = CpuStorage::from_contiguous(CpuBuffer::I64(vec![2, 0, 2]), vec![3]);
+    let out = index_select_storage(&t, 0, &index).unwrap();
+    assert_eq!(f32_vec(&out), vec![5.0, 6.0, 1.0, 2.0, 5.0, 6.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 1.0, 0.0, 0.0, 2.0, 2.0]);
+}
+
+#[test]
+/// `scatter_backward_zeroes_overwritten_positions_and_routes_to_source`.
+fn scatter_backward_zeroes_overwritten_positions_and_routes_to_source() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let index = CpuStorage::from_contiguous(CpuBuffer::I64(vec![1, 0]), vec![2, 1]);
+    let source = matrix(vec![10.0, 20.0], 2, 1);
+    let out = scatter_storage(&t, 0, &index, &source).unwrap();
+    assert_eq!(f32_vec(&out), vec![20.0, 2.0, 10.0, 4.0]);
+    let grads = tape::backward(&out).unwrap();
+    // Overwritten positions ([0,0] and [1,0]) receive nothing on the input
+    // path; their cotangents land on the source instead.
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![0.0, 1.0, 0.0, 1.0]);
+    assert_eq!(f32_vec(grads.get(source.id).unwrap()), vec![1.0, 1.0]);
+}
+
+#[test]
+/// `scatter_backward_accumulates_duplicate_writes_on_the_source_path`.
+fn scatter_backward_accumulates_duplicate_writes_on_the_source_path() {
+    let t = matrix(vec![1.0, 2.0], 1, 2);
+    let index = CpuStorage::from_contiguous(CpuBuffer::I64(vec![0, 0]), vec![2, 1]);
+    let source = matrix(vec![7.0, 8.0], 2, 1);
+    let out = scatter_storage(&t, 0, &index, &source).unwrap();
+    // Last write wins in the forward.
+    assert_eq!(f32_vec(&out), vec![8.0, 2.0]);
+    let grads = tape::backward(&out).unwrap();
+    // Last-write-wins: only the surviving write routes a cotangent to the
+    // source; the overwritten first write contributed nothing.
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![0.0, 1.0]);
+    assert_eq!(f32_vec(grads.get(source.id).unwrap()), vec![0.0, 1.0]);
+}
