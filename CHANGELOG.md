@@ -34,6 +34,14 @@ major/minor values.
 
 ### Removed
 
+- **`incin_backends::iteration` from the public surface.** The module exposed a
+  single item, `tile_2d`, a 2D loop-tiling helper that takes runtime
+  dimensions and sits below the descriptor contract. It is now `pub(crate)`,
+  matching the "Internal Modules" rule in `docs/API_DESIGN.md`. No call site
+  changed: internal kernels already used the `crate::iteration::` path, and the
+  helper was never referenced from user documentation. Its test coverage moved
+  into the module rather than being dropped.
+
 - **`protoc` as a build dependency.** `incin-core`'s build script ran
   `prost-build` unconditionally, making a system protobuf compiler mandatory
   for every crate that depended on the facade. The generated ONNX module is
@@ -61,6 +69,13 @@ major/minor values.
   old method panicked.
 
 ### Added
+
+- **A published API tier classification.** `docs/public-api/API_TIERS.md`
+  assigns every module in every shipped crate to one of four tiers: stable user
+  API, expert/backend-authoring API, intentional macro ABI, or preview. It
+  states what a 0.1.0 consumer may rely on, and records which surfaces were
+  reviewed as privatization candidates and deliberately kept.
+
 
 - **`clip_grad_norm`** - total-norm gradient clipping over a `ParameterGroup`,
   returning the norm before rescaling.
