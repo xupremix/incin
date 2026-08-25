@@ -7,8 +7,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
-incin = { path = "../..", version = "0.1.0" }
-incin-data = { path = "../../../incin-data", version = "0.1.0" }
+incin = { path = "../..", version = "0.1.0-rc.2" }
+incin-data = { path = "../../../incin-data", version = "0.1.0-rc.2" }
 rayon = "1.12.0"
 
 [lints]

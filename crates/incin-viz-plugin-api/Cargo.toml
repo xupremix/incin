@@ -15,7 +15,7 @@ categories = ["science", "development-tools"]
 documentation = "https://docs.rs/incin-viz-plugin-api"
 
 [dependencies]
-incin-telemetry = { path = "../incin-telemetry", version = "0.1.0" }
+incin-telemetry = { path = "../incin-telemetry", version = "0.1.0-rc.2" }
 thiserror.workspace = true
 ratatui-core = "0.1.2"
 ratatui-widgets = "0.3.2"

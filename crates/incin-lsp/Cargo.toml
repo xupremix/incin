@@ -14,7 +14,7 @@ categories = ["development-tools", "development-tools::debugging"]
 documentation = "https://docs.rs/incin-lsp"
 
 [dependencies]
-incin-diagnostics = { path = "../incin-diagnostics", version = "0.1.0" }
+incin-diagnostics = { path = "../incin-diagnostics", version = "0.1.0-rc.2" }
 serde_json = "1.0.120"
 
 [[bin]]
