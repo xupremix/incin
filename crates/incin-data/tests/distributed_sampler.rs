@@ -148,7 +148,11 @@ fn all_ranks_derive_the_same_shared_permutation() {
         .seed(SEED)
         .build()
         .expect("plain builds");
-    assert_eq!(shared, epoch_items(&plain), "ranks disagreed on the permutation");
+    assert_eq!(
+        shared,
+        epoch_items(&plain),
+        "ranks disagreed on the permutation"
+    );
 }
 
 #[test]
@@ -205,18 +209,17 @@ fn worker_backed_path_shards_identically_to_the_sync_path() {
     const LEN: usize = 40;
     const WORLD: usize = 4;
 
-    let sharded =
-        |workers: usize, rank: usize| -> Vec<i64> {
-            let loader = DataLoader::builder(Indices(LEN))
-                .batch_size(5)
-                .shuffle(true)
-                .seed(11)
-                .workers(workers)
-                .sampler(sampler(WORLD, rank, RemainderPolicy::Drop))
-                .build()
-                .expect("valid rank");
-            epoch_items(&loader)
-        };
+    let sharded = |workers: usize, rank: usize| -> Vec<i64> {
+        let loader = DataLoader::builder(Indices(LEN))
+            .batch_size(5)
+            .shuffle(true)
+            .seed(11)
+            .workers(workers)
+            .sampler(sampler(WORLD, rank, RemainderPolicy::Drop))
+            .build()
+            .expect("valid rank");
+        epoch_items(&loader)
+    };
 
     // Same shard regardless of worker count...
     for rank in 0..WORLD {

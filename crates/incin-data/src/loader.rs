@@ -655,7 +655,11 @@ where
                     indices.extend_from_slice(&padding);
                 }
             }
-            indices = indices.into_iter().skip(sampler.rank).step_by(world).collect();
+            indices = indices
+                .into_iter()
+                .skip(sampler.rank)
+                .step_by(world)
+                .collect();
         }
 
         let num_batches = if self.drop_last {

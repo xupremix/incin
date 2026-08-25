@@ -732,7 +732,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-data/src/loader.rs:330",
+    "site": "crates/incin-data/src/loader.rs:406",
     "code": "prefetch: NonZeroUsize::new(2).expect(\"constant is non-zero\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"

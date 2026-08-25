@@ -167,8 +167,9 @@ pub(crate) fn deserialize_snapshot_safetensors_index(
     let mut snapshot = StateSnapshot::new();
     let mut loaded: BTreeSet<String> = BTreeSet::new();
     for shard in index.shards() {
-        let bytes =
-            index.read_shard(shard).map_err(|error| anyhow::anyhow!("{error}"))?;
+        let bytes = index
+            .read_shard(shard)
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
         let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
         let metadata = header.metadata();
         let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
@@ -225,7 +226,8 @@ pub(crate) fn deserialize_snapshot_safetensors_index(
     let entries = std::fs::read_dir(index.root())
         .map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?;
     for entry in entries {
-        let path = entry.map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?
+        let path = entry
+            .map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?
             .path();
         let is_shard_file = path
             .extension()

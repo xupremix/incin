@@ -67,7 +67,10 @@ type IndexShapes = (Vec<PathBuf>, BTreeMap<String, Vec<usize>>);
 
 fn resolve_index_shapes(index_path: &std::path::Path) -> Result<IndexShapes> {
     fn malformed(message: impl std::fmt::Display) -> syn::Error {
-        syn::Error::new(proc_macro2::Span::call_site(), format!("safetensors index: {message}"))
+        syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!("safetensors index: {message}"),
+        )
     }
 
     struct WeightMapVisitor;
@@ -107,15 +110,16 @@ fn resolve_index_shapes(index_path: &std::path::Path) -> Result<IndexShapes> {
         de.deserialize_map(WeightMapVisitor)
     }
 
-    let raw = fs::read_to_string(index_path).map_err(|e| malformed(format!(
-        "reading {:?} failed: {e}",
-        index_path.display()
-    )))?;
-    let parsed: RawIndex = serde_json::from_str(&raw)
-        .map_err(|e| malformed(format!("invalid index JSON: {e}")))?;
+    let raw = fs::read_to_string(index_path)
+        .map_err(|e| malformed(format!("reading {:?} failed: {e}", index_path.display())))?;
+    let parsed: RawIndex =
+        serde_json::from_str(&raw).map_err(|e| malformed(format!("invalid index JSON: {e}")))?;
 
     let root = index_path.parent().ok_or_else(|| {
-        malformed(format!("{:?} has no parent directory", index_path.display()))
+        malformed(format!(
+            "{:?} has no parent directory",
+            index_path.display()
+        ))
     })?;
 
     let mut shard_set = std::collections::BTreeSet::new();
@@ -147,12 +151,15 @@ fn resolve_index_shapes(index_path: &std::path::Path) -> Result<IndexShapes> {
 
     let mut shapes = BTreeMap::new();
     for shard_path in &shard_paths {
-        let buffer =
-            fs::read(shard_path).map_err(|e| malformed(format!("reading {shard_path:?} failed: {e}")))?;
+        let buffer = fs::read(shard_path)
+            .map_err(|e| malformed(format!("reading {shard_path:?} failed: {e}")))?;
         let st = SafeTensors::deserialize(&buffer)
             .map_err(|e| malformed(format!("parsing {shard_path:?} failed: {e:?}")))?;
         for (tname, tensor) in st.tensors() {
-            if shapes.insert(tname.clone(), tensor.shape().to_vec()).is_some() {
+            if shapes
+                .insert(tname.clone(), tensor.shape().to_vec())
+                .is_some()
+            {
                 return Err(malformed(format!(
                     "tensor `{tname}` appears in more than one shard"
                 )));
@@ -164,7 +171,10 @@ fn resolve_index_shapes(index_path: &std::path::Path) -> Result<IndexShapes> {
 
 /// Newest modification time across the index and its shards, used for
 /// metadata-cache validity so a re-sharded checkpoint invalidates the cache.
-fn newest_input_mtime(index_path: &std::path::Path, shard_paths: &[PathBuf]) -> Option<std::time::SystemTime> {
+fn newest_input_mtime(
+    index_path: &std::path::Path,
+    shard_paths: &[PathBuf],
+) -> Option<std::time::SystemTime> {
     let mut newest = fs::metadata(index_path).ok()?.modified().ok()?;
     for path in shard_paths {
         if let Ok(time) = fs::metadata(path).ok()?.modified()
@@ -317,7 +327,9 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     let mut root = Node::Dir(BTreeMap::new());
 
     let newest_input = if shard_paths.is_empty() {
-        fs::metadata(&full_path).ok().and_then(|m| m.modified().ok())
+        fs::metadata(&full_path)
+            .ok()
+            .and_then(|m| m.modified().ok())
     } else {
         newest_input_mtime(&full_path, &shard_paths)
     };
@@ -358,9 +370,7 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
                     let parts: Vec<&str> = tname.split('.').collect();
                     root.insert(&parts, shape.clone());
                     if meta_map.insert(tname.clone(), shape).is_some() {
-                        return Err(format!(
-                            "tensor `{tname}` appears in more than one shard"
-                        ));
+                        return Err(format!("tensor `{tname}` appears in more than one shard"));
                     }
                 }
                 Ok(())
@@ -371,13 +381,11 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
                 .map_err(|e| format!("Failed to read safetensors file {:?}: {}", full_path, e))
                 .and_then(|buffer| record_shard(&buffer, &full_path))
         } else {
-            shard_paths
-                .iter()
-                .try_for_each(|shard_path| {
-                    fs::read(shard_path)
-                        .map_err(|e| format!("Failed to read shard {shard_path:?}: {e}"))
-                        .and_then(|buffer| record_shard(&buffer, shard_path))
-                })
+            shard_paths.iter().try_for_each(|shard_path| {
+                fs::read(shard_path)
+                    .map_err(|e| format!("Failed to read shard {shard_path:?}: {e}"))
+                    .and_then(|buffer| record_shard(&buffer, shard_path))
+            })
         };
 
         if let Err(message) = outcome {
@@ -445,7 +453,8 @@ mod tests {
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("incin-macro-index-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("incin-macro-index-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
