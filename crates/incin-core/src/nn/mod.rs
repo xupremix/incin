@@ -90,6 +90,9 @@ pub mod rnn;
 #[cfg(feature = "std")]
 /// `save`.
 pub mod save;
+/// Sharded Safetensors checkpoint indexes (`model.safetensors.index.json`).
+#[cfg(feature = "std")]
+pub mod safetensors_index;
 /// Backend-neutral model state artifacts.
 pub mod state;
 /// `stats`.
@@ -131,6 +134,8 @@ pub use save::{
     load_safetensors, load_safetensors_snapshot, save_checkpoint, save_checkpoint_manifest,
     save_safetensors, slice_bytes_for_rank,
 };
+#[cfg(feature = "std")]
+pub use safetensors_index::SafetensorsIndex;
 pub use state::{
     StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue,
     StateVisitor, VisitState, VisitStateMut, collect_state, load_state,

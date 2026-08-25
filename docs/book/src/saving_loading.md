@@ -77,6 +77,33 @@ reads those, and it does not look for the key.
 Sharded checkpoints carry their own, separate `CHECKPOINT_MANIFEST_VERSION`
 in the manifest, since topology and payload can change independently.
 
+## Sharded checkpoints (model hub layout)
+
+Standard model-hub checkpoints split weights across files with one
+`model.safetensors.index.json`. Point the loader at the index and it reads
+the whole set as a single state dictionary:
+
+```rust,ignore
+// runtime: index in, one logical dictionary out
+let snapshot = load_safetensors_snapshot("checkpoints/model.safetensors.index.json")?;
+
+// compile time: import_model! accepts the same index path
+import_model!("checkpoints/model.safetensors.index.json", ImportedModel);
+```
+
+The reader validates the index before touching shard contents: duplicate
+entries for the same tensor are rejected instead of silently keeping the last
+one; shard references must be bare file names beside the index, so a crafted
+index cannot read outside the checkpoint directory; every referenced shard
+must exist at open time; and a declared `total_size` must match what is on
+disk. During loading, three mismatches are errors naming the tensor and both
+files: a shard containing a tensor the index does not map, a mapped tensor
+appearing in more than one shard, and an index claim its shard does not
+contain. Tensor names iterate deterministically regardless of shard or JSON
+key order.
+
+Single-file `.safetensors` behavior is unchanged.
+
 ## ONNX
 
 `incin::experimental::model!("model.onnx", Name)` and `import_model!` expand
