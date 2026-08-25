@@ -420,3 +420,196 @@ fn argmax_argmin_do_not_push_tape_entries() {
         .expect("unrelated should have gradient");
     assert_eq!(f32_vec(g), vec![1.0, 1.0, 1.0]);
 }
+
+// --- cumsum ---
+
+#[test]
+/// `cumsum_scans_along_the_named_axis`.
+fn cumsum_scans_along_the_named_axis() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+    let out = crate::cpu::ops::reduce::cumsum(&t, 1).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    // Row 0: [1, 1+2, 1+2+3] = [1, 3, 6]; row 1: [4, 9, 15].
+    assert_eq!(f32_vec(&out), vec![1.0, 3.0, 6.0, 4.0, 9.0, 15.0]);
+}
+
+#[test]
+/// `cumsum_backward_receives_the_suffix_sum_of_the_incoming_gradient`.
+fn cumsum_backward_receives_the_suffix_sum_of_the_incoming_gradient() {
+    // The scan's Jacobian is lower-triangular ones, so the cotangent is its
+    // transpose: grad_in[d] = sum_{k >= d} grad_out[k]. Seeding with ones
+    // gives position d the count of elements at or after it.
+    let t = vector(vec![1.0, 2.0, 3.0, 4.0]);
+    let scanned = crate::cpu::ops::reduce::cumsum(&t, 0).unwrap();
+    let loss = crate::cpu::ops::reduce::sum_all(&scanned).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(g.shape, vec![4]);
+    assert_eq!(f32_vec(g), vec![4.0, 3.0, 2.0, 1.0]);
+}
+
+#[test]
+/// `cumsum_gradcheck_matches_finite_differences_on_both_axes`.
+fn cumsum_gradcheck_matches_finite_differences_on_both_axes() {
+    let x = matrix(vec![0.5, -1.0, 2.0, 1.5, -0.5, 0.25], 2, 3);
+    let operands = [x];
+    for dim in [0usize, 1] {
+        let op = |inputs: &[CpuStorage]| -> CpuStorage {
+            let scanned = crate::cpu::ops::reduce::cumsum(&inputs[0], dim).unwrap();
+            crate::cpu::ops::reduce::sum_all(&scanned).unwrap()
+        };
+        let max_rel_err = gradcheck(op, &operands, F32_STEP);
+        assert!(
+            max_rel_err < GRAD_TOL,
+            "cumsum(dim={dim}) gradcheck too high: {max_rel_err}"
+        );
+    }
+}
+
+#[test]
+/// `cumsum_rejects_an_out_of_range_axis_instead_of_panicking`.
+fn cumsum_rejects_an_out_of_range_axis_instead_of_panicking() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let err = crate::cpu::ops::reduce::cumsum(&t, 2).unwrap_err();
+    assert!(
+        matches!(err, Error::ShapeMismatch { op: "cumsum", .. }),
+        "expected a ShapeMismatch naming cumsum, got: {err:?}"
+    );
+}
+
+// --- reductions over non-contiguous operands ---
+
+/// A transposed operand reads through swapped strides; every reduction
+/// backward must still land a correctly-shaped, correctly-valued cotangent on
+/// that operand. The finite-difference harness perturbs through the
+/// operand's own strides, so any stride-handling defect in the analytic path
+/// shows up as a gradcheck divergence.
+#[test]
+fn gradchecks_hold_for_non_contiguous_operands() {
+    // The same backing buffer viewed as its own [3, 2] transpose: shape
+    // [2, 3] with strides [1, 2].
+    let base = matrix(vec![0.5, -1.0, 2.0, 1.5, -0.5, 4.0], 3, 2);
+    let x = CpuStorage::try_from_parts(base.buffer.clone(), vec![2usize, 3], vec![1usize, 2], 0)
+        .unwrap();
+    assert!(!crate::cpu::stride::is_contiguous(&x.shape, &x.strides));
+    let operands = [x];
+
+    let op_sum = |inputs: &[CpuStorage]| -> CpuStorage {
+        crate::cpu::ops::reduce::sum_all(&inputs[0]).unwrap()
+    };
+    let err = gradcheck(op_sum, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "non-contiguous sum_all gradcheck: {err}");
+
+    // max along the trailing axis of the strided view; values are distinct,
+    // so the scatter backward stays inside max's differentiable region.
+    let op_max = |inputs: &[CpuStorage]| -> CpuStorage {
+        let reduced = crate::cpu::ops::reduce::max_keepdim(&inputs[0], 1).unwrap();
+        crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
+    };
+    let err = gradcheck(op_max, &operands, F32_STEP);
+    assert!(
+        err < GRAD_TOL,
+        "non-contiguous max_keepdim gradcheck: {err}"
+    );
+}
+
+#[test]
+fn backward_through_a_transposed_operand_matches_the_view_shape() {
+    // Forward through a strided view, then backward: the cotangent must be
+    // shaped like the VIEW the op actually saw, and reading it back through
+    // the original strides must equal the analytic answer.
+    let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+    let viewed = x.transpose(0, 1).unwrap();
+    assert!(!crate::cpu::stride::is_contiguous(
+        &viewed.shape,
+        &viewed.strides
+    ));
+    let out = crate::cpu::ops::reduce::sum_dim(&viewed, 1).unwrap();
+    assert_eq!(out.shape, vec![2]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(viewed.id).expect("input should have gradient");
+    assert_eq!(g.shape, vec![2, 3]);
+    // ones seed broadcast back over the viewed shape.
+    assert_eq!(f32_vec(g), vec![1.0; 6]);
+}
+
+// --- prod backward (the catalog declares Reduction gradients Defined) ---
+
+#[test]
+/// `prod_all_backward_divides_by_each_operand_element`.
+fn prod_all_backward_divides_by_each_operand_element() {
+    // y = prod(x) = 24; d(y)/d(x_i) = y / x_i. With seed 1 the gradient is
+    // [24/2, 24/4, ...] i.e. the product of every element except x_i.
+    let t = vector(vec![2.0, 4.0, 3.0]);
+    let out = crate::cpu::ops::reduce::prod_all(&t).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(g.shape, vec![3]);
+    // excluding 2 -> 12; excluding 4 -> 6; excluding 3 -> 8.
+    assert_eq!(f32_vec(g), vec![12.0, 6.0, 8.0]);
+}
+
+#[test]
+/// `prod_all_with_a_single_zero_routes_the_whole_gradient_through_it`.
+fn prod_all_with_a_single_zero_routes_the_whole_gradient_through_it() {
+    // One zero: only the zero's position has a non-zero derivative, equal to
+    // the product of the remaining (non-zero) elements.
+    let t = vector(vec![2.0, 0.0, 5.0]);
+    let out = crate::cpu::ops::reduce::prod_all(&t).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![0.0, 10.0, 0.0]);
+}
+
+#[test]
+/// `prod_all_with_multiple_zeros_has_an_all_zero_gradient`.
+fn prod_all_with_multiple_zeros_has_an_all_zero_gradient() {
+    let t = vector(vec![2.0, 0.0, 5.0, 0.0]);
+    let out = crate::cpu::ops::reduce::prod_all(&t).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![0.0; 4]);
+}
+
+#[test]
+/// `prod_all_gradcheck_matches_finite_differences`.
+fn prod_all_gradcheck_matches_finite_differences() {
+    // The product is multilinear in its operands, so the central difference
+    // is exact here even across the zero.
+    let x = vector(vec![1.5, -2.0, 0.0, 3.0]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        crate::cpu::ops::reduce::prod_all(&inputs[0]).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "prod_all gradcheck too high: {max_rel_err}"
+    );
+}
+
+#[test]
+/// `prod_dim_backward_scales_each_axis_slice_independently`.
+fn prod_dim_backward_scales_each_axis_slice_independently() {
+    // Per output slice along dim 1: grad_i = prod(slice) / slice[i].
+    let t = matrix(vec![1.0, 2.0, 3.0, 2.0, 1.0, 5.0], 2, 3);
+    let out = crate::cpu::ops::reduce::prod_dim(&t, 1).unwrap(); // [6, 10]
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Row 0: 6/[1,2,3] = [6,3,2]; row 1: 10/[2,1,5] = [5,10,2].
+    assert_eq!(f32_vec(g), vec![6.0, 3.0, 2.0, 5.0, 10.0, 2.0]);
+}
+
+#[test]
+/// `prod_dim_gradcheck_matches_finite_differences`.
+fn prod_dim_gradcheck_matches_finite_differences() {
+    let x = matrix(vec![0.5, -1.0, 2.0, 1.5, -0.5, 4.0], 2, 3);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let reduced = crate::cpu::ops::reduce::prod_dim(&inputs[0], 1).unwrap();
+        crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "prod_dim gradcheck too high: {max_rel_err}"
+    );
+}

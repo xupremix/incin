@@ -17,6 +17,10 @@ type ClusterPipe = placement![PipelineStage(1) on ClusterMesh];
 type Embed<B> = Linear<s![512, 1024], B>;
 type Proj<B> = Linear<s![1024, 2048], B>;
 
+/// A two-layer model whose fields carry a pipeline-stage placement and a shard
+/// placement, so `#[module]` has to thread both through one generated
+/// implementation. Public because the `#[module]` expansion is checked here as
+/// a downstream consumer would see it.
 #[module]
 #[allow(dead_code)]
 pub struct DistributedTransformer<

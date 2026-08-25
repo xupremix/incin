@@ -1,5 +1,9 @@
 # Reviewed public API baselines
 
+[API_TIERS.md](API_TIERS.md) classifies every module in these baselines as
+stable user API, expert/backend-authoring API, intentional macro ABI, or
+preview, and records the visibility decisions made for the 0.1.0 freeze.
+
 Every shipped crate's public API is snapshotted with `cargo-public-api`
 (`-sss`: blanket, auto-trait, and auto-derived implementations omitted)
 and reviewed as a checked-in baseline under this directory:

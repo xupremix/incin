@@ -489,32 +489,72 @@ impl<D: Device> Execute<op::Softmax> for CpuBackendImpl<D> {
     }
 }
 
-macro_rules! numeric_binary_tensor_executors {
-    ($(($operation:ident, $func:expr)),* $(,)?) => {$(
-        impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
-            type Output = CpuStorage;
+// Maximum/Minimum/AbsDiff declare BinaryBroadcast gradients `Defined`, so
+// each composes from tape-tracked primitives instead of the raw kernel: the
+// selection mask is a constant, and where_storage's own backward routes and
+// unbroadcasts both cotangents.
+impl<D: Device> Execute<op::Maximum> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
 
-            fn execute(
-                &self,
-                request: ExecutionRequest<'_, op::$operation, Self>,
-            ) -> Result<CpuStorage, BackendError> {
-                let operation = OperationKind::$operation;
-                let (lhs, rhs) = binary_operands(self, request.inputs, operation, training_mode(request.context))?;
-                let out_shape = resolved_output_shape(request.operation)
-                    .map(|s| s.to_vec())
-                    .unwrap_or_else(|| crate::cpu::stride::broadcast_shape(&lhs.shape, &rhs.shape).unwrap_or_default());
-                crate::cpu::ops::elementwise::elementwise_binary(lhs, rhs, &out_shape, $func)
-                    .map_err(|error| kernel_error(CPU_NAME, operation, error))
-            }
-        }
-    )*};
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Maximum, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Maximum;
+        let (lhs, rhs) = binary_operands(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let mask = crate::cpu::ops::shape_ops::elementwise_cmp(lhs, rhs, |a, b| a > b)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        crate::cpu::ops::shape_ops::where_storage(&mask, lhs, rhs)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
 }
 
-numeric_binary_tensor_executors![
-    (Maximum, |a, b| a.max(b)),
-    (Minimum, |a, b| a.min(b)),
-    (AbsDiff, |a, b| (a - b).abs()),
-];
+impl<D: Device> Execute<op::Minimum> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Minimum, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Minimum;
+        let (lhs, rhs) = binary_operands(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let mask = crate::cpu::ops::shape_ops::elementwise_cmp(lhs, rhs, |a, b| a < b)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        crate::cpu::ops::shape_ops::where_storage(&mask, lhs, rhs)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::AbsDiff> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::AbsDiff, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::AbsDiff;
+        let (lhs, rhs) = binary_operands(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let diff = crate::cpu::ops::elementwise::sub_storage(lhs, rhs)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        crate::cpu::ops::elementwise::canonical_abs(&diff)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
 
 macro_rules! cmp_tensor_executors {
     ($(($operation:ident, $func:expr)),* $(,)?) => {$(

@@ -694,3 +694,284 @@ fn attention_keeps_the_operand_dtype() {
     );
     assert_eq!(out.shape, vec![2, 2]);
 }
+
+// --- pointwise-family backwards (catalog: BinaryBroadcast gradients Defined) ---
+
+#[test]
+/// `sub_scalar_backward_is_the_identity`.
+fn sub_scalar_backward_is_the_identity() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let out = sub_scalar_storage(&t, 5.0).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0; 4]);
+}
+
+#[test]
+/// `div_scalar_backward_scales_by_one_over_the_constant`.
+fn div_scalar_backward_scales_by_one_over_the_constant() {
+    let t = matrix(vec![2.0, 4.0, 6.0, 8.0], 2, 2);
+    let out = div_scalar_storage(&t, 2.0).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // ones seed / 2.
+    assert_eq!(f32_vec(g), vec![0.5; 4]);
+}
+
+#[test]
+/// `maximum_backward_routes_to_the_strictly_greater_operand_with_ties_to_rhs`.
+fn maximum_backward_routes_to_the_strictly_greater_operand_with_ties_to_rhs() {
+    let lhs = matrix(vec![3.0, 1.0, 2.0, 5.0], 2, 2);
+    let rhs = matrix(vec![1.0, 1.0, 4.0, 5.0], 2, 2);
+    let out = crate::cpu::ops::shape_ops::lerp_storage; // keep import shape stable
+    let _ = out;
+    let max_out = {
+        let mask = crate::cpu::ops::shape_ops::elementwise_cmp(&lhs, &rhs, |a, b| a > b).unwrap();
+        where_storage(&mask, &lhs, &rhs).unwrap()
+    };
+    assert_eq!(f32_vec(&max_out), vec![3.0, 1.0, 4.0, 5.0]);
+    let grads = tape::backward(&max_out).unwrap();
+    // lhs receives only where it is strictly greater; the tie at [1,1]
+    // routes to rhs, matching maximum's piecewise convention.
+    assert_eq!(
+        f32_vec(grads.get(lhs.id).unwrap()),
+        vec![1.0, 0.0, 0.0, 0.0]
+    );
+    assert_eq!(
+        f32_vec(grads.get(rhs.id).unwrap()),
+        vec![0.0, 1.0, 1.0, 1.0]
+    );
+}
+
+#[test]
+/// `minimum_backward_mirrors_maximum`.
+fn minimum_backward_mirrors_maximum() {
+    let lhs = matrix(vec![1.0, 3.0, 2.0, 5.0], 2, 2);
+    let rhs = matrix(vec![3.0, 3.0, 1.0, 5.0], 2, 2);
+    let min_out = {
+        let mask = crate::cpu::ops::shape_ops::elementwise_cmp(&lhs, &rhs, |a, b| a < b).unwrap();
+        where_storage(&mask, &lhs, &rhs).unwrap()
+    };
+    assert_eq!(f32_vec(&min_out), vec![1.0, 3.0, 1.0, 5.0]);
+    let grads = tape::backward(&min_out).unwrap();
+    // Strictly-less positions go to lhs; the tie and the rhs-wins position
+    // route to rhs.
+    assert_eq!(
+        f32_vec(grads.get(lhs.id).unwrap()),
+        vec![1.0, 0.0, 0.0, 0.0]
+    );
+    assert_eq!(
+        f32_vec(grads.get(rhs.id).unwrap()),
+        vec![0.0, 1.0, 1.0, 1.0]
+    );
+}
+
+#[test]
+/// `abs_diff_gradcheck_matches_finite_differences`.
+fn abs_diff_gradcheck_matches_finite_differences() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    let lhs = matrix(vec![0.5, -1.0, 2.0, 1.5], 2, 2);
+    let rhs = matrix(vec![1.0, -0.25, -0.5, 3.0], 2, 2);
+    let operands = [lhs, rhs];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let diff = crate::cpu::ops::elementwise::sub_storage(&inputs[0], &inputs[1]).unwrap();
+        crate::cpu::ops::reduce::sum_all(
+            &crate::cpu::ops::elementwise::canonical_abs(&diff).unwrap(),
+        )
+        .unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "abs_diff gradcheck too high: {err}");
+}
+
+#[test]
+/// `lerp_gradcheck_matches_finite_differences_for_both_operands`.
+fn lerp_gradcheck_matches_finite_differences_for_both_operands() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    let start = matrix(vec![0.5, -1.0, 2.0, 1.5], 2, 2);
+    let end = matrix(vec![1.0, -0.25, -0.5, 3.0], 2, 2);
+    let operands = [start, end];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = lerp_storage(&inputs[0], &inputs[1], 0.3).unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "lerp gradcheck too high: {err}");
+}
+
+// --- selection/indexing backwards (catalog promises these gradients) ---
+
+#[test]
+/// `masked_fill_backward_passes_through_only_unmasked_positions`.
+fn masked_fill_backward_passes_through_only_unmasked_positions() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0, 1, 0]), vec![4]);
+    let out = masked_fill_storage(&t, &mask, 9.0).unwrap();
+    assert_eq!(f32_vec(&out), vec![9.0, 2.0, 9.0, 4.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![0.0, 1.0, 0.0, 1.0]);
+}
+
+#[test]
+/// `index_select_backward_accumulates_repeated_selections`.
+fn index_select_backward_accumulates_repeated_selections() {
+    // Rows of the input selected by index [2, 0, 2]: row 2 is chosen twice,
+    // so its cotangent accumulates both contributions.
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+    let index = CpuStorage::from_contiguous(CpuBuffer::I64(vec![2, 0, 2]), vec![3]);
+    let out = index_select_storage(&t, 0, &index).unwrap();
+    assert_eq!(f32_vec(&out), vec![5.0, 6.0, 1.0, 2.0, 5.0, 6.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 1.0, 0.0, 0.0, 2.0, 2.0]);
+}
+
+#[test]
+/// `scatter_backward_zeroes_overwritten_positions_and_routes_to_source`.
+fn scatter_backward_zeroes_overwritten_positions_and_routes_to_source() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let index = CpuStorage::from_contiguous(CpuBuffer::I64(vec![1, 0]), vec![2, 1]);
+    let source = matrix(vec![10.0, 20.0], 2, 1);
+    let out = scatter_storage(&t, 0, &index, &source).unwrap();
+    assert_eq!(f32_vec(&out), vec![20.0, 2.0, 10.0, 4.0]);
+    let grads = tape::backward(&out).unwrap();
+    // Overwritten positions ([0,0] and [1,0]) receive nothing on the input
+    // path; their cotangents land on the source instead.
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![0.0, 1.0, 0.0, 1.0]);
+    assert_eq!(f32_vec(grads.get(source.id).unwrap()), vec![1.0, 1.0]);
+}
+
+#[test]
+/// `scatter_backward_accumulates_duplicate_writes_on_the_source_path`.
+fn scatter_backward_accumulates_duplicate_writes_on_the_source_path() {
+    let t = matrix(vec![1.0, 2.0], 1, 2);
+    let index = CpuStorage::from_contiguous(CpuBuffer::I64(vec![0, 0]), vec![2, 1]);
+    let source = matrix(vec![7.0, 8.0], 2, 1);
+    let out = scatter_storage(&t, 0, &index, &source).unwrap();
+    // Last write wins in the forward.
+    assert_eq!(f32_vec(&out), vec![8.0, 2.0]);
+    let grads = tape::backward(&out).unwrap();
+    // Last-write-wins: only the surviving write routes a cotangent to the
+    // source; the overwritten first write contributed nothing.
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![0.0, 1.0]);
+    assert_eq!(f32_vec(grads.get(source.id).unwrap()), vec![0.0, 1.0]);
+}
+
+// --- shape-family backwards (catalog: Shape gradients Defined) ---
+
+#[test]
+/// `repeat_backward_sums_tiles_onto_the_source`.
+fn repeat_backward_sums_tiles_onto_the_source() {
+    let t = matrix(vec![1.0, 2.0], 1, 2);
+    let out = repeat_storage(&t, &[2, 2]).unwrap();
+    assert_eq!(out.shape, vec![2, 4]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Each source element is repeated 4x, so ones seed sums to 4 per element.
+    assert_eq!(f32_vec(g), vec![4.0, 4.0]);
+}
+
+#[test]
+/// `pad_backward_shifts_the_cotangent_by_the_padding_offsets`.
+fn pad_backward_shifts_the_cotangent_by_the_padding_offsets() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0]), vec![2]);
+    let out = pad_storage(&t, &[(1, 1)], 9.0).unwrap();
+    assert_eq!(f32_vec(&out), vec![9.0, 1.0, 2.0, 9.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 1.0]);
+}
+
+#[test]
+/// `unfold_backward_accumulates_through_overlapping_windows`.
+fn unfold_backward_accumulates_through_overlapping_windows() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
+    // Windows of size 2 with step 1 over [1,2,3,4] -> [[1,2],[2,3],[3,4]].
+    let out = unfold_storage(&t, 0, 2, 1).unwrap();
+    assert_eq!(out.shape, vec![3, 2]);
+    assert_eq!(f32_vec(&out), vec![1.0, 2.0, 2.0, 3.0, 3.0, 4.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Interior elements belong to two windows.
+    assert_eq!(f32_vec(g), vec![1.0, 2.0, 2.0, 1.0]);
+}
+
+#[test]
+/// `pixel_shuffle_backward_inverts_the_permutation`.
+fn pixel_shuffle_backward_inverts_the_permutation() {
+    // 1x4 channels of a 1x1 image shuffled to 1 channel of a 2x2 image:
+    // every output element maps to exactly one input element either way.
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![1, 4, 1, 1]);
+    let out = pixel_shuffle_storage(&t, 2).unwrap();
+    assert_eq!(out.shape, vec![1, 1, 2, 2]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // The permutation is bijective here, so ones seed stays ones.
+    assert_eq!(f32_vec(g), vec![1.0; 4]);
+}
+
+#[test]
+/// `triu_tril_backward_apply_the_same_mask`.
+fn triu_tril_backward_apply_the_same_mask() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let upper = triu_storage(&t, 0).unwrap();
+    assert_eq!(f32_vec(&upper), vec![1.0, 2.0, 0.0, 4.0]);
+    let grads = tape::backward(&upper).unwrap();
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![1.0, 1.0, 0.0, 1.0]);
+
+    let lower = tril_storage(&t, 0).unwrap();
+    assert_eq!(f32_vec(&lower), vec![1.0, 0.0, 3.0, 4.0]);
+    let grads = tape::backward(&lower).unwrap();
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![1.0, 0.0, 1.0, 1.0]);
+}
+
+#[test]
+/// `diag_vector_to_matrix_backward_reads_the_diagonal_of_the_cotangent`.
+fn diag_vector_to_matrix_backward_reads_the_diagonal_of_the_cotangent() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0]), vec![2]);
+    let out = diag_storage(&t, 0).unwrap();
+    assert_eq!(f32_vec(&out), vec![1.0, 0.0, 0.0, 2.0]);
+    // Seed the matrix cotangent by summing it; the diagonal entries carry it.
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 1.0]);
+}
+
+#[test]
+/// `diag_matrix_to_vector_backward_scatters_onto_the_diagonal`.
+fn diag_matrix_to_vector_backward_scatters_onto_the_diagonal() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let out = diag_storage(&t, 0).unwrap();
+    assert_eq!(out.shape, vec![2]);
+    assert_eq!(f32_vec(&out), vec![1.0, 4.0]);
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 0.0, 0.0, 1.0]);
+}
+
+#[test]
+/// `group_norm_gradcheck_proves_the_statistical_path_is_recorded`.
+fn group_norm_gradcheck_proves_the_statistical_path_is_recorded() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    // Normalizing by batch statistics means the cotangent must flow through
+    // the mean and variance back into every element. A tape-silent
+    // statistic shows up here as a finite-difference divergence, which is
+    // exactly how training-mode batch norm's defect was found.
+    let t = CpuStorage::from_contiguous(
+        CpuBuffer::F32(vec![
+            0.5, 1.0, -0.5, 0.2, 1.5, -1.0, 0.3, -0.3, //
+            0.8, -0.8, 1.2, -1.2, 0.1, 0.9, -0.1, 0.4,
+        ]),
+        vec![2, 2, 2, 2],
+    );
+    let operands = [t];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = group_norm_storage(&inputs[0], 2, 1e-5).unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "group_norm gradcheck too high: {err}");
+}

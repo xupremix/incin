@@ -154,5 +154,22 @@ pub(crate) fn min_all(t: &CpuStorage) -> Result<CpuStorage> {
 pub(crate) fn prod_all(t: &CpuStorage) -> Result<CpuStorage> {
     let prod = fold_all_f64(t, 1.0f64, |product, _, value| product * value);
     let buffer = t.buffer.from_f64_values(vec![prod])?;
-    Ok(CpuStorage::from_contiguous(buffer, vec![]))
+    let out = CpuStorage::from_contiguous(buffer, vec![]);
+
+    // The catalog declares Reduction gradients `Defined`, and this row is
+    // advertised with training = true, so the reduction records its backward:
+    // a silent product would promise a gradient that never arrives.
+    let original_shape = t.shape.to_vec();
+    let t_clone = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
+            Ok(vec![prod_all_grad(&t_clone, &original_shape, scalar_grad)?])
+        }),
+    });
+
+    Ok(out)
 }

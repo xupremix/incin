@@ -51,6 +51,13 @@ if grep -rnE --include='*.rs' 'incin_core::tensor::backend' crates/incin-backend
     exit 1
 fi
 
+# Kernel iteration plumbing takes runtime dimensions and sits below the
+# descriptor contract, so it is not part of the backend-authoring surface.
+if ! grep -qE '^pub\(crate\) mod iteration;' crates/incin-backends/src/lib.rs; then
+    echo "public API check failed: kernel iteration plumbing is public" >&2
+    exit 1
+fi
+
 # Keep implementation-level shape, storage, graph, and state-staging names out
 # of the ordinary facade prelude.  They remain available through named expert
 # modules or macro support where appropriate.

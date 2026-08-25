@@ -34,6 +34,14 @@ major/minor values.
 
 ### Removed
 
+- **`incin_backends::iteration` from the public surface.** The module exposed a
+  single item, `tile_2d`, a 2D loop-tiling helper that takes runtime
+  dimensions and sits below the descriptor contract. It is now `pub(crate)`,
+  matching the "Internal Modules" rule in `docs/API_DESIGN.md`. No call site
+  changed: internal kernels already used the `crate::iteration::` path, and the
+  helper was never referenced from user documentation. Its test coverage moved
+  into the module rather than being dropped.
+
 - **`protoc` as a build dependency.** `incin-core`'s build script ran
   `prost-build` unconditionally, making a system protobuf compiler mandatory
   for every crate that depended on the facade. The generated ONNX module is
@@ -61,6 +69,13 @@ major/minor values.
   old method panicked.
 
 ### Added
+
+- **A published API tier classification.** `docs/public-api/API_TIERS.md`
+  assigns every module in every shipped crate to one of four tiers: stable user
+  API, expert/backend-authoring API, intentional macro ABI, or preview. It
+  states what a 0.1.0 consumer may rely on, and records which surfaces were
+  reviewed as privatization candidates and deliberately kept.
+
 
 - **`clip_grad_norm`** - total-norm gradient clipping over a `ParameterGroup`,
   returning the norm before rescaling.
@@ -244,6 +259,23 @@ major/minor values.
   checks, the permanent regression class this file exists to catch.
 
 ### Changed
+
+- **`maximum` and `minimum` now propagate NaN.** They were implemented on
+  Rust's `f32::max` and `f32::min`, which return the non-NaN operand and so
+  swallowed NaN entirely. The operation profile's `IeeePropagate` rule requires
+  a NaN operand to produce NaN, which is also what other array frameworks do,
+  so a comparison against one of them will now agree where it previously
+  diverged. Code that relied on the old NaN-swallowing behaviour to clean data
+  must filter explicitly.
+
+- **`scatter` defines its gradient as last-write-wins.** When two indices write
+  the same output position, only the surviving write receives a cotangent and
+  the overwritten one receives nothing.
+
+- **Group and instance norm use the two-pass deviation form** for their
+  statistics, which is more numerically stable and removed the need for a
+  clamp.
+
 
 - **Loss constructors no longer need a reduction turbofish.** `MSELoss`,
   `CrossEntropyLoss`, `L1Loss`, and `BCEWithLogitsLoss` each declare
@@ -439,6 +471,30 @@ major/minor values.
   `incin_core::exec::TensorId`; three independent identity counters became one.
 
 ### Fixed
+
+- **Operations that advertised a gradient but recorded none.** The operation
+  catalog publishes a `GradientRule` per operation and the capability
+  registrations publish a per-operation training flag. Twenty-two operations
+  across six families carried a `Defined` or `Piecewise` rule with training
+  set while their CPU kernels were forward-only walks that pushed no autograd
+  tape entry, so a backward pass through any of them stopped silently: the
+  input was treated as a leaf and optimizers saw no gradient. This affected the
+  scalar and pointwise binary family, the selection and indexing family
+  (`masked_fill`, `index_select`, `scatter`), the Shape family, `cumsum`,
+  `prod_all` and `prod_dim`, group and instance norm, training-mode batch norm,
+  and the unary float operations including `powf` and `clamp`. All of them now
+  record backwards, and `docs/capabilities.md` is truthful for those rows as a
+  result. Covered by exact-value backward tests and finite-difference
+  gradchecks, including through non-contiguous operands.
+
+- **`lerp` rejected broadcast operands** it should have accepted.
+
+- **The CUDA and Metal arms of the addition benchmark had never compiled.**
+  Both called `.unwrap()` on `&input + &input`, which returns a tensor rather
+  than a result. They are lint-clean under `--all-features` now, along with
+  four `unsafe` blocks in the `incin-data` hub tests that carried no `SAFETY:`
+  comment.
+
 
 - **Every gradcheck uses an f32-appropriate finite-difference step, and
   catches gradient errors 25x smaller.** All 50 gradcheck call sites in

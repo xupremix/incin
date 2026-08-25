@@ -116,15 +116,18 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        // SAFETY-equivalent: std::env::set_var is unsafe in this edition
-        // because it is process-global and races with other threads reading
-        // the environment; this test owns the variable for its duration and
-        // restores it, and #[test] harness invocations of this specific test
-        // do not run this env var concurrently with another reader of it.
+        // SAFETY: `set_var` is unsafe in this edition because the environment
+        // is process-global and mutating it races with any other thread
+        // reading it. This test is the only one that touches
+        // `INCIN_HUB_CACHE_DIR` outside the `#[ignore]`d live test below, and
+        // that one cannot run concurrently with this one under a default
+        // `cargo test` invocation, so no other reader observes the mutation.
         unsafe {
             std::env::set_var("INCIN_HUB_CACHE_DIR", &tmp);
         }
         let api = HubApi::new();
+        // SAFETY: same argument as the `set_var` above; this restores the
+        // variable the test claimed, still with no concurrent reader.
         unsafe {
             std::env::remove_var("INCIN_HUB_CACHE_DIR");
         }
@@ -168,6 +171,11 @@ mod tests {
     #[ignore = "requires network access to huggingface.co"]
     fn hub_client_works_end_to_end_against_the_real_hub() {
         let tmp = std::env::temp_dir().join(format!("incin-hub-live-test-{}", std::process::id()));
+        // SAFETY: `set_var` is unsafe because the environment is
+        // process-global. This test is deliberately one test rather than
+        // several precisely so a single thread owns this variable for the
+        // whole mutation window, as the doc comment above explains; it is
+        // `#[ignore]`d, so it only runs when asked for explicitly.
         unsafe {
             std::env::set_var("INCIN_HUB_CACHE_DIR", &tmp);
         }
@@ -176,6 +184,8 @@ mod tests {
         let second = download("hf-internal-testing/tiny-random-gpt2", "config.json");
         let snapshot = from_pretrained("hf-internal-testing/tiny-random-gpt2", None);
 
+        // SAFETY: same argument as the `set_var` above; the mutation window
+        // this closes was owned by this single thread throughout.
         unsafe {
             std::env::remove_var("INCIN_HUB_CACHE_DIR");
         }
