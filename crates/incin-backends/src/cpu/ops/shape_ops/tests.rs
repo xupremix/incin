@@ -857,3 +857,97 @@ fn scatter_backward_accumulates_duplicate_writes_on_the_source_path() {
     assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![0.0, 1.0]);
     assert_eq!(f32_vec(grads.get(source.id).unwrap()), vec![0.0, 1.0]);
 }
+
+// --- shape-family backwards (catalog: Shape gradients Defined) ---
+
+#[test]
+/// `repeat_backward_sums_tiles_onto_the_source`.
+fn repeat_backward_sums_tiles_onto_the_source() {
+    let t = matrix(vec![1.0, 2.0], 1, 2);
+    let out = repeat_storage(&t, &[2, 2]).unwrap();
+    assert_eq!(out.shape, vec![2, 4]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Each source element is repeated 4x, so ones seed sums to 4 per element.
+    assert_eq!(f32_vec(g), vec![4.0, 4.0]);
+}
+
+#[test]
+/// `pad_backward_shifts_the_cotangent_by_the_padding_offsets`.
+fn pad_backward_shifts_the_cotangent_by_the_padding_offsets() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0]), vec![2]);
+    let out = pad_storage(&t, &[(1, 1)], 9.0).unwrap();
+    assert_eq!(f32_vec(&out), vec![9.0, 1.0, 2.0, 9.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 1.0]);
+}
+
+#[test]
+/// `unfold_backward_accumulates_through_overlapping_windows`.
+fn unfold_backward_accumulates_through_overlapping_windows() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4]);
+    // Windows of size 2 with step 1 over [1,2,3,4] -> [[1,2],[2,3],[3,4]].
+    let out = unfold_storage(&t, 0, 2, 1).unwrap();
+    assert_eq!(out.shape, vec![3, 2]);
+    assert_eq!(f32_vec(&out), vec![1.0, 2.0, 2.0, 3.0, 3.0, 4.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Interior elements belong to two windows.
+    assert_eq!(f32_vec(g), vec![1.0, 2.0, 2.0, 1.0]);
+}
+
+#[test]
+/// `pixel_shuffle_backward_inverts_the_permutation`.
+fn pixel_shuffle_backward_inverts_the_permutation() {
+    // 1x4 channels of a 1x1 image shuffled to 1 channel of a 2x2 image:
+    // every output element maps to exactly one input element either way.
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![1, 4, 1, 1]);
+    let out = pixel_shuffle_storage(&t, 2).unwrap();
+    assert_eq!(out.shape, vec![1, 1, 2, 2]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // The permutation is bijective here, so ones seed stays ones.
+    assert_eq!(f32_vec(g), vec![1.0; 4]);
+}
+
+#[test]
+/// `triu_tril_backward_apply_the_same_mask`.
+fn triu_tril_backward_apply_the_same_mask() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let upper = triu_storage(&t, 0).unwrap();
+    assert_eq!(f32_vec(&upper), vec![1.0, 2.0, 0.0, 4.0]);
+    let grads = tape::backward(&upper).unwrap();
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![1.0, 1.0, 0.0, 1.0]);
+
+    let lower = tril_storage(&t, 0).unwrap();
+    assert_eq!(f32_vec(&lower), vec![1.0, 0.0, 3.0, 4.0]);
+    let grads = tape::backward(&lower).unwrap();
+    assert_eq!(f32_vec(grads.get(t.id).unwrap()), vec![1.0, 0.0, 1.0, 1.0]);
+}
+
+#[test]
+/// `diag_vector_to_matrix_backward_reads_the_diagonal_of_the_cotangent`.
+fn diag_vector_to_matrix_backward_reads_the_diagonal_of_the_cotangent() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0, 2.0]), vec![2]);
+    let out = diag_storage(&t, 0).unwrap();
+    assert_eq!(f32_vec(&out), vec![1.0, 0.0, 0.0, 2.0]);
+    // Seed the matrix cotangent by summing it; the diagonal entries carry it.
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 1.0]);
+}
+
+#[test]
+/// `diag_matrix_to_vector_backward_scatters_onto_the_diagonal`.
+fn diag_matrix_to_vector_backward_scatters_onto_the_diagonal() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let out = diag_storage(&t, 0).unwrap();
+    assert_eq!(out.shape, vec![2]);
+    assert_eq!(f32_vec(&out), vec![1.0, 4.0]);
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0, 0.0, 0.0, 1.0]);
+}

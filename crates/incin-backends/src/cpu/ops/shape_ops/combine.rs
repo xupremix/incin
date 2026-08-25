@@ -179,10 +179,39 @@ pub(crate) fn unfold_storage(
         out.push(t.get(&src_idx));
         crate::cpu::storage::increment_index(&mut idx, &out_shape);
     }
-    Ok(CpuStorage::from_contiguous(
-        t.buffer.from_f64_values(out)?,
-        out_shape,
-    ))
+    let out_storage = CpuStorage::from_contiguous(t.buffer.from_f64_values(out)?, out_shape);
+
+    // Overlapping windows read the same source element, so the cotangent
+    // accumulates through the exact mapping the forward used.
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out_storage.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let mut grads = vec![0.0; crate::cpu::stride::checked_numel(&original_shape)?];
+            let grad_total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let mut grad_idx = vec![0usize; grad_out.shape.len()];
+            for _ in 0..grad_total {
+                let win_idx = grad_idx[dim];
+                let offset_idx = grad_idx[grad_out.shape.len() - 1];
+                let mut src_idx = grad_idx[..original_shape.len()].to_vec();
+                src_idx[dim] = win_idx * step + offset_idx;
+                let flat_src: usize = src_idx
+                    .iter()
+                    .zip(crate::cpu::stride::contiguous_strides(&original_shape).iter())
+                    .map(|(&coordinate, &stride)| coordinate * stride)
+                    .sum();
+                grads[flat_src] += grad_out.get(&grad_idx);
+                crate::cpu::storage::increment_index(&mut grad_idx, &grad_out.shape);
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grads)?,
+                &original_shape,
+            )])
+        }),
+    });
+    Ok(out_storage)
 }
 
 pub(crate) fn pixel_shuffle_storage(t: &CpuStorage, upscale_factor: usize) -> Result<CpuStorage> {
@@ -204,6 +233,9 @@ pub(crate) fn pixel_shuffle_storage(t: &CpuStorage, upscale_factor: usize) -> Re
     let out_w = w * r;
     let out_shape = vec![n, out_c, out_h, out_w];
     let total: usize = crate::cpu::stride::checked_numel(&out_shape)?;
+    // The forward is a pure permutation of elements; record the inverse
+    // permutation so the Shape profile's declared gradient arrives.
+    let mut source_positions: Vec<[usize; 4]> = Vec::with_capacity(total);
     let mut out = Vec::with_capacity(total);
     let mut idx = vec![0usize; 4];
     for _ in 0..total {
@@ -213,13 +245,38 @@ pub(crate) fn pixel_shuffle_storage(t: &CpuStorage, upscale_factor: usize) -> Re
         let r_h = h_out % r;
         let r_w = w_out % r;
         let c_in = c_out * r_sq + r_h * r + r_w;
+        source_positions.push([b, c_in, h_in, w_in]);
         out.push(t.get(&[b, c_in, h_in, w_in]));
         crate::cpu::storage::increment_index(&mut idx, &out_shape);
     }
-    Ok(CpuStorage::from_contiguous(
-        t.buffer.from_f64_values(out)?,
-        out_shape,
-    ))
+    let out_storage = CpuStorage::from_contiguous(t.buffer.from_f64_values(out)?, out_shape);
+
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out_storage.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let mut grads = vec![0.0; crate::cpu::stride::checked_numel(&original_shape)?];
+            let strides = crate::cpu::stride::contiguous_strides(&original_shape);
+            for (flat_out, src) in source_positions.iter().enumerate() {
+                let flat_src: usize = src
+                    .iter()
+                    .zip(strides.iter())
+                    .map(|(&coordinate, &stride)| coordinate * stride)
+                    .sum();
+                grads[flat_src] += grad_out.get(&crate::cpu::ops::elementwise::flat_to_nd(
+                    flat_out,
+                    &grad_out.shape,
+                ));
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grads)?,
+                &original_shape,
+            )])
+        }),
+    });
+    Ok(out_storage)
 }
 
 pub(crate) fn repeat_storage(t: &CpuStorage, repeats: &[usize]) -> Result<CpuStorage> {
@@ -250,7 +307,38 @@ pub(crate) fn repeat_storage(t: &CpuStorage, repeats: &[usize]) -> Result<CpuSto
         }
     }
     let buffer = t.buffer.from_f64_values(out)?;
-    Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
+
+    // Every output position maps back through the same modulo rule, so the
+    // cotangent sums every tile's contribution onto its source element.
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out_storage.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let mut grads = vec![0.0; crate::cpu::stride::checked_numel(&original_shape)?];
+            let strides = crate::cpu::stride::contiguous_strides(&original_shape);
+            let grad_total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let mut grad_idx = vec![0usize; grad_out.shape.len()];
+            for _ in 0..grad_total {
+                let flat_src: usize = grad_idx
+                    .iter()
+                    .enumerate()
+                    .map(|(axis, &value)| (value % original_shape[axis]) * strides[axis])
+                    .sum();
+                grads[flat_src] += grad_out.get(&grad_idx);
+                if !grad_out.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut grad_idx, &grad_out.shape);
+                }
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grads)?,
+                &original_shape,
+            )])
+        }),
+    });
+    Ok(out_storage)
 }
 
 pub(crate) fn pad_storage(
@@ -265,6 +353,7 @@ pub(crate) fn pad_storage(
         .map(|(size, &(before, after))| size + before + after)
         .collect();
     let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let _ = total;
     let mut out = Vec::with_capacity(total);
     let mut idx = vec![0usize; out_shape.len()];
     for _ in 0..total {
@@ -284,5 +373,35 @@ pub(crate) fn pad_storage(
         }
     }
     let buffer = t.buffer.from_f64_values(out)?;
-    Ok(CpuStorage::from_contiguous(buffer, out_shape))
+    let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
+
+    // The fill value is a constant: each input element's cotangent sits at
+    // its own position shifted by the per-axis `before` padding.
+    let original_shape = t.shape.to_vec();
+    let offsets: Vec<usize> = padding.iter().map(|&(before, _)| before).collect();
+    let (t_id, out_id) = (t.id, out_storage.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let grad_total = crate::cpu::stride::checked_numel(&original_shape)?;
+            let mut vals = Vec::with_capacity(grad_total);
+            let mut idx = vec![0usize; original_shape.len()];
+            for _ in 0..grad_total {
+                let mut out_idx = Vec::with_capacity(original_shape.len());
+                for (axis, &coordinate) in idx.iter().enumerate() {
+                    out_idx.push(coordinate + offsets[axis]);
+                }
+                vals.push(grad_out.get(&out_idx));
+                if !original_shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut idx, &original_shape);
+                }
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(vals)?,
+                &original_shape,
+            )])
+        }),
+    });
+    Ok(out_storage)
 }
