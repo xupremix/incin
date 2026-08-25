@@ -67,11 +67,61 @@ pub(crate) fn canonical_mul_scalar(t: &CpuStorage, scalar: f64) -> Result<CpuSto
 }
 
 pub(crate) fn canonical_powf(t: &CpuStorage, exponent: f64) -> Result<CpuStorage> {
-    elementwise_unary_typed(UnaryOp::Powf(exponent), t)
+    let out = elementwise_unary_typed(UnaryOp::Powf(exponent), t)?;
+
+    // d x^p / dx = p * x^(p-1), evaluated at the captured input.
+    let t_cap = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let derivative = elementwise_unary_typed(UnaryOp::Powf(exponent - 1.0), &t_cap)?;
+            let scaled = elementwise_unary_typed(UnaryOp::MulScalar(exponent), &derivative)?;
+            Ok(vec![elementwise_binary_numeric(
+                BinaryOp::Mul,
+                grad_out,
+                &scaled,
+                &grad_out.shape,
+            )?])
+        }),
+    });
+    Ok(out)
 }
 
 pub(crate) fn canonical_clamp(t: &CpuStorage, min: f64, max: f64) -> Result<CpuStorage> {
-    elementwise_unary_typed(UnaryOp::Clamp(min, max), t)
+    let out = elementwise_unary_typed(UnaryOp::Clamp(min, max), t)?;
+
+    // The cotangent passes through the interior and stops at both clamped
+    // regions; on a boundary the subgradient convention is zero, matching
+    // torch.clamp.
+    let t_cap = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let mut vals = Vec::with_capacity(total);
+            let mut idx = vec![0usize; grad_out.shape.len()];
+            for _ in 0..total {
+                let value = t_cap.get(&idx);
+                vals.push(if value < min || value > max {
+                    0.0
+                } else {
+                    grad_out.get(&idx)
+                });
+                if !grad_out.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut idx, &grad_out.shape);
+                }
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(vals)?,
+                &grad_out.shape,
+            )])
+        }),
+    });
+    Ok(out)
 }
 
 pub(crate) fn canonical_exp(t: &CpuStorage) -> Result<CpuStorage> {

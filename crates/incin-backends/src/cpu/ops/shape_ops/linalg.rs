@@ -5,21 +5,13 @@ pub(crate) fn lerp_storage(
     end: &CpuStorage,
     weight: f64,
 ) -> Result<CpuStorage> {
-    let total = crate::cpu::stride::checked_numel(&start.shape)?;
-    let mut out = Vec::with_capacity(total);
-    let mut idx = vec![0usize; start.shape.len()];
-    for _ in 0..total {
-        let start_value = start.get(&idx);
-        let end_value = end.get(&idx);
-        out.push(start_value + weight * (end_value - start_value));
-        if !start.shape.is_empty() {
-            crate::cpu::storage::increment_index(&mut idx, &start.shape);
-        }
-    }
-    Ok(CpuStorage::from_contiguous(
-        start.buffer.from_f64_values(out)?,
-        &start.shape,
-    ))
+    // Composed from tape-tracked primitives rather than a raw walk so the
+    // BinaryBroadcast gradient the catalog declares actually arrives:
+    // d/dstart = 1 - weight and d/dend = weight, per element, both through
+    // the wrappers' own unbroadcast handling.
+    let diff = crate::cpu::ops::elementwise::sub_storage(end, start)?;
+    let scaled = crate::cpu::ops::elementwise::canonical_mul_scalar(&diff, weight)?;
+    crate::cpu::ops::elementwise::add_storage(start, &scaled)
 }
 
 pub(crate) fn addmm_storage(

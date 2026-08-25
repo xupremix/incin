@@ -858,3 +858,32 @@ fn atan2_gradcheck() {
         "atan2 gradcheck error too high: {max_rel_err}"
     );
 }
+
+// --- powf / clamp backwards (catalog: UnaryFloat gradients Defined) ---
+
+#[test]
+/// `powf_gradcheck_matches_finite_differences`.
+fn powf_gradcheck_matches_finite_differences() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    // Keep the operand positive and away from zero: x^(p-1) is singular at
+    // zero for p < 1, which the finite-difference harness cannot cross.
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.5, 1.0, 2.0, 3.0]), vec![4]);
+    let operands = [t];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let raised = crate::cpu::ops::elementwise::canonical_powf(&inputs[0], 1.5).unwrap();
+        crate::cpu::ops::reduce::sum_all(&raised).unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "powf gradcheck too high: {err}");
+}
+
+#[test]
+/// `clamp_backward_stops_at_both_clamped_regions`.
+fn clamp_backward_stops_at_both_clamped_regions() {
+    let t = CpuStorage::from_contiguous(CpuBuffer::F32(vec![-2.0, -0.5, 0.5, 2.0]), vec![4]);
+    let out = crate::cpu::ops::elementwise::canonical_clamp(&t, -1.0, 1.0).unwrap();
+    assert_eq!(f32_vec(&out), vec![-1.0, -0.5, 0.5, 1.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![0.0, 1.0, 1.0, 0.0]);
+}

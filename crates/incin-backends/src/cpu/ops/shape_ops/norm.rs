@@ -17,28 +17,23 @@ pub(crate) fn group_norm_storage(t: &CpuStorage, groups: usize, eps: f64) -> Res
         (1, total)
     };
     let group_size = channels / groups * spatial;
-    let mut out = Vec::with_capacity(total);
-    for run in 0..batch * groups {
-        let mut sum = 0.0;
-        let mut sq_sum = 0.0;
-        for i in 0..group_size {
-            let index = crate::cpu::ops::elementwise::flat_to_nd(run * group_size + i, &t.shape);
-            let value = t.get(&index);
-            sum += value;
-            sq_sum += value * value;
-        }
-        let mean = sum / group_size as f64;
-        let variance = (sq_sum / group_size as f64 - mean * mean).max(0.0);
-        let inv_std = 1.0 / (variance + eps).sqrt();
-        for i in 0..group_size {
-            let index = crate::cpu::ops::elementwise::flat_to_nd(run * group_size + i, &t.shape);
-            out.push((t.get(&index) - mean) * inv_std);
-        }
-    }
-    Ok(CpuStorage::from_contiguous(
-        t.buffer.from_f64_values(out)?,
-        &t.shape,
-    ))
+
+    // Normalization divides by statistics that are functions of the input,
+    // so every step composes from tape-tracked primitives: a tape-silent
+    // mean or variance here would cut the statistical path out of the
+    // backward pass exactly as it once did for training-mode batch norm.
+    // Group runs are contiguous in memory, so the regrouping is a pure
+    // reshape recorded like any other view.
+    let runs = batch * groups;
+    let flat = reshape_storage(t, &[runs, group_size])?;
+    let mean = crate::cpu::ops::reduce::mean_keepdim(&flat, 1)?;
+    let centered = crate::cpu::ops::elementwise::sub_storage(&flat, &mean)?;
+    let squared = crate::cpu::ops::elementwise::mul_storage(&centered, &centered)?;
+    let variance = crate::cpu::ops::reduce::mean_keepdim(&squared, 1)?;
+    let guarded = canonical_add_scalar(&variance, eps)?;
+    let std = canonical_sqrt(&guarded)?;
+    let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
+    reshape_storage(&normalized, &t.shape)
 }
 
 pub(crate) fn instance_norm_storage(t: &CpuStorage, eps: f64) -> Result<CpuStorage> {
