@@ -170,11 +170,15 @@ So the release identity chain accepts a tag cut at the current `master` tip.
 was assembled on 2026-08-25. Nothing gates on that date, so it was left rather
 than guessed at a second time; it should be set to the day the tag is cut.
 
-Four commit subjects in the correctness stream exceed the repository's
-72-character convention (76, 74, 73, and 73 characters). They were left intact
-rather than rewritten, because rewriting another author's commits would change
-their identity and break the relationship to the branch they came from. This is
-flagged for the maintainer rather than silently corrected.
+Seven commit subjects exceed the repository's 72-character convention, by one
+to four characters. Six are in the correctness stream and one
+(`docs(release): refresh the evidence for the autograd-integrated candidate`,
+73 characters) is in the documentation stream and is mine. None were rewritten:
+the correctness commits belong to another author and rewriting them would
+change their identity, and rewriting the documentation one would mean rewriting
+merged history for a single character. This is flagged for the maintainer
+rather than silently corrected, and it applies to both streams rather than only
+one of them.
 
 The release tag does not exist yet. `v0.1.0-rc.1` points at `71b3485c`, an
 ancestor of this candidate. `cargo-semver-checks` records a skip rather than a
