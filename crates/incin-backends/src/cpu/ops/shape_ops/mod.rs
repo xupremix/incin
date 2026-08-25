@@ -16,7 +16,8 @@ use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 use crate::cpu::ops::elementwise::{
-    add_storage, canonical_mul_scalar, canonical_softmax, elementwise_unary,
+    add_storage, canonical_add_scalar, canonical_mul_scalar, canonical_softmax, canonical_sqrt,
+    elementwise_unary,
 };
 use crate::cpu::ops::matmul::{batched_matmul_impl, matmul_impl};
 use crate::cpu::storage::{CpuBuffer, CpuStorage};

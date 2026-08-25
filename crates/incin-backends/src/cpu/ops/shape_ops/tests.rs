@@ -951,3 +951,27 @@ fn diag_matrix_to_vector_backward_scatters_onto_the_diagonal() {
     let g = grads.get(t.id).expect("input should have gradient");
     assert_eq!(f32_vec(g), vec![1.0, 0.0, 0.0, 1.0]);
 }
+
+#[test]
+/// `group_norm_gradcheck_proves_the_statistical_path_is_recorded`.
+fn group_norm_gradcheck_proves_the_statistical_path_is_recorded() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    // Normalizing by batch statistics means the cotangent must flow through
+    // the mean and variance back into every element. A tape-silent
+    // statistic shows up here as a finite-difference divergence, which is
+    // exactly how training-mode batch norm's defect was found.
+    let t = CpuStorage::from_contiguous(
+        CpuBuffer::F32(vec![
+            0.5, 1.0, -0.5, 0.2, 1.5, -1.0, 0.3, -0.3, //
+            0.8, -0.8, 1.2, -1.2, 0.1, 0.9, -0.1, 0.4,
+        ]),
+        vec![2, 2, 2, 2],
+    );
+    let operands = [t];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = group_norm_storage(&inputs[0], 2, 1e-5).unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "group_norm gradcheck too high: {err}");
+}
