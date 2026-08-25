@@ -90,11 +90,11 @@ kernels. The full honest status, including what's *not* done, lives in
 
 ## Quick start
 
-0.1.0 hasn't shipped to crates.io yet, so point at master:
+Pull it from crates.io:
 
 ```toml
 [dependencies]
-incin = { git = "https://github.com/xupremix/incin", branch = "master" }
+incin = "0.1.0"
 ```
 
 Define a model, train it, keep every shape known at compile time:
@@ -162,7 +162,7 @@ all pass through with typenum noise translated to decimal shapes as it streams.
 It also inspects model files and translates pasted errors:
 
 ```bash
-cargo install --path crates/incin --bin cargo-incin --locked
+cargo install incin --bin cargo-incin --locked
 
 cargo incin check                  # readable shape errors, live
 cargo incin inspect model.safetensors
@@ -188,20 +188,21 @@ Three tools, one diagnostic engine, no configuration required.
 
 ```toml
 # Default: std + native CPU backend
-incin = { git = "https://github.com/xupremix/incin", branch = "master" }
+incin = "0.1.0"
 
 # Add WGPU
-incin = { git = "https://github.com/xupremix/incin", features = ["wgpu"], branch = "master" }
+incin = { version = "0.1.0", features = ["wgpu"] }
 
 # CUDA-only application
-incin = { git = "https://github.com/xupremix/incin", default-features = false,
-          features = ["std", "cuda"], branch = "master" }
+incin = { version = "0.1.0", default-features = false,
+          features = ["std", "cuda"] }
 
 # Candle interop
-incin = { git = "https://github.com/xupremix/incin", features = ["external-candle"], branch = "master" }
+incin = { version = "0.1.0", features = ["external-candle"] }
 ```
 
-These become `"0.1.0"`-style version deps once crates.io publication lands.
+From a checkout instead of the registry, point the dependency at your clone or
+install the binaries with `--path`.
 
 </details>
 
@@ -285,7 +286,7 @@ Type error. Nothing switches backends behind your back.
 Install the proxy, point your editor at it, done:
 
 ```bash
-cargo install --path crates/incin-lsp --bin incin-lsp --locked
+cargo install incin-lsp --locked
 ```
 
 | Editor | Status | Guide |

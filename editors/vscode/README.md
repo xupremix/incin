@@ -32,11 +32,10 @@ also checks the complete path for diagnostics, hints, and completions.
 
 ## Requirements
 
-- `incin-lsp` on your `PATH` (`cargo install incin-lsp` after the first
-  crates.io publication, or `cargo install --path crates/incin-lsp --bin
-  incin-lsp --locked` from a checkout before then), or set `incin.lspPath` to
-  its absolute path. A normal `cargo install incin-lsp` installs only the
-  proxy executable.
+- `incin-lsp` on your `PATH` (`cargo install incin-lsp`, or
+  `cargo install --path crates/incin-lsp --bin incin-lsp --locked` from a
+  checkout), or set `incin.lspPath` to its absolute path. A normal
+  `cargo install incin-lsp` installs only the proxy executable.
 - The standard `rust-lang.rust-analyzer` extension installed and enabled;
   this extension configures it, it does not replace it.
 
