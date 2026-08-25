@@ -2,8 +2,8 @@
 
 Branch: `integration/0.1.0`
 Release base: `094bb484`
-Candidate source commit: `27d874fd`
-Candidate tree: `c43b28cc4f0878b07e324f98c6ee97e62d0fd210`
+Candidate source commit: `5b2fc6f1`
+Candidate tree: `c3c0dc79`
 
 The aggregate gate ran against `27d874fd`. The commit carrying this bundle sits
 on top of it and adds only files under `audit-evidence/REL-0.1.0-final/`, which
@@ -19,6 +19,8 @@ implementation correctness stream. Every validation result recorded in
 
 ## Commits in the candidate
 
+Twenty-two non-merge commits over five `--no-ff` integration points.
+
 Public API, release, and documentation:
 
 `ad716155` demote kernel iteration plumbing out of the 0.1 surface
@@ -26,16 +28,26 @@ Public API, release, and documentation:
 `c0754c02` explain the err and error split in the tier table
 `53a084d6` apply rustfmt to the merged reduce gradient work
 `69eeb434` let the inspect smoke check run on a fresh clone
+`d9722507` add the 0.1.0 candidate evidence bundle
+`8810c44a` classify the remaining six shipped crates
+`edf44a2f` make the all-features clippy gate pass
+`5b2fc6f1` record the autograd coverage work in the changelog
 
-Implementation correctness:
+Implementation correctness, thirteen commits:
 
 `0031816a` record batch-norm training reductions on the autograd tape
 `a3dcbd79` give cumsum and prod the gradients their catalog rows promise
 `e7001dc0` pin zero-sized operand semantics to the catalog's EmptyRule
 `e21bcba7` allow the type-complexity lint in the zero-sized suite
 `6c2a1ee4` gradcheck reduction backwards over non-contiguous operands
-
-Integration points: `be21ea50`, `f1b54c65`, `afc316fb`, `27d874fd`.
+`cdf49ee6` exercise scan and product gradients through the public API
+`9473648a` record gradients for the scalar and pointwise binary family
+`f8ef0454` record gradients for masked_fill, index_select and scatter
+`a282f1b4` record gradients for the Shape-family kernels
+`b693d623` drop a needless borrow in the diag backward
+`c93b9fb1` record group and instance norm statistics on the tape
+`40a22292` pass the shape slice directly to the closing reshape
+`f7f2514a` record powf and clamp gradients
 
 ## The three briefed release blockers were already closed
 
@@ -54,18 +66,30 @@ file passes silently. Every `crates/**.rs` path referenced by
 `docs/public-api/hidden-items.md` was therefore checked for existence. 22
 paths, zero orphans. The inventory is genuinely current.
 
-## What the correctness work changed about the release claim
+## The largest single finding: advertised gradients that did not exist
 
-`a3dcbd79` matters for the truthfulness of generated documentation.
-`docs/capabilities.md` is rendered from the capability statics and already
-advertised `training = yes` for `prod_all`, `prod_dim`, and `cumsum`, and the
-operation catalog already declared `GradientRule::Defined` for the Reduction
-and Scan identities. The CPU kernels recorded no tape entry, so a backward pass
-through any of the three stopped silently and the generated table was making a
-promise the backend did not keep. It was closed in the backend rather than by
-narrowing the advertised row, so the generated documentation is now truthful
-for those rows without a documentation edit. `0031816a` is the same shape of
-defect in training-mode batch norm.
+The first three fixes here looked like isolated defects and were not. The
+operation catalog publishes a `GradientRule` per operation and the capability
+registrations publish a per-operation training flag, and both are rendered into
+`docs/OPERATION_SEMANTICS.md` and `docs/capabilities.md`. Twenty-two operations
+across six families carried a `Defined` or `Piecewise` rule with training set
+while their CPU kernels were forward-only walks that recorded no autograd tape
+entry. A backward pass through any of them stopped silently: the input was
+treated as a leaf and optimizers saw no gradient at all.
+
+That made both generated documents untruthful on the backend the project calls
+complete and verified, which is a release-blocking documentation defect and not
+only a correctness one. It was closed in the backend rather than by narrowing
+the advertised rows, so the generated documentation is now correct for those
+rows without a documentation edit. A final sweep confirmed every remaining
+non-recording kernel sits in a `training = false` or `GradientRule::None` row,
+so coverage now matches the contract everywhere.
+
+Two behaviour corrections travelled with it and are recorded in the changelog
+rather than buried here, because neither is a pure gap fill: `maximum` and
+`minimum` now propagate NaN per the profile's `IeeePropagate` rule instead of
+letting Rust's `f32::max` swallow it, and `scatter` defines its gradient as
+last-write-wins.
 
 ## Public API freeze
 

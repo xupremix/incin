@@ -7,7 +7,7 @@ line records a command that ran and the result it printed.
 == Aggregate gate ==
 
 Command: bash tools/ci-local.sh
-Result: exit 0, eleven steps, 41 checks, 3182 tests passed, zero failures.
+Result: exit 0, eleven steps, 41 checks, 3265 tests passed, zero failures.
 This is the repository's own aggregate gate and it is what the
 per-tool checks below are drawn from. It runs eleven steps:
 
@@ -61,6 +61,7 @@ Result: "public API checks passed". Baselines: incin 512, incin-core 13976,
 incin-backends 1109, incin-data 286, incin-diagnostics 133, incin-telemetry
 171, incin-macros 10, incin-lsp 20, incin-viz-plugin-api 160, incin-viz 121.
 incin-backends is 1109 rather than 1111 because of the iteration removal.
+The correctness work added no public items, so no other baseline moved.
 
 Command: tools/command-smoke.sh
 Result: pass, eight checks. Fixed in 36b306b0 to stop requiring a gitignored
@@ -147,23 +148,49 @@ and the earlier --base-ref HEAD run is trivially satisfied and does not
 exercise the ancestry rule. The candidate sits on integration/0.1.0 while
 master is still at 094bb484. See the summary for what this means for tagging.
 
-== Not run, and why ==
+== Checks previously recorded as unavailable, and now actually run ==
+
+An earlier draft of this bundle listed the following three as unavailable in
+this environment. That was wrong in all three cases, and testing the assumption
+rather than restating it found three real defects. They are recorded here as
+run.
+
+Command: bash tools/soundness.sh
+Result: exit 0 on the final candidate. Five checks: miri on incin-core, miri on incin-backends,
+AddressSanitizer baseline, AddressSanitizer with +avx2, and ThreadSanitizer on
+parallel AVX2 initialization. Miri runs under Tree Borrows
+(-Zmiri-tree-borrows) on the pinned nightly-2026-07-28, which carries the miri
+component locally.
+
+Command: RUSTUP_TOOLCHAIN=1.88.0 cargo check --workspace --all-targets --locked
+Result: exit 0. This is the command the MSRV job runs, at the declared MSRV,
+with RUSTUP_TOOLCHAIN overriding the repository's 1.97.1 pin the same way CI
+does.
 
 Command: cargo clippy --workspace --all-targets --all-features -- -D warnings
-Not run. --all-features enables the CUDA, Metal, and WGPU stacks together;
-this machine has no accelerator toolchains or devices, and the workspace
-deliberately keeps the accelerator example crates out of default-members for
-this reason. The CPU clippy gate above ran with -D warnings and passed, and CI
-runs the accelerator lints in their own jobs. This was recorded as unavailable
-rather than substituted with a narrower run reported as if it were the same
-command.
+Result: exit 0, after three fixes. It does not need accelerator hardware: the
+CUDA, Metal, and WGPU code typechecks locally without a device, and only
+execution needs one. Attempting it surfaced:
 
-Command: MSRV verification at 1.88
-Not run locally. The pinned toolchain is 1.97.1 and CI holds the MSRV in a
-dedicated job.
+  1. The CUDA and Metal arms of the addition benchmark in
+     crates/incin/benches/baselines.rs called .unwrap() on `&input + &input`,
+     which returns a tensor and not a result. Neither arm had ever compiled.
+     The CPU and WGPU arms of the same benchmark were already correct.
+  2. Four unsafe blocks in the incin-data hub tests had no `// SAFETY:`
+     comment. One carried its reasoning under a `SAFETY-equivalent:` heading
+     the lint does not recognise; three had none.
+  3. A public struct in the distributed macro test suite had no doc comment.
 
-Miri, AddressSanitizer, LeakSanitizer, ThreadSanitizer: not run. They are the
-soundness job in CI (tools/soundness.sh) and need a nightly toolchain plus
-sanitizer runtimes.
+None of the three is reachable from the CPU-only lint job, because the targets
+involved are either feature-gated or not built with --all-targets.
 
-Hardware execution on CUDA, Metal, or WGPU devices: not run. No device present.
+== Still not run, and why ==
+
+Hardware execution on CUDA, Metal, or WGPU devices: no device is present. The
+accelerator code is compile-checked and lint-clean here, and that is the only
+claim made for it.
+
+Feature powerset (cargo hack --feature-powerset): CI runs this as its own job
+across incin-core, incin-macros, and incin-diagnostics. The supported feature
+contract matrix, which is the curated subset, does run here and passes across
+31 rows.
