@@ -694,3 +694,107 @@ fn attention_keeps_the_operand_dtype() {
     );
     assert_eq!(out.shape, vec![2, 2]);
 }
+
+// --- pointwise-family backwards (catalog: BinaryBroadcast gradients Defined) ---
+
+#[test]
+/// `sub_scalar_backward_is_the_identity`.
+fn sub_scalar_backward_is_the_identity() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
+    let out = sub_scalar_storage(&t, 5.0).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    assert_eq!(f32_vec(g), vec![1.0; 4]);
+}
+
+#[test]
+/// `div_scalar_backward_scales_by_one_over_the_constant`.
+fn div_scalar_backward_scales_by_one_over_the_constant() {
+    let t = matrix(vec![2.0, 4.0, 6.0, 8.0], 2, 2);
+    let out = div_scalar_storage(&t, 2.0).unwrap();
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // ones seed / 2.
+    assert_eq!(f32_vec(g), vec![0.5; 4]);
+}
+
+#[test]
+/// `maximum_backward_routes_to_the_strictly_greater_operand_with_ties_to_rhs`.
+fn maximum_backward_routes_to_the_strictly_greater_operand_with_ties_to_rhs() {
+    let lhs = matrix(vec![3.0, 1.0, 2.0, 5.0], 2, 2);
+    let rhs = matrix(vec![1.0, 1.0, 4.0, 5.0], 2, 2);
+    let out = crate::cpu::ops::shape_ops::lerp_storage; // keep import shape stable
+    let _ = out;
+    let max_out = {
+        let mask = crate::cpu::ops::shape_ops::elementwise_cmp(&lhs, &rhs, |a, b| a > b).unwrap();
+        where_storage(&mask, &lhs, &rhs).unwrap()
+    };
+    assert_eq!(f32_vec(&max_out), vec![3.0, 1.0, 4.0, 5.0]);
+    let grads = tape::backward(&max_out).unwrap();
+    // lhs receives only where it is strictly greater; the tie at [1,1]
+    // routes to rhs, matching maximum's piecewise convention.
+    assert_eq!(
+        f32_vec(grads.get(lhs.id).unwrap()),
+        vec![1.0, 0.0, 0.0, 0.0]
+    );
+    assert_eq!(
+        f32_vec(grads.get(rhs.id).unwrap()),
+        vec![0.0, 1.0, 1.0, 1.0]
+    );
+}
+
+#[test]
+/// `minimum_backward_mirrors_maximum`.
+fn minimum_backward_mirrors_maximum() {
+    let lhs = matrix(vec![1.0, 3.0, 2.0, 5.0], 2, 2);
+    let rhs = matrix(vec![3.0, 3.0, 1.0, 5.0], 2, 2);
+    let min_out = {
+        let mask = crate::cpu::ops::shape_ops::elementwise_cmp(&lhs, &rhs, |a, b| a < b).unwrap();
+        where_storage(&mask, &lhs, &rhs).unwrap()
+    };
+    assert_eq!(f32_vec(&min_out), vec![1.0, 3.0, 1.0, 5.0]);
+    let grads = tape::backward(&min_out).unwrap();
+    // Strictly-less positions go to lhs; the tie and the rhs-wins position
+    // route to rhs.
+    assert_eq!(
+        f32_vec(grads.get(lhs.id).unwrap()),
+        vec![1.0, 0.0, 0.0, 0.0]
+    );
+    assert_eq!(
+        f32_vec(grads.get(rhs.id).unwrap()),
+        vec![0.0, 1.0, 1.0, 1.0]
+    );
+}
+
+#[test]
+/// `abs_diff_gradcheck_matches_finite_differences`.
+fn abs_diff_gradcheck_matches_finite_differences() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    let lhs = matrix(vec![0.5, -1.0, 2.0, 1.5], 2, 2);
+    let rhs = matrix(vec![1.0, -0.25, -0.5, 3.0], 2, 2);
+    let operands = [lhs, rhs];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let diff = crate::cpu::ops::elementwise::sub_storage(&inputs[0], &inputs[1]).unwrap();
+        crate::cpu::ops::reduce::sum_all(
+            &crate::cpu::ops::elementwise::canonical_abs(&diff).unwrap(),
+        )
+        .unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "abs_diff gradcheck too high: {err}");
+}
+
+#[test]
+/// `lerp_gradcheck_matches_finite_differences_for_both_operands`.
+fn lerp_gradcheck_matches_finite_differences_for_both_operands() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    let start = matrix(vec![0.5, -1.0, 2.0, 1.5], 2, 2);
+    let end = matrix(vec![1.0, -0.25, -0.5, 3.0], 2, 2);
+    let operands = [start, end];
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = lerp_storage(&inputs[0], &inputs[1], 0.3).unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let err = gradcheck(op, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "lerp gradcheck too high: {err}");
+}

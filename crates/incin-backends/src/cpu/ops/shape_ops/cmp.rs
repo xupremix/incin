@@ -51,9 +51,31 @@ pub(crate) fn elementwise_cmp(
 }
 
 pub(crate) fn sub_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
-    elementwise_unary(t, |value| value - val)
+    let out = elementwise_unary(t, |value| value - val)?;
+
+    // The native_tensor capability row promises a gradient for this
+    // operation: d(x - c)/dx = 1 everywhere.
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+    });
+    Ok(out)
 }
 
 pub(crate) fn div_scalar_storage(t: &CpuStorage, val: f64) -> Result<CpuStorage> {
-    elementwise_unary(t, |value| value / val)
+    let out = elementwise_unary(t, |value| value / val)?;
+
+    // d(x / c)/dx = 1/c, applied by the same division the forward used so
+    // the constant's rounding matches exactly.
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![elementwise_unary(grad_out, |g| g / val)?])
+        }),
+    });
+    Ok(out)
 }
