@@ -325,6 +325,111 @@ pub(super) fn scatter_axis_grad(
     CpuStorage::from_contiguous(CpuBuffer::F32(vals), original_shape)
 }
 
+/// Zero-aware cotangent of a whole-tensor product reduction.
+///
+/// `dy/dx_i = prod(x except x_i)` is evaluated without dividing by the
+/// operand itself so a zero input cannot manufacture a NaN:
+///
+/// * no zeros      - every element gets `g * total_nonzero_product / x_i`;
+/// * exactly one   - the zero's position alone receives
+///   `g * product_of_the_others`, everything else receives zero;
+/// * two or more   - every partial derivative is zero.
+///
+/// Values widen to `f64` for accumulation and land back in the operand's own
+/// dtype, matching [`prod_all`]'s forward convention.
+pub(super) fn prod_all_grad(
+    input: &CpuStorage,
+    original_shape: &[usize],
+    scalar_grad: f64,
+) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(original_shape);
+    let mut nonzero_product = 1.0f64;
+    let mut zero_count = 0usize;
+    let mut zero_flat_idx = 0usize;
+    let mut idx = vec![0usize; original_shape.len()];
+    for flat in 0..total {
+        let v = input.get(&idx);
+        if v == 0.0 {
+            zero_count += 1;
+            zero_flat_idx = flat;
+        } else {
+            nonzero_product *= v;
+        }
+        increment_index(&mut idx, original_shape);
+    }
+
+    let mut vals = vec![0.0f64; total];
+    match zero_count {
+        0 => {
+            let mut idx = vec![0usize; original_shape.len()];
+            for val in vals.iter_mut() {
+                *val = scalar_grad * nonzero_product / input.get(&idx);
+                increment_index(&mut idx, original_shape);
+            }
+        }
+        1 => vals[zero_flat_idx] = scalar_grad * nonzero_product,
+        _ => {}
+    }
+
+    let buffer = input.buffer.from_f64_values(vals)?;
+    Ok(CpuStorage::from_contiguous(buffer, original_shape))
+}
+
+/// Zero-aware cotangent of [`prod_dim`], one independent product per
+/// `dim`-slice of `original_shape`, with the same zero rules as
+/// [`prod_all_grad`] applied per slice.
+#[allow(clippy::needless_pass_by_value)]
+pub(super) fn prod_dim_grad(
+    grad_out: &CpuStorage,
+    input: &CpuStorage,
+    dim: usize,
+    original_shape: &[usize],
+) -> Result<CpuStorage> {
+    let mut out_shape = original_shape.to_vec();
+    out_shape.remove(dim);
+    let out_total: usize = crate::cpu::stride::validated_numel(&out_shape);
+
+    // Pass 1: per-slice nonzero product, zero count, and the within-slice
+    // coordinate of the slice's single zero (when it has exactly one).
+    let mut nonzero_product = vec![1.0f64; out_total];
+    let mut zero_count = vec![0usize; out_total];
+    let mut zero_coord = vec![0usize; out_total];
+    let mut idx = vec![0usize; original_shape.len()];
+    let src_total: usize = crate::cpu::stride::validated_numel(original_shape);
+    for _ in 0..src_total {
+        let mut out_idx = idx.clone();
+        out_idx.remove(dim);
+        let flat_out = flatten_index(&out_idx, &out_shape);
+        let v = input.get(&idx);
+        if v == 0.0 {
+            zero_count[flat_out] += 1;
+            zero_coord[flat_out] = idx[dim];
+        } else {
+            nonzero_product[flat_out] *= v;
+        }
+        increment_index(&mut idx, original_shape);
+    }
+
+    // Pass 2: evaluate the per-element rule slice by slice.
+    let mut vals = vec![0.0f64; src_total];
+    let mut idx = vec![0usize; original_shape.len()];
+    for _ in 0..src_total {
+        let mut out_idx = idx.clone();
+        out_idx.remove(dim);
+        let flat_out = flatten_index(&out_idx, &out_shape);
+        let g = grad_out.get(&out_idx);
+        vals[flatten_index(&idx, original_shape)] = match zero_count[flat_out] {
+            0 => g * nonzero_product[flat_out] / input.get(&idx),
+            1 if idx[dim] == zero_coord[flat_out] => g * nonzero_product[flat_out],
+            _ => 0.0,
+        };
+        increment_index(&mut idx, original_shape);
+    }
+
+    let buffer = input.buffer.from_f64_values(vals)?;
+    Ok(CpuStorage::from_contiguous(buffer, original_shape))
+}
+
 // ---------------------------------------------------------------------------
 // Concrete reduction kernels
 // ---------------------------------------------------------------------------

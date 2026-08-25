@@ -334,6 +334,14 @@ pub(crate) fn min_keepdim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
 }
 
 pub(crate) fn prod_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "prod_dim",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!("prod_dim: axis {dim} out of range for shape {:?}", t.shape),
+        });
+    }
     let mut out_shape = t.shape.to_vec();
     out_shape.remove(dim);
     let mut keep_shape = t.shape.to_vec();
@@ -351,10 +359,34 @@ pub(crate) fn prod_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
     }
     let buffer = t.buffer.from_f64_values(prods)?;
     let storage = CpuStorage::from_contiguous(buffer, keep_shape);
-    storage.reshape(&out_shape)
+    let out = storage.reshape(&out_shape)?;
+
+    // Same contract as prod_all: the reduction is advertised for training,
+    // so its backward must be recorded. The cotangent applies the same
+    // zero-aware per-slice product rule the all-reduce uses.
+    let original_shape = t.shape.to_vec();
+    let t_clone = t.clone();
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            Ok(vec![prod_dim_grad(grad_out, &t_clone, dim, &original_shape)?])
+        }),
+    });
+
+    Ok(out)
 }
 
 pub(crate) fn cumsum(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    if dim >= t.shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "cumsum",
+            expected: t.shape.to_vec(),
+            got: vec![dim],
+            msg: format!("cumsum: axis {dim} out of range for shape {:?}", t.shape),
+        });
+    }
     let total: usize = crate::cpu::stride::validated_numel(&(t.shape));
     let mut out_data = vec![0.0f64; total];
     let dim_len = t.shape[dim];
@@ -378,5 +410,51 @@ pub(crate) fn cumsum(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
         increment_index(&mut idx, &t.shape);
     }
     let buffer = t.buffer.from_f64_values(out_data)?;
-    Ok(CpuStorage::from_contiguous(buffer, &t.shape))
+    let out = CpuStorage::from_contiguous(buffer, &t.shape);
+
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            // The scan's Jacobian is lower-triangular ones, so the cotangent
+            // is its transpose applied to grad_out: every input position
+            // receives the SUFFIX sum of grad_out along `dim`
+            // (grad_in[d] = sum_{k >= d} grad_out[k]).
+            Ok(vec![reverse_cumsum(grad_out, dim)?])
+        }),
+    });
+
+    Ok(out)
+}
+
+/// Suffix sum of `storage` along `dim`, shape-preserving - the backward of
+/// [`cumsum`]. Same traversal and accumulation conventions as the forward
+/// scan: values widen to `f64`, read through the operand's own strides, and
+/// land in a fresh contiguous buffer of the operand's dtype.
+fn reverse_cumsum(storage: &CpuStorage, dim: usize) -> Result<CpuStorage> {
+    let total: usize = crate::cpu::stride::validated_numel(&(storage.shape));
+    let mut out_data = vec![0.0f64; total];
+    let dim_len = storage.shape[dim];
+    let strides = contiguous_strides(&storage.shape);
+    let mut idx = vec![0usize; storage.shape.len()];
+    for _ in 0..total {
+        if idx[dim] == 0 {
+            let mut current = 0.0f64;
+            for step in (0..dim_len).rev() {
+                let mut step_idx = idx.clone();
+                step_idx[dim] = step;
+                current += storage.get(&step_idx);
+                let flat_dest: usize = step_idx
+                    .iter()
+                    .zip(strides.iter())
+                    .map(|(&i, &s)| i * s)
+                    .sum();
+                out_data[flat_dest] = current;
+            }
+        }
+        increment_index(&mut idx, &storage.shape);
+    }
+    let buffer = storage.buffer.from_f64_values(out_data)?;
+    Ok(CpuStorage::from_contiguous(buffer, &storage.shape))
 }
