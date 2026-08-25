@@ -148,19 +148,23 @@ actions.
 
 ## Known deviations and actions required before tagging
 
-**The candidate is not reachable from `master`, so the release gate will refuse
-a tag as things stand.** `.github/workflows/release.yml` runs
-`tools/release-preflight.py --base-ref origin/master`, and that calls
-`git merge-base --is-ancestor <tag commit> origin/master`. The candidate lives
-on `integration/0.1.0` while `master` is still at `094bb484`, so the check
-fails with `release tag 'v0.1.0' is not reachable from master`. This was
-confirmed by running the gate with the base-ref CI actually uses, not with a
-base-ref that is trivially satisfied.
+**Resolved: the candidate is now reachable from `master`.**
+`.github/workflows/release.yml` runs
+`tools/release-preflight.py --base-ref origin/master`, which calls
+`git merge-base --is-ancestor <tag commit> origin/master`. While the work sat
+only on `integration/0.1.0` this refused a tag with
+`release tag 'v0.1.0' is not reachable from master`, confirmed by running the
+gate with the base ref CI actually uses rather than one that is trivially
+satisfied. `integration/0.1.0` has since been merged into `master` with
+`--no-ff`, and the merge tree is identical to the validated candidate tree.
 
-This is a property of where the work sits, not a defect in the work. Before a
-tag can be cut, `integration/0.1.0` has to be merged into `master`, or the
-release workflow has to be pointed at a different base ref. Merging to `master`
-is a maintainer decision and was deliberately not done here.
+Re-checked afterwards against a throwaway local tag, deleted immediately and
+never pushed:
+
+    python3 tools/release-preflight.py --tag v0.1.0 --base-ref master
+    release preflight passed: v0.1.0 at ead21d572fab30b0baec275baf53f7dcaa81d0fb
+
+So the release identity chain accepts a tag cut at the current `master` tip.
 
 `CHANGELOG.md` heads the section `## [0.1.0] - 2026-08-24` and the candidate
 was assembled on 2026-08-25. Nothing gates on that date, so it was left rather
