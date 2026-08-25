@@ -67,7 +67,10 @@ pub mod vision;
 pub use dataset::Dataset;
 #[cfg(feature = "download")]
 pub use downloader::Downloader;
-pub use loader::{BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DefaultCollate};
+pub use loader::{
+    BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DefaultCollate,
+    DistributedSampler, RemainderPolicy,
+};
 pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform};
 
 /// Prelude.
@@ -76,7 +79,7 @@ pub mod prelude {
     pub use super::hub::{HubApi, HubRepo, download, from_pretrained};
     pub use super::loader::{
         BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DataLoaderIter,
-        DefaultCollate,
+        DefaultCollate, DistributedSampler, RemainderPolicy,
     };
     pub use super::transforms::{
         CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform,
