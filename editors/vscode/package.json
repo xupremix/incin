@@ -2,7 +2,7 @@
   "name": "incin-lsp-vscode",
   "displayName": "Incin Shape Diagnostics",
   "description": "Humanizes typenum shape errors and shows real tensor shapes as inlay hints, by routing rust-analyzer through the incin-lsp proxy.",
-  "version": "0.1.0-rc.2",
+  "version": "0.1.0",
   "publisher": "incin",
   "license": "MIT OR Apache-2.0",
   "repository": {

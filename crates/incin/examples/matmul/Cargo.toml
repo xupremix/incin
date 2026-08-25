@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-incin = { path = "../..", version = "0.1.0-rc.2" }
+incin = { path = "../..", version = "0.1.0" }
 
 [lints]
 workspace = true

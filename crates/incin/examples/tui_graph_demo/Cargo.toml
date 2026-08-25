@@ -7,10 +7,10 @@ license.workspace = true
 publish = false
 
 [dependencies]
-incin = { path = "../..", version = "0.1.0-rc.2", features = ["backend-authoring"] }
-incin-core = { path = "../../../incin-core", version = "0.1.0-rc.2" }
-incin-backends = { path = "../../../incin-backends", version = "0.1.0-rc.2", default-features = false, features = ["cpu", "wgpu"] }
-incin-telemetry = { path = "../../../incin-telemetry", version = "0.1.0-rc.2" }
+incin = { path = "../..", version = "0.1.0", features = ["backend-authoring"] }
+incin-core = { path = "../../../incin-core", version = "0.1.0" }
+incin-backends = { path = "../../../incin-backends", version = "0.1.0", default-features = false, features = ["cpu", "wgpu"] }
+incin-telemetry = { path = "../../../incin-telemetry", version = "0.1.0" }
 anyhow = "1.0.103"
 
 [lints]
