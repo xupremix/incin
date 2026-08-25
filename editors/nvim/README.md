@@ -31,9 +31,9 @@ before `incin-lsp` can turn it into a readable tensor shape.
 
 - Neovim 0.11+ (for `vim.lsp.config`/`vim.lsp.enable`), **or**
   nvim-lspconfig on any supported Neovim version.
-- `incin-lsp` on your `$PATH` (`cargo install incin-lsp` after the first
-  crates.io publication, or `cargo install --path crates/incin-lsp --bin
-  incin-lsp --locked` from a checkout before then), or pass `lsp_path` to
+- `incin-lsp` on your `$PATH` (`cargo install incin-lsp`, or
+  `cargo install --path crates/incin-lsp --bin incin-lsp --locked` from a
+  checkout), or pass `lsp_path` to
   `setup()`/`server_opts()`. A normal `cargo install incin-lsp` installs only
   the proxy executable.
 

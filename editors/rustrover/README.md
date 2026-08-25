@@ -9,9 +9,9 @@ explicitly marked unverified so it isn't oversold.
 
 ## Requirements
 
-- `cargo-incin` on your `PATH` (`cargo install incin --bin cargo-incin` after
-  the first crates.io publication, or `cargo install --path crates/incin --bin
-  cargo-incin --locked` from a checkout before then). `incin-check.sh` checks
+- `cargo-incin` on your `PATH` (`cargo install incin --bin cargo-incin`, or
+  `cargo install --path crates/incin --bin cargo-incin --locked` from a
+  checkout). `incin-check.sh` checks
   for this itself and prints an install command if it is missing, so this is
   not a silent failure; installing it first saves the round trip.
 - A RustRover (or any IntelliJ-platform Rust IDE) install with **External

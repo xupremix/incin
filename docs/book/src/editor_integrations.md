@@ -5,17 +5,16 @@ rewrites Incin's type-level shape diagnostics and tensor inlay hints into
 readable labels. It does not replace rust-analyzer or implement a separate
 Rust language server.
 
-`incin-lsp` is prepared for crates.io publication but is not available there
-yet. During this pre-release period, build it from a checkout:
+Install it from the registry:
+
+```sh
+cargo install incin-lsp --locked
+```
+
+From a checkout instead:
 
 ```sh
 cargo install --path crates/incin-lsp --bin incin-lsp --locked
-```
-
-After a published release, the equivalent registry install is:
-
-```sh
-cargo install incin-lsp
 ```
 
 The proxy starts `rust-analyzer` from `PATH` by default. The VS Code extension
@@ -107,17 +106,17 @@ registry release at present.
 terminal. It is distributed by the `incin` package rather than as a separate
 crate.
 
-Until crates.io has `0.1.0`, install it from a checkout:
+Install it from the registry:
 
 ```sh
-cargo install --path crates/incin --bin cargo-incin --locked
+cargo install incin --bin cargo-incin --locked
 cargo incin doctor
 ```
 
-After the registry publication, use:
+From a checkout instead (for example while hacking on the tool itself):
 
 ```sh
-cargo install incin --bin cargo-incin
+cargo install --path crates/incin --bin cargo-incin --locked
 cargo incin doctor
 ```
 

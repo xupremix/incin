@@ -1,22 +1,18 @@
 # Installation
 
-`0.1.0` is prepared for publication but is not on crates.io yet. Until that
-release is published, use a checkout, which is what the examples in this
-repository do:
-
-```toml
-[dependencies]
-incin = { path = "../incin/crates/incin" }
-# or
-incin = { git = "https://github.com/xupremix/incin" }
-```
-
-After `0.1.0` is available on crates.io, a project can depend on the facade
-with:
+Incin is on crates.io. Depend on the facade with:
 
 ```toml
 [dependencies]
 incin = "0.1"
+```
+
+Working from a checkout of this repository? A path dependency does what the
+examples here do:
+
+```toml
+[dependencies]
+incin = { path = "../incin/crates/incin" }
 ```
 
 The default feature set is `["std", "cpu"]`, a standard-library CPU build
@@ -25,9 +21,7 @@ with no extra setup. That's enough for everything in this book except the
 
 ## Stability
 
-The current checkout may still change before release. Once `0.1.0` ships, the
-documented facade API selected for that release becomes Incin's compatibility
-baseline. Changes to that surface will be additive or follow a documented
+The published `0.1.0` facade API is Incin's compatibility baseline. Changes to that surface will be additive or follow a documented
 deprecation path, even though Cargo treats `0.x` minor releases as potentially
 breaking by default.
 
