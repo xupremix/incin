@@ -171,14 +171,21 @@ validated. If the tag is cut on a later day, that heading is the one line to
 update.
 
 Seven commit subjects exceed the repository's 72-character convention, by one
-to four characters. Six are in the correctness stream and one
-(`docs(release): refresh the evidence for the autograd-integrated candidate`,
-73 characters) is in the documentation stream and is mine. None were rewritten:
-the correctness commits belong to another author and rewriting them would
-change their identity, and rewriting the documentation one would mean rewriting
-merged history for a single character. This is flagged for the maintainer
-rather than silently corrected, and it applies to both streams rather than only
-one of them.
+to four characters. Six are in the correctness stream and one is in the
+documentation stream. They were not rewritten, and that is a deliberate call
+rather than an oversight: the only way to shorten a subject is to rewrite the
+commit, and these are already merged. Rewriting them would give every commit in
+the release range a new identity, which would in turn invalidate the twenty-two
+commit hashes recorded in this bundle, including the hash of the commit that
+carries the bundle itself. Trading a verifiable release record for one to four
+characters per line is a bad exchange, so the deviation is recorded instead.
+
+Branch state at the end: the release history is on `master`, and the two stale
+documentation branches (`docs/deep-dive-book` and `docs/readme-strengthen`)
+were deleted. Both had already been merged long before this work, through pull
+requests 76 and 78, and were zero commits ahead of `master`; they were
+leftovers rather than open work. Their remote-tracking refs still exist and
+will disappear on the next prune, which needs a push and was not done.
 
 The release tag does not exist yet. `v0.1.0-rc.1` points at `71b3485c`, an
 ancestor of this candidate. `cargo-semver-checks` records a skip rather than a
