@@ -11,6 +11,7 @@
 //!   nothing has no defined answer - it must fail explicitly, never fabricate;
 //! * matmul contracting over an empty `K` defines the product as zeros.
 #![cfg(feature = "cpu")]
+#![allow(clippy::type_complexity)]
 
 use incin::prelude::*;
 
