@@ -1,0 +1,169 @@
+REL-0.1.0-final validation
+
+All commands below were run in the release worktree
+with integration/0.1.0 checked out. Nothing in this file is inferred; each
+line records a command that ran and the result it printed.
+
+== Aggregate gate ==
+
+Command: bash tools/ci-local.sh
+Result: exit 0, eleven steps, 41 checks, 3182 tests passed, zero failures.
+This is the repository's own aggregate gate and it is what the
+per-tool checks below are drawn from. It runs eleven steps:
+
+  1. Formatting Check
+  2. Ledger & Governance Validation
+  3. CPU Clippy Lints
+  4. CPU Unit & Integration Tests
+  5. Build Examples
+  6. Preview-Feature Tests
+  7. Isolated Bare-CPU & CPU-BLAS Tests
+  8. Core no_std Check
+  9. WGPU Software Adapter Tests & Lint
+ 10. CUDA Check & Tests
+ 11. Documentation Build & Public Doctests
+
+Step 10 reports "CUDA Compile Check OK (hardware runtime tests skipped)". No
+CUDA device is present, so CUDA is compile-checked only. That is the
+documented behaviour of the step, not a weakened gate.
+
+== Commands inside the aggregate gate ==
+
+Command: cargo fmt --all -- --check
+Result: pass.
+
+Command: cargo clippy --all-targets --no-default-features
+         --features incin-backends/cpu,incin/cpu -- -D warnings
+Result: pass.
+
+Command: cargo test --all-targets --no-default-features
+         --features incin-backends/cpu,incin/cpu
+Result: pass.
+
+Command: cargo test --workspace --doc --features incin-core/distributed
+Result: pass. Doctests are run here rather than by the --all-targets command,
+which excludes them.
+
+Command: cargo build --examples --no-default-features
+         --features incin-backends/cpu,incin/cpu
+Result: pass.
+
+Command: cargo xtask ledger / budgets / docs --check / feature-matrix
+Result: pass. The supported feature contract matrix reports PASS across 31
+rows spanning core, backend, and facade feature sets, including the
+compile-only accelerator rows.
+
+Command: tools/audit-shapes.sh --check
+Result: "audit-shapes ok: inventory matches shape-proof-inventory.md".
+
+Command: tools/check-public-api.sh
+Result: "public API checks passed". Baselines: incin 512, incin-core 13976,
+incin-backends 1109, incin-data 286, incin-diagnostics 133, incin-telemetry
+171, incin-macros 10, incin-lsp 20, incin-viz-plugin-api 160, incin-viz 121.
+incin-backends is 1109 rather than 1111 because of the iteration removal.
+
+Command: tools/command-smoke.sh
+Result: pass, eight checks. Fixed in 36b306b0 to stop requiring a gitignored
+fixture; see the summary.
+
+== Commands run outside the aggregate gate ==
+
+Command: python3 tools/check-hidden-items.py
+Result: "hidden-item inventory passed: 22 source files, 56 occurrences".
+Additionally, every crates/**.rs path referenced by
+docs/public-api/hidden-items.md was checked for existence, because that script
+detects missing rows but not orphan ones. 22 paths, zero orphans.
+
+Command: python3 tools/check-unsafe-ledger.py
+Result: "unsafe ledger passed: 21 production files, 139 unsafe blocks".
+
+Command: python3 tools/check-roadmap-counts.py
+Result: "roadmap.md matches ledger.toml: 101 tasks across 12 themes".
+All 101 ledger tasks are status = "complete".
+
+Command: bash tools/check-architecture.sh
+Result: "architecture checks passed" and "large-file inventory checks passed".
+
+Command: bash tools/check-package.sh
+Result: "package reproducibility check passed: 10 publishable crates".
+
+Command: python3 tools/check-publish-metadata.py
+Result: "publish metadata complete for 10 crate(s) at version 0.1.0".
+
+Command: python3 tools/check-release-workflow.py
+Result: "release workflow static checks passed".
+
+Command: python3 tools/check-actions-pinned.py
+Result: "action pin checks passed (4 workflows)".
+
+Command: python3 tools/check-markdown-links.py
+Result: "markdown link check passed: 211 files".
+
+== Book ==
+
+Command: mdbook build docs/book
+Result: pass, mdbook v0.4.52, matching MDBOOK_VERSION in pages.yml.
+
+Command: python3 docs/book/build_site.py
+Result: "wrote 35 chapters".
+
+Command: python3 tools/check-book-site.py
+Result: "book site checks passed: 35 chapters and static shell".
+
+Command: python3 tools/check-docs.py
+Result: "docs checks passed: 35 book chapters, 20 facade features, and 53
+crate feature declarations".
+
+Command: node --check docs/book/site/book.js
+Result: pass.
+
+Command: python3 tools/test-book-site.py
+Result: "book browser checks passed: routing, history, theme, search,
+keyboard, DOM, base path". Run against Chromium 151.0.7922.108.
+
+Rendering features verified directly in the generated site, because no gate
+asserts them: syntax highlighting (language-rust classes present), hidden-line
+handling (215 class="boring" spans), and code copy (clipboard handling in
+book.js).
+
+Editor assets verified as real 1440x900 PNGs rather than placeholders, present
+in docs/assets/editors/, docs/book/src/assets/editors/, and the built site, and
+referenced from the book chapter, both editor READMEs, and tools/check-docs.py.
+
+== Release identity ==
+
+Command: python3 tools/release-preflight.py --tag v0.1.0 --base-ref HEAD
+Result: "release preflight passed". Run against a throwaway local tag that was
+deleted immediately and never pushed.
+
+Negative check: the same command with the tag one commit behind HEAD was
+refused with "checkout is <head>, but v0.1.0 resolves to <other>". The gate
+verifies the exact commit being released, not merely a well-formed tag name.
+
+Command: python3 tools/release-preflight.py --tag v0.1.0 --base-ref master
+Result: refused with "release tag 'v0.1.0' is not reachable from master".
+This is the base-ref the release workflow actually passes (as origin/master),
+and the earlier --base-ref HEAD run is trivially satisfied and does not
+exercise the ancestry rule. The candidate sits on integration/0.1.0 while
+master is still at 094bb484. See the summary for what this means for tagging.
+
+== Not run, and why ==
+
+Command: cargo clippy --workspace --all-targets --all-features -- -D warnings
+Not run. --all-features enables the CUDA, Metal, and WGPU stacks together;
+this machine has no accelerator toolchains or devices, and the workspace
+deliberately keeps the accelerator example crates out of default-members for
+this reason. The CPU clippy gate above ran with -D warnings and passed, and CI
+runs the accelerator lints in their own jobs. This was recorded as unavailable
+rather than substituted with a narrower run reported as if it were the same
+command.
+
+Command: MSRV verification at 1.88
+Not run locally. The pinned toolchain is 1.97.1 and CI holds the MSRV in a
+dedicated job.
+
+Miri, AddressSanitizer, LeakSanitizer, ThreadSanitizer: not run. They are the
+soundness job in CI (tools/soundness.sh) and need a nightly toolchain plus
+sanitizer runtimes.
+
+Hardware execution on CUDA, Metal, or WGPU devices: not run. No device present.

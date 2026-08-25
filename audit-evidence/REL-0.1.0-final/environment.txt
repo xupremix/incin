@@ -1,0 +1,31 @@
+REL-0.1.0-final environment
+
+Command: rustc -Vv
+Result: rustc 1.97.1 (8bab26f4f 2026-07-14), host x86_64-unknown-linux-gnu.
+
+Command: cargo -V
+Result: cargo 1.97.1 (c980f4866 2026-06-30).
+
+Pinned toolchain: rust-toolchain.toml channel = "1.97.1", components
+rust-src, rustfmt, clippy. The workspace MSRV is 1.88 and is held by a
+dedicated CI job; it was not re-verified locally in this task.
+
+Command: cargo +nightly-2026-07-28 public-api (via tools/check-public-api-baseline.py)
+Result: nightly-2026-07-28 is installed locally and matches the pin recorded in
+.github/workflows/ci.yml and docs/public-api/README.md, so the API baselines
+were regenerated on the same toolchain CI uses.
+
+Command: mdbook --version
+Result: mdbook v0.4.52, matching MDBOOK_VERSION in .github/workflows/pages.yml.
+
+Command: cargo public-api --version
+Result: cargo-public-api 0.52.0.
+
+Command: chromium --version
+Result: Chromium 151.0.7922.108 snap. Used by tools/test-book-site.py.
+
+Command: python3 -V / node -v
+Result: Python 3.12.3, Node v25.2.1.
+
+Accelerator hardware: none. No CUDA, Metal, or WGPU device was present, so no
+accelerator execution claim is made anywhere in this bundle.
