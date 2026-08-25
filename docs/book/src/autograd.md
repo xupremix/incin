@@ -2,7 +2,7 @@
 
 Gradient tracking is a type parameter, `G`, defaulting to `NoGrad`. A
 `Tensor<S, B, K, Grad>` records a tape entry for the operations that produce
-it; a `Tensor<S, B, K, NoGrad>` never does - the distinction is visible in
+it; a `Tensor<S, B, K, NoGrad>` never does; the distinction is visible in
 the type, not just at runtime.
 
 ```rust,no_run
@@ -59,7 +59,7 @@ let target = Tensor::<s![3, 2], B, f32, NoGrad>::zeros(())?;
 # Ok::<(), incin::Error>(())
 ```
 
-This is the usual shape for a loss function's `target` argument - see
+This is the usual shape for a loss function's `target` argument; see
 [Training](./training.md): the label data isn't something you differentiate
 with respect to, so it's typed `NoGrad` rather than merely happening to have
 no gradient at runtime.

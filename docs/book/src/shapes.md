@@ -2,10 +2,10 @@
 
 A `Shape` is a type, and three kinds of type implement it:
 
-- **A tuple of `typenum` dims** - every axis known at compile time.
+- **A tuple of `typenum` dims**: every axis known at compile time.
   `s![2, 3, 224, 224]` expands to exactly this.
-- **`Dyn`** - rank itself is unknown until a value exists.
-- **A tuple mixing `usize` and `typenum` dims** - rank known, some axes are
+- **`Dyn`**: rank itself is unknown until a value exists.
+- **A tuple mixing `usize` and `typenum` dims**: rank known, some axes are
   not. `s![usize, 128]`, or a named axis via `dim!(Batch)` used as
   `s![Batch, 128]`.
 
@@ -71,7 +71,7 @@ let reasserted: Tensor<s![2, 3], B> = dynamic.to_shape::<s![2, 3]>()?;
 ```
 
 `into_dyn` always succeeds (a static shape is always a valid dynamic one).
-`to_shape` is fallible - it checks the runtime dims against the target shape
+`to_shape` is fallible: it checks the runtime dims against the target shape
 and returns a typed error if they disagree, rather than panicking.
 
 ## `s!` vs `shape!`

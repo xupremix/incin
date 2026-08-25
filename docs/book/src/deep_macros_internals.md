@@ -1,44 +1,29 @@
-# Macro internals
+# What the macros guarantee
 
-How the macros work behind their reference entries - the grammars they parse,
-the hygiene strategy every expansion follows, and the test suite that keeps
-all of it honest. The user-level documentation is
-[the macro reference](./macros.md) and each macro's rustdoc; this chapter is
-about the machinery in
-[`crates/incin-macros/src/`](../../../crates/incin-macros/src/lib.rs).
+The macros are the part of Incin you touch first and think about least. This
+chapter is about the promises they make (what an expansion can and cannot
+do to your program) rather than how they are implemented. For usage and
+syntax, see [the macro reference](./macros.md); for what the generated
+shape types mean, see [type semantics](./deep_type_semantics.md).
 
-## The inventory
+| Macro | What it produces |
+|---|---|
+| `s![...]` | shape *types* for `Tensor<S, ...>` |
+| `shape![...]` | shape *values* for targets and checks |
+| `tensor![...]` | tensors from literals |
+| `idx![...]` / `i![...]` | type-level vs runtime indexing |
+| `axis![...]` | axis selectors |
+| `#[module]` | module plumbing for your structs |
+| `model!` / `import_model!` | typed modules from `.safetensors` / `.onnx` at compile time |
 
-| Macro | Kind | Implementation |
-|---|---|---|
-| `s![...]` | proc macro | `shape.rs` - shape *types* |
-| `shape![...]` | proc macro | `shape_value.rs` - shape *values* for targets |
-| `tensor![...]` | proc macro | `tensor.rs` - literal construction |
-| `idx![...]` / `i![...]` | proc macros | `idx.rs` / `index_expr.rs` - type-level vs runtime indexing |
-| `axis![...]` | proc macro | `axis.rs` - axis selectors |
-| `#[module]` | attribute | `module.rs` - visitor derivation |
-| `model!` / `import_model!` | proc macros | `safetensors.rs` + `onnx.rs` - compile-time import |
-| `dim!(...)` | `macro_rules!` | lives in `incin-core/src/shapes/dim.rs`, not a proc macro |
+## Expansions cannot be hijacked
 
-The distributed family (`mesh!`, `placement!`, `parallel!`,
-`#[distributed_main]`) shares the same conventions and is feature-gated.
-
-## Hygiene: absolute paths, one documented exception
-
-Every expansion names what it needs through `::incin::prelude::...` (or
-`::incin::advanced::...`) *absolutely*, so it resolves against the crate
-rather than against whatever the caller has in scope. `s!` additionally
-carries an internal marker (`s![@ ...]`, spelled `crate::prelude::...`) for
-use inside `incin` itself:
-
-```rust,ignore
-// crates/incin-macros/src/shape.rs
-let path = if internal {
-    quote! { crate::prelude:: }
-} else {
-    quote! { ::incin::prelude:: }
-};
-```
+Every expansion names what it needs through absolute paths into the real
+crate. That is a stronger promise than it sounds. Your crate may define its
+own modules called `incin` or `typenum`; glob-imports may drag conflicting
+names into scope; none of it matters. An expansion resolves against the
+published crate or fails loudly at the macro's own invocation, never
+against whatever happens to be visible where you used it.
 
 <svg class="incin-diagram" viewBox="0 0 780 210" role="img" aria-label="Macro hygiene: an expansion parses its input against the macro grammar and emits absolute ::incin paths, so decoy modules named incin or typenum in the caller's scope are never captured." xmlns="http://www.w3.org/2000/svg">
   <style>
@@ -71,7 +56,7 @@ let path = if internal {
   <path class="dg6-edge" d="M240,58 L300,58"/>
   <rect class="dg6-node" x="304" y="20" width="200" height="76" rx="7"/>
   <text class="dg6-code" x="404" y="46" text-anchor="middle">proc macro</text>
-  <text class="dg6-sub" x="404" y="64" text-anchor="middle">parse against its own</text>
+  <text class="dg6-sub" x="404" y="64" text-anchor="middle">parses against its own</text>
   <text class="dg6-sub" x="404" y="80" text-anchor="middle">closed grammar</text>
   <path class="dg6-reject" d="M130,100 L130,124"/>
 
@@ -89,154 +74,64 @@ let path = if internal {
   <text class="dg6-note" x="662" y="142" text-anchor="middle">or the build fails loudly</text>
 </svg>
 
-This is not a style preference; it is load-bearing, and the failure it
-prevents used to happen:
+One documented limit: renaming the *package* in your manifest
+(`incin_x = { package = "incin" }`) breaks the absolute paths, since `::incin`
+then names a dependency you do not have. Depending on the crate under its
+own name is the supported configuration; depending on it through an alias
+with normal `use` renames works fine.
 
-```rust,ignore
-// crates/incin-macros/tests/compile_pass/hygiene.rs (abridged)
-mod incin {
-    pub mod prelude {
-        pub struct Decoy;
-    }
-}
-/// `s!` emits `typenum::UInt`, `typenum::UTerm`, `typenum::B0`, `typenum::B1`.
-mod typenum {
-    pub struct UTerm;
-    pub struct B0;
-    ...
-}
-```
+## Rejections are named, not inferred
 
-Before CI-005, expansions resolved against relative paths, so a caller with a
-module named `incin` (or `typenum`) won, and the error surfaced as a
-nonsensical message pointing at the caller's own invocation. The test plants
-decoys for every emitted name and asserts both directions of hygiene: the
-macro does not resolve against them, and it does not capture them either.
-`rename.rs` covers the other axis - calling the crate under an alias
-(`use ::incin as renamed;`) with no glob import at all.
+When a macro rejects input, the diagnostic says which rule failed. A
+negative dimension, an unknown `#[module]` argument, a ragged `tensor!`
+literal: each fails expansion with a message naming the problem, because a
+macro rejection carries no error code; the message is the contract you
+read. Nothing expands "as if you hadn't written it": there is no input that
+silently changes behavior by accepting a typo.
 
-The one thing absolute paths cannot survive is a *package* rename in the
-caller's manifest (`incin_x = { package = "incin" }`): `::incin` then names a
-crate that is not there. Resolving the real name would require reading the
-caller's manifest at expansion time, which the macro policy in `PROPOSALS.md`
-forbids - so that limitation is documented rather than worked around.
+That last point has teeth in `#[module]`. Its struct arguments form a fixed
+vocabulary (`no_stats`, `no_parameters`, ...), and unknown keys fail by
+name. A misspelled flag is an error pointing at the misspelling, not a
+quietly different module than the one you meant to configure.
 
-## `s!`: grammar and expansion
+## `s!` versus `shape!`: types and values
 
-`s!` parses each dimension into one of five forms
-(`crates/incin-macros/src/shape.rs`), then renders a right-folded
-`DimCons<..., Nil>` chain:
+`s!` builds shape *types*: five dimension forms (static literal, runtime,
+named tag, named-with-extent, const path) folded into one chain whose
+proof level the compiler computes (see [type semantics](./deep_type_semantics.md)).
+The ellipsis forms currently render as fully dynamic on purpose: partial
+rank knowledge the parser has not verified would promise more proof than it
+checked.
 
-```rust,ignore
-enum Dim {
-    Dyn,                          // `dyn` or `_`
-    Lit(syn::LitInt),             // integer literal -> binary typenum
-    Path(syn::Path),              // named tag -> NamedDim<path, usize>
-    ConstPath(syn::Path),         // `const PATH` -> ConstDim<{ PATH }>
-    Named { tag: syn::Path, extent: Box<Dim> },  // `tag = extent`
-}
-```
+`shape!` builds shape *values*. Its static/runtime split is syntactic: an
+integer literal is static, everything else runs. That is deliberately a
+weaker answer, never a wrong one. If you need the strongest possible proof
+at a boundary, write the type with `s!` and let conversion checking do the
+rest.
 
-Rejections are grammar errors with named messages (`s_rejects_a_non_path_dim`,
-`s_rejects_a_repeat_without_a_count`). The `..` ellipsis forms (`Head`,
-`Tail`, `Span`) currently render to plain `Dyn` - the conservative choice,
-since a partially-known chain would promise more rank proof than the parser
-verified.
+`tensors from literals`: `tensor!` infers shape from nesting depth exactly
+like a Rust array literal and dtype in a fixed order: explicit clause,
+consistent numeric suffixes, integer-literals-mean-`i64` (matching
+`torch.tensor`), else `f32`. Ragged literals are expansion errors naming
+the offending dimension; there is no best-effort reshape of what you
+clearly did not mean.
 
-`shape!` (`shape_value.rs`) is the value-level counterpart whose static/runtime
-split is *syntactic*: an integer literal is a static axis, anything else -
-including a named `const` - is a runtime axis. That is deliberately a weaker
-answer, never a wrong one, and negative or fractional dimensions are rejected
-at expansion ("a shape! dimension cannot be negative") instead of surfacing as
-a confusing `usize` mismatch later.
+## Two vocabularies that stay apart
 
-`tensor!` infers shape from nesting depth exactly like a Rust array literal,
-and dtype in a fixed order: explicit `; dtype:` clause, then numeric-literal
-suffixes when every suffixed leaf agrees, then `i64` if every leaf is a bare
-integer literal (matching `torch.tensor`), else `f32`. A ragged literal is an
-expansion error naming the offending dimension, never a best-effort reshape.
-An earlier revision accepted a `device:` clause inferred from token spelling,
-which could not see through `let d = Wgpu::new(0);`; the heuristic was removed
-rather than patched, and allocation placement belongs to targets.
+`axis!` selects axes; `i!` indexes. They look similar and share nothing:
+axis selection accepts expressions, negative positions, and named tags, and
+carries compile-time position proofs that still get checked against the
+real rank at runtime; indexing has its own grammar of ranges, negatives, and
+inference. Keeping them separate means learning one never corrupts the
+other; an `i![..]` range will not quietly mean something in a position
+where only an axis selector belongs.
 
-## `axis!`: two vocabularies, kept apart
+## Compile-time import fails closed
 
-`axis!` accepts expressions (including negative literals), bare named tags,
-and `named <Tag>`:
-
-```rust,ignore
-// crates/incin-macros/src/axis.rs (parser)
-if input.peek(syn::Ident) && input.peek2(syn::Ident) {
-    let keyword: syn::Ident = input.parse()?;
-    if keyword != "named" {
-        return Err(...expected `named <AxisTag>`...);
-    }
-    return Ok(Self::Named(input.parse()?));
-}
-```
-
-Numeric items expand to typed cursors built by recursion over magnitude -
-`Here`, `Next::<...>`, and a `ReverseAxis::<...>` wrapper for negatives - so
-positive and negative selectors carry separate compile-time proofs while
-runtime normalization still checks both against the real rank
-([target API](./target_api.md)). `i!` is deliberately a separate macro with
-its own vocabulary (`..`, ranges, negative indices, `-1` inference); axis
-selection never changes indexing rules.
-
-## `#[module]`: versioned argument grammar
-
-The struct-level arguments are parsed against a fixed vocabulary, unknown keys
-rejected by name:
-
-```rust,ignore
-// crates/incin-macros/src/module.rs (abridged)
-const STRUCT_ARGUMENTS: &[&str] = &[
-    "internal", "no_stats", "no_parameters", "no_state",
-    "no_named_layers", "no_shape_info", "no_train_mode", "no_to_device",
-];
-```
-
-That list exists because of how this macro used to fail: arguments were read
-with `attr.to_string().contains(..)`, so `#[module(no_such_argument)]`
-expanded as if written `#[module]`, and substring matching even accepted
-`not_internal` as `internal` - the failure mode where a typo silently changes
-behavior. The expansion walks every field of the struct, delegating to fields
-implementing the parameter/state visitors and recursing into nested modules;
-plain fields are skipped. Generated code routes `Vec`/`format!` through
-`::incin::__macro_support` so even stdlib prelude names stay out of the
-caller's namespace. `no_*` flags disable individual generated capabilities
-for forward-only or specialized modules.
-
-## Compile-time import
-
-`model!` / `import_model!` read `.onnx` graphs and `.safetensors` headers at
-compile time and emit typed module structs. Support is intentionally partial
-and **fail-closed**: initializers, unknown rank, control flow, custom domains,
-and unsupported nodes produce macro-expansion diagnostics instead of fabricated
-code or values ([experimental surfaces](./experimental.md)).
-
-## CI-005: the suite that keeps all of this true
-
-The macro policy requires every public macro to provide compile-pass,
-compile-fail, hygiene, rename, and rustfmt tests. Until CI-005,
-`crates/incin-macros` had no `tests/` directory at all - `cargo test` ran
-nothing and exited zero doing it. The harness is
-[`tests/macro_suite.rs`](../../../crates/incin-macros/tests/macro_suite.rs):
-
-- `tests/compile_pass/*.rs` and `tests/compile_fail/*.rs` run through
-  trybuild;
-- each compile-fail case has a row in `expected_reasons()` pinning the exact
-  diagnostic wording, because a macro rejection carries no error code - the
-  message *is* the contract the user reads;
-- adding a case without pinning its reason fails
-  `compile_fail_cases_fail_for_their_stated_reason`, a guard added after
-  four cases elsewhere were found rotted into passing while asserting
-  nothing;
-- `hygiene.rs` and `rename.rs` are the decoy suites described above;
-  `rustfmt_fixture.rs` pins expansion output formatting.
-
-The same pattern guards `mesh_*`, `placement_*`, `parallel_attrs*`, and
-`tensor_compile_fail` directories. When you extend any macro's grammar, the
-expected workflow is: new pass case, new fail case with its pinned reason,
-then the implementation - the suite is written so skipping the first two
-steps fails visibly.
+`model!` and `import_model!` read `.onnx` graphs and `.safetensors` headers
+during compilation and emit typed module structs. Where they cannot help
+(unknown rank, control flow, custom domains, unsupported nodes), they stop
+with an expansion diagnostic instead of emitting code that would misbehave
+later. Partial support plus fail-closed beats broad support plus surprises;
+[experimental surfaces](./experimental.md) tracks exactly which graph shapes
+are covered today.

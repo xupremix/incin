@@ -83,17 +83,20 @@ npm ci
 npm test
 ```
 
-This launches a real VS Code Extension Development Host (via
-`@vscode/test-electron`, which downloads its own VS Code build the first
-time. Do not point it at a snap-packaged `code`; that was confirmed to
-silently swallow `--extensionTestsPath` and exit 0 without running anything)
-with this extension loaded from source, opens a throwaway workspace
+This launches a real VS Code Extension Development Host via
+`@vscode/test-electron`, which downloads its own VS Code build the first time.
+The host loads this extension from source, opens a throwaway workspace
 containing a `Cargo.toml` that mentions `incin`, and asserts the extension
 activates and correctly rewrites `rust-analyzer.server.path`/`extraEnv`, and
 that **Incin: Toggle Shape Hints** flips the hints env var. It installs
-`rust-lang.rust-analyzer` into its own isolated test profile first (needed
-because of `extensionDependencies` above). It does not touch your real VS
-Code profile. The standard run keeps the fast activation/settings tests only.
+`rust-lang.rust-analyzer` into its own isolated test profile first, which this
+extension's `extensionDependencies` in `package.json` requires. It does not
+touch your real VS Code profile. The standard run keeps the fast
+activation/settings tests only.
+
+Do not point the harness at a snap-packaged `code`. That build was confirmed
+to silently swallow `--extensionTestsPath` and exit 0 without running
+anything.
 
 The dedicated pipeline check used in CI builds `incin-lsp`, opens a local Incin
 workspace, and waits (at most two minutes) for a humanized rust-analyzer

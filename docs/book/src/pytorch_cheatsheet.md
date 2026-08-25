@@ -13,17 +13,17 @@
 | `loss.backward()` | `loss.backward()?` | Returns `Gradients` rather than mutating `.grad` on each leaf. |
 | `param.grad` | `grads.require(&param)?` | Explicit typed lookup by tensor, not an attribute. `grads.get(&param)?` is the optional form. |
 | `nn.Linear(768, 256)` | `Linear::<s![768, 256], B>::build(())?` | In/out features are the shape type, not constructor arguments. |
-| `nn.Sequential(a, b, c)` | `seq!(a, b, c)` - see [Sequential](./sequential.md) | Type is `SeqTy!(A, B, C)`, built the same way the value is. |
+| `nn.Sequential(a, b, c)` | `seq!(a, b, c)`, see [Sequential](./sequential.md) | Type is `SeqTy!(A, B, C)`, built the same way the value is. |
 | `optim.AdamW(model.parameters(), lr=1e-3)` | `AdamW::<B>::from_module(&model, 1e-2)?` | Parameters are collected through the module visitor. |
 | `optim.step()` | `optim.step(&grads)?` | Takes the `Gradients` from `backward()` explicitly rather than reading accumulated `.grad` fields. |
 | `scheduler.step(); optim.param_groups[0]['lr']` | `sched.step(); optim.lr = sched.get_lr();` | `lr` is a public field you copy the scheduler's value into, not managed for you. |
 | `nn.MSELoss()(pred, target)` | `MSELoss::new().forward(&pred, &target)?` | Same default reduction as PyTorch. Reduction is a type parameter, so a non-default one is named at construction: `MSELoss::<Sum>::with_reduction()`. `Mean`, `Sum`, and `NoneReduction` live in `incin::nn`, not the prelude. |
-| `torch.save(model.state_dict(), "m.pt")` | `save_safetensors::<B, _, _>(&model, "m.safetensors")?` | safetensors, not pickle - see [Saving and loading](./saving_loading.md). |
+| `torch.save(model.state_dict(), "m.pt")` | `save_safetensors::<B, _, _>(&model, "m.safetensors")?` | safetensors, not pickle; see [Saving and loading](./saving_loading.md). |
 | `DataLoader(dataset, batch_size=4)` | `DataLoader::builder(dataset).batch_size(4).build()?` | Builder setters are infallible; validation happens in `build`. Scalar samples become `Vec<T>` and tuple samples are collated field-wise. |
 | `logits.argmax(dim=1)` | `logits.argmax(axis!(1))?` | Static and runtime signed selectors share one axis argument. |
 | `x.to(device)` | `x.to_device::<D2>(&device_arg)?` | Device is part of the type on the receiving end, `Tensor<S, TransferTo<D2>::Output, ...>`. |
 | `x.view(-1, 4)` / `x.reshape(...)` | `x.reshape(shape![usize, 4])?` | A static target keeps its compile-time proof. Runtime extents are checked during the reshape. |
-| `q = self.query(x)`, then reuse `x` | `self.query.forward(x.clone())?` | `Module::forward` takes its input by value, so feeding one tensor to several layers - Q/K/V projections, a residual `x + block(x)`, any skip connection - needs `.clone()` at each extra use. The clone is a reference-count bump on shared storage plus small shape metadata, never a copy of the data. Losses are the exception: they already take `&pred, &target`. |
+| `q = self.query(x)`, then reuse `x` | `self.query.forward(x.clone())?` | `Module::forward` takes its input by value, so feeding one tensor to several layers (Q/K/V projections, a residual `x + block(x)`, any skip connection) needs `.clone()` at each extra use. The clone is a reference-count bump on shared storage plus small shape metadata, never a copy of the data. Losses are the exception: they already take `&pred, &target`. |
 
 The biggest structural difference is not any one API. Shape and
 dtype mismatches, tensors that shouldn't require a gradient, and layers fed
@@ -31,5 +31,5 @@ the wrong feature count are, as much as possible, compile errors here rather
 than runtime exceptions. Code that "just runs" in PyTorch because Python
 doesn't check any of that ahead of time often needs its shapes made
 explicit, by writing `s![768, 256]` rather than trusting two `768`s a hundred
-lines apart to agree - to compile in Incin at all. That's the trade this
+lines apart to agree, to compile in Incin at all. That's the trade this
 library is built around, not a friction to work around.

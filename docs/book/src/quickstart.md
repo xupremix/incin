@@ -1,6 +1,6 @@
 # Quickstart
 
-A tensor, some arithmetic, and a gradient - the shortest useful program:
+A tensor, some arithmetic, and a gradient. The shortest useful program:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -22,8 +22,8 @@ fn main() -> Result<()> {
 }
 ```
 
-`shape![2, 2]` produces a statically-checked type-level shape proof. `a`'s shape is checked at compile
-time. Checked arithmetic uses the same broadcasting rules as ordinary
+`shape![2, 2]` produces a type-level shape proof, so `a`'s shape is settled at
+compile time. Checked arithmetic uses the same broadcasting rules as ordinary
 operators, while `add_exact`, `mul_exact`, and their siblings request strict
 equal-shape behavior explicitly.
 
@@ -74,5 +74,5 @@ fn main() -> Result<()> {
 ```
 
 That's the whole shape of a training step: forward, a loss module, `backward`,
-`optimizer.step`. The rest of this book fills in the pieces - more layer
+`optimizer.step`. The rest of this book fills in the pieces: more layer
 types, real datasets, schedulers, metrics, and checkpointing.

@@ -15,6 +15,34 @@ It only changes these server-to-editor messages:
 All other LSP frames are forwarded unchanged. The proxy does not implement a
 separate language server and does not replace rust-analyzer.
 
+## What it looks like
+
+A reshape error leaves rust-analyzer in this form:
+
+```text
+Cannot reshape: source has UInt<UInt<UInt<UTerm, B1>, B1>, B0> elements but
+the target shape has UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0> elements
+```
+
+and reaches your editor in this one, with the original expansions attached as
+related information rather than thrown away:
+
+```text
+Cannot reshape: source has 6 elements but the target shape has 8 elements
+
+  6 <= UInt<UInt<UInt<UTerm, B1>, B1>, B0>
+  8 <= UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0>, B0>
+```
+
+Inlay hints and hover labels get the same treatment, so
+
+```text
+Tensor<(UInt<UInt<UTerm, B1>, B0>, UInt<UInt<UTerm, B1>, B1>), CpuBackendImpl<Cpu>>
+```
+
+reads as `Tensor<[2, 3], CpuBackendImpl<Cpu>>`, or as `Tensor<[2, 3]>` with
+`INCIN_LSP_SHORTEN_BACKEND=1`.
+
 ## Install
 
 After the first crates.io release, install the binary with:

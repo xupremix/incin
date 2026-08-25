@@ -42,7 +42,7 @@ error[E0277]: Cannot contract dimension `UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B0
               with `UInt<UInt<UTerm, B1>, B1>`
 ```
 
-[`cargo incin check`](#cli-cargo-incin) intercepts that and prints what you
+[`cargo incin check`](#the-tooling-is-the-feature) intercepts that and prints what you
 actually wanted:
 
 ```text
@@ -56,10 +56,10 @@ error[E0277]: Cannot contract dimension `[4, 8]` with `MatMulShape<[3, 8]>`
 ```
 
 Same error, readable shapes, zero runtime cost. The types prove the shapes; the
-numbers are covered too - every operation comes from one canonical catalog
+numbers are covered too: every operation comes from one canonical catalog
 backed by generated conformance vectors, and the differentiable ones carry
 finite-difference gradcheck suites. And with
-[incin-lsp](#editor-support), rust-analyzer shows shapes as decimal hints
+[incin-lsp](#the-tooling-is-the-feature), rust-analyzer shows shapes as decimal hints
 directly in your editor while you type.
 
 ## Why another deep learning framework?
@@ -69,7 +69,7 @@ frameworks check shapes when the kernel launches; by then you've already paid
 for the queue, the data load, and three minutes of your life. Incin moves that
 check to the type system, which means:
 
-- **If it compiles, the shapes agree.** Not "probably agree" - the compiler
+- **If it compiles, the shapes agree.** Not "probably agree": the compiler
   proved it.
 - **Dynamic shapes are still first-class.** Real models have runtime batch
   sizes and sequence lengths. `Tensor<Dyn, B>` composes with static shapes in
@@ -79,11 +79,11 @@ check to the type system, which means:
   semantics docs and conformance vectors. No drift between what the docs claim
   and what a backend does.
 - **No silent fallbacks.** If a backend can't run an operation, you get a type
-  error naming the gap - never a quiet transfer to another device.
+  error naming the gap, never a quiet transfer to another device.
 
 Under the hood there's an autograd tape, AdamW/SGD, conv/pool/norm/loss layers,
 safetensors checkpoints, ONNX import for supported graphs, and CPU executors for
-all 158 backend-executable catalog operations - checked against generated
+all 158 backend-executable catalog operations, checked against generated
 conformance vectors, with finite-difference gradchecks over the differentiable
 kernels. The full honest status, including what's *not* done, lives in
 [what's not finished](https://xupremix.github.io/incin/#/whats_not_finished).
@@ -178,8 +178,8 @@ and inlay hints with the same engine. Tensor types render as `[4, 8]`, not
   <img src="https://raw.githubusercontent.com/xupremix/incin/master/docs/assets/editors/vscode-shape-diagnostic.png" alt="A reshape error rewritten by incin-lsp in VS Code">
 </p>
 
-**`incin-viz`** is a terminal UI for watching training runs live - losses,
-gradient norms, memory, graph snapshots - over a local telemetry socket.
+**`incin-viz`** is a terminal UI for watching training runs live (losses,
+gradient norms, memory, graph snapshots) over a local telemetry socket.
 
 Three tools, one diagnostic engine, no configuration required.
 
@@ -302,18 +302,19 @@ Neovim screenshot for good measure:
 
 ## Where to go next
 
-- **[The Book](https://xupremix.github.io/incin/)** - task-oriented guide from
-  five-line tensors up to a Transformer block.
+- **[The Book](https://xupremix.github.io/incin/)** is the task-oriented guide,
+  from five-line tensors up to a Transformer block.
 - **[What's not finished](https://xupremix.github.io/incin/#/whats_not_finished)**
-  - the honest list. GPU backends cover a subset; read before planning a CUDA
-  training run.
+  is the honest list. GPU backends cover a subset; read it before planning a
+  CUDA training run.
 - **[Capability matrix](https://github.com/xupremix/incin/blob/master/docs/capabilities.md)**
-  - per-operation, generated from executor registrations, never hand-edited.
+  is per-operation, generated from executor registrations, never hand-edited.
 - **[docs/GUIDE.md](https://github.com/xupremix/incin/blob/master/docs/GUIDE.md)**
-  - how the shape-proof system works internally.
-- **[The deep dive](https://xupremix.github.io/incin/#/deep_architecture)**
-  - five rendered chapters on architecture, type semantics, lowering, proofs,
-  and macro internals - how the pieces above are actually built.
+  is the repository-side tour of the shape-proof system.
+- **[The deep dive](https://xupremix.github.io/incin/#/deep_architecture)** runs
+  five rendered chapters on the execution model: how a typed call becomes a
+  kernel, what each stage proves, and how to add your own backends, devices,
+  and dtypes.
 - Found something? [Open an issue](https://github.com/xupremix/incin/issues/new/choose).
   The templates make it fast.
 

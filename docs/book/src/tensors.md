@@ -156,5 +156,5 @@ assert_eq!(values, vec![1.0, 1.0, 1.0]);
 # Ok::<(), incin::Error>(())
 ```
 
-Reading a value back is a synchronization point on a device backend - cheap
+Reading a value back is a synchronization point on a device backend, cheap
 on CPU, worth batching on an accelerator.

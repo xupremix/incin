@@ -4,7 +4,7 @@
 rest of the type-level machinery: reshaping vs re-asserting, slicing, the
 broadcast rules, and the traits that decide what compiles.
 
-## `reshape` vs `to_shape` - the distinction that bites
+## `reshape` vs `to_shape`: the distinction that bites
 
 They sound interchangeable and are not:
 
@@ -63,7 +63,7 @@ wrote the operation:
 | Form | Rule | Fails how |
 |---|---|---|
 | `a.try_add(&b)` | broadcasting | recoverable error |
-| `a + b` | `BroadcastShape` - numpy-style | panic on dynamic/backend error |
+| `a + b` | `BroadcastShape`, numpy-style | panic on dynamic/backend error |
 | `a.broadcast_add(&b)` | `BroadcastShape` | compile error if unbroadcastable |
 
 ```rust,no_run
@@ -99,11 +99,11 @@ broadcasting cannot express.
 
 Two constants on `Shape` carry the proof information the execution path uses:
 
-- **`PROOF`** - `Static` (rank and every extent known), `Mixed` (known rank,
+- **`PROOF`**: `Static` (rank and every extent known), `Mixed` (known rank,
   some runtime axis), or `Dynamic` (rank itself unknown). Both default to the
   weakest honest answer, so a `Shape` implemented outside the crate is
   credited with nothing it hasn't demonstrated.
-- **`STATIC_NUMEL`** - `Some(n)` when the type alone settles the element
+- **`STATIC_NUMEL`**: `Some(n)` when the type alone settles the element
   count, `None` otherwise.
 
 `STATIC_NUMEL` exists in that `Option` form for a specific reason: stable Rust
@@ -111,7 +111,7 @@ cannot branch on whether a generic `S` exposes a stronger static-shape trait
 without specialization. Restating the count on the base trait means any `S` can
 be asked, and because `S` is a type parameter, `if let Some(n) =
 S::STATIC_NUMEL` collapses to one arm at monomorphization. That is what lets a
-backend specialize on a static shape - see
+backend specialize on a static shape; see
 [Backend authoring](./backend_authoring.md).
 
 ## Named dimensions and the middle ground

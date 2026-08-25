@@ -35,7 +35,7 @@ the prelude.
 ## Loading does not move the model
 
 `load` restores state in place and leaves every parameter on the device it
-already lives on. There is no device argument - it used to take one and
+already lives on. There is no device argument; it used to take one and
 ignore it, which read as a relocation the call never performed. Moving a model
 between devices is `ToDevice`, which is explicit and hands back the relocated
 model.
@@ -65,8 +65,8 @@ reported as a version problem rather than as a decode failure several fields
 in. Reading refuses a file whose version is newer than the build, naming both
 numbers so you learn which release would read it.
 
-The version describes the *envelope* - how paths, roles, dtypes and payload
-bytes are arranged - and is deliberately independent of the crate version
+The version describes the *envelope* (how paths, roles, dtypes and payload
+bytes are arranged) and is deliberately independent of the crate version
 and of any individual dtype's descriptor version.
 
 A file written before versioning existed carries no key and is refused as
@@ -84,8 +84,8 @@ a supported `.onnx` graph into typed Rust code at compile time.
 
 Dense f32 initializers (weights and biases) are parsed at compile time and
 embedded into typed `Param<Shape, B>` module state with deterministic state keys
-(`initializer_000`, `initializer_001`, etc.). Unsupported constructs - such as
+(`initializer_000`, `initializer_001`, etc.). Unsupported constructs (such as
 sparse initializers, unknown rank, non-f32 initializers, control flow, custom
-domains, and unsupported node types - produce compile diagnostics rather than
+domains, and unsupported node types) produce compile diagnostics rather than
 silently-wrong code. Treat this as import tooling for supported feed-forward graph
 topologies rather than an arbitrary ONNX runtime.

@@ -3,7 +3,7 @@
 Every built-in layer follows the same two-step shape: a `Shape` type
 parameter names what's static, and a `build(args)` constructor takes
 whatever isn't. `args` uses the same flexible-argument system as tensor
-constructors - pass exactly the runtime values the static shape didn't
+constructors: pass exactly the runtime values the static shape didn't
 already pin down, in a tuple if there's more than one, and `()` when there
 are none.
 
@@ -76,7 +76,7 @@ assert_eq!(h.dims().as_ref(), &[1, 4, 3, 3]);
 
 `BatchNorm2d`, `LayerNorm`, and `RMSNorm` all take their channel count as a
 one-element shape tuple, `(Channels,)`, and their `build` arguments are
-whatever the static shape didn't already fix - an epsilon (and, for batch
+whatever the static shape didn't already fix: an epsilon (and, for batch
 norm, a momentum):
 
 ```rust,no_run
@@ -97,7 +97,7 @@ let h2 = ln.forward(x2)?;
 
 `Embedding`'s shape is `(Vocab, EmbedDim)`. Its forward input's element type
 matches its own `K` (the layer's float element by default) rather than an
-integer dtype - the underlying kernel reads any dtype it can convert to an
+integer dtype; the underlying kernel reads any dtype it can convert to an
 exact integer, so an index tensor is written with integer-valued floats:
 
 ```rust,no_run
@@ -114,8 +114,8 @@ assert_eq!(h.dims().as_ref(), &[3, 4]);
 ## LSTM
 
 `LSTM`'s shape is `(InFeatures, OutFeatures)`. Unlike the layers above, its
-`forward` takes the initial hidden and cell state explicitly - there's no
-implicit "start from zero" - and returns both the full output sequence and
+`forward` takes the initial hidden and cell state explicitly (there's no
+implicit "start from zero") and returns both the full output sequence and
 the final state:
 
 ```rust,ignore

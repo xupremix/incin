@@ -1,7 +1,7 @@
 # Metrics
 
 Metrics accumulate over batches rather than compute a single value from
-tensors directly - call `update` per batch, read `value()` whenever you want
+tensors directly: call `update` per batch, read `value()` whenever you want
 the running score, `reset()` between epochs.
 
 ```rust,no_run
@@ -22,7 +22,7 @@ fn main() -> Result<()> {
 }
 ```
 
-`update` takes plain `&[usize]` class-index slices, not tensors - pull the
+`update` takes plain `&[usize]` class-index slices, not tensors; pull the
 values off the device first (`to_vec1`), same as any other host-side
 readout. `Precision`, `Recall`, `F1Score`, `MSE`, and `ConfusionMatrix`
 follow the same `Metric` trait shape (`reset`, `value`).

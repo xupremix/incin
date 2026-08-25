@@ -51,7 +51,7 @@ operation.
 
 State files now record a format version, and a file without one is refused as
 unversioned rather than read on a guess. Load it with the old build, save it
-with this one. Foreign safetensors files are unaffected - they were never
+with this one. Foreign safetensors files are unaffected; they were never
 loadable through `ModelExt::load`, and `import_model!` does not look for the
 key.
 
@@ -110,7 +110,7 @@ the framework was missing. See
 ### The CPU SIMD kernels became reachable
 
 The AVX2 elementwise kernels were gated on a compile-time check for the AVX2
-target feature, which a stock `cargo build` never sets - so every default build
+target feature, which a stock `cargo build` never sets, so every default build
 dead-code-eliminated them and ran a scalar loop instead. They are selected by
 runtime detection now.
 
@@ -122,7 +122,7 @@ elementwise arithmetic. On an AVX2 machine a 65536-element `f32` add went from
 
 `relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`, `sqrt`, `log`,
 `tanh`, `sigmoid`, and `swish` had working shaders and `Execute`
-implementations, but were never advertised by the capability registry - so
+implementations, but were never advertised by the capability registry, so
 canonical dispatch refused them. They are advertised now and verified
 numerically against reference implementations on a software adapter.
 
@@ -167,9 +167,9 @@ the default graph with it.
 
 This page is written by hand and can drift. These do not:
 
-- `docs/capabilities.md` - which operations each backend supports, for which
+- `docs/capabilities.md`: which operations each backend supports, for which
   dtypes, generated from the registrations.
-- `docs/OPERATION_SEMANTICS.md` - the semantic contract for every catalog
+- `docs/OPERATION_SEMANTICS.md`: the semantic contract for every catalog
   operation.
 - The feature table in [Every feature flag](./feature_flags.md), which is
   checked against the Cargo manifests on every run.

@@ -1,14 +1,14 @@
 # Invariants: what you may construct, and what must be earned
 
 Some values in Incin are plain data you can assemble however you like. Others
-*certify* something - that a shape's element count doesn't overflow, that a
+*certify* something: that a shape's element count doesn't overflow, that a
 descriptor has been checked against real storage, that a device ordinal was
 range-checked. The second kind has no public unchecked constructor, on
 purpose: being able to hand-build one would make the certification worthless.
 
 This chapter is the map of which is which. It is the most "you are holding a
 sharp thing" part of the library, and the closest thing here to a nomicon
-chapter - though note that unlike Rust's own, almost none of this is `unsafe`.
+chapter, though note that unlike Rust's own, almost none of this is `unsafe`.
 The enforcement is the type system and private fields, not undefined behaviour
 waiting to happen.
 
@@ -16,11 +16,11 @@ waiting to happen.
 
 | Category | Example | May you build one directly? |
 |---|---|---|
-| **Marker** - no runtime claim | `Dyn`, `Cpu`, dtype/ordinal markers | Yes. Unit construction. |
-| **Configuration** - caller intent only | `ResourceLimits`, optimizer options, `Sequential` | Yes, via public fields/builders. |
-| **Validated value** - a checked invariant | `ShapeBuf`, `Alignment`, `CheckedNumel` | Only through a checking constructor. |
-| **Opaque identifier** - allocated identity | `TensorId`, `GradientId` | Only through the owning subsystem. |
-| **Proof token** - "a rule has run" | `Validated<O>`, `TensorMeta`, `ConstructionWitness` | **No public constructor at all.** |
+| **Marker**: no runtime claim | `Dyn`, `Cpu`, dtype/ordinal markers | Yes. Unit construction. |
+| **Configuration**: caller intent only | `ResourceLimits`, optimizer options, `Sequential` | Yes, via public fields/builders. |
+| **Validated value**: a checked invariant | `ShapeBuf`, `Alignment`, `CheckedNumel` | Only through a checking constructor. |
+| **Opaque identifier**: allocated identity | `TensorId`, `GradientId` | Only through the owning subsystem. |
+| **Proof token**: "a rule has run" | `Validated<O>`, `TensorMeta`, `ConstructionWitness` | **No public constructor at all.** |
 
 The last row is the load-bearing one. A `Validated<O>` exists only because
 descriptor validation produced it; there is no way for user code to mint one
@@ -29,7 +29,7 @@ and hand it to a backend claiming checks happened that didn't.
 ## Checked arithmetic is not optional
 
 A shape's element count is computed with `checked_mul`, never
-`.iter().product()`. This is not fastidiousness - release builds have overflow
+`.iter().product()`. This is not fastidiousness: release builds have overflow
 checks off, so a crafted or accidentally-huge shape wraps to a small number,
 undersizes the allocation, and then stride-based indexing computed from the
 same (differently-wrapped) shape reads and writes past the end of it.
@@ -54,7 +54,7 @@ and the tensor byte limit. Both expose only `get()` and have private fields.
 The rule for the codebase, stated in `docs/INVARIANT_TYPES.md`: an internal
 helper may use `expect` **only after** a value has crossed one of these checked
 boundaries. At that point a failure is an internal invariant violation, not a
-user input error - which is exactly the distinction the panic policy draws.
+user input error, which is exactly the distinction the panic policy draws.
 
 ## Device selectors prove nothing about hardware
 
@@ -70,7 +70,7 @@ let device = Cuda::new(0);
 ```
 
 Constructing a selector is infallible and free. Availability is a *later,
-fallible* step - backend initialization. The ordinal field is private and
+fallible* step: backend initialization. The ordinal field is private and
 readable only through `ordinal()`, specifically so the tuple syntax never
 becomes a compatibility commitment.
 
@@ -78,13 +78,12 @@ becomes a compatibility commitment.
 
 `CanonicalOperation` is sealed (`private::Sealed`), so the set of canonical
 operation identities is closed to `incin-core`. A downstream crate cannot
-declare a new `op::X` and route it through `dispatch::execute` - the catalog is
+declare a new `op::X` and route it through `dispatch::execute`; the catalog is
 the single authoritative declaration of what operations exist, and sealing is
 what keeps that true rather than merely conventional.
 
-This is why adding an operation is a change to
-`crates/incin-core/src/operation_catalog.rs` and nowhere else: every consumer
-is generated from it.
+This is why adding an operation is a change to the catalog declaration and
+nowhere else: every consumer is generated from it.
 
 ## Deserialization is a constructor
 

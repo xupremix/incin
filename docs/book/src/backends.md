@@ -1,7 +1,7 @@
 # CPU, and what actually runs on GPU today
 
 The backend is a type parameter (`B` in `Tensor<S, B, ...>`), not a runtime
-switch - `CpuBackendImpl<Cpu>` and `CudaBackendImpl<Cuda>` are
+switch: `CpuBackendImpl<Cpu>` and `CudaBackendImpl<Cuda>` are
 different types, and which one you use is fixed at compile time by which
 type you wrote.
 
@@ -45,8 +45,8 @@ been observed to compute. Two caveats belong next to the numbers:
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
 `matmul`, and `conv2d`/pooling. WGPU additionally advertises thirteen unary
-activations - `relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
-`sqrt`, `log`, `tanh`, `sigmoid`, `swish` - which Metal does not. CUDA
+activations (`relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
+`sqrt`, `log`, `tanh`, `sigmoid`, `swish`), which Metal does not. CUDA
 additionally advertises `softmax` and `rms_norm`, both trainable and composed
 from primitives, plus the two forward-only normalizations above.
 
@@ -63,7 +63,7 @@ training happens right now.
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with
 a typed `UnsupportedReason` rather than doing something wrong silently, so
-you'll find out immediately rather than discover it three epochs in - but
+you'll find out immediately rather than discover it three epochs in, but
 the fix is writing the kernel, not finding the right incantation.
 
 ## Picking a backend at compile time
@@ -86,5 +86,5 @@ on, gated behind the matching Cargo feature (`cpu`, `cuda`, `wgpu`, `metal`).
 
 The `doctor` report (via the library's `doctor` module, `std` feature) lists
 which backend features are compiled in, what devices were detected, and
-cache state for the running build - the fastest way to check what a given
+cache state for the running build, the fastest way to check what a given
 build can actually reach before writing code against it.

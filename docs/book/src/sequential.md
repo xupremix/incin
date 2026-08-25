@@ -1,6 +1,6 @@
 # Sequential models
 
-`Sequential<L1, L2>` chains two layers, and only two - a three-or-more-layer
+`Sequential<L1, L2>` chains two layers, and only two: a three-or-more-layer
 model needs right-nesting, which is exactly what `seq!`/`SeqTy!` automate.
 They mirror each other: `seq!` builds the **value**, `SeqTy!` names the
 **type**, from the same flat layer list, so you never hand-nest either one.
