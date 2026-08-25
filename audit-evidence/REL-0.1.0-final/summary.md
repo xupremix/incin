@@ -166,9 +166,9 @@ never pushed:
 
 So the release identity chain accepts a tag cut at the current `master` tip.
 
-`CHANGELOG.md` heads the section `## [0.1.0] - 2026-08-24` and the candidate
-was assembled on 2026-08-25. Nothing gates on that date, so it was left rather
-than guessed at a second time; it should be set to the day the tag is cut.
+`CHANGELOG.md` is dated `2026-08-25`, the day the candidate was assembled and
+validated. If the tag is cut on a later day, that heading is the one line to
+update.
 
 Seven commit subjects exceed the repository's 72-character convention, by one
 to four characters. Six are in the correctness stream and one
