@@ -57,6 +57,16 @@ earns `pub` only by being named in the table below.
 | `experimental` | 1 | P | |
 | `paranoid_audit` | 1 | M | |
 
+### Reading `err` versus `error` in the baselines
+
+`incin_core::err` is `pub(crate)`; the supported path is
+`incin_core::error`, a re-export facade over it. `cargo-public-api` renders a
+type by its defining module, so roughly 300 signatures in
+`incin-backends-cpu.txt` print `incin_core::err::Result` even though no public
+module of that name exists. `err` is therefore tier I, not a second public
+error path, and nothing in a baseline that spells `incin_core::err::` is a
+supported import.
+
 ## `incin-backends`
 
 | Module | Items | Tier | Notes |
