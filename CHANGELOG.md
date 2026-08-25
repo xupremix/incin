@@ -6,7 +6,7 @@
 All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.0] - 2026-08-24
+## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified
 backend; the GPU backends, distributed planning, compiled execution, and the
