@@ -9,7 +9,8 @@
 //! or JSON key order.
 
 use crate::err::{Error, ErrorMessage, Result};
-use alloc::{collections::BTreeMap, string::String, vec::Vec};use std::path::{Component, Path, PathBuf};
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use std::path::{Component, Path, PathBuf};
 
 /// Operation tag used for structured errors raised while reading an index.
 const OP: &str = "safetensors_index_open";
@@ -79,7 +80,10 @@ fn parse_index_document(raw: &str) -> Result<ParsedIndex> {
         .map_err(|e| malformed(format!("invalid index JSON: {e}")))?;
     de.end()
         .map_err(|e| malformed(format!("trailing data after index JSON: {e}")))?;
-    Ok((parsed.metadata.and_then(|m| m.total_size), parsed.weight_map))
+    Ok((
+        parsed.metadata.and_then(|m| m.total_size),
+        parsed.weight_map,
+    ))
 }
 
 /// Shape of the index document we accept: `metadata.total_size` optional,
@@ -101,7 +105,9 @@ struct RawIndexMetadata {
 
 /// Deserializes `weight_map` as ordered pairs so duplicate tensor entries
 /// surface as errors rather than last-writer-wins.
-fn reject_duplicate_weight_map<'de, D>(de: D) -> std::result::Result<Vec<(String, String)>, D::Error>
+fn reject_duplicate_weight_map<'de, D>(
+    de: D,
+) -> std::result::Result<Vec<(String, String)>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -120,15 +126,19 @@ impl SafetensorsIndex {
     /// Opens and validates the index at `path`.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let raw = std::fs::read_to_string(path).map_err(|e| {
-            malformed(format!("reading safetensors index {}: {e}", path.display()))
-        })?;
+        let raw = std::fs::read_to_string(path)
+            .map_err(|e| malformed(format!("reading safetensors index {}: {e}", path.display())))?;
         // Reject traversal-shaped documents before touching the filesystem.
         let (total_size, weight_pairs) = parse_index_document(&raw)?;
 
         let root = path
             .parent()
-            .ok_or_else(|| malformed(format!("index path {} has no parent directory", path.display())))?
+            .ok_or_else(|| {
+                malformed(format!(
+                    "index path {} has no parent directory",
+                    path.display()
+                ))
+            })?
             .to_path_buf();
 
         let mut weight_map = BTreeMap::new();
@@ -182,7 +192,9 @@ impl SafetensorsIndex {
 
     /// Iterates `(tensor name, shard name)` in sorted tensor-name order.
     pub fn tensors(&self) -> impl ExactSizeIterator<Item = (&str, &str)> + '_ {
-        self.weight_map.iter().map(|(n, s)| (n.as_str(), s.as_str()))
+        self.weight_map
+            .iter()
+            .map(|(n, s)| (n.as_str(), s.as_str()))
     }
 
     /// The shard that owns `tensor`, if the map names it.
@@ -232,7 +244,6 @@ fn validate_shard_name(shard: &str) -> Result<()> {
     }
     Ok(())
 }
-
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
@@ -360,8 +371,7 @@ mod tests {
         let outside = std::env::temp_dir().join(format!("incin-escape-{}", std::process::id()));
         std::fs::create_dir_all(&outside).expect("outside dir is created");
         write_shard(&outside, "escaped.safetensors", &[("x", vec![1.0])], &[]);
-        let index_path =
-            write_index(&dir, r#"{"weight_map": {"x": "../escaped.safetensors"}}"#);
+        let index_path = write_index(&dir, r#"{"weight_map": {"x": "../escaped.safetensors"}}"#);
         let error = deserialize_snapshot_safetensors_index(&index_path)
             .expect_err("traversal must be rejected")
             .to_string();
@@ -398,7 +408,10 @@ mod tests {
         let error = deserialize_snapshot_safetensors_index(&index_path)
             .expect_err("an unmapped tensor must be rejected")
             .to_string();
-        assert!(error.contains("stowaway") && error.contains("a.safetensors"), "{error}");
+        assert!(
+            error.contains("stowaway") && error.contains("a.safetensors"),
+            "{error}"
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -411,7 +424,10 @@ mod tests {
         let error = deserialize_snapshot_safetensors_index(&index_path)
             .expect_err("duplicate ownership must be rejected")
             .to_string();
-        assert!(error.contains("`x`") && error.contains("b.safetensors"), "{error}");
+        assert!(
+            error.contains("`x`") && error.contains("b.safetensors"),
+            "{error}"
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -426,7 +442,10 @@ mod tests {
         let error = deserialize_snapshot_safetensors_index(&index_path)
             .expect_err("an unsatisfied claim must be rejected")
             .to_string();
-        assert!(error.contains("ghost") && error.contains("does not contain"), "{error}");
+        assert!(
+            error.contains("ghost") && error.contains("does not contain"),
+            "{error}"
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 }

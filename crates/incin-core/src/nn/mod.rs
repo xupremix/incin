@@ -87,12 +87,12 @@ pub mod param;
 pub mod rms_norm;
 /// Elman recurrent layer family.
 pub mod rnn;
-#[cfg(feature = "std")]
-/// `save`.
-pub mod save;
 /// Sharded Safetensors checkpoint indexes (`model.safetensors.index.json`).
 #[cfg(feature = "std")]
 pub mod safetensors_index;
+#[cfg(feature = "std")]
+/// `save`.
+pub mod save;
 /// Backend-neutral model state artifacts.
 pub mod state;
 /// `stats`.
@@ -129,13 +129,13 @@ pub use param::{Buffer, Frozen, Param, TrainState, Trainable};
 pub use rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm};
 pub use rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell};
 #[cfg(feature = "std")]
+pub use safetensors_index::SafetensorsIndex;
+#[cfg(feature = "std")]
 pub use save::{
     CheckpointDType, GlobalCheckpointManifest, TensorCheckpointMeta, load_resharded_checkpoint,
     load_safetensors, load_safetensors_snapshot, save_checkpoint, save_checkpoint_manifest,
     save_safetensors, slice_bytes_for_rank,
 };
-#[cfg(feature = "std")]
-pub use safetensors_index::SafetensorsIndex;
 pub use state::{
     StateMutVisitor, StatePath, StateRole, StateSnapshot, StateSnapshotVisitor, StateValue,
     StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
