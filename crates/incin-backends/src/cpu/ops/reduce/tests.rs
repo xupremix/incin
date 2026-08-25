@@ -477,6 +477,62 @@ fn cumsum_rejects_an_out_of_range_axis_instead_of_panicking() {
     );
 }
 
+// --- reductions over non-contiguous operands ---
+
+/// A transposed operand reads through swapped strides; every reduction
+/// backward must still land a correctly-shaped, correctly-valued cotangent on
+/// that operand. The finite-difference harness perturbs through the
+/// operand's own strides, so any stride-handling defect in the analytic path
+/// shows up as a gradcheck divergence.
+#[test]
+fn gradchecks_hold_for_non_contiguous_operands() {
+    // The same backing buffer viewed as its own [3, 2] transpose: shape
+    // [2, 3] with strides [1, 2].
+    let base = matrix(vec![0.5, -1.0, 2.0, 1.5, -0.5, 4.0], 3, 2);
+    let x = CpuStorage::try_from_parts(base.buffer.clone(), vec![2usize, 3], vec![1usize, 2], 0)
+        .unwrap();
+    assert!(!crate::cpu::stride::is_contiguous(&x.shape, &x.strides));
+    let operands = [x];
+
+    let op_sum = |inputs: &[CpuStorage]| -> CpuStorage {
+        crate::cpu::ops::reduce::sum_all(&inputs[0]).unwrap()
+    };
+    let err = gradcheck(op_sum, &operands, F32_STEP);
+    assert!(err < GRAD_TOL, "non-contiguous sum_all gradcheck: {err}");
+
+    // max along the trailing axis of the strided view; values are distinct,
+    // so the scatter backward stays inside max's differentiable region.
+    let op_max = |inputs: &[CpuStorage]| -> CpuStorage {
+        let reduced = crate::cpu::ops::reduce::max_keepdim(&inputs[0], 1).unwrap();
+        crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
+    };
+    let err = gradcheck(op_max, &operands, F32_STEP);
+    assert!(
+        err < GRAD_TOL,
+        "non-contiguous max_keepdim gradcheck: {err}"
+    );
+}
+
+#[test]
+fn backward_through_a_transposed_operand_matches_the_view_shape() {
+    // Forward through a strided view, then backward: the cotangent must be
+    // shaped like the VIEW the op actually saw, and reading it back through
+    // the original strides must equal the analytic answer.
+    let x = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 3, 2);
+    let viewed = x.transpose(0, 1).unwrap();
+    assert!(!crate::cpu::stride::is_contiguous(
+        &viewed.shape,
+        &viewed.strides
+    ));
+    let out = crate::cpu::ops::reduce::sum_dim(&viewed, 1).unwrap();
+    assert_eq!(out.shape, vec![2]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(viewed.id).expect("input should have gradient");
+    assert_eq!(g.shape, vec![2, 3]);
+    // ones seed broadcast back over the viewed shape.
+    assert_eq!(f32_vec(g), vec![1.0; 6]);
+}
+
 // --- prod backward (the catalog declares Reduction gradients Defined) ---
 
 #[test]
