@@ -1,6 +1,7 @@
 # Public API tiers for 0.1.0
 
-Every module in a shipped crate is assigned one of four tiers. The tier states
+Every module in every shipped crate is assigned one of four tiers. All ten
+published packages are covered. The tier states
 what a 0.1.0 consumer may rely on and what the project may still change without
 a major version bump. Module counts are declared items in the reviewed
 baselines under this directory, so the table is checkable against
@@ -94,8 +95,79 @@ supported import.
 | `dispatch` | 6 | X | |
 | `err` | 4 | X | |
 
-`incin-viz-plugin-api` is expert tier in its entirety; it exists to be
-implemented against.
+## `incin-viz-plugin-api`
+
+Expert tier in its entirety; it exists to be implemented against.
+
+| Module | Items | Tier | Notes |
+| --- | ---: | :---: | --- |
+| `prelude` | 23 | X | Single import surface for plugin authors. |
+| `render_ctx` | 11 | X | |
+| `panel` | 9 | X | |
+| `event` | 6 | X | |
+| `keymap` | 4 | X | |
+| `err` | 4 | X | |
+| `plugin` | 3 | X | |
+
+## `incin-data`
+
+| Module | Items | Tier | Notes |
+| --- | ---: | :---: | --- |
+| `loader` | 70 | S | Dataset iteration and batching. |
+| `transforms` | 34 | S | |
+| `vision` | 20 | S | Includes `vision::mnist`. |
+| `prelude` | 19 | S | |
+| `dataset` | 6 | S | |
+| `downloader` | 4 | S | Network fetch; honours the documented `INCIN_HUB_*` variables. |
+
+## `incin-telemetry`
+
+| Module | Items | Tier | Notes |
+| --- | ---: | :---: | --- |
+| `prelude` | 26 | S | |
+| `emitter` | 24 | X | Implemented against by callers producing events. |
+| `reporter` | 16 | X | |
+| `transport` | 11 | X | Includes `transport::file` and `transport::socket`. |
+| `events` | 10 | S | The event vocabulary consumers match on. |
+| `run_dir` | 5 | S | |
+| `err` | 4 | S | |
+
+## `incin-diagnostics`
+
+133 entries, all at the crate root, no submodules. Stable user API: this is the
+typenum-to-prose translation surface that `cargo incin check` and the LSP both
+call, and its function names (`translate_typenum_text`, the `parse_*_mismatch`
+family, `strip_path_qualifiers`) are the contract an editor integration binds
+to.
+
+## `incin-lsp`
+
+| Module | Items | Tier | Notes |
+| --- | ---: | :---: | --- |
+| `config` | 6 | X | Home of the documented `INCIN_LSP_*` variables. |
+| `rewrite` | 5 | X | |
+| `frame` | 3 | X | |
+
+Expert tier throughout: the crate is a language-server implementation, and its
+public surface exists so the binary and its tests can be assembled, not so
+users can write against it.
+
+## `incin-macros`
+
+Ten entries, all exported macros: `tensor`, `shape`, `s`, `model`,
+`import_model`, `idx`, `i`, `axis`. Stable user API by way of the facade, which
+re-exports them. Their expansion support lives in `incin`, `incin-core`, and
+`incin-macros` support modules and is tier M; see
+[hidden-items.md](hidden-items.md).
+
+## One inconsistency this review found and did not change
+
+The error module is spelled `error` in `incin-core` and `err` in
+`incin-telemetry`, `incin-viz`, and `incin-viz-plugin-api`. In `incin-core`
+alone the short name is taken by a `pub(crate)` module, so the public spelling
+had to differ; the other crates expose theirs directly. Renaming would churn
+four baselines to no functional end, and the project is pre-1.0, so the
+inconsistency is recorded here rather than corrected on the eve of a release.
 
 ## Changes made for the 0.1.0 freeze
 
