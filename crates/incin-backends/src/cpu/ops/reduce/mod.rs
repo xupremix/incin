@@ -81,6 +81,6 @@ pub(crate) use select::{argmax, argmin, argsort, topk};
 // super::*;` once it is imported here.
 use helpers::{
     DenseReader, dense_reader, fill_like, flatten_index, fold_all_f64, index_buffer,
-    max_axis_with_indices, min_axis_with_indices, prod_all_grad, prod_dim_grad,
-    scatter_axis_grad, sum_axis_squeeze, total_sum_f64, unflatten_index,
+    max_axis_with_indices, min_axis_with_indices, prod_all_grad, prod_dim_grad, scatter_axis_grad,
+    sum_axis_squeeze, total_sum_f64, unflatten_index,
 };

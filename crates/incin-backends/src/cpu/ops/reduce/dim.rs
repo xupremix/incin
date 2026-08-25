@@ -371,7 +371,12 @@ pub(crate) fn prod_dim(t: &CpuStorage, dim: usize) -> Result<CpuStorage> {
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            Ok(vec![prod_dim_grad(grad_out, &t_clone, dim, &original_shape)?])
+            Ok(vec![prod_dim_grad(
+                grad_out,
+                &t_clone,
+                dim,
+                &original_shape,
+            )?])
         }),
     });
 

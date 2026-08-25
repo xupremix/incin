@@ -167,11 +167,7 @@ pub(crate) fn prod_all(t: &CpuStorage) -> Result<CpuStorage> {
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
             let scalar_grad = grad_out.get(&vec![0usize; grad_out.shape.len()]);
-            Ok(vec![prod_all_grad(
-                &t_clone,
-                &original_shape,
-                scalar_grad,
-            )?])
+            Ok(vec![prod_all_grad(&t_clone, &original_shape, scalar_grad)?])
         }),
     });
 
