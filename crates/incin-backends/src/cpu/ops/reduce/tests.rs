@@ -525,7 +525,10 @@ fn prod_all_gradcheck_matches_finite_differences() {
         crate::cpu::ops::reduce::prod_all(&inputs[0]).unwrap()
     };
     let max_rel_err = gradcheck(op, &[x], F32_STEP);
-    assert!(max_rel_err < GRAD_TOL, "prod_all gradcheck too high: {max_rel_err}");
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "prod_all gradcheck too high: {max_rel_err}"
+    );
 }
 
 #[test]
@@ -549,5 +552,8 @@ fn prod_dim_gradcheck_matches_finite_differences() {
         crate::cpu::ops::reduce::sum_all(&reduced).unwrap()
     };
     let max_rel_err = gradcheck(op, &[x], F32_STEP);
-    assert!(max_rel_err < GRAD_TOL, "prod_dim gradcheck too high: {max_rel_err}");
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "prod_dim gradcheck too high: {max_rel_err}"
+    );
 }
