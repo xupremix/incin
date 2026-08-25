@@ -43,17 +43,40 @@ python3 -c "import json,sys; json.load(open('$WORK/doctor.json'))" || fail "doct
 ok "doctor --json parses"
 
 echo "== inspect: real safetensors fixture =="
+# Prefer a real checkpoint left behind by the examples, but never require one:
+# `*.safetensors` is gitignored, so those files exist only in a working tree
+# that has already run an example. On a fresh clone there are none, and this
+# check used to hard-fail there rather than on any real defect. Synthesize a
+# minimal well-formed file instead so the check runs everywhere and still
+# inspects a genuine safetensors container.
 FIXTURE=""
 for candidate in "$REPO_ROOT"/mnist_model.safetensors "$REPO_ROOT"/rnn_model.safetensors; do
     [ -f "$candidate" ] && FIXTURE="$candidate" && break
 done
-if [ -n "$FIXTURE" ]; then
-    "$CLI" inspect "$FIXTURE" > "$WORK/inspect.txt" 2>&1 || fail "inspect failed on $FIXTURE"
-    grep -qi "dtype\|shape\|tensor" "$WORK/inspect.txt" || fail "inspect output lacks tensor metadata"
-    ok "inspect reports model metadata"
+if [ -z "$FIXTURE" ]; then
+    FIXTURE="$WORK/smoke_model.safetensors"
+    python3 - "$FIXTURE" <<'PYFIX' || fail "could not synthesize a safetensors fixture"
+import json, struct, sys
+
+tensors = {
+    "layer.weight": {"dtype": "F32", "shape": [2, 3], "data_offsets": [0, 24]},
+    "layer.bias": {"dtype": "F32", "shape": [2], "data_offsets": [24, 32]},
+}
+header = json.dumps(tensors, separators=(",", ":")).encode("utf-8")
+header += b" " * (-len(header) % 8)
+payload = struct.pack("<8f", *[0.5 * i for i in range(8)])
+with open(sys.argv[1], "wb") as fh:
+    fh.write(struct.pack("<Q", len(header)))
+    fh.write(header)
+    fh.write(payload)
+PYFIX
+    SYNTHETIC=" (synthesized)"
 else
-    fail "no .safetensors fixture found for inspect smoke test"
+    SYNTHETIC=""
 fi
+"$CLI" inspect "$FIXTURE" > "$WORK/inspect.txt" 2>&1 || fail "inspect failed on $FIXTURE"
+grep -qi "dtype\|shape\|tensor" "$WORK/inspect.txt" || fail "inspect output lacks tensor metadata"
+ok "inspect reports model metadata${SYNTHETIC}"
 
 echo "== check subcommand: typenum translation pipeline on a scratch crate =="
 SCRATCH="$WORK/scratch"
