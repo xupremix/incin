@@ -56,7 +56,12 @@ use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceS
 /// The same order `incin_backends::detect::PREFERENCE` uses, restated here
 /// rather than imported so that this module's behaviour does not change when a
 /// backend crate reorders its own detection for an unrelated reason.
-const FASTEST_ORDER: &[DeviceKind] = &[DeviceKind::Cuda, DeviceKind::Wgpu, DeviceKind::Cpu];
+const FASTEST_ORDER: &[DeviceKind] = &[
+    DeviceKind::Cuda,
+    DeviceKind::Metal,
+    DeviceKind::Wgpu,
+    DeviceKind::Cpu,
+];
 
 // ============================================================================
 // The machine
@@ -323,6 +328,10 @@ fn device_at(kind: DeviceKind, ordinal: usize) -> Option<DeviceId> {
     match kind {
         DeviceKind::Cpu => (ordinal == 0).then(DeviceId::cpu),
         DeviceKind::Cuda => Some(DeviceId::cuda(ordinal)),
+        // Metal resolves ordinal 0 only: the backend family has no
+        // multi-ordinal device spelling yet, so higher ordinals are a
+        // missing device, not a guess.
+        DeviceKind::Metal => (ordinal == 0).then(|| DeviceId::metal(ordinal)),
         DeviceKind::Wgpu => Some(DeviceId::wgpu(ordinal)),
         _ => None,
     }
@@ -333,6 +342,7 @@ const fn feature_for(kind: DeviceKind) -> &'static str {
     match kind {
         DeviceKind::Cpu => "cpu",
         DeviceKind::Cuda => "cuda",
+        DeviceKind::Metal => "metal",
         DeviceKind::Wgpu => "wgpu",
         // `DeviceKind` is `#[non_exhaustive]` outside `incin-core`. A family
         // added later has no feature name here, and naming the crate is more
@@ -709,5 +719,30 @@ impl Trainer {
             batches,
             final_loss,
         })
+    }
+}
+
+#[cfg(test)]
+mod device_order_tests {
+    use super::*;
+
+    /// The planner's family order must mirror detection's preference order.
+    /// The two constants drifted once: detection ranked Metal ahead of WGPU
+    /// while `Fastest` skipped Metal entirely, so a macOS machine with both
+    /// features enabled planned onto WGPU. This test is the drift alarm.
+    #[test]
+    fn fastest_order_mirrors_detection_preference() {
+        assert_eq!(FASTEST_ORDER, incin_backends::detect::PREFERENCE);
+    }
+
+    #[test]
+    fn metal_resolves_only_ordinal_zero() {
+        assert!(device_at(DeviceKind::Metal, 0).is_some());
+        assert!(device_at(DeviceKind::Metal, 1).is_none());
+    }
+
+    #[test]
+    fn metal_names_its_feature() {
+        assert_eq!(feature_for(DeviceKind::Metal), "metal");
     }
 }
