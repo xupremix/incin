@@ -1,6 +1,6 @@
 <div align="center">
 
-# incin
+# Incin
 
 ### A Rust deep learning framework with compile-time verification of tensor shapes, dtypes, devices, and gradient state.
 
