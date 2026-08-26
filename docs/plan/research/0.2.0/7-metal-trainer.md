@@ -1,0 +1,4 @@
+#7 Metal in Trainer device selection — S
+Finding: detect ranks Cuda->Metal->Wgpu->Cpu and compile-time BestDevice = MetalN<U0> under metal feature, but Trainer FASTEST_ORDER omits Metal (stale comment claims parity), device_at hits _ => None, feature_for emits the incin-backends catch-all. Metal executors are stubs pending MTL-002/003 (25 advertised rows = advertisement, not verification).
+Recommendation: option (a) exactly — insert Metal after CUDA in FASTEST_ORDER, DeviceKind::Metal arm (ordinal 0 only, higher refused), feature_for -> "metal", parity test pinning FASTEST_ORDER to detect::PREFERENCE. Do NOT add capability-based gating inside Fastest yet (that is #83's job); keep Metal preview-flagged.
+Risk: planner-yes/kernel-no — Fastest picks stub-backed Metal; drift if constants change without the parity test.

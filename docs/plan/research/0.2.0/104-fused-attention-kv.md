@@ -1,0 +1,3 @@
+#104 Fused attention + typed KV cache — L (KvCache alone S/M, could land first)
+Finding: composed SDPA materializes [B,H,T,T] twice (fwd+saved) -> quadratic memory; no cache -> generation re-runs full prefix per token. No attention/online-softmax kernel exists; SDPA row composed f32-only; Buffer = the cache vehicle; autotune infra lacks a call site (this is one).
+Recommendation: typed PREALLOCATED KvCache (capacity in the shape, NoGrad, reset(), overflow = typed CacheCapacityExceeded) + causal flash-style FusedAttention catalog op (query-blocked online softmax, recompute backward, causal block skipping — numerically exact for #83 oracle). Defer ring + paged until demand. All three dependencies OPEN: #85 (GEMM quality), #101 (module surface), #90 (bf16).
