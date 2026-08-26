@@ -95,7 +95,15 @@ jobs:
               exit 1
             fi
             cuda=false
-            echo "::warning::CUDA hardware job skipped: HARDWARE_CUDA_RUNNER is unset, so no NVIDIA runner is registered"
+            # The collective jobs inherit the CUDA runner: without one they
+            # would schedule onto the GPU-less ubuntu-latest fallback and run
+            # NCCL with no device and no second rank. Skip them too, loudly,
+            # so a skipped run can never masquerade as a passing one.
+            if [ "$dist2_network" = "true" ] || [ "$multinode" = "true" ]; then
+              echo "::warning::CUDA collective jobs skipped alongside the CUDA hardware job: HARDWARE_CUDA_RUNNER is unset, so there is no GPU and no second rank to run them on"
+            fi
+            dist2_network=false
+            multinode=false
           fi
           if [ -z "${WGPU_RUNNER:-}" ]; then
             wgpu_native=false
