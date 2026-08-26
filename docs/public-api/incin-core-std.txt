@@ -658,6 +658,7 @@ impl incin_core::nn::param::TrainState for incin_core::nn::param::Frozen
 impl incin_core::nn::param::TrainState for incin_core::nn::param::Trainable
 impl incin_core::nn::rms_norm::RMSNormShape for incin_core::shapes::Dyn
 impl incin_core::nn::rnn::RnnShape for incin_core::shapes::Dyn
+impl incin_core::nn::safetensors_index::SafetensorsIndex
 impl incin_core::nn::save::CheckpointDType
 impl incin_core::nn::save::GlobalCheckpointManifest
 impl incin_core::nn::state::StatePath
@@ -6715,6 +6716,16 @@ pub fn incin_core::nn::rnn::rnn<S: incin_core::nn::rnn::RnnShape>(incin_core::sh
 pub fn incin_core::nn::rnn::rnn_cell<S: incin_core::nn::rnn::RnnShape>(incin_core::shapes::ShapeValue<S>) -> incin_core::nn::rnn::RNNCellBuilder<S>
 pub fn incin_core::nn::rnn<S: incin_core::nn::rnn::RnnShape>(incin_core::shapes::ShapeValue<S>) -> incin_core::nn::rnn::RNNBuilder<S>
 pub fn incin_core::nn::rnn_cell<S: incin_core::nn::rnn::RnnShape>(incin_core::shapes::ShapeValue<S>) -> incin_core::nn::rnn::RNNCellBuilder<S>
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::is_empty(&self) -> bool
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::len(&self) -> usize
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::open(impl core::convert::AsRef<std::path::Path>) -> incin_core::error::Result<Self>
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::read_shard(&self, &str) -> incin_core::error::Result<alloc::vec::Vec<u8>>
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::root(&self) -> &std::path::Path
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::shard_of(&self, &str) -> core::option::Option<&str>
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::shard_path(&self, &str) -> std::path::PathBuf
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::shards(&self) -> alloc::vec::Vec<&str>
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::tensors(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = (&str, &str)> + '_
+pub fn incin_core::nn::safetensors_index::SafetensorsIndex::total_size(&self) -> core::option::Option<u64>
 pub fn incin_core::nn::save::CheckpointDType::descriptor(&self) -> incin_core::error::Result<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::nn::save::CheckpointDType::from_descriptor(incin_core::prelude::DTypeDescriptor) -> Self
 pub fn incin_core::nn::save::GlobalCheckpointManifest::add_tensor(&mut self, impl core::convert::Into<alloc::string::String>, alloc::vec::Vec<usize>, impl core::convert::Into<incin_core::prelude::DTypeDescriptor>, impl core::convert::Into<alloc::string::String>)
@@ -11004,6 +11015,7 @@ pub mod incin_core::nn::optional
 pub mod incin_core::nn::param
 pub mod incin_core::nn::rms_norm
 pub mod incin_core::nn::rnn
+pub mod incin_core::nn::safetensors_index
 pub mod incin_core::nn::save
 pub mod incin_core::nn::state
 pub mod incin_core::nn::stats
@@ -12067,6 +12079,7 @@ pub struct incin_core::nn::RNNBuilder<S: incin_core::nn::rnn::RnnShape, BiasIh: 
 pub struct incin_core::nn::RNNCell<S: incin_core::nn::rnn::RnnShape, B: incin_core::backend_authoring::VariableBackend, BiasIh: incin_core::nn::optional::OptionalField, BiasHh: incin_core::nn::optional::OptionalField, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> where <S as incin_core::nn::rnn::RnnShape>::IhShape: incin_core::nn::linear::LinearShape, <S as incin_core::nn::rnn::RnnShape>::HhShape: incin_core::nn::linear::LinearShape
 pub struct incin_core::nn::RNNCellBuilder<S: incin_core::nn::rnn::RnnShape, BiasIh: incin_core::nn::optional::OptionalField, BiasHh: incin_core::nn::optional::OptionalField, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::ReLU
+pub struct incin_core::nn::SafetensorsIndex
 pub struct incin_core::nn::Sequential<L1, L2>(pub L1, pub L2)
 pub struct incin_core::nn::Sigmoid
 pub struct incin_core::nn::Softmax
@@ -12134,6 +12147,7 @@ pub struct incin_core::nn::rnn::RNN<S: incin_core::nn::rnn::RnnShape, B: incin_c
 pub struct incin_core::nn::rnn::RNNBuilder<S: incin_core::nn::rnn::RnnShape, BiasIh: incin_core::nn::optional::OptionalField, BiasHh: incin_core::nn::optional::OptionalField, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::rnn::RNNCell<S: incin_core::nn::rnn::RnnShape, B: incin_core::backend_authoring::VariableBackend, BiasIh: incin_core::nn::optional::OptionalField, BiasHh: incin_core::nn::optional::OptionalField, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> where <S as incin_core::nn::rnn::RnnShape>::IhShape: incin_core::nn::linear::LinearShape, <S as incin_core::nn::rnn::RnnShape>::HhShape: incin_core::nn::linear::LinearShape
 pub struct incin_core::nn::rnn::RNNCellBuilder<S: incin_core::nn::rnn::RnnShape, BiasIh: incin_core::nn::optional::OptionalField, BiasHh: incin_core::nn::optional::OptionalField, Train: incin_core::nn::param::TrainState>
+pub struct incin_core::nn::safetensors_index::SafetensorsIndex
 pub struct incin_core::nn::save::CheckpointDType
 pub struct incin_core::nn::save::GlobalCheckpointManifest
 pub struct incin_core::nn::save::TensorCheckpointMeta

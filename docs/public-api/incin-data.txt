@@ -43,8 +43,11 @@ impl<T> incin_data::vision::mnist::TensorCollate<T>
 pub const fn incin_data::vision::mnist::MnistDataset::is_training(&self) -> bool
 pub const fn incin_data::vision::mnist::TensorCollate<T>::new(T) -> Self
 pub enum incin_data::DataError
+pub enum incin_data::RemainderPolicy
 pub enum incin_data::loader::DataError
+pub enum incin_data::loader::RemainderPolicy
 pub enum incin_data::prelude::DataError
+pub enum incin_data::prelude::RemainderPolicy
 pub fn &incin_data::loader::DataLoader<D, C>::into_iter(self) -> Self::IntoIter
 pub fn alloc::sync::Arc<T>::get(&self, usize) -> core::result::Result<core::option::Option<Self::Item>, incin_data::loader::DataError>
 pub fn alloc::sync::Arc<T>::is_empty(&self) -> bool
@@ -62,6 +65,7 @@ pub fn incin_data::downloader::Downloader::download_and_extract_gz(&str, &std::p
 pub fn incin_data::loader::Collate::collate(&self, alloc::vec::Vec<T>) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::loader::DataLoader<D, C>::builder_with_collate(D, C) -> incin_data::loader::DataLoaderBuilder<D, C>
 pub fn incin_data::loader::DataLoader<D, C>::new(D, C, usize) -> incin_core::err::Result<Self>
+pub fn incin_data::loader::DataLoader<D, C>::set_epoch(&mut self, u64)
 pub fn incin_data::loader::DataLoader<D, C>::with_drop_last(self, bool) -> Self
 pub fn incin_data::loader::DataLoader<D, C>::with_epoch(self, u64) -> Self
 pub fn incin_data::loader::DataLoader<D, C>::with_num_workers(self, usize) -> Self
@@ -77,6 +81,7 @@ pub fn incin_data::loader::DataLoaderBuilder<D, C>::build(self) -> incin_core::e
 pub fn incin_data::loader::DataLoaderBuilder<D, C>::drop_last(self, bool) -> Self
 pub fn incin_data::loader::DataLoaderBuilder<D, C>::epoch(self, u64) -> Self
 pub fn incin_data::loader::DataLoaderBuilder<D, C>::prefetch(self, usize) -> Self
+pub fn incin_data::loader::DataLoaderBuilder<D, C>::sampler(self, incin_data::loader::DistributedSampler) -> Self
 pub fn incin_data::loader::DataLoaderBuilder<D, C>::seed(self, u64) -> Self
 pub fn incin_data::loader::DataLoaderBuilder<D, C>::shuffle(self, bool) -> Self
 pub fn incin_data::loader::DataLoaderBuilder<D, C>::timeout(self, core::option::Option<core::time::Duration>) -> Self
@@ -143,9 +148,14 @@ pub incin_data::DataError::WorkerDisconnected
 pub incin_data::DataError::WorkerPanicked
 pub incin_data::DataError::WorkerPanicked::stage: &'static str
 pub incin_data::DataError::WorkerPanicked::worker_id: usize
+pub incin_data::DistributedSampler::rank: usize
+pub incin_data::DistributedSampler::remainder: incin_data::loader::RemainderPolicy
+pub incin_data::DistributedSampler::world_size: usize
 pub incin_data::Normalize::mean: alloc::vec::Vec<f32>
 pub incin_data::Normalize::std: alloc::vec::Vec<f32>
 pub incin_data::RandomHorizontalFlip::p: f64
+pub incin_data::RemainderPolicy::Drop
+pub incin_data::RemainderPolicy::Pad
 pub incin_data::Scale::factor: f32
 pub incin_data::loader::DataError::CollatePanicked
 pub incin_data::loader::DataError::CollatePanicked::worker_id: usize
@@ -161,6 +171,11 @@ pub incin_data::loader::DataError::WorkerDisconnected
 pub incin_data::loader::DataError::WorkerPanicked
 pub incin_data::loader::DataError::WorkerPanicked::stage: &'static str
 pub incin_data::loader::DataError::WorkerPanicked::worker_id: usize
+pub incin_data::loader::DistributedSampler::rank: usize
+pub incin_data::loader::DistributedSampler::remainder: incin_data::loader::RemainderPolicy
+pub incin_data::loader::DistributedSampler::world_size: usize
+pub incin_data::loader::RemainderPolicy::Drop
+pub incin_data::loader::RemainderPolicy::Pad
 pub incin_data::prelude::CenterCrop::crop_h: usize
 pub incin_data::prelude::CenterCrop::crop_w: usize
 pub incin_data::prelude::DataError::CollatePanicked
@@ -177,9 +192,14 @@ pub incin_data::prelude::DataError::WorkerDisconnected
 pub incin_data::prelude::DataError::WorkerPanicked
 pub incin_data::prelude::DataError::WorkerPanicked::stage: &'static str
 pub incin_data::prelude::DataError::WorkerPanicked::worker_id: usize
+pub incin_data::prelude::DistributedSampler::rank: usize
+pub incin_data::prelude::DistributedSampler::remainder: incin_data::loader::RemainderPolicy
+pub incin_data::prelude::DistributedSampler::world_size: usize
 pub incin_data::prelude::Normalize::mean: alloc::vec::Vec<f32>
 pub incin_data::prelude::Normalize::std: alloc::vec::Vec<f32>
 pub incin_data::prelude::RandomHorizontalFlip::p: f64
+pub incin_data::prelude::RemainderPolicy::Drop
+pub incin_data::prelude::RemainderPolicy::Pad
 pub incin_data::prelude::Scale::factor: f32
 pub incin_data::transforms::CenterCrop::crop_h: usize
 pub incin_data::transforms::CenterCrop::crop_w: usize
@@ -200,6 +220,7 @@ pub struct incin_data::Compose<T>
 pub struct incin_data::DataLoader<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::DataLoaderBuilder<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::DefaultCollate
+pub struct incin_data::DistributedSampler
 pub struct incin_data::Downloader
 pub struct incin_data::Normalize
 pub struct incin_data::RandomHorizontalFlip
@@ -209,12 +230,14 @@ pub struct incin_data::loader::DataLoader<D, C> where D: incin_data::dataset::Da
 pub struct incin_data::loader::DataLoaderBuilder<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::loader::DataLoaderIter<T>
 pub struct incin_data::loader::DefaultCollate
+pub struct incin_data::loader::DistributedSampler
 pub struct incin_data::prelude::CenterCrop
 pub struct incin_data::prelude::Compose<T>
 pub struct incin_data::prelude::DataLoader<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::prelude::DataLoaderBuilder<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::prelude::DataLoaderIter<T>
 pub struct incin_data::prelude::DefaultCollate
+pub struct incin_data::prelude::DistributedSampler
 pub struct incin_data::prelude::Normalize
 pub struct incin_data::prelude::RandomHorizontalFlip
 pub struct incin_data::prelude::Scale
