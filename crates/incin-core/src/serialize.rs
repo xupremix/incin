@@ -120,6 +120,7 @@ pub(crate) fn serialize_snapshot_safetensors(
     Ok(())
 }
 
+#[cfg(feature = "std")]
 /// A `.json` path names a sharded-checkpoint index (`*.safetensors.index.json`
 /// by convention); anything else is a single safetensors file.
 fn looks_like_safetensors_index(path: &std::path::Path) -> bool {
@@ -140,6 +141,7 @@ fn looks_like_safetensors_index(path: &std::path::Path) -> bool {
 /// shard. Sharded checkpoints are external artifacts by construction, so
 /// entries load under foreign-file semantics (no `incin.format.version`
 /// requirement).
+#[cfg(feature = "std")]
 pub(crate) fn deserialize_snapshot_safetensors_index(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
