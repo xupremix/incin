@@ -61,6 +61,33 @@ themselves are left as written rather than edited in place.
   currently poses CPU only, so accelerator rows are still verified by
   hand-written per-backend tests rather than by the oracle.
 
+- **#90's transmute finding is right about the hazard and wrong about both its
+  scope and its failure mode.** The report locates it in the CUDA matmul
+  executor and describes it as "bf16 today = silent byte misread". There are
+  nineteen unconditional `transmute::<f32>` calls across five files
+  (`ops/matmul.rs`, `ops/conv.rs`, `ops/pool.rs`, `ops/shape.rs`), not one, and
+  none of them had a dtype guard.
+
+  The failure depends on which way the width goes, and cudarc decides it:
+  `transmute::<S>(len)` returns `None` when `len * size_of::<S>()` exceeds the
+  allocation. A **narrower** dtype (`f16`, `bf16`, `u8`) therefore asks for
+  more bytes than exist, so the transmute fails and the `unwrap` panics. A
+  **wider** dtype (`f64`) satisfies the byte check, so the transmute succeeds
+  and the kernel reads the first half of the allocation as `f32`. The silent
+  misread the report describes is real, but it is the `f64` case, not the
+  `bf16` one.
+
+  Both were unreachable, held off only by the capability rows being
+  `F32_ONLY` while `validate_cuda_storage_dtype` deliberately accepts `f64`,
+  `f16`, `bf16`, `i64`, `q8_0` and `bool` as storage. Widening a `matmul`,
+  `conv` or `pool` row, which is what #90, #86, #87 and #106 all propose,
+  would have made them reachable with nothing in the code to stop it.
+
+  `validate_cuda_f32_kernel` now guards all nine entry points, so a wider row
+  produces the same typed `UnsupportedDType` refusal the rest of the backend
+  gives instead of a panic or a wrong answer. That does not implement #90; it
+  removes the trap #90 would otherwise spring.
+
 - **The "dead/unwired code" theme is broader than the report states.** It
   names WGPU's binary/scalar shader modes. `transpose` was a further instance:
   a complete WGSL kernel with a correct tape entry, in
