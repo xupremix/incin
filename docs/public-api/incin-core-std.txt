@@ -7261,6 +7261,7 @@ pub fn incin_core::shapes::DimCons<OutC, incin_core::shapes::DimCons<InC, incin_
 pub fn incin_core::shapes::DimCons<V, incin_core::shapes::DimCons<E, incin_core::shapes::Nil>>::build_args((<Self::Vocab as incin_core::shapes::Dim>::Arg, <Self::Embed as incin_core::shapes::Dim>::Arg)) -> Self::BuildArg
 pub fn incin_core::shapes::DimIdx::size() -> core::option::Option<usize>
 pub fn incin_core::shapes::DimensionConstraint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_core::shapes::DimensionConstraint::remedy(self, usize, usize) -> alloc::string::String
 pub fn incin_core::shapes::Dyn::build_args((<Self::InF as incin_core::shapes::Dim>::Arg, <Self::OutF as incin_core::shapes::Dim>::Arg)) -> core::result::Result<(usize, usize, Self::WeightArg, Self::BiasArg), incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::Dyn::build_args((<Self::Vocab as incin_core::shapes::Dim>::Arg, <Self::Embed as incin_core::shapes::Dim>::Arg)) -> Self::BuildArg
 pub fn incin_core::shapes::Dyn::build_args(usize) -> Self::BuildArg

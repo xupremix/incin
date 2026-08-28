@@ -106,6 +106,7 @@ macro_rules! descriptor_capability_rules {
         quantized_layouts = $quantized_layouts:expr,
         tensor_dtypes = $tensor_dtypes:expr,
         tensor_layouts = $tensor_layouts:expr,
+        logical_dtypes = $logical_dtypes:expr,
         legacy = [$($legacy:expr),* $(,)?];
         elementwise = [$($elementwise_op:ident),* $(,)?],
         broadcast = [$($broadcast_op:ident),* $(,)?],
@@ -119,6 +120,7 @@ macro_rules! descriptor_capability_rules {
         normalization = [$($normalization_op:ident),* $(,)?],
         embedding = [$($embedding_op:ident),* $(,)?],
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
+        logical = [$($logical_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
         composed_matmul = [$($composed_matmul_op:ident),* $(,)?],
         composed_matmul_bias = [$($composed_matmul_bias_op:ident),* $(,)?],
@@ -207,6 +209,23 @@ macro_rules! descriptor_capability_rules {
                 $tensor_layouts,
                 descriptor_min_rank(OperationKind::$native_tensor_op),
                 descriptor_max_rank(OperationKind::$native_tensor_op),
+                true,
+            ),)*
+            // Boolean throughout, on every operand and on the result, which
+            // is why these cannot sit in the tensor group even though they
+            // read through the same accessor. The tensor group's dtype set is
+            // whatever the backend can hold, and `dispatch::execute` checks
+            // every operand against the one resolved row, so a wider row here
+            // advertises `logical_and` over `f32` while the descriptor
+            // contract refuses it before any kernel is reached. Unlike
+            // `where_cond`'s `F32_AND_BOOL`, no union is needed: there is no
+            // mixed-dtype operand to union against.
+            $(native_ranked(
+                OperationKind::$logical_op,
+                $logical_dtypes,
+                $tensor_layouts,
+                descriptor_min_rank(OperationKind::$logical_op),
+                descriptor_max_rank(OperationKind::$logical_op),
                 true,
             ),)*
             // Same shape, reported as composed: these answer by rewriting into
@@ -345,7 +364,14 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // the flattened form is defined for a scalar, so their minimum is zero.
         | OperationKind::Cumsum
         | OperationKind::Argsort
-        | OperationKind::TopK => 1,
+        | OperationKind::TopK
+        // `dot` contracts one axis away and `outer` expands two vectors into a
+        // matrix; neither has anything to do on a scalar. Both reached this
+        // function's zero default until the conformance harness posed a
+        // rank-zero `dot` and the descriptor's own extent check indexed into an
+        // empty shape.
+        | OperationKind::Dot
+        | OperationKind::Outer => 1,
         // A transpose needs two axes to swap; every other view here needs at
         // least the one axis its attributes name. `unsqueeze` is the exception
         // that keeps this table honest: it inserts an axis, so a scalar is a

@@ -210,6 +210,82 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
+    /// Drop an axis of extent 1.
+    ///
+    /// A view, not a move: the elements are already in the right order, so
+    /// this is `reshape` with the axis removed from the shape. Composed the
+    /// same way CUDA composes it, and it inherits `reshape`'s tape entry
+    /// rather than pushing one of its own.
+    ///
+    /// Refusing a non-unit axis is the point of the check: silently keeping
+    /// an axis the caller asked to remove would hand back a tensor of a
+    /// different rank than the one they wrote down.
+    pub(crate) fn squeeze<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if dim >= t.shape.len() || t.shape[dim] != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "squeeze",
+                expected: alloc::vec![1],
+                got: t.shape.to_vec(),
+                msg: alloc::format!(
+                    "squeeze requires axis {dim} to have size 1, got size {} in shape {:?}",
+                    t.shape.get(dim).copied().unwrap_or(0),
+                    t.shape
+                ),
+            });
+        }
+        let mut target = t.shape.to_vec();
+        target.remove(dim);
+        Self::reshape::<K>(t, &target)
+    }
+
+    /// Insert an axis of extent 1 at `dim`.
+    ///
+    /// The inverse of [`squeeze`](Self::squeeze), and a view for the same
+    /// reason. `dim == rank` appends rather than failing, matching CUDA.
+    pub(crate) fn unsqueeze<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mut target = t.shape.to_vec();
+        if dim <= target.len() {
+            target.insert(dim, 1);
+        } else {
+            target.push(1);
+        }
+        Self::reshape::<K>(t, &target)
+    }
+
+    /// Collapse the inclusive axis range `[start_dim, end_dim]` into one axis.
+    ///
+    /// Composed from `reshape`, like the two above. The bounds check is what
+    /// keeps a reversed or out-of-range range from producing a plausible
+    /// wrong shape instead of an error.
+    pub(crate) fn flatten<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        start_dim: usize,
+        end_dim: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if start_dim > end_dim || end_dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "flatten",
+                expected: t.shape.to_vec(),
+                got: alloc::vec![start_dim, end_dim],
+                msg: alloc::format!(
+                    "flatten(start_dim={start_dim}, end_dim={end_dim}) out of bounds for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let collapsed: usize = t.shape[start_dim..=end_dim].iter().product();
+        let mut target = t.shape[..start_dim].to_vec();
+        target.push(collapsed);
+        target.extend_from_slice(&t.shape[end_dim + 1..]);
+        Self::reshape::<K>(t, &target)
+    }
+
     /// `transpose`.
     pub(crate) fn transpose<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,

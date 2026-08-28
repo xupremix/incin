@@ -161,7 +161,16 @@ pub(crate) fn rand_with_total(
         DTypeId::F64 => CpuBuffer::F64(data),
         DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
         DTypeId::BF16 => CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect()),
-        _ => unreachable!(),
+        // The sampling capability row is float-only, so nothing else should
+        // arrive here. Saying so with a refusal rather than a panic keeps the
+        // executor's answer inside the error contract even when the row that
+        // guards it is wrong.
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "rand",
+                backend: "Cpu non-float sampling",
+            });
+        }
     };
 
     let final_buffer = match device.kind() {
@@ -196,7 +205,16 @@ pub(crate) fn randn_with_total(
         DTypeId::F64 => CpuBuffer::F64(data),
         DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
         DTypeId::BF16 => CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect()),
-        _ => unreachable!(),
+        // The sampling capability row is float-only, so nothing else should
+        // arrive here. Saying so with a refusal rather than a panic keeps the
+        // executor's answer inside the error contract even when the row that
+        // guards it is wrong.
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "randn",
+                backend: "Cpu non-float sampling",
+            });
+        }
     };
 
     let final_buffer = match device.kind() {

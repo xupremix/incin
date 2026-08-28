@@ -23,6 +23,11 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for WgpuBackendImp
 
 impl incin_core::backend_authoring::StorageOutput for WgpuStorage {}
 
+// A variable is a trainable handle, not storage, so it carries `ExecuteOutput`
+// directly rather than through `StorageOutput`. `CpuVar` does the same; the
+// `var_*` creation executors are what need it.
+impl incin_core::backend_authoring::ExecuteOutput for super::types::WgpuVar {}
+
 impl<D: Device> Backend for WgpuBackendImpl<D> {
     /// `Grads`.
     /// `InnerBackend`.

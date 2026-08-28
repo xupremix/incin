@@ -1,3 +1,4 @@
+impl core::fmt::Display for incin::update::UpdateStatus
 impl incin::MnistTargetExt for incin_data::vision::mnist::MnistDataset
 impl incin::doctor::Cache
 impl incin::doctor::Feature
@@ -11,8 +12,10 @@ pub const incin::doctor::EXIT_USAGE: i32
 pub const incin::doctor::SCHEMA_VERSION: u32
 pub const incin::experimental::tuning_report::EXIT_OK: i32
 pub const incin::experimental::tuning_report::EXIT_USAGE: i32
+pub const incin::update::CURRENT: &str
 pub enum incin::doctor::CacheState
 pub enum incin::doctor::Severity
+pub enum incin::update::UpdateStatus
 pub fn incin::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 pub fn incin::TargetBatch<T>::batch(&self, alloc::vec::Vec<f32>, alloc::vec::Vec<u8>, usize) -> incin_data::loader::BatchResult<(Self::Images, Self::Labels)>
 pub fn incin::data::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
@@ -41,6 +44,8 @@ pub fn incin::doctor::Report::to_text(&self) -> alloc::string::String
 pub fn incin::doctor::cache_state(&std::path::Path) -> incin::doctor::CacheState
 pub fn incin::doctor::run(&[alloc::string::String]) -> (alloc::string::String, i32)
 pub fn incin::experimental::tuning_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub fn incin::update::UpdateStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin::update::check() -> incin::update::UpdateStatus
 pub fn incin_data::vision::mnist::MnistDataset::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 pub incin::doctor::Cache::detail: core::option::Option<alloc::string::String>
 pub incin::doctor::Cache::name: alloc::string::String
@@ -78,11 +83,21 @@ pub incin::doctor::Report::findings: alloc::vec::Vec<incin::doctor::Finding>
 pub incin::doctor::Report::probes: alloc::vec::Vec<incin::doctor::Probe>
 pub incin::doctor::Report::schema_version: u32
 pub incin::doctor::Report::toolchain: incin::doctor::Toolchain
+pub incin::doctor::Report::update: core::option::Option<alloc::string::String>
 pub incin::doctor::Severity::Error
 pub incin::doctor::Severity::Note
 pub incin::doctor::Severity::Warning
 pub incin::doctor::Toolchain::incin: alloc::string::String
 pub incin::doctor::Toolchain::rustc: core::option::Option<alloc::string::String>
+pub incin::update::UpdateStatus::Available
+pub incin::update::UpdateStatus::Available::latest: alloc::string::String
+pub incin::update::UpdateStatus::Available::running: alloc::string::String
+pub incin::update::UpdateStatus::Current
+pub incin::update::UpdateStatus::Current::running: alloc::string::String
+pub incin::update::UpdateStatus::NotCompiledIn
+pub incin::update::UpdateStatus::Offline
+pub incin::update::UpdateStatus::Unknown
+pub incin::update::UpdateStatus::Unknown::reason: alloc::string::String
 pub mod incin
 pub mod incin::advanced
 pub mod incin::data
@@ -99,6 +114,7 @@ pub mod incin::state
 pub mod incin::transforms
 pub mod incin::types
 pub mod incin::types::dtype
+pub mod incin::update
 pub struct incin::TargetBatch<T>(pub T)
 pub struct incin::doctor::Cache
 pub struct incin::doctor::DeviceReport

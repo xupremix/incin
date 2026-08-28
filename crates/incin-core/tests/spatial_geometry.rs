@@ -266,7 +266,12 @@ fn dyn_rules_reject_a_rank_they_cannot_handle() {
     );
     assert_eq!(
         err.to_string(),
-        "pool2d: expected rank between 3 and 4, got 2"
+        concat!(
+            "pool2d: expected rank between 3 and 4, got 2\n",
+            "  required: rank between 3 and 4\n",
+            "  received: rank 2\n",
+            "  fix: reshape, squeeze or unsqueeze the operand so its rank is between 3 and 4"
+        )
     );
 
     let err = <Dyn as SpatialConv2d<usize, U3, U1, U1, U1>>::compute_output_shape(

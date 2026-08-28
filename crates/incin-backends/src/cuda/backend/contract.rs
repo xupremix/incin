@@ -21,6 +21,11 @@ impl<D: Device> incin_core::backend_authoring::StorageBackend for CudaBackendImp
 
 impl incin_core::backend_authoring::StorageOutput for CudaStorage {}
 
+// A variable is a trainable handle, not storage, so it carries `ExecuteOutput`
+// directly rather than through `StorageOutput`. `CpuVar` does the same; the
+// `var_*` creation executors are what need it.
+impl incin_core::backend_authoring::ExecuteOutput for super::types::CudaVar {}
+
 impl<D: Device> Backend for CudaBackendImpl<D> {
     type InnerBackend = Self;
 

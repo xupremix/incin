@@ -116,6 +116,65 @@ impl From<crate::shapes::ShapeError> for DescriptorError {
     }
 }
 
+/// The edit that satisfies an operand-count contract.
+fn arity_remedy(
+    actual: usize,
+    expected: &core::ops::RangeInclusive<usize>,
+) -> alloc::string::String {
+    use alloc::format;
+    if actual < *expected.start() {
+        format!("pass {} more operand(s)", expected.start() - actual)
+    } else {
+        format!("pass {} fewer operand(s)", actual - expected.end())
+    }
+}
+
+/// The edit that satisfies a rank contract.
+fn rank_remedy(
+    actual: usize,
+    expected: &core::ops::RangeInclusive<usize>,
+) -> alloc::string::String {
+    use alloc::format;
+    if actual < *expected.start() {
+        format!(
+            "add {} axis/axes with `unsqueeze`, or pass an operand of rank {}",
+            expected.start() - actual,
+            expected.start()
+        )
+    } else {
+        format!(
+            "remove {} axis/axes with `squeeze` or `reshape`, or pass an operand of rank {}",
+            actual - expected.end(),
+            expected.end()
+        )
+    }
+}
+
+/// A concrete edit for the attribute contracts a caller trips most often.
+///
+/// Keyed on the attribute name the contract itself reports, so the advice
+/// cannot drift from the check: a name that stops being produced stops being
+/// matched, and falls back to naming where the rule lives. A generic
+/// "check the attribute" would be true of every arm and useful in none.
+fn attribute_remedy(attribute: &str) -> &'static str {
+    match attribute {
+        "index dtype" => {
+            "an index operand addresses positions, so it must be an integer tensor: \
+             build it as `Tensor::<_, _, i64>` rather than letting it default to a float"
+        }
+        "dtype" => {
+            "give every operand the same dtype, converting one with `.to_dtype(..)` \
+             if they genuinely differ"
+        }
+        "shape" | "rank" | "input shape" => {
+            "adjust the operand geometry named above; the rule is enforced in this \
+             operation's `AttributeContract::validate`"
+        }
+        "spatial parameters" => "kernel, stride, dilation and groups must each be non-zero",
+        _ => "correct the attribute named above; the rule stated is the contract",
+    }
+}
+
 impl fmt::Display for DescriptorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -125,7 +184,10 @@ impl fmt::Display for DescriptorError {
                 actual,
             } => write!(
                 f,
-                "{operation}: input arity {actual} is outside {expected:?}"
+                "{operation}: input arity {actual} is outside {expected:?}\n  accepts: {} to {} operands\n  received: {actual}\n  fix: {}",
+                expected.start(),
+                expected.end(),
+                arity_remedy(*actual, expected),
             ),
             Self::OutputArity {
                 operation,
@@ -142,7 +204,10 @@ impl fmt::Display for DescriptorError {
                 actual,
             } => write!(
                 f,
-                "{operation}: input {input} rank {actual} is outside {expected:?}"
+                "{operation}: input {input} rank {actual} is outside {expected:?}\n  operand {input}: rank {actual}\n  accepts: rank {} to {}\n  fix: {}",
+                expected.start(),
+                expected.end(),
+                rank_remedy(*actual, expected),
             ),
             Self::DeviceMismatch {
                 operation,
@@ -151,7 +216,7 @@ impl fmt::Display for DescriptorError {
                 actual,
             } => write!(
                 f,
-                "{operation}: input {input} device {actual:?} does not match {expected:?}"
+                "{operation}: input {input} device {actual:?} does not match {expected:?}\n  operand 0 is on: {expected:?}\n  operand {input} is on: {actual:?}\n  rule: every operand of one call must live on one device;                  nothing here moves data across devices implicitly\n  fix: move one operand with `.to_device(..)` so both agree,                  then repeat the call"
             ),
             Self::MissingCatalogEntry { operation } => write!(
                 f,
@@ -165,7 +230,11 @@ impl fmt::Display for DescriptorError {
                 operation,
                 attribute,
                 reason,
-            } => write!(f, "{operation}: invalid {attribute}: {reason}"),
+            } => write!(
+                f,
+                "{operation}: invalid {attribute}: {reason}\n  attribute: {attribute}\n  rule: {reason}\n  fix: {}",
+                attribute_remedy(attribute)
+            ),
             Self::Shape(error) => fmt::Display::fmt(error, f),
             Self::MetadataMismatch {
                 operation,

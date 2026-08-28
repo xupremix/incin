@@ -161,7 +161,13 @@ fn matmul_rejects_a_disagreeing_contraction() {
     );
     assert_eq!(
         err.to_string(),
-        "matmul: axis 'k' mismatch: 3 vs 4, which must be equal"
+        concat!(
+            "matmul: axis 'k' mismatch: 3 vs 4, which must be equal\n",
+            "  lhs axis 'k' = 3\n",
+            "  rhs axis 'k' = 4\n",
+            "  rule: the two must be equal\n",
+            "  fix: change the lhs to 4, or the rhs to 3"
+        )
     );
 }
 

@@ -318,6 +318,39 @@ pub(crate) fn pool_output_dim(
 //
 // ─────────────────────────────────────────────────────────────────────────────
 impl<D: Device> WgpuBackendImpl<D> {
+    /// `x / sqrt(mean(x^2, last axis) + eps) * weight`.
+    ///
+    /// Composed step for step the way CPU's kernel and CUDA's both compose it,
+    /// so all three agree on the same input rather than each being separately
+    /// plausible. Every step is already a tape-tracked primitive, so this
+    /// writes no backward code: the composite's gradient is the replay of the
+    /// six entries below, which is what makes `training = true` on its
+    /// capability row a verified claim rather than a hopeful one.
+    ///
+    /// `epsilon` is added to the mean *before* the square root, not after.
+    /// That ordering is the entire point of the guard: it keeps the root
+    /// finite when every element of a row is zero, which adding afterwards
+    /// would not.
+    ///
+    /// The axis is the last one, matching both references. RMS norm is defined
+    /// over the feature axis and the operation carries no axis attribute to
+    /// say otherwise.
+    pub(crate) fn rms_norm<K: DType>(
+        input: &<Self as StorageBackend>::Storage<K>,
+        weight: &<Self as StorageBackend>::Storage<K>,
+        epsilon: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let axis = input.shape.len().saturating_sub(1);
+        let squared = Self::mul::<K>(input, input)?;
+        let mean = Self::mean_keepdim::<K>(&squared, axis)?;
+        let guarded = Self::add_scalar_float::<K>(&mean, epsilon)?;
+        let scale = Self::sqrt::<K>(&guarded)?;
+        let normalized = Self::div::<K>(input, &scale)?;
+        Self::mul::<K>(&normalized, weight)
+    }
+}
+
+impl<D: Device> WgpuBackendImpl<D> {
     /// `avg_pool2d`.
     pub(crate) fn avg_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,

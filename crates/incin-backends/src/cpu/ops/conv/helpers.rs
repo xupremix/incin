@@ -5,6 +5,8 @@ use incin_core::error::{Error, Result};
 use incin_core::shapes::ShapeError;
 use incin_core::shapes::error::OperationKind;
 
+use crate::cpu::storage::CpuStorage;
+
 // ---------------------------------------------------------------------------
 // Shared output-size arithmetic (T-04-11: saturating_sub, never raw subtraction)
 // ---------------------------------------------------------------------------
@@ -107,4 +109,58 @@ pub(super) fn validate_groups(
         });
     }
     Ok(())
+}
+
+/// The activation a convolution kernel works on, given the one it was handed.
+///
+/// The catalog admits an unbatched activation: `accepted_ranks` opens at three
+/// for the two-dimensional convolutions and at two for `conv1d`, and
+/// `inference.rs` infers the output of that form by rewriting only the trailing
+/// axes and reading the channel extent at `input[len - 1 - spatial]`. Every
+/// kernel here is written against the batched form throughout, from the
+/// `narrow(1, ..)` that splits the channel groups to the `reshape` that
+/// restores the canonical output layout.
+///
+/// So the unbatched form is served by giving it a batch of one and taking that
+/// axis back off the result, rather than by a second code path through the
+/// same im2col arithmetic. The second return says whether the axis was added,
+/// which the caller needs twice: once to unwrap the output, and once to return
+/// a gradient shaped like the activation it was asked about.
+///
+/// A rank outside those two is refused rather than folded. The descriptor
+/// pins the range before a kernel is reached, so this is the arm that keeps a
+/// wrong answer from being a panic if a row ever widens past what the kernel
+/// can address.
+pub(super) fn with_batch_axis(
+    op: &'static str,
+    input: &CpuStorage,
+    batched_rank: usize,
+) -> Result<(CpuStorage, bool)> {
+    let rank = input.shape.len();
+    if rank == batched_rank {
+        return Ok((input.clone(), false));
+    }
+    if rank + 1 == batched_rank {
+        let mut batched = vec![1];
+        batched.extend_from_slice(&input.shape);
+        return Ok((input.reshape(&batched)?, true));
+    }
+    Err(Error::ShapeMismatch {
+        op,
+        expected: vec![batched_rank - 1, batched_rank],
+        got: input.shape.to_vec(),
+        msg: format!(
+            "{op}: an activation must be batched or unbatched, and this one is rank {rank}"
+        ),
+    })
+}
+
+/// Drop the batch axis `with_batch_axis` added, when it added one.
+pub(super) fn without_batch_axis(storage: CpuStorage, added: bool) -> Result<CpuStorage> {
+    if added {
+        let unbatched = storage.shape[1..].to_vec();
+        storage.reshape(&unbatched)
+    } else {
+        Ok(storage)
+    }
 }

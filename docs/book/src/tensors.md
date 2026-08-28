@@ -77,6 +77,45 @@ assert_eq!(runtime_dtype.dtype(), DTypeId::F64.descriptor());
 # Ok::<(), incin::Error>(())
 ```
 
+### Declaring a dtype is not computing in one
+
+Every dtype above *allocates*. Far fewer of them *execute*, and the two are
+separate questions with separate answers. On CPU today `matmul` is `f32` only,
+and elementwise arithmetic is float only, so `i64` addition and `f16` matmul
+are both refused:
+
+```text
+backend 'Cpu' refused the request: dtype f16 is unsupported for matmul
+```
+
+That refusal is generated from the same capability tables as
+[`docs/capabilities.md`](https://github.com/xupremix/incin/blob/master/docs/capabilities.md),
+so the table, the error message, and the kernel cannot disagree. You can ask
+the registry directly instead of trying and catching, which is what
+`cargo incin doctor` does:
+
+```rust,no_run
+use incin::prelude::*;
+use incin_core::exec::{Capabilities, CapabilityQuery, LayoutClass, MathMode};
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::device::DeviceKind;
+use incin_core::tensor::dtype::DTypeId;
+
+let query = CapabilityQuery {
+    operation: incin_core::exec::OperationIdentity::Builtin(OperationKind::MatMul),
+    dtype: DTypeId::F16.descriptor(),
+    layout: LayoutClass::Contiguous,
+    rank: 2,
+    training: false,
+    math_mode: MathMode::Precise,
+};
+let level = incin_backends::capability::registry(DeviceKind::Cpu).support(&query);
+```
+
+`cargo run -p incin --example dtypes --features cpu` runs the whole axis
+end to end: allocation in all eight built-in dtypes, `to_dtype` conversions,
+the registry query above, and the refusal.
+
 ## Arithmetic
 
 ```rust,no_run

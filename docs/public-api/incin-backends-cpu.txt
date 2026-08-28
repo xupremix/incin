@@ -3,6 +3,9 @@
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchVar
 impl core::ops::deref::Deref for incin_backends::cpu::CpuStorage
 impl incin_backends::codegen::pointwise::PointwiseOpSpec
+impl incin_backends::conformance::AdvertisedTuple
+impl incin_backends::conformance::OracleReport
+impl incin_backends::conformance::Verdict
 impl incin_backends::cpu::CpuBuffer
 impl incin_backends::cpu::CpuGrads
 impl incin_backends::cpu::CpuStorage
@@ -281,12 +284,15 @@ impl<const A: usize> incin_backends::target::TensorData for [f64; A] where incin
 impl<const A: usize> incin_backends::target::TensorData for [i64; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
 impl<const A: usize> incin_backends::target::TensorData for [u32; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
 impl<const A: usize> incin_backends::target::TensorData for [u8; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
+pub const fn incin_backends::conformance::AdvertisedTuple::query(&self) -> incin_core::exec::capability::CapabilityQuery
+pub const fn incin_backends::conformance::Verdict::is_finding(&self) -> bool
 pub const fn incin_backends::cpu::CpuBackendImpl<D>::new() -> Self
 pub const fn incin_backends::detect::is_compiled_in(incin_core::tensor::device::DeviceKind) -> bool
 pub const fn incin_backends::dispatch::DispatchBackend<D>::new() -> Self
 pub const fn incin_backends::simd::simd_lanes<T: core::marker::Sized>() -> usize
 pub const fn incin_backends::simd::simd_vector_bytes() -> usize
 pub const fn incin_backends::simd_lanes<T: core::marker::Sized>() -> usize
+pub const incin_backends::conformance::RANK_CAP: usize
 pub const incin_backends::cpu::CpuBackendImpl<D>::BACKEND_NAME: &'static str
 pub const incin_backends::cpu::typed_kernel::PARALLEL_GRAIN: usize
 pub const incin_backends::detect::PREFERENCE: &[incin_core::tensor::device::DeviceKind]
@@ -304,6 +310,8 @@ pub enum incin_backends::codegen::pointwise::LayoutKind
 pub enum incin_backends::codegen::pointwise::PointwiseExpr
 pub enum incin_backends::codegen::pointwise::TernaryOp
 pub enum incin_backends::codegen::pointwise::UnaryOp
+pub enum incin_backends::conformance::Coverage
+pub enum incin_backends::conformance::Verdict
 pub enum incin_backends::cpu::CpuBuffer
 pub enum incin_backends::external::conformance::Outcome
 pub enum incin_backends::prelude::GeneratedFill
@@ -373,6 +381,14 @@ pub fn incin_backends::codegen::pointwise::render_wgsl(&incin_backends::codegen:
 pub fn incin_backends::codegen::render_cuda(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::render_msl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::render_wgsl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
+pub fn incin_backends::conformance::AdvertisedTuple::label(&self) -> alloc::string::String
+pub fn incin_backends::conformance::OracleReport::covered_operations(&self) -> alloc::vec::Vec<incin_core::shapes::error::OperationKind>
+pub fn incin_backends::conformance::OracleReport::executed(&self) -> usize
+pub fn incin_backends::conformance::OracleReport::findings(&self) -> impl core::iter::traits::iterator::Iterator<Item = &incin_backends::conformance::Observation>
+pub fn incin_backends::conformance::OracleReport::findings_text(&self) -> alloc::string::String
+pub fn incin_backends::conformance::OracleReport::unfixtured_operations(&self) -> alloc::vec::Vec<(incin_core::shapes::error::OperationKind, &'static str)>
+pub fn incin_backends::conformance::advertised_tuples(incin_core::tensor::device::DeviceKind) -> alloc::vec::Vec<incin_backends::conformance::AdvertisedTuple>
+pub fn incin_backends::conformance::run_cpu_self_check() -> incin_backends::conformance::OracleReport
 pub fn incin_backends::cpu::CpuBackendImpl<D>::assign_var<K: incin_core::tensor::dtype::traits::DType>(&mut Self::Var, &Self::Storage) -> incin_core::err::Result<()>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::backward<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage) -> incin_core::err::Result<Self::Grads>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::backward_with<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage, &Self::Storage) -> incin_core::err::Result<Self::Grads>
@@ -823,6 +839,24 @@ pub incin_backends::codegen::pointwise::UnaryOp::Sin
 pub incin_backends::codegen::pointwise::UnaryOp::Sqrt
 pub incin_backends::codegen::pointwise::UnaryOp::Square
 pub incin_backends::codegen::pointwise::UnaryOp::Tanh
+pub incin_backends::conformance::AdvertisedTuple::dtype: incin_core::tensor::dtype::registry::DTypeDescriptor
+pub incin_backends::conformance::AdvertisedTuple::layout: incin_core::exec::meta::LayoutClass
+pub incin_backends::conformance::AdvertisedTuple::math_mode: incin_core::exec::policy::MathMode
+pub incin_backends::conformance::AdvertisedTuple::operation: incin_core::shapes::error::OperationKind
+pub incin_backends::conformance::AdvertisedTuple::rank: usize
+pub incin_backends::conformance::AdvertisedTuple::training: bool
+pub incin_backends::conformance::Coverage::Unbuildable(alloc::string::String)
+pub incin_backends::conformance::Coverage::Unfixtured(&'static str)
+pub incin_backends::conformance::Observation::tuple: incin_backends::conformance::AdvertisedTuple
+pub incin_backends::conformance::Observation::verdict: incin_backends::conformance::Verdict
+pub incin_backends::conformance::OracleReport::device: incin_core::tensor::device::DeviceKind
+pub incin_backends::conformance::OracleReport::observations: alloc::vec::Vec<incin_backends::conformance::Observation>
+pub incin_backends::conformance::Verdict::Executed
+pub incin_backends::conformance::Verdict::Failed(alloc::string::String)
+pub incin_backends::conformance::Verdict::NotCovered(incin_backends::conformance::Coverage)
+pub incin_backends::conformance::Verdict::Panicked(alloc::string::String)
+pub incin_backends::conformance::Verdict::Refused(alloc::string::String)
+pub incin_backends::conformance::Verdict::Rejected(alloc::string::String)
 pub incin_backends::cpu::CpuBuffer::BF16(alloc::vec::Vec<half::bfloat::bf16>)
 pub incin_backends::cpu::CpuBuffer::Bool(alloc::vec::Vec<u8>)
 pub incin_backends::cpu::CpuBuffer::F16(alloc::vec::Vec<half::binary16::f16>)
@@ -860,6 +894,7 @@ pub mod incin_backends::capability
 pub mod incin_backends::capability_docs
 pub mod incin_backends::codegen
 pub mod incin_backends::codegen::pointwise
+pub mod incin_backends::conformance
 pub mod incin_backends::cpu
 pub mod incin_backends::cpu::typed_kernel
 pub mod incin_backends::detect
@@ -878,6 +913,9 @@ pub struct incin_backends::DispatchBackend<D>(_)
 pub struct incin_backends::capability::BackendCoverageRow
 pub struct incin_backends::codegen::PointwiseOpSpec
 pub struct incin_backends::codegen::pointwise::PointwiseOpSpec
+pub struct incin_backends::conformance::AdvertisedTuple
+pub struct incin_backends::conformance::Observation
+pub struct incin_backends::conformance::OracleReport
 pub struct incin_backends::cpu::CpuBackendImpl<D>(_)
 pub struct incin_backends::cpu::CpuGrads
 pub struct incin_backends::cpu::CpuStorage

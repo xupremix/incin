@@ -147,6 +147,16 @@ pub mod wgpu;
 #[cfg(feature = "metal")]
 pub mod metal;
 
+/// The registry-driven conformance oracle: every capability row a backend
+/// advertises, expanded into tuples and executed.
+///
+/// Gated on `cpu` because the CPU backend is the oracle. It is the only
+/// backend with an executor for all 158 backend-executable catalog operations,
+/// and any other choice of reference would be a second implementation that can
+/// itself be wrong.
+#[cfg(feature = "cpu")]
+pub mod conformance;
+
 /// Third-party backend integrations, and the conformance suite an author of one
 /// runs against their own backend.
 ///

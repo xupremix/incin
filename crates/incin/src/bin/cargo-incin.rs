@@ -4,10 +4,11 @@
 //! plan/tune tooling documented in the Book. See `--help` for the
 //! subcommand surface.
 use incin_diagnostics::{
-    humanize_diagnostic, parse_broadcast_mismatch, parse_concat_mismatch, parse_conv1d_mismatch,
-    parse_conv2d_mismatch, parse_flatten_mismatch, parse_matmul_mismatch,
-    parse_module_forward_mismatch, parse_pool2d_mismatch, parse_reduce_dim_mismatch,
-    parse_reshape_mismatch, parse_slice_mismatch, parse_transpose_mismatch,
+    humanize_diagnostic, parse_broadcast_mismatch, parse_concat_mismatch,
+    parse_contraction_mismatch, parse_conv1d_mismatch, parse_conv2d_mismatch,
+    parse_flatten_mismatch, parse_matmul_mismatch, parse_module_forward_mismatch,
+    parse_pool2d_mismatch, parse_reduce_dim_mismatch, parse_reshape_mismatch, parse_slice_mismatch,
+    parse_transpose_mismatch,
 };
 use serde_json::Value;
 use std::env;
@@ -36,7 +37,9 @@ mod embedded_skills {
 /// this to path-depend on the exact incin checkout that built the
 /// `cargo-incin` binary generating them -- see the `Cargo.toml.template`
 /// comment for why this can't simply be a crates.io version dependency yet.
-const INCIN_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
+/// The version a scaffold depends on: the one this tool was built from, so a
+/// generated project always matches the `cargo incin new` that wrote it.
+const INCIN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Renders a message with its translated typenum hints appended underneath.
 fn render_translated_diagnostic(original: &str, raw: bool, explain: bool) {
@@ -55,136 +58,208 @@ fn render_translated_diagnostic(original: &str, raw: bool, explain: bool) {
         }
     }
 
-    if explain {
-        if translated.text.contains("ConcatShape")
-            || translated.text.contains("Cannot concatenate shape")
-            || original.contains("ConcatShape")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Concatenation Rule]: All tensor dimensions except the concatenation axis must match exactly."
-            );
-            if let Some(mismatch) = parse_concat_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("MatMulShape")
-            || translated.text.contains("matrix-multiply")
-            || original.contains("MatMulShape")
-            || original.contains("matmul")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - MatMul Rule]: matmul requires [M, K] x [K, N] -> [M, N] — the inner dimensions (K) must match."
-            );
-            if let Some(mismatch) = parse_matmul_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("Conv2D")
-            || translated.text.contains("Conv2d")
-            || translated.text.contains("incompatible with kernel shape")
-            || original.contains("Conv2d")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Conv2D Rule]: Input channels must match kernel input channels, and spatial dims must fit stride/padding."
-            );
-            if let Some(mismatch) = parse_conv2d_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("BroadcastShape")
-            || translated.text.contains("Cannot broadcast shape")
-            || original.contains("Broadcast")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Broadcast Rule]: Dimensions must either match exactly or one of them must be 1."
-            );
-            if let Some(mismatch) = parse_broadcast_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("ReshapeShape")
-            || translated.text.contains("Cannot reshape from")
-            || original.contains("Reshape")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Reshape Rule]: Total number of elements (product of dimensions) before and after reshape must be identical."
-            );
-            if let Some(mismatch) = parse_reshape_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("StackShape")
-            || translated.text.contains("Cannot stack shape")
-            || original.contains("Stack")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Stack Rule]: All tensors being stacked must have identical shapes."
-            );
-        } else if translated.text.contains("Slice")
-            || translated.text.contains("Cannot slice dimension")
-            || original.contains("Slice")
-            || original.contains("idx!")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Slice/Indexing Rule]: Slice ranges must be within tensor dimension bounds."
-            );
-            if let Some(mismatch) = parse_slice_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("Conv1D")
-            || translated.text.contains("Conv1d")
-            || translated.text.contains("1D convolution")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Conv1D Rule]: Conv1D requires a 2D or 3D tensor (C, L) or (B, C, L)."
-            );
-            if let Some(mismatch) = parse_conv1d_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("Transpose")
-            || translated.text.contains("Cannot transpose dimensions")
-            || original.contains("Transpose")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Transpose Rule]: Transpose indices must be < the rank of the tensor."
-            );
-            if let Some(mismatch) = parse_transpose_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("ReduceDim")
-            || translated.text.contains("Cannot reduce dimension")
-            || original.contains("ReduceDim")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Reduction Rule]: Reduction dimension index must be < the rank of the tensor."
-            );
-            if let Some(mismatch) = parse_reduce_dim_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("Flatten")
-            || translated.text.contains("Cannot flatten shape")
-            || original.contains("Flatten")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Flatten Rule]: Flatten range [START, END] requires START <= END and END < rank."
-            );
-            if let Some(mismatch) = parse_flatten_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("Pool2d") || original.contains("Pool") {
-            eprintln!(
-                "  └── 📖 [Explain - Pooling Rule]: Spatial input dimensions (H, W) must be larger than or equal to kernel dimensions."
-            );
-            if let Some(mismatch) = parse_pool2d_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
-        } else if translated.text.contains("Module")
-            || translated.text.contains("forward")
-            || original.contains("Module")
-        {
-            eprintln!(
-                "  └── 📖 [Explain - Module Forward Rule]: Layer / Module forward pass input shape must match the layer's expected input shape."
-            );
-            if let Some(mismatch) = parse_module_forward_mismatch(&translated.text) {
-                eprintln!("{}", mismatch.render());
-            }
+    if let Some(explanation) = explain
+        .then(|| explanation(&translated.text, original))
+        .flatten()
+    {
+        eprintln!(
+            "  └── 📖 [Explain - {}]: {}",
+            explanation.rule.0, explanation.rule.1
+        );
+        if let Some(detail) = explanation.detail {
+            eprintln!("{detail}");
         }
     }
+}
+
+/// One explanation: the rule that was broken, and the pointed-out detail when
+/// the message carried enough to draw one.
+struct Explanation {
+    /// Heading and the rule itself.
+    rule: (&'static str, &'static str),
+    /// The rendered diagram, when a parser recognized the message.
+    detail: Option<String>,
+}
+
+/// Every fixed `#[diagnostic::on_unimplemented]` message the shape traits emit,
+/// paired with the rule it means.
+///
+/// Matching on these literals rather than on an identifier is the whole point.
+/// `original.contains("matmul")` fires on any diagnostic that merely mentions
+/// one -- a binding named `matmul_out`, a path `src/matmul.rs`, an unrelated
+/// borrow error in a function whose name contains it -- and then explains a
+/// rule the reader never broke. These messages, by contrast, exist only when
+/// the corresponding bound actually failed.
+///
+/// The list is exhaustive against `grep -r 'message = "' crates/incin-core`, so
+/// a trait that grows a message and is not added here explains nothing rather
+/// than explaining the wrong thing.
+const RULES: &[(&str, &str, &str)] = &[
+    (
+        "Cannot matrix-multiply shape `",
+        "MatMul Rule",
+        "matmul contracts [.., M, K] against [.., K, N] to give [.., M, N]: the two inner dimensions must be equal, and every leading batch dimension must agree.",
+    ),
+    (
+        "Cannot contract dimension `",
+        "MatMul Rule",
+        "matmul contracts the last axis of the left operand against the second-to-last of the right; those two must be equal, or one of them a runtime `usize`.",
+    ),
+    (
+        "Cannot concatenate shape `",
+        "Concatenation Rule",
+        "concat joins along one axis: every dimension except that axis must match exactly, and both operands must have the same rank.",
+    ),
+    (
+        "Cannot stack shape `",
+        "Stack Rule",
+        "stack inserts a new axis, so unlike concat it requires the operands to have identical shapes; use concat if you meant to join along an existing axis.",
+    ),
+    (
+        "Cannot broadcast shape `",
+        "Broadcast Rule",
+        "shapes are aligned from the right, and at each axis the two extents must be equal or one of them must be 1; a missing leading axis counts as 1.",
+    ),
+    (
+        "Cannot broadcast axis `",
+        "Broadcast Rule",
+        "this one axis broke the rule: two extents broadcast only when they are equal or one of them is 1. An extent of 1 stretches; any other pair does not.",
+    ),
+    (
+        "Cannot reshape from `",
+        "Reshape Rule",
+        "reshape preserves the element count: the product of the source dimensions must equal the product of the target dimensions.",
+    ),
+    (
+        "Cannot reshape: source has ",
+        "Reshape Rule",
+        "the two element counts differ, so no reshape exists between these shapes; reshape re-addresses the same buffer and can neither add nor drop elements.",
+    ),
+    (
+        "Cannot reshape dimension into `",
+        "Reshape Rule",
+        "a target dimension must be a concrete extent the source can be divided into; an inferred axis needs the remaining elements to divide evenly.",
+    ),
+    (
+        "Cannot slice dimension with `",
+        "Slice Rule",
+        "a slice range must lie within the axis it addresses: the start must be below the extent and the end must not exceed it.",
+    ),
+    (
+        "Cannot apply a `",
+        "Conv Kernel Rule",
+        "the kernel's input-channel count must equal the activation's channel extent, and the kernel must fit the spatial extents once stride, padding and dilation are applied.",
+    ),
+    (
+        "Cannot apply 2D convolution to shape `",
+        "Conv2D Rule",
+        "conv2d takes a [C, H, W] or [N, C, H, W] activation; the channel axis is the third from the end, and the weight is always rank four.",
+    ),
+    (
+        "Cannot apply 1D convolution to shape `",
+        "Conv1D Rule",
+        "conv1d takes a [C, L] or [N, C, L] activation; the channel axis is the second from the end, and the weight is always rank three.",
+    ),
+    (
+        "Cannot apply 2D pooling to shape `",
+        "Pooling Rule",
+        "pooling takes a [C, H, W] or [N, C, H, W] activation, and the window must fit the spatial extents once stride, padding and dilation are applied.",
+    ),
+    (
+        "Cannot apply adaptive 2D pooling to shape `",
+        "Adaptive Pooling Rule",
+        "adaptive pooling takes a [C, H, W] or [N, C, H, W] activation and rewrites only the two trailing axes to the requested output size.",
+    ),
+    (
+        "Cannot use shape `",
+        "Layer Shape Rule",
+        "this layer pins one axis of its input: the shape given does not carry the channel count or trailing width the layer was built for.",
+    ),
+    (
+        "dimension `",
+        "Sharding Rule",
+        "a sharded axis must divide evenly by the sharding degree; an axis with a remainder has no even split across ranks.",
+    ),
+    (
+        "placement transition from `",
+        "Placement Rule",
+        "not every placement can be reached from every other; a transition has to be expressible as a collective this backend supports.",
+    ),
+    (
+        "` is not a valid logical mesh",
+        "Mesh Rule",
+        "a logical mesh must name a positive extent per axis, and its total size must equal the number of ranks in the process group.",
+    ),
+    (
+        "` is not a valid rank in a two-rank distributed context",
+        "Rank Rule",
+        "a two-rank context addresses exactly ranks zero and one.",
+    ),
+    (
+        "` is not a collective supported for dtype `",
+        "Collective Rule",
+        "the collective exists, but not for this dtype on this backend; the supported dtype set per collective is part of the backend's capability table.",
+    ),
+    (
+        "implements `Module<",
+        "Module Forward Rule",
+        "a module's forward input type is part of its signature: the shape passed in must match the shape the layer was constructed for.",
+    ),
+];
+
+/// The explanation for a diagnostic, or `None` when nothing in it names a rule
+/// this tool knows.
+///
+/// The match is the message whose prefix appears **earliest**, because a
+/// rendered diagnostic leads with its primary message and carries the notes
+/// underneath. Taking the first table entry that matches anywhere would let a
+/// note decide the explanation for the error above it.
+///
+/// `original` is searched too, since a long-type substitution can rewrite the
+/// span a message sits in, but only for the same fixed literals.
+fn explanation(translated: &str, original: &str) -> Option<Explanation> {
+    let earliest = |text: &str| {
+        RULES
+            .iter()
+            .filter_map(|entry| text.find(entry.0).map(|at| (at, entry)))
+            .min_by_key(|(at, _)| *at)
+    };
+
+    let (_, entry) = earliest(translated).or_else(|| earliest(original))?;
+    let detail = detail_for(entry.0, translated);
+    Some(Explanation {
+        rule: (entry.1, entry.2),
+        detail,
+    })
+}
+
+/// The rendered diagram for a message, when a parser recognizes it.
+///
+/// A message with no parser gets its rule and nothing else, which is the
+/// honest answer: several of these carry only the shape that failed and not
+/// what it failed against, and there is no diagram to draw from one shape.
+fn detail_for(message: &str, text: &str) -> Option<String> {
+    let rendered = match message {
+        "Cannot matrix-multiply shape `" => parse_matmul_mismatch(text).map(|m| m.render()),
+        "Cannot contract dimension `" => parse_contraction_mismatch(text).map(|m| m.render()),
+        "Cannot concatenate shape `" => parse_concat_mismatch(text).map(|m| m.render()),
+        "Cannot broadcast shape `" => parse_broadcast_mismatch(text).map(|m| m.render()),
+        "Cannot reshape from `" => parse_reshape_mismatch(text).map(|m| m.render()),
+        "Cannot slice dimension with `" => parse_slice_mismatch(text).map(|m| m.render()),
+        "Cannot apply 1D convolution to shape `" => parse_conv1d_mismatch(text).map(|m| m.render()),
+        "Cannot apply 2D pooling to shape `" => parse_pool2d_mismatch(text).map(|m| m.render()),
+        "Cannot apply a `" => parse_conv2d_mismatch(text).map(|m| m.render()),
+        "implements `Module<" => parse_module_forward_mismatch(text).map(|m| m.render()),
+        _ => None,
+    };
+    // The remaining parsers -- transpose, flatten, reduce-dim -- look for
+    // messages no trait emits today. They are tried last against the whole
+    // text rather than wired to a message that does not exist, so they cost
+    // nothing now and start working the moment such a message appears.
+    rendered
+        .or_else(|| parse_transpose_mismatch(text).map(|m| m.render()))
+        .or_else(|| parse_flatten_mismatch(text).map(|m| m.render()))
+        .or_else(|| parse_reduce_dim_mismatch(text).map(|m| m.render()))
 }
 
 fn print_help() {
@@ -201,7 +276,12 @@ fn print_help() {
     println!("    run        Run cargo run with real-time typenum error translation");
     println!("    bench, doc, fix, clippy");
     println!("               Same real-time typenum error translation as above");
-    println!("    doctor     Report devices, features, caches, and capability probes [--json]");
+    println!(
+        "    doctor     Report devices, features, caches, and capability probes"
+    );
+    println!(
+        "               [--json] [--check-updates: ask crates.io for a newer incin]"
+    );
     println!("    inspect    Inspect a .safetensors, .gguf, or .onnx model file metadata");
     println!("    plan       Generate execution plan report [--json] [--devices DEV] [--epochs N]");
     println!("    tune       Inspect and manage autotune cache [--json] [--clear] [--offline]");
@@ -393,22 +473,10 @@ fn main() -> io::Result<()> {
             .unwrap_or(&template_name)
             .to_string();
 
-        let incin_path = std::path::Path::new(INCIN_MANIFEST_DIR);
-        // `INCIN_MANIFEST_DIR` is `.../crates/incin`; `incin-telemetry`
-        // is its workspace sibling under the same `crates/` parent.
-        let incin_telemetry_path = incin_path
-            .parent()
-            .expect("crates/incin always has a parent directory")
-            .join("incin-telemetry");
-
         let substitute = |template: &str| -> String {
             template
                 .replace("{{PROJECT_NAME}}", &project_name)
-                .replace("{{INCIN_PATH}}", &incin_path.display().to_string())
-                .replace(
-                    "{{INCIN_TELEMETRY_PATH}}",
-                    &incin_telemetry_path.display().to_string(),
-                )
+                .replace("{{INCIN_VERSION}}", INCIN_VERSION)
         };
 
         std::fs::create_dir_all(target.join("src"))?;
@@ -677,4 +745,81 @@ fn main() -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod explain_tests {
+    use super::{RULES, explanation};
+
+    /// The regression this table exists for.
+    ///
+    /// The chain used to select a branch on `original.contains("matmul")`, so
+    /// any diagnostic whose source line merely mentioned one -- a binding named
+    /// `matmul_out`, a path `src/matmul.rs` -- was explained as a matmul shape
+    /// failure. Explaining a rule the reader did not break is worse than
+    /// explaining nothing, because they go looking for a mistake that is not
+    /// there.
+    #[test]
+    fn a_diagnostic_that_merely_mentions_an_operation_is_not_explained() {
+        let unrelated = "error[E0308]: mismatched types\n \
+             --> src/main.rs:6:27\n  |\n6 | let matmul_out: i32 = \"not a number\";\n  \
+             |                       ^^^^^^^^^^^^^^ expected `i32`, found `&str`";
+
+        assert!(explanation(unrelated, unrelated).is_none());
+    }
+
+    /// Several loose identifiers used to have their own branch: `Stack`,
+    /// `Pool`, `Slice`, `Transpose`, `Flatten`, `Module`, `forward`. Each
+    /// appears in ordinary Rust diagnostics that have nothing to do with
+    /// shapes.
+    #[test]
+    fn ordinary_rust_identifiers_do_not_select_a_shape_rule() {
+        for text in [
+            "error: cannot borrow `pool` as mutable",
+            "note: required by a bound in `core::slice::Iter`",
+            "error[E0599]: no method named `forward` found for struct `Config`",
+            "warning: unused import: `std::fmt::Debug`, stack overflow detected",
+            "error: `Flatten` is not iterable here",
+        ] {
+            assert!(
+                explanation(text, text).is_none(),
+                "explained an unrelated diagnostic: {text}"
+            );
+        }
+    }
+
+    /// The message a shape trait actually emits does select its rule.
+    #[test]
+    fn the_emitted_message_selects_its_own_rule() {
+        let text = "error[E0277]: Cannot contract dimension `3` with `4`";
+        let explained = explanation(text, text).expect("the contraction message explains");
+
+        assert_eq!(explained.rule.0, "MatMul Rule");
+        assert!(explained.detail.is_some(), "the diagram should render");
+    }
+
+    /// A rendered diagnostic leads with its primary message and carries notes
+    /// underneath, so the earliest match wins rather than the first table
+    /// entry that appears anywhere.
+    #[test]
+    fn the_primary_message_wins_over_a_note_below_it() {
+        let text = "error[E0277]: Cannot broadcast shape `[2, 3]` to `[4, 5]`\n  \
+                    = note: required for `Cannot concatenate shape `[1]` with `[2]` along axis `0``";
+
+        let explained = explanation(text, text).expect("the broadcast message explains");
+        assert_eq!(explained.rule.0, "Broadcast Rule");
+    }
+
+    /// No two table prefixes may shadow one another, or which rule a message
+    /// gets would depend on table order rather than on the message.
+    #[test]
+    fn no_table_prefix_shadows_another() {
+        for (outer, ..) in RULES {
+            for (inner, ..) in RULES {
+                if outer != inner {
+                    assert!(!outer.starts_with(inner), "`{inner}` shadows `{outer}`");
+                }
+            }
+        }
+    }
 }

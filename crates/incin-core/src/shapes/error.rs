@@ -314,10 +314,65 @@ impl DimensionConstraint {
     }
 }
 
+impl DimensionConstraint {
+    /// The edit that would satisfy this rule, given the two extents that broke
+    /// it. Named concretely rather than as "make them compatible": a reader
+    /// with two numbers in front of them needs to know which one to move and
+    /// what to move it to.
+    #[must_use]
+    pub fn remedy(self, lhs: usize, rhs: usize) -> alloc::string::String {
+        use alloc::format;
+        match self {
+            Self::Equal => format!("change the lhs to {rhs}, or the rhs to {lhs}"),
+            Self::Broadcastable => format!(
+                "change the lhs to {rhs}, change the rhs to {lhs}, \
+                 or set whichever operand should stretch to 1"
+            ),
+            Self::DivisibleBy => {
+                format!(
+                    "choose an lhs that is a whole multiple of {rhs} ({rhs} does not divide {lhs})"
+                )
+            }
+            Self::AtLeast => format!("raise the lhs to at least {rhs}"),
+        }
+    }
+}
+
 impl fmt::Display for DimensionConstraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.describe())
     }
+}
+
+/// Renders [`ShapeError::DimensionMismatch`] as a summary line plus the
+/// operand extents, the rule, and the edit that satisfies it.
+fn dimension_mismatch_fmt(
+    operation: &OperationKind,
+    axis: &Axis,
+    lhs: &usize,
+    rhs: &usize,
+    constraint: &DimensionConstraint,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    write!(
+        f,
+        "{operation}: {axis} mismatch: {lhs} vs {rhs}, which must be {constraint}\n  lhs {axis} = {lhs}\n  rhs {axis} = {rhs}\n  rule: the two must be {constraint}\n  fix: {}",
+        constraint.remedy(*lhs, *rhs)
+    )
+}
+
+/// Renders [`ShapeError::RankMismatch`] as a summary line plus what was
+/// required against what arrived.
+fn rank_mismatch_fmt(
+    operation: &OperationKind,
+    expected: &RankExpectation,
+    actual: &usize,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    write!(
+        f,
+        "{operation}: expected rank {expected}, got {actual}\n  required: rank {expected}\n  received: rank {actual}\n  fix: reshape, squeeze or unsqueeze the operand so its rank is {expected}"
+    )
 }
 
 /// A shape rule that could not be discharged.
@@ -328,7 +383,10 @@ impl fmt::Display for DimensionConstraint {
 #[derive(thiserror::Error, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ShapeError {
     /// An operand had the wrong number of dimensions.
-    #[error("{operation}: expected rank {expected}, got {actual}")]
+    ///
+    /// Multi-line for the same reason as [`ShapeError::DimensionMismatch`]: the
+    /// summary line, then what the operation required and what arrived.
+    #[error(fmt = rank_mismatch_fmt)]
     RankMismatch {
         /// Operation being resolved.
         operation: OperationKind,
@@ -339,7 +397,14 @@ pub enum ShapeError {
     },
 
     /// Two dimensions at the same axis violated the operation's rule.
-    #[error("{operation}: {axis} mismatch: {lhs} vs {rhs}, which must be {constraint}")]
+    ///
+    /// Rendered over several lines: the summary first, so the message is still
+    /// greppable and still reads as one clause, then the two operands' extents
+    /// at the failing axis, the rule that related them, and the edit that would
+    /// satisfy it. A reader who has just been handed "3 vs 4" knows the numbers
+    /// and not which operand to change, and that is the whole distance between
+    /// an error they can act on and one they have to go read the source for.
+    #[error(fmt = dimension_mismatch_fmt)]
     DimensionMismatch {
         /// Operation being resolved.
         operation: OperationKind,

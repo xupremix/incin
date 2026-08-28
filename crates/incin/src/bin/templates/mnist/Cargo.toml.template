@@ -4,11 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# Path dependencies pointing at the incin checkout that generated this
-# scaffold (via `cargo incin new`). `incin-telemetry` is `publish = false`
-# (see its Cargo.toml), so it can never be a crates.io version dependency --
-# a path (or git) dependency is the only option, from any incin checkout.
-# Once `incin`/`incin-data` are published, those two lines can switch to
-# `incin = "0.2"` / `incin-data = "0.2"` instead.
-incin = { path = "{{INCIN_PATH}}", default-features = false, features = ["std", "cpu"] }
-incin-telemetry = { path = "{{INCIN_TELEMETRY_PATH}}" }
+# Version dependencies, so this scaffold builds anywhere rather than only on
+# the machine that generated it. Both crates are published; the version is the
+# one the `cargo incin new` that wrote this file was built from, so a scaffold
+# always matches the tool that produced it.
+incin = { version = "{{INCIN_VERSION}}", default-features = false, features = ["std", "cpu"] }
+incin-telemetry = "{{INCIN_VERSION}}"

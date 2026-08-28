@@ -19,7 +19,15 @@ fn rank_mismatch_renders() {
         expected: RankExpectation::Exactly(4),
         actual: 3,
     };
-    assert_eq!(err.to_string(), "reshape: expected rank exactly 4, got 3");
+    assert_eq!(
+        err.to_string(),
+        concat!(
+            "reshape: expected rank exactly 4, got 3\n",
+            "  required: rank exactly 4\n",
+            "  received: rank 3\n",
+            "  fix: reshape, squeeze or unsqueeze the operand so its rank is exactly 4"
+        )
+    );
 }
 
 #[test]
@@ -33,7 +41,14 @@ fn dimension_mismatch_renders() {
     };
     assert_eq!(
         err.to_string(),
-        "broadcast: axis 1 mismatch: 3 vs 4, which must be equal, or one of them 1"
+        concat!(
+            "broadcast: axis 1 mismatch: 3 vs 4, which must be equal, or one of them 1\n",
+            "  lhs axis 1 = 3\n",
+            "  rhs axis 1 = 4\n",
+            "  rule: the two must be equal, or one of them 1\n",
+            "  fix: change the lhs to 4, change the rhs to 3, ",
+            "or set whichever operand should stretch to 1"
+        )
     );
 }
 

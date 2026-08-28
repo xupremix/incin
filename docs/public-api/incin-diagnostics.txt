@@ -1,6 +1,7 @@
 impl incin_diagnostics::BmmMismatch
 impl incin_diagnostics::BroadcastMismatch
 impl incin_diagnostics::ConcatMismatch
+impl incin_diagnostics::ContractionMismatch
 impl incin_diagnostics::Conv1dMismatch
 impl incin_diagnostics::Conv2dMismatch
 impl incin_diagnostics::FlattenMismatch
@@ -20,6 +21,7 @@ impl incin_diagnostics::UnfoldMismatch
 pub fn incin_diagnostics::BmmMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::BroadcastMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::ConcatMismatch::render(&self) -> alloc::string::String
+pub fn incin_diagnostics::ContractionMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::Conv1dMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::Conv2dMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::FlattenMismatch::render(&self) -> alloc::string::String
@@ -44,6 +46,7 @@ pub fn incin_diagnostics::humanize_type_signature(&str, bool) -> incin_diagnosti
 pub fn incin_diagnostics::parse_bmm_mismatch(&str) -> core::option::Option<incin_diagnostics::BmmMismatch>
 pub fn incin_diagnostics::parse_broadcast_mismatch(&str) -> core::option::Option<incin_diagnostics::BroadcastMismatch>
 pub fn incin_diagnostics::parse_concat_mismatch(&str) -> core::option::Option<incin_diagnostics::ConcatMismatch>
+pub fn incin_diagnostics::parse_contraction_mismatch(&str) -> core::option::Option<incin_diagnostics::ContractionMismatch>
 pub fn incin_diagnostics::parse_conv1d_mismatch(&str) -> core::option::Option<incin_diagnostics::Conv1dMismatch>
 pub fn incin_diagnostics::parse_conv2d_mismatch(&str) -> core::option::Option<incin_diagnostics::Conv2dMismatch>
 pub fn incin_diagnostics::parse_flatten_mismatch(&str) -> core::option::Option<incin_diagnostics::FlattenMismatch>
@@ -73,6 +76,8 @@ pub incin_diagnostics::ConcatMismatch::axis: usize
 pub incin_diagnostics::ConcatMismatch::lhs: alloc::vec::Vec<alloc::string::String>
 pub incin_diagnostics::ConcatMismatch::mismatch_index: usize
 pub incin_diagnostics::ConcatMismatch::rhs: alloc::vec::Vec<alloc::string::String>
+pub incin_diagnostics::ContractionMismatch::lhs_inner: alloc::string::String
+pub incin_diagnostics::ContractionMismatch::rhs_inner: alloc::string::String
 pub incin_diagnostics::Conv1dMismatch::input_shape: alloc::string::String
 pub incin_diagnostics::Conv2dMismatch::input: alloc::vec::Vec<alloc::string::String>
 pub incin_diagnostics::Conv2dMismatch::input_channel_idx: usize
@@ -114,6 +119,7 @@ pub mod incin_diagnostics
 pub struct incin_diagnostics::BmmMismatch
 pub struct incin_diagnostics::BroadcastMismatch
 pub struct incin_diagnostics::ConcatMismatch
+pub struct incin_diagnostics::ContractionMismatch
 pub struct incin_diagnostics::Conv1dMismatch
 pub struct incin_diagnostics::Conv2dMismatch
 pub struct incin_diagnostics::FlattenMismatch

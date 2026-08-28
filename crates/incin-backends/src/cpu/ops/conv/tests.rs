@@ -402,3 +402,339 @@ fn conv_transpose2d_gradcheck_input_and_weight() {
         "gradcheck max relative error too high: {max_rel_err}"
     );
 }
+
+// --- the unbatched activation ---
+//
+// `accepted_ranks` opens at three for the two-dimensional convolutions and at
+// two for `conv1d`, and `inference.rs` infers the output of that form, so the
+// unbatched activation is advertised on three layers. Each test below pins it
+// against the batched form it must equal, which is the only claim worth making:
+// a batch of one changes nothing about the arithmetic, so any difference is a
+// defect in how the axis is put on or taken off.
+
+/// A `[Cin, L]` activation convolves to the `[Cout, L_out]` its batched form
+/// produces, values and all.
+#[test]
+fn conv1d_unbatched_matches_the_batched_form() {
+    let values: Vec<f32> = (1..=8).map(|x| x as f32).collect();
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1]);
+    let bias = tensor(vec![7.0, -3.0], vec![2]);
+
+    let batched = conv1d_impl::<Cpu, f32>(
+        &tensor(values.clone(), vec![1, 2, 4]),
+        &weight,
+        Some(&bias),
+        1,
+        0,
+        1,
+        1,
+    )
+    .unwrap();
+    let unbatched = conv1d_impl::<Cpu, f32>(
+        &tensor(values, vec![2, 4]),
+        &weight,
+        Some(&bias),
+        1,
+        0,
+        1,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(batched.shape.as_ref(), &[1, 2, 4]);
+    assert_eq!(unbatched.shape.as_ref(), &[2, 4]);
+    assert_eq!(f32_vec(&unbatched), f32_vec(&batched));
+}
+
+/// A `[Cin, H, W]` activation convolves to the `[Cout, H_out, W_out]` its
+/// batched form produces.
+#[test]
+fn conv2d_unbatched_matches_the_batched_form() {
+    let values: Vec<f32> = (1..=8).map(|x| x as f32).collect();
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1, 1]);
+    let bias = tensor(vec![7.0, -3.0], vec![2]);
+
+    let batched = conv2d_windowed_impl::<Cpu, f32>(
+        &tensor(values.clone(), vec![1, 2, 2, 2]),
+        &weight,
+        Some(&bias),
+        Window2d::isotropic(1, 0, 1),
+        1,
+    )
+    .unwrap();
+    let unbatched = conv2d_windowed_impl::<Cpu, f32>(
+        &tensor(values, vec![2, 2, 2]),
+        &weight,
+        Some(&bias),
+        Window2d::isotropic(1, 0, 1),
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(batched.shape.as_ref(), &[1, 2, 2, 2]);
+    assert_eq!(unbatched.shape.as_ref(), &[2, 2, 2]);
+    assert_eq!(f32_vec(&unbatched), f32_vec(&batched));
+}
+
+/// The same, transposed: `[Cin, H, W]` folds to the result its batched form
+/// folds to.
+#[test]
+fn conv_transpose2d_unbatched_matches_the_batched_form() {
+    let values: Vec<f32> = (1..=8).map(|x| x as f32).collect();
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1, 1]);
+    let bias = tensor(vec![7.0, -3.0], vec![2]);
+
+    let batched = conv_transpose2d_impl::<Cpu, f32>(
+        &tensor(values.clone(), vec![1, 2, 2, 2]),
+        &weight,
+        Some(&bias),
+        1,
+        0,
+        0,
+        1,
+        1,
+    )
+    .unwrap();
+    let unbatched = conv_transpose2d_impl::<Cpu, f32>(
+        &tensor(values, vec![2, 2, 2]),
+        &weight,
+        Some(&bias),
+        1,
+        0,
+        0,
+        1,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(batched.shape.as_ref(), &[1, 2, 2, 2]);
+    assert_eq!(unbatched.shape.as_ref(), &[2, 2, 2]);
+    assert_eq!(f32_vec(&unbatched), f32_vec(&batched));
+}
+
+/// The gradient of an unbatched convolution is shaped like the activation that
+/// was asked about, not like the batched one the kernel worked on.
+#[test]
+fn conv2d_unbatched_gradients_are_shaped_like_the_unbatched_activation() {
+    let input = tensor((1..=8).map(|x| x as f32).collect(), vec![2, 2, 2]);
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1, 1]);
+
+    let out =
+        conv2d_windowed_impl::<Cpu, f32>(&input, &weight, None, Window2d::isotropic(1, 0, 1), 1)
+            .unwrap();
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+
+    let grad_input = grads.get(input.id).expect("grad_input should exist");
+    assert_eq!(grad_input.shape.as_ref(), &[2, 2, 2]);
+    let grad_weight = grads.get(weight.id).expect("grad_weight should exist");
+    assert_eq!(grad_weight.shape.as_ref(), &[2, 2, 1, 1]);
+}
+
+/// The same for `conv1d`, whose backward transposes axes one and two and so
+/// needs the batch axis put back on before it can address them.
+#[test]
+fn conv1d_unbatched_gradients_are_shaped_like_the_unbatched_activation() {
+    let input = tensor((1..=8).map(|x| x as f32).collect(), vec![2, 4]);
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1]);
+
+    let out = conv1d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 1, 1).unwrap();
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+
+    let grad_input = grads.get(input.id).expect("grad_input should exist");
+    assert_eq!(grad_input.shape.as_ref(), &[2, 4]);
+    let grad_weight = grads.get(weight.id).expect("grad_weight should exist");
+    assert_eq!(grad_weight.shape.as_ref(), &[2, 2, 1]);
+}
+
+/// And for the transposed fold, whose backward narrows axes two and three.
+#[test]
+fn conv_transpose2d_unbatched_gradients_are_shaped_like_the_unbatched_activation() {
+    let input = tensor((1..=8).map(|x| x as f32).collect(), vec![2, 2, 2]);
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1, 1]);
+
+    let out = conv_transpose2d_impl::<Cpu, f32>(&input, &weight, None, 1, 0, 0, 1, 1).unwrap();
+    let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+    let grads = tape::backward(&loss).unwrap();
+
+    let grad_input = grads.get(input.id).expect("grad_input should exist");
+    assert_eq!(grad_input.shape.as_ref(), &[2, 2, 2]);
+    let grad_weight = grads.get(weight.id).expect("grad_weight should exist");
+    assert_eq!(grad_weight.shape.as_ref(), &[2, 2, 1, 1]);
+}
+
+/// An activation outside the two ranks the catalog admits is refused rather
+/// than folded. The descriptor pins the range before a kernel is reached, so
+/// this is the arm that keeps a widened row from becoming a panic.
+#[test]
+fn a_convolution_outside_the_admitted_ranks_is_refused_rather_than_panicking() {
+    let weight = tensor(vec![0.5, -1.0, 2.0, 0.25], vec![2, 2, 1, 1]);
+
+    let too_shallow = tensor(vec![1.0, 2.0], vec![2]);
+    assert!(
+        conv2d_windowed_impl::<Cpu, f32>(
+            &too_shallow,
+            &weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            1
+        )
+        .is_err()
+    );
+
+    let too_deep = tensor((1..=16).map(|x| x as f32).collect(), vec![2, 1, 2, 2, 2]);
+    assert!(
+        conv2d_windowed_impl::<Cpu, f32>(&too_deep, &weight, None, Window2d::isotropic(1, 0, 1), 1)
+            .is_err()
+    );
+    assert!(conv_transpose2d_impl::<Cpu, f32>(&too_deep, &weight, None, 1, 0, 0, 1, 1).is_err());
+    assert!(conv1d_impl::<Cpu, f32>(&too_deep, &weight, None, 1, 0, 1, 1).is_err());
+}
+
+/// The same equality with a window that actually slides.
+///
+/// The unit-kernel tests above cannot fail: a 1x1 kernel at stride one makes
+/// im2col a reshape, so a batch axis inserted at the wrong index has nothing to
+/// shear against and both paths agree either way. A 2x2 kernel over a 3x3
+/// activation gives the fold four positions per output channel, each reading a
+/// different set of input elements, which is the arithmetic the batch axis has
+/// to leave alone.
+#[test]
+fn conv2d_unbatched_matches_the_batched_form_with_a_sliding_window() {
+    let values: Vec<f32> = (1..=18).map(|x| x as f32).collect();
+    let weight = tensor(
+        (1..=16).map(|x| x as f32 * 0.25).collect(),
+        vec![2, 2, 2, 2],
+    );
+    let bias = tensor(vec![7.0, -3.0], vec![2]);
+
+    let batched = conv2d_windowed_impl::<Cpu, f32>(
+        &tensor(values.clone(), vec![1, 2, 3, 3]),
+        &weight,
+        Some(&bias),
+        Window2d::isotropic(1, 0, 1),
+        1,
+    )
+    .unwrap();
+    let unbatched = conv2d_windowed_impl::<Cpu, f32>(
+        &tensor(values, vec![2, 3, 3]),
+        &weight,
+        Some(&bias),
+        Window2d::isotropic(1, 0, 1),
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(batched.shape.as_ref(), &[1, 2, 2, 2]);
+    assert_eq!(unbatched.shape.as_ref(), &[2, 2, 2]);
+    assert_eq!(f32_vec(&unbatched).len(), 8);
+    assert_eq!(f32_vec(&unbatched), f32_vec(&batched));
+}
+
+/// `conv1d` with a kernel of two, so each output position reads an overlapping
+/// pair rather than a single element.
+#[test]
+fn conv1d_unbatched_matches_the_batched_form_with_a_sliding_window() {
+    let values: Vec<f32> = (1..=8).map(|x| x as f32).collect();
+    let weight = tensor((1..=8).map(|x| x as f32 * 0.5).collect(), vec![2, 2, 2]);
+    let bias = tensor(vec![7.0, -3.0], vec![2]);
+
+    let batched = conv1d_impl::<Cpu, f32>(
+        &tensor(values.clone(), vec![1, 2, 4]),
+        &weight,
+        Some(&bias),
+        1,
+        0,
+        1,
+        1,
+    )
+    .unwrap();
+    let unbatched = conv1d_impl::<Cpu, f32>(
+        &tensor(values, vec![2, 4]),
+        &weight,
+        Some(&bias),
+        1,
+        0,
+        1,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(batched.shape.as_ref(), &[1, 2, 3]);
+    assert_eq!(unbatched.shape.as_ref(), &[2, 3]);
+    assert_eq!(f32_vec(&unbatched).len(), 6);
+    assert_eq!(f32_vec(&unbatched), f32_vec(&batched));
+}
+
+/// The transposed fold with a stride of two, which upsamples and so writes
+/// overlapping regions of the output buffer.
+#[test]
+fn conv_transpose2d_unbatched_matches_the_batched_form_with_a_stride() {
+    let values: Vec<f32> = (1..=8).map(|x| x as f32).collect();
+    let weight = tensor(
+        (1..=16).map(|x| x as f32 * 0.25).collect(),
+        vec![2, 2, 2, 2],
+    );
+    let bias = tensor(vec![7.0, -3.0], vec![2]);
+
+    let batched = conv_transpose2d_impl::<Cpu, f32>(
+        &tensor(values.clone(), vec![1, 2, 2, 2]),
+        &weight,
+        Some(&bias),
+        2,
+        0,
+        1,
+        1,
+        1,
+    )
+    .unwrap();
+    let unbatched = conv_transpose2d_impl::<Cpu, f32>(
+        &tensor(values, vec![2, 2, 2]),
+        &weight,
+        Some(&bias),
+        2,
+        0,
+        1,
+        1,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(batched.shape.as_ref(), &[1, 2, 5, 5]);
+    assert_eq!(unbatched.shape.as_ref(), &[2, 5, 5]);
+    assert_eq!(f32_vec(&unbatched).len(), 50);
+    assert_eq!(f32_vec(&unbatched), f32_vec(&batched));
+}
+
+/// A sliding-window gradient, for the same reason: the unit-kernel gradient
+/// tests check shape, and this checks that the values a wrong batch axis would
+/// shear are the ones the batched path produces.
+#[test]
+fn conv2d_unbatched_gradients_match_the_batched_form_with_a_sliding_window() {
+    let values: Vec<f32> = (1..=18).map(|x| x as f32).collect();
+    let weight_values: Vec<f32> = (1..=16).map(|x| x as f32 * 0.25).collect();
+
+    let mut results = Vec::new();
+    for shape in [vec![1, 2, 3, 3], vec![2, 3, 3]] {
+        let input = tensor(values.clone(), shape);
+        let weight = tensor(weight_values.clone(), vec![2, 2, 2, 2]);
+        let out = conv2d_windowed_impl::<Cpu, f32>(
+            &input,
+            &weight,
+            None,
+            Window2d::isotropic(1, 0, 1),
+            1,
+        )
+        .unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&out).unwrap();
+        let grads = tape::backward(&loss).unwrap();
+        results.push((
+            f32_vec(grads.get(input.id).expect("grad_input should exist")),
+            f32_vec(grads.get(weight.id).expect("grad_weight should exist")),
+        ));
+    }
+
+    assert_eq!(results[0].0.len(), 18);
+    assert_eq!(results[0], results[1]);
+}

@@ -13,7 +13,7 @@ use crate::cpu::storage::CpuStorage;
 use crate::cpu::tape::{self, TapeEntry};
 
 use super::combine::{concat_along_dim0, concat_along_dim1, sum_batch_dim};
-use super::helpers::{out_size, validate_groups};
+use super::helpers::{out_size, validate_groups, with_batch_axis, without_batch_axis};
 use super::window::{Window2d, col2im_2d, im2col_2d};
 
 // ---------------------------------------------------------------------------
@@ -37,11 +37,15 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
     window: Window2d,
     groups: usize,
 ) -> Result<CpuStorage> {
+    // The unbatched `[Cin, H, W]` activation the catalog admits is given a
+    // batch of one here and has it taken back off below, so the im2col
+    // arithmetic and the tape recipe stay written against one shape.
+    let (activation, unbatched) = with_batch_axis("conv2d", input, 4)?;
     let (b, cin, h, w) = (
-        input.shape[0],
-        input.shape[1],
-        input.shape[2],
-        input.shape[3],
+        activation.shape[0],
+        activation.shape[1],
+        activation.shape[2],
+        activation.shape[3],
     );
     let (cout, cin_g, kh, kw) = (
         weight.shape[0],
@@ -82,7 +86,7 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
 
     let mut group_outputs: Vec<CpuStorage> = Vec::with_capacity(groups);
     for g in 0..groups {
-        let input_g = input.narrow(1, g * cin_g, cin_g)?;
+        let input_g = activation.narrow(1, g * cin_g, cin_g)?;
         let weight_g = weight.narrow(0, g * cout_g, cout_g)?;
         let cols = im2col_2d(&input_g, kh, kw, window)?;
         let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
@@ -99,9 +103,13 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
     let conv_out = matmul_out
         .transpose(1, 2)?
         .reshape(&[b, cout, h_out, w_out])?;
+    // Unwrapped before the tape entry is pushed rather than after, so the
+    // output the caller receives is the one the recipe is keyed on.
+    let conv_out = without_batch_axis(conv_out, unbatched)?;
 
-    let (input_capture, weight_capture) = (input.clone(), weight.clone());
+    let (input_capture, weight_capture) = (activation.clone(), weight.clone());
     let (input_id, weight_id, out_id) = (input.id, weight.id, conv_out.id);
+    let input_shape = input.shape.to_vec();
     tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![input_id, weight_id],
@@ -141,6 +149,9 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
             } else {
                 concat_along_dim1(&grad_input_groups)?
             };
+            // The gradient is shaped like the activation that was asked about,
+            // not like the batched one the kernel worked on.
+            let grad_input = grad_input.reshape(&input_shape)?;
             let grad_weight = if groups == 1 {
                 grad_weight_groups
                     .into_iter()
@@ -159,7 +170,13 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
 
     match bias {
         Some(bias) => {
-            let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
+            // One broadcast axis per output axis. Right-aligned broadcasting
+            // would otherwise put the batch axis back on an unbatched result.
+            let bias_shaped = if unbatched {
+                bias.reshape(&[cout, 1, 1])?
+            } else {
+                bias.reshape(&[1, cout, 1, 1])?
+            };
             add_storage(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),

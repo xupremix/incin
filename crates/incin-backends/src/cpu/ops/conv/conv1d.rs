@@ -13,7 +13,7 @@ use crate::cpu::storage::CpuStorage;
 use crate::cpu::tape::{self, TapeEntry};
 
 use super::combine::{concat_along_dim0, concat_along_dim1, sum_batch_dim};
-use super::helpers::{out_size, validate_groups};
+use super::helpers::{out_size, validate_groups, with_batch_axis, without_batch_axis};
 use super::unfold1d::{col2im_1d, im2col_1d};
 
 // ---------------------------------------------------------------------------
@@ -35,7 +35,15 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
     dilation: usize,
     groups: usize,
 ) -> Result<CpuStorage> {
-    let (b, cin, len) = (input.shape[0], input.shape[1], input.shape[2]);
+    // The unbatched `[Cin, L]` activation the catalog admits is given a batch
+    // of one here and has it taken back off below, so the im2col arithmetic and
+    // the tape recipe stay written against one shape.
+    let (activation, unbatched) = with_batch_axis("conv1d", input, 3)?;
+    let (b, cin, len) = (
+        activation.shape[0],
+        activation.shape[1],
+        activation.shape[2],
+    );
     let (cout, cin_g, kernel_size) = (weight.shape[0], weight.shape[1], weight.shape[2]);
     validate_groups("conv1d", cin, cout, groups)?;
     if cin / groups != cin_g {
@@ -56,7 +64,7 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
 
     let mut group_outputs: Vec<CpuStorage> = Vec::with_capacity(groups);
     for g in 0..groups {
-        let input_g = input.narrow(1, g * cin_g, cin_g)?;
+        let input_g = activation.narrow(1, g * cin_g, cin_g)?;
         let weight_g = weight.narrow(0, g * cout_g, cout_g)?;
         let cols = im2col_1d(&input_g, kernel_size, stride, padding, dilation)?;
         let weight_mat = weight_g.reshape(&[cout_g, input_columns])?;
@@ -71,15 +79,21 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
     };
     // matmul_out: [B, L_out, Cout] -> canonical [B, Cout, L_out]
     let conv_out = matmul_out.transpose(1, 2)?.reshape(&[b, cout, l_out])?;
+    // Unwrapped before the tape entry is pushed rather than after, so the
+    // output the caller receives is the one the recipe is keyed on.
+    let conv_out = without_batch_axis(conv_out, unbatched)?;
 
-    let (input_capture, weight_capture) = (input.clone(), weight.clone());
+    let (input_capture, weight_capture) = (activation.clone(), weight.clone());
     let (input_id, weight_id, out_id) = (input.id, weight.id, conv_out.id);
+    let input_shape = input.shape.to_vec();
     tape::push_with(|| TapeEntry {
         output_id: out_id,
         input_ids: vec![input_id, weight_id],
         backward: Box::new(move |grad_out: &CpuStorage| {
-            // grad_out: [B, Cout, L_out] -> [B, L_out, Cout]
-            let grad_out_t = grad_out.transpose(1, 2)?;
+            // grad_out: [B, Cout, L_out] -> [B, L_out, Cout], with the batch
+            // axis put back on first when the activation had none, since the
+            // gradient is shaped like the output and the output lost it.
+            let grad_out_t = with_batch_axis("conv1d", grad_out, 3)?.0.transpose(1, 2)?;
 
             let mut grad_input_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
             let mut grad_weight_groups: Vec<CpuStorage> = Vec::with_capacity(groups);
@@ -122,6 +136,9 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
             } else {
                 concat_along_dim1(&grad_input_groups)?
             };
+            // The gradient is shaped like the activation that was asked about,
+            // not like the batched one the kernel worked on.
+            let grad_input = grad_input.reshape(&input_shape)?;
             let grad_weight = if groups == 1 {
                 grad_weight_groups
                     .into_iter()
@@ -140,7 +157,13 @@ pub(crate) fn conv1d_impl<D: incin_core::tensor::device::Device, K: DType>(
 
     match bias {
         Some(bias) => {
-            let bias_shaped = bias.reshape(&[1, cout, 1])?;
+            // One broadcast axis per output axis. Right-aligned broadcasting
+            // would otherwise put the batch axis back on an unbatched result.
+            let bias_shaped = if unbatched {
+                bias.reshape(&[cout, 1])?
+            } else {
+                bias.reshape(&[1, cout, 1])?
+            };
             add_storage(&conv_out, &bias_shaped)
         }
         None => Ok(conv_out),

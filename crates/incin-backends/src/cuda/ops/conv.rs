@@ -136,6 +136,7 @@ pub(crate) fn launch_im2col_2d(
 ) -> Result<CudaStorage> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "conv2d")?;
     ensure_conv_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("conv", "im2col_2d")?;
@@ -204,6 +205,7 @@ pub(crate) fn launch_col2im_2d(
 ) -> Result<CudaStorage> {
     let cols_buf = &*cols.buffer;
     let device_id = cols_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(cols_buf.dtype, "conv2d")?;
     ensure_conv_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("conv", "col2im_2d")?;
