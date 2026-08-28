@@ -97,6 +97,7 @@
     include_str!("../../../docs/book/src/backends.md"),
     include_str!("../../../docs/book/src/target_api.md"),
     include_str!("../../../docs/book/src/backend_authoring.md"),
+    include_str!("../../../docs/book/src/backend_conformance.md"),
     include_str!("../../../docs/book/src/proofs_to_execution.md"),
     include_str!("../../../docs/book/src/custom_operations.md"),
     include_str!("../../../docs/book/src/macros.md"),
@@ -525,6 +526,14 @@ pub use incin_core::typenum;
 /// evidence command is `cargo test -p incin --test doctor`.
 #[cfg(feature = "std")]
 pub mod doctor;
+
+/// Whether a newer `incin` has been published.
+///
+/// Reached only through `cargo incin doctor --check-updates`. The module is
+/// always present so callers can name [`update::UpdateStatus`] regardless of
+/// features; the network path inside it exists only under `update-check`.
+#[cfg(feature = "std")]
+pub mod update;
 
 /// Model checkpoint artifacts and transactional state loading.
 pub mod state {

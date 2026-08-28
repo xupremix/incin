@@ -251,6 +251,7 @@ fn the_json_carries_its_schema_version_and_a_fixed_key_set() {
             "probes",
             "schema_version",
             "toolchain",
+            "update",
         ],
         "the JSON key set changed; that is a schema change, so bump SCHEMA_VERSION"
     );

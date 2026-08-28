@@ -45,6 +45,11 @@ metal = ["std", "incin-backends/metal"]
 metal-mps = ["metal", "incin-backends/metal-mps"]
 
 
+# Lets `cargo incin doctor --check-updates` ask crates.io whether a newer
+# incin exists. Off by default: it is the only feature that can reach the
+# network, and no build should gain that ability without asking for it.
+update-check = ["std", "dep:ureq"]
+
 # Enables the external Candle backend at `incin::external::candle`.
 external-candle = ["std", "incin-backends/external-candle"]
 
@@ -97,6 +102,7 @@ wgpu = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware =
 metal = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware = "apple-silicon" }
 metal-mps = { tier = "preview", owner = "facade", prerequisites = ["metal"], hardware = "apple-silicon" }
 external-candle = { tier = "stable", owner = "facade", prerequisites = ["std"], hardware = "none" }
+update-check = { tier = "stable", owner = "facade", prerequisites = ["std"], hardware = "none" }
 autotune = { tier = "preview", owner = "facade", prerequisites = ["cuda"], hardware = "cuda" }
 train = { tier = "preview", owner = "facade", prerequisites = ["std"], hardware = "none" }
 distributed = { tier = "preview", owner = "facade", prerequisites = [], hardware = "none" }
@@ -118,6 +124,9 @@ incin-diagnostics = { version = "0.1.0", path = "../incin-diagnostics" }
 incin-telemetry = { version = "0.1.0", path = "../incin-telemetry", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Only for `cargo incin doctor --check-updates`, which is opt-in twice over:
+# the feature below is off by default and the flag must still be typed.
+ureq = { version = "3.3.0", optional = true }
 
 [[bin]]
 name = "cargo-incin"
@@ -148,6 +157,17 @@ required-features = ["cpu"]
 [[example]]
 name = "mnist_training"
 required-features = ["cpu"]
+
+# The `cargo incin new mnist` scaffold, compiled from the template file itself
+# rather than from a copy of it. The template went stale precisely because
+# nothing built it: it imported a name that had moved out of the crate root and
+# handed `cross_entropy_loss` a float where it reads a class index. Pointing an
+# example straight at the file is what makes a scaffold that cannot compile a
+# failing build rather than a bad first impression.
+[[example]]
+name = "scaffold_mnist"
+path = "src/bin/templates/mnist/main.rs.template"
+required-features = ["cpu", "telemetry"]
 
 [[example]]
 name = "transformer_block"

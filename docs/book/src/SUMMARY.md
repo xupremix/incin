@@ -36,6 +36,7 @@
 - [CPU, and what actually runs on GPU today](./backends.md)
 - [The target API and canonical dispatch](./target_api.md)
 - [Backend authoring](./backend_authoring.md)
+- [Backend conformance](./backend_conformance.md)
 - [From proofs to execution](./proofs_to_execution.md)
 - [Custom and fused operations](./custom_operations.md)
 

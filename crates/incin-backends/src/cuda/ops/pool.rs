@@ -117,6 +117,7 @@ pub(crate) fn launch_max_pool2d_forward(
 ) -> Result<(CudaStorage, CudaStorage)> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "max_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "max_pool2d_forward")?;
@@ -199,6 +200,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
 ) -> Result<CudaStorage> {
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(go_buf.dtype, "max_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "scatter_pool_grad_2d")?;
@@ -251,6 +253,7 @@ pub(crate) fn launch_avg_pool2d_forward(
 ) -> Result<CudaStorage> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "avg_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "avg_pool2d_forward")?;
@@ -314,6 +317,7 @@ pub(crate) fn launch_avg_pool2d_backward(
 ) -> Result<CudaStorage> {
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(go_buf.dtype, "avg_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "avg_pool2d_backward")?;

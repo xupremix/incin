@@ -108,6 +108,7 @@ fn launch_shape_op(
 ) -> Result<CudaStorage> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "shape_op")?;
     ensure_shape_loaded(device_id)?;
 
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
@@ -253,6 +254,13 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
 
     let first_buf = &*tensors[0].buffer;
     let device_id = first_buf.device_id;
+    // Every operand is read through the same `f32` transmute inside the loop
+    // below, so all of them are checked here rather than one per iteration:
+    // a mismatch on the last tensor would otherwise be found only after the
+    // earlier ones had already been copied into the output.
+    for tensor in tensors {
+        crate::cuda::capability::validate_cuda_f32_kernel(tensor.buffer.dtype, "concat")?;
+    }
     ensure_concat_loaded(device_id)?;
 
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;

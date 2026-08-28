@@ -33,6 +33,8 @@ fn ensure_matmul_loaded(device_id: usize) -> Result<()> {
 pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
     let device_id = lhs_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(lhs_buf.dtype, "matmul")?;
+    crate::cuda::capability::validate_cuda_f32_kernel(rhs_buf.dtype, "matmul")?;
     ensure_matmul_loaded(device_id)?;
 
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;

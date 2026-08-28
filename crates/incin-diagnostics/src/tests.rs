@@ -504,3 +504,91 @@ fn test_humanize_diagnostic_collapses_dimcons_after_typenum_translation() {
         translated.text
     );
 }
+
+// --- truncated-span substitution ---
+//
+// `replace_truncated_spans` had no coverage at all, which is how it shipped
+// overwriting complete typenum expressions with an unrelated long type. The
+// three below pin the rule it now follows: substitute a truncated span when
+// exactly one candidate matches, and otherwise leave the span alone.
+
+/// A complete typenum expression is not truncated and must survive untouched,
+/// so the translator downstream can render it as the decimal it is.
+///
+/// This is the matmul regression. A `[2, 3]` against `[4, 5]` product reported
+/// `Cannot contract dimension `MatMulShape<[4, 5]>` with `MatMulShape<[4, 5]>``
+/// -- two different dimensions, three and four, both replaced by one unrelated
+/// type, which then read as "X is not implemented for X".
+#[test]
+fn a_complete_typenum_span_is_not_treated_as_truncated() {
+    let text = "Cannot contract dimension `UInt<UInt<UTerm, B1>, B1>` \
+                with `UInt<UInt<UInt<UTerm, B1>, B0>, B0>`";
+    let lines = alloc::vec![String::from("MatMulShape<[4, 5]>")];
+
+    assert_eq!(replace_truncated_spans(text, &lines), text);
+}
+
+/// A span rustc actually truncated is substituted when its head names exactly
+/// one of the full types read back from the long-type file.
+#[test]
+fn a_truncated_span_takes_the_one_full_type_that_shares_its_head() {
+    let text = "required for `Foo` to implement `MatMulShape<DimCons<UInt<UTerm, B1>, ...>>`";
+    let lines = alloc::vec![String::from("MatMulShape<[4, 5]>")];
+
+    assert_eq!(
+        replace_truncated_spans(text, &lines),
+        "required for `Foo` to implement `MatMulShape<[4, 5]>`"
+    );
+}
+
+/// Two candidates sharing a head is an ambiguous match, and an ambiguous match
+/// is left alone. Picking one would read as authoritative while being a coin
+/// flip, which is the failure the rotating fallback used to produce.
+#[test]
+fn an_ambiguous_truncated_span_is_left_exactly_as_it_came_in() {
+    let text = "required for `Foo` to implement `MatMulShape<DimCons<UInt<UTerm, B1>, ...>>`";
+    let lines = alloc::vec![
+        String::from("MatMulShape<[4, 5]>"),
+        String::from("MatMulShape<[2, 3]>"),
+    ];
+
+    assert_eq!(replace_truncated_spans(text, &lines), text);
+}
+
+/// A truncated span whose head names no full type at all is also left alone,
+/// rather than borrowing whichever line happened to be next.
+#[test]
+fn an_unmatched_truncated_span_is_left_exactly_as_it_came_in() {
+    let text = "required for `Foo` to implement `ConcatShape<DimCons<UInt<UTerm, B1>, ...>>`";
+    let lines = alloc::vec![String::from("MatMulShape<[4, 5]>")];
+
+    assert_eq!(replace_truncated_spans(text, &lines), text);
+}
+
+// --- the contraction message ---
+
+/// `matmul` carries two `on_unimplemented` messages and rustc reports the
+/// innermost failing bound, so it is `ContractsWith`'s that reaches a reader.
+/// Keying the explanation only on `MatMulShape`'s is why `--explain` printed a
+/// rule sentence and no diagram for every real matmul mismatch.
+#[test]
+fn the_contraction_message_yields_the_two_axes_that_disagree() {
+    let text = "error[E0277]: Cannot contract dimension `3` with `4`\n  --> src/main.rs:6:22";
+
+    let mismatch = parse_contraction_mismatch(text).expect("the message parses");
+    assert_eq!(mismatch.lhs_inner, "3");
+    assert_eq!(mismatch.rhs_inner, "4");
+
+    let rendered = mismatch.render();
+    assert!(rendered.contains("last axis of the left operand"));
+    assert!(rendered.contains("second-to-last axis of the right operand"));
+    assert!(rendered.contains("transpose"));
+}
+
+/// Equal axes mean the contraction was not what failed -- a rank disagreement
+/// reaches the same bound -- so explaining one would misdirect.
+#[test]
+fn equal_axes_are_not_reported_as_a_contraction_mismatch() {
+    let text = "Cannot contract dimension `3` with `3`";
+    assert!(parse_contraction_mismatch(text).is_none());
+}

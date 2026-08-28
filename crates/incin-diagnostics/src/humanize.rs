@@ -125,8 +125,37 @@ pub fn expand_and_substitute_type_files(text: &str) -> (String, Vec<(String, Str
     (text, hints)
 }
 
-/// Replaces backticked spans in `text` that contain `...` or `UInt<` with the corresponding
-/// full humanized type strings read from a rustc long-type file.
+/// The part of a type expression before its first generic argument.
+///
+/// `MatMulShape<DimCons<..>>` gives `MatMulShape`, and so does the humanized
+/// `MatMulShape<[4, 5]>`. That shared head is what lets a truncated span in the
+/// diagnostic be matched against a full type read from rustc's long-type file,
+/// even though one is still spelled in typenum and the other is already
+/// decimal.
+fn head_identifier(expression: &str) -> &str {
+    let head = expression.split('<').next().unwrap_or(expression).trim();
+    // A trait bound arrives as `Trait<Args>` but an associated path can arrive
+    // qualified; the last segment is the name in both spellings.
+    head.rsplit("::").next().unwrap_or(head)
+}
+
+/// Replaces backticked spans that rustc *truncated* with the full humanized
+/// type read from its long-type file.
+///
+/// Only truncated spans. A span that spells a complete typenum expression is
+/// not truncated, however long it looks: `translate_typenum_text` renders it as
+/// a decimal a moment later, and substituting a long-type line for it discards
+/// the very number the reader needs. That is what produced `Cannot contract
+/// dimension `MatMulShape<[4, 5]>` with `MatMulShape<[4, 5]>`` for a `[2, 3]`
+/// against `[4, 5]` product: two different dimensions, three and four, both
+/// overwritten with one unrelated type.
+///
+/// And only when the match is certain. Spans are matched on their head
+/// identifier, and a span whose head matches no line, or matches more than one,
+/// is left exactly as it came in. A wrong substitution reads as authoritative
+/// and sends the reader after a type that was never in the error; showing what
+/// plain cargo shows is the worse-looking answer and the honest one. The
+/// `[Expanded Full Type]` block below carries the full types either way.
 pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
     if file_lines.is_empty() {
         return text.to_string();
@@ -134,7 +163,6 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
 
     let mut result = String::with_capacity(text.len());
     let mut last_end = 0;
-    let mut line_idx = 0;
 
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -150,24 +178,18 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
                 let end = i + 1;
                 let span = &text[start + 1..end - 1];
 
-                if span.contains("...") || span.contains("...") || span.contains("UInt<") {
-                    let matched_line = file_lines
+                // Both spellings rustc uses for an elided type argument.
+                if span.contains("...") || span.contains('\u{2026}') {
+                    let head = head_identifier(span);
+                    let mut matches = file_lines
                         .iter()
-                        .find(|l| {
-                            let prefix = span.split("...").next().unwrap_or("").trim();
-                            let prefix_clean = prefix.trim_end_matches(|c: char| {
-                                c == ',' || c == '<' || c.is_whitespace()
-                            });
-                            !prefix_clean.is_empty() && l.starts_with(prefix_clean)
-                        })
-                        .or_else(|| file_lines.get(line_idx));
+                        .filter(|line| !head.is_empty() && head_identifier(line) == head);
 
-                    if let Some(replacement) = matched_line {
+                    if let (Some(replacement), None) = (matches.next(), matches.next()) {
                         result.push_str(&text[last_end..start + 1]);
                         result.push_str(replacement);
                         result.push('`');
                         last_end = end;
-                        line_idx = (line_idx + 1) % file_lines.len();
                     }
                 }
                 i += 1;

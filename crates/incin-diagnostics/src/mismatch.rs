@@ -69,6 +69,69 @@ fn joined_prefix_len(elements: &[String], index: usize) -> usize {
     elements[..index].iter().map(|e| e.len() + 2).sum()
 }
 
+/// The two dimensions a matrix product failed to contract.
+///
+/// A narrower fact than [`MatMulMismatch`], and the one a reader almost always
+/// gets. `matmul` carries two `on_unimplemented` messages: `MatMulShape`'s,
+/// which names both whole shapes, and `ContractsWith`'s, which names only the
+/// two conflicting axes. rustc reports the innermost failing bound, so it is
+/// `ContractsWith`'s message that reaches the terminal, and an explanation
+/// keyed only on the wider one never fires.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContractionMismatch {
+    /// The lhs's last dimension, humanized (e.g. `"3"`).
+    pub lhs_inner: String,
+    /// The rhs's second-to-last dimension, humanized (e.g. `"4"`).
+    pub rhs_inner: String,
+}
+
+impl ContractionMismatch {
+    /// Renders the contraction rule against the two axes that broke it.
+    ///
+    /// Deliberately says which position each number came from. "3 does not
+    /// equal 4" is not actionable on its own: a reader with a `[2, 3]` and a
+    /// `[4, 5]` in front of them needs to know that the three is the *last*
+    /// axis of the left operand and the four is the *second-to-last* of the
+    /// right, because that is what tells them which of the two to change and
+    /// whether a transpose would do it.
+    pub fn render(&self) -> String {
+        const INDENT: &str = "      ";
+        let Self {
+            lhs_inner,
+            rhs_inner,
+        } = self;
+        format!(
+            "{INDENT}lhs (..., K) -> K = {lhs_inner}   <- last axis of the left operand\n\
+             {INDENT}rhs (K, ...) -> K = {rhs_inner}   <- second-to-last axis of the right operand\n\
+             {INDENT}{lhs_inner} \u{2260} {rhs_inner} \u{2192} change the left operand's last axis to {rhs_inner}, \
+             change the right operand's second-to-last axis to {lhs_inner}, \n\
+             {INDENT}or transpose whichever operand is the wrong way round."
+        )
+    }
+}
+
+/// Parses `ContractsWith`'s on_unimplemented message -- `` Cannot contract
+/// dimension `{Self}` with `{Rhs}` `` -- into the two axes that disagree.
+///
+/// Returns `None` when the message is absent or the two axes read the same,
+/// since equal axes mean the real failure was something else (a rank
+/// disagreement, most often) and explaining a contraction would misdirect.
+pub fn parse_contraction_mismatch(text: &str) -> Option<ContractionMismatch> {
+    const PREFIX: &str = "Cannot contract dimension `";
+    let start = text.find(PREFIX)?;
+    let after_prefix = &text[start + PREFIX.len()..];
+    let (lhs_inner, after_lhs) = after_prefix.split_once('`')?;
+    let (rhs_inner, _) = after_lhs.strip_prefix(" with `")?.split_once('`')?;
+
+    if lhs_inner == rhs_inner || lhs_inner.is_empty() || rhs_inner.is_empty() {
+        return None;
+    }
+    Some(ContractionMismatch {
+        lhs_inner: lhs_inner.to_string(),
+        rhs_inner: rhs_inner.to_string(),
+    })
+}
+
 /// Parses the `MatMulShape` trait's fixed on_unimplemented message -
 /// `` Cannot matrix-multiply shape `{Self}` with `{Rhs}` `` - and, if the
 /// inner dimensions (last element of `Self`, second-to-last of `Rhs`, per

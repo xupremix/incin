@@ -39,7 +39,7 @@ use serde::Serialize;
 /// will not touch this schema. Bumped on any change to a key or to the meaning
 /// of a value; a new *finding code* is not a schema change, since consumers
 /// already have to tolerate codes they do not know.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The backend families the report covers, in the order it prints them.
 const DEVICE_ORDER: &[DeviceKind] = &[DeviceKind::Cpu, DeviceKind::Cuda, DeviceKind::Wgpu];
@@ -304,6 +304,12 @@ pub struct Report {
     pub probes: Vec<Probe>,
     /// Findings derived from the observations.
     pub findings: Vec<Finding>,
+    /// Result of the crates.io version check, when one was requested.
+    ///
+    /// `None` whenever `--check-updates` was not passed, which is the default.
+    /// The key is always serialized so the JSON key set does not depend on the
+    /// flags a run was given.
+    pub update: Option<String>,
 }
 
 /// One representative operation the report asks every available device about.
@@ -393,6 +399,7 @@ impl Report {
 
         Self {
             schema_version: SCHEMA_VERSION,
+            update: None,
             toolchain,
             features,
             cpu_isa,
@@ -518,6 +525,11 @@ impl Report {
                 "{} {} {} rank {} {mode}: {answer}",
                 probe.device, probe.operation, probe.dtype, probe.rank
             );
+        }
+
+        if let Some(update) = &self.update {
+            out.push_str("\n[update]\n");
+            let _ = writeln!(out, "{update}");
         }
 
         out.push_str("\n[findings]\n");
@@ -712,6 +724,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("metal-mps", cfg!(feature = "metal-mps")),
         Feature::new("autotune", cfg!(feature = "autotune")),
         Feature::new("train", cfg!(feature = "train")),
+        Feature::new("update-check", cfg!(feature = "update-check")),
         Feature::new("distributed", cfg!(feature = "distributed")),
         Feature::new(
             "distributed-reference",
@@ -878,19 +891,31 @@ pub const EXIT_USAGE: i32 = 2;
 #[must_use]
 pub fn run(args: &[String]) -> (String, i32) {
     let mut json = false;
+    let mut check_updates = false;
     for arg in args {
         match arg.as_str() {
             "--json" => json = true,
+            "--check-updates" => check_updates = true,
             other => {
                 return (
-                    format!("error: unknown argument `{other}` for doctor (expected --json)\n"),
+                    format!(
+                        "error: unknown argument `{other}` for doctor \
+                         (expected --json or --check-updates)\n"
+                    ),
                     EXIT_USAGE,
                 );
             }
         }
     }
 
-    let report = Report::gather(&HostMachine);
+    let mut report = Report::gather(&HostMachine);
+    // Only on an explicit request. Everything else the doctor reports is read
+    // from this machine; this is the one line that would leave it, so it stays
+    // behind a flag a person had to type.
+    if check_updates {
+        report.update = Some(crate::update::check().to_string());
+    }
+    let report = report;
     let rendered = if json {
         match report.to_json() {
             Ok(text) => format!("{text}\n"),

@@ -23,6 +23,8 @@ impl<D: Device> Capabilities for CudaBackendImpl<D> {
 
 impl_creation_executors!(CudaBackendImpl<D>, CudaStorage);
 impl_data_creation_executors!(CudaBackendImpl<D>, CudaStorage);
+impl_variable_creation_executors!(CudaBackendImpl<D>, super::backend::CudaVar);
+impl_readback_executors!(CudaBackendImpl<D>, CudaStorage);
 
 /// Whether an operand's physical shape is the one the descriptor promised.
 ///

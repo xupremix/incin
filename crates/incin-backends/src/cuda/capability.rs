@@ -36,6 +36,40 @@ impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64, bool);
 /// function accepts is a necessary condition for `bool` support, not a
 /// capability claim by itself - the capability table is what actually
 /// claims something, one row at a time.
+/// The precondition for every kernel that reinterprets a byte buffer as `f32`.
+///
+/// Storage validation above is deliberately wider: CUDA storage legitimately
+/// holds `f64`, `f16`, `bf16`, `i64`, `q8_0` and `bool`. The hand-written
+/// kernels in `cuda/ops` are not that wide. Each takes a `const float*` and
+/// reaches its operand through an unconditional `transmute::<f32>`, which is
+/// sound only when the buffer really is `f32`.
+///
+/// Nothing but the capability rows was enforcing that, and the failure mode if
+/// a wider row is ever declared depends on which way the width goes:
+///
+/// * A **narrower** dtype (`f16`, `bf16`, `u8`) makes the transmute request
+///   more bytes than the allocation holds, so cudarc returns `None` and the
+///   `unwrap` panics.
+/// * A **wider** dtype (`f64`) satisfies the byte check, so the transmute
+///   succeeds and the kernel reads the first half of the allocation as `f32`.
+///   That is a wrong answer with no error attached to it, which is the worse
+///   of the two.
+///
+/// Calling this first turns both into the same typed refusal the rest of the
+/// backend gives, and means widening a `matmul`/`conv`/`pool` capability row
+/// fails loudly at the boundary instead of silently inside a kernel launch.
+pub(crate) fn validate_cuda_f32_kernel(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
+    if dtype.builtin_id() == Some(DTypeId::F32) {
+        Ok(())
+    } else {
+        Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op,
+        })
+    }
+}
+
 pub(crate) fn validate_cuda_storage_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
     let is_supported = matches!(
         dtype.builtin_id(),
@@ -138,5 +172,38 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{dtype:?} should validate: {e:?}"));
         }
         assert!(validate_cuda_storage_dtype(DTypeId::U32.descriptor(), "test").is_err());
+    }
+
+    /// The kernel guard is deliberately narrower than the storage guard. Every
+    /// dtype that storage accepts but the f32 kernels cannot read must be
+    /// refused here, or the transmute inside those kernels is reachable.
+    #[test]
+    fn the_f32_kernel_guard_accepts_only_f32() {
+        validate_cuda_f32_kernel(DTypeId::F32.descriptor(), "test")
+            .expect("f32 is what the kernels read");
+
+        for dtype in [
+            DTypeId::F64,
+            DTypeId::F16,
+            DTypeId::BF16,
+            DTypeId::I64,
+            DTypeId::Q8_0,
+            DTypeId::Bool,
+            DTypeId::U32,
+        ] {
+            assert!(
+                validate_cuda_f32_kernel(dtype.descriptor(), "test").is_err(),
+                "{dtype:?} must be refused: the f32 kernels would transmute it blind"
+            );
+        }
+    }
+
+    /// `f64` is the one that matters most, and the reason the guard exists
+    /// rather than relying on the transmute failing. A wider dtype passes
+    /// cudarc's byte check, so without this guard the kernel would read half
+    /// the allocation as `f32` and report success.
+    #[test]
+    fn a_wider_dtype_is_refused_rather_than_silently_halved() {
+        assert!(validate_cuda_f32_kernel(DTypeId::F64.descriptor(), "matmul").is_err());
     }
 }

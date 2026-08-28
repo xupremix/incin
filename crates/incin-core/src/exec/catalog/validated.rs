@@ -211,6 +211,17 @@ where
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
             ) {
+                // Checked rather than indexed. A rank-zero operand has no
+                // extent to read, and a validation path that indexes into one
+                // panics in the place whose entire purpose is to return a
+                // diagnostic instead.
+                if lhs.is_empty() || rhs.is_empty() {
+                    return Err(invalid(
+                        O::ID,
+                        "shape",
+                        "dot requires an axis to contract over",
+                    ));
+                }
                 if lhs[0] != rhs[0] {
                     return Err(invalid(
                         O::ID,
