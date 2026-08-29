@@ -5,6 +5,7 @@ pub(crate) mod kernels;
 pub(crate) mod logical;
 pub(crate) mod matmul;
 pub(crate) mod norm;
+pub(crate) mod optimizer;
 pub(crate) mod pool;
 pub(crate) mod quant;
 pub(crate) mod reduce;
