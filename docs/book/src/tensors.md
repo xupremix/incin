@@ -20,7 +20,22 @@ Concrete application code selects a target device directly:
 ```rust,no_run
 use incin::prelude::*;
 
+// 1. Static compile-time target (Cpu, or Cuda::new(0))
 let x = Cpu.randn(shape![2, 3])?; // ~ N(0, 1) standard normal
+
+// 2. Rebinding to a specific static dtype (f16, bf16, f64, i64, etc.):
+let half_target = Cpu.dtype::<f16>()?;
+let h = half_target.zeros(shape![2, 3])?;
+
+// 3. Dynamic runtime-chosen device (detect_device() or DeviceId):
+let device = incin_backends::detect_device().unwrap_or_else(DeviceId::cpu);
+let target: Target<Native, Dyn> = Target::new((), device, ());
+let dynamic_zeros = target.zeros([2, 3])?;
+
+// 4. Dynamic runtime-chosen dtype (.dtype_dynamic):
+let desc = DTypeId::F64.descriptor();
+let f64_target = target.dtype_dynamic(desc)?;
+let dynamic_f64 = f64_target.ones([2, 3])?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -74,6 +89,11 @@ let ints = Tensor::<s![2, 2], B, i64>::zeros(())?;
 // of in the type:
 let runtime_dtype = Tensor::<Dyn, B, Dyn>::ones((vec![2, 2], DTypeId::F64.descriptor()))?;
 assert_eq!(runtime_dtype.dtype(), DTypeId::F64.descriptor());
+
+// Or use target-first dynamic rebinding:
+let target: Target<Native, Dyn> = Target::new((), DeviceId::cpu(), ());
+let dynamic_target = target.dtype_dynamic(DTypeId::F64.descriptor())?;
+let dynamic_tensor = dynamic_target.zeros([2, 2])?;
 # Ok::<(), incin::Error>(())
 ```
 

@@ -104,8 +104,24 @@ let x = Tensor::<s![2, 3], Dev>::zeros(())?;
 
 `detect_device()` probes the **machine**, trying CUDA, then Metal, then WGPU,
 then CPU, and returns the first family with usable hardware. Its answer is a
-run-time `DeviceId` rather than a type, so the tensor holding it has to be
-dynamic in its backend:
+run-time `DeviceId` rather than a type.
+
+You can allocate directly via the target-first API:
+
+```rust,no_run
+use incin::prelude::*;
+use incin_backends::detect::detect_device;
+use incin_backends::target::{Native, Target};
+use incin_core::tensor::device::DeviceId;
+
+let device = detect_device().unwrap_or_else(DeviceId::cpu);
+let target: Target<Native, Dyn> = Target::new((), device, ());
+
+let x = target.zeros([2, 3])?;
+# Ok::<(), incin::Error>(())
+```
+
+Or via explicit type-level construction:
 
 ```rust,no_run
 use incin::prelude::*;
@@ -128,8 +144,8 @@ to whatever is actually there. `detect_device_in(&[..])` pins a preference
 order when the default one is wrong for you.
 
 `cargo run -p incin --example device_selection --features cpu` prints all four
-rungs side by side, including what each of the last two resolved to on the
-machine running it.
+rungs side by side, and `cargo run -p incin --example target_api_dynamic --features cpu`
+shows dynamic device and dtype creation end to end.
 
 ## `cargo incin doctor`
 
