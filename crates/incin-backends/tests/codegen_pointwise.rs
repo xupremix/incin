@@ -431,3 +431,42 @@ fn test_prefix_scan_codegen() {
     assert!(cuda.contains("__shfl_up_sync"));
     assert!(cuda.contains("running_val += other"));
 }
+
+#[test]
+fn test_composite_fusion_swiglu_codegen() {
+    use incin_backends::codegen::CompositeFusionSpec;
+
+    let spec = CompositeFusionSpec::swiglu_residual("swiglu_res_f32", DTypeId::F32);
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("__global__ void swiglu_res_f32"));
+    assert!(cuda.contains("const float gate = static_cast<float>(in_0[idx])"));
+    assert!(cuda.contains("const float silu_up = up / (1.0f + expf(-up))"));
+    assert!(cuda.contains("const float gated = gate * silu_up"));
+    assert!(cuda.contains("const float out = gated + res"));
+    assert!(cuda.contains("Out[idx] = static_cast<float>(out)"));
+}
+
+#[test]
+fn test_moe_topk_gating_codegen() {
+    use incin_backends::codegen::MoeGatingSpec;
+
+    let spec = MoeGatingSpec::new("moe_gating_top2_f32", DTypeId::F32, 8, 2);
+    let cuda = spec.render_cuda_gating();
+    assert!(cuda.contains("__global__ void moe_gating_top2_f32_gating"));
+    assert!(cuda.contains("int top_idx[2]"));
+    assert!(cuda.contains("float top_val[2]"));
+    assert!(cuda.contains("out_indices[k] = top_idx[k]"));
+    assert!(cuda.contains("out_weights[k] = expf(top_val[k] - max_val) * inv_sum"));
+}
+
+#[test]
+fn test_implicit_gemm_conv2d_codegen() {
+    use incin_backends::codegen::ImplicitConv2dSpec;
+
+    let spec = ImplicitConv2dSpec::new("conv2d_k3s1p1_f32", DTypeId::F32, (3, 3), (1, 1), (1, 1));
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("__global__ void conv2d_k3s1p1_f32"));
+    assert!(cuda.contains("const int w_out = out_idx % out_w"));
+    assert!(cuda.contains("const int h_in = h_out * 1 - 1 + r * 1"));
+    assert!(cuda.contains("fmaf(in_val, w_val, sum)"));
+}
