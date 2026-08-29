@@ -311,6 +311,7 @@ fn every_mutating_and_autograd_operation_is_classified_by_its_profile() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "document formatting is tested by ordinary test suite")]
 fn generated_semantics_document_covers_every_row() {
     let document = operation_semantics_document();
     for row in OPERATION_CATALOG {
