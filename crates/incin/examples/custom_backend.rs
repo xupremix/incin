@@ -1,8 +1,8 @@
-//! Practical Example: Authoring a Custom Compute Backend.
+//! Practical Example: Authoring a Custom Compute Backend in 100% Safe Rust.
 //!
 //! Demonstrates:
 //! 1. Defining a custom device type `MyCustomDevice`
-//! 2. Defining custom tensor storage `MyStorage<K>`
+//! 2. Defining custom tensor storage `MyStorage<K>` without any unsafe code
 //! 3. Implementing the core backend contracts:
 //!    - `StorageBackend`
 //!    - `SupportsDType`
@@ -18,9 +18,11 @@
 //!
 //! Run with: `cargo run -p incin --example custom_backend --features cpu,backend-authoring`
 
+#![forbid(unsafe_code)]
 #![allow(missing_docs)]
 #![allow(clippy::type_complexity)]
 
+use core::marker::PhantomData;
 use incin::backend_authoring::operations::op;
 use incin::backend_authoring::{
     Alignment, Capabilities, CapabilityQuery, Execute, ExecutionRequest,
@@ -51,16 +53,22 @@ impl Device for MyCustomDevice {
 
 impl ConstDevice for MyCustomDevice {}
 
-// ── 2. Custom Storage Type ───────────────────────────────────────────────────
+// ── 2. Custom Storage Type (100% Safe Rust) ──────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct MyStorage<K> {
-    pub data: Arc<Vec<K>>,
+pub struct MyStorage<K = f32> {
+    pub bytes: Arc<Vec<u8>>,
     pub meta: TensorMeta,
+    pub _marker: PhantomData<K>,
 }
 
 impl<K: DType + ConstDType> MyStorage<K> {
-    pub fn new(data: Vec<K>, dims: &[usize]) -> Self {
+    /// Constructs storage safely from float elements.
+    pub fn from_floats(floats: &[f32], dims: &[usize]) -> Self {
+        let mut bytes = Vec::with_capacity(floats.len() * 4);
+        for &f in floats {
+            bytes.extend_from_slice(&f.to_ne_bytes());
+        }
         let meta = TensorMeta::contiguous(
             ShapeBuf::from_slice(dims),
             K::DESCRIPTOR,
@@ -69,10 +77,23 @@ impl<K: DType + ConstDType> MyStorage<K> {
             dims.iter().product(),
         )
         .expect("valid tensor metadata");
+
         Self {
-            data: Arc::new(data),
+            bytes: Arc::new(bytes),
             meta,
+            _marker: PhantomData,
         }
+    }
+
+    /// Reads floats safely from byte storage.
+    pub fn to_floats(&self) -> Vec<f32> {
+        self.bytes
+            .chunks_exact(4)
+            .map(|chunk| {
+                let arr: [u8; 4] = [chunk[0], chunk[1], chunk[2], chunk[3]];
+                f32::from_ne_bytes(arr)
+            })
+            .collect()
     }
 }
 
@@ -110,19 +131,30 @@ impl<K: DType + ConstDType> SupportsDType<K> for MyCustomBackend {
 
 impl HostReadback for MyCustomBackend {
     fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> incin::Result<Vec<f64>> {
-        let bytes = Self::to_bytes(storage)?;
-        let count = bytes.len() / std::mem::size_of::<f32>();
-        let ptr = bytes.as_ptr() as *const f32;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, count) };
-        Ok(slice.iter().map(|&v| v as f64).collect())
+        let floats: Vec<f64> = storage
+            .bytes
+            .chunks_exact(4)
+            .map(|chunk| {
+                let arr: [u8; 4] = [chunk[0], chunk[1], chunk[2], chunk[3]];
+                f32::from_ne_bytes(arr) as f64
+            })
+            .collect();
+        Ok(floats)
     }
 
     fn int_to_vec1<K: DType>(storage: &Self::Storage<K>) -> incin::Result<Vec<i64>> {
-        let bytes = Self::to_bytes(storage)?;
-        let count = bytes.len() / std::mem::size_of::<i64>();
-        let ptr = bytes.as_ptr() as *const i64;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, count) };
-        Ok(slice.to_vec())
+        let ints: Vec<i64> = storage
+            .bytes
+            .chunks_exact(8)
+            .map(|chunk| {
+                let arr: [u8; 8] = [
+                    chunk[0], chunk[1], chunk[2], chunk[3],
+                    chunk[4], chunk[5], chunk[6], chunk[7],
+                ];
+                i64::from_ne_bytes(arr)
+            })
+            .collect();
+        Ok(ints)
     }
 }
 
@@ -134,17 +166,6 @@ impl HostInterop for MyCustomBackend {
         _device: &DeviceId,
     ) -> incin::Result<Self::Storage<K>> {
         let count: usize = dims.iter().product();
-        let elem_size = std::mem::size_of::<K>();
-        if bytes.len() != count * elem_size {
-            return Err(incin::Error::Msg(format!(
-                "Byte length {} does not match required {} elements",
-                bytes.len(),
-                count
-            )));
-        }
-
-        let ptr = bytes.as_ptr() as *const K;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, count) };
         let meta = TensorMeta::contiguous(
             ShapeBuf::from_slice(dims),
             _dtype,
@@ -155,17 +176,14 @@ impl HostInterop for MyCustomBackend {
         .map_err(|e| incin::Error::Msg(format!("{:?}", e)))?;
 
         Ok(MyStorage {
-            data: Arc::new(slice.to_vec()),
+            bytes: Arc::new(bytes.to_vec()),
             meta,
+            _marker: PhantomData,
         })
     }
 
     fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> incin::Result<Vec<u8>> {
-        let slice = &storage.data;
-        let bytes_ptr = slice.as_ptr() as *const u8;
-        let total_bytes = slice.len() * std::mem::size_of::<K>();
-        let byte_slice = unsafe { std::slice::from_raw_parts(bytes_ptr, total_bytes) };
-        Ok(byte_slice.to_vec())
+        Ok(storage.bytes.as_ref().clone())
     }
 }
 
@@ -199,7 +217,7 @@ impl incin::backend_authoring::Backend for MyCustomBackend {
     type InnerBackend = Self;
 }
 
-// ── 4. Operation Kernels (Execute<Op>) ────────────────────────────────────────
+// ── 4. Operation Kernels (Execute<Op> in Safe Rust) ───────────────────────────
 
 // op::Zeros Kernel
 impl Execute<op::Zeros> for MyCustomBackend {
@@ -212,7 +230,8 @@ impl Execute<op::Zeros> for MyCustomBackend {
         let attrs = request.operation.descriptor().attributes();
         let dims: &[usize] = attrs.shape.as_slice();
         let numel: usize = dims.iter().product();
-        Ok(MyStorage::new(vec![0.0_f32; numel], dims))
+        let zeros = vec![0.0_f32; numel];
+        Ok(MyStorage::from_floats(&zeros, dims))
     }
 }
 
@@ -227,9 +246,11 @@ impl Execute<op::Add> for MyCustomBackend {
         let lhs: &MyStorage<f32> = request.inputs[0].downcast_ref().unwrap();
         let rhs: &MyStorage<f32> = request.inputs[1].downcast_ref().unwrap();
 
-        let out: Vec<f32> = lhs.data.iter().zip(rhs.data.iter()).map(|(a, b)| a + b).collect();
+        let lhs_f = lhs.to_floats();
+        let rhs_f = rhs.to_floats();
+        let out: Vec<f32> = lhs_f.iter().zip(rhs_f.iter()).map(|(a, b)| a + b).collect();
         let dims: &[usize] = lhs.meta.shape().dims();
-        Ok(MyStorage::new(out, dims))
+        Ok(MyStorage::from_floats(&out, dims))
     }
 }
 
@@ -251,8 +272,8 @@ impl Execute<op::MatMulExact> for MyCustomBackend {
         let n = b_dims[1];
 
         let mut c = vec![0.0_f32; m * n];
-        let a_data = &a.data;
-        let b_data = &b.data;
+        let a_data = a.to_floats();
+        let b_data = b.to_floats();
 
         for i in 0..m {
             for p in 0..k {
@@ -263,7 +284,7 @@ impl Execute<op::MatMulExact> for MyCustomBackend {
             }
         }
 
-        Ok(MyStorage::new(c, &[m, n]))
+        Ok(MyStorage::from_floats(&c, &[m, n]))
     }
 }
 
@@ -276,9 +297,10 @@ impl Execute<op::Relu> for MyCustomBackend {
         request: ExecutionRequest<'_, op::Relu, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
         let x: &MyStorage<f32> = request.inputs[0].downcast_ref().unwrap();
-        let out: Vec<f32> = x.data.iter().map(|&v| if v > 0.0 { v } else { 0.0 }).collect();
+        let x_f = x.to_floats();
+        let out: Vec<f32> = x_f.iter().map(|&v| if v > 0.0 { v } else { 0.0 }).collect();
         let dims: &[usize] = x.meta.shape().dims();
-        Ok(MyStorage::new(out, dims))
+        Ok(MyStorage::from_floats(&out, dims))
     }
 }
 
@@ -305,7 +327,7 @@ impl incin_backends::target::TensorTarget for MyCustomDevice {
 // ── Main Demo Execution ──────────────────────────────────────────────────────
 
 fn main() -> incin::Result<()> {
-    println!("=== Practical Example: Custom Backend Implementation ===");
+    println!("=== Practical Example: Custom Backend Implementation (100% Safe Rust) ===");
 
     // 1. Allocate on custom backend via TargetExt
     println!("\n[1] Allocating zeros on MyCustomDevice target...");
@@ -330,6 +352,6 @@ fn main() -> incin::Result<()> {
     let relu_out = sum.relu()?;
     println!("  • ReLU output data: {:?}", relu_out.to_vec1::<f32>()?);
 
-    println!("\n[5] Custom backend executed all tensor operations successfully!");
+    println!("\n[5] Custom backend executed all tensor operations successfully without unsafe code!");
     Ok(())
 }
