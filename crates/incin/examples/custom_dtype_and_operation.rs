@@ -1,13 +1,10 @@
-//! Practical Example: Complete End-to-End Custom Operation with Validation Proofs.
+//! Practical Example: Complete End-to-End Custom Operation with Validation Proofs & Kernel Execution.
 //!
-//! Demonstrates the full lifecycle:
-//! 1. Defining the Contract: `Operation` with mathematical shape & dtype inference.
-//! 2. Implementing the Kernel: `Execute<MyOp>` taking direct advantage of validated shape proofs
-//!    from `request.operation.descriptor().outputs()`.
-//! 3. Invoking the Operation:
-//!    - Standalone function: `fused_scaled_add(&x, &y, alpha)` (No extension trait needed!)
-//!    - Extension trait: `x.fused_scaled_add(&y, alpha)` (For method-chaining syntax)
-//! 4. Proving that invalid dimensions fail-fast before kernel launch.
+//! Demonstrates the complete flow:
+//! 1. Contract: `Operation` with mathematical shape & dtype inference (`infer_outputs`).
+//! 2. Backend Kernel: `Execute<FusedScaledAdd>` consuming `ExecutionRequest` with verified shape proofs.
+//! 3. Invocation: Calling the custom kernel via `dispatch::execute::<FusedScaledAdd, CustomBackend>`.
+//! 4. Invariant Enforcement: Proving that dimension mismatches fail-fast *before* `execute()` is called.
 //!
 //! Run with: `cargo run -p incin --example custom_dtype_and_operation --features cpu,backend-authoring`
 
@@ -22,6 +19,9 @@ use incin::backend_authoring::{
     StorageOutput, SupportLevel, SupportsDType, TensorMeta, VariableBackend,
 };
 use incin_core::error::BackendError;
+use incin_core::exec::dispatch;
+use incin_core::exec::request::TensorHandle;
+use incin_core::exec::ExecutionContext;
 use incin_core::shapes::OperationKind;
 use incin::prelude::*;
 use std::sync::Arc;
@@ -46,7 +46,7 @@ impl Operation for FusedScaledAdd {
         version: 1,
     };
 
-    /// Proves shape & contract invariants ahead of execution.
+    /// Mathematical proof: Verifies shape & contract invariants ahead of execution.
     fn infer_outputs(
         _attrs: &Self::Attributes,
         inputs: &[LogicalTensorMeta],
@@ -175,6 +175,8 @@ impl Execute<FusedScaledAdd> for CustomBackend {
         &self,
         request: ExecutionRequest<'_, FusedScaledAdd, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
+        println!("  >>> [CustomBackend::execute] Executing FusedScaledAdd Kernel!");
+
         // 1. Read validated attributes
         let attrs = request.operation.descriptor().attributes();
         let alpha = attrs.alpha;
@@ -184,6 +186,7 @@ impl Execute<FusedScaledAdd> for CustomBackend {
         let output_meta = &request.operation.descriptor().outputs()[0];
         let proven_dims = output_meta.shape.as_ref().unwrap().dims();
         let numel: usize = proven_dims.iter().product();
+        println!("      • Verified proven output geometry: {:?}", proven_dims);
 
         // 3. ADVANTAGE OF PROOF: Inputs are guaranteed to match the contract by `infer_outputs`.
         // The hot loop runs with zero branch overhead:
@@ -213,54 +216,40 @@ impl incin_backends::target::TensorTarget for CustomDevice {
     fn precision_policy(&self) -> incin_backends::target::RuntimePrecisionPolicy { incin_backends::target::RuntimePrecisionPolicy::fp32() }
 }
 
-// ── 5. How to Invoke the Custom Operation ───────────────────────────────────
+// ── 5. How to Invoke the Custom Operation via dispatch::execute ──────────────
 
-/// Standalone function invoking the custom kernel.
-pub fn fused_scaled_add<S, G>(
+/// Standalone function calling the custom kernel via `dispatch::execute`.
+pub fn run_fused_scaled_add<S: Shape + DynShape, G: RequiresGrad>(
     x: &Tensor<S, CustomBackend, f32, G>,
     y: &Tensor<S, CustomBackend, f32, G>,
     alpha: f32,
-) -> incin::Result<Tensor<S, CustomBackend>>
-where
-    S: Shape + DynShape,
-    G: RequiresGrad,
-{
-    let x_data = x.to_vec1::<f32>()?;
-    let y_data = y.to_vec1::<f32>()?;
-    let numel = x_data.len();
+) -> incin::Result<Tensor<S, CustomBackend>> {
+    let backend = CustomBackend;
+    let context = ExecutionContext::new(backend);
 
-    let mut out = vec![0.0_f32; numel];
-    for i in 0..numel {
-        out[i] = x_data[i] + alpha * y_data[i];
-    }
+    // 1. Create storage handles for operands
+    let x_storage = CustomStorage::new(x.to_vec1::<f32>()?, x.dims().as_ref());
+    let y_storage = CustomStorage::new(y.to_vec1::<f32>()?, y.dims().as_ref());
+    let handle_x = TensorHandle::from_storage::<CustomBackend, f32, incin_core::dist::placement::Local>(&x_storage);
+    let handle_y = TensorHandle::from_storage::<CustomBackend, f32, incin_core::dist::placement::Local>(&y_storage);
 
-    let out_dyn = CustomDevice.tensor_from_vec(out, x.dims().as_ref())?;
+    // 2. Execute via dispatch::execute - this invokes <CustomBackend as Execute<FusedScaledAdd>>::execute!
+    let out_storage: CustomStorage = dispatch::execute::<FusedScaledAdd, CustomBackend>(
+        &context,
+        ScaledAddAttributes { alpha },
+        &[handle_x, handle_y],
+    )
+    .map_err(|e| incin::Error::Msg(format!("{:?}", e)))?;
+
+    // 3. Wrap output storage back into typed Tensor
+    let out_dyn = CustomDevice.tensor_from_vec(out_storage.data.as_ref().clone(), x.dims().as_ref())?;
     out_dyn.to_shape::<S>()
-}
-
-// Optional Extension Trait for method syntax: `x.fused_scaled_add(&y, alpha)`
-pub trait FusedScaledAddExt<S: Shape + DynShape, G: RequiresGrad> {
-    fn fused_scaled_add(
-        &self,
-        y: &Tensor<S, CustomBackend, f32, G>,
-        alpha: f32,
-    ) -> incin::Result<Tensor<S, CustomBackend>>;
-}
-
-impl<S: Shape + DynShape, G: RequiresGrad> FusedScaledAddExt<S, G> for Tensor<S, CustomBackend, f32, G> {
-    fn fused_scaled_add(
-        &self,
-        y: &Tensor<S, CustomBackend, f32, G>,
-        alpha: f32,
-    ) -> incin::Result<Tensor<S, CustomBackend>> {
-        fused_scaled_add(self, y, alpha)
-    }
 }
 
 // ── Main Demo Execution ──────────────────────────────────────────────────────
 
 fn main() -> incin::Result<()> {
-    println!("=== Practical Example: Complete Custom Op with Validation Proofs ===\n");
+    println!("=== Practical Example: Complete Custom Op with Validation Proofs & Kernel Execution ===\n");
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. Contract Validation Ahead of Execution
@@ -294,22 +283,18 @@ fn main() -> incin::Result<()> {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 2. Executing Custom Kernel on Custom Backend
+    // 2. Calling Custom Backend Kernel via dispatch::execute
     // ─────────────────────────────────────────────────────────────────────────
-    println!("\n[2] Executing FusedScaledAdd Kernel (out = x + 2.0 * y):");
+    println!("\n[2] Invoking Custom Backend Kernel via dispatch::execute (out = x + 2.0 * y):");
     let x = CustomDevice.tensor([[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0]])?;
     let y = CustomDevice.tensor([[10.0_f32, 20.0, 30.0], [40.0, 50.0, 60.0]])?;
 
-    // A. Via Standalone Function (No extension trait required!)
-    let out_fn = fused_scaled_add(&x, &y, 2.0)?;
-    println!("  • Result via Standalone Fn: {:?}", out_fn.to_vec1::<f32>()?);
-
-    // B. Via Extension Trait (Method syntax)
-    let out_method = x.fused_scaled_add(&y, 2.0)?;
-    println!("  • Result via Method Syntax: {:?}", out_method.to_vec1::<f32>()?);
+    // Calling the custom kernel!
+    let out = run_fused_scaled_add(&x, &y, 2.0)?;
+    println!("  • Result from custom kernel: {:?}", out.to_vec1::<f32>()?);
 
     // Verify mathematical correctness: 1.0 + 2.0 * 10.0 = 21.0, etc.
-    assert_eq!(out_fn.to_vec1::<f32>()?, vec![21.0, 42.0, 63.0, 84.0, 105.0, 126.0]);
-    println!("\n[3] Single-pass fused kernel executed with verified shape proofs!");
+    assert_eq!(out.to_vec1::<f32>()?, vec![21.0, 42.0, 63.0, 84.0, 105.0, 126.0]);
+    println!("\n[3] Backend Execute kernel was executed directly with validated shape proofs!");
     Ok(())
 }
