@@ -16,9 +16,12 @@ pub mod ir;
 pub mod jit;
 pub mod mma;
 pub mod normalization;
+pub mod optim;
 pub mod pointwise;
+pub mod quant_gemm;
 pub mod reduction;
 pub mod rope;
+pub mod scan;
 pub mod scheduler;
 pub mod strided;
 pub mod vectorized;
@@ -38,12 +41,15 @@ pub use jit::CpuJitKernel;
 pub use jit::CudaJitKernel;
 pub use mma::{TensorCoreMmaLayout, TensorCoreMmaSpec};
 pub use normalization::{NormKind, NormalizationSpec};
+pub use optim::{FusedOptimizerSpec, OptimizerKind};
 pub use pointwise::{
     BinaryOp, LayoutKind, PointwiseExpr, PointwiseOpSpec, TernaryOp, UnaryOp, render_cuda,
     render_msl, render_wgsl,
 };
+pub use quant_gemm::QuantGemmSpec;
 pub use reduction::{ReductionLayout, ReductionOpKind, ReductionOpSpec};
 pub use rope::RopeSpec;
+pub use scan::{PrefixScanSpec, ScanOpKind};
 pub use scheduler::{BlockTensorPtr, KernelScheduler, LoopScheduleKind, MemorySpace};
 pub use strided::{FastDivisor, StridedIndexSpec};
 pub use vectorized::{VectorWidth, VectorizedOpSpec};

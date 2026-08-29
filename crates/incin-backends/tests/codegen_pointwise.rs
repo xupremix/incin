@@ -379,3 +379,55 @@ fn test_fused_cross_entropy_codegen() {
     assert!(cuda_bwd.contains("__global__ void cross_entropy_loss_f32_backward"));
     assert!(cuda_bwd.contains("dlogits_sample[v] = static_cast<float>(grad)"));
 }
+
+#[test]
+fn test_fused_optimizer_adamw_and_lion_codegen() {
+    use incin_backends::codegen::FusedOptimizerSpec;
+
+    let spec_adamw = FusedOptimizerSpec::adamw(
+        "adamw_f32",
+        DTypeId::F32,
+        DTypeId::F32,
+        1e-3,
+        0.01,
+        0.9,
+        0.999,
+        1e-8,
+    );
+    let cuda_adamw = spec_adamw.render_cuda();
+    assert!(cuda_adamw.contains("__global__ void adamw_f32"));
+    assert!(cuda_adamw.contains("p -= lr * weight_decay * p"));
+    assert!(cuda_adamw.contains("step = m_hat / (sqrtf(v_hat) + eps)"));
+
+    let spec_lion =
+        FusedOptimizerSpec::lion("lion_f32", DTypeId::F32, DTypeId::F32, 1e-4, 0.1, 0.9, 0.99);
+    let cuda_lion = spec_lion.render_cuda();
+    assert!(cuda_lion.contains("__global__ void lion_f32"));
+    assert!(
+        cuda_lion.contains(
+            "sign_val = (update_dir > 0.0f) ? 1.0f : ((update_dir < 0.0f) ? -1.0f : 0.0f)"
+        )
+    );
+}
+
+#[test]
+fn test_quant_gemv_q8_0_codegen() {
+    use incin_backends::codegen::QuantGemmSpec;
+
+    let spec = QuantGemmSpec::q8_0_gemv("gemv_q8_0_f32", DTypeId::F32);
+    let cuda = spec.render_cuda_gemv();
+    assert!(cuda.contains("__global__ void gemv_q8_0_f32"));
+    assert!(cuda.contains("struct __align__(2) BlockQ8_0"));
+    assert!(cuda.contains("__shfl_down_sync"));
+}
+
+#[test]
+fn test_prefix_scan_codegen() {
+    use incin_backends::codegen::{PrefixScanSpec, ScanOpKind};
+
+    let spec = PrefixScanSpec::new("cumsum_f32", ScanOpKind::Sum, DTypeId::F32, true);
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("__global__ void cumsum_f32"));
+    assert!(cuda.contains("__shfl_up_sync"));
+    assert!(cuda.contains("running_val += other"));
+}
