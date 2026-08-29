@@ -270,7 +270,7 @@ pub mod __macro_support {
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
     /// Partial, fail-closed model import macros.
-    pub use incin_macros::{import_model, model};
+    pub use incin_macros::{autotune, import_model, model};
     #[cfg(feature = "distributed")]
     /// Experimental distributed declaration macros.
     pub use incin_macros::{mesh, parallel, placement};

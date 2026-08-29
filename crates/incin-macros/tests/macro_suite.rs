@@ -74,6 +74,18 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
             "mesh_rejects_unknown_axis",
             "unknown mesh axis key `foo`; expected `dp`, `tp`, or `pp`",
         ),
+        (
+            "autotune_rejects_empty_key",
+            "autotune key must not be empty",
+        ),
+        (
+            "autotune_rejects_empty_params",
+            "autotune params must not be empty",
+        ),
+        (
+            "autotune_rejects_invalid_policy",
+            "invalid autotune policy: expected disabled, heuristic, warmup, or profile",
+        ),
     ])
 }
 
