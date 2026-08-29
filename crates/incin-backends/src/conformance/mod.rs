@@ -10,7 +10,7 @@
 //! five columns.
 //!
 //! This module runs them. It enumerates the product a capability row describes
-//! (see [`advertised_tuples`]), builds an operand for each point, executes it,
+//! (see `advertised_tuples`), builds an operand for each point, executes it,
 //! and reports what happened. Nothing here is hand-written per operation except the
 //! operand contracts, which cannot be derived: a capability row applies one
 //! dtype set to every operand in turn, so a row can never state that operand
@@ -42,7 +42,7 @@
 //!
 //! # Coverage is a number, not a wall
 //!
-//! An operation with no fixture is reported as [`Coverage::Unfixtured`] with
+//! An operation with no fixture is reported as `Coverage::Unfixtured` with
 //! the reason it is outstanding, and it is counted. It is deliberately not a failure. A
 //! harness that opens with a hundred red rows is a harness that gets marked
 //! ignored, which is the same outcome as one that silently passes. The floor
