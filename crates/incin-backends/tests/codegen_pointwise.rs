@@ -332,3 +332,50 @@ fn test_triton_inductor_scheduler_and_autotuning() {
     let best = space.select_best_heuristic();
     assert!(best.block_m >= 16);
 }
+
+#[test]
+fn test_tensor_core_mma_codegen() {
+    use incin_backends::codegen::TensorCoreMmaSpec;
+
+    let spec = TensorCoreMmaSpec::new("tensor_core_gemm_f16", DTypeId::F16, DTypeId::F32, 2, 2);
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("nvcuda::wmma"));
+    assert!(cuda.contains("fragment<matrix_a, 16, 16, 16, __half, row_major>"));
+    assert!(cuda.contains("mma_sync(c_frag, a_frag, b_frag, c_frag)"));
+    assert!(cuda.contains("store_matrix_sync"));
+}
+
+#[test]
+fn test_rope_embedding_codegen() {
+    use incin_backends::codegen::RopeSpec;
+
+    let spec_dyn = RopeSpec::new("rope_dyn_f32", DTypeId::F32, 64, 10000.0, false);
+    let cuda_fwd = spec_dyn.render_cuda_forward();
+    assert!(cuda_fwd.contains("__global__ void rope_dyn_f32_forward"));
+    assert!(cuda_fwd.contains("sincosf(angle, &sin_v, &cos_v)"));
+    assert!(cuda_fwd.contains("y0 = x0 * cos_v - x1 * sin_v"));
+
+    let cuda_bwd = spec_dyn.render_cuda_backward();
+    assert!(cuda_bwd.contains("__global__ void rope_dyn_f32_backward"));
+    assert!(cuda_bwd.contains("dx0 = dy0 * cos_v + dy1 * sin_v"));
+
+    let spec_pre = RopeSpec::new("rope_pre_f32", DTypeId::F32, 128, 500000.0, true);
+    let cuda_pre_fwd = spec_pre.render_cuda_forward();
+    assert!(cuda_pre_fwd.contains("cos_table"));
+    assert!(cuda_pre_fwd.contains("sin_table"));
+}
+
+#[test]
+fn test_fused_cross_entropy_codegen() {
+    use incin_backends::codegen::CrossEntropySpec;
+
+    let spec = CrossEntropySpec::new("cross_entropy_loss_f32", DTypeId::F32, 32000, 0.1);
+    let cuda_fwd = spec.render_cuda_forward();
+    assert!(cuda_fwd.contains("__global__ void cross_entropy_loss_f32_forward"));
+    assert!(cuda_fwd.contains("__shfl_down_sync"));
+    assert!(cuda_fwd.contains("smooth_loss"));
+
+    let cuda_bwd = spec.render_cuda_backward();
+    assert!(cuda_bwd.contains("__global__ void cross_entropy_loss_f32_backward"));
+    assert!(cuda_bwd.contains("dlogits_sample[v] = static_cast<float>(grad)"));
+}
