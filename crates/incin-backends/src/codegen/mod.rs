@@ -7,6 +7,7 @@
 //! - Fused GEMM / Linear epilogues (`BiasAdd`, `ResidualAdd`, `Gelu`, `Relu`, `Silu`)
 
 pub mod attention;
+pub mod autotune_config;
 pub mod dsl;
 pub mod fused_epilogue;
 pub mod gemm;
@@ -15,10 +16,12 @@ pub mod jit;
 pub mod normalization;
 pub mod pointwise;
 pub mod reduction;
+pub mod scheduler;
 pub mod strided;
 pub mod vectorized;
 
 pub use attention::AttentionSpec;
+pub use autotune_config::{AutotuneCandidate, AutotuneSpace, GpuArchProfile};
 pub use dsl::{define_binary_custom_op, define_ternary_custom_op, define_unary_custom_op};
 pub use fused_epilogue::{FusedEpilogueKind, FusedEpilogueSpec};
 pub use gemm::{GemmSpec, GemmTileConfig};
@@ -35,5 +38,6 @@ pub use pointwise::{
     render_msl, render_wgsl,
 };
 pub use reduction::{ReductionLayout, ReductionOpKind, ReductionOpSpec};
+pub use scheduler::{BlockTensorPtr, KernelScheduler, LoopScheduleKind, MemorySpace};
 pub use strided::{FastDivisor, StridedIndexSpec};
 pub use vectorized::{VectorWidth, VectorizedOpSpec};

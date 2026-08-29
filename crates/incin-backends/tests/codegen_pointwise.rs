@@ -291,3 +291,44 @@ fn test_fast_divisor_and_strided_indexing() {
     assert!(code.contains("coord_1 = rem % 8"));
     assert!(code.contains("physical_offset"));
 }
+
+#[test]
+fn test_triton_inductor_scheduler_and_autotuning() {
+    use incin_backends::codegen::{
+        AutotuneSpace, BlockTensorPtr, GpuArchProfile, KernelScheduler, LoopScheduleKind,
+    };
+
+    let ptr_a = BlockTensorPtr::global("a", DTypeId::F32, vec![32, 64], vec![64, 1]);
+    assert!(ptr_a.is_innermost_contiguous());
+    assert_eq!(ptr_a.optimal_vector_width(), 4);
+
+    let scheduler = KernelScheduler::new(
+        "custom_gemm",
+        LoopScheduleKind::Tiled2D {
+            block_m: 64,
+            block_n: 64,
+            block_k: 16,
+        },
+        vec![ptr_a],
+        vec![],
+    );
+
+    let (gx, gy, gz) = scheduler.recommended_grid_dim();
+    assert!(gx >= 1);
+    assert!(gy >= 1);
+    assert_eq!(gz, 1);
+
+    let preamble = scheduler.render_cuda_preamble();
+    assert!(preamble.contains("block_row = blockIdx.y * 64"));
+    assert!(preamble.contains("block_col = blockIdx.x * 64"));
+
+    let space =
+        AutotuneSpace::for_matmul(1024, 1024, 1024, DTypeId::F32, GpuArchProfile::NvidiaModern);
+    let candidates = space.generate_candidates();
+    assert!(!candidates.is_empty());
+    assert!(candidates[0].block_m >= 16);
+    assert!(candidates[0].shared_memory_bytes > 0);
+
+    let best = space.select_best_heuristic();
+    assert!(best.block_m >= 16);
+}

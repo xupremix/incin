@@ -4842,6 +4842,72 @@
     "evidence": "codegen unit tests"
   },
   {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:193",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:205",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:206",
+    "code": "writeln!(out, \"    const int total_numel = {numel};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:211",
+    "code": "writeln!(out, \"    const int block_row = blockIdx.y * {block_m};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:212",
+    "code": "writeln!(out, \"    const int block_col = blockIdx.x * {block_n};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:213",
+    "code": "writeln!(out, \"    const int tid = threadIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:219",
+    "code": "writeln!(out, \"    const int row = blockIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:220",
+    "code": "writeln!(out, \"    const int tid = threadIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:221",
+    "code": "writeln!(out, \"    const int total_rows = {num_rows};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:222",
+    "code": "writeln!(out, \"    const int r_dim = {reduction_dim};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/scheduler.rs:223",
+    "code": "writeln!(out, \"    if (row >= total_rows) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
     "site": "crates/incin-backends/src/codegen/strided.rs:89",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
