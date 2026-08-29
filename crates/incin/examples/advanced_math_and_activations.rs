@@ -56,9 +56,9 @@ fn main() -> incin::Result<()> {
     // 2. Scaled Dot-Product Attention with Causal Masking
     // ─────────────────────────────────────────────────────────────────────────
     println!("\n[2] Computing Scaled Dot-Product Attention with Temperature...");
-    let q: Tensor<s![4, 8], Backend> = Cpu.randn(shape![4, 8])?;
-    let k: Tensor<s![4, 8], Backend> = Cpu.randn(shape![4, 8])?;
-    let v: Tensor<s![4, 8], Backend> = Cpu.randn(shape![4, 8])?;
+    let q = Cpu.randn(shape![4, 8])?;
+    let k = Cpu.randn(shape![4, 8])?;
+    let v = Cpu.randn(shape![4, 8])?;
 
     // 1. Raw scores: Q @ K.T
     let k_t = k.transpose(axis!(0), axis!(1))?;
@@ -89,7 +89,10 @@ fn main() -> incin::Result<()> {
 
     // Max class index per row
     let max_indices = matrix.argmax(axis!(1))?;
-    println!("  • Argmax across columns (axis 1): {:?}", max_indices.to_vec1::<u32>()?);
+    println!(
+        "  • Argmax across columns (axis 1): {:?}",
+        max_indices.to_vec1::<u32>()?
+    );
 
     // Mean across rows (dim 0)
     let col_means = matrix.clone().sum_keepdim(axis!(0))? * (1.0 / 3.0_f32);
@@ -97,7 +100,10 @@ fn main() -> incin::Result<()> {
 
     // Total matrix sum
     let total_sum = matrix.sum_all()?;
-    println!("  • Total element sum: {:.2}", total_sum.to_scalar::<f32>()?);
+    println!(
+        "  • Total element sum: {:.2}",
+        total_sum.to_scalar::<f32>()?
+    );
 
     println!("\n[4] Advanced math and attention operations completed successfully!");
     Ok(())
