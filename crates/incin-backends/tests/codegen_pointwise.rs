@@ -110,3 +110,109 @@ fn test_all_dtypes_type_mapping() {
         assert!(!msl.is_empty());
     }
 }
+
+#[test]
+fn test_vectorized_vec4_pointwise_codegen() {
+    use incin_backends::codegen::{VectorWidth, VectorizedOpSpec};
+
+    let spec = VectorizedOpSpec::unary(
+        "gelu_vec4_f32",
+        UnaryOp::Gelu,
+        DTypeId::F32,
+        VectorWidth::Vec4,
+    );
+
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("const float4* __restrict__ in0"));
+    assert!(cuda.contains("float4* __restrict__ out_data"));
+    assert!(cuda.contains("make_float4(res_lane0, res_lane1, res_lane2, res_lane3)"));
+
+    let wgsl = spec.render_wgsl();
+    assert!(wgsl.contains("array<vec4<f32>>"));
+    assert!(wgsl.contains("vec4(res_lane0, res_lane1, res_lane2, res_lane3)"));
+
+    let msl = spec.render_msl();
+    assert!(msl.contains("device const float4*"));
+    assert!(msl.contains("float4(res_lane0, res_lane1, res_lane2, res_lane3)"));
+}
+
+#[test]
+fn test_fused_gemm_epilogue_codegen() {
+    use incin_backends::codegen::{FusedEpilogueKind, FusedEpilogueSpec};
+
+    let spec = FusedEpilogueSpec::new(
+        "fused_linear_bias_gelu",
+        DTypeId::F32,
+        FusedEpilogueKind::BiasResidualGelu,
+    )
+    .with_cols(768);
+
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("const float* __restrict__ matmul_out"));
+    assert!(cuda.contains("const float* __restrict__ bias"));
+    assert!(cuda.contains("const float* __restrict__ residual"));
+    assert!(cuda.contains("bias[(idx % 768)]"));
+    assert!(cuda.contains("tanhf("));
+
+    let wgsl = spec.render_wgsl();
+    assert!(wgsl.contains("var<storage, read> matmul_out: array<f32>"));
+    assert!(wgsl.contains("var<storage, read> bias: array<f32>"));
+    assert!(wgsl.contains("var<storage, read> residual: array<f32>"));
+    assert!(wgsl.contains("bias[(idx % 768u)]"));
+    assert!(wgsl.contains("tanh("));
+
+    let msl = spec.render_msl();
+    assert!(msl.contains("device const float* matmul_out"));
+    assert!(msl.contains("device const float* bias"));
+    assert!(msl.contains("bias[(idx % 768u)]"));
+    assert!(msl.contains("tanh("));
+}
+
+#[test]
+fn test_parallel_reduction_codegen() {
+    use incin_backends::codegen::{ReductionOpKind, ReductionOpSpec};
+
+    let spec = ReductionOpSpec::row_wise("warp_reduce_sum_f32", ReductionOpKind::Sum, DTypeId::F32)
+        .with_reduction_size(512);
+
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("__global__ void warp_reduce_sum_f32"));
+    assert!(cuda.contains("__shfl_down_sync"));
+    assert!(cuda.contains("local_acc += __shfl_down_sync"));
+
+    let wgsl = spec.render_wgsl();
+    assert!(wgsl.contains("@compute @workgroup_size(256, 1, 1)"));
+    assert!(wgsl.contains("var<workgroup> s_acc: array<f32, 256>"));
+    assert!(wgsl.contains("workgroupBarrier()"));
+
+    let msl = spec.render_msl();
+    assert!(msl.contains("kernel void warp_reduce_sum_f32"));
+    assert!(msl.contains("simd_sum(local_val)"));
+}
+
+#[test]
+fn test_tiled_gemm_codegen() {
+    use incin_backends::codegen::{GemmSpec, GemmTileConfig};
+
+    let spec = GemmSpec::new("tiled_gemm_f32", DTypeId::F32).with_tile(GemmTileConfig {
+        bm: 64,
+        bn: 64,
+        bk: 16,
+        tm: 4,
+        tn: 4,
+    });
+
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("__global__ void tiled_gemm_f32"));
+    assert!(cuda.contains("__shared__ float s_a[64][17]"));
+    assert!(cuda.contains("__shared__ float s_b[16][65]"));
+    assert!(cuda.contains("fmaf(r_a[i], r_b[j], r_c[i][j])"));
+
+    let wgsl = spec.render_wgsl();
+    assert!(wgsl.contains("var<workgroup> s_a: array<array<f32, 16>, 64>"));
+    assert!(wgsl.contains("fma(r_a[i], r_b[j], r_c[i][j])"));
+
+    let msl = spec.render_msl();
+    assert!(msl.contains("threadgroup float s_a[64][16]"));
+    assert!(msl.contains("fma(r_a[i], r_b[j], r_c[i][j])"));
+}
