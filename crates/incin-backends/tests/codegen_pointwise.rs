@@ -216,3 +216,78 @@ fn test_tiled_gemm_codegen() {
     assert!(msl.contains("threadgroup float s_a[64][16]"));
     assert!(msl.contains("fma(r_a[i], r_b[j], r_c[i][j])"));
 }
+
+#[test]
+fn test_attention_sdpa_flash_codegen() {
+    use incin_backends::codegen::AttentionSpec;
+
+    let spec = AttentionSpec::new("sdpa_causal_f32", DTypeId::F32, 64, true);
+
+    let cuda = spec.render_cuda();
+    assert!(cuda.contains("__global__ void sdpa_causal_f32_forward"));
+    assert!(cuda.contains("min(seq_len, q_seq_idx + 1)"));
+    assert!(cuda.contains("m_curr = fmaxf(m_prev, dot)"));
+    assert!(cuda.contains("p_prev_scale = expf(m_prev - m_curr)"));
+
+    let wgsl = spec.render_wgsl();
+    assert!(wgsl.contains("fn sdpa_causal_f32_forward"));
+    assert!(wgsl.contains("min(params.seq_len, q_seq_idx + 1u)"));
+
+    let msl = spec.render_msl();
+    assert!(msl.contains("kernel void sdpa_causal_f32_forward"));
+    assert!(msl.contains("min(seq_len, q_seq_idx + 1)"));
+}
+
+#[test]
+fn test_normalization_fused_layernorm_and_rmsnorm() {
+    use incin_backends::codegen::{NormKind, NormalizationSpec};
+
+    let rms_spec = NormalizationSpec::new(
+        "rms_norm_f32",
+        NormKind::RmsNorm,
+        DTypeId::F32,
+        512,
+        1e-5,
+        true,
+    );
+    let cuda_rms = rms_spec.render_cuda_forward();
+    assert!(cuda_rms.contains("__global__ void rms_norm_f32_forward"));
+    assert!(cuda_rms.contains("__shfl_down_sync"));
+    assert!(cuda_rms.contains("rsqrtf(s_mean_sq + eps)"));
+
+    let cuda_rms_bwd = rms_spec.render_cuda_backward();
+    assert!(cuda_rms_bwd.contains("__global__ void rms_norm_f32_backward"));
+    assert!(cuda_rms_bwd.contains("atomicAdd"));
+
+    let ln_spec = NormalizationSpec::new(
+        "layer_norm_f32",
+        NormKind::LayerNorm,
+        DTypeId::F32,
+        768,
+        1e-5,
+        true,
+    );
+    let cuda_ln = ln_spec.render_cuda_forward();
+    assert!(cuda_ln.contains("__global__ void layer_norm_f32_forward"));
+    assert!(cuda_ln.contains("normed * gamma[i] + beta[i]"));
+
+    let cuda_ln_bwd = ln_spec.render_cuda_backward();
+    assert!(cuda_ln_bwd.contains("__global__ void layer_norm_f32_backward"));
+    assert!(cuda_ln_bwd.contains("s_sum_dy_g_hat"));
+}
+
+#[test]
+fn test_fast_divisor_and_strided_indexing() {
+    use incin_backends::codegen::{FastDivisor, StridedIndexSpec};
+
+    let fdiv = FastDivisor::new(7);
+    assert_eq!(fdiv.divisor, 7);
+    assert!(fdiv.multiplier > 0);
+
+    let spec = StridedIndexSpec::new(vec![2, 8, 64], vec![512, 64, 1]);
+    let code = spec.render_cuda_offset_expression("tid");
+    assert!(code.contains("Fast strided coordinate decomposition for rank 3"));
+    assert!(code.contains("coord_2 = rem % 64"));
+    assert!(code.contains("coord_1 = rem % 8"));
+    assert!(code.contains("physical_offset"));
+}
