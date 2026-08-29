@@ -221,34 +221,23 @@ macro_rules! cuda_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            elementwise = [Add, Sub, Mul, Div, Relu, Exp, Sqrt, Log, Tanh, Sigmoid],
+            elementwise = [
+                Add, Sub, Mul, Div,
+                Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
+                Tanh, Sigmoid, Swish, Sign, Floor, Ceil, Round, Log2, Log10,
+                Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
+                Atanh, Erf, Rsqrt, Trunc, Frac,
+                AddScalar, MulScalar, Powf, Clamp,
+                SubScalar, DivScalar,
+                Atan2, Fmod, Remainder,
+                Dropout
+            ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
-            // `impl_creation_executors!`/`impl_data_creation_executors!` in
-            // descriptor_bind.rs give every backend these nine for free;
-            // CUDA simply never listed them here, so the capability query
-            // answered `Unsupported` and the coarse `Fill`/`Random` legacy
-            // rows below were the only channel advertising them at all.
-            // `TensorFromData`/`TensorFromBytes` are not in this list:
-            // they route through `HostInterop::from_bytes`, a plain
-            // byte-length-checked host-to-device upload with no kernel
-            // launch and no dtype-width assumption, genuinely wider than
-            // the `F32_ONLY` this group's other five members are stuck at -
-            // so they get their own standalone rows in `legacy` below
-            // instead of a shared one that would either overclaim for
-            // `zeros`/`ones`/etc or underclaim for these two.
-            // The nine rows below are wrappers over paths each backend
-            // already has, which is why they arrive without new kernel source.
-            // The `var_*` forms are their plain sibling's allocation plus
-            // `VariableBackend::var_from_tensor`, so they belong in exactly the
-            // groups their siblings do and inherit `F32_ONLY`/`CONTIGUOUS`
-            // honestly. The readback rows take `tensor_dtypes`/`tensor_layouts`,
-            // which this backend declares as `F32_ONLY`/`CONTIGUOUS`: both are
-            // real constraints here, not conservatism. `float_to_vec1` requires
-            // f32, and every accelerator readback downloads the whole
-            // allocation without walking strides, so `readback_operand` refuses
-            // a strided operand rather than returning the wrong window.
-            filling = [Zeros, Ones, Full, Arange, Linspace, VariableZeros, VariableOnes],
+            filling = [
+                TensorFromData, TensorFromBytes, Zeros, Ones, Full, Arange, Linspace,
+                VariableZeros, VariableOnes
+            ],
             sampling = [
                 UniformRandom, NormalRandom,
                 VariableUniformRandom, VariableNormalRandom
@@ -259,71 +248,48 @@ macro_rules! cuda_descriptor_operations {
                 TensorToBytes
             ],
             reduction = [
-                SumAll, MeanAll, MaxAll, MinAll,
+                SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
-                MaxDim, MaxKeepDim, MinDim, MinKeepDim
+                MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
+                TopK
             ],
-            spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
+            spatial = [
+                Conv2dExact, Conv1dExact, ConvTranspose2d,
+                MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact
+            ],
             matmul = [MatMulExact],
-            // No canonical executor was written for this backend beyond the
-            // groups above, so it advertises none. An empty group is a truthful
-            // claim; a copied one would not be.
-            normalization = [],
-            embedding = [],
-            // `transpose`/`narrow`/`concat` each launch a dedicated CUDA
-            // kernel and push their own tape entry (`concat`'s backward
-            // splits the incoming gradient back into per-operand segments
-            // via `narrow`), so `Native`.
-            // `sub_scalar`/`div_scalar` push their own tape entry directly
-            // (unlike the `composed_tensor` rows below, they call no other
-            // catalog operation to do it), so `Native` alongside the shape
-            // kernels rather than `Composed`.
-            // The six comparisons launch their own dedicated kernel
-            // (`cuda/ops/compare.rs`), so `Native` too, despite writing
-            // `bool` rather than the operand dtype the row's `F32_ONLY`
-            // declares: a capability row constrains what it reads, the same
-            // convention `QuantizedMatMul` established for a row whose
-            // output dtype the declaration cannot separately state.
-            // `where_cond`/`masked_fill` are not here: unlike the six
-            // comparisons, both take a `bool` operand (the mask) *alongside*
-            // an `f32` one, and this group's shared row cannot state a
-            // per-operand dtype pair - `dispatch::execute` checks every
-            // operand against the one resolved row. `F32_ONLY` here would
-            // make the mask operand fail admission before either kernel
-            // launches, so they get their own standalone `F32_AND_BOOL` rows
-            // in `legacy` below instead (see that constant's own doc).
+            normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
+            embedding = [EmbeddingExact],
             native_tensor = [
-                TransposeExact, Narrow, ConcatExact, SubScalar, DivScalar,
-                CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe
+                ArgMax, ArgMin, Argsort, Cumsum,
+                Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
+                CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
+                TransposeExact, Narrow, Triu, Tril, Diag,
+                ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
+                PixelShuffle,
+                ToDType
             ],
-            // Empty because CUDA already declares `logical_and`/`logical_or`/
-            // `logical_not` as standalone `BOOL_ONLY` rows in `legacy`, and
-            // one operation cannot carry two rows without the wider one
-            // deciding admission.
-            logical = [],
-            // Every one of these rewrites into `reshape`/`broadcast_as`/
-            // `narrow`/`concat`/`unsqueeze` rather than running a kernel of
-            // its own, pushing zero new tape entries - the composite's
-            // backward is the tape replay over whichever primitives it
-            // called, the same reasoning `softmax`/`rms_norm` above rely on.
+            logical = [LogicalAnd, LogicalOr, LogicalNot],
             composed_tensor = [
                 FlattenExact, SqueezeExact, UnsqueezeExact,
                 StackExact, SliceExact, BroadcastLeft,
-                // Both answer with a sequence of narrows along one axis,
-                // same as CPU's own placement of these two in this group.
                 Chunk, Split
             ],
-            // Every one of these rewrites into `matmul` (batched, in
-            // `bmm`/`addmm`/attention's case, composed from it the same way
-            // CUDA's own `matmul` has no batched-GEMM kernel of its own) or
-            // into `mul`+an all-reduce (`dot`) or `unsqueeze`+broadcast
-            // `mul` (`outer`), pushing zero new tape entries of its own.
-            composed_matmul = [BatchedMatMul, Addmm, ScaledDotProductAttention, Dot, Outer],
-            composed_matmul_bias = [],
-            quantizing = [],
-            quantized = [],
-            composed_reduction = [],
-            composed_reduction_indexed = []
+            composed_matmul = [
+                BatchedMatMul, Addmm, ScaledDotProductAttention,
+                Dot, Outer
+            ],
+            composed_matmul_bias = [Linear],
+            quantizing = [Quantize],
+            quantized = [Dequantize, QuantizedMatMul],
+            composed_reduction = [
+                MseLoss, L1Loss, BceWithLogitsLoss,
+                InstanceNorm,
+                VarianceAll, VarianceDim, VarianceKeepDim,
+                StdAll, StdDim, StdKeepDim,
+                Norm
+            ],
+            composed_reduction_indexed = [CrossEntropyLoss]
         }
     };
 }

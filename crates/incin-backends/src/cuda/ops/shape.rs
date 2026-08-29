@@ -2,8 +2,9 @@ use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use incin_core::error::Result;
+use incin_core::error::{BackendError, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
+use incin_core::tensor::dtype::DTypeId;
 
 /// Packs the `[u32; 21]` params buffer `kernels/shape.cu`'s `shape_op` kernel
 /// expects: `[op_mode, rank, n_elements, out_shape(6), inp_shape(6), aux(6)]`,
@@ -374,4 +375,1061 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
         .strides()
         .to_vec();
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
+}
+
+#[cfg(feature = "cuda")]
+const EMBEDDING_SRC: &str = include_str!("kernels/embedding.cu");
+
+#[cfg(feature = "cuda")]
+const INDEX_OPS_SRC: &str = r#"
+typedef long long int64_t;
+typedef unsigned int uint32_t;
+
+extern "C" __global__ void incin_cuda_gather(
+    const float* __restrict__ input,
+    const int64_t* __restrict__ index,
+    float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    int numel,
+    int rank,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ in_shape,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides,
+    int dim)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel) return;
+
+    int rem = idx;
+    int in_flat = 0;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / out_strides[d];
+        rem = rem % out_strides[d];
+        if (d == dim) {
+            int64_t target_i = index[idx];
+            if (target_i < 0 || target_i >= in_shape[dim]) {
+                atomicExch(error_flag, 1);
+                return;
+            }
+            coord = (int)target_i;
+        }
+        in_flat += coord * in_strides[d];
+    }
+    output[idx] = input[in_flat];
+}
+
+extern "C" __global__ void incin_cuda_scatter(
+    const float* __restrict__ input,
+    const int64_t* __restrict__ index,
+    const float* __restrict__ src,
+    float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    int numel_src,
+    int numel_out,
+    int rank,
+    const int* __restrict__ idx_shape,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ idx_strides,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides,
+    int dim)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < numel_out) {
+        output[idx] = input[idx];
+    }
+    __syncthreads();
+
+    if (idx < numel_src) {
+        int rem = idx;
+        int out_flat = 0;
+        for (int d = 0; d < rank; d++) {
+            int coord = rem / idx_strides[d];
+            rem = rem % idx_strides[d];
+            if (d == dim) {
+                int64_t target_i = index[idx];
+                if (target_i < 0 || target_i >= out_shape[dim]) {
+                    atomicExch(error_flag, 1);
+                    return;
+                }
+                coord = (int)target_i;
+            }
+            out_flat += coord * out_strides[d];
+        }
+        output[out_flat] = src[idx];
+    }
+}
+
+extern "C" __global__ void incin_cuda_triangular(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int numel,
+    int rows,
+    int cols,
+    int diagonal,
+    int is_upper)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel) return;
+
+    int matrix_size = rows * cols;
+    int matrix_idx = idx % matrix_size;
+    int r = matrix_idx / cols;
+    int c = matrix_idx % cols;
+
+    bool keep = is_upper ? (c >= r + diagonal) : (c <= r + diagonal);
+    output[idx] = keep ? input[idx] : 0.0f;
+}
+
+extern "C" __global__ void incin_cuda_pad(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int numel_out,
+    int rank,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ in_shape,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides,
+    const int* __restrict__ pad_before,
+    float pad_val)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_out) return;
+
+    int rem = idx;
+    int in_flat = 0;
+    bool is_padding = false;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / out_strides[d];
+        rem = rem % out_strides[d];
+        int in_coord = coord - pad_before[d];
+        if (in_coord < 0 || in_coord >= in_shape[d]) {
+            is_padding = true;
+            break;
+        }
+        in_flat += in_coord * in_strides[d];
+    }
+    output[idx] = is_padding ? pad_val : input[in_flat];
+}
+
+extern "C" __global__ void incin_cuda_repeat(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int numel_out,
+    int rank,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ in_shape,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_out) return;
+
+    int rem = idx;
+    int in_flat = 0;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / out_strides[d];
+        rem = rem % out_strides[d];
+        int in_coord = coord % in_shape[d];
+        in_flat += in_coord * in_strides[d];
+    }
+    output[idx] = input[in_flat];
+}
+
+extern "C" __global__ void incin_cuda_diag_1d_to_2d(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int n,
+    int out_dim,
+    int diagonal)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int numel_out = out_dim * out_dim;
+    if (idx < numel_out) {
+        output[idx] = 0.0f;
+    }
+    __syncthreads();
+
+    if (idx < n) {
+        int r = diagonal >= 0 ? idx : idx - diagonal;
+        int c = diagonal >= 0 ? idx + diagonal : idx;
+        if (r < out_dim && c < out_dim) {
+            output[r * out_dim + c] = input[idx];
+        }
+    }
+}
+
+extern "C" __global__ void incin_cuda_diag_2d_to_1d(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int rows,
+    int cols,
+    int out_len,
+    int diagonal)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= out_len) return;
+
+    int r = diagonal >= 0 ? idx : idx - diagonal;
+    int c = diagonal >= 0 ? idx + diagonal : idx;
+    if (r < rows && c < cols) {
+        output[idx] = input[r * cols + c];
+    }
+}
+"#;
+
+#[cfg(feature = "cuda")]
+fn ensure_index_ops_loaded(device_id: usize) -> Result<()> {
+    if crate::cuda::gpu::cuda_cache::get_module(device_id, "index_ops").is_none() {
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+        dispatcher.compile_and_load_kernel("index_ops", INDEX_OPS_SRC, "index_ops")?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cuda")]
+fn ensure_embedding_loaded(device_id: usize) -> Result<()> {
+    if crate::cuda::gpu::cuda_cache::get_module(device_id, "embedding").is_none() {
+        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+        dispatcher.compile_and_load_kernel("embedding", EMBEDDING_SRC, "embedding")?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_embedding(weight: &CudaStorage, indices: &CudaStorage) -> Result<CudaStorage> {
+    if weight.shape.len() != 2 {
+        return Err(Error::ShapeMismatch {
+            op: "embedding",
+            expected: vec![
+                weight.shape.first().copied().unwrap_or(0),
+                weight.shape.get(1).copied().unwrap_or(0),
+            ],
+            got: weight.shape.to_vec(),
+            msg: "embedding weight must be 2D".into(),
+        });
+    }
+    let vocab_size = weight.shape[0];
+    let hidden_size = weight.shape[1];
+    let num_indices = indices.shape.iter().product::<usize>();
+    let mut out_shape = indices.shape.to_vec();
+    out_shape.push(hidden_size);
+
+    let device_id = weight.buffer.device_id;
+    ensure_embedding_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("embedding", "embedding_forward")?;
+    let stream = weight.buffer.device.default_stream();
+
+    let out_numel = out_shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+    let mut out_buffer =
+        CudaBuffer {
+            len: out_numel,
+            dtype: DTypeId::F32.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA embedding output allocation failed: {e:?}"))
+            })?),
+            device: weight.buffer.device.clone(),
+            device_id,
+        };
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    if num_indices > 0 {
+        let block_size = 256u32.min(hidden_size as u32).max(1);
+        let grid_size = num_indices as u32;
+        let config = cudarc::driver::LaunchConfig {
+            grid_dim: (grid_size, 1, 1),
+            block_dim: (block_size, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        // SAFETY: Launches embedding kernel with validated buffer sizes and device error flag.
+        unsafe {
+            let out_u8 = Arc::get_mut(&mut out_buffer.data)
+                .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+            use cudarc::driver::PushKernelArg;
+            stream
+                .launch_builder(&function)
+                .arg(&*indices.buffer.data)
+                .arg(&*weight.buffer.data)
+                .arg(&mut *out_u8)
+                .arg(&error_flag_dev)
+                .arg(&num_indices)
+                .arg(&vocab_size)
+                .arg(&hidden_size)
+                .launch(config)
+                .map_err(|e| Error::Msg(format!("CUDA embedding launch failed: {e:?}")))?;
+        }
+
+        let mut host_err = [0u32; 1];
+        stream
+            .memcpy_dtoh(&error_flag_dev, &mut host_err)
+            .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+        if host_err[0] != 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Embedding,
+                reason: "embedding index out of bounds",
+            }));
+        }
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_embedding_backward(
+    grad_output: &CudaStorage,
+    indices: &CudaStorage,
+    vocab_size: usize,
+    hidden_size: usize,
+) -> Result<CudaStorage> {
+    let num_indices = indices.shape.iter().product::<usize>();
+    let out_shape = vec![vocab_size, hidden_size];
+    let device_id = grad_output.buffer.device_id;
+    ensure_embedding_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("embedding", "embedding_backward")?;
+    let stream = grad_output.buffer.device.default_stream();
+
+    let out_numel = vocab_size * hidden_size;
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+    let mut out_buffer =
+        CudaBuffer {
+            len: out_numel,
+            dtype: DTypeId::F32.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA embedding grad allocation failed: {e:?}"))
+            })?),
+            device: grad_output.buffer.device.clone(),
+            device_id,
+        };
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    if num_indices > 0 {
+        let block_size = 256u32.min(hidden_size as u32).max(1);
+        let grid_size = num_indices as u32;
+        let config = cudarc::driver::LaunchConfig {
+            grid_dim: (grid_size, 1, 1),
+            block_dim: (block_size, 1, 1),
+            shared_mem_bytes: 0,
+        };
+
+        // SAFETY: Launches embedding backward kernel with validated buffer sizes and device error flag.
+        unsafe {
+            let out_u8 = Arc::get_mut(&mut out_buffer.data)
+                .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+            use cudarc::driver::PushKernelArg;
+            stream
+                .launch_builder(&function)
+                .arg(&*grad_output.buffer.data)
+                .arg(&*indices.buffer.data)
+                .arg(&mut *out_u8)
+                .arg(&error_flag_dev)
+                .arg(&num_indices)
+                .arg(&vocab_size)
+                .arg(&hidden_size)
+                .launch(config)
+                .map_err(|e| Error::Msg(format!("CUDA embedding backward launch failed: {e:?}")))?;
+        }
+
+        let mut host_err = [0u32; 1];
+        stream
+            .memcpy_dtoh(&error_flag_dev, &mut host_err)
+            .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+        if host_err[0] != 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Embedding,
+                reason: "embedding backward index out of bounds",
+            }));
+        }
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_gather(
+    input: &CudaStorage,
+    dim: usize,
+    index: &CudaStorage,
+) -> Result<CudaStorage> {
+    if dim >= input.shape.len() {
+        return Err(Error::Msg(format!(
+            "CUDA gather dimension {dim} is out of bounds for input shape {:?}",
+            input.shape
+        )));
+    }
+    let rank = input.shape.len();
+    if index.shape.len() != rank {
+        return Err(Error::Msg(format!(
+            "CUDA gather index rank {} must match input rank {}",
+            index.shape.len(),
+            rank
+        )));
+    }
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_gather")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_shape = index.shape.to_vec();
+    let out_numel = out_shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(byte_len)
+                .map_err(|e| Error::Msg(format!("CUDA gather output allocation failed: {e:?}")))?,
+        ),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let in_strides = crate::layout::contiguous_strides(&input.shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let in_shape_i32 = input.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+
+    let out_shape_dev = stream
+        .clone_htod(&out_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_shape_dev = stream
+        .clone_htod(&in_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let out_strides_dev = stream
+        .clone_htod(&out_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_strides_dev = stream
+        .clone_htod(&in_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+
+    let block_size = 256u32;
+    let grid_size = (out_numel as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let out_numel_i32 = out_numel as i32;
+    let rank_i32 = rank as i32;
+    let dim_i32 = dim as i32;
+
+    // SAFETY: Launches gather kernel with bounds-checked parameters and device error flag.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&*index.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&error_flag_dev)
+            .arg(&out_numel_i32)
+            .arg(&rank_i32)
+            .arg(&out_shape_dev)
+            .arg(&in_shape_dev)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .arg(&dim_i32)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA gather launch failed: {e:?}")))?;
+    }
+
+    let mut host_err = [0u32; 1];
+    stream
+        .memcpy_dtoh(&error_flag_dev, &mut host_err)
+        .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+    if host_err[0] != 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Gather,
+            reason: "index out of bounds",
+        }));
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter(
+    input: &CudaStorage,
+    dim: usize,
+    index: &CudaStorage,
+    src: &CudaStorage,
+) -> Result<CudaStorage> {
+    if dim >= input.shape.len() {
+        return Err(Error::Msg(format!(
+            "CUDA scatter dimension {dim} is out of bounds for input shape {:?}",
+            input.shape
+        )));
+    }
+    let rank = input.shape.len();
+    if index.shape.len() != rank || src.shape.len() != rank {
+        return Err(Error::Msg(format!(
+            "CUDA scatter index and src rank must match input rank {rank}"
+        )));
+    }
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_scatter")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_shape = input.shape.to_vec();
+    let out_numel = out_shape.iter().product::<usize>();
+    let src_numel = src.shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer =
+        CudaBuffer {
+            len: out_numel,
+            dtype: DTypeId::F32.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA scatter output allocation failed: {e:?}"))
+            })?),
+            device: input.buffer.device.clone(),
+            device_id,
+        };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let in_strides = crate::layout::contiguous_strides(&input.shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let idx_strides = crate::layout::contiguous_strides(&index.shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let idx_shape_i32 = index.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+
+    let out_shape_dev = stream
+        .clone_htod(&out_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let idx_shape_dev = stream
+        .clone_htod(&idx_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let out_strides_dev = stream
+        .clone_htod(&out_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_strides_dev = stream
+        .clone_htod(&in_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let idx_strides_dev = stream
+        .clone_htod(&idx_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+
+    let block_size = 256u32;
+    let grid_size = (out_numel.max(src_numel) as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let src_numel_i32 = src_numel as i32;
+    let out_numel_i32 = out_numel as i32;
+    let rank_i32 = rank as i32;
+    let dim_i32 = dim as i32;
+
+    // SAFETY: Launches scatter kernel with bounds-checked parameters and device error flag.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&*index.buffer.data)
+            .arg(&*src.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&error_flag_dev)
+            .arg(&src_numel_i32)
+            .arg(&out_numel_i32)
+            .arg(&rank_i32)
+            .arg(&idx_shape_dev)
+            .arg(&out_shape_dev)
+            .arg(&idx_strides_dev)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .arg(&dim_i32)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA scatter launch failed: {e:?}")))?;
+    }
+
+    let mut host_err = [0u32; 1];
+    stream
+        .memcpy_dtoh(&error_flag_dev, &mut host_err)
+        .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+    if host_err[0] != 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Scatter,
+            reason: "index out of bounds",
+        }));
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_tril(input: &CudaStorage, diagonal: i32) -> Result<CudaStorage> {
+    launch_triangular(input, diagonal, false)
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_triu(input: &CudaStorage, diagonal: i32) -> Result<CudaStorage> {
+    launch_triangular(input, diagonal, true)
+}
+
+#[cfg(feature = "cuda")]
+fn launch_triangular(input: &CudaStorage, diagonal: i32, is_upper: bool) -> Result<CudaStorage> {
+    let rank = input.shape.len();
+    if rank < 2 {
+        return Err(Error::ShapeMismatch {
+            op: if is_upper { "triu" } else { "tril" },
+            expected: vec![2],
+            got: vec![rank],
+            msg: "triangular operations require rank >= 2".into(),
+        });
+    }
+    let rows = input.shape[rank - 2];
+    let cols = input.shape[rank - 1];
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_triangular")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_shape = input.shape.to_vec();
+    let out_numel = out_shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer =
+        CudaBuffer {
+            len: out_numel,
+            dtype: DTypeId::F32.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA triangular output allocation failed: {e:?}"))
+            })?),
+            device: input.buffer.device.clone(),
+            device_id,
+        };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let block_size = 256u32;
+    let grid_size = (out_numel as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let numel_i32 = out_numel as i32;
+    let rows_i32 = rows as i32;
+    let cols_i32 = cols as i32;
+    let is_upper_i32 = if is_upper { 1i32 } else { 0i32 };
+
+    // SAFETY: Launches triangular mask kernel with verified output shape and bounds.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&rows_i32)
+            .arg(&cols_i32)
+            .arg(&diagonal)
+            .arg(&is_upper_i32)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA triangular launch failed: {e:?}")))?;
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_pad(
+    input: &CudaStorage,
+    padding: &[(usize, usize)],
+    value: f64,
+) -> Result<CudaStorage> {
+    let rank = input.shape.len();
+    if padding.len() != rank {
+        return Err(Error::Msg(format!(
+            "CUDA pad expects {} padding pairs, got {}",
+            rank,
+            padding.len()
+        )));
+    }
+
+    let mut out_shape = Vec::with_capacity(rank);
+    let mut pad_before = Vec::with_capacity(rank);
+    for (d, &(before, after)) in padding.iter().enumerate() {
+        let extent = input.shape[d] + before + after;
+        out_shape.push(extent);
+        pad_before.push(before as i32);
+    }
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_pad")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_numel = out_shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(byte_len)
+                .map_err(|e| Error::Msg(format!("CUDA pad output allocation failed: {e:?}")))?,
+        ),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let in_strides = crate::layout::contiguous_strides(&input.shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let in_shape_i32 = input.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+
+    let out_shape_dev = stream
+        .clone_htod(&out_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_shape_dev = stream
+        .clone_htod(&in_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let out_strides_dev = stream
+        .clone_htod(&out_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_strides_dev = stream
+        .clone_htod(&in_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let pad_before_dev = stream
+        .clone_htod(&pad_before)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+
+    let block_size = 256u32;
+    let grid_size = (out_numel as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let out_numel_i32 = out_numel as i32;
+    let rank_i32 = rank as i32;
+    let val_f32 = value as f32;
+
+    // SAFETY: Launches padding kernel with validated strides and bounds.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&out_numel_i32)
+            .arg(&rank_i32)
+            .arg(&out_shape_dev)
+            .arg(&in_shape_dev)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .arg(&pad_before_dev)
+            .arg(&val_f32)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA pad launch failed: {e:?}")))?;
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_repeat(input: &CudaStorage, repeats: &[usize]) -> Result<CudaStorage> {
+    let rank = input.shape.len();
+    if repeats.len() != rank {
+        return Err(Error::Msg(format!(
+            "CUDA repeat expects {} repeats, got {}",
+            rank,
+            repeats.len()
+        )));
+    }
+
+    let mut out_shape = Vec::with_capacity(rank);
+    for (d, &r) in repeats.iter().enumerate() {
+        out_shape.push(input.shape[d] * r);
+    }
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_repeat")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_numel = out_shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(byte_len)
+                .map_err(|e| Error::Msg(format!("CUDA repeat output allocation failed: {e:?}")))?,
+        ),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let in_strides = crate::layout::contiguous_strides(&input.shape)
+        .strides()
+        .iter()
+        .map(|&s| s as i32)
+        .collect::<Vec<_>>();
+    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let in_shape_i32 = input.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+
+    let out_shape_dev = stream
+        .clone_htod(&out_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_shape_dev = stream
+        .clone_htod(&in_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let out_strides_dev = stream
+        .clone_htod(&out_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_strides_dev = stream
+        .clone_htod(&in_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+
+    let block_size = 256u32;
+    let grid_size = (out_numel as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let out_numel_i32 = out_numel as i32;
+    let rank_i32 = rank as i32;
+
+    // SAFETY: Launches repeat kernel with validated strides and bounds.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&out_numel_i32)
+            .arg(&rank_i32)
+            .arg(&out_shape_dev)
+            .arg(&in_shape_dev)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA repeat launch failed: {e:?}")))?;
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStorage> {
+    let rank = input.shape.len();
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let stream = input.buffer.device.default_stream();
+
+    if rank == 1 {
+        let n = input.shape[0];
+        let diag_abs = diagonal.unsigned_abs() as usize;
+        let out_dim = n + diag_abs;
+        let out_shape = vec![out_dim, out_dim];
+        let out_numel = out_dim * out_dim;
+        let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+        let mut out_buffer =
+            CudaBuffer {
+                len: out_numel,
+                dtype: DTypeId::F32.descriptor(),
+                data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                    Error::Msg(format!("CUDA diag output allocation failed: {e:?}"))
+                })?),
+                device: input.buffer.device.clone(),
+                device_id,
+            };
+
+        if n > 0 {
+            let function = dispatcher.get_function("index_ops", "incin_cuda_diag_1d_to_2d")?;
+            let block_size = 256u32;
+            let grid_size = (out_numel as u32).div_ceil(block_size);
+            let config = cudarc::driver::LaunchConfig {
+                grid_dim: (grid_size, 1, 1),
+                block_dim: (block_size, 1, 1),
+                shared_mem_bytes: 0,
+            };
+            let n_i32 = n as i32;
+            let out_dim_i32 = out_dim as i32;
+
+            // SAFETY: Launches diag 1d to 2d kernel with validated dimensions.
+            unsafe {
+                let out_u8 = Arc::get_mut(&mut out_buffer.data)
+                    .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+                use cudarc::driver::PushKernelArg;
+                stream
+                    .launch_builder(&function)
+                    .arg(&*input.buffer.data)
+                    .arg(&mut *out_u8)
+                    .arg(&n_i32)
+                    .arg(&out_dim_i32)
+                    .arg(&diagonal)
+                    .launch(config)
+                    .map_err(|e| Error::Msg(format!("CUDA diag launch failed: {e:?}")))?;
+            }
+        }
+
+        Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+    } else if rank == 2 {
+        let (rows, cols) = (input.shape[0], input.shape[1]);
+        let out_len = if diagonal >= 0 {
+            let d = diagonal as usize;
+            if d < cols { (cols - d).min(rows) } else { 0 }
+        } else {
+            let d = (-diagonal) as usize;
+            if d < rows { (rows - d).min(cols) } else { 0 }
+        };
+        let out_shape = vec![out_len];
+        let byte_len = crate::bytes::byte_len(DTypeId::F32, out_len, OperationKind::Storage)?;
+
+        let mut out_buffer =
+            CudaBuffer {
+                len: out_len,
+                dtype: DTypeId::F32.descriptor(),
+                data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                    Error::Msg(format!("CUDA diag output allocation failed: {e:?}"))
+                })?),
+                device: input.buffer.device.clone(),
+                device_id,
+            };
+
+        if out_len > 0 {
+            let function = dispatcher.get_function("index_ops", "incin_cuda_diag_2d_to_1d")?;
+            let block_size = 256u32;
+            let grid_size = (out_len as u32).div_ceil(block_size);
+            let config = cudarc::driver::LaunchConfig {
+                grid_dim: (grid_size, 1, 1),
+                block_dim: (block_size, 1, 1),
+                shared_mem_bytes: 0,
+            };
+            let rows_i32 = rows as i32;
+            let cols_i32 = cols as i32;
+            let out_len_i32 = out_len as i32;
+
+            // SAFETY: Launches diag 2d to 1d kernel with validated dimensions.
+            unsafe {
+                let out_u8 = Arc::get_mut(&mut out_buffer.data)
+                    .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+                use cudarc::driver::PushKernelArg;
+                stream
+                    .launch_builder(&function)
+                    .arg(&*input.buffer.data)
+                    .arg(&mut *out_u8)
+                    .arg(&rows_i32)
+                    .arg(&cols_i32)
+                    .arg(&out_len_i32)
+                    .arg(&diagonal)
+                    .launch(config)
+                    .map_err(|e| Error::Msg(format!("CUDA diag launch failed: {e:?}")))?;
+            }
+        }
+
+        Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+    } else {
+        Err(Error::ShapeMismatch {
+            op: "diag",
+            expected: vec![1, 2],
+            got: vec![rank],
+            msg: "diag requires 1D or 2D tensor".into(),
+        })
+    }
 }

@@ -61,6 +61,7 @@ pub(crate) fn render_cuda_reduction(
             "if (value < acc) { acc = value; best_idx = (unsigned int)in_flat; }",
             "acc",
         ),
+        "prod" => ("1.0", "acc *= value;", "acc"),
         _ => {
             return Err(Error::Msg(format!(
                 "unsupported CUDA reduction operation {op_name:?}"
@@ -111,6 +112,7 @@ pub(crate) fn render_cuda_reduction(
             "sum" | "mean" => "acc += other;",
             "max" => "if (other > acc) acc = other;",
             "min" => "if (other < acc) acc = other;",
+            "prod" => "acc *= other;",
             _ => unreachable!(),
         };
         format!(

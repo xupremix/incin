@@ -9,11 +9,25 @@ fn check_fixture(name: &str, should_pass: bool, expected: &[&str]) {
         .join(name)
         .join("Cargo.toml");
     let target = root.join("../../target/facade-contract").join(name);
-    let output = Command::new(env!("CARGO"))
+    let mut cmd = Command::new(env!("CARGO"));
+    cmd.current_dir("/tmp")
         .args(["check", "--quiet", "--manifest-path"])
         .arg(&manifest)
         .env("CARGO_TARGET_DIR", target)
-        .env_remove("CARGO_PRIMARY_PACKAGE")
+        .env_remove("CARGO_PRIMARY_PACKAGE");
+    if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
+        cmd.env("CARGO_HOME", cargo_home);
+    }
+    if let Ok(rustup_home) = std::env::var("RUSTUP_HOME") {
+        cmd.env("RUSTUP_HOME", rustup_home);
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        cmd.env("HOME", home);
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        cmd.env("PATH", path);
+    }
+    let output = cmd
         .output()
         .expect("consumer fixture cargo invocation must start");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -45,11 +59,25 @@ fn test_fixture(name: &str) {
         .join(name)
         .join("Cargo.toml");
     let target = root.join("../../target/facade-contract").join(name);
-    let output = Command::new(env!("CARGO"))
+    let mut cmd = Command::new(env!("CARGO"));
+    cmd.current_dir("/tmp")
         .args(["test", "--quiet", "--manifest-path"])
         .arg(&manifest)
         .env("CARGO_TARGET_DIR", target)
-        .env_remove("CARGO_PRIMARY_PACKAGE")
+        .env_remove("CARGO_PRIMARY_PACKAGE");
+    if let Ok(cargo_home) = std::env::var("CARGO_HOME") {
+        cmd.env("CARGO_HOME", cargo_home);
+    }
+    if let Ok(rustup_home) = std::env::var("RUSTUP_HOME") {
+        cmd.env("RUSTUP_HOME", rustup_home);
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        cmd.env("HOME", home);
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        cmd.env("PATH", path);
+    }
+    let output = cmd
         .output()
         .expect("consumer fixture cargo test invocation must start");
     assert!(

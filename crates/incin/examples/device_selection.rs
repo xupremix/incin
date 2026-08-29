@@ -103,7 +103,10 @@ fn runtime_detected() -> incin::Result<()> {
 
     let tensor: Tensor<Dyn, IncinBackend<Dyn>> = Tensor::zeros(([2, 3], device))?;
     println!("  detect_device() probed the machine and chose {device:?}");
-    println!("  shape {:?}, backend known only at run time", tensor.dims());
+    println!(
+        "  shape {:?}, backend known only at run time",
+        tensor.dims()
+    );
 
     // A caller that wants a policy rather than the default preference order
     // can pin one. This refuses CUDA even where it is present.
@@ -118,8 +121,7 @@ fn runtime_detected() -> incin::Result<()> {
     // it does not: a `--features cuda` build on a machine with no NVIDIA card
     // still resolves `best_device!()` to CUDA while `detect_device()` falls
     // through to whatever is actually present.
-    let build_choice: Tensor<s![1], IncinBackend<incin_core::best_device!()>> =
-        Tensor::zeros(())?;
+    let build_choice: Tensor<s![1], IncinBackend<incin_core::best_device!()>> = Tensor::zeros(())?;
     println!();
     println!("  build says   {:?}", build_choice.device()?);
     println!("  hardware says {device:?}");

@@ -248,7 +248,10 @@ fn new_scaffolds_a_project_with_substitutions_applied() {
     );
 
     let main_rs = std::fs::read_to_string(target.join("src/main.rs")).expect("main is written");
-    assert!(!main_rs.contains("{{"), "no placeholder survives in main.rs");
+    assert!(
+        !main_rs.contains("{{"),
+        "no placeholder survives in main.rs"
+    );
 
     std::fs::remove_dir_all(&target).expect("cleanup");
 }
@@ -381,7 +384,10 @@ fn translate_raw_passes_the_diagnostic_through_untouched() {
         TYPENUM_DIAGNOSTIC,
         "raw mode returns the input verbatim"
     );
-    assert_ne!(raw, translated, "and therefore differs from the translation");
+    assert_ne!(
+        raw, translated,
+        "and therefore differs from the translation"
+    );
 }
 
 /// Without `--explain` the shape rule stays out of the way; with it, the rule

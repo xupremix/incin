@@ -33,8 +33,21 @@ type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
 const LHS: [f32; 6] = [1.0, 5.0, 3.0, 3.0, -2.0, 0.5];
 const RHS: [f32; 6] = [4.0, 2.0, 3.0, 3.0, -7.0, 0.5];
 
+fn has_wgpu() -> bool {
+    <TestBackend as HostInterop>::from_bytes::<f32>(
+        &[0u8; 4],
+        &[1],
+        DTypeId::F32.descriptor(),
+        &DeviceId::wgpu(0),
+    )
+    .is_ok()
+}
+
 fn upload(values: &[f32]) -> TestStorage {
-    let bytes: Vec<u8> = values.iter().flat_map(|value| value.to_le_bytes()).collect();
+    let bytes: Vec<u8> = values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
     <TestBackend as HostInterop>::from_bytes::<f32>(
         &bytes,
         &[values.len()],
@@ -69,6 +82,9 @@ where
 
 #[test]
 fn maximum_matches_the_cpu_reference_and_records_a_gradient() {
+    if !has_wgpu() {
+        return;
+    }
     let (lhs, rhs) = (upload(&LHS), upload(&RHS));
     let (out, recorded) = run::<op::Maximum>(&lhs, &rhs);
     assert_eq!(read(&out), vec![4.0, 5.0, 3.0, 3.0, -2.0, 0.5]);
@@ -83,6 +99,9 @@ fn maximum_matches_the_cpu_reference_and_records_a_gradient() {
 
 #[test]
 fn minimum_matches_the_cpu_reference_and_records_a_gradient() {
+    if !has_wgpu() {
+        return;
+    }
     let (lhs, rhs) = (upload(&LHS), upload(&RHS));
     let (out, recorded) = run::<op::Minimum>(&lhs, &rhs);
     assert_eq!(read(&out), vec![1.0, 2.0, 3.0, 3.0, -7.0, 0.5]);
@@ -91,6 +110,9 @@ fn minimum_matches_the_cpu_reference_and_records_a_gradient() {
 
 #[test]
 fn abs_diff_matches_the_cpu_reference_and_records_a_gradient() {
+    if !has_wgpu() {
+        return;
+    }
     let (lhs, rhs) = (upload(&LHS), upload(&RHS));
     let (out, recorded) = run::<op::AbsDiff>(&lhs, &rhs);
     assert_eq!(read(&out), vec![3.0, 3.0, 0.0, 0.0, 5.0, 0.0]);

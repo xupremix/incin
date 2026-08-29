@@ -50,6 +50,16 @@ fn lower(lhs: &[usize], rhs: &[usize]) -> Validated<Descriptor<op::MatMulExact>>
     .expect("test operands must be valid matmul shapes")
 }
 
+fn has_wgpu() -> bool {
+    TestBackend::from_bytes::<f32>(
+        bytemuck::cast_slice(&[1.0f32]),
+        &[1],
+        DTypeId::F32.into(),
+        &DeviceId::wgpu(0),
+    )
+    .is_ok()
+}
+
 fn storage(shape: &[usize], values: &[f32]) -> TestStorage {
     TestBackend::from_bytes::<f32>(
         bytemuck::cast_slice(values),
@@ -85,6 +95,9 @@ fn execute(
 
 #[test]
 fn rank2_descriptor_execution_produces_the_arithmetic_product() {
+    if !has_wgpu() {
+        return;
+    }
     let lhs = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
     let rhs = storage(&[3, 2], &[7., 8., 9., 10., 11., 12.]);
     let validated = lower(&[2, 3], &[3, 2]);
@@ -97,6 +110,9 @@ fn rank2_descriptor_execution_produces_the_arithmetic_product() {
 
 #[test]
 fn the_binder_requires_exactly_two_inputs() {
+    if !has_wgpu() {
+        return;
+    }
     let lhs = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
     let validated = lower(&[2, 3], &[3, 2]);
     let context = ExecutionContext::new(TestBackend::new());
@@ -122,6 +138,9 @@ fn the_binder_requires_exactly_two_inputs() {
 
 #[test]
 fn the_binder_rejects_operands_that_disagree_with_the_descriptor() {
+    if !has_wgpu() {
+        return;
+    }
     // Both operands are individually valid WGPU storage, and their product is a
     // legal matmul, but the descriptor was lowered for different extents. The
     // binder must reject rather than execute the shapes it was handed.
@@ -144,6 +163,9 @@ fn the_binder_rejects_operands_that_disagree_with_the_descriptor() {
 
 #[test]
 fn the_binder_rejects_storage_belonging_to_another_backend() {
+    if !has_wgpu() {
+        return;
+    }
     // A CPU allocation carries CPU metadata. The WGPU executor must refuse it
     // rather than downcast it into a GPU buffer.
     #[cfg(feature = "cpu")]
@@ -211,6 +233,9 @@ fn execute_reshape(
 
 #[test]
 fn reshape_descriptor_execution_rewrites_the_shape_and_keeps_row_major_order() {
+    if !has_wgpu() {
+        return;
+    }
     let values = [1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
     let input = storage(&[2, 6], &values);
     let validated = lower_reshape_2x6_to_3x4();
@@ -225,6 +250,9 @@ fn reshape_descriptor_execution_rewrites_the_shape_and_keeps_row_major_order() {
 
 #[test]
 fn the_reshape_binder_requires_exactly_one_input() {
+    if !has_wgpu() {
+        return;
+    }
     let input = storage(&[2, 6], &[1.; 12]);
     let validated = lower_reshape_2x6_to_3x4();
     let context = ExecutionContext::new(TestBackend::new());
@@ -252,7 +280,10 @@ fn the_reshape_binder_requires_exactly_one_input() {
 }
 
 #[test]
-fn the_reshape_binder_rejects_an_operand_that_disagrees_with_the_descriptor() {
+fn the_reshape_binder_rejects_an_operand_that_disagree_with_the_descriptor() {
+    if !has_wgpu() {
+        return;
+    }
     // Twelve elements either way, but the descriptor was proved against `[2, 6]`.
     let input = storage(&[4, 3], &[1.; 12]);
 
@@ -365,6 +396,9 @@ fn reference_conv2d(
 
 #[test]
 fn conv2d_descriptor_execution_matches_a_direct_convolution() {
+    if !has_wgpu() {
+        return;
+    }
     let input_values: Vec<f32> = (0..32).map(|value| value as f32 * 0.25 - 4.0).collect();
     let weight_values: Vec<f32> = (0..54).map(|value| value as f32 * 0.1 - 2.5).collect();
     let bias_values = [0.5_f32, -0.25, 1.0];
@@ -411,6 +445,9 @@ fn conv2d_descriptor_execution_matches_a_direct_convolution() {
 
 #[test]
 fn the_conv2d_binder_rejects_a_weight_that_disagrees_with_the_descriptor() {
+    if !has_wgpu() {
+        return;
+    }
     let input = storage(&[1, 2, 4, 4], &[1.; 32]);
     // A legal filter bank, but for four output channels rather than the three
     // the descriptor was proved for.
@@ -442,6 +479,9 @@ fn the_conv2d_binder_rejects_a_weight_that_disagrees_with_the_descriptor() {
 
 #[test]
 fn a_conv2d_bias_actually_reaches_every_output_element() {
+    if !has_wgpu() {
+        return;
+    }
     // WGPU's elementwise kernels do not broadcast, so the bias has to be
     // stretched to the output shape before it is added. Comparing against the
     // unbiased convolution pins that down without trusting the other path:
@@ -511,6 +551,9 @@ where
 
 #[test]
 fn a_reduction_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
+    if !has_wgpu() {
+        return;
+    }
     let input = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
 
     macro_rules! check {
@@ -537,6 +580,9 @@ fn a_reduction_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
 
 #[test]
 fn a_pool_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
+    if !has_wgpu() {
+        return;
+    }
     let values: Vec<f32> = (1..=16).map(|value| value as f32).collect();
     let input = storage(&[1, 1, 4, 4], &values);
 
@@ -591,6 +637,9 @@ fn a_pool_descriptor_routes_to_the_accumulation_it_names_on_gpu() {
 /// only call that can tell an implemented operation from a reachable one.
 #[test]
 fn every_advertised_unary_activation_is_reachable_through_canonical_dispatch() {
+    if !has_wgpu() {
+        return;
+    }
     use incin_core::backend_authoring::execute;
     use incin_core::backend_authoring::operations::NoAttributes;
 

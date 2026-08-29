@@ -1,11 +1,11 @@
-// NVRTC has no default header search path, so `int64_t` isn't available
-// without an explicit typedef (unlike `size_t`, which is compiler builtin).
 typedef long long int64_t;
+typedef unsigned int uint32_t;
 
 extern "C" __global__ void embedding_forward(
     const int64_t* __restrict__ indices,
     const float* __restrict__ weight,
     float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
     const size_t num_indices,
     const size_t vocab_size,
     const size_t hidden_size)
@@ -14,23 +14,12 @@ extern "C" __global__ void embedding_forward(
     if (idx_idx >= num_indices) return;
 
     int64_t row_idx = indices[idx_idx];
-    float* __restrict__ out_row = output + idx_idx * hidden_size;
-
-    if (row_idx < 0 || row_idx >= vocab_size) {
-        if (hidden_size % 4 == 0) {
-            float4* o4 = reinterpret_cast<float4*>(out_row);
-            size_t h4 = hidden_size / 4;
-            for (size_t h = threadIdx.x; h < h4; h += blockDim.x) {
-                o4[h] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-            }
-        } else {
-            for (size_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
-                out_row[h] = 0.0f;
-            }
-        }
+    if (row_idx < 0 || (size_t)row_idx >= vocab_size) {
+        atomicExch(error_flag, 1);
         return;
     }
 
+    float* __restrict__ out_row = output + idx_idx * hidden_size;
     const float* __restrict__ weight_row = weight + row_idx * hidden_size;
 
     if (hidden_size % 4 == 0) {
@@ -51,14 +40,19 @@ extern "C" __global__ void embedding_backward(
     const float* __restrict__ grad_output,
     const int64_t* __restrict__ indices,
     float* __restrict__ grad_weight,
+    uint32_t* __restrict__ error_flag,
     const size_t num_indices,
+    const size_t vocab_size,
     const size_t hidden_size)
 {
     const size_t idx_idx = blockIdx.x;
     if (idx_idx >= num_indices) return;
 
     int64_t row_idx = indices[idx_idx];
-    if (row_idx < 0) return;
+    if (row_idx < 0 || (size_t)row_idx >= vocab_size) {
+        atomicExch(error_flag, 1);
+        return;
+    }
 
     const float* __restrict__ grad_out_row = grad_output + idx_idx * hidden_size;
     float* __restrict__ grad_w_row = grad_weight + row_idx * hidden_size;

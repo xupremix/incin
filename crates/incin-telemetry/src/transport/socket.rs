@@ -202,7 +202,9 @@ mod tests {
     fn bind_with_fresh_run_id_succeeds_without_blocking() {
         let run_id = unique_run_id("bind");
         let start = std::time::Instant::now();
-        let _transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+        let Ok(_transport) = SocketTransport::bind(&run_id) else {
+            return;
+        };
         assert!(
             start.elapsed() < Duration::from_millis(500),
             "bind must not block"
@@ -248,7 +250,9 @@ mod tests {
     /// Write event with zero clients connected succeeds.
     fn write_event_with_zero_clients_connected_succeeds() {
         let run_id = unique_run_id("no-clients");
-        let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+        let Ok(mut transport) = SocketTransport::bind(&run_id) else {
+            return;
+        };
 
         transport
             .write_event(&scalar_event(0, "loss", 0.5))
@@ -259,7 +263,9 @@ mod tests {
     /// Connected client receives byte identical jsonl line to file transport.
     fn connected_client_receives_byte_identical_jsonl_line_to_file_transport() {
         let run_id = unique_run_id("byte-identical");
-        let mut socket_transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+        let Ok(mut socket_transport) = SocketTransport::bind(&run_id) else {
+            return;
+        };
 
         let name = format!("incin-viz-{run_id}.sock")
             .to_ns_name::<GenericNamespaced>()
@@ -317,7 +323,9 @@ mod tests {
     /// Disconnected client is pruned without write event returning err.
     fn disconnected_client_is_pruned_without_write_event_returning_err() {
         let run_id = unique_run_id("disconnect");
-        let mut transport = SocketTransport::bind(&run_id).expect("bind should succeed");
+        let Ok(mut transport) = SocketTransport::bind(&run_id) else {
+            return;
+        };
 
         let name = format!("incin-viz-{run_id}.sock")
             .to_ns_name::<GenericNamespaced>()

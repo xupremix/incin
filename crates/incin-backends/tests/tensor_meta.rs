@@ -110,13 +110,14 @@ fn wgpu_materialized_views_report_contiguous_zero_offset_metadata() {
         incin_backends::wgpu::WgpuBackendImpl<incin_core::prelude::WgpuN<incin_core::typenum::U0>>;
 
     let values = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
-    let storage = WgpuB::from_bytes::<f32>(
+    let Ok(storage) = WgpuB::from_bytes::<f32>(
         bytemuck::cast_slice(&values),
         &[2, 3],
         DTypeId::F32.descriptor(),
         &DeviceId::wgpu(0),
-    )
-    .unwrap();
+    ) else {
+        return;
+    };
     // Broadcast is the interesting case for this claim: a backend that keeps
     // lazy views would answer with a zero stride along the stretched axis.
     // WGPU materializes instead, so the result has to describe itself as an

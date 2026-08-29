@@ -276,12 +276,8 @@ fn print_help() {
     println!("    run        Run cargo run with real-time typenum error translation");
     println!("    bench, doc, fix, clippy");
     println!("               Same real-time typenum error translation as above");
-    println!(
-        "    doctor     Report devices, features, caches, and capability probes"
-    );
-    println!(
-        "               [--json] [--check-updates: ask crates.io for a newer incin]"
-    );
+    println!("    doctor     Report devices, features, caches, and capability probes");
+    println!("               [--json] [--check-updates: ask crates.io for a newer incin]");
     println!("    inspect    Inspect a .safetensors, .gguf, or .onnx model file metadata");
     println!("    plan       Generate execution plan report [--json] [--devices DEV] [--epochs N]");
     println!("    tune       Inspect and manage autotune cache [--json] [--clear] [--offline]");

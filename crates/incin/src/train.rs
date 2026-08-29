@@ -45,7 +45,7 @@
 
 use incin_core::backend_authoring::Backend;
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin_core::exec::{LossScaleState, LossScaling};
+use incin_core::exec::{LossScaleState, LossScaling, RuntimePrecisionPolicy};
 use incin_core::optim::{Optimizer, ScaledOptimizer};
 use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
@@ -147,6 +147,7 @@ pub struct Plan {
     devices: DeviceSet,
     epochs: usize,
     loss_scaling: LossScaling,
+    precision: RuntimePrecisionPolicy,
     decisions: Vec<Decision>,
 }
 
@@ -167,6 +168,12 @@ impl Plan {
     #[must_use]
     pub fn loss_scaling(&self) -> LossScaling {
         self.loss_scaling
+    }
+
+    /// The runtime precision policy configured for this plan.
+    #[must_use]
+    pub fn precision(&self) -> RuntimePrecisionPolicy {
+        self.precision
     }
 
     /// Every decision the planner made, in the order it made them.
@@ -365,6 +372,7 @@ pub struct TrainerBuilder {
     preference: DevicePreference,
     epochs: usize,
     loss_scaling: LossScaling,
+    precision: RuntimePrecisionPolicy,
 }
 
 impl Default for TrainerBuilder {
@@ -373,6 +381,7 @@ impl Default for TrainerBuilder {
             preference: DevicePreference::default(),
             epochs: 1,
             loss_scaling: LossScaling::None,
+            precision: RuntimePrecisionPolicy::default(),
         }
     }
 }
@@ -405,6 +414,20 @@ impl TrainerBuilder {
     pub fn loss_scaling(mut self, loss_scaling: LossScaling) -> Self {
         self.loss_scaling = loss_scaling;
         self
+    }
+
+    /// Configures the runtime precision policy (e.g. AMP, mixed-bf16, fp32).
+    #[must_use]
+    pub fn precision(mut self, precision: RuntimePrecisionPolicy) -> Self {
+        self.precision = precision;
+        self.loss_scaling = precision.loss_scaling();
+        self
+    }
+
+    /// Configures the runtime precision policy.
+    #[must_use]
+    pub fn with_precision(self, precision: RuntimePrecisionPolicy) -> Self {
+        self.precision(precision)
     }
 
     /// Validates the request against this machine.
@@ -529,11 +552,16 @@ impl TrainerBuilder {
             "loss-scaling",
             format!("{:?} policy configured", self.loss_scaling),
         ));
+        decisions.push(Decision::new(
+            "precision",
+            format!("{:?} runtime precision policy configured", self.precision),
+        ));
 
         Ok(Plan {
             devices,
             epochs: self.epochs,
             loss_scaling: self.loss_scaling,
+            precision: self.precision,
             decisions,
         })
     }

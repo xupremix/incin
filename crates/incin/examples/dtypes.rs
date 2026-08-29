@@ -68,9 +68,11 @@ fn allocation() -> incin::Result<()> {
     // travels with the value instead of the type, exactly as `Dyn` does for
     // shapes, and with the same trade: the program accepts a dtype it was not
     // compiled against, and the compiler stops being able to check it.
-    let runtime: Tensor<Dyn, B, Dyn> =
-        Tensor::ones((vec![2, 2], DTypeId::F64.descriptor()))?;
-    println!("  and one chosen at run time: {}", runtime.dtype().key().name());
+    let runtime: Tensor<Dyn, B, Dyn> = Tensor::ones((vec![2, 2], DTypeId::F64.descriptor()))?;
+    println!(
+        "  and one chosen at run time: {}",
+        runtime.dtype().key().name()
+    );
 
     Ok(())
 }

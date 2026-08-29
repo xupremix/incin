@@ -9,6 +9,11 @@ publish = false
 [dependencies]
 incin = { path = "../..", version = "0.1.0", features = ["wgpu"] }
 
+[features]
+default = []
+cuda = ["incin/cuda"]
+wgpu = ["incin/wgpu"]
+
 [lints]
 workspace = true
 

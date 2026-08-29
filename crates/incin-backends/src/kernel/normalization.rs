@@ -54,13 +54,15 @@ pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result
         KernelFamily::Normalization,
         op_name,
         dtype,
-        if op_name == "layer_norm" {
+        if op_name == "layer_norm" || op_name == "rms_norm" || op_name == "softmax" {
             LayoutClass::RowWise
         } else {
             LayoutClass::ChannelWise
         },
         if op_name == "layer_norm" {
             KernelAccess::Welford
+        } else if op_name == "rms_norm" || op_name == "softmax" {
+            KernelAccess::WarpReduction
         } else {
             KernelAccess::Scalar { unroll_width: 1 }
         },
@@ -236,6 +238,176 @@ extern "C" __global__ void {entry_point}(
             load_suffix = scalar.load_suffix,
             store_prefix = scalar.store_prefix,
             store_suffix = scalar.store_suffix,
+        ),
+        "rms_norm" => format!(
+            r#"
+{preamble}
+extern "C" __global__ void {entry_point}(
+    const {storage_type}* __restrict__ input,
+    const {storage_type}* __restrict__ weight,
+    {storage_type}* __restrict__ output,
+    float eps,
+    int norm_size,
+    int batch_size,
+    int input_offset,
+    int weight_offset)
+{{
+    int row = blockIdx.x;
+    if (row >= batch_size) return;
+    int tid = threadIdx.x;
+    int lane = tid & 31;
+    int warp = tid >> 5;
+    
+    {compute_type} local_sum_sq = ({compute_type})0.0;
+    int row_start = input_offset + row * norm_size;
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        local_sum_sq += value * value;
+    }}
+    
+    unsigned int active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        local_sum_sq += __shfl_down_sync(active, local_sum_sq, delta);
+    }}
+    
+    extern __shared__ unsigned char shared_raw[];
+    int warp_count = (blockDim.x + 31) >> 5;
+    {compute_type}* shared_sum = reinterpret_cast<{compute_type}*>(shared_raw);
+    if (lane == 0) {{
+        shared_sum[warp] = local_sum_sq;
+    }}
+    __syncthreads();
+    
+    if (warp == 0) {{
+        local_sum_sq = lane < warp_count ? shared_sum[lane] : ({compute_type})0.0;
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            local_sum_sq += __shfl_down_sync(active, local_sum_sq, delta);
+        }}
+        if (lane == 0) {{
+            {compute_type} mean_sq = local_sum_sq / ({compute_type})norm_size;
+            shared_sum[0] = {inverse_rms};
+        }}
+    }}
+    __syncthreads();
+    
+    {compute_type} inv_rms = shared_sum[0];
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        {compute_type} gamma = {load_prefix}weight[weight_offset + i]{load_suffix};
+        output[row * norm_size + i] = {store_prefix}(value * inv_rms * gamma){store_suffix};
+    }}
+}}
+"#,
+            preamble = scalar.preamble,
+            compute_type = scalar.compute_type,
+            storage_type = scalar.storage_type,
+            load_prefix = scalar.load_prefix,
+            load_suffix = scalar.load_suffix,
+            store_prefix = scalar.store_prefix,
+            store_suffix = scalar.store_suffix,
+            inverse_rms = if dtype == DTypeId::F64 {
+                "1.0 / sqrt(mean_sq + (double)eps)"
+            } else {
+                "rsqrtf(mean_sq + eps)"
+            },
+        ),
+        "softmax" => format!(
+            r#"
+{preamble}
+extern "C" __global__ void {entry_point}(
+    const {storage_type}* __restrict__ input,
+    {storage_type}* __restrict__ output,
+    int norm_size,
+    int batch_size,
+    int input_offset)
+{{
+    int row = blockIdx.x;
+    if (row >= batch_size) return;
+    int tid = threadIdx.x;
+    int lane = tid & 31;
+    int warp = tid >> 5;
+    int row_start = input_offset + row * norm_size;
+    
+    // 1. Local max reduction
+    {compute_type} local_max = ({compute_type})-1e38;
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        if (value > local_max) local_max = value;
+    }}
+    unsigned int active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        {compute_type} other = __shfl_down_sync(active, local_max, delta);
+        if (other > local_max) local_max = other;
+    }}
+    
+    extern __shared__ unsigned char shared_raw[];
+    int warp_count = (blockDim.x + 31) >> 5;
+    {compute_type}* shared_scratch = reinterpret_cast<{compute_type}*>(shared_raw);
+    if (lane == 0) {{
+        shared_scratch[warp] = local_max;
+    }}
+    __syncthreads();
+    
+    if (warp == 0) {{
+        local_max = lane < warp_count ? shared_scratch[lane] : ({compute_type})-1e38;
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            {compute_type} other = __shfl_down_sync(active, local_max, delta);
+            if (other > local_max) local_max = other;
+        }}
+        if (lane == 0) {{
+            shared_scratch[0] = local_max;
+        }}
+    }}
+    __syncthreads();
+    {compute_type} row_max = shared_scratch[0];
+    
+    // 2. Sum of exponentials
+    {compute_type} local_sum_exp = ({compute_type})0.0;
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        local_sum_exp += {exp_func}(value - row_max);
+    }}
+    active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        local_sum_exp += __shfl_down_sync(active, local_sum_exp, delta);
+    }}
+    if (lane == 0) {{
+        shared_scratch[warp] = local_sum_exp;
+    }}
+    __syncthreads();
+    
+    if (warp == 0) {{
+        local_sum_exp = lane < warp_count ? shared_scratch[lane] : ({compute_type})0.0;
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            local_sum_exp += __shfl_down_sync(active, local_sum_exp, delta);
+        }}
+        if (lane == 0) {{
+            shared_scratch[0] = local_sum_exp;
+        }}
+    }}
+    __syncthreads();
+    {compute_type} row_sum_exp = shared_scratch[0];
+    {compute_type} inv_sum = row_sum_exp > ({compute_type})0.0 ? (({compute_type})1.0 / row_sum_exp) : ({compute_type})0.0;
+    
+    // 3. Write normalized probabilities
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        {compute_type} prob = {exp_func}(value - row_max) * inv_sum;
+        output[row * norm_size + i] = {store_prefix}prob{store_suffix};
+    }}
+}}
+"#,
+            preamble = scalar.preamble,
+            compute_type = scalar.compute_type,
+            storage_type = scalar.storage_type,
+            load_prefix = scalar.load_prefix,
+            load_suffix = scalar.load_suffix,
+            store_prefix = scalar.store_prefix,
+            store_suffix = scalar.store_suffix,
+            exp_func = if dtype == DTypeId::F64 { "exp" } else { "expf" },
         ),
         _ => {
             return Err(Error::Msg(format!(

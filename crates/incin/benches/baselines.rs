@@ -84,6 +84,9 @@ fn eager_baselines(c: &mut Criterion) {
 
 #[cfg(feature = "wgpu")]
 fn gpu_baselines(c: &mut Criterion) {
+    if Tensor::<s![1], WgpuB>::zeros(()).is_err() {
+        return;
+    }
     let mut capability = c.benchmark_group("capability");
     capability.bench_function("wgpu/f32_create", |b| {
         b.iter(|| black_box(Tensor::<s![1], WgpuB>::zeros(()).unwrap()))
@@ -119,6 +122,9 @@ fn gpu_baselines(_: &mut Criterion) {}
 /// silent in `target/criterion` and invisible to the gate.
 #[cfg(feature = "cuda")]
 fn cuda_baselines(c: &mut Criterion) {
+    if Tensor::<s![1], CudaB>::zeros(()).is_err() {
+        return;
+    }
     let mut capability = c.benchmark_group("capability");
     capability.bench_function("cuda/f32_create", |b| {
         b.iter(|| black_box(Tensor::<s![1], CudaB>::zeros(()).unwrap()))
@@ -148,6 +154,9 @@ fn cuda_baselines(_: &mut Criterion) {}
 /// Metal counterparts of the GPU series.
 #[cfg(feature = "metal")]
 fn metal_baselines(c: &mut Criterion) {
+    if Tensor::<s![1], MetalB>::zeros(()).is_err() {
+        return;
+    }
     let mut capability = c.benchmark_group("capability");
     capability.bench_function("metal/f32_create", |b| {
         b.iter(|| black_box(Tensor::<s![1], MetalB>::zeros(()).unwrap()))

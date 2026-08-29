@@ -27,8 +27,21 @@ type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
 
 const EPSILON: f64 = 1e-5;
 
+fn has_wgpu() -> bool {
+    <TestBackend as HostInterop>::from_bytes::<f32>(
+        &[0u8; 4],
+        &[1],
+        DTypeId::F32.descriptor(),
+        &DeviceId::wgpu(0),
+    )
+    .is_ok()
+}
+
 fn upload(values: &[f32], shape: &[usize]) -> TestStorage {
-    let bytes: Vec<u8> = values.iter().flat_map(|value| value.to_le_bytes()).collect();
+    let bytes: Vec<u8> = values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
     <TestBackend as HostInterop>::from_bytes::<f32>(
         &bytes,
         shape,
@@ -66,8 +79,11 @@ fn reference(values: &[f32], rows: usize, cols: usize, weight: &[f32]) -> Vec<f6
     let mut out = vec![0.0f64; values.len()];
     for row in 0..rows {
         let slice = &values[row * cols..(row + 1) * cols];
-        let mean_square: f64 =
-            slice.iter().map(|v| f64::from(*v) * f64::from(*v)).sum::<f64>() / cols as f64;
+        let mean_square: f64 = slice
+            .iter()
+            .map(|v| f64::from(*v) * f64::from(*v))
+            .sum::<f64>()
+            / cols as f64;
         let scale = (mean_square + EPSILON).sqrt();
         for (column, value) in slice.iter().enumerate() {
             out[row * cols + column] = (f64::from(*value) / scale) * f64::from(weight[column]);
@@ -78,6 +94,9 @@ fn reference(values: &[f32], rows: usize, cols: usize, weight: &[f32]) -> Vec<f6
 
 #[test]
 fn rms_norm_matches_the_reference_and_records_a_gradient() {
+    if !has_wgpu() {
+        return;
+    }
     const VALUES: [f32; 8] = [1.0, 2.0, 3.0, 4.0, -1.0, 0.5, -2.0, 3.0];
     const WEIGHT: [f32; 4] = [1.0, 0.5, 2.0, 1.5];
 
@@ -106,6 +125,9 @@ fn rms_norm_matches_the_reference_and_records_a_gradient() {
 /// fails this.
 #[test]
 fn the_weight_is_applied_per_feature() {
+    if !has_wgpu() {
+        return;
+    }
     const VALUES: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
     let uniform = rms_norm(&VALUES, &[1, 4], &[1.0, 1.0, 1.0, 1.0]).0;
     let scaled = rms_norm(&VALUES, &[1, 4], &[1.0, 1.0, 3.0, 1.0]).0;
@@ -125,6 +147,9 @@ fn the_weight_is_applied_per_feature() {
 /// pull on a row beside it. Reducing the wrong axis breaks this first.
 #[test]
 fn rows_are_normalised_independently() {
+    if !has_wgpu() {
+        return;
+    }
     const SMALL: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
     const WEIGHT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
@@ -152,6 +177,9 @@ fn rows_are_normalised_independently() {
 /// ordering is pinned by the reference comparison above instead.
 #[test]
 fn an_all_zero_row_stays_finite() {
+    if !has_wgpu() {
+        return;
+    }
     const ZEROS: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
     const WEIGHT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 

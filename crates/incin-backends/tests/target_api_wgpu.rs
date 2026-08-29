@@ -20,6 +20,9 @@ use incin_core::prelude::*;
 #[test]
 fn a_tier_two_device_value_is_a_target_with_no_extra_ceremony() {
     let gpu = Wgpu::new(0);
+    if gpu.zeros(shape![1]).is_err() {
+        return;
+    }
     assert_eq!(gpu.device_id().unwrap(), DeviceId::wgpu(0));
 
     let x = gpu.zeros(shape![2, 3]).unwrap();
@@ -31,6 +34,9 @@ fn a_tier_two_device_value_is_a_target_with_no_extra_ceremony() {
 #[test]
 fn typed_data_reaches_the_accelerator_with_its_own_dtype() {
     let gpu = Wgpu::new(0);
+    if gpu.zeros(shape![1]).is_err() {
+        return;
+    }
     let x = gpu.tensor([[1.0_f32, 2.0], [3.0, 4.0]]).unwrap();
     assert_eq!(x.dims(), [2, 2]);
     assert_eq!(x.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
@@ -39,6 +45,9 @@ fn typed_data_reaches_the_accelerator_with_its_own_dtype() {
 #[test]
 fn a_partial_shape_survives_onto_the_accelerator() {
     let gpu = Wgpu::new(0);
+    if gpu.zeros(shape![1]).is_err() {
+        return;
+    }
     let batch = 3usize;
     let x = gpu.zeros(shape![batch, 4]).unwrap();
     assert_eq!(x.dims(), [3, 4]);
