@@ -26,6 +26,7 @@ pub mod reduction;
 pub mod rope;
 pub mod scan;
 pub mod scheduler;
+pub mod sota_gemm;
 pub mod strided;
 pub mod vectorized;
 
@@ -57,5 +58,6 @@ pub use reduction::{ReductionLayout, ReductionOpKind, ReductionOpSpec};
 pub use rope::RopeSpec;
 pub use scan::{PrefixScanSpec, ScanOpKind};
 pub use scheduler::{BlockTensorPtr, KernelScheduler, LoopScheduleKind, MemorySpace};
+pub use sota_gemm::{EpilogueActivation, GemmComputeEngine, SotaGemmSpec};
 pub use strided::{FastDivisor, StridedIndexSpec};
 pub use vectorized::{VectorWidth, VectorizedOpSpec};

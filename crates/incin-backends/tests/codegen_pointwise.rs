@@ -470,3 +470,25 @@ fn test_implicit_gemm_conv2d_codegen() {
     assert!(cuda.contains("const int h_in = h_out * 1 - 1 + r * 1"));
     assert!(cuda.contains("fmaf(in_val, w_val, sum)"));
 }
+
+#[test]
+fn test_sota_gemm_tensor_core_and_fused_epilogue_codegen() {
+    use incin_backends::codegen::{EpilogueActivation, SotaGemmSpec};
+
+    let spec_f16 =
+        SotaGemmSpec::tensor_core_f16("sota_gemm_bias_gelu_f16", true, EpilogueActivation::Gelu);
+    let cuda_f16 = spec_f16.render_cuda();
+    assert!(cuda_f16.contains("__global__ void sota_gemm_bias_gelu_f16"));
+    assert!(cuda_f16.contains("L2 Cache Swizzling / Super-Tile Rasterization"));
+    assert!(cuda_f16.contains("super_tile_id"));
+    assert!(cuda_f16.contains("__shared__ __half s_a[128][40]"));
+    assert!(cuda_f16.contains("val += static_cast<float>(Bias[global_c_col])"));
+    assert!(cuda_f16.contains("tanhf(0.79788456f *"));
+
+    let spec_f32 =
+        SotaGemmSpec::simd_tiled_f32("sota_gemm_bias_silu_f32", true, EpilogueActivation::Silu);
+    let cuda_f32 = spec_f32.render_cuda();
+    assert!(cuda_f32.contains("__global__ void sota_gemm_bias_silu_f32"));
+    assert!(cuda_f32.contains("val / (1.0f + expf(-val))"));
+    assert!(cuda_f32.contains("fmaf(r_a[i], r_b[j], acc[i][j])"));
+}
