@@ -619,15 +619,21 @@ pub(crate) fn launch_embedding(weight: &CudaStorage, indices: &CudaStorage) -> R
     let device_id = weight.buffer.device_id;
     ensure_embedding_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("embedding", "embedding_forward")?;
+    let entry_point = match weight.buffer.dtype.builtin_id() {
+        Some(DTypeId::F64) => "embedding_forward_f64",
+        Some(DTypeId::F16) => "embedding_forward_f16",
+        Some(DTypeId::BF16) => "embedding_forward_bf16",
+        _ => "embedding_forward_f32",
+    };
+    let function = dispatcher.get_function("embedding", entry_point)?;
     let stream = weight.buffer.device.default_stream();
 
     let out_numel = out_shape.iter().product::<usize>();
-    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+    let byte_len = crate::bytes::byte_len(weight.buffer.dtype, out_numel, OperationKind::Storage)?;
     let mut out_buffer =
         CudaBuffer {
             len: out_numel,
-            dtype: DTypeId::F32.descriptor(),
+            dtype: weight.buffer.dtype,
             data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
                 Error::Msg(format!("CUDA embedding output allocation failed: {e:?}"))
             })?),
@@ -693,15 +699,22 @@ pub(crate) fn launch_embedding_backward(
     let device_id = grad_output.buffer.device_id;
     ensure_embedding_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("embedding", "embedding_backward")?;
+    let entry_point = match grad_output.buffer.dtype.builtin_id() {
+        Some(DTypeId::F64) => "embedding_backward_f64",
+        Some(DTypeId::F16) => "embedding_backward_f16",
+        Some(DTypeId::BF16) => "embedding_backward_bf16",
+        _ => "embedding_backward_f32",
+    };
+    let function = dispatcher.get_function("embedding", entry_point)?;
     let stream = grad_output.buffer.device.default_stream();
 
     let out_numel = vocab_size * hidden_size;
-    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+    let byte_len =
+        crate::bytes::byte_len(grad_output.buffer.dtype, out_numel, OperationKind::Storage)?;
     let mut out_buffer =
         CudaBuffer {
             len: out_numel,
-            dtype: DTypeId::F32.descriptor(),
+            dtype: grad_output.buffer.dtype,
             data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
                 Error::Msg(format!("CUDA embedding grad allocation failed: {e:?}"))
             })?),

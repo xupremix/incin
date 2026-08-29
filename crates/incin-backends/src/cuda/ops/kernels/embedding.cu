@@ -1,10 +1,17 @@
+#include <cuda_fp16.h>
+#include <cuda_bf16.h>
+
 typedef long long int64_t;
 typedef unsigned int uint32_t;
 
-extern "C" __global__ void embedding_forward(
+// ----------------------------------------------------------------------------
+// Template Forward Implementation
+// ----------------------------------------------------------------------------
+template <typename T>
+__device__ void embedding_forward_impl(
     const int64_t* __restrict__ indices,
-    const float* __restrict__ weight,
-    float* __restrict__ output,
+    const T* __restrict__ weight,
+    T* __restrict__ output,
     uint32_t* __restrict__ error_flag,
     const size_t num_indices,
     const size_t vocab_size,
@@ -19,21 +26,106 @@ extern "C" __global__ void embedding_forward(
         return;
     }
 
-    float* __restrict__ out_row = output + idx_idx * hidden_size;
-    const float* __restrict__ weight_row = weight + row_idx * hidden_size;
+    T* __restrict__ out_row = output + idx_idx * hidden_size;
+    const T* __restrict__ weight_row = weight + row_idx * hidden_size;
 
-    if (hidden_size % 4 == 0) {
-        const float4* w4 = reinterpret_cast<const float4*>(weight_row);
-        float4* o4 = reinterpret_cast<float4*>(out_row);
-        size_t h4 = hidden_size / 4;
-        for (size_t h = threadIdx.x; h < h4; h += blockDim.x) {
-            o4[h] = w4[h];
-        }
-    } else {
-        for (size_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
-            out_row[h] = weight_row[h];
-        }
+    for (size_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
+        out_row[h] = weight_row[h];
     }
+}
+
+// ----------------------------------------------------------------------------
+// Template Backward Implementation
+// ----------------------------------------------------------------------------
+template <typename T>
+__device__ void embedding_backward_impl(
+    const T* __restrict__ grad_output,
+    const int64_t* __restrict__ indices,
+    T* __restrict__ grad_weight,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    const size_t idx_idx = blockIdx.x;
+    if (idx_idx >= num_indices) return;
+
+    int64_t row_idx = indices[idx_idx];
+    if (row_idx < 0 || (size_t)row_idx >= vocab_size) {
+        atomicExch(error_flag, 1);
+        return;
+    }
+
+    const T* __restrict__ grad_out_row = grad_output + idx_idx * hidden_size;
+    T* __restrict__ grad_w_row = grad_weight + row_idx * hidden_size;
+
+    for (size_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
+        atomicAdd(&grad_w_row[h], grad_out_row[h]);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Exported C Entry Points
+// ----------------------------------------------------------------------------
+
+extern "C" __global__ void embedding_forward(
+    const int64_t* __restrict__ indices,
+    const float* __restrict__ weight,
+    float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_forward_impl<float>(indices, weight, output, error_flag, num_indices, vocab_size, hidden_size);
+}
+
+extern "C" __global__ void embedding_forward_f32(
+    const int64_t* __restrict__ indices,
+    const float* __restrict__ weight,
+    float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_forward_impl<float>(indices, weight, output, error_flag, num_indices, vocab_size, hidden_size);
+}
+
+extern "C" __global__ void embedding_forward_f64(
+    const int64_t* __restrict__ indices,
+    const double* __restrict__ weight,
+    double* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_forward_impl<double>(indices, weight, output, error_flag, num_indices, vocab_size, hidden_size);
+}
+
+extern "C" __global__ void embedding_forward_f16(
+    const int64_t* __restrict__ indices,
+    const __half* __restrict__ weight,
+    __half* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_forward_impl<__half>(indices, weight, output, error_flag, num_indices, vocab_size, hidden_size);
+}
+
+extern "C" __global__ void embedding_forward_bf16(
+    const int64_t* __restrict__ indices,
+    const __nv_bfloat16* __restrict__ weight,
+    __nv_bfloat16* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_forward_impl<__nv_bfloat16>(indices, weight, output, error_flag, num_indices, vocab_size, hidden_size);
 }
 
 extern "C" __global__ void embedding_backward(
@@ -45,31 +137,53 @@ extern "C" __global__ void embedding_backward(
     const size_t vocab_size,
     const size_t hidden_size)
 {
-    const size_t idx_idx = blockIdx.x;
-    if (idx_idx >= num_indices) return;
+    embedding_backward_impl<float>(grad_output, indices, grad_weight, error_flag, num_indices, vocab_size, hidden_size);
+}
 
-    int64_t row_idx = indices[idx_idx];
-    if (row_idx < 0 || (size_t)row_idx >= vocab_size) {
-        atomicExch(error_flag, 1);
-        return;
-    }
+extern "C" __global__ void embedding_backward_f32(
+    const float* __restrict__ grad_output,
+    const int64_t* __restrict__ indices,
+    float* __restrict__ grad_weight,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_backward_impl<float>(grad_output, indices, grad_weight, error_flag, num_indices, vocab_size, hidden_size);
+}
 
-    const float* __restrict__ grad_out_row = grad_output + idx_idx * hidden_size;
-    float* __restrict__ grad_w_row = grad_weight + row_idx * hidden_size;
+extern "C" __global__ void embedding_backward_f64(
+    const double* __restrict__ grad_output,
+    const int64_t* __restrict__ indices,
+    double* __restrict__ grad_weight,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_backward_impl<double>(grad_output, indices, grad_weight, error_flag, num_indices, vocab_size, hidden_size);
+}
 
-    if (hidden_size % 4 == 0) {
-        const float4* g4 = reinterpret_cast<const float4*>(grad_out_row);
-        size_t h4 = hidden_size / 4;
-        for (size_t h = threadIdx.x; h < h4; h += blockDim.x) {
-            float4 val = g4[h];
-            atomicAdd(&grad_w_row[h * 4 + 0], val.x);
-            atomicAdd(&grad_w_row[h * 4 + 1], val.y);
-            atomicAdd(&grad_w_row[h * 4 + 2], val.z);
-            atomicAdd(&grad_w_row[h * 4 + 3], val.w);
-        }
-    } else {
-        for (size_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
-            atomicAdd(&grad_w_row[h], grad_out_row[h]);
-        }
-    }
+extern "C" __global__ void embedding_backward_f16(
+    const __half* __restrict__ grad_output,
+    const int64_t* __restrict__ indices,
+    __half* __restrict__ grad_weight,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_backward_impl<__half>(grad_output, indices, grad_weight, error_flag, num_indices, vocab_size, hidden_size);
+}
+
+extern "C" __global__ void embedding_backward_bf16(
+    const __nv_bfloat16* __restrict__ grad_output,
+    const int64_t* __restrict__ indices,
+    __nv_bfloat16* __restrict__ grad_weight,
+    uint32_t* __restrict__ error_flag,
+    const size_t num_indices,
+    const size_t vocab_size,
+    const size_t hidden_size)
+{
+    embedding_backward_impl<__nv_bfloat16>(grad_output, indices, grad_weight, error_flag, num_indices, vocab_size, hidden_size);
 }
