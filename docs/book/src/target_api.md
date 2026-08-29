@@ -61,6 +61,93 @@ They panic on a dynamic-shape or backend failure, so use `try_add`, `try_sub`,
 boundaries. This applies to `+`, `-`, `*`, `/`, unary `-`, and tensor-scalar
 variants.
 
+## Runtime-known devices and dynamic targets
+
+When the compute device is chosen at runtime (for example, via a `--gpu` CLI argument,
+configuration file, or automatic hardware discovery), use `Dyn` with a runtime
+`DeviceId` or the `detect_device()` probe:
+
+```rust,no_run
+use incin::prelude::*;
+use incin_backends::detect::detect_device;
+use incin_backends::target::{Native, Target};
+use incin_core::tensor::device::DeviceId;
+
+// 1. Probe the machine for the best available device (CUDA -> Metal -> WGPU -> CPU)
+let device_id = detect_device().unwrap_or_else(DeviceId::cpu);
+
+// 2. Construct a Target value with the Native engine and the discovered DeviceId
+let target: Target<Native, Dyn> = Target::new((), device_id, ());
+
+// 3. Allocate tensors on the runtime target
+let activations = target.zeros([32, 128])?;
+# Ok::<(), incin::Error>(())
+```
+
+Partial compile-time device targets (`Cuda::new(gpu_idx)` or `Wgpu::new(adapter_idx)`)
+keep the backend family static while letting the physical device ordinal remain
+runtime-selected without runtime engine dispatch overhead.
+
+## Dynamic dtype rebinding
+
+When the element dtype is selected at runtime (e.g. parsed from an ONNX graph or SafeTensors
+metadata), rebind the target using `.dtype_dynamic(descriptor)`:
+
+```rust,no_run
+use incin::prelude::*;
+use incin_backends::target::{Native, Target};
+use incin_core::tensor::device::DeviceId;
+use incin_core::tensor::dtype::{DTypeId, DTypeDescriptor};
+
+let target: Target<Native, Dyn> = Target::new((), DeviceId::cpu(), ());
+
+// Dynamic descriptor parsed at runtime
+let f64_desc: DTypeDescriptor = DTypeId::F64.descriptor();
+let f64_target = target.dtype_dynamic(f64_desc)?;
+
+let tensor: Tensor<Dyn, _, Dyn, NoGrad> = f64_target.ones([4, 4])?;
+# Ok::<(), incin::Error>(())
+```
+
+Before allocating, `dtype_dynamic` validates that the physical device backend
+advertises hardware/kernel capability for the requested format.
+
+## Data ingestion and dtype preservation
+
+Data tensors take their element type directly from the host data and are never cast.
+For example, an `i64` array on an `f32` target produces an `i64` tensor:
+
+```rust,no_run
+use incin::prelude::*;
+
+// Integer labels retain their native i64 width:
+let labels = Cpu.tensor([0_i64, 1, 2])?;
+assert_eq!(labels.to_vec1::<i64>()?, vec![0, 1, 2]);
+
+// Dynamically sized vectors use tensor_from_vec:
+let values = vec![1.0_f32, 2.0, 3.0, 4.0];
+let tensor = Cpu.tensor_from_vec(values, [2, 2])?;
+# Ok::<(), incin::Error>(())
+```
+
+## Runtime precision policies (AMP)
+
+Precision policies can be configured dynamically to decouple the generated activation
+dtype from stored parameter weights:
+
+```rust,no_run
+use incin::prelude::*;
+use incin_backends::target::{Native, RuntimePrecisionPolicy, Target};
+use incin_core::tensor::device::DeviceId;
+
+let target: Target<Native, Dyn> = Target::new((), DeviceId::cpu(), ());
+
+// Mixed-precision policy (compute in BF16, parameters in FP32)
+let amp = RuntimePrecisionPolicy::mixed_bf16();
+let mixed_target = target.with_runtime_precision(amp);
+# Ok::<(), incin::Error>(())
+```
+
 ## Axis selectors
 
 Reductions accept one selector value for static axes, named axes, and runtime
