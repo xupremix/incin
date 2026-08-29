@@ -497,7 +497,7 @@ pub fn distributed_main(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Attributes a compute function with runtime hardware autotuning parameters.
 ///
 /// ## Examples
-/// ```rust,ignore
+/// ```text
 /// #[autotune(
 ///     key = "matmul_f32_tile",
 ///     params = [(32, 32), (64, 64), (128, 64)],

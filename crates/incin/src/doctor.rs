@@ -304,12 +304,6 @@ pub struct Report {
     pub probes: Vec<Probe>,
     /// Findings derived from the observations.
     pub findings: Vec<Finding>,
-    /// Result of the crates.io version check, when one was requested.
-    ///
-    /// `None` whenever `--check-updates` was not passed, which is the default.
-    /// The key is always serialized so the JSON key set does not depend on the
-    /// flags a run was given.
-    pub update: Option<String>,
 }
 
 /// One representative operation the report asks every available device about.
@@ -399,7 +393,6 @@ impl Report {
 
         Self {
             schema_version: SCHEMA_VERSION,
-            update: None,
             toolchain,
             features,
             cpu_isa,
@@ -437,6 +430,10 @@ impl Report {
     /// format is the part sec. 2.3 asks to be stable.
     #[must_use]
     pub fn to_text(&self) -> String {
+        self.to_text_with_update(None)
+    }
+
+    fn to_text_with_update(&self, update: Option<&str>) -> String {
         let mut out = String::new();
 
         out.push_str("[toolchain]\n");
@@ -527,7 +524,7 @@ impl Report {
             );
         }
 
-        if let Some(update) = &self.update {
+        if let Some(update) = update {
             out.push_str("\n[update]\n");
             let _ = writeln!(out, "{update}");
         }
@@ -559,7 +556,21 @@ impl Report {
     /// Only if the report cannot be serialized, which cannot happen for the
     /// types above; the signature keeps the `unwrap` out of the library.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
+        self.to_json_with_update(None)
+    }
+
+    fn to_json_with_update(&self, update: Option<&str>) -> Result<String, serde_json::Error> {
+        let mut value = serde_json::to_value(self)?;
+        let object = value
+            .as_object_mut()
+            .expect("serializing Report produces a JSON object");
+        object.insert(
+            "update".to_string(),
+            update.map_or(serde_json::Value::Null, |status| {
+                serde_json::Value::String(status.to_string())
+            }),
+        );
+        serde_json::to_string_pretty(&value)
     }
 }
 
@@ -908,16 +919,13 @@ pub fn run(args: &[String]) -> (String, i32) {
         }
     }
 
-    let mut report = Report::gather(&HostMachine);
+    let report = Report::gather(&HostMachine);
     // Only on an explicit request. Everything else the doctor reports is read
     // from this machine; this is the one line that would leave it, so it stays
     // behind a flag a person had to type.
-    if check_updates {
-        report.update = Some(crate::update::check().to_string());
-    }
-    let report = report;
+    let update = check_updates.then(|| crate::update::check().to_string());
     let rendered = if json {
-        match report.to_json() {
+        match report.to_json_with_update(update.as_deref()) {
             Ok(text) => format!("{text}\n"),
             Err(error) => {
                 return (
@@ -927,7 +935,7 @@ pub fn run(args: &[String]) -> (String, i32) {
             }
         }
     } else {
-        report.to_text()
+        report.to_text_with_update(update.as_deref())
     };
     (rendered, report.exit_code())
 }

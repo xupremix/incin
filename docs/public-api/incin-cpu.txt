@@ -83,7 +83,6 @@ pub incin::doctor::Report::findings: alloc::vec::Vec<incin::doctor::Finding>
 pub incin::doctor::Report::probes: alloc::vec::Vec<incin::doctor::Probe>
 pub incin::doctor::Report::schema_version: u32
 pub incin::doctor::Report::toolchain: incin::doctor::Toolchain
-pub incin::doctor::Report::update: core::option::Option<alloc::string::String>
 pub incin::doctor::Severity::Error
 pub incin::doctor::Severity::Note
 pub incin::doctor::Severity::Warning
@@ -252,6 +251,7 @@ pub use incin::data::Downloader
 pub use incin::data::MnistBatchTarget
 pub use incin::data::vision
 pub use incin::dim
+pub use incin::experimental::autotune
 pub use incin::experimental::import_model
 pub use incin::experimental::model
 pub use incin::f16

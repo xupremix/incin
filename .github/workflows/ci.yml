@@ -502,7 +502,12 @@ jobs:
           exit 0
         fi
         echo "baseline: $BASELINE"
-        cargo semver-checks --baseline-rev "$BASELINE"
+        # The `incin` facade is the versioned consumer contract. Workspace
+        # implementation crates deliberately expose backend machinery to one
+        # another and are covered by the reviewed API snapshots and feature
+        # matrix instead; treating all of their incidental `pub` items as one
+        # release surface makes harmless internal refactors fail this gate.
+        cargo semver-checks -p incin --baseline-rev "$BASELINE"
 
   # Every other backend job above enables `cpu` alongside the backend it is
   # named for, so none of them can see an accelerator reaching into the CPU

@@ -515,3 +515,16 @@ enables = ["std", "cpu", "incin-backends/test-utils"]
 [[feature_crate.feature]]
 name = "data-hub"
 enables = ["std", "incin-data/hub"]
+
+[[feature_crate]]
+package = "backends"
+manifest = "crates/incin/examples/backends/Cargo.toml"
+default = []
+
+[[feature_crate.feature]]
+name = "cuda"
+enables = ["incin/cuda"]
+
+[[feature_crate.feature]]
+name = "wgpu"
+enables = ["incin/wgpu"]
