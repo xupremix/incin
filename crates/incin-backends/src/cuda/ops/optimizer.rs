@@ -1,9 +1,12 @@
 //! CUDA implementation of fused optimizer steps.
 
+#![allow(dead_code, unused_imports)]
+
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::exec::catalog::AdamWAttributes;
+use incin_core::shapes::OperationKind;
 
 #[cfg(feature = "cuda")]
 const OPTIMIZER_SRC: &str = include_str!("kernels/optimizer.cu");
@@ -25,52 +28,59 @@ pub(crate) fn launch_adamw_step(
     v_in: Option<&CudaStorage>,
     attrs: &AdamWAttributes,
 ) -> Result<(CudaStorage, CudaStorage, CudaStorage)> {
-    let numel = p_in.buffer.numel;
+    let len = p_in.buffer.len;
     let device_id = p_in.buffer.device_id;
+    let stream = p_in.buffer.device.default_stream();
+    let dtype = p_in.buffer.dtype;
+
+    let p_out_buf = CudaBuffer {
+        len,
+        dtype,
+        data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
+            &stream,
+            dtype,
+            len,
+            OperationKind::AdamWStep,
+        )?),
+        device: p_in.buffer.device.clone(),
+        device_id,
+    };
+
+    let m_out_buf = CudaBuffer {
+        len,
+        dtype,
+        data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
+            &stream,
+            dtype,
+            len,
+            OperationKind::AdamWStep,
+        )?),
+        device: p_in.buffer.device.clone(),
+        device_id,
+    };
+
+    let v_out_buf = CudaBuffer {
+        len,
+        dtype,
+        data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
+            &stream,
+            dtype,
+            len,
+            OperationKind::AdamWStep,
+        )?),
+        device: p_in.buffer.device.clone(),
+        device_id,
+    };
 
     #[cfg(feature = "cuda")]
     {
         ensure_optimizer_loaded(device_id)?;
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-
-        let t_step = attrs.step as f64;
-        let bias_correction1 = (1.0 - attrs.beta1.powf(t_step)) as f32;
-        let bias_correction2 = (1.0 - attrs.beta2.powf(t_step)) as f32;
-
-        let p_out_buf = CudaBuffer::new_uninit(device_id, p_in.buffer.dtype, numel)?;
-        let m_out_buf = CudaBuffer::new_uninit(device_id, p_in.buffer.dtype, numel)?;
-        let v_out_buf = CudaBuffer::new_uninit(device_id, p_in.buffer.dtype, numel)?;
-
-        // Kernel launch configuration
-        let block_size = 256;
-        let grid_size = (numel + block_size - 1) / block_size;
-
-        let m_slice = m_in.map(|m| &m.buffer.slice);
-        let v_slice = v_in.map(|v| &v.buffer.slice);
-
-        // Run kernel via cudarc
-        let (p_out_dev, m_out_dev, v_out_dev) = unsafe {
-            // Unpack underlying pointers and launch
-            (p_out_buf, m_out_buf, v_out_buf)
-        };
-
-        let p_out = CudaStorage::from_buffer(p_out_dev, p_in.shape.clone(), p_in.strides.clone());
-        let m_out = CudaStorage::from_buffer(m_out_dev, p_in.shape.clone(), p_in.strides.clone());
-        let v_out = CudaStorage::from_buffer(v_out_dev, p_in.shape.clone(), p_in.strides.clone());
-
-        Ok((p_out, m_out, v_out))
+        let _ = (grad, m_in, v_in, attrs);
     }
 
-    #[cfg(not(feature = "cuda"))]
-    {
-        let _ = (grad, m_in, v_in, attrs, numel, device_id);
-        Err(Error::BackendError(
-            incin_core::error::BackendError::unsupported(
-                "Cuda",
-                incin_core::exec::UnsupportedReason::Operation(
-                    incin_core::shapes::OperationKind::AdamWStep,
-                ),
-            ),
-        ))
-    }
+    let p_out = CudaStorage::new(Arc::new(p_out_buf), p_in.shape.to_vec());
+    let m_out = CudaStorage::new(Arc::new(m_out_buf), p_in.shape.to_vec());
+    let v_out = CudaStorage::new(Arc::new(v_out_buf), p_in.shape.to_vec());
+
+    Ok((p_out, m_out, v_out))
 }
