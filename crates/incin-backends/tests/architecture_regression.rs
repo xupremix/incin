@@ -1,5 +1,6 @@
-#![cfg(feature = "cpu")]
 //! Architecture regression tests enforcing concrete backend dtype decoupling.
+
+#![cfg(feature = "cpu")]
 
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::dispatch::DispatchBackend;

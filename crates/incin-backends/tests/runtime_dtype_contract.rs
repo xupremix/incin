@@ -1,7 +1,8 @@
-#![cfg(feature = "cpu")]
 //! Acceptance test suite for Runtime DType Abstraction (Backend contracts).
 //! Tests built-in backend rejection of unsupported custom dtypes, public tensor dtype contract,
 //! target dtype extensibility, and runtime dtype view.
+
+#![cfg(feature = "cpu")]
 
 use core::marker::PhantomData;
 use incin_backends::cpu::{Cpu, CpuBackendImpl};
