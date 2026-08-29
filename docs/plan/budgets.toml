@@ -465,6 +465,10 @@ enables = ["metal", "incin-backends/metal-mps"]
 
 
 [[feature_crate.feature]]
+name = "update-check"
+enables = ["std", "dep:ureq"]
+
+[[feature_crate.feature]]
 name = "external-candle"
 enables = ["std", "incin-backends/external-candle"]
 

@@ -1,9 +1,1815 @@
 [
   {
-    "site": "crates/incin/src/bin/cargo-incin.rs:699",
+    "site": "crates/incin/src/bin/cargo-incin.rs:695",
     "code": "let stdout = child.stdout.take().expect(\"Failed to open child stdout\");",
     "disposition": "declared process boundary",
     "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:90",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:91",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:92",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:93",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:94",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:96",
+    "code": "write!(out, \"__global__ void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:97",
+    "code": "write!(out, \"const {ty}* __restrict__ matmul_out, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:99",
+    "code": "write!(out, \"const {ty}* __restrict__ bias, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:102",
+    "code": "write!(out, \"const {ty}* __restrict__ residual, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:104",
+    "code": "write!(out, \"{ty}* __restrict__ final_out, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:106",
+    "code": "write!(out, \"const int cols, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:108",
+    "code": "writeln!(out, \"const int numel) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:114",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:115",
+    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:116",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:123",
+    "code": "writeln!(out, \"    {ty} acc = matmul_out[idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:125",
+    "code": "writeln!(out, \"    const {ty} b = bias[{col_expr}];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:126",
+    "code": "writeln!(out, \"    acc = acc + b;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:129",
+    "code": "writeln!(out, \"    acc = acc + residual[idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:137",
+    "code": "writeln!(out, \"    acc = fmaxf(0.0f, acc);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:144",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:147",
+    "code": "writeln!(out, \"    acc = acc / (1.0f + expf(-acc));\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:151",
+    "code": "writeln!(out, \"    final_out[idx] = acc;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:152",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:166",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:167",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:174",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:182",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:191",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:199",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:203",
+    "code": "writeln!(out, \"@group(0) @binding({binding}) var<uniform> cols: u32;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:206",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:212",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:217",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:218",
+    "code": "writeln!(out, \"    let idx = global_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:219",
+    "code": "writeln!(out, \"    if (idx >= arrayLength(&final_out)) {{ return; }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:220",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:227",
+    "code": "writeln!(out, \"    var acc = matmul_out[idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:229",
+    "code": "writeln!(out, \"    let b = bias[{col_expr}];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:230",
+    "code": "writeln!(out, \"    acc = acc + b;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:233",
+    "code": "writeln!(out, \"    acc = acc + residual[idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:241",
+    "code": "writeln!(out, \"    acc = max(0.0, acc);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:248",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:251",
+    "code": "writeln!(out, \"    acc = acc / (1.0 + exp(-acc));\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:255",
+    "code": "writeln!(out, \"    final_out[idx] = acc;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:256",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:270",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:271",
+    "code": "writeln!(out, \"#include <metal_stdlib>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:272",
+    "code": "writeln!(out, \"using namespace metal;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:273",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:276",
+    "code": "write!(out, \"kernel void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:277",
+    "code": "write!(out, \"device const {ty}* matmul_out [[buffer({buf_idx})]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:281",
+    "code": "write!(out, \"device const {ty}* bias [[buffer({buf_idx})]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:286",
+    "code": "write!(out, \"device const {ty}* residual [[buffer({buf_idx})]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:290",
+    "code": "write!(out, \"device {ty}* final_out [[buffer({buf_idx})]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:294",
+    "code": "write!(out, \"constant uint& cols [[buffer({buf_idx})]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:298",
+    "code": "write!(out, \"constant uint& numel [[buffer({buf_idx})]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:299",
+    "code": "writeln!(out, \"uint idx [[thread_position_in_grid]]) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:301",
+    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:302",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:309",
+    "code": "writeln!(out, \"    {ty} acc = matmul_out[idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:311",
+    "code": "writeln!(out, \"    const {ty} b = bias[{col_expr}];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:312",
+    "code": "writeln!(out, \"    acc = acc + b;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:315",
+    "code": "writeln!(out, \"    acc = acc + residual[idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:323",
+    "code": "writeln!(out, \"    acc = max(0.0f, acc);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:330",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:333",
+    "code": "writeln!(out, \"    acc = acc / (1.0f + exp(-acc));\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:337",
+    "code": "writeln!(out, \"    final_out[idx] = acc;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/fused_epilogue.rs:338",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:101",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:102",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:103",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:104",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:105",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:107",
+    "code": "write!(out, \"__global__ void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:108",
+    "code": "write!(out, \"const {ty}* __restrict__ a, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:109",
+    "code": "write!(out, \"const {ty}* __restrict__ b, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:110",
+    "code": "write!(out, \"{ty}* __restrict__ c, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:111",
+    "code": "write!(out, \"const int m, const int k, const int n) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:112",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:114",
+    "code": "writeln!(out, \"    const int bx = blockIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:115",
+    "code": "writeln!(out, \"    const int by = blockIdx.y;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:116",
+    "code": "writeln!(out, \"    const int tid = threadIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:117",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:125",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:132",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:133",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:135",
+    "code": "writeln!(out, \"    __shared__ float s_a[{}][{}];\", bm, bk + 1).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:136",
+    "code": "writeln!(out, \"    __shared__ float s_b[{}][{}];\", bk, bn + 1).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:137",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:139",
+    "code": "writeln!(out, \"    float r_c[{}][{}] = {{0.0f}};\", tm, tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:140",
+    "code": "writeln!(out, \"    float r_a[{}];\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:141",
+    "code": "writeln!(out, \"    float r_b[{}];\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:142",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:149",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:157",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:163",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:164",
+    "code": "writeln!(out, \"            int a_col = bk_idx + (load_idx % {});\", bk).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:165",
+    "code": "writeln!(out, \"            s_a[load_idx / {}][load_idx % {}] = (a_row < m && a_col < k) ? static_cast<float>(a[a_row * k + a_col]) : 0.0f;\", bk, bk).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:166",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:174",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:175",
+    "code": "writeln!(out, \"            int b_row = bk_idx + (load_idx / {});\", bn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:181",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:182",
+    "code": "writeln!(out, \"            s_b[load_idx / {}][load_idx % {}] = (b_row < k && b_col < n) ? static_cast<float>(b[b_row * n + b_col]) : 0.0f;\", bn, bn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:183",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:184",
+    "code": "writeln!(out, \"        __syncthreads();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:185",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:188",
+    "code": "writeln!(out, \"        #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:194",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:195",
+    "code": "writeln!(out, \"            #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:201",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:202",
+    "code": "writeln!(out, \"            #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:208",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:209",
+    "code": "writeln!(out, \"            #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:210",
+    "code": "writeln!(out, \"            for (int i = 0; i < {}; ++i) {{\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:211",
+    "code": "writeln!(out, \"                #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:212",
+    "code": "writeln!(out, \"                for (int j = 0; j < {}; ++j) {{\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:217",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:218",
+    "code": "writeln!(out, \"                }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:219",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:220",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:221",
+    "code": "writeln!(out, \"        __syncthreads();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:222",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:223",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:226",
+    "code": "writeln!(out, \"    #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:227",
+    "code": "writeln!(out, \"    for (int i = 0; i < {}; ++i) {{\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:228",
+    "code": "writeln!(out, \"        int out_r = by * {} + thread_row + i;\", bm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:229",
+    "code": "writeln!(out, \"        if (out_r < m) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:230",
+    "code": "writeln!(out, \"            #pragma unroll\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:231",
+    "code": "writeln!(out, \"            for (int j = 0; j < {}; ++j) {{\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:237",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:238",
+    "code": "writeln!(out, \"                if (out_c < n) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:243",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:244",
+    "code": "writeln!(out, \"                }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:245",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:246",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:247",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:248",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:269",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:270",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:275",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:280",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:285",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:286",
+    "code": "writeln!(out, \"struct GemmUniforms {{ m: u32, k: u32, n: u32 }};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:291",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:292",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:299",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:305",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:306",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:308",
+    "code": "writeln!(out, \"@compute @workgroup_size({}, 1, 1)\", block_threads).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:309",
+    "code": "writeln!(out, \"fn main(@builtin(local_invocation_id) local_id: vec3<u32>, @builtin(workgroup_id) group_id: vec3<u32>) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:310",
+    "code": "writeln!(out, \"    let bx = group_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:311",
+    "code": "writeln!(out, \"    let by = group_id.y;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:312",
+    "code": "writeln!(out, \"    let tid = local_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:313",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:315",
+    "code": "writeln!(out, \"    let thread_row = (tid / {}u) * {}u;\", bn / tn, tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:316",
+    "code": "writeln!(out, \"    let thread_col = (tid % {}u) * {}u;\", bn / tn, tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:317",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:319",
+    "code": "writeln!(out, \"    var r_c: array<array<f32, {}>, {}>;\", tn, tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:320",
+    "code": "writeln!(out, \"    var r_a: array<f32, {}>;\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:321",
+    "code": "writeln!(out, \"    var r_b: array<f32, {}>;\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:322",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:324",
+    "code": "writeln!(out, \"    var bk_idx = 0u;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:325",
+    "code": "writeln!(out, \"    while (bk_idx < dims.k) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:326",
+    "code": "writeln!(out, \"        var load_idx = tid;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:327",
+    "code": "writeln!(out, \"        while (load_idx < {}u) {{\", bm * bk).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:333",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:339",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:340",
+    "code": "writeln!(out, \"            if (a_row < dims.m && a_col < dims.k) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:346",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:347",
+    "code": "writeln!(out, \"            }} else {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:353",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:354",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:355",
+    "code": "writeln!(out, \"            load_idx += {}u;\", block_threads).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:356",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:357",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:359",
+    "code": "writeln!(out, \"        load_idx = tid;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:360",
+    "code": "writeln!(out, \"        while (load_idx < {}u) {{\", bk * bn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:366",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:372",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:373",
+    "code": "writeln!(out, \"            if (b_row < dims.k && b_col < dims.n) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:379",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:380",
+    "code": "writeln!(out, \"            }} else {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:386",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:387",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:388",
+    "code": "writeln!(out, \"            load_idx += {}u;\", block_threads).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:389",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:390",
+    "code": "writeln!(out, \"        workgroupBarrier();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:391",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:398",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:404",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:410",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:411",
+    "code": "writeln!(out, \"            for (var i = 0u; i < {}u; i++) {{\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:412",
+    "code": "writeln!(out, \"                for (var j = 0u; j < {}u; j++) {{\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:417",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:418",
+    "code": "writeln!(out, \"                }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:419",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:420",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:421",
+    "code": "writeln!(out, \"        workgroupBarrier();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:422",
+    "code": "writeln!(out, \"        bk_idx += {}u;\", bk).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:423",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:424",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:426",
+    "code": "writeln!(out, \"    for (var i = 0u; i < {}u; i++) {{\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:427",
+    "code": "writeln!(out, \"        let out_r = by * {}u + thread_row + i;\", bm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:428",
+    "code": "writeln!(out, \"        if (out_r < dims.m) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:429",
+    "code": "writeln!(out, \"            for (var j = 0u; j < {}u; j++) {{\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:435",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:436",
+    "code": "writeln!(out, \"                if (out_c < dims.n) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:441",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:442",
+    "code": "writeln!(out, \"                }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:443",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:444",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:445",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:446",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:467",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:468",
+    "code": "writeln!(out, \"#include <metal_stdlib>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:469",
+    "code": "writeln!(out, \"using namespace metal;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:470",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:472",
+    "code": "write!(out, \"kernel void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:473",
+    "code": "write!(out, \"device const {ty}* a [[buffer(0)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:474",
+    "code": "write!(out, \"device const {ty}* b [[buffer(1)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:475",
+    "code": "write!(out, \"device {ty}* c [[buffer(2)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:476",
+    "code": "write!(out, \"constant uint& m [[buffer(3)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:477",
+    "code": "write!(out, \"constant uint& k [[buffer(4)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:478",
+    "code": "write!(out, \"constant uint& n [[buffer(5)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:479",
+    "code": "writeln!(out, \"uint2 group_id [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]]) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:481",
+    "code": "writeln!(out, \"    uint bx = group_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:482",
+    "code": "writeln!(out, \"    uint by = group_id.y;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:483",
+    "code": "writeln!(out, \"    uint thread_row = (tid / {}u) * {}u;\", bn / tn, tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:484",
+    "code": "writeln!(out, \"    uint thread_col = (tid % {}u) * {}u;\", bn / tn, tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:485",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:487",
+    "code": "writeln!(out, \"    threadgroup float s_a[{}][{}];\", bm, bk).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:488",
+    "code": "writeln!(out, \"    threadgroup float s_b[{}][{}];\", bk, bn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:489",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:491",
+    "code": "writeln!(out, \"    float r_c[{}][{}] = {{0.0f}};\", tm, tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:492",
+    "code": "writeln!(out, \"    float r_a[{}];\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:493",
+    "code": "writeln!(out, \"    float r_b[{}];\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:494",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:501",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:508",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:514",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:520",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:521",
+    "code": "writeln!(out, \"            s_a[load_idx / {}][load_idx % {}] = (a_row < m && a_col < k) ? float(a[a_row * k + a_col]) : 0.0f;\", bk, bk).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:522",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:529",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:535",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:541",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:542",
+    "code": "writeln!(out, \"            s_b[load_idx / {}][load_idx % {}] = (b_row < k && b_col < n) ? float(b[b_row * n + b_col]) : 0.0f;\", bn, bn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:543",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:548",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:549",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:556",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:562",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:568",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:569",
+    "code": "writeln!(out, \"            for (uint i = 0; i < {}; ++i) {{\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:570",
+    "code": "writeln!(out, \"                for (uint j = 0; j < {}; ++j) {{\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:575",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:576",
+    "code": "writeln!(out, \"                }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:577",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:578",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:583",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:584",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:585",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:587",
+    "code": "writeln!(out, \"    for (uint i = 0; i < {}; ++i) {{\", tm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:588",
+    "code": "writeln!(out, \"        uint out_r = by * {} + thread_row + i;\", bm).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:589",
+    "code": "writeln!(out, \"        if (out_r < m) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:590",
+    "code": "writeln!(out, \"            for (uint j = 0; j < {}; ++j) {{\", tn).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:596",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:597",
+    "code": "writeln!(out, \"                if (out_c < n) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:602",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:603",
+    "code": "writeln!(out, \"                }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:604",
+    "code": "writeln!(out, \"            }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:605",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:606",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/gemm.rs:607",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:821",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:822",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:823",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:824",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:826",
+    "code": "write!(out, \"extern \\\"C\\\" __global__ void {}_forward(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:828",
+    "code": "write!(out, \"const {scalar_ty}* __restrict__ in{i}, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:830",
+    "code": "writeln!(out, \"{scalar_ty}* __restrict__ out, const int numel) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:835",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:836",
+    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:842",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:843",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:866",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:867",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:868",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:869",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:870",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:877",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:878",
+    "code": "write!(out, \"const {scalar_ty}* __restrict__ grad_out, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:880",
+    "code": "write!(out, \"const {scalar_ty}* __restrict__ in{i}, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:886",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:891",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:892",
+    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:897",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:903",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:908",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:909",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
   },
   {
     "site": "crates/incin-backends/src/codegen/pointwise.rs:163",
@@ -228,6 +2034,1224 @@
     "evidence": "codegen unit tests"
   },
   {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:108",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:109",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:110",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:111",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:112",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:116",
+    "code": "write!(out, \"__global__ void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:117",
+    "code": "write!(out, \"const {scalar_ty}* __restrict__ input, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:118",
+    "code": "write!(out, \"{scalar_ty}* __restrict__ output, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:120",
+    "code": "write!(out, \"const int reduction_size, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:122",
+    "code": "writeln!(out, \"const int num_rows) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:124",
+    "code": "writeln!(out, \"    const int row = blockIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:125",
+    "code": "writeln!(out, \"    if (row >= num_rows) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:126",
+    "code": "writeln!(out, \"    const int tid = threadIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:127",
+    "code": "writeln!(out, \"    const int lane = tid & 31;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:128",
+    "code": "writeln!(out, \"    const int warp = tid >> 5;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:129",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:148",
+    "code": "writeln!(out, \"    const int row_start = row * {size_expr};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:149",
+    "code": "writeln!(out, \"    float local_acc = {init_val};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:154",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:159",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:163",
+    "code": "writeln!(out, \"        local_acc += val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:166",
+    "code": "writeln!(out, \"        local_acc += val * val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:169",
+    "code": "writeln!(out, \"        local_acc *= val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:172",
+    "code": "writeln!(out, \"        if (val > local_acc) local_acc = val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:175",
+    "code": "writeln!(out, \"        if (val < local_acc) local_acc = val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:178",
+    "code": "writeln!(out, \"        local_acc += val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:181",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:182",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:185",
+    "code": "writeln!(out, \"    unsigned int active = __activemask();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:186",
+    "code": "writeln!(out, \"    for (int delta = 16; delta > 0; delta >>= 1) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:193",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:200",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:207",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:208",
+    "code": "writeln!(out, \"        if (other > local_acc) local_acc = other;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:215",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:216",
+    "code": "writeln!(out, \"        if (other < local_acc) local_acc = other;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:223",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:226",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:227",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:230",
+    "code": "writeln!(out, \"    extern __shared__ unsigned char shared_raw[];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:235",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:236",
+    "code": "writeln!(out, \"    const int warp_count = (blockDim.x + 31) >> 5;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:237",
+    "code": "writeln!(out, \"    if (lane == 0) shared_acc[warp] = local_acc;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:238",
+    "code": "writeln!(out, \"    __syncthreads();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:239",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:241",
+    "code": "writeln!(out, \"    if (warp == 0) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:246",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:247",
+    "code": "writeln!(out, \"        active = __activemask();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:252",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:259",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:266",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:273",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:275",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:282",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:284",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:291",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:294",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:295",
+    "code": "writeln!(out, \"        if (lane == 0) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:298",
+    "code": "writeln!(out, \"            output[row] = static_cast<{scalar_ty}>(local_acc / static_cast<float>({size_expr}));\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:305",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:312",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:315",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:316",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:317",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:320",
+    "code": "write!(out, \"__global__ void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:321",
+    "code": "write!(out, \"const {scalar_ty}* __restrict__ input, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:322",
+    "code": "write!(out, \"{scalar_ty}* __restrict__ output, \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:323",
+    "code": "writeln!(out, \"const int numel) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:324",
+    "code": "writeln!(out, \"    const int tid = threadIdx.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:325",
+    "code": "writeln!(out, \"    const int idx = blockIdx.x * blockDim.x + tid;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:330",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:331",
+    "code": "writeln!(out, \"    unsigned int active = __activemask();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:332",
+    "code": "writeln!(out, \"    for (int delta = 16; delta > 0; delta >>= 1) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:333",
+    "code": "writeln!(out, \"        val += __shfl_down_sync(active, val, delta);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:334",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:339",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:340",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:357",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:358",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:363",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:368",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:374",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:376",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:383",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:389",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:390",
+    "code": "writeln!(out, \"fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>, @builtin(workgroup_id) group_id: vec3<u32>) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:397",
+    "code": "writeln!(out, \"    let row = group_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:398",
+    "code": "writeln!(out, \"    let tid = local_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:399",
+    "code": "writeln!(out, \"    let row_start = row * {size_expr};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:400",
+    "code": "writeln!(out, \"    var local_val: f32 = 0.0;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:401",
+    "code": "writeln!(out, \"    var i = tid;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:402",
+    "code": "writeln!(out, \"    while (i < {size_expr}) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:405",
+    "code": "writeln!(out, \"        let v = f32(input[row_start + i]);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:406",
+    "code": "writeln!(out, \"        local_val += v * v;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:409",
+    "code": "writeln!(out, \"        local_val += f32(input[row_start + i]);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:412",
+    "code": "writeln!(out, \"        i += {}u;\", self.work_group_size).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:413",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:414",
+    "code": "writeln!(out, \"    s_acc[tid] = local_val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:415",
+    "code": "writeln!(out, \"    workgroupBarrier();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:416",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:418",
+    "code": "writeln!(out, \"    var stride: u32 = {}u / 2u;\", self.work_group_size).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:419",
+    "code": "writeln!(out, \"    while (stride > 0u) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:420",
+    "code": "writeln!(out, \"        if (tid < stride) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:421",
+    "code": "writeln!(out, \"            s_acc[tid] += s_acc[tid + stride];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:422",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:423",
+    "code": "writeln!(out, \"        workgroupBarrier();\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:424",
+    "code": "writeln!(out, \"        stride /= 2u;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:425",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:426",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:428",
+    "code": "writeln!(out, \"    if (tid == 0u) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:435",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:438",
+    "code": "writeln!(out, \"        output[row] = {ty}(sqrt(s_acc[0]));\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:441",
+    "code": "writeln!(out, \"        output[row] = {ty}(s_acc[0]);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:444",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:445",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:460",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:461",
+    "code": "writeln!(out, \"#include <metal_stdlib>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:462",
+    "code": "writeln!(out, \"using namespace metal;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:463",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:465",
+    "code": "write!(out, \"kernel void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:466",
+    "code": "write!(out, \"device const {ty}* input [[buffer(0)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:467",
+    "code": "write!(out, \"device {ty}* output [[buffer(1)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:469",
+    "code": "write!(out, \"constant uint& reduction_size [[buffer(2)]], \").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:471",
+    "code": "writeln!(out, \"uint row [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]], uint simd_lane [[thread_index_in_simdgroup]], uint simd_id [[simdgroup_index_in_threadgroup]]) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:478",
+    "code": "writeln!(out, \"    uint row_start = row * {size_expr};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:479",
+    "code": "writeln!(out, \"    float local_val = 0.0f;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:480",
+    "code": "writeln!(out, \"    for (uint i = tid; i < {size_expr}; i += 256) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:483",
+    "code": "writeln!(out, \"        float v = float(input[row_start + i]);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:484",
+    "code": "writeln!(out, \"        local_val += v * v;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:487",
+    "code": "writeln!(out, \"        local_val += float(input[row_start + i]);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:490",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:491",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:493",
+    "code": "writeln!(out, \"    local_val = simd_sum(local_val);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:494",
+    "code": "writeln!(out, \"    threadgroup float s_acc[8];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:495",
+    "code": "writeln!(out, \"    if (simd_lane == 0) s_acc[simd_id] = local_val;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:496",
+    "code": "writeln!(out, \"    threadgroup_barrier(mem_flags::mem_threadgroup);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:497",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:499",
+    "code": "writeln!(out, \"    if (simd_id == 0) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:504",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:505",
+    "code": "writeln!(out, \"        val = simd_sum(val);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:506",
+    "code": "writeln!(out, \"        if (simd_lane == 0) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:513",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:516",
+    "code": "writeln!(out, \"            output[row] = {ty}(sqrt(val));\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:519",
+    "code": "writeln!(out, \"            output[row] = {ty}(val);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:522",
+    "code": "writeln!(out, \"        }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:523",
+    "code": "writeln!(out, \"    }}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/reduction.rs:524",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:110",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:111",
+    "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:112",
+    "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:113",
+    "code": "writeln!(out, \"#include <math.h>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:114",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:116",
+    "code": "write!(out, \"__global__ void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:119",
+    "code": "write!(out, \"const {}* __restrict__ in{}, \", in_vec, i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:121",
+    "code": "write!(out, \"{}* __restrict__ out_data, \", vec_type).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:122",
+    "code": "writeln!(out, \"const int num_vectors) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:128",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:129",
+    "code": "writeln!(out, \"    if (vec_idx >= num_vectors) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:130",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:135",
+    "code": "writeln!(out, \"    const {in_vec} in{i}_val = in{i}[vec_idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:137",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:148",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:155",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:157",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:162",
+    "code": "writeln!(out, \"    out_data[vec_idx] = res_lane0;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:169",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:176",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:180",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:195",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:196",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:205",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:213",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:214",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:221",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:226",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:227",
+    "code": "writeln!(out, \"    let vec_idx = global_id.x;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:232",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:233",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:236",
+    "code": "writeln!(out, \"    let in{i}_val = in{i}[vec_idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:242",
+    "code": "writeln!(out, \"    let val{i}_lane{lane} = {comp};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:245",
+    "code": "writeln!(out, \"    let res_lane{lane} = {lane_expr};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:250",
+    "code": "writeln!(out, \"    out_data[vec_idx] = res_lane0;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:253",
+    "code": "writeln!(out, \"    out_data[vec_idx] = vec2(res_lane0, res_lane1);\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:260",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:264",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:280",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:281",
+    "code": "writeln!(out, \"#include <metal_stdlib>\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:282",
+    "code": "writeln!(out, \"using namespace metal;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:283",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:285",
+    "code": "write!(out, \"kernel void {}(\", self.name).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:288",
+    "code": "write!(out, \"device const {}* in{} [[buffer({})]], \", in_vec, i, i).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:296",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:302",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:303",
+    "code": "writeln!(out, \"uint vec_idx [[thread_position_in_grid]]) {{\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:305",
+    "code": "writeln!(out, \"    if (vec_idx >= num_vectors) return;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:306",
+    "code": "writeln!(out).unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:310",
+    "code": "writeln!(out, \"    const {in_vec} in{i}_val = in{i}[vec_idx];\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:317",
+    "code": "writeln!(out, \"    const {scalar_in} val{i}_lane{lane} = {comp};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:320",
+    "code": "writeln!(out, \"    const {scalar_type} res_lane{lane} = {lane_expr};\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:325",
+    "code": "writeln!(out, \"    out_data[vec_idx] = res_lane0;\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:332",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:339",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/vectorized.rs:343",
+    "code": "writeln!(out, \"}}\").unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
     "site": "crates/incin-backends/src/conformance/mod.rs:362",
     "code": ".expect(\"the operation was drawn from these observations\");",
     "disposition": "statically proven internal transition",
@@ -336,6 +3360,12 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
+    "site": "crates/incin-backends/src/cuda/executor.rs:1836",
+    "code": "batch_cols.into_iter().next().unwrap()",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
     "site": "crates/incin-backends/src/cuda/ops/conv.rs:159",
     "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
     "disposition": "validated backend transition",
@@ -396,133 +3426,169 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:149",
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:151",
     "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:151",
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:153",
     "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:152",
-    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
     "site": "crates/incin-backends/src/cuda/ops/pool.rs:154",
-    "code": "Arc::get_mut(&mut idx_b.data).expect(\"idx_b freshly allocated, uniquely owned\");",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:155",
-    "code": "let mut idx_u32 = idx_u8.transmute_mut::<u32>(out_total).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:219",
-    "code": "let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:221",
-    "code": "let idx_u32 = idx_buf.data.transmute::<u32>(idx_buf.len).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:223",
-    "code": "Arc::get_mut(&mut grad_in_b.data).expect(\"grad_in_b freshly allocated, uniquely owned\");",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:224",
-    "code": "let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:276",
-    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:278",
-    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:279",
     "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:344",
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:156",
+    "code": "Arc::get_mut(&mut idx_b.data).expect(\"idx_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:157",
+    "code": "let mut idx_u32 = idx_u8.transmute_mut::<u32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:221",
     "code": "let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:346",
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:223",
+    "code": "let idx_u32 = idx_buf.data.transmute::<u32>(idx_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:225",
     "code": "Arc::get_mut(&mut grad_in_b.data).expect(\"grad_in_b freshly allocated, uniquely owned\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/pool.rs:347",
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:226",
     "code": "let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:151",
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:278",
     "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:280",
+    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:281",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:346",
+    "code": "let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:348",
+    "code": "Arc::get_mut(&mut grad_in_b.data).expect(\"grad_in_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:349",
+    "code": "let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:404",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:406",
+    "code": "Arc::get_mut(&mut out_b.data).expect(\"out_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:407",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:463",
+    "code": "let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:465",
+    "code": "Arc::get_mut(&mut grad_in_b.data).expect(\"grad_in_b freshly allocated, uniquely owned\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/pool.rs:466",
+    "code": "let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
     "site": "crates/incin-backends/src/cuda/ops/shape.rs:152",
-    "code": "let params_f32 = params_dev.transmute::<u32>(21).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:157",
-    "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:158",
-    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();",
-    "disposition": "validated backend transition",
-    "evidence": "CUDA/NCCL clippy and hardware matrix"
-  },
-  {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:340",
     "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:345",
-    "code": ".expect(\"out_b.data is uniquely owned for the lifetime of this loop\");",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:153",
+    "code": "let params_f32 = params_dev.transmute::<u32>(21).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:158",
+    "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:159",
+    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:341",
+    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
     "site": "crates/incin-backends/src/cuda/ops/shape.rs:346",
+    "code": ".expect(\"out_b.data is uniquely owned for the lifetime of this loop\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:347",
     "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"

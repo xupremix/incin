@@ -190,5 +190,5 @@ required-features = ["cuda"]
 # document a fraction of this crate. Hardware-only features are deliberately
 # absent: docs.rs has no GPU and a build that cannot link is worse than a
 # page that says the feature exists.
-features = ["cpu", "std", "cpu-blas", "external-candle", "telemetry", "backend-authoring", "data-hub", "train", "compiled", "distributed", "test-utils"]
+features = ["cpu", "std", "cpu-blas", "external-candle", "update-check", "telemetry", "backend-authoring", "data-hub", "train", "compiled", "distributed", "test-utils"]
 rustdoc-args = ["--cfg", "docsrs"]
