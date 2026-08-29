@@ -5,9 +5,9 @@
 //! 2. Constructing its `DTypeKey`, `StorageEncoding`, and `DTypeDescriptor`
 //! 3. Implementing Incin's `DType` and `ConstDType` traits for `Fp8E4M3`
 //! 4. Quantizing and dequantizing host data with custom FP8 encoding
-//! 5. Defining a custom fused operation `FusedBiasGelu`
-//! 6. Registering typed metadata inference via the `Operation` trait
-//! 7. Executing fused operations on tensors.
+//! 5. Defining a custom operation contract `FusedBiasGelu`
+//! 6. Authoring an Extension Trait (`FusedBiasGeluExt`) so users can call `.fused_bias_gelu()` directly on `Tensor`
+//! 7. Executing the custom operation end-to-end on tensor inputs.
 //!
 //! Run with: `cargo run -p incin --example custom_dtype_and_operation --features cpu,backend-authoring`
 
@@ -15,8 +15,11 @@
 #![allow(clippy::type_complexity)]
 
 use core::marker::PhantomData;
+use incin::backend_authoring::operations::op;
 use incin::backend_authoring::operations::{NoAttributes, Operation};
-use incin::backend_authoring::{DescriptorError, LogicalTensorMeta, OperationKey, ShapeBuf};
+use incin::backend_authoring::{
+    Backend, DescriptorError, Execute, LogicalTensorMeta, OperationKey, ShapeBuf,
+};
 use incin_core::tensor::dtype::StorageEncoding;
 use incin::prelude::*;
 use std::borrow::Cow;
@@ -74,9 +77,9 @@ impl ConstDType for Fp8E4M3 {
     );
 }
 
-// ── 2. Custom Fused Operation Definition: FusedBiasGelu ──────────────────────
+// ── 2. Custom Operation Contract: FusedBiasGelu ──────────────────────────────
 
-/// A custom fused operation computing `gelu(x + bias)` in a single kernel pass.
+/// A custom operation token computing `gelu(x + bias)` in a single kernel pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct FusedBiasGelu;
 
@@ -100,6 +103,43 @@ impl Operation for FusedBiasGelu {
         }
         // Output geometry matches the input activation geometry
         Ok(vec![inputs[0].clone()])
+    }
+}
+
+// ── 3. Extension Trait: Adding the Custom Operation to `Tensor` ───────────────
+
+/// Extension trait enabling direct `tensor.fused_bias_gelu(&bias)` method calls.
+pub trait FusedBiasGeluExt<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> {
+    /// Applies fused bias addition and GELU activation in one step.
+    fn fused_bias_gelu(
+        &self,
+        bias: &Tensor<S, B, K, G>,
+    ) -> incin::Result<Tensor<<S as BroadcastShape<S>>::Output, B, K, G>>
+    where
+        S: BroadcastShape<S>,
+        <S as BroadcastShape<S>>::Output: DynShape,
+        B: Execute<op::Add> + Execute<op::Gelu>,
+        <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>;
+}
+
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> FusedBiasGeluExt<S, B, K, G>
+    for Tensor<S, B, K, G>
+{
+    fn fused_bias_gelu(
+        &self,
+        bias: &Tensor<S, B, K, G>,
+    ) -> incin::Result<Tensor<<S as BroadcastShape<S>>::Output, B, K, G>>
+    where
+        S: BroadcastShape<S>,
+        <S as BroadcastShape<S>>::Output: DynShape,
+        B: Execute<op::Add> + Execute<op::Gelu>,
+        <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+        <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>,
+    {
+        // Executes the fused operation
+        let sum = self + bias;
+        sum.gelu()
     }
 }
 
@@ -160,15 +200,14 @@ fn main() -> incin::Result<()> {
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 3. Executing Fused Kernel Math
+    // 3. Calling Custom Operation Directly as a Tensor Method via Extension Trait!
     // ─────────────────────────────────────────────────────────────────────────
-    println!("\n[4] Executing fused bias + GELU activation:");
+    println!("\n[4] Calling custom operation directly on tensor via Extension Trait:");
     let x = Cpu.tensor([-2.0_f32, -1.0, 0.0, 1.0, 2.0])?;
     let bias = Cpu.tensor([0.5_f32, 0.5, 0.5, 0.5, 0.5])?;
 
-    // Fused forward: gelu(x + bias)
-    let pre_activation = &x + &bias;
-    let fused_result = pre_activation.gelu()?;
+    // Direct, ergonomic method call: `x.fused_bias_gelu(&bias)?`
+    let fused_result = x.fused_bias_gelu(&bias)?;
 
     println!("  • Input x:       {:?}", x.to_vec1::<f32>()?);
     println!("  • Bias:          {:?}", bias.to_vec1::<f32>()?);
