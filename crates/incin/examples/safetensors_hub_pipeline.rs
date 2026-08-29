@@ -12,9 +12,9 @@
 #![allow(missing_docs)]
 #![allow(clippy::type_complexity)]
 
-use incin_core::nn::save::{load_safetensors, save_safetensors};
 use incin::nn::Linear;
 use incin::prelude::*;
+use incin_core::nn::save::{load_safetensors, save_safetensors};
 
 type Backend = DefaultBackend;
 
@@ -59,7 +59,10 @@ fn main() -> incin::Result<()> {
     let sample_input = Cpu.randn(shape![2, 8])?;
     let baseline_output = original_model.forward(sample_input.clone())?;
     println!("  • Sample input shape: {:?}", sample_input.dims());
-    println!("  • Baseline prediction: {:?}", baseline_output.to_vec1::<f32>()?);
+    println!(
+        "  • Baseline prediction: {:?}",
+        baseline_output.to_vec1::<f32>()?
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
     // 2. Saving Model Checkpoint to SafeTensors

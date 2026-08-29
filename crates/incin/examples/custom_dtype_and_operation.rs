@@ -10,6 +10,8 @@
 
 #![allow(missing_docs)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::needless_range_loop)]
 
 use core::marker::PhantomData;
 use incin::backend_authoring::operations::Operation;
@@ -18,12 +20,12 @@ use incin::backend_authoring::{
     HostInterop, HostReadback, LogicalTensorMeta, OperationKey, ShapeBuf, StorageBackend,
     StorageOutput, SupportLevel, SupportsDType, TensorMeta, VariableBackend,
 };
+use incin::prelude::*;
 use incin_core::error::BackendError;
+use incin_core::exec::ExecutionContext;
 use incin_core::exec::dispatch;
 use incin_core::exec::request::TensorHandle;
-use incin_core::exec::ExecutionContext;
 use incin_core::shapes::OperationKind;
-use incin::prelude::*;
 use std::sync::Arc;
 
 // ── 1. The Mathematical Operation Contract ───────────────────────────────────
@@ -86,8 +88,12 @@ pub struct CustomDevice;
 impl Device for CustomDevice {
     type Arg = ();
     type Field = PhantomData<Self>;
-    fn init(_: ()) -> Self::Field { PhantomData }
-    fn to_incin(_: &Self::Field) -> incin::Result<DeviceId> { Ok(DeviceId::cpu()) }
+    fn init(_: ()) -> Self::Field {
+        PhantomData
+    }
+    fn to_incin(_: &Self::Field) -> incin::Result<DeviceId> {
+        Ok(DeviceId::cpu())
+    }
 }
 impl ConstDevice for CustomDevice {}
 
@@ -107,7 +113,10 @@ impl CustomStorage {
             dims.iter().product(),
         )
         .unwrap();
-        Self { data: Arc::new(data), meta }
+        Self {
+            data: Arc::new(data),
+            meta,
+        }
     }
 }
 impl StorageOutput for CustomStorage {}
@@ -121,13 +130,23 @@ impl StorageBackend for CustomBackend {
     const BACKEND_NAME: &'static str = "CustomBackend";
     type Device = CustomDevice;
     type Storage<K: DType> = CustomStorage;
-    fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta { &storage.meta }
-    fn execution_storage<K: DType>(storage: &Self::Storage<K>) -> (&dyn core::any::Any, Option<usize>)
-    where Self::Storage<K>: core::any::Any { (storage, None) }
+    fn metadata<K: DType>(storage: &Self::Storage<K>) -> &TensorMeta {
+        &storage.meta
+    }
+    fn execution_storage<K: DType>(
+        storage: &Self::Storage<K>,
+    ) -> (&dyn core::any::Any, Option<usize>)
+    where
+        Self::Storage<K>: core::any::Any,
+    {
+        (storage, None)
+    }
 }
 
 impl<K: DType + ConstDType> SupportsDType<K> for CustomBackend {
-    fn resolve_dtype(_: &K::Field, _: &DeviceId) -> incin::Result<DTypeDescriptor> { Ok(K::DESCRIPTOR) }
+    fn resolve_dtype(_: &K::Field, _: &DeviceId) -> incin::Result<DTypeDescriptor> {
+        Ok(K::DESCRIPTOR)
+    }
 }
 
 impl HostReadback for CustomBackend {
@@ -140,11 +159,29 @@ impl HostReadback for CustomBackend {
 }
 
 impl HostInterop for CustomBackend {
-    fn from_bytes<K: DType>(bytes: &[u8], dims: &[usize], dtype: DTypeDescriptor, _: &DeviceId) -> incin::Result<Self::Storage<K>> {
+    fn from_bytes<K: DType>(
+        bytes: &[u8],
+        dims: &[usize],
+        dtype: DTypeDescriptor,
+        _: &DeviceId,
+    ) -> incin::Result<Self::Storage<K>> {
         let count: usize = dims.iter().product();
-        let floats: Vec<f32> = bytes.chunks_exact(4).map(|c| f32::from_ne_bytes(c.try_into().unwrap())).collect();
-        let meta = TensorMeta::contiguous(ShapeBuf::from_slice(dims), dtype, DeviceId::cpu(), Alignment::new(8).unwrap(), count).unwrap();
-        Ok(CustomStorage { data: Arc::new(floats), meta })
+        let floats: Vec<f32> = bytes
+            .chunks_exact(4)
+            .map(|c| f32::from_ne_bytes(c.try_into().unwrap()))
+            .collect();
+        let meta = TensorMeta::contiguous(
+            ShapeBuf::from_slice(dims),
+            dtype,
+            DeviceId::cpu(),
+            Alignment::new(8).unwrap(),
+            count,
+        )
+        .unwrap();
+        Ok(CustomStorage {
+            data: Arc::new(floats),
+            meta,
+        })
     }
     fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> incin::Result<Vec<u8>> {
         let bytes: Vec<u8> = storage.data.iter().flat_map(|&f| f.to_ne_bytes()).collect();
@@ -156,15 +193,26 @@ impl HostInterop for CustomBackend {
 pub struct CustomVar(pub Arc<std::sync::RwLock<CustomStorage>>);
 impl VariableBackend for CustomBackend {
     type Var<K: DType> = CustomVar;
-    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> incin::Result<Self::Var<K>> { Ok(CustomVar(Arc::new(std::sync::RwLock::new(storage.clone())))) }
-    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> incin::Result<Self::Storage<K>> { Ok(var.0.read().unwrap().clone()) }
-    fn assign_var<K: DType>(var: &mut Self::Var<K>, val: &Self::Storage<K>) -> incin::Result<()> { *var.0.write().unwrap() = val.clone(); Ok(()) }
+    fn var_from_tensor<K: DType>(storage: &Self::Storage<K>) -> incin::Result<Self::Var<K>> {
+        Ok(CustomVar(Arc::new(std::sync::RwLock::new(storage.clone()))))
+    }
+    fn var_as_tensor<K: DType>(var: &Self::Var<K>) -> incin::Result<Self::Storage<K>> {
+        Ok(var.0.read().unwrap().clone())
+    }
+    fn assign_var<K: DType>(var: &mut Self::Var<K>, val: &Self::Storage<K>) -> incin::Result<()> {
+        *var.0.write().unwrap() = val.clone();
+        Ok(())
+    }
 }
 
 impl Capabilities for CustomBackend {
-    fn support(&self, _: &CapabilityQuery) -> SupportLevel { SupportLevel::Native }
+    fn support(&self, _: &CapabilityQuery) -> SupportLevel {
+        SupportLevel::Native
+    }
 }
-impl incin::backend_authoring::Backend for CustomBackend { type InnerBackend = Self; }
+impl incin::backend_authoring::Backend for CustomBackend {
+    type InnerBackend = Self;
+}
 
 // ── HOW THE KERNEL TAKES ADVANTAGE OF VALIDATION PROOFS ──────────────────────
 
@@ -211,9 +259,15 @@ impl incin_backends::target::TensorTarget for CustomDevice {
     type Device = Self;
     type Backend = CustomBackend;
     fn device_arg(&self) {}
-    fn dtype_field(&self) -> <Self::Dtype as DType>::Field { PhantomData }
-    fn parameter_dtype_field(&self) -> <Self::ParameterDtype as DType>::Field { PhantomData }
-    fn precision_policy(&self) -> incin_backends::target::RuntimePrecisionPolicy { incin_backends::target::RuntimePrecisionPolicy::fp32() }
+    fn dtype_field(&self) -> <Self::Dtype as DType>::Field {
+        PhantomData
+    }
+    fn parameter_dtype_field(&self) -> <Self::ParameterDtype as DType>::Field {
+        PhantomData
+    }
+    fn precision_policy(&self) -> incin_backends::target::RuntimePrecisionPolicy {
+        incin_backends::target::RuntimePrecisionPolicy::fp32()
+    }
 }
 
 // ── 5. How to Invoke the Custom Operation via dispatch::execute ──────────────
@@ -230,8 +284,14 @@ pub fn run_fused_scaled_add<S: Shape + DynShape, G: RequiresGrad>(
     // 1. Create storage handles for operands
     let x_storage = CustomStorage::new(x.to_vec1::<f32>()?, x.dims().as_ref());
     let y_storage = CustomStorage::new(y.to_vec1::<f32>()?, y.dims().as_ref());
-    let handle_x = TensorHandle::from_storage::<CustomBackend, f32, incin_core::dist::placement::Local>(&x_storage);
-    let handle_y = TensorHandle::from_storage::<CustomBackend, f32, incin_core::dist::placement::Local>(&y_storage);
+    let handle_x =
+        TensorHandle::from_storage::<CustomBackend, f32, incin_core::dist::placement::Local>(
+            &x_storage,
+        );
+    let handle_y =
+        TensorHandle::from_storage::<CustomBackend, f32, incin_core::dist::placement::Local>(
+            &y_storage,
+        );
 
     // 2. Execute via dispatch::execute - this invokes <CustomBackend as Execute<FusedScaledAdd>>::execute!
     let out_storage: CustomStorage = dispatch::execute::<FusedScaledAdd, CustomBackend>(
@@ -242,14 +302,17 @@ pub fn run_fused_scaled_add<S: Shape + DynShape, G: RequiresGrad>(
     .map_err(|e| incin::Error::Msg(format!("{:?}", e)))?;
 
     // 3. Wrap output storage back into typed Tensor
-    let out_dyn = CustomDevice.tensor_from_vec(out_storage.data.as_ref().clone(), x.dims().as_ref())?;
+    let out_dyn =
+        CustomDevice.tensor_from_vec(out_storage.data.as_ref().clone(), x.dims().as_ref())?;
     out_dyn.to_shape::<S>()
 }
 
 // ── Main Demo Execution ──────────────────────────────────────────────────────
 
 fn main() -> incin::Result<()> {
-    println!("=== Practical Example: Complete Custom Op with Validation Proofs & Kernel Execution ===\n");
+    println!(
+        "=== Practical Example: Complete Custom Op with Validation Proofs & Kernel Execution ===\n"
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. Contract Validation Ahead of Execution
@@ -266,9 +329,15 @@ fn main() -> incin::Result<()> {
         device: Some(DeviceId::cpu()),
     };
 
-    let validated = FusedScaledAdd::infer_outputs(&ScaledAddAttributes { alpha: 2.0 }, &[input_meta_x.clone(), input_meta_y])
-        .map_err(|e| incin::Error::Msg(format!("{:?}", e)))?;
-    println!("  • Inferred output shape proof: {:?}", validated[0].shape.as_ref().unwrap().dims());
+    let validated = FusedScaledAdd::infer_outputs(
+        &ScaledAddAttributes { alpha: 2.0 },
+        &[input_meta_x.clone(), input_meta_y],
+    )
+    .map_err(|e| incin::Error::Msg(format!("{:?}", e)))?;
+    println!(
+        "  • Inferred output shape proof: {:?}",
+        validated[0].shape.as_ref().unwrap().dims()
+    );
 
     // 1.2 Shape mismatch caught before any backend kernel launch!
     let invalid_bias = LogicalTensorMeta {
@@ -276,7 +345,10 @@ fn main() -> incin::Result<()> {
         dtype: Some(DTypeId::F32.descriptor()),
         device: Some(DeviceId::cpu()),
     };
-    let mismatch_result = FusedScaledAdd::infer_outputs(&ScaledAddAttributes { alpha: 2.0 }, &[input_meta_x, invalid_bias]);
+    let mismatch_result = FusedScaledAdd::infer_outputs(
+        &ScaledAddAttributes { alpha: 2.0 },
+        &[input_meta_x, invalid_bias],
+    );
     match mismatch_result {
         Ok(_) => println!("  • Unexpected success!"),
         Err(err) => println!("  • Validation Proof correctly rejected mismatch: {err}"),
@@ -294,7 +366,10 @@ fn main() -> incin::Result<()> {
     println!("  • Result from custom kernel: {:?}", out.to_vec1::<f32>()?);
 
     // Verify mathematical correctness: 1.0 + 2.0 * 10.0 = 21.0, etc.
-    assert_eq!(out.to_vec1::<f32>()?, vec![21.0, 42.0, 63.0, 84.0, 105.0, 126.0]);
+    assert_eq!(
+        out.to_vec1::<f32>()?,
+        vec![21.0, 42.0, 63.0, 84.0, 105.0, 126.0]
+    );
     println!("\n[3] Backend Execute kernel was executed directly with validated shape proofs!");
     Ok(())
 }

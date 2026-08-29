@@ -19,7 +19,7 @@ use incin::prelude::*;
 use incin_backends::detect::detect_device;
 use incin_backends::target::{Native, RuntimePrecisionPolicy, Target};
 use incin_core::tensor::device::DeviceId;
-use incin_core::tensor::dtype::{DTypeId, DTypeDescriptor};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 fn main() -> incin::Result<()> {
     section("1. Runtime Device Detection & Target Creation");
@@ -75,7 +75,10 @@ fn dynamic_dtype_rebinding() -> incin::Result<()> {
     let f64_desc: DTypeDescriptor = DTypeId::F64.descriptor();
     let i64_desc: DTypeDescriptor = DTypeId::I64.descriptor();
 
-    println!("  [+] Rebinding target dynamically to descriptor: {:?}", f64_desc);
+    println!(
+        "  [+] Rebinding target dynamically to descriptor: {:?}",
+        f64_desc
+    );
     let f64_target = target.dtype_dynamic(f64_desc)?;
     let double_tensor: Tensor<Dyn, _, Dyn, NoGrad> = f64_target.ones([3, 3])?;
     println!(
@@ -83,7 +86,10 @@ fn dynamic_dtype_rebinding() -> incin::Result<()> {
         double_tensor.dims()
     );
 
-    println!("  [+] Rebinding target dynamically to integer descriptor: {:?}", i64_desc);
+    println!(
+        "  [+] Rebinding target dynamically to integer descriptor: {:?}",
+        i64_desc
+    );
     let i64_target = target.dtype_dynamic(i64_desc)?;
     let int_tensor: Tensor<Dyn, _, Dyn, NoGrad> = i64_target.zeros([5])?;
     println!(
@@ -101,7 +107,10 @@ fn data_ingestion() -> incin::Result<()> {
     // Target default float is f32, but integer label data is never silently cast:
     let labels = target.tensor([10_i64, 20, 30])?;
     assert_eq!(labels.to_vec1::<i64>()?, vec![10, 20, 30]);
-    println!("  [+] Target::tensor preserved i64 labels unchanged: {:?}", labels.dims());
+    println!(
+        "  [+] Target::tensor preserved i64 labels unchanged: {:?}",
+        labels.dims()
+    );
 
     // Creating tensors from dynamically-sized runtime vectors:
     let dynamic_values: Vec<f32> = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6];

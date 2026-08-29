@@ -63,11 +63,17 @@ fn main() -> incin::Result<()> {
     // Allocate dynamic tensor from host vector
     let dynamic_images: Tensor<Dyn, Backend> =
         Cpu.tensor_from_vec(raw_flat_data, [runtime_batch_size, 1, 28, 28])?;
-    println!("  • Ingested dynamic tensor: dims = {:?}", dynamic_images.dims());
+    println!(
+        "  • Ingested dynamic tensor: dims = {:?}",
+        dynamic_images.dims()
+    );
 
     // Flatten spatial dimensions dynamically: [4, 1, 28, 28] -> [4, 784]
     let flattened = dynamic_images.reshape([runtime_batch_size, 784])?;
-    println!("  • Flattened dynamic tensor: dims = {:?}", flattened.dims());
+    println!(
+        "  • Flattened dynamic tensor: dims = {:?}",
+        flattened.dims()
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
     // 2. Bridging from Dynamic to Static Type Proofs (`to_shape`)
@@ -82,7 +88,10 @@ fn main() -> incin::Result<()> {
     // Execute the statically-checked model:
     let model = StaticClassifier::new()?;
     let output = model.forward(static_tensor)?;
-    println!("  • Statically-typed model output shape: {:?}", output.dims());
+    println!(
+        "  • Statically-typed model output shape: {:?}",
+        output.dims()
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
     // 3. Fallible Dimension Safety (Preventing Runtime Shape Invariant Violations)
@@ -100,7 +109,10 @@ fn main() -> incin::Result<()> {
     // ─────────────────────────────────────────────────────────────────────────
     println!("\n[4] Converting and transitioning tensor element dtypes...");
     let f32_tensor = Cpu.tensor([1.5_f32, 2.5, 3.5])?;
-    println!("  • Original float32 tensor dtype: {:?}", f32_tensor.dtype());
+    println!(
+        "  • Original float32 tensor dtype: {:?}",
+        f32_tensor.dtype()
+    );
 
     // Convert f32 -> f64
     let f64_tensor = f32_tensor.to_dtype::<f64>()?;

@@ -112,6 +112,8 @@ fn main() -> incin::Result<()> {
         println!("  • Step {}: Loss = {:.6}", step, loss_val);
     }
 
-    println!("\n[5] Transformer block training step completed successfully with 100% compile-time shape proofs!");
+    println!(
+        "\n[5] Transformer block training step completed successfully with 100% compile-time shape proofs!"
+    );
     Ok(())
 }

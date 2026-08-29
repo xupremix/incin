@@ -25,12 +25,12 @@
 use core::marker::PhantomData;
 use incin::backend_authoring::operations::op;
 use incin::backend_authoring::{
-    Alignment, Capabilities, CapabilityQuery, Execute, ExecutionRequest,
-    HostInterop, HostReadback, ShapeBuf, StorageBackend, StorageOutput,
-    SupportLevel, SupportsDType, TensorMeta, VariableBackend,
+    Alignment, Capabilities, CapabilityQuery, Execute, ExecutionRequest, HostInterop, HostReadback,
+    ShapeBuf, StorageBackend, StorageOutput, SupportLevel, SupportsDType, TensorMeta,
+    VariableBackend,
 };
-use incin_core::error::BackendError;
 use incin::prelude::*;
+use incin_core::error::BackendError;
 use std::sync::Arc;
 
 // ── 1. Custom Device Definition ──────────────────────────────────────────────
@@ -148,8 +148,7 @@ impl HostReadback for MyCustomBackend {
             .chunks_exact(8)
             .map(|chunk| {
                 let arr: [u8; 8] = [
-                    chunk[0], chunk[1], chunk[2], chunk[3],
-                    chunk[4], chunk[5], chunk[6], chunk[7],
+                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
                 ];
                 i64::from_ne_bytes(arr)
             })
@@ -352,6 +351,8 @@ fn main() -> incin::Result<()> {
     let relu_out = sum.relu()?;
     println!("  • ReLU output data: {:?}", relu_out.to_vec1::<f32>()?);
 
-    println!("\n[5] Custom backend executed all tensor operations successfully without unsafe code!");
+    println!(
+        "\n[5] Custom backend executed all tensor operations successfully without unsafe code!"
+    );
     Ok(())
 }
