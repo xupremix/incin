@@ -18,10 +18,14 @@
 // NVRTC has no default header search path, so `uint32_t` isn't available
 // without an explicit typedef (unlike `size_t`, which is compiler builtin).
 typedef unsigned int uint32_t;
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned long long uint64_t;
 
-extern "C" __global__ void shape_op(
-    const float* __restrict__ inp,
-    float* __restrict__ out,
+template <typename T>
+__device__ void shape_op_impl(
+    const T* __restrict__ inp,
+    T* __restrict__ out,
     const uint32_t* __restrict__ params
 ) {
     const uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -103,4 +107,44 @@ extern "C" __global__ void shape_op(
         }
         out[idx] = inp[in_flat];
     }
+}
+
+extern "C" __global__ void shape_op(
+    const float* __restrict__ inp,
+    float* __restrict__ out,
+    const uint32_t* __restrict__ params
+) {
+    shape_op_impl<float>(inp, out, params);
+}
+
+extern "C" __global__ void shape_op_8bit(
+    const uint8_t* __restrict__ inp,
+    uint8_t* __restrict__ out,
+    const uint32_t* __restrict__ params
+) {
+    shape_op_impl<uint8_t>(inp, out, params);
+}
+
+extern "C" __global__ void shape_op_16bit(
+    const uint16_t* __restrict__ inp,
+    uint16_t* __restrict__ out,
+    const uint32_t* __restrict__ params
+) {
+    shape_op_impl<uint16_t>(inp, out, params);
+}
+
+extern "C" __global__ void shape_op_32bit(
+    const uint32_t* __restrict__ inp,
+    uint32_t* __restrict__ out,
+    const uint32_t* __restrict__ params
+) {
+    shape_op_impl<uint32_t>(inp, out, params);
+}
+
+extern "C" __global__ void shape_op_64bit(
+    const uint64_t* __restrict__ inp,
+    uint64_t* __restrict__ out,
+    const uint32_t* __restrict__ params
+) {
+    shape_op_impl<uint64_t>(inp, out, params);
 }

@@ -109,11 +109,18 @@ fn launch_shape_op(
 ) -> Result<CudaStorage> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
-    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "shape_op")?;
     ensure_shape_loaded(device_id)?;
 
+    let item_bytes = crate::bytes::byte_len(t_buf.dtype, 1, OperationKind::Reshape)?;
+    let kernel_name = match item_bytes {
+        1 => "shape_op_8bit",
+        2 => "shape_op_16bit",
+        8 => "shape_op_64bit",
+        _ => "shape_op_32bit",
+    };
+
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let f = dispatcher.get_function("shape", "shape_op")?;
+    let f = dispatcher.get_function("shape", kernel_name)?;
     let stream = t_buf.device.default_stream();
 
     let n_elements: usize = incin_core::shapes::ShapeBuf::from_slice(&(out_shape))
@@ -255,17 +262,26 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
 
     let first_buf = &*tensors[0].buffer;
     let device_id = first_buf.device_id;
-    // Every operand is read through the same `f32` transmute inside the loop
-    // below, so all of them are checked here rather than one per iteration:
-    // a mismatch on the last tensor would otherwise be found only after the
-    // earlier ones had already been copied into the output.
     for tensor in tensors {
-        crate::cuda::capability::validate_cuda_f32_kernel(tensor.buffer.dtype, "concat")?;
+        if tensor.buffer.dtype != first_buf.dtype {
+            return Err(Error::DTypeStorageMismatch {
+                expected: first_buf.dtype,
+                got: tensor.buffer.dtype,
+            });
+        }
     }
     ensure_concat_loaded(device_id)?;
 
+    let item_bytes = crate::bytes::byte_len(first_buf.dtype, 1, OperationKind::Concat)?;
+    let kernel_name = match item_bytes {
+        1 => "concat_8bit",
+        2 => "concat_16bit",
+        8 => "concat_64bit",
+        _ => "concat_32bit",
+    };
+
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let f = dispatcher.get_function("concat", "concat_f32")?;
+    let f = dispatcher.get_function("concat", kernel_name)?;
     let stream = first_buf.device.default_stream();
 
     let mut out_shape = tensors[0].shape.to_vec();
