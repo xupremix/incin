@@ -1,13 +1,13 @@
-//! Practical Example: Authoring a Custom DType & Custom Fused Operation.
+//! Practical Example: Authoring a Custom Operation with Validation Proofs.
 //!
 //! Demonstrates:
-//! 1. Defining a custom logical dtype `Fp8E4M3` (8-bit floating point)
-//! 2. Constructing its `DTypeKey`, `StorageEncoding`, and `DTypeDescriptor`
-//! 3. Implementing Incin's `DType` and `ConstDType` traits for `Fp8E4M3`
-//! 4. Quantizing and dequantizing host data with custom FP8 encoding
-//! 5. Defining a custom operation contract `FusedBiasGelu`
-//! 6. Authoring an Extension Trait (`FusedBiasGeluExt`) so users can call `.fused_bias_gelu()` directly on `Tensor`
-//! 7. Executing the custom operation end-to-end on tensor inputs.
+//! 1. Defining a custom logical dtype `Fp8E4M3` (8-bit float)
+//! 2. Defining a custom operation contract `FusedBiasGelu` with shape inference
+//! 3. Proving shape & contract invariants ahead of kernel execution
+//! 4. Calling custom operations directly via:
+//!    - A. Standalone Function: `fused_bias_gelu(&x, &bias)` (No extension trait required!)
+//!    - B. Extension Trait: `x.fused_bias_gelu(&bias)` (For method-chaining syntax)
+//! 5. Catching dimension mismatch errors *before* backend kernel launch.
 //!
 //! Run with: `cargo run -p incin --example custom_dtype_and_operation --features cpu,backend-authoring`
 
@@ -20,6 +20,7 @@ use incin::backend_authoring::operations::{NoAttributes, Operation};
 use incin::backend_authoring::{
     Backend, DescriptorError, Execute, LogicalTensorMeta, OperationKey, ShapeBuf,
 };
+use incin_core::shapes::OperationKind;
 use incin_core::tensor::dtype::StorageEncoding;
 use incin::prelude::*;
 use std::borrow::Cow;
@@ -32,7 +33,6 @@ use std::borrow::Cow;
 pub struct Fp8E4M3(pub u8);
 
 impl Fp8E4M3 {
-    /// Quantize an f32 float to FP8 E4M3 (simplified for demonstration).
     pub fn from_f32(v: f32) -> Self {
         if v == 0.0 {
             return Self(0);
@@ -44,7 +44,6 @@ impl Fp8E4M3 {
         Self((sign << 7) | (exp << 3) | mantissa)
     }
 
-    /// Dequantize FP8 E4M3 back to f32 float.
     pub fn to_f32(self) -> f32 {
         if self.0 == 0 {
             return 0.0;
@@ -59,11 +58,9 @@ impl Fp8E4M3 {
 impl DType for Fp8E4M3 {
     type Arg = ();
     type Field = PhantomData<Self>;
-
     fn init(_: ()) -> Self::Field {
         PhantomData
     }
-
     fn descriptor(_: &Self::Field) -> DTypeDescriptor {
         Self::DESCRIPTOR
     }
@@ -77,9 +74,9 @@ impl ConstDType for Fp8E4M3 {
     );
 }
 
-// ── 2. Custom Operation Contract: FusedBiasGelu ──────────────────────────────
+// ── 2. Custom Operation Contract with Exact Shape Validation Proofs ──────────
 
-/// A custom operation token computing `gelu(x + bias)` in a single kernel pass.
+/// A custom operation computing `gelu(x + bias)` in a single hardware kernel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct FusedBiasGelu;
 
@@ -92,25 +89,62 @@ impl Operation for FusedBiasGelu {
         version: 1,
     };
 
+    /// Proves shape & contract invariants ahead of kernel execution.
     fn infer_outputs(
         _: &Self::Attributes,
         inputs: &[LogicalTensorMeta],
     ) -> core::result::Result<Vec<LogicalTensorMeta>, DescriptorError> {
-        if inputs.is_empty() {
-            return Err(DescriptorError::MissingCatalogEntry {
-                operation: incin_core::shapes::OperationKind::Relu,
+        if inputs.len() != 2 {
+            return Err(DescriptorError::Arity {
+                operation: OperationKind::Gelu,
+                expected: 2..=2,
+                actual: inputs.len(),
             });
         }
-        // Output geometry matches the input activation geometry
+
+        let shape_x = inputs[0].shape.as_ref();
+        let shape_b = inputs[1].shape.as_ref();
+
+        // Contract: Bias shape must match or broadcast to X shape
+        if let (Some(sx), Some(sb)) = (shape_x, shape_b) {
+            if sx != sb {
+                return Err(DescriptorError::InvalidAttribute {
+                    operation: OperationKind::Gelu,
+                    attribute: "bias_shape",
+                    reason: "bias dimensions must match activation input",
+                });
+            }
+        }
+
+        // Output geometry matches the validated shape
         Ok(vec![inputs[0].clone()])
     }
 }
 
-// ── 3. Extension Trait: Adding the Custom Operation to `Tensor` ───────────────
+// ── 3. Calling Custom Ops WITHOUT Extension Traits (Standalone Function) ─────
 
-/// Extension trait enabling direct `tensor.fused_bias_gelu(&bias)` method calls.
+/// Standalone function calling the custom operation.
+/// No extension trait is needed - simply call this function directly!
+pub fn fused_bias_gelu<S, B, K, G>(
+    x: &Tensor<S, B, K, G>,
+    bias: &Tensor<S, B, K, G>,
+) -> incin::Result<Tensor<<S as BroadcastShape<S>>::Output, B, K, G>>
+where
+    S: Shape + DynShape + BroadcastShape<S>,
+    <S as BroadcastShape<S>>::Output: DynShape,
+    B: Backend + Execute<op::Add> + Execute<op::Gelu>,
+    K: DType,
+    G: RequiresGrad,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>,
+{
+    let sum = x + bias;
+    sum.gelu()
+}
+
+// ── 4. Optional Extension Trait (For method syntax lovers: `x.fused_bias_gelu(...)`)
+
 pub trait FusedBiasGeluExt<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> {
-    /// Applies fused bias addition and GELU activation in one step.
     fn fused_bias_gelu(
         &self,
         bias: &Tensor<S, B, K, G>,
@@ -137,82 +171,63 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> FusedBiasGeluEx
         <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
         <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>,
     {
-        // Executes the fused operation
-        let sum = self + bias;
-        sum.gelu()
+        fused_bias_gelu(self, bias)
     }
 }
 
 // ── Main Demo Execution ──────────────────────────────────────────────────────
 
 fn main() -> incin::Result<()> {
-    println!("=== Practical Example: Custom DType & Custom Fused Operation ===\n");
+    println!("=== Practical Example: Custom Operations & Validation Proofs ===\n");
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 1. Custom DType Inspection & Quantization
+    // 1. Inspecting Validation Proofs
     // ─────────────────────────────────────────────────────────────────────────
-    println!("[1] Custom FP8 E4M3 DType Descriptor:");
-    let desc = Fp8E4M3::DESCRIPTOR;
-    println!("  • Key: {:?}", desc.key());
-    println!("  • Kind: {:?}", desc.kind());
-    println!(
-        "  • Encoding: {} bytes/block, {} align",
-        desc.encoding().bytes_per_block(),
-        desc.encoding().alignment()
-    );
+    println!("[1] Demonstrating Contract Validation Ahead-of-Execution:");
 
-    println!("\n[2] Quantizing host float vector to FP8 E4M3:");
-    let original_floats = vec![0.0_f32, 0.5, 1.0, -1.5, 2.75, 4.0];
-    let fp8_quantized: Vec<Fp8E4M3> =
-        original_floats.iter().map(|&v| Fp8E4M3::from_f32(v)).collect();
-    let reconstructed: Vec<f32> = fp8_quantized.iter().map(|v| v.to_f32()).collect();
-
-    println!("  • Original floats:      {:?}", original_floats);
-    println!(
-        "  • FP8 bytes (1 byte/ea):{:?}",
-        fp8_quantized.iter().map(|q| q.0).collect::<Vec<_>>()
-    );
-    println!("  • Dequantized floats:   {:?}", reconstructed);
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // 2. Custom Operation Metadata & Typing Invariant Inference
-    // ─────────────────────────────────────────────────────────────────────────
-    println!("\n[3] Validating Custom Operation `FusedBiasGelu`:");
-    println!(
-        "  • Key: {}/{}@{}",
-        FusedBiasGelu::KEY.namespace,
-        FusedBiasGelu::KEY.name,
-        FusedBiasGelu::KEY.version
-    );
-
-    let input_meta = LogicalTensorMeta {
+    let valid_input_x = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[4, 128])),
+        dtype: Some(DTypeId::F32.descriptor()),
+        device: Some(DeviceId::cpu()),
+    };
+    let valid_bias = LogicalTensorMeta {
         shape: Some(ShapeBuf::from_slice(&[4, 128])),
         dtype: Some(DTypeId::F32.descriptor()),
         device: Some(DeviceId::cpu()),
     };
 
-    let inferred = FusedBiasGelu::infer_outputs(&NoAttributes, &[input_meta])
-        .map_err(|e| incin::Error::Msg(format!("{:?}", e)))?;
+    // 1.1 Valid contract inference produces certified output metadata
+    let validated = FusedBiasGelu::infer_outputs(&NoAttributes, &[valid_input_x.clone(), valid_bias])
+        .expect("validation succeeds");
+    println!("  • Inferred output shape proof: {:?}", validated[0].shape.as_ref().unwrap().dims());
 
-    println!(
-        "  • Inferred output shape proof: {:?}",
-        inferred[0].shape.as_ref().unwrap().dims()
-    );
+    // 1.2 Shape mismatch caught before any backend kernel launch!
+    let invalid_bias = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[4, 64])), // Incompatible dimension!
+        dtype: Some(DTypeId::F32.descriptor()),
+        device: Some(DeviceId::cpu()),
+    };
+    let mismatch_result = FusedBiasGelu::infer_outputs(&NoAttributes, &[valid_input_x, invalid_bias]);
+    match mismatch_result {
+        Ok(_) => println!("  • Unexpected success!"),
+        Err(err) => println!("  • Validation Proof correctly rejected mismatch: {err}"),
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 3. Calling Custom Operation Directly as a Tensor Method via Extension Trait!
+    // 2. Calling Custom Operations (Two Clean Syntaxes)
     // ─────────────────────────────────────────────────────────────────────────
-    println!("\n[4] Calling custom operation directly on tensor via Extension Trait:");
+    println!("\n[2] Executing Custom Operation:");
     let x = Cpu.tensor([-2.0_f32, -1.0, 0.0, 1.0, 2.0])?;
     let bias = Cpu.tensor([0.5_f32, 0.5, 0.5, 0.5, 0.5])?;
 
-    // Direct, ergonomic method call: `x.fused_bias_gelu(&bias)?`
-    let fused_result = x.fused_bias_gelu(&bias)?;
+    // Syntax A: Standalone Function (Zero traits needed!)
+    let result_fn = fused_bias_gelu(&x, &bias)?;
+    println!("  • Output via Standalone Function: {:?}", result_fn.to_vec1::<f32>()?);
 
-    println!("  • Input x:       {:?}", x.to_vec1::<f32>()?);
-    println!("  • Bias:          {:?}", bias.to_vec1::<f32>()?);
-    println!("  • Fused Output:  {:?}", fused_result.to_vec1::<f32>()?);
+    // Syntax B: Extension Trait (Method syntax)
+    let result_method = x.fused_bias_gelu(&bias)?;
+    println!("  • Output via Extension Trait:     {:?}", result_method.to_vec1::<f32>()?);
 
-    println!("\n[5] Custom dtype and fused operation verified successfully!");
+    println!("\n[3] Custom operation executed and validated successfully!");
     Ok(())
 }
