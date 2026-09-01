@@ -145,3 +145,55 @@ fn experimental_compiled_facade_executes_a_non_empty_cpu_plan() {
 fn expert_storage_encoding_has_a_named_path() {
     let _ = incin::types::dtype::StorageEncoding::scalar(4, 4);
 }
+
+/// The published crate, exercised from outside the workspace.
+///
+/// Ignored because it is the one fixture that resolves `incin` from crates.io
+/// rather than from this checkout, so it needs the network and it reports on a
+/// release rather than on the working tree. A red result here does not mean the
+/// commit under test is broken, which is exactly why it must not sit in the
+/// same gate as the fixtures that do mean that. CI runs it on the nightly
+/// schedule and on demand; run it by hand with
+/// `cargo test -p incin --test facade_contract -- --ignored`.
+#[test]
+#[ignore = "resolves incin from crates.io; reports on the release, not this checkout"]
+fn the_published_release_still_trains() {
+    test_fixture("released-consumer");
+}
+
+/// The README's install line and the released fixture ask for the same version.
+///
+/// The fixture exists to check the artifact a reader installs, and the reader
+/// installs whatever the front page told them to write. If the two drift, the
+/// fixture is still green and still meaningless, because it is testing a
+/// release nobody was pointed at. This costs no network, so it runs in the
+/// ordinary gate rather than beside the fixture it guards.
+#[test]
+fn the_released_consumer_tracks_the_readme_quick_start() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = std::fs::read_to_string(root.join("../../README.md"))
+        .expect("the repository README must be readable");
+    let manifest =
+        std::fs::read_to_string(root.join("tests/consumer-fixtures/released-consumer/Cargo.toml"))
+            .expect("the released-consumer manifest must be readable");
+
+    let requirement = |text: &str, source: &str| -> String {
+        text.lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("incin = ")?
+                    .trim()
+                    .strip_prefix('"')?
+                    .strip_suffix('"')
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(|| panic!("{source} no longer contains an `incin = \"...\"` line"))
+    };
+
+    assert_eq!(
+        requirement(&readme, "the README quick start"),
+        requirement(&manifest, "the released-consumer manifest"),
+        "the README tells readers to install one version and the released \
+         consumer fixture checks another"
+    );
+}
