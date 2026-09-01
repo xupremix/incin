@@ -72,6 +72,12 @@ reduce_axis_executors![
     (MeanKeepDim, mean_keepdim),
     (MaxKeepDim, max_keepdim),
     (MinKeepDim, min_keepdim),
+    // Composed rather than a kernel of its own, but it takes the same operand
+    // and the same single `axis` attribute as every row above, so it belongs in
+    // this macro rather than in a hand written impl. Where the composition lives
+    // and why it cannot be `log(sum(exp(x)))` is documented on the kernel.
+    (LogSumExpDim, logsumexp_dim),
+    (LogSumExpKeepDim, logsumexp_keepdim),
 ];
 
 impl<D: Device> Execute<op::Cumsum> for CpuBackendImpl<D> {

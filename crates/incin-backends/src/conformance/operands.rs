@@ -9,11 +9,13 @@ use alloc::vec::Vec;
 
 use half::{bf16, f16};
 
+use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 use crate::conformance::AdvertisedTuple;
 use crate::conformance::fixtures::{Operands, Role};
 use crate::cpu::{CpuBuffer, CpuStorage};
+use crate::quant::BlockQ8_0;
 
 /// Extents for a rank, small and unequal.
 ///
@@ -25,18 +27,100 @@ fn extents(rank: usize) -> Vec<usize> {
     LADDER[..rank.min(LADDER.len())].to_vec()
 }
 
-/// The extents an operand actually carries once its layout has been applied.
+/// The logical values one block holds, for a tuple whose operand has to be a
+/// whole number of them.
+///
+/// Two different facts arrive here. `dequantize` reads a block-encoded operand,
+/// so the number is the tuple dtype's own and the dtype registry already knows
+/// it. `quantize` reads a plain float operand and *writes* blocks, so nothing
+/// about its operand's dtype says anything, and its length is constrained all
+/// the same: the CPU kernel refuses a buffer that is not a whole number of
+/// blocks, and the output metadata would be refused by `size_bytes` even if it
+/// were not.
+///
+/// `q8_0` is named outright for that second case because the row admits nothing
+/// else. `Q8_ONLY` is the whole quantized dtype set the CPU table lists, and
+/// `cpu/canonical/linalg.rs` refuses any other compression target by name, so
+/// reading the block size off `q8_0` here says what the backend already says
+/// rather than inventing a number.
+fn block_elements(tuple: &AdvertisedTuple) -> Option<usize> {
+    let encoded = if tuple.operation == OperationKind::Quantize {
+        DTypeId::Q8_0.descriptor()
+    } else {
+        tuple.dtype
+    };
+    let encoding = encoded.encoding();
+    encoding
+        .is_block()
+        .then(|| encoding.logical_elements_per_block())
+}
+
+/// The ladder with its final extent widened to one whole block.
+///
+/// A block encoding has no partial block: `size_bytes` refuses a logical length
+/// that is not a multiple of the block's, and so does the CPU quantizer. The
+/// ladder's extents are twos and a three, so no rank on it produces a multiple
+/// of thirty-two and a block operand cannot be built from it unchanged.
+///
+/// The last extent is the one widened, not the first. It keeps the leading
+/// extents unequal, which is the whole point of the ladder, and it puts the
+/// whole block on the contiguous axis, which is where a block encoding can be
+/// laid out at all: thirty-two consecutive logical values share a scale, and
+/// consecutive means row-major consecutive.
+///
+/// Rank zero holds one value and has no extent to widen, so a block-encoded
+/// tuple does not exist there. That is a gap in what a capability row can say
+/// rather than a defect in the backend: the rank column cannot express "a whole
+/// number of blocks", so the row advertises a rank the encoding has no tensor
+/// at.
+fn block_extents(rank: usize, per_block: usize) -> Result<Vec<usize>, String> {
+    let mut dims = extents(rank);
+    let Some(last) = dims.last_mut() else {
+        return Err(alloc::format!(
+            "a block of {per_block} logical values needs an extent to hold it and \
+             rank zero has none; the row's rank column cannot say that a length \
+             must be a whole number of blocks"
+        ));
+    };
+    *last = per_block;
+    Ok(dims)
+}
+
+/// The extents this tuple's own operand carries, before its layout is applied.
+fn ladder_extents(tuple: &AdvertisedTuple) -> Result<Vec<usize>, String> {
+    match block_elements(tuple) {
+        Some(per_block) => block_extents(tuple.rank, per_block),
+        None => Ok(extents(tuple.rank)),
+    }
+}
+
+/// The same extents once the tuple's layout claim has been applied.
 ///
 /// The strided operand is a transpose of the contiguous one, so its first two
 /// extents are swapped. Anything naming a target shape has to ask for the shape
 /// the operand really has, or a reshape to its own extents stops being an
 /// identity halfway through the layout axis.
-pub(crate) fn materialized_extents(tuple: &AdvertisedTuple) -> Vec<usize> {
-    let mut dims = extents(tuple.rank);
+fn apply_layout(mut dims: Vec<usize>, tuple: &AdvertisedTuple) -> Vec<usize> {
     if tuple.layout != incin_core::exec::LayoutClass::Contiguous && tuple.rank >= 2 {
         dims.swap(0, 1);
     }
     dims
+}
+
+/// The extents an operand actually carries once its layout has been applied.
+///
+/// Block-aware, because a shim that describes the operand has to describe the
+/// one that was built: `reshape` and `broadcast_as` advertise every dtype
+/// including `q8_0`, and an identity reshape stated against the plain ladder
+/// would not preserve the element count of a widened operand.
+///
+/// The fallback is unreachable rather than a second opinion. A shim reads this
+/// only after [`operand`] built what it describes, and [`operand`] is where a
+/// rank-zero block row is turned away; the rows that build no operand at all
+/// are the creation rows, whose dtype set is `NON_QUANTIZED`.
+pub(crate) fn materialized_extents(tuple: &AdvertisedTuple) -> Vec<usize> {
+    let dims = ladder_extents(tuple).unwrap_or_else(|_| extents(tuple.rank));
+    apply_layout(dims, tuple)
 }
 
 /// A buffer of `length` values in `dtype`.
@@ -78,6 +162,40 @@ fn buffer(dtype: DTypeDescriptor, length: usize) -> Result<CpuBuffer, String> {
         }
         Some(DTypeId::Bool) => {
             CpuBuffer::Bool((0..length).map(|index| (index % 2) as u8).collect())
+        }
+        // `length` counts logical values, not blocks, so a Q8_0 buffer holds
+        // one block per thirty-two of them. `block_extents` is what makes that
+        // division exact, and a caller that reached here with anything else
+        // would build a buffer shorter than the shape it is about to be given,
+        // so the remainder is refused rather than truncated.
+        //
+        // A unit scale with small whole quantized values, so the logical
+        // magnitudes match the ladder every other dtype carries. The alternative
+        // is a scale that makes the dequantized values round, which would put
+        // the arithmetic of the format into the fixture; this harness asks
+        // whether the tuple runs.
+        Some(DTypeId::Q8_0) => {
+            const PER_BLOCK: usize = 32;
+            if !length.is_multiple_of(PER_BLOCK) {
+                return Err(alloc::format!(
+                    "a q8_0 operand is whole blocks of {PER_BLOCK} logical values \
+                     and {length} is not a multiple of one"
+                ));
+            }
+            CpuBuffer::Q8_0(
+                (0..length / PER_BLOCK)
+                    .map(|block| {
+                        let mut qs = [0_i8; PER_BLOCK];
+                        for (index, value) in qs.iter_mut().enumerate() {
+                            *value = ((block + index) % 7 + 1) as i8;
+                        }
+                        BlockQ8_0 {
+                            d: f16::from_f32(1.0),
+                            qs,
+                        }
+                    })
+                    .collect(),
+            )
         }
         other => {
             return Err(alloc::format!(
@@ -245,7 +363,8 @@ pub(crate) fn operand(
     // carries, which for a strided tuple is the transpose of the ladder. Sizing
     // them against the ladder instead would build a weight the inference
     // rejects, and the report would read that as a backend finding.
-    let activation = materialized_extents(tuple);
+    let ladder = ladder_extents(tuple)?;
+    let activation = apply_layout(ladder.clone(), tuple);
     let dims = match (operands, role) {
         (_, Role::IndexVector) => alloc::vec![2],
         (_, Role::FloatMatrix) => alloc::vec![2, 3],
@@ -266,7 +385,7 @@ pub(crate) fn operand(
         (_, Role::ChannelVector) => channel_vector(&activation)?,
         (_, Role::TrailingVector) => trailing_vector(&activation)?,
         (Operands::UnaryScalar, _) => alloc::vec![1; tuple.rank],
-        _ => extents(tuple.rank),
+        _ => ladder,
     };
     let length: usize = dims.iter().product::<usize>().max(1);
     let data = role_buffer(tuple, role, length)?;

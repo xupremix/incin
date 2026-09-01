@@ -444,6 +444,25 @@ jobs:
     - name: Compile every public example
       run: cargo test --workspace --doc --features incin-core/distributed
 
+  released-consumer:
+    name: Published Release Smoke
+    # Not on push or pull request. This job resolves `incin` from crates.io, so
+    # it reports on whatever is published rather than on the commit under test;
+    # a red result here means "go patch or yank a release", never "this branch
+    # is broken". Wiring it into the per-commit gate would put a verdict about
+    # the registry in front of every author who cannot act on it, and would
+    # make every merge wait on a network fetch besides.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    # `--ignored` is the whole job. The fixture it reaches is the only consumer
+    # fixture that does not resolve through a path dependency, which is why it
+    # carries `#[ignore]` in the first place.
+    - name: Train against the published crate
+      run: cargo test -p incin --test facade_contract --no-default-features --features cpu -- --ignored
+
   core-no-std:
     name: Core no_std Check
     runs-on: ubuntu-latest

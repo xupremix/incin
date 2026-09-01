@@ -160,6 +160,45 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         )
     }
 
+    /// Applies the log of Softmax over the specified dimension, in one step.
+    ///
+    /// This is not `softmax(axis)?.log()?`, and the difference is not a matter
+    /// of speed. Softmax normalises against the row maximum, so a logit far
+    /// below that maximum lands on an exponential that underflows to zero, and
+    /// the logarithm of zero is negative infinity. Subtracting the log of the
+    /// summed exponentials instead keeps the same quantity finite, because the
+    /// large negative value is carried through an addition rather than a
+    /// round trip through the exponential. Routing and classification heads
+    /// read exactly those far-from-maximum entries, which is why they get a
+    /// dedicated operation instead of a composition.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[0.0, -200.0, 1.0], ()).unwrap();
+    /// let logits = t.log_softmax(0).unwrap().to_vec1::<f32>().unwrap();
+    /// // The middle entry survives as a large finite number; through
+    /// // `softmax` then `log` it would have been negative infinity.
+    /// assert!(logits.iter().all(|value| value.is_finite()));
+    /// let mass: f32 = logits.iter().map(|value| value.exp()).sum();
+    /// assert!((mass - 1.0).abs() < 1e-5);
+    /// ```
+    #[inline]
+    pub fn log_softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G>>
+    where
+        S: DynShape,
+        B: Execute<op::LogSoftmax>,
+        <B as Execute<op::LogSoftmax>>::Output: Into<B::Storage<K>>,
+    {
+        let dim = axis.resolve(self.shape_buf().rank())?;
+        execute_unary_descriptor_with_attributes::<op::LogSoftmax, S, B, K, G>(
+            self,
+            crate::exec::catalog::AxisAttributes { axis: dim },
+        )
+    }
+
     /// Negates the tensor element-wise, returning recoverable execution errors.
     pub fn try_neg(&self) -> Result<Self>
     where

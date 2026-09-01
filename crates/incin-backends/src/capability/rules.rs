@@ -342,7 +342,10 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // weight and refuses a left operand with fewer than two axes.
         OperationKind::QuantizedMatMul => 2,
         OperationKind::BatchedMatMul => 3,
-        OperationKind::Softmax | OperationKind::LayerNorm | OperationKind::RmsNorm => 1,
+        OperationKind::Softmax
+        | OperationKind::LogSoftmax
+        | OperationKind::LayerNorm
+        | OperationKind::RmsNorm => 1,
         // The weight is a matrix and the input has at least the feature axis,
         // but the bias beside them is rank one and this row speaks for it too.
         OperationKind::Linear => 1,
@@ -359,6 +362,8 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         | OperationKind::MinDim
         | OperationKind::MinKeepDim
         | OperationKind::ProdDim
+        | OperationKind::LogSumExpDim
+        | OperationKind::LogSumExpKeepDim
         // An axis-bearing scan or ordering needs an axis to run along.
         // `argmax` and `argmin` do not appear here: their axis is optional and
         // the flattened form is defined for a scalar, so their minimum is zero.
@@ -390,6 +395,7 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         OperationKind::ConcatExact
         | OperationKind::Gather
         | OperationKind::Scatter
+        | OperationKind::ScatterAdd
         | OperationKind::IndexSelect
         | OperationKind::Unfold => 1,
         // `addmm` broadcasts its addend against the product, so a per-column

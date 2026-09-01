@@ -6,6 +6,12 @@
     "evidence": "ERROR_CONTRACT.md#panics-and-process-boundaries"
   },
   {
+    "site": "crates/incin/src/doctor.rs:566",
+    "code": ".expect(\"serializing Report produces a JSON object\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
     "site": "crates/incin-backends/src/codegen/attention.rs:71",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
@@ -8424,8 +8430,8 @@
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/conformance/mod.rs:362",
-    "code": ".expect(\"the operation was drawn from these observations\");",
+    "site": "crates/incin-backends/src/conformance/mod.rs:370",
+    "code": ".expect(\"the operation was drawn from an executed observation\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
@@ -8724,43 +8730,43 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:152",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:159",
     "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:153",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:160",
     "code": "let params_f32 = params_dev.transmute::<u32>(21).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:158",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:165",
     "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:159",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:166",
     "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:341",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:357",
     "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:346",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:362",
     "code": ".expect(\"out_b.data is uniquely owned for the lifetime of this loop\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:347",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:363",
     "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"

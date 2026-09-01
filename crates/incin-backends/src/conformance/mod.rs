@@ -355,11 +355,19 @@ pub fn run_cpu_self_check() -> OracleReport {
         if !fixtures::varies_with_tuple_dtype(operation) {
             continue;
         }
+        // An executed one, not merely the first. A rule's lowest rank is
+        // enumerated first and is the one most likely to be unbuildable: a
+        // block-encoded operand has no rank-zero form, and a probe anchored
+        // there would be reported as not covered rather than as the refusal it
+        // is asking for. `covered` drew this operation from an observation that
+        // executed, so one exists.
         let executed = *observations
             .iter()
-            .find(|observation| observation.tuple.operation == operation)
+            .find(|observation| {
+                observation.tuple.operation == operation && observation.verdict == Verdict::Executed
+            })
             .map(|observation| &observation.tuple)
-            .expect("the operation was drawn from these observations");
+            .expect("the operation was drawn from an executed observation");
 
         for dtype in unadvertised_dtypes(operation) {
             let tuple = AdvertisedTuple { dtype, ..executed };

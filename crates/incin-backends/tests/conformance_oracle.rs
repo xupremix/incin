@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 
-/// Operations the harness reaches today, out of the 158 the CPU backend has an
+/// Operations the harness reaches today, out of the 162 the CPU backend has an
 /// executor for.
 ///
 /// Exact rather than slack, because the point of a ratchet is that it cannot
@@ -25,13 +25,20 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// removed or a capability row was narrowed, and either should be a deliberate
 /// edit in the same commit rather than a number quietly absorbing it.
 ///
-/// The five outstanding are `quantize`, `dequantize`, `quantized_matmul`,
-/// `tensor_from_data` and `tensor_from_bytes`. The first three need a buffer
-/// whose length is its block encoding rather than its logical extent, and the
-/// block size is a backend detail the enumeration does not know. The last two
-/// need bytes on the `ExecutionRequest`, which this harness poses as `None`.
-/// Neither is a shape the operand builder is one role away from producing.
-const COVERED_OPERATION_FLOOR: usize = 153;
+/// The one outstanding is `quantized_matmul`, and it is outstanding because two
+/// contracts disagree rather than because the harness cannot build an operand.
+/// The catalog gives it `OutputRule::MatMul`, which requires `lhs[-1] ==
+/// rhs[-2]`; the CPU kernel reads the right operand as `[n, k]`, because a
+/// block encoding shares one scale across thirty-two consecutive values and so
+/// can only be contracted along its contiguous axis. A square operand satisfies
+/// both and would report an agreement that is not there.
+///
+/// `quantize` and `dequantize` were counted with the same reason until this
+/// floor and did not need one. `block_extents` widens the ladder's last extent
+/// to a whole block, which is the shape a block encoding can hold, and the
+/// block size is the dtype registry's rather than a number this harness
+/// invented.
+const COVERED_OPERATION_FLOOR: usize = 161;
 
 #[test]
 fn the_cpu_backend_executes_every_advertised_tuple_it_is_asked_about() {

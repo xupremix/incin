@@ -88,6 +88,33 @@ Partial compile-time device targets (`Cuda::new(gpu_idx)` or `Wgpu::new(adapter_
 keep the backend family static while letting the physical device ordinal remain
 runtime-selected without runtime engine dispatch overhead.
 
+## Static dtype rebinding
+
+A target generates `f32` unless told otherwise. `.dtype::<K>()` rebinds it to
+generate `K` instead, and the result is itself a target, so every creation
+method above works on it unchanged:
+
+```rust,no_run
+use incin::prelude::*;
+
+let half = Cpu.dtype::<f16>()?;
+let activations: Tensor<s![2, 3], _, f16, NoGrad> = half.zeros(shape![2, 3])?;
+# Ok::<(), incin::Error>(())
+```
+
+The method returns a `Result` because no backend implements every dtype on
+every device, and the check runs once, when the target is rebound, rather than
+on each allocation from it. What it cannot do is fail later: `K` is a type
+parameter here, so the tensor carries `f16` in its own type, and an operation
+with no `f16` kernel is a compile error rather than a `Result` at run time.
+
+That is the same trade the device sections above describe, one axis over.
+`.dtype::<K>()` is to `.dtype_dynamic(descriptor)` what `Cuda::new(0)` is to
+`detect_device()`.
+
+Rebinding is not conversion. `.dtype::<K>()` allocates at `K` from the start,
+while `to_dtype::<K>()` casts a tensor that already exists.
+
 ## Dynamic dtype rebinding
 
 When the element dtype is selected at runtime (e.g. parsed from an ONNX graph or SafeTensors

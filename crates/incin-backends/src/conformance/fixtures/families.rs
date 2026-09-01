@@ -1,16 +1,8 @@
-//! Operands and typed execution shims, keyed by the declaration group.
+//! The tables themselves: one entry per operation, grouped by operand contract.
 //!
-//! The harness drives runtime data: an [`AdvertisedTuple`] names an operation
-//! as an `OperationKind`. Execution is typed: `dispatch::execute` is generic
-//! over the `op::X` marker and over that marker's attribute type. Something has
-//! to cross between the two, and this module is it.
-//!
-//! The crossing is keyed on operand contract, not on attribute type and not on
-//! semantic profile. Those two look like the obvious keys and are both wrong.
-//! Seventy-eight catalog rows declare `NoAttributes`, and that set contains
-//! unary floats, binary broadcasts, comparisons that return `bool` whatever
-//! they read, logical operations that are `bool` on both sides, and a quantized
-//! matmul that reads `Q8_0` blocks. One key cannot serve all of those.
+//! The shims come first and the group tables after, but a shim serving exactly
+//! one family is written beside that family rather than up here, because the
+//! attribute it fixes is only meaningful next to the operands it is fixed for.
 //!
 //! The groups of `cpu_descriptor_operations!` are where the operand contracts
 //! are already written down, and their comments in `declarations.rs` explain
@@ -18,295 +10,25 @@
 //! than the groups rather than equal to them: a group exists to share a
 //! capability row, and a row says nothing about arity, so a single group can
 //! hold a unary and a binary operation that need different operands.
-//!
-//! An operation with no fixture is not a failure and not a pass. It is
-//! [`Coverage::Unfixtured`] with a reason, counted, and held against a floor by
-//! `crates/incin-backends/tests/conformance_oracle.rs` so the number can only
-//! go up.
 
-use alloc::string::String;
-
-use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, op};
+use incin_core::backend_authoring::{Execute, op};
 use incin_core::exec::catalog::{
     AddmmAttributes, ArgsortAttributes, AttentionAttributes, AxisAttributes,
     AxisVarianceAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes, DiagonalAttributes,
     DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
     GroupNormAttributes, IndexReductionAttributes, LerpAttributes, LinearAttributes,
     LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes, PadAttributes,
-    RepeatAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes, SliceAttributes,
-    SplitAttributes, TopKAttributes, TransposeAttributes, VarianceAttributes,
+    QuantizationAttributes, RepeatAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes,
+    SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes, VarianceAttributes,
 };
 use incin_core::exec::{CanonicalError, Capabilities, ExecutionContext, Operation, TensorHandle};
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::dtype::DTypeId;
 
 use crate::conformance::operands::materialized_extents;
-use crate::conformance::shaped;
-use crate::cpu::CpuBackendImpl;
+use crate::conformance::plan::AdvertisedTuple;
 
-use super::plan::AdvertisedTuple;
-
-/// The subject and the oracle are the same backend for the self-check, so the
-/// harness names one type rather than two.
-pub(crate) type Subject = CpuBackendImpl;
-
-/// A typed execution shim, erased to a function pointer.
-///
-/// A plain `fn` rather than a boxed closure: there is nothing to capture, since
-/// everything a shim needs arrives as an argument, and the family tables are
-/// then simple enough to read as the lists they are.
-pub(crate) type Run = fn(
-    &ExecutionContext<Subject>,
-    &AdvertisedTuple,
-    Route,
-    &[TensorHandle<'_>],
-) -> Result<(), CanonicalError>;
-
-/// Which of the two paths into a backend to take.
-///
-/// `dispatch::execute` validates the descriptor, then asks the capability
-/// registry, then calls the executor. That middle step is what makes the
-/// positive direction meaningful and the negative direction impossible: a
-/// tuple the table does not advertise never reaches the kernel, so going
-/// through the dispatcher could only ever prove that the dispatcher works.
-///
-/// [`Route::PastAdmission`] builds the same validated descriptor and calls the
-/// executor with it directly. It is the only way to ask a kernel what it would
-/// do with a tuple its own table never promised, which is one half of what an
-/// advertisement means.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Route {
-    /// Through `dispatch::execute`, capability admission included.
-    Dispatched,
-    /// Straight to the executor, with the capability query skipped.
-    PastAdmission,
-}
-
-impl Operands {
-    /// How many operands to build.
-    pub(crate) const fn arity(self) -> usize {
-        match self {
-            Self::Nullary => 0,
-            Self::Unary | Self::UnaryAxis | Self::UnaryScalar => 1,
-            Self::Binary => 2,
-            Self::Triple => 3,
-        }
-    }
-}
-
-impl Route {
-    pub(crate) fn run<O>(
-        self,
-        context: &ExecutionContext<Subject>,
-        attributes: O::Attributes,
-        inputs: &[TensorHandle<'_>],
-    ) -> Result<(), CanonicalError>
-    where
-        O: Operation + incin_core::exec::CanonicalOperation,
-        O::Attributes: incin_core::exec::AttributeContract,
-        Subject: Execute<O> + Capabilities,
-    {
-        match self {
-            Self::Dispatched => {
-                incin_core::exec::dispatch::execute::<O, Subject>(context, attributes, inputs)
-                    .map(|_| ())
-            }
-            Self::PastAdmission => {
-                let logical = inputs
-                    .iter()
-                    .map(|handle| incin_core::exec::dispatch::logical_meta(handle.metadata()))
-                    .collect();
-                let validated = Descriptor::<O>::infer_runtime(attributes, logical)
-                    .map_err(CanonicalError::Descriptor)?;
-                context
-                    .backend()
-                    .execute(ExecutionRequest {
-                        operation: &validated,
-                        inputs,
-                        context,
-                        payload: None,
-                    })
-                    .map(|_| ())
-                    .map_err(CanonicalError::Backend)
-            }
-        }
-    }
-}
-
-/// How many operands to build, and what each one holds.
-///
-/// Every variant here states an operand contract that a capability row cannot.
-/// A row carries one dtype set applied to every operand in turn, which is why
-/// `declarations.rs` documents `INDEX_AND_F32_DTYPES` and `F32_AND_BOOL` as
-/// unions rather than as per-operand claims. The fixture is the only place that
-/// knows the split, so the split lives here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Operands {
-    /// No operand at all.
-    ///
-    /// The creation rows take their shape and dtype from their attributes
-    /// rather than from an input, so the capability row is queried against the
-    /// inferred output. Nothing has to be built, and the tuple still reaches
-    /// the invocation because every creation attribute carries a dtype.
-    Nullary,
-    /// One operand carrying the tuple's dtype.
-    Unary,
-    /// Two operands of identical shape and dtype.
-    Binary,
-    /// Three operands, each read through its own role.
-    ///
-    /// Arity only. Shape authority belongs to [`Role`]: `where_cond` reads
-    /// three operands of one shape, while `batch_norm` reads an activation
-    /// against two per-channel vectors, and both arrive here.
-    Triple,
-    /// One operand, for an operation that names an axis.
-    ///
-    /// Separate from [`Operands::Unary`] only so that rank zero can be turned
-    /// away with a reason. A scalar has no axis, and an attribute type with a
-    /// plain `usize` axis field has no way to say so, unlike
-    /// `IndexReductionAttributes` whose `Option` carries the flattened form.
-    UnaryAxis,
-    /// One operand holding exactly one element, at the tuple's rank.
-    ///
-    /// The scalar readbacks are advertised across the whole rank range because
-    /// a one-element tensor exists at every rank. Their contract is about the
-    /// element count, not the rank, which is the one thing a capability row has
-    /// no column for.
-    UnaryScalar,
-}
-
-/// What one operand carries, when the row cannot say.
-///
-/// A capability row applies one dtype set to every operand in turn, so a row
-/// whose operands genuinely differ has to state the *union* of what they carry.
-/// `declarations.rs` says so twice at length, for `INDEX_AND_F32_DTYPES` and
-/// for `F32_AND_BOOL`. The union is the loosest honest claim the row can make
-/// and it is not a claim that either operand may be either dtype, so walking it
-/// and handing every operand the same dtype poses invocations the operation was
-/// never meant to accept.
-///
-/// The split lives here because the fixture is the only place that knows it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Role {
-    /// Carries the tuple's dtype, at the tuple's rank and layout.
-    Tuple,
-    /// A boolean mask at the tuple's shape.
-    Mask,
-    /// A float payload, whatever the row's union says.
-    Float,
-    /// A float matrix, for an operation whose table operand is rank two.
-    FloatMatrix,
-    /// Integer indices at the tuple's shape, all zero so every one is in range.
-    Index,
-    /// Integer indices as a vector, all zero for the same reason.
-    IndexVector,
-    /// The tuple's batch extents followed by two named ones.
-    ///
-    /// The one operand shape a single ladder cannot produce: a matrix product
-    /// reads `[..batch, m, k]` against `[..batch, k, n]`, and the two operands
-    /// agree on `k` while differing on everything else. Naming both trailing
-    /// extents per operand states that agreement, and it states the two harder
-    /// ones above it as well: `addmm` adds a `[..batch, m, n]` addend to the
-    /// same product, and attention reads a query, a key and a value that agree
-    /// pairwise on two different extents.
-    ///
-    /// The strided form is built by transposing the *last* two axes rather
-    /// than the first, or the batch extents of one operand stop agreeing with
-    /// the batch extents of the next.
-    Paired {
-        /// Second-to-last extent.
-        rows: usize,
-        /// Last extent.
-        columns: usize,
-    },
-    /// A convolution filter bank: `[out, in / groups, ..unit spatial]`.
-    ///
-    /// `spatial` is how many trailing kernel axes the operation has. It fixes
-    /// the weight's rank, which `inference.rs` pins exactly, and it also fixes
-    /// which input axis is the channel, read there at `input[len - 1 -
-    /// spatial]`. One number decides both because they are the same fact.
-    ConvWeight {
-        /// Trailing kernel axes: one for `conv1d`, two for `conv2d`.
-        spatial: usize,
-    },
-    /// A transposed convolution filter bank: `[in, out / groups, ..unit
-    /// spatial]`.
-    ///
-    /// The two channel extents trade places against [`Role::ConvWeight`],
-    /// which is the whole difference between the two roles and the reason a
-    /// single one with a flag would read worse than two.
-    ConvTransposeWeight {
-        /// Trailing kernel axes, as in [`Role::ConvWeight`].
-        spatial: usize,
-    },
-    /// One value per output channel or output feature.
-    ///
-    /// A convolution bias is read against `weight[0]` forward and
-    /// `weight[1] * groups` transposed, and a linear bias against `weight[0]`.
-    /// All three are the same extent while groups stay at one, which every
-    /// fixture here keeps them at.
-    OutputVector,
-    /// One value per channel, as batch norm's affine and running state carry.
-    ///
-    /// Axis one absolutely, not counted back from the end.
-    /// `BatchNormAttributes::validate` reads `input[1]`, which agrees with a
-    /// convolution's channel axis at rank four and disagrees below it.
-    ChannelVector,
-    /// The input's final extent, as an RMS norm weight or as a layer norm
-    /// parameter over a one-axis normalized shape.
-    TrailingVector,
-    /// A `[out, in]` projection, where `in` is the input's final extent.
-    LinearWeight,
-}
-
-impl Role {
-    /// Whether this operand carries the tuple's shape, and so its layout.
-    ///
-    /// A role that fixes its own shape is not the operand the layout claim is
-    /// about. The tuple's layout describes the operand carrying its dtype, and
-    /// transposing a per-channel vector or a unit kernel says nothing about
-    /// whether the backend handles a strided activation.
-    pub(crate) const fn follows_tuple_shape(self) -> bool {
-        matches!(self, Self::Tuple | Self::Mask | Self::Float | Self::Index)
-    }
-
-    /// Whether this operand carries the tuple's dtype.
-    ///
-    /// False only for the roles that pin a dtype of their own. A fixture with
-    /// no such operand never lets the tuple's dtype reach the invocation, which
-    /// is what [`varies_with_tuple_dtype`] needs to know: posing an
-    /// unadvertised dtype at a fixture like that changes nothing about the call
-    /// and would report the row executing something it never advertised.
-    pub(crate) const fn carries_tuple_dtype(self) -> bool {
-        !matches!(
-            self,
-            Self::Mask | Self::Float | Self::FloatMatrix | Self::Index | Self::IndexVector
-        )
-    }
-}
-
-/// One operation's fixture: what to feed it and how to call it.
-#[derive(Clone, Copy)]
-pub(crate) struct Fixture {
-    pub(crate) operands: Operands,
-    /// Per-operand roles, or empty when every operand carries the tuple's dtype.
-    pub(crate) roles: &'static [Role],
-    pub(crate) run: Run,
-}
-
-/// Why a tuple could not be executed, when the reason is the harness rather
-/// than the backend.
-///
-/// Kept distinct from a failure throughout. A harness that cannot build an
-/// operand and reports that as a backend defect is worse than no harness,
-/// because it spends a reader's attention on its own gaps.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Coverage {
-    /// No fixture yet for this operation, with the reason it is outstanding.
-    Unfixtured(&'static str),
-    /// A fixture exists but this particular tuple cannot be materialized.
-    Unbuildable(String),
-}
+use super::contracts::{Fixture, Operands, Role, Route, Subject};
 
 // ============================================================================
 // Typed shims
@@ -620,9 +342,11 @@ macro_rules! typed_family {
     };
 }
 
-// Visible to `shaped`, which holds the families whose attributes name extents
-// and so has to build shims of its own. `macro_rules!` is textual and scoped to
-// the rest of the file without this.
+// `macro_rules!` is textual and scoped to the rest of its own file, so a macro
+// is not an item another module can name until this line makes it one. `shaped`
+// is the module that needs them, because it holds the families whose attributes
+// name extents and so has to build shims of its own; the re-export it actually
+// imports from is in `super`.
 pub(crate) use {constant_attribute_shim, derived_attribute_shim, family, typed_family};
 
 family!(
@@ -676,8 +400,17 @@ family!(
         MinDim,
         MinKeepDim,
         ProdDim,
+        LogSumExpDim,
+        LogSumExpKeepDim,
         Cumsum,
         Softmax,
+        // Same operand shape and the same single `axis` attribute as `softmax`
+        // beside it, because it is that operation stopped before its final
+        // exponential. The oracle asks whether the advertised tuple executes,
+        // not whether the numbers are right, so it needs nothing narrower here;
+        // the value the log form must produce is pinned by the shared
+        // conformance vector and by `tensor_ops.rs`.
+        LogSoftmax,
     ]
 );
 
@@ -933,6 +666,66 @@ typed_family!(
     [Scatter]
 );
 
+// Same operands as `scattering` above, but it cannot share that shim. The
+// executor refuses every rule but its own, so posing it with the
+// last-write-wins attribute would record a refusal the operation is entitled to
+// give rather than a tuple that failed to execute.
+constant_attribute_shim!(
+    accumulating_at_zero,
+    ScatterAttributes,
+    ScatterAttributes {
+        axis: 0,
+        duplicate_indices: DuplicateIndexRule::Accumulate,
+    }
+);
+
+typed_family!(
+    accumulating,
+    Operands::Triple,
+    &[Role::Tuple, Role::Index, Role::Tuple],
+    accumulating_at_zero,
+    [ScatterAdd]
+);
+
+// The two halves of the block compression. Each names the representation it
+// *produces* rather than the one it reads, which is what `verify_outputs`
+// checks the attribute against, so the two dtypes are opposite ways round: the
+// row's dtype set describes the operand and the attribute describes the result.
+//
+// Both are stated outright rather than read off the tuple. `quantize` advertises
+// `F32_ONLY` and `dequantize` advertises `Q8_ONLY`, so in each case the tuple
+// carries the operand's dtype and the other end of the conversion is fixed by
+// the CPU executor, which refuses any compression target but `q8_0` and any
+// expansion target that is not a float.
+constant_attribute_shim!(
+    compressing_to_blocks,
+    QuantizationAttributes,
+    QuantizationAttributes {
+        dtype: DTypeId::Q8_0.descriptor()
+    }
+);
+
+constant_attribute_shim!(
+    expanding_to_floats,
+    QuantizationAttributes,
+    QuantizationAttributes {
+        dtype: DTypeId::F32.descriptor()
+    }
+);
+
+family!(
+    compressing,
+    Operands::Unary,
+    compressing_to_blocks,
+    [Quantize]
+);
+family!(
+    expanding,
+    Operands::Unary,
+    expanding_to_floats,
+    [Dequantize]
+);
+
 // `dot` contracts two vectors to a scalar and `outer` expands them to a matrix.
 // Both read two operands of one shape, so the plain binary ladder serves.
 family!(vector_product, Operands::Binary, plain, [Dot, Outer]);
@@ -997,110 +790,3 @@ family!(
     mean_reduced,
     [MseLoss, L1Loss, BceWithLogitsLoss]
 );
-
-/// The fixture for `operation`, or the reason there is not one yet.
-///
-/// Order is arbitrary because the family lists are disjoint. Nothing enforces
-/// that beyond their being written that way, which is worth knowing: naming an
-/// operation twice would silently give whichever family is consulted first.
-pub(crate) fn fixture(operation: OperationKind) -> Result<Fixture, &'static str> {
-    unary_float(operation)
-        .or_else(|| binary_elementwise(operation))
-        .or_else(|| unary_logical(operation))
-        .or_else(|| scalar_elementwise(operation))
-        .or_else(|| reduce_all(operation))
-        .or_else(|| reduce_axis(operation))
-        .or_else(|| index_reduce_axis(operation))
-        .or_else(|| readback(operation))
-        .or_else(|| readback_scalar(operation))
-        .or_else(|| clamping(operation))
-        .or_else(|| interpolating(operation))
-        .or_else(|| transposing(operation))
-        .or_else(|| diagonal_shape(operation))
-        .or_else(|| norm_reduce(operation))
-        .or_else(|| variance_all(operation))
-        .or_else(|| variance_axis(operation))
-        .or_else(|| epsilon_unary(operation))
-        .or_else(|| dropping(operation))
-        .or_else(|| same_dtype_loss(operation))
-        .or_else(|| selecting(operation))
-        .or_else(|| masking(operation))
-        .or_else(|| gathering(operation))
-        .or_else(|| selecting_rows(operation))
-        .or_else(|| embedding_lookup(operation))
-        .or_else(|| matrix_product(operation))
-        .or_else(|| vector_product(operation))
-        .or_else(|| converting_dtype(operation))
-        .or_else(|| unsqueezing(operation))
-        .or_else(|| joining(operation))
-        .or_else(|| reshaping(operation))
-        .or_else(|| narrowing(operation))
-        .or_else(|| flattening(operation))
-        .or_else(|| slicing(operation))
-        .or_else(|| padding(operation))
-        .or_else(|| repeating(operation))
-        .or_else(|| chunking(operation))
-        .or_else(|| splitting(operation))
-        .or_else(|| order_statistic(operation))
-        .or_else(|| sorting(operation))
-        .or_else(|| grouped_norm(operation))
-        .or_else(|| shaped::creating(operation))
-        .or_else(|| shaped::creating_full(operation))
-        .or_else(|| shaped::creating_arange(operation))
-        .or_else(|| shaped::creating_linspace(operation))
-        .or_else(|| shaped::squeezing(operation))
-        .or_else(|| shaped::pooling_max(operation))
-        .or_else(|| shaped::pooling_average(operation))
-        .or_else(|| shaped::pooling_adaptive(operation))
-        .or_else(|| shaped::sliding(operation))
-        .or_else(|| shaped::shuffling(operation))
-        .or_else(|| shaped::convolving_1d(operation))
-        .or_else(|| shaped::convolving_2d(operation))
-        .or_else(|| shaped::convolving_transposed(operation))
-        .or_else(|| shaped::normalizing_layer(operation))
-        .or_else(|| shaped::normalizing_rms(operation))
-        .or_else(|| shaped::normalizing_batch(operation))
-        .or_else(|| fused_product_sum(operation))
-        .or_else(|| attending(operation))
-        .or_else(|| projecting(operation))
-        .or_else(|| class_loss(operation))
-        .or_else(|| scattering(operation))
-        .ok_or_else(|| unfixtured_reason(operation))
-}
-
-/// Whether the tuple's dtype reaches any operand of `operation`'s fixture.
-///
-/// False for a fixture whose every operand has a fixed role, as `embedding`'s
-/// index vector and float table both do. The row's dtype set for such an
-/// operation is a union describing operands the fixture pins, so posing a
-/// different dtype changes nothing about the invocation and the
-/// unadvertised-dtype probe would report the row executing something it never
-/// advertised when in fact the dtype was never used.
-pub(crate) fn varies_with_tuple_dtype(operation: OperationKind) -> bool {
-    fixture(operation).is_ok_and(|fixture| {
-        fixture.roles.is_empty() || fixture.roles.iter().any(|role| role.carries_tuple_dtype())
-    })
-}
-
-/// Why an operation has no fixture, in the terms a contributor closing the gap
-/// would need.
-fn unfixtured_reason(operation: OperationKind) -> &'static str {
-    use OperationKind::*;
-    match operation {
-        Quantize | Dequantize | QuantizedMatMul => {
-            "block-encoded storage: the logical extent and the buffer length              differ by a block size this harness does not know, and inventing              one here would hard-code a backend detail into the enumeration"
-        }
-        TensorFromData | TensorFromBytes => {
-            "the payload rides on the execution request rather than the              attributes, and this harness poses every tuple with no payload              at all; describing the byte length is not enough, the bytes have              to be supplied"
-        }
-        coarse if !coarse.is_exact() => {
-            "a coarse family row rather than an exact identity: it has no              descriptor and nothing to execute, and the exact rows beneath it              carry the coverage"
-        }
-        // Every exact identity the CPU registry advertises today reaches one
-        // of the families above it, so this arm is unreachable in practice. It
-        // stays because removing a fixture must produce a counted gap with a
-        // reason rather than an empty string, which
-        // `every_uncovered_operation_carries_a_reason` asserts.
-        _ => "no fixture yet",
-    }
-}

@@ -207,6 +207,42 @@ fn execute_vector(vector: &ConformanceVector) -> Result<Vec<f64>> {
                 .map(f64::from)
                 .collect())
         }
+        OperationKind::LogSumExpDim => {
+            // A reduction rather than a shape-preserving normalization, so the
+            // last axis of a rank-one operand leaves a scalar. The axis
+            // convention matches the two above for the same reason theirs
+            // match each other.
+            let input = tensor_for_f32(vector.input_shapes[0], vector.inputs[0]);
+            let out = if vector.class == ConformanceClass::InvalidAxis {
+                input.logsumexp(2)?
+            } else {
+                input.logsumexp(-1)?
+            };
+            Ok(out
+                .into_dyn()
+                .to_vec1::<f32>()?
+                .into_iter()
+                .map(f64::from)
+                .collect())
+        }
+        OperationKind::LogSoftmax => {
+            // Same axis convention as `Softmax` above, because it is the same
+            // operation stopped one step earlier. `ln(0.5)` is not exact in
+            // f32, so the row it answers leans on the suite's tolerance rather
+            // than on the exactness the softmax row can claim.
+            let input = tensor_for_f32(vector.input_shapes[0], vector.inputs[0]);
+            let out = if vector.class == ConformanceClass::InvalidAxis {
+                input.log_softmax(2)?
+            } else {
+                input.log_softmax(-1)?
+            };
+            Ok(out
+                .into_dyn()
+                .to_vec1::<f32>()?
+                .into_iter()
+                .map(f64::from)
+                .collect())
+        }
         OperationKind::MseLoss => {
             // Loss kernels are f32 on this backend; all values here are exact.
             let pred = tensor_for_f32(vector.input_shapes[0], vector.inputs[0]);
@@ -290,6 +326,8 @@ fn transcendental(operation: OperationKind) -> bool {
             | OperationKind::Sigmoid
             | OperationKind::Tanh
             | OperationKind::Softmax
+            | OperationKind::LogSoftmax
+            | OperationKind::LogSumExpDim
     )
 }
 
@@ -634,6 +672,8 @@ fn executable_in_this_suite(operation: OperationKind) -> bool {
             | OperationKind::ProdAll
             | OperationKind::MatMulExact
             | OperationKind::Softmax
+            | OperationKind::LogSoftmax
+            | OperationKind::LogSumExpDim
             | OperationKind::MseLoss
             | OperationKind::ToDType
     )
