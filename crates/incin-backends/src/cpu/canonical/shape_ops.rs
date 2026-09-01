@@ -14,9 +14,9 @@ use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::shape_ops::{
     broadcast_left_storage, concat_storage, diag_storage, flatten_storage, gather_storage,
     index_select_storage, lerp_storage, masked_fill_storage, narrow_storage, pad_storage,
-    pixel_shuffle_storage, repeat_storage, scatter_storage, slice_storage, squeeze_storage,
-    stack_storage, tensor_to_dtype_storage, transpose_storage, tril_storage, triu_storage,
-    unfold_storage, unsqueeze_storage, where_storage,
+    pixel_shuffle_storage, repeat_storage, scatter_add_storage, scatter_storage, slice_storage,
+    squeeze_storage, stack_storage, tensor_to_dtype_storage, transpose_storage, tril_storage,
+    triu_storage, unfold_storage, unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -347,6 +347,39 @@ impl<D: Device> Execute<op::Scatter> for CpuBackendImpl<D> {
             ));
         }
         scatter_storage(input, attributes.axis, index, source)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::ScatterAdd> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ScatterAdd, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::ScatterAdd;
+        let [input, index, source] = ternary_operands(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let attributes = request.operation.descriptor().attributes();
+        // The mirror of the guard on `Scatter` above. There the backend refuses
+        // the one rule it does not implement; here it refuses every rule but
+        // the one it does, because summing is the operation rather than a mode
+        // of it, and a caller who asked for last-write-wins on this descriptor
+        // has asked for `scatter` and should be told so rather than quietly
+        // handed a different answer.
+        if attributes.duplicate_indices != DuplicateIndexRule::Accumulate {
+            return Err(invalid(
+                operation,
+                "scatter_add accumulates duplicate indices and implements no other rule; \
+                 use scatter for last-write-wins",
+            ));
+        }
+        scatter_add_storage(input, attributes.axis, index, source)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

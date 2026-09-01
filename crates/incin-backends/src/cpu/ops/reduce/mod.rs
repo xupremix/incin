@@ -63,6 +63,7 @@ use crate::cpu::tape::{self, TapeEntry};
 mod all;
 mod dim;
 mod helpers;
+mod logsumexp;
 mod select;
 #[cfg(test)]
 /// `tests`.
@@ -74,6 +75,10 @@ pub(crate) use dim::{
     sum_keepdim,
 };
 pub(crate) use helpers::sum_axis_keepdim;
+// Composed rather than folded, so it sits in its own file beside the reducers
+// it is built from instead of inside `dim`, whose kernels each own a hand
+// written backward.
+pub(crate) use logsumexp::{logsumexp_dim, logsumexp_keepdim};
 pub(crate) use select::{argmax, argmin, argsort, topk};
 
 // `helpers`'s cross-file machinery is `pub(super)` (this module's own reach,

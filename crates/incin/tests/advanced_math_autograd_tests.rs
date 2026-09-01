@@ -67,6 +67,39 @@ fn test_inplace_operations() -> Result<()> {
 }
 
 #[test]
+fn scatter_add_routes_gradient_to_every_colliding_source() -> Result<()> {
+    // Slot 0 is written by sources 0, 1 and 2; slot 2 by source 3. This is the
+    // collision an overwriting scatter resolves by discarding, and the reason
+    // its catalog row cannot state a gradient at all.
+    let base = Tensor::<s![4], DefaultBackend, f32, Grad>::zeros(())?;
+    let index = Tensor::<s![4], DefaultBackend, u32>::from_slice(&[0, 0, 0, 2], ())?;
+    let src = Tensor::<s![4], DefaultBackend, f32, Grad>::from_slice(&[1.0, 2.0, 4.0, 8.0], ())?;
+
+    let out = base.scatter_add(0, &index, &src)?;
+    assert_eq!(out.to_vec1::<f32>()?, vec![7.0, 0.0, 8.0, 0.0]);
+
+    let grads = out.sum_all()?.backward()?;
+
+    // Every source reached the output exactly once and the objective weights
+    // each output slot by one, so each source's cotangent is one. Under
+    // last-write-wins only source 2 would have earned anything, and which one
+    // that is would be a fact about traversal order rather than about values.
+    assert_eq!(
+        grads.require(&src)?.to_vec1::<f32>()?,
+        vec![1.0, 1.0, 1.0, 1.0]
+    );
+
+    // Addition passes the target through untouched, so its cotangent is the
+    // output's, including at the slots that were written into.
+    assert_eq!(
+        grads.require(&base)?.to_vec1::<f32>()?,
+        vec![1.0, 1.0, 1.0, 1.0]
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_autograd_tape_closures() -> Result<()> {
     let mask = Tensor::<s![3], DefaultBackend, bool>::from_slice(&[true, false, true], ())?;
     let true_val = Tensor::<s![3], DefaultBackend, f32, Grad>::from_slice(&[10.0, 20.0, 30.0], ())?;

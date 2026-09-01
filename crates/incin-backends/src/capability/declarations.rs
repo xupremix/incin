@@ -79,6 +79,14 @@ macro_rules! cpu_descriptor_operations {
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
+                // The exponential and the logarithm underneath `logsumexp` are
+                // f32 arithmetic, which is this group's dtype anyway, and the
+                // shift by the axis maximum keeps every intermediate inside the
+                // range f32 can hold. Both spellings are here for the same
+                // reason `sum_dim` and `sum_keepdim` both are: whether the
+                // reduced axis survives is the caller's choice, not a property
+                // the row can decide for them.
+                LogSumExpDim, LogSumExpKeepDim,
                 // `topk` is here rather than with the other index reductions
                 // because its value buffer is built as f32 whatever the operand
                 // held. f32 is the only operand dtype whose result it labels
@@ -104,7 +112,14 @@ macro_rules! cpu_descriptor_operations {
             // non-float operand, and the row that states is this one. It sat
             // with the shape operations, which re-address bytes of any dtype
             // the backend can hold and share nothing with it but an accessor.
-            normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
+            // `log_softmax` is the same row as `softmax` because it is the same
+            // computation stopped one step earlier: the CPU kernel `softmax`
+            // calls already produces log-probabilities and then exponentiates
+            // them. It is declared separately rather than left to callers to
+            // compose because `log(softmax(x))` sends every entry far below its
+            // row maximum through an exponential that underflows to zero, and
+            // the logarithm of zero is not a number a router can act on.
+            normalization = [Softmax, LogSoftmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
             // `embedding`'s two operands have different dtypes by construction:
             // an integer index and an f32 weight table (`embedding_impl` always
             // reads and writes f32, so a wider float claim here would be the
@@ -125,6 +140,12 @@ macro_rules! cpu_descriptor_operations {
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
+                // Same operands and the same row as `scatter` beside it, and
+                // declared on this backend only. The rule it advertises is a
+                // fixed summation order, which a CUDA kernel built on atomics
+                // could not honour, so the accelerator groups are deliberately
+                // left to claim it once they have a kernel that can.
+                ScatterAdd,
                 PixelShuffle,
                 // `to_dtype` reads through the same stride-aware accessor and
                 // writes a fresh contiguous buffer, which is this group's shape

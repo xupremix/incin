@@ -50,9 +50,16 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     tensor_layouts = CPU_LAYOUTS,
     logical_dtypes = BOOL_ONLY,
     legacy = [
+        // Composed, meaning it materializes the strided operand and reshapes
+        // the copy. Materializing walks the logical index space one value at a
+        // time, and a block encoding has no per-value access: thirty-two
+        // logical values share one scale, so `CpuStorage`'s copy refuses `q8_0`
+        // by name. `NON_QUANTIZED` rather than `ALL_DTYPES` for that reason.
+        // The contiguous reshape above keeps every dtype, because it rewrites
+        // metadata and never reads a value.
         CapabilityRule::new(
             OperationKind::ReshapeExact,
-            ALL_DTYPES,
+            NON_QUANTIZED,
             &[LayoutClass::Strided],
             0,
             usize::MAX,

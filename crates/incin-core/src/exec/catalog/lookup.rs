@@ -24,6 +24,12 @@ pub const fn onnx_name(operation: OperationKind) -> Option<&'static str> {
         OperationKind::Tanh => "Tanh",
         OperationKind::Sigmoid => "Sigmoid",
         OperationKind::Softmax => "Softmax",
+        // ONNX-13 `LogSoftmax` takes the same single `axis` attribute and is
+        // defined by the same formula, so the projection is a rename rather
+        // than a lowering. Exporting it as `Log(Softmax(x))` instead would be
+        // two nodes and would hand the importer the composition this operation
+        // exists to avoid.
+        OperationKind::LogSoftmax => "LogSoftmax",
         OperationKind::ReshapeExact => "Reshape",
         OperationKind::TransposeExact => "Transpose",
         OperationKind::ConcatExact => "Concat",
@@ -49,6 +55,13 @@ pub const fn onnx_name(operation: OperationKind) -> Option<&'static str> {
         OperationKind::Gather => "GatherElements",
         OperationKind::IndexSelect => "Gather",
         OperationKind::Scatter => "ScatterElements",
+        // `scatter_add` is ONNX `ScatterElements` with `reduction="add"`, and
+        // that attribute is precisely what this projection cannot carry: it
+        // maps an operation to a node name and nothing else. Emitting the bare
+        // name would export the default `reduction="none"`, so an importer
+        // would read back the overwriting scatter, which is the silent
+        // contribution loss this operation exists to prevent. Fail closed until
+        // the projection can carry attributes, as `Stack` above already does.
         OperationKind::Unsqueeze => "Unsqueeze",
         OperationKind::Repeat => "Tile",
         OperationKind::Pad => "Pad",

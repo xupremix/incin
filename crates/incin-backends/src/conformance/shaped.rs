@@ -18,8 +18,8 @@ use incin_core::backend_authoring::{Execute, op};
 use incin_core::exec::catalog::{
     AdaptivePool2dAttributes, ArangeAttributes, AvgPool2dAttributes, BatchNormAttributes,
     Conv1dAttributes, Conv2dAttributes, ConvTranspose2dAttributes, CreationAttributes,
-    FullAttributes, LayerNormAttributes, LinspaceAttributes, PixelShuffleAttributes,
-    Pool2dAttributes, UnfoldAttributes,
+    CreationPayload, DataAttributes, DescriptorError, FullAttributes, LayerNormAttributes,
+    LinspaceAttributes, PixelShuffleAttributes, Pool2dAttributes, UnfoldAttributes,
 };
 use incin_core::exec::{CanonicalError, Capabilities, ExecutionContext, Operation, TensorHandle};
 use incin_core::shapes::error::OperationKind;
@@ -41,6 +41,72 @@ derived_attribute_shim!(created_as, CreationAttributes, |tuple| CreationAttribut
     dtype: tuple.dtype,
     device: DeviceId::cpu(),
 });
+
+/// The two data-creation rows, posed with a payload the descriptor accepts.
+///
+/// These cannot go through [`derived_attribute_shim`], which builds attributes
+/// and nothing else. The bytes here are not an attribute: they are borrowed by
+/// the execution request and validated against the descriptor's own arithmetic,
+/// so the length has to be the one `DataAttributes::validate` recomputes rather
+/// than a length this shim considers reasonable. Calling `size_bytes` is what
+/// keeps the two in step, including for a block-encoded dtype whose buffer is
+/// not `numel * width`.
+///
+/// The payload kind is read off the operation because the contract fixes it per
+/// row and rejects the other: `TensorFromData` carries a typed payload whose
+/// dtype must equal the attribute dtype, `TensorFromBytes` carries an opaque
+/// one checked only by length. Posing either kind at both rows would report a
+/// deliberate refusal as a backend defect.
+///
+/// The buffer is zeroed rather than patterned. Every dtype in these rows reads
+/// a zero buffer as a valid tensor of zeros, and the harness asks whether the
+/// advertised tuple executes, not what it computed; values become meaningful
+/// only once a second backend runs the same driver.
+fn from_host_bytes<O>(
+    context: &ExecutionContext<Subject>,
+    tuple: &AdvertisedTuple,
+    route: Route,
+    inputs: &[TensorHandle<'_>],
+) -> Result<(), CanonicalError>
+where
+    O: Operation<Attributes = DataAttributes> + incin_core::exec::CanonicalOperation,
+    Subject: Execute<O> + Capabilities,
+{
+    let shape = materialized_extents(tuple);
+    let elements: usize = shape.iter().product();
+    let byte_len = tuple
+        .dtype
+        .size_bytes(elements, tuple.operation)
+        .map_err(|error| CanonicalError::Descriptor(DescriptorError::Shape(error)))?;
+
+    let payload = match tuple.operation {
+        OperationKind::TensorFromData => CreationPayload::Typed {
+            byte_len,
+            dtype: tuple.dtype,
+        },
+        _ => CreationPayload::Bytes { byte_len },
+    };
+
+    let bytes = alloc::vec![0_u8; byte_len];
+    route.run_with_payload::<O>(
+        context,
+        DataAttributes {
+            shape,
+            dtype: tuple.dtype,
+            device: DeviceId::cpu(),
+            payload,
+        },
+        inputs,
+        Some(&bytes),
+    )
+}
+
+family!(
+    creating_from_host,
+    Operands::Nullary,
+    from_host_bytes,
+    [TensorFromData, TensorFromBytes]
+);
 
 derived_attribute_shim!(filled_with_two, FullAttributes, |tuple| FullAttributes {
     shape: materialized_extents(tuple),

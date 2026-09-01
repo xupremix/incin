@@ -91,6 +91,120 @@ fn test_unary_softmax() -> Result<()> {
     Ok(())
 }
 
+/// `log_softmax` is not `softmax` then `log`, and this is the input that shows
+/// it.
+///
+/// The second row spans two thousand in a single axis. Softmax normalises
+/// against the row maximum, so the two entries below it exponentiate to values
+/// no `f32` can hold apart from zero, and taking the logarithm of that zero
+/// yields negative infinity: the composition destroys exactly the two numbers a
+/// router would compare. Subtracting the log of the summed exponentials instead
+/// never exponentiates the large negative difference at all, so it comes back as
+/// itself.
+///
+/// The assertions are therefore split. The first row, whose entries are equal,
+/// pins the value: three equal logits share the mass, so each log-probability is
+/// `ln(1/3)`, and that holds for either implementation. The second row pins the
+/// difference between the two, and it is stated as `is_finite` plus a wide
+/// tolerance rather than an exact comparison, because the claim under test is
+/// "a usable number survives here", not "this bit pattern survives here".
+#[test]
+fn log_softmax_survives_the_span_that_breaks_softmax_then_log() -> Result<()> {
+    let logits = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(
+        &[
+            1000.0, 1000.0, 1000.0, // equal, so each is ln(1/3)
+            -1000.0, 0.0, 1000.0, // spans 2000, so the composition collapses
+        ],
+        (),
+    )?;
+
+    let direct = to_vec(&logits.log_softmax(1)?.into_dyn());
+    let composed = to_vec(&logits.softmax(1)?.log()?.into_dyn());
+
+    let ln_third = (1.0f32 / 3.0).ln();
+    for index in 0..3 {
+        assert!((direct[index] - ln_third).abs() < 1e-3);
+        assert!((composed[index] - ln_third).abs() < 1e-3);
+    }
+
+    assert!(direct[3].is_finite() && (direct[3] + 2000.0).abs() < 1.0);
+    assert!(direct[4].is_finite() && (direct[4] + 1000.0).abs() < 1.0);
+    assert!((direct[5] - 0.0).abs() < 1e-4);
+
+    // The composition's verdict on the same two entries, asserted rather than
+    // left as a comment, so that a change which makes the composition safe is
+    // reported here instead of quietly making this test pointless.
+    assert!(composed[3].is_infinite() && composed[4].is_infinite());
+
+    Ok(())
+}
+
+/// `logsumexp` holds at magnitudes where the naive spelling has no answer.
+///
+/// The first row sits at 300, where a single `exp` already overflows f32, and
+/// the second at -300, where one underflows to zero. Both are stated against a
+/// closed form that is a maximum plus the log of a small integer, so the
+/// expected value is arithmetic rather than a recorded output.
+///
+/// The composed spelling is executed beside it and asserted to be useless on
+/// both rows, in opposite directions: infinity where the entries are large and
+/// negative infinity where they are small. That the failure has two directions
+/// is the reason the shift is by the maximum rather than by a constant.
+#[test]
+fn logsumexp_holds_where_the_naive_spelling_overflows_and_underflows() -> Result<()> {
+    let logits = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(
+        &[
+            300.0, 300.0, 300.0, // exp overflows: 300 + ln(3)
+            -300.0, -300.0, -400.0, // exp underflows: -300 + ln(2)
+        ],
+        (),
+    )?;
+
+    let direct = to_vec(&logits.logsumexp(1)?.into_dyn());
+    assert!((direct[0] - (300.0 + 3.0f32.ln())).abs() < 1e-2);
+    assert!((direct[1] - (-300.0 + 2.0f32.ln())).abs() < 1e-2);
+
+    let composed = to_vec(&logits.exp()?.sum(1)?.log()?.into_dyn());
+    assert!(composed[0].is_infinite() && composed[0].is_sign_positive());
+    assert!(composed[1].is_infinite() && composed[1].is_sign_negative());
+
+    // The keepdim spelling reduces the same axis and differs only in whether it
+    // survives, which is what makes it usable as a broadcast operand.
+    let kept = logits.logsumexp_keepdim(1)?;
+    assert_eq!(kept.dims().dims(), &[2, 1]);
+    assert_eq!(to_vec(&kept.into_dyn()), direct);
+
+    Ok(())
+}
+
+#[test]
+fn scatter_add_keeps_every_contribution_where_scatter_keeps_one() -> Result<()> {
+    // Four tokens' worth of contributions aimed at three slots. Slot 0 is
+    // written three times and slot 2 once, which is the shape a top-k router
+    // produces when several tokens pick the same expert.
+    let base = Tensor::<s![4], CpuBackendImpl>::zeros(())?;
+    let index = Tensor::<s![4], CpuBackendImpl, u32>::from_slice(&[0, 0, 0, 2], ())?;
+    let src = Tensor::<s![4], CpuBackendImpl>::from_slice(&[1.0, 2.0, 4.0, 8.0], ())?;
+
+    let summed = to_vec(&base.scatter_add(0, &index, &src)?.into_dyn());
+    assert_eq!(summed, vec![7.0, 0.0, 8.0, 0.0]);
+
+    // The overwriting form on the same operands, asserted rather than described,
+    // so that a change making `scatter` accumulate is reported here instead of
+    // quietly making this test redundant. It keeps the last write, 4.0, and the
+    // 1.0 and 2.0 are gone with no error to say so.
+    let overwritten = to_vec(&base.scatter(0, &index, &src)?.into_dyn());
+    assert_eq!(overwritten, vec![4.0, 0.0, 8.0, 0.0]);
+
+    // Adding onto a non-zero target accumulates rather than replacing, which is
+    // what makes the target's own gradient a pass-through.
+    let occupied = Tensor::<s![4], CpuBackendImpl>::from_slice(&[10.0, 20.0, 30.0, 40.0], ())?;
+    let onto = to_vec(&occupied.scatter_add(0, &index, &src)?.into_dyn());
+    assert_eq!(onto, vec![17.0, 20.0, 38.0, 40.0]);
+
+    Ok(())
+}
+
 #[test]
 fn signed_axis_selectors_cover_runtime_and_axis_macro_paths() -> Result<()> {
     let tensor =

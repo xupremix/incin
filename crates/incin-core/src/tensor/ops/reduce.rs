@@ -299,6 +299,53 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         self.execute_reduction::<op::MaxKeepDim, A::Keep>(axis.resolve(self.shape_buf().rank())?)
     }
 
+    /// Computes `log(sum(exp(x)))` over an axis without ever forming `exp(x)`.
+    ///
+    /// The naive spelling is unusable at the magnitudes this is wanted for. A
+    /// single entry above roughly 88 sends `exp` to infinity in f32, and a row
+    /// that sits far enough below zero sends the whole sum to zero and the
+    /// logarithm to negative infinity. Both are ordinary sizes for a router
+    /// logit or an unnormalized log-likelihood. Shifting by the axis maximum
+    /// first bounds every exponential to `(0, 1]`, so the sum lies between one
+    /// and the axis length, and adding the maximum back recovers the answer.
+    ///
+    /// This is the normalizer [`Self::log_softmax`] subtracts, exposed on its
+    /// own because an auxiliary loss usually wants the normalizer rather than
+    /// the normalized values.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[300.0, 300.0, 300.0], ()).unwrap();
+    /// let total = t.logsumexp(0).unwrap().to_vec1::<f32>().unwrap()[0];
+    /// // ln(3 * e^300) = 300 + ln(3). Summing the exponentials directly would
+    /// // have overflowed to infinity three times over before the logarithm.
+    /// assert!((total - (300.0 + 3.0f32.ln())).abs() < 1e-2);
+    /// ```
+    pub fn logsumexp<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
+    where
+        A: ReduceSelector<S>,
+        B: Execute<op::LogSumExpDim> + crate::exec::Capabilities,
+        <B as Execute<op::LogSumExpDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.execute_reduction::<op::LogSumExpDim, A::Drop>(axis.resolve(self.shape_buf().rank())?)
+    }
+
+    /// [`Self::logsumexp`] over a static, named, or runtime axis selector,
+    /// retaining the reduced axis as size one.
+    pub fn logsumexp_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
+    where
+        A: ReduceSelector<S>,
+        B: Execute<op::LogSumExpKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::LogSumExpKeepDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.execute_reduction::<op::LogSumExpKeepDim, A::Keep>(
+            axis.resolve(self.shape_buf().rank())?,
+        )
+    }
+
     /// Computes the minimum over a static, named, or runtime axis selector.
     pub fn min<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
     where

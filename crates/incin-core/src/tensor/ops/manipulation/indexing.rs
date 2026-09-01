@@ -481,6 +481,88 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
+    /// Adds `src` values along `dim` into `self` at `index`, accumulating.
+    ///
+    /// Where [`Self::scatter`] resolves two writes to one position by keeping
+    /// the last, this one keeps both by summing them. That is the difference
+    /// between combining the outputs of a top-`k` router and silently throwing
+    /// `k - 1` of them away: a token routed to several experts writes to its
+    /// row once per expert, and only the accumulating form gives each of those
+    /// contributions, and each of their gradients, an effect on the result.
+    ///
+    /// Summation order is row-major over `index`, and the catalog row claims
+    /// determinism on that basis. Floating-point addition is not associative,
+    /// so this is a promise about the answer's low bits rather than a
+    /// description of the loop, and it is why the operation is currently
+    /// declared on CPU alone.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// // Two sources, both aimed at slot 0, as a token routed to two experts.
+    /// let base = Tensor::<s![3], DefaultBackend>::zeros(()).unwrap();
+    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 0], ()).unwrap();
+    /// let src = Tensor::<s![2], DefaultBackend>::from_slice(&[2.0, 3.0], ()).unwrap();
+    /// let summed = base.scatter_add(0, &index, &src).unwrap();
+    /// // Both contributions land. `scatter` would have kept only the 3.0.
+    /// assert_eq!(summed.to_vec1::<f32>().unwrap(), vec![5.0, 0.0, 0.0]);
+    /// ```
+    pub fn scatter_add<
+        A,
+        S2: Shape,
+        S3: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        G3: RequiresGrad,
+    >(
+        &self,
+        axis: A,
+        index: &Tensor<S2, B, KInt, G2>,
+        src: &Tensor<S3, B, K, G3>,
+    ) -> Result<Self>
+    where
+        A: AxisSelectorArg<S>,
+        S2: ShapeEq<S3>,
+        B: Execute<op::ScatterAdd> + Capabilities,
+        <B as Execute<op::ScatterAdd>>::Output: Into<B::Storage<K>>,
+    {
+        <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
+        let dim = axis.resolve(self.shape_buf().rank())?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
+            TensorHandle::from_storage::<B, K, Local>(&src.inner),
+        ];
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::ScatterAdd, B, S>(
+                    &context,
+                    ScatterAttributes {
+                        axis: dim,
+                        // Fixed rather than a parameter, for the reason the
+                        // issue that asked for this operation gives: an
+                        // `accumulate` flag would make a change of semantics
+                        // look like a setting, and would leave the determinism
+                        // contract conditional on an attribute value.
+                        duplicate_indices: DuplicateIndexRule::Accumulate,
+                    },
+                    &inputs,
+                    &self._shape,
+                )
+            })?
+            .into();
+        Tensor::from_shape_value(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
     /// Selects slices along `dim` given 1D `index`.
     pub fn index_select<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
         &self,

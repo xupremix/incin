@@ -320,6 +320,104 @@ pub(crate) fn scatter_storage(
     Ok(out_storage)
 }
 
+/// `scatter_add`: like [`scatter_storage`], except colliding writes sum rather
+/// than the last one winning.
+///
+/// The difference is one operator in the forward loop and a much shorter
+/// backward. `scatter_storage` has to work out which write to each destination
+/// survived, because only that one earned the cotangent and the rest
+/// contributed nothing to the result. Summing keeps every contribution, so
+/// there is no survivor to identify: each write takes the output cotangent at
+/// the destination it wrote, and the target keeps its own everywhere, since
+/// adding to a value does not displace it.
+///
+/// That is what makes this the combine step for a top-`k` router. A token sent
+/// to `k` experts writes `k` times to the same row, and under
+/// [`scatter_storage`] that row would keep one expert's output and silently
+/// discard the other `k - 1`, gradients included.
+///
+/// Accumulation runs in row-major order of `index`. Floating-point addition is
+/// not associative, so that order is part of the contract rather than an
+/// implementation detail, and it is why the catalog row claims determinism: a
+/// backend summing with atomics would produce a different low bit run to run
+/// and could not advertise this operation.
+pub(crate) fn scatter_add_storage(
+    t: &CpuStorage,
+    dim: usize,
+    index: &CpuStorage,
+    source: &CpuStorage,
+) -> Result<CpuStorage> {
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut out_data: Vec<f64> = (0..total)
+        .map(|i| t.get(&crate::cpu::ops::elementwise::flat_to_nd(i, &t.shape)))
+        .collect();
+    let index_total = crate::cpu::stride::checked_numel(&index.shape)?;
+    let strides = crate::cpu::stride::contiguous_strides(&t.shape);
+    // Every write is recorded, not just the last one to each destination, which
+    // is the whole difference from `scatter_storage`'s bookkeeping.
+    let mut writes: Vec<(usize, Vec<usize>)> = Vec::with_capacity(index_total);
+    let mut idx = vec![0usize; index.shape.len()];
+    for _ in 0..index_total {
+        let target_i = index.get(&idx) as usize;
+        let mut dest_idx = idx.clone();
+        dest_idx[dim] = target_i;
+        let flat_dest: usize = dest_idx
+            .iter()
+            .zip(strides.iter())
+            .map(|(&i, &stride)| i * stride)
+            .sum();
+        // Out-of-range destinations are dropped rather than clamped, matching
+        // `scatter_storage`: clamping would silently add a contribution to a
+        // row the caller never named.
+        if flat_dest < out_data.len() {
+            out_data[flat_dest] += source.get(&idx);
+            writes.push((flat_dest, idx.clone()));
+        }
+        if !index.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &index.shape);
+        }
+    }
+    let out_storage = CpuStorage::from_contiguous(t.buffer.from_f64_values(out_data)?, &t.shape);
+
+    let t_cap = t.clone();
+    let source_cap = source.clone();
+    let (t_id, source_id, out_id) = (t.id, source.id, out_storage.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id, source_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let t_total = crate::cpu::stride::checked_numel(&t_cap.shape)?;
+            // The target is passed through by addition, so its cotangent is the
+            // output's untouched. No position is zeroed the way an overwriting
+            // scatter has to zero the ones it clobbered.
+            let grad_t: Vec<f64> = (0..t_total)
+                .map(|i| {
+                    grad_out.get(&crate::cpu::ops::elementwise::flat_to_nd(
+                        i,
+                        &grad_out.shape,
+                    ))
+                })
+                .collect();
+            let mut grad_source = vec![0.0; crate::cpu::stride::checked_numel(&source_cap.shape)?];
+            for (flat_dest, src_idx) in &writes {
+                let flat_src = flatten_index_checked(src_idx, &source_cap.shape);
+                grad_source[flat_src] += grad_out.get(&crate::cpu::ops::elementwise::flat_to_nd(
+                    *flat_dest,
+                    &grad_out.shape,
+                ));
+            }
+            Ok(vec![
+                CpuStorage::from_contiguous(grad_out.buffer.from_f64_values(grad_t)?, &t_cap.shape),
+                CpuStorage::from_contiguous(
+                    grad_out.buffer.from_f64_values(grad_source)?,
+                    &source_cap.shape,
+                ),
+            ])
+        }),
+    });
+    Ok(out_storage)
+}
+
 /// Flat row-major index of `idx` within `shape`, saturating each coordinate
 /// into range so an out-of-bounds write target cannot panic in backward.
 fn flatten_index_checked(idx: &[usize], shape: &[usize]) -> usize {
