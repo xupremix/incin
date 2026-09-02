@@ -128,14 +128,40 @@ Next along this line, in order of value:
 
 1. Extend `ShapeEvidence` with static extents, so strides fold to literals, the
    `%` and `/` per axis per element become multiply-shifts, and both
-   `clone_htod` uploads and both pointer parameters disappear. **This has a real
-   design question in front of it**: `ShapeEvidence` is `Copy` with fixed fields,
-   and extents are variable-length. A `&'static [usize]` cannot be built from a
-   `DimCons` chain in a const context, so the options are a fixed
-   `[Option<usize>; MAX_RANK]` array (simple, caps rank, costs size in a type
-   that is copied on every dispatch) or a trait-level associated const array
-   parameterised on rank. Worth deciding deliberately rather than discovering
-   halfway through.
+   `clone_htod` uploads and both pointer parameters disappear.
+
+   An earlier draft of this note claimed `&'static [usize]` "cannot be built
+   from a `DimCons` chain in a const context" and offered a fixed
+   `[Option<usize>; MAX_RANK]` field as the pragmatic option. That was wrong,
+   and the mistake was conflating the construction vehicle with the payload.
+
+   The working shape, verified on the pinned 1.97.1 toolchain with no unstable
+   features:
+
+   ```rust
+   const BUF: [usize; MAX];                  // construction only
+   const EXTENTS: &'static [usize] = Self::BUF.split_at(Self::RANK).0;
+   ```
+
+   A fixed-size array is how the recursive `prepend` is written, because
+   prepending to a chain needs a length that does not depend on `Self::RANK`
+   (that would want `generic_const_exprs`). But the array stays internal. What
+   `ShapeEvidence` carries is the *slice*, promoted into `.rodata`: exact
+   length, and 16 bytes rather than `MAX_RANK` elements' worth. That matters
+   because `ShapeEvidence` is `Copy` and rides along on every dispatch.
+
+   The rank cap moves to the construction buffer, where exceeding it is a
+   compile-time `evaluation panicked: mid > len` rather than a silent
+   truncation — the correct failure mode for a proof, which must never quietly
+   report less than it knows. Prefer `Option<usize>` per axis over `usize`, so
+   a `Mixed` shape can still contribute the axes it does know: a static inner
+   dimension is enough to fold that axis's stride even when the batch axis is
+   dynamic.
+
+   There is no const heap allocation to reach for here, and none is wanted.
+   `Vec::push` is not const-stable on 1.97.1 (rust-lang/rust#143874). `'static`
+   data is statically allocated, not heap allocated, and const promotion already
+   provides it.
 2. Apply the same projection to the binary family and to reductions. Mechanical
    once (1) settles the representation, since binary needs two operands' extents.
 3. Weigh cache pressure once extents are in. Specialising on exact extents rather
