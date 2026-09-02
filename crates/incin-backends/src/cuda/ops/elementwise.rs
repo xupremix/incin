@@ -314,7 +314,7 @@ fn render_unary_strategy(
     layout: LayoutClass,
     strategy: PointwiseStrategy,
     specialization: crate::kernel::KernelSpecialization,
-    iterated_shape: &[usize],
+    index_extents: Option<&alloc::vec::Vec<usize>>,
 ) -> Result<crate::kernel::RenderedKernel> {
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
@@ -325,9 +325,7 @@ fn render_unary_strategy(
                 builtin_id,
                 layout,
                 unroll_width,
-                // Resolved here because this is the only layer holding both the
-                // frontend's proof and the shape the kernel will actually walk.
-                specialization.unrollable_extents(iterated_shape),
+                index_extents.cloned(),
             )
         }
         PointwiseStrategy::Packed { .. } => crate::kernel::render_cuda_unary_packed_body(
@@ -486,6 +484,17 @@ pub(crate) fn launch_unary_body(
     let layout = plan.layout_class();
     let numel = plan.numel;
     let strategy = select_unary_strategy(b.dtype, layout, numel, plan.operand.offset)?;
+    // Resolved once, here, because this is the only layer holding both the
+    // frontend's proof and the shape the kernel will actually walk -- and
+    // because the same answer decides two things that must not disagree: what
+    // the renderer emits, and which arguments the launch supplies. Deriving it
+    // twice would let those drift into a signature mismatch, which CUDA reports
+    // as corrupt output rather than as an error.
+    let index_extents = if layout == LayoutClass::Strided {
+        specialization.unrollable_extents(&plan.output_shape)
+    } else {
+        None
+    };
     let kernel = render_unary_strategy(
         op_name,
         body,
@@ -493,7 +502,7 @@ pub(crate) fn launch_unary_body(
         layout,
         strategy,
         specialization,
-        &plan.output_shape,
+        index_extents.as_ref(),
     )?;
     let packed_width = crate::tuning::preferred_pointwise_width(b.dtype);
     let dense = layout == LayoutClass::Contiguous;
@@ -514,7 +523,7 @@ pub(crate) fn launch_unary_body(
             layout,
             strategy,
             specialization,
-            &plan.output_shape,
+            index_extents.as_ref(),
         )
     })?;
     let dtype = prepared
@@ -579,32 +588,59 @@ pub(crate) fn launch_unary_body(
                 execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
             }
             Some((shape_i32, strides_i32, ndim_i32)) => {
-                let shape_dev = stream
-                    .clone_htod(&shape_i32)
-                    .map_err(|error| Error::Msg(format!("CUDA shape upload failed: {error:?}")))?;
                 let strides_dev = stream
                     .clone_htod(&strides_i32)
                     .map_err(|error| Error::Msg(format!("CUDA stride upload failed: {error:?}")))?;
-                let mut launch = |candidate: &PreparedPointwiseKernel| -> Result<()> {
-                    let config = launch_config(
-                        numel,
-                        candidate.kernel.elements_per_thread(),
-                        candidate.candidate.block_size,
-                    )?;
-                    stream
-                        .launch_builder(&candidate.function)
-                        .arg(&*b.data)
-                        .arg(&mut *out_slice_u8)
-                        .arg(&shape_dev)
-                        .arg(&strides_dev)
-                        .arg(&offset_i32)
-                        .arg(&numel_i32)
-                        .arg(&ndim_i32)
-                        .launch(config)
-                        .map(|_| ())
-                        .map_err(|error| Error::Msg(format!("Kernel launch failed: {error:?}")))
-                };
-                execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
+                if index_extents.is_some() {
+                    // The extents are literals in the source, so the kernel has
+                    // no `shape` or `ndim` parameter and the upload that fed
+                    // them is skipped entirely -- one fewer host-to-device copy
+                    // per launch. The argument list must match the signature
+                    // `render_cuda_unary_for_layout_body` emitted for the very
+                    // same `index_extents`, which is why both read one value.
+                    let mut launch = |candidate: &PreparedPointwiseKernel| -> Result<()> {
+                        let config = launch_config(
+                            numel,
+                            candidate.kernel.elements_per_thread(),
+                            candidate.candidate.block_size,
+                        )?;
+                        stream
+                            .launch_builder(&candidate.function)
+                            .arg(&*b.data)
+                            .arg(&mut *out_slice_u8)
+                            .arg(&strides_dev)
+                            .arg(&offset_i32)
+                            .arg(&numel_i32)
+                            .launch(config)
+                            .map(|_| ())
+                            .map_err(|error| Error::Msg(format!("Kernel launch failed: {error:?}")))
+                    };
+                    execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
+                } else {
+                    let shape_dev = stream.clone_htod(&shape_i32).map_err(|error| {
+                        Error::Msg(format!("CUDA shape upload failed: {error:?}"))
+                    })?;
+                    let mut launch = |candidate: &PreparedPointwiseKernel| -> Result<()> {
+                        let config = launch_config(
+                            numel,
+                            candidate.kernel.elements_per_thread(),
+                            candidate.candidate.block_size,
+                        )?;
+                        stream
+                            .launch_builder(&candidate.function)
+                            .arg(&*b.data)
+                            .arg(&mut *out_slice_u8)
+                            .arg(&shape_dev)
+                            .arg(&strides_dev)
+                            .arg(&offset_i32)
+                            .arg(&numel_i32)
+                            .arg(&ndim_i32)
+                            .launch(config)
+                            .map(|_| ())
+                            .map_err(|error| Error::Msg(format!("Kernel launch failed: {error:?}")))
+                    };
+                    execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
+                }
             }
         }?;
     }

@@ -134,11 +134,9 @@ const CUDA_UNARY_TEMPLATE: &str = r#"
 extern "C" __global__ void {ENTRY_POINT}(
     const {STORAGE_TYPE}* input,
     {STORAGE_TYPE}* output,
-    const int* shape,
-    const int* strides,
+{SHAPE_PARAM}    const int* strides,
     int offset,
-    int numel,
-    int ndim
+    int numel{NDIM_PARAM}
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < numel) {
@@ -345,9 +343,16 @@ fn render_cuda_body(
     let op_expr = body.value.as_str();
     // Only the strided templates carry an index walk; the dense ones address
     // linearly and leave the slot absent.
-    let index_calc = match &index_calc {
-        Some(extents) => static_index_calc(extents),
-        None => DYNAMIC_INDEX_CALC.into(),
+    // Baking the extents also retires the `shape` array and `ndim`: nothing in
+    // the unrolled walk reads them, so the parameters come off the signature and
+    // the launcher stops uploading a buffer per launch to feed them.
+    let (index_calc, shape_param, ndim_param) = match &index_calc {
+        Some(extents) => (static_index_calc(extents), "", ""),
+        None => (
+            DYNAMIC_INDEX_CALC.into(),
+            "    const int* shape,\n",
+            ",\n    int ndim",
+        ),
     };
     if !matches!(unroll_width, 1 | 2 | 4) {
         return Err(Error::Msg(format!(
@@ -394,6 +399,8 @@ fn render_cuda_body(
         .replace("{UNROLL_WIDTH}", &unroll_width.to_string())
         .replace("{PROLOGUE}", prologue)
         .replace("{INDEX_CALC}", &index_calc)
+        .replace("{SHAPE_PARAM}", shape_param)
+        .replace("{NDIM_PARAM}", ndim_param)
         .replace("{OP}", op_expr);
 
     Ok(RenderedKernel {

@@ -765,6 +765,27 @@ fn proven_extents_replace_the_strided_divisors_with_literals() {
     // Strides stay dynamic in both: they are a property of the view.
     assert!(general.contains("strides[i]"));
     assert!(unrolled.contains("strides[1]") && unrolled.contains("strides[0]"));
+
+    // The signature must shed the parameters the unrolled walk no longer reads.
+    // This is the half the launcher has to agree with: it supplies a shorter
+    // argument list for exactly this kernel, and a mismatch would be read as
+    // corrupt output rather than reported as an error.
+    assert!(
+        general.contains("const int* shape,") && general.contains("int ndim"),
+        "the general kernel takes the extents as parameters"
+    );
+    assert!(
+        !unrolled.contains("const int* shape,"),
+        "a baked-extent kernel must not declare the shape parameter:\n{unrolled}"
+    );
+    assert!(
+        !unrolled.contains("int ndim"),
+        "a baked-extent kernel must not declare ndim:\n{unrolled}"
+    );
+    assert!(
+        unrolled.contains("const int* strides,"),
+        "strides are still a parameter, since the view supplies them:\n{unrolled}"
+    );
     // The outermost axis consumes what is left, so its division is dead.
     assert!(
         !unrolled.contains("temp /= 3"),
