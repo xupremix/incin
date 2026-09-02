@@ -1,4 +1,5 @@
 #[non_exhaustive] pub enum incin_core::backend_authoring::UnsupportedReason
+#[non_exhaustive] pub enum incin_core::backend_authoring::operations::DuplicateIndexRule
 #[non_exhaustive] pub enum incin_core::dist::PlacementKind
 #[non_exhaustive] pub enum incin_core::dist::placement::PlacementKind
 #[non_exhaustive] pub enum incin_core::error::BackendError
@@ -6,6 +7,7 @@
 #[non_exhaustive] pub enum incin_core::error::Error
 #[non_exhaustive] pub enum incin_core::exec::UnsupportedReason
 #[non_exhaustive] pub enum incin_core::exec::capability::UnsupportedReason
+#[non_exhaustive] pub enum incin_core::exec::catalog::DuplicateIndexRule
 #[non_exhaustive] pub enum incin_core::prelude::Axis
 #[non_exhaustive] pub enum incin_core::prelude::BackendError
 #[non_exhaustive] pub enum incin_core::prelude::BackwardError
@@ -284,6 +286,9 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Log
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Log10
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Log2
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::LogSoftmax
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::LogSumExpDim
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::LogSumExpKeepDim
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::LogicalAnd
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::LogicalNot
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::LogicalOr
@@ -332,6 +337,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Sample
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::ScaledDotProductAttention
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Scatter
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::ScatterAdd
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::SgdStep
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Sigmoid
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Sign
@@ -462,6 +468,9 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Lin
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Log
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Log10
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Log2
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::LogSoftmax
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::LogSumExpDim
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::LogSumExpKeepDim
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::LogicalAnd
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::LogicalNot
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::LogicalOr
@@ -510,6 +519,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Rsq
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sample
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::ScaledDotProductAttention
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Scatter
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::ScatterAdd
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::SgdStep
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sigmoid
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sign
@@ -772,6 +782,7 @@ impl incin_core::shapes::broadcast::BroadcastDim<usize> for usize
 impl incin_core::shapes::broadcast::BroadcastShape<incin_core::shapes::Dyn> for incin_core::shapes::Nil
 impl incin_core::shapes::broadcast::BroadcastShape<incin_core::shapes::Nil> for incin_core::shapes::Nil
 impl incin_core::shapes::broadcast::ReverseShape for incin_core::shapes::Nil
+impl incin_core::shapes::layout::Layout for incin_core::shapes::layout::Unknown
 impl incin_core::tensor::allocation::CheckedByteLen
 impl incin_core::tensor::arg_into::ArgInto<((), ((), ((), (usize, ((), ())))))> for ((), ((), ((), (usize, ((), ())))))
 impl incin_core::tensor::arg_into::ArgInto<(usize, ())> for [usize; 1]
@@ -1361,6 +1372,7 @@ impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B, K: incin_co
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::exec::capability::Capabilities, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad + incin_core::tensor::grad::GradJoin<G, Output = G>> incin_core::prelude::Tensor<S, B, K, G> where <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, K, G> where <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend + incin_core::exec::capability::Capabilities + core::default::Default, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, bool, G>
+impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G, P, L>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, G, P>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad> incin_core::distributions::TensorDistributionExt<S, B, K, G> for incin_core::prelude::Tensor<S, B, K, G>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, K, G>
@@ -1419,11 +1431,13 @@ impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend + i
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend + incin_core::exec::capability::Capabilities + core::default::Default, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, bool, G>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend + incin_core::exec::capability::Capabilities + core::default::Default, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, K, G>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, bool, G>
-impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G1: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, K, G1>
-impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement> core::clone::Clone for incin_core::prelude::Tensor<S, B, K, G, P>
+impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G1: incin_core::tensor::grad::RequiresGrad, L1: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>
+impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, L: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>
+impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout> core::clone::Clone for incin_core::prelude::Tensor<S, B, K, G, P, L>
+impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G, P, L>
+impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::Unknown>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, G, P>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>
-impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad> incin_core::prelude::Tensor<S, B, K, G>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::Grad, P>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::NoGrad, P>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType> incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::Grad>
@@ -1444,6 +1458,10 @@ impl<S: incin_core::shapes::Shape> incin_core::nn::loss::BCEWithLogitsShape<S> f
 impl<S: incin_core::shapes::Shape> incin_core::nn::loss::L1Shape<S> for S
 impl<S: incin_core::shapes::Shape> incin_core::nn::loss::MSEShape<S> for S
 impl<S: incin_core::shapes::Shape> incin_core::shapes::ShapeValue<S>
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Contiguous for incin_core::shapes::layout::RowMajor<S>
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout for incin_core::shapes::layout::RowMajor<S>
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::layout::RowMajor<S>
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::layout::Unknown
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::Mean
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::NoneReduction
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::Sum
@@ -2721,6 +2739,7 @@ pub const fn incin_core::exec::precision::RuntimePrecisionPolicy::with_accumulat
 pub const fn incin_core::exec::precision::RuntimePrecisionPolicy::with_compute(self, incin_core::exec::precision::PrecisionChoice) -> Self
 pub const fn incin_core::exec::precision::precision::Exact<K>::new() -> Self
 pub const fn incin_core::exec::proof::ShapeEvidence::proof(self) -> incin_core::exec::ProofLevel
+pub const fn incin_core::exec::proof::ShapeEvidence::static_extents(self) -> &'static [core::option::Option<usize>]
 pub const fn incin_core::exec::proof::ShapeEvidence::static_numel(self) -> core::option::Option<usize>
 pub const fn incin_core::exec::proof::ShapeEvidence::static_rank(self) -> core::option::Option<usize>
 pub const fn incin_core::exec::proof::Validated<O>::descriptor(&self) -> &O
@@ -2963,6 +2982,12 @@ pub const incin_core::exec::catalog::op::Log2::ID: incin_core::shapes::Operation
 pub const incin_core::exec::catalog::op::Log2::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Log::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Log::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::LogSoftmax::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::LogSoftmax::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::LogSumExpDim::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::LogSumExpDim::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::LogSumExpKeepDim::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::LogSumExpKeepDim::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::LogicalAnd::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::LogicalAnd::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::LogicalNot::ID: incin_core::shapes::OperationKind
@@ -3059,6 +3084,8 @@ pub const incin_core::exec::catalog::op::ScaledDotProductAttention::ID: incin_co
 pub const incin_core::exec::catalog::op::ScaledDotProductAttention::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Scatter::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Scatter::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::ScatterAdd::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::ScatterAdd::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::SgdStep::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::SgdStep::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Sigmoid::ID: incin_core::shapes::OperationKind
@@ -3178,10 +3205,15 @@ pub const incin_core::prelude::Dim::STATIC: incin_core::shapes::StaticExtent
 pub const incin_core::prelude::Dim::STATIC_SIZE: bool
 pub const incin_core::prelude::Dim::STATIC_VALID: ()
 pub const incin_core::prelude::INLINE_RANK: usize
+pub const incin_core::prelude::Layout::PROOF: incin_core::exec::ProofLevel
+pub const incin_core::prelude::Layout::STATIC_ALIGNMENT: core::option::Option<usize>
+pub const incin_core::prelude::Layout::STATIC_OFFSET: core::option::Option<usize>
+pub const incin_core::prelude::Layout::STATIC_STRIDES: &'static [core::option::Option<usize>]
 pub const incin_core::prelude::Q8_0::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
 pub const incin_core::prelude::Q8_0::DTYPE: incin_core::prelude::DTypeId
 pub const incin_core::prelude::Shape::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::prelude::Shape::RANK: core::option::Option<usize>
+pub const incin_core::prelude::Shape::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::prelude::Shape::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::prelude::Shape::STATIC_VALID: ()
 pub const incin_core::prelude::TrainState::TRAINABLE: bool
@@ -3211,10 +3243,12 @@ pub const incin_core::shapes::Dim::STATIC_VALID: ()
 pub const incin_core::shapes::DimCompatible::STATIC_ASSERT: ()
 pub const incin_core::shapes::DimCons<H, T>::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::DimCons<H, T>::RANK: core::option::Option<usize>
+pub const incin_core::shapes::DimCons<H, T>::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::DimCons<H, T>::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::DimCons<H, T>::STATIC_VALID: ()
 pub const incin_core::shapes::Dyn::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::Dyn::RANK: core::option::Option<usize>
+pub const incin_core::shapes::Dyn::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::Dyn::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::Dyn::STATIC_VALID: ()
 pub const incin_core::shapes::ExactDivDim<A, B>::NAME: core::option::Option<&'static str>
@@ -3226,6 +3260,11 @@ pub const incin_core::shapes::FromEnd<I>::DEFAULT: Self
 pub const incin_core::shapes::FromEnd<I>::INDEX: isize
 pub const incin_core::shapes::Here::INDEX: isize
 pub const incin_core::shapes::INLINE_RANK: usize
+pub const incin_core::shapes::Layout::PROOF: incin_core::exec::ProofLevel
+pub const incin_core::shapes::Layout::STATIC_ALIGNMENT: core::option::Option<usize>
+pub const incin_core::shapes::Layout::STATIC_OFFSET: core::option::Option<usize>
+pub const incin_core::shapes::Layout::STATIC_STRIDES: &'static [core::option::Option<usize>]
+pub const incin_core::shapes::MAX_STATIC_RANK: usize
 pub const incin_core::shapes::MulDim<A, B>::NAME: core::option::Option<&'static str>
 pub const incin_core::shapes::MulDim<A, B>::STATIC: incin_core::shapes::StaticExtent
 pub const incin_core::shapes::MulDim<A, B>::STATIC_SIZE: bool
@@ -3238,15 +3277,18 @@ pub const incin_core::shapes::Next<I>::DEFAULT: Self
 pub const incin_core::shapes::Next<I>::INDEX: isize
 pub const incin_core::shapes::Nil::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::Nil::RANK: core::option::Option<usize>
+pub const incin_core::shapes::Nil::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::Nil::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::Nil::STATIC_VALID: ()
 pub const incin_core::shapes::Ranked<R>::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::Ranked<R>::RANK: core::option::Option<usize>
+pub const incin_core::shapes::Ranked<R>::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::Ranked<R>::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::Ranked<R>::STATIC_VALID: ()
 pub const incin_core::shapes::ReverseAxis<I>::DEFAULT: Self
 pub const incin_core::shapes::Shape::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::Shape::RANK: core::option::Option<usize>
+pub const incin_core::shapes::Shape::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::Shape::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::Shape::STATIC_VALID: ()
 pub const incin_core::shapes::ShapeBuf::SCALAR: Self
@@ -3261,6 +3303,18 @@ pub const incin_core::shapes::dim::Dim::STATIC_VALID: ()
 pub const incin_core::shapes::dim::DimCompatible::STATIC_ASSERT: ()
 pub const incin_core::shapes::idx::AxisCursor::INDEX: isize
 pub const incin_core::shapes::idx::StaticCursor::INDEX: isize
+pub const incin_core::shapes::layout::Layout::PROOF: incin_core::exec::ProofLevel
+pub const incin_core::shapes::layout::Layout::STATIC_ALIGNMENT: core::option::Option<usize>
+pub const incin_core::shapes::layout::Layout::STATIC_OFFSET: core::option::Option<usize>
+pub const incin_core::shapes::layout::Layout::STATIC_STRIDES: &'static [core::option::Option<usize>]
+pub const incin_core::shapes::layout::RowMajor<S>::PROOF: incin_core::exec::ProofLevel
+pub const incin_core::shapes::layout::RowMajor<S>::STATIC_ALIGNMENT: core::option::Option<usize>
+pub const incin_core::shapes::layout::RowMajor<S>::STATIC_OFFSET: core::option::Option<usize>
+pub const incin_core::shapes::layout::RowMajor<S>::STATIC_STRIDES: &'static [core::option::Option<usize>]
+pub const incin_core::shapes::layout::Unknown::PROOF: incin_core::exec::ProofLevel
+pub const incin_core::shapes::layout::Unknown::STATIC_ALIGNMENT: core::option::Option<usize>
+pub const incin_core::shapes::layout::Unknown::STATIC_OFFSET: core::option::Option<usize>
+pub const incin_core::shapes::layout::Unknown::STATIC_STRIDES: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::prelude::AxisTag::NAME: &'static str
 pub const incin_core::shapes::prelude::Dim::NAME: core::option::Option<&'static str>
 pub const incin_core::shapes::prelude::Dim::STATIC: incin_core::shapes::StaticExtent
@@ -3268,12 +3322,16 @@ pub const incin_core::shapes::prelude::Dim::STATIC_SIZE: bool
 pub const incin_core::shapes::prelude::Dim::STATIC_VALID: ()
 pub const incin_core::shapes::prelude::DimCompatible::STATIC_ASSERT: ()
 pub const incin_core::shapes::prelude::INLINE_RANK: usize
+pub const incin_core::shapes::prelude::MAX_STATIC_RANK: usize
 pub const incin_core::shapes::prelude::Shape::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::prelude::Shape::RANK: core::option::Option<usize>
+pub const incin_core::shapes::prelude::Shape::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::prelude::Shape::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::prelude::Shape::STATIC_VALID: ()
+pub const incin_core::shapes::shape::MAX_STATIC_RANK: usize
 pub const incin_core::shapes::shape::Shape::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::shape::Shape::RANK: core::option::Option<usize>
+pub const incin_core::shapes::shape::Shape::STATIC_EXTENTS: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::shape::Shape::STATIC_NUMEL: core::option::Option<usize>
 pub const incin_core::shapes::shape::Shape::STATIC_VALID: ()
 pub const incin_core::tensor::device::DeviceId::CPU: Self
@@ -3318,7 +3376,6 @@ pub enum incin_core::backend_authoring::operations::BroadcastingRule
 pub enum incin_core::backend_authoring::operations::DTypeRule
 pub enum incin_core::backend_authoring::operations::DescriptorCaptureError
 pub enum incin_core::backend_authoring::operations::DescriptorError
-pub enum incin_core::backend_authoring::operations::DuplicateIndexRule
 pub enum incin_core::backend_authoring::operations::EmptyRule
 pub enum incin_core::backend_authoring::operations::ExecutionSite
 pub enum incin_core::backend_authoring::operations::GradientRule
@@ -3372,7 +3429,6 @@ pub enum incin_core::exec::catalog::CreationPayload
 pub enum incin_core::exec::catalog::DTypeRule
 pub enum incin_core::exec::catalog::DescriptorCaptureError
 pub enum incin_core::exec::catalog::DescriptorError
-pub enum incin_core::exec::catalog::DuplicateIndexRule
 pub enum incin_core::exec::catalog::EmptyRule
 pub enum incin_core::exec::catalog::ExecutionSite
 pub enum incin_core::exec::catalog::GradientRule
@@ -5563,6 +5619,15 @@ pub fn incin_core::exec::catalog::op::Log2::infer_outputs(&Self::Attributes, &[i
 pub fn incin_core::exec::catalog::op::Log::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Log::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Log::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSoftmax::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSoftmax::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSoftmax::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSumExpDim::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSumExpDim::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSumExpDim::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSumExpKeepDim::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSumExpKeepDim::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::LogSumExpKeepDim::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::LogicalAnd::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::LogicalAnd::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::LogicalAnd::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -5707,6 +5772,9 @@ pub fn incin_core::exec::catalog::op::ScaledDotProductAttention::infer_outputs(&
 pub fn incin_core::exec::catalog::op::Scatter::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Scatter::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Scatter::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::ScatterAdd::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::ScatterAdd::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::ScatterAdd::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::SgdStep::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::SgdStep::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::SgdStep::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -6927,40 +6995,85 @@ pub fn incin_core::prelude::StateMutVisitor::visit_buffer<S, K>(&mut self, &inci
 pub fn incin_core::prelude::StateMutVisitor::visit_param<S, K, Train>(&mut self, &incin_core::nn::state::StatePath, &mut incin_core::nn::param::Param<S, B, K, Train>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop, Train: incin_core::nn::param::TrainState
 pub fn incin_core::prelude::StateVisitor::visit_buffer<S, K>(&mut self, &incin_core::nn::state::StatePath, &incin_core::nn::param::Buffer<S, B, K>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop
 pub fn incin_core::prelude::StateVisitor::visit_param<S, K, Train>(&mut self, &incin_core::nn::state::StatePath, &incin_core::nn::param::Param<S, B, K, Train>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop, Train: incin_core::nn::param::TrainState
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::builtin_dtype_id(&self) -> core::option::Option<incin_core::prelude::DTypeId>
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::clone(&self) -> Self
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::device(&self) -> incin_core::error::Result<incin_core::tensor::device::DeviceId>
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::dims(&self) -> incin_core::shapes::ShapeBuf
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::dtype(&self) -> incin_core::prelude::DTypeDescriptor
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::dtype_descriptor(&self) -> incin_core::prelude::DTypeDescriptor
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::grad_field(&self) -> &<G as incin_core::tensor::grad::RequiresGrad>::Field
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::inner(&self) -> &<B as incin_core::backend_authoring::StorageBackend>::Storage
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::into_inner(self) -> <B as incin_core::backend_authoring::StorageBackend>::Storage
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::local_dims(&self) -> alloc::vec::Vec<usize>
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::numel(&self) -> usize
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::placement(&self) -> incin_core::dist::placement::PlacementKind
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::rank(&self) -> usize
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::rank_index(&self) -> usize
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::requires_grad(&self) -> bool
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::reshape_view<S2>(self) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P, incin_core::shapes::layout::RowMajor<S2>>> where L: incin_core::shapes::layout::Contiguous, S2: incin_core::shapes::Shape + incin_core::shapes::ElementCount<Count = <S as incin_core::shapes::ElementCount>::Count>, S: incin_core::shapes::ElementCount
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::shape_buf(&self) -> &incin_core::shapes::ShapeBuf
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::Unknown>::into_row_major(self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::broadcast_to<S2: incin_core::shapes::Shape + incin_core::shapes::DynShape>(&self, <S2 as incin_core::shapes::Shape>::Arg) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P>> where S: incin_core::shapes::broadcast::BroadcastShape<S2, Output = S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::builtin_dtype_id(&self) -> core::option::Option<incin_core::prelude::DTypeId>
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::clone(&self) -> Self
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::device(&self) -> incin_core::error::Result<incin_core::tensor::device::DeviceId>
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::dims(&self) -> incin_core::shapes::ShapeBuf
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::dtype(&self) -> incin_core::prelude::DTypeDescriptor
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::dtype_descriptor(&self) -> incin_core::prelude::DTypeDescriptor
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::expand<S2: incin_core::shapes::Shape + incin_core::shapes::DynShape>(&self, <S2 as incin_core::shapes::Shape>::Arg) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P>> where S: incin_core::shapes::broadcast::BroadcastShape<S2, Output = S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::grad_field(&self) -> &<G as incin_core::tensor::grad::RequiresGrad>::Field
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::inner(&self) -> &<B as incin_core::backend_authoring::StorageBackend>::Storage
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::into_inner(self) -> <B as incin_core::backend_authoring::StorageBackend>::Storage
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::local_dims(&self) -> alloc::vec::Vec<usize>
+pub fn incin_core::prelude::Tensor<S, B, K, G, P>::logsumexp<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LogSumExpDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LogSumExpDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, P>::logsumexp_keepdim<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Keep, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LogSumExpKeepDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LogSumExpKeepDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::max<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::max_keepdim<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Keep, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxKeepDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxKeepDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::mean<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::mean_keepdim<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Keep, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanKeepDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanKeepDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::min<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MinDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MinDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::min_keepdim<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Keep, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MinKeepDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MinKeepDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::numel(&self) -> usize
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::placement(&self) -> incin_core::dist::placement::PlacementKind
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::rank(&self) -> usize
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::rank_index(&self) -> usize
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::requires_grad(&self) -> bool
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::reshape<Spec>(&self, Spec) -> incin_core::error::Result<incin_core::prelude::Tensor<<Spec as incin_core::shapes::ShapeSpec>::Shape, B, K, G, P>> where Spec: incin_core::shapes::ShapeSpec + incin_core::shapes::ReshapeSpec<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::reshape_idx<T: incin_core::shapes::ReshapeTarget<S>>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<T as incin_core::shapes::ReshapeTarget>::Output, B, K, G, P>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::reshape_infer<S2>(&self, incin_core::shapes::InferShape<S2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P>> where S2: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G, P>::shape_buf(&self) -> &incin_core::shapes::ShapeBuf
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::slice_idx<T: incin_core::shapes::SliceTarget<S>>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<T as incin_core::shapes::SliceTarget>::Output, B, K, G, P>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SliceExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SliceExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::sum<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::sum_keepdim<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Keep, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumKeepDim> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumKeepDim>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::try_narrow<A>(self, A, usize, usize) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output, B, K, G, P>> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::try_reshape<S2>(&self, <S2 as incin_core::shapes::Shape>::Arg) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P>> where S2: incin_core::shapes::Shape + incin_core::shapes::DynShape, S: incin_core::shapes::TryReshape<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P>::try_squeeze<A>(self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, <A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::abs(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::acos(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acos>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acos>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::acosh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acosh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acosh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::add_scalar<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, Sc) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AddScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AddScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::asin(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asin>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asin>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::asinh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asinh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asinh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::atan(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::atanh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atanh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atanh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::ceil(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ceil>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ceil>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::clamp(&self, f64, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Clamp>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Clamp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::cos(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::cosh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cosh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cosh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::elu(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Elu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Elu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::erf(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Erf>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Erf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::exp(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::floor(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Floor>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Floor>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::frac(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Frac>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Frac>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::gelu(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::log(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::log10(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log10>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log10>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::log2(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log2>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log2>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::log_softmax<A: incin_core::tensor::ops::reduce::ReduceSelector<S>>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>> where S: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LogSoftmax>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LogSoftmax>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mish(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mish>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mish>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mul_scalar<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, Sc) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::powf(&self, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::relu(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::round(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Round>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Round>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::rsqrt(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Rsqrt>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Rsqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::sigmoid(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sigmoid>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sigmoid>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::sign(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sign>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sign>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::sin(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::sinh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sinh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sinh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::softmax<A: incin_core::tensor::ops::reduce::ReduceSelector<S>>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>> where S: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::sqrt(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::step(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Step>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Step>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::swish(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::tan(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tan>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tan>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::tanh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tanh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tanh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::trunc(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Trunc>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Trunc>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::try_from_storage(<B as incin_core::backend_authoring::StorageBackend>::Storage, incin_core::shapes::ShapeBuf, <K as incin_core::prelude::DType>::Field, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field, <G as incin_core::tensor::grad::RequiresGrad>::Field) -> incin_core::error::Result<Self>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::try_neg(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::cumsum<A: incin_core::tensor::ops::reduce::ReduceSelector<S>>(&self, A) -> incin_core::error::Result<Self> where S: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cumsum> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cumsum>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::max_all(self) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxAll> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::mean_all(self) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanAll> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -6968,44 +7081,31 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::norm(&self, f64) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where G: incin_core::tensor::grad::GradJoin<G, Output = G>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::prod_all(self) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ProdAll> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ProdAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::sum_all(self) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local>::try_from_storage(<B as incin_core::backend_authoring::StorageBackend>::Storage, incin_core::shapes::ShapeBuf, <K as incin_core::prelude::DType>::Field, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field, <G as incin_core::tensor::grad::RequiresGrad>::Field) -> incin_core::error::Result<Self>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::abs_diff<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::add_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::atan2<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan2>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan2>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::div_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Div>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Div>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::fmod<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Fmod>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Fmod>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::maximum<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Maximum>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Maximum>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::minimum<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Minimum>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Minimum>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::mul_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::remainder<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Remainder>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Remainder>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G1>::sub_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::abs(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::acos(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acos>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acos>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::acosh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acosh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Acosh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::abs_diff<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::add_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::atan2<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan2>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan2>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::div_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Div>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Div>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::fmod<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Fmod>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Fmod>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::maximum<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Maximum>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Maximum>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::minimum<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Minimum>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Minimum>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::mul_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::remainder<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Remainder>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Remainder>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::sub_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::add(self, f32) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::add(self, f64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::add(self, i32) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::add(self, i64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::add_<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&mut self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<()> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::add_scalar<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, Sc) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AddScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AddScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::arange<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>, A>(Sc, Sc, A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Arange> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Arange>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::argmax<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, u32, incin_core::tensor::grad::NoGrad>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, <A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ArgMax> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ArgMax>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::argmin<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, u32, incin_core::tensor::grad::NoGrad>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, <A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ArgMin> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ArgMin>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::argsort(&self, usize, bool) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, u32, incin_core::tensor::grad::NoGrad>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Argsort> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Argsort>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::asin(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asin>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asin>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::asinh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asinh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Asinh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::atan(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::atanh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atanh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atanh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::batch_norm(&self, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>, f32) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BatchNorm>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BatchNorm>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::bce_with_logits_loss<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::bce_with_logits_loss_with<R, S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<<R as incin_core::tensor::reduction::BceReductionShape>::Output, B, K, G>> where R: incin_core::tensor::reduction::ReductionMode + incin_core::tensor::reduction::BceReductionShape<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::ceil(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ceil>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ceil>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::chunk<A>(&self, usize, A) -> incin_core::error::Result<alloc::vec::Vec<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output, B, K, G>>> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S> + core::marker::Copy, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::clamp(&self, f64, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Clamp>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Clamp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::concat<S2, A>(&self, &incin_core::prelude::Tensor<S2, B, K, G>, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::ConcatSelector<S, S2>>::Output, B, K, G>> where S2: incin_core::shapes::Shape, A: incin_core::tensor::ops::manipulation::selectors::ConcatSelector<S, S2>, <A as incin_core::tensor::ops::manipulation::selectors::ConcatSelector<S, S2>>::Output: incin_core::shapes::Shape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::concat_structural<S2, Axis>(&self, &incin_core::prelude::Tensor<S2, B, K, G>) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::concat::ConcatShape<S2, Axis>>::Output, B, K, G>> where S2: incin_core::shapes::Shape + incin_core::shapes::DynShape, Axis: incin_core::shapes::StaticCursor, S: incin_core::shapes::concat::ConcatShape<S2, Axis>, <S as incin_core::shapes::concat::ConcatShape<S2, Axis>>::Output: incin_core::shapes::Shape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
-pub fn incin_core::prelude::Tensor<S, B, K, G>::cos(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::cosh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cosh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cosh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::cross_entropy_loss<S2: incin_core::shapes::Shape, KT: incin_core::prelude::DType, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, KT, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CrossEntropyLoss>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CrossEntropyLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::cross_entropy_loss_with<R, S2: incin_core::shapes::Shape, KT: incin_core::prelude::DType, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, KT, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<<R as incin_core::tensor::reduction::CrossEntropyReductionShape>::Output, B, K, G>> where R: incin_core::tensor::reduction::ReductionMode + incin_core::tensor::reduction::CrossEntropyReductionShape<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CrossEntropyLoss>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CrossEntropyLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::diag(&self, i64) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Diag> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Diag>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7016,22 +7116,16 @@ pub fn incin_core::prelude::Tensor<S, B, K, G>::div(self, i64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::div_<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&mut self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<()> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Div>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Div>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::div_scalar(&self, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::DivScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::DivScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::dyn_slice(&self, &[incin_core::tensor::ops::index::IndexSpec]) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::elu(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Elu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Elu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::eq<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpEq>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpEq>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::erf(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Erf>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Erf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::exp(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::fill_(&mut self, f64) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AddScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AddScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::flatten<A, BSel>(&self, A, BSel) -> incin_core::error::Result<incin_core::prelude::Tensor<<() as incin_core::tensor::ops::manipulation::selectors::FlattenSelector<S, A, BSel>>::Output, B, K, G>> where (): incin_core::tensor::ops::manipulation::selectors::FlattenSelector<S, A, BSel>, <() as incin_core::tensor::ops::manipulation::selectors::FlattenSelector<S, A, BSel>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FlattenExact, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
 pub fn incin_core::prelude::Tensor<S, B, K, G>::flatten_structural<Start, End>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::FlattenAt<Start, End>>::Output, B, K, G>> where S: incin_core::shapes::FlattenAt<Start, End>, <S as incin_core::shapes::FlattenAt<Start, End>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, Start: incin_core::shapes::StaticCursor, End: incin_core::shapes::StaticCursor, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FlattenExact, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
-pub fn incin_core::prelude::Tensor<S, B, K, G>::floor(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Floor>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Floor>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::frac(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Frac>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Frac>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::from_bytes<A>(&[u8], A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromBytes> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromBytes>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::from_raw<A>(<B as incin_core::backend_authoring::StorageBackend>::Storage, A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::from_slice<A>(&[<K as incin_core::prelude::PlainDType>::Elem], A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, K: incin_core::prelude::PlainDType + incin_core::prelude::BuiltinDType, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromData> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromData>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::full<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>, A>(Sc, A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::gather<A, S2: incin_core::shapes::Shape, KInt: incin_core::prelude::DType, G2: incin_core::tensor::grad::RequiresGrad>(&self, A, &incin_core::prelude::Tensor<S2, B, KInt, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G>> where A: incin_core::tensor::ops::manipulation::selectors::AxisSelectorArg<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gather> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gather>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::ge<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpGe>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpGe>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::gelu(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::get<I: incin_core::tensor::ops::index::IndexArgs>(&self, I) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::group_norm(&self, usize, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::GroupNorm> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::GroupNorm>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::gt<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpGt>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpGt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7043,13 +7137,9 @@ pub fn incin_core::prelude::Tensor<S, B, K, G>::layer_norm(&self, &incin_core::p
 pub fn incin_core::prelude::Tensor<S, B, K, G>::le<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpLe>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpLe>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::lerp<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>, f64) -> incin_core::error::Result<Self> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Lerp>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Lerp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::linspace<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>, A>(Sc, Sc, A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Linspace> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Linspace>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::log(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::log10(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log10>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log10>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::log2(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log2>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log2>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::lt<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpLt>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpLt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::masked_fill<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, &incin_core::prelude::Tensor<S2, B, bool, G2>, Sc) -> incin_core::error::Result<Self> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaskedFill>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaskedFill>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::max_pool2d<KShape, SShape, Pool, Dilation>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output, B, K, G>> where KShape: typenum::marker_traits::Unsigned, SShape: typenum::marker_traits::Unsigned, Pool: typenum::marker_traits::Unsigned, Dilation: typenum::marker_traits::Unsigned, S: incin_core::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>, <S as incin_core::shapes::Pool2dShape<KShape, SShape, Pool, Dilation>>::Output: incin_core::shapes::Shape
-pub fn incin_core::prelude::Tensor<S, B, K, G>::mish(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mish>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mish>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::mse_loss<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MseLoss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MseLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::mse_loss_with<R, S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<<R as incin_core::tensor::reduction::MseReductionShape>::Output, B, K, G>> where R: incin_core::tensor::reduction::ReductionMode + incin_core::tensor::reduction::MseReductionShape<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MseLoss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MseLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::mul(self, f32) -> Self::Output
@@ -7057,41 +7147,27 @@ pub fn incin_core::prelude::Tensor<S, B, K, G>::mul(self, f64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::mul(self, i32) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::mul(self, i64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::mul_<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&mut self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<()> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::mul_scalar<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, Sc) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::ne<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpNe>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpNe>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::neg(self) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::ones<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::pad<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, &[(usize, usize)], Sc) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Pad>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Pad>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::pixel_shuffle(&self, usize) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::PixelShuffle>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::PixelShuffle>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::powf(&self, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::rand<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UniformRandom> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UniformRandom>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::randn<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::NormalRandom> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::NormalRandom>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::relu(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::repeat(&self, &[usize]) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Repeat>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Repeat>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::round(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Round>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Round>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::rsqrt(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Rsqrt>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Rsqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sample<D: incin_core::distributions::Distribution<K>, A>(&D, A) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G>> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::distributions::DistributionExecutor<D, K>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::scatter<A, S2, S3: incin_core::shapes::Shape, KInt: incin_core::prelude::DType, G2: incin_core::tensor::grad::RequiresGrad, G3: incin_core::tensor::grad::RequiresGrad>(&self, A, &incin_core::prelude::Tensor<S2, B, KInt, G2>, &incin_core::prelude::Tensor<S3, B, K, G3>) -> incin_core::error::Result<Self> where A: incin_core::tensor::ops::manipulation::selectors::AxisSelectorArg<S>, S2: incin_core::tensor::ops::index::ShapeEq<S3> + incin_core::shapes::Shape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Scatter> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Scatter>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::sigmoid(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sigmoid>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sigmoid>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::sign(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sign>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sign>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::sin(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::sinh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sinh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sinh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G>::scatter_add<A, S2, S3: incin_core::shapes::Shape, KInt: incin_core::prelude::DType, G2: incin_core::tensor::grad::RequiresGrad, G3: incin_core::tensor::grad::RequiresGrad>(&self, A, &incin_core::prelude::Tensor<S2, B, KInt, G2>, &incin_core::prelude::Tensor<S3, B, K, G3>) -> incin_core::error::Result<Self> where A: incin_core::tensor::ops::manipulation::selectors::AxisSelectorArg<S>, S2: incin_core::tensor::ops::index::ShapeEq<S3> + incin_core::shapes::Shape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScatterAdd> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScatterAdd>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::slice(&self, &[incin_core::tensor::ops::index::IndexSpec]) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::softmax<A: incin_core::tensor::ops::reduce::ReduceSelector<S>>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G>> where S: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::split<A>(&self, usize, A) -> incin_core::error::Result<alloc::vec::Vec<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output, B, K, G>>> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S> + core::marker::Copy, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::sqrt(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::stack<A>(&self, &incin_core::prelude::Tensor<S, B, K, G>, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::StackSelector<S>>::Output, B, K, G>> where A: incin_core::tensor::ops::manipulation::selectors::StackSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::StackSelector<S>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::StackExact, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
 pub fn incin_core::prelude::Tensor<S, B, K, G>::std_all(&self, bool) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::step(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Step>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Step>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sub(self, f32) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sub(self, f64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sub(self, i32) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sub(self, i64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sub_<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&mut self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<()> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sub_scalar(&self, f64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SubScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SubScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::swish(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::tan(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tan>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tan>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::tanh(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tanh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tanh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::to_device(self, &<NewD as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self::Output>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::to_dtype<T2: incin_core::prelude::DType<Arg = ()>>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, T2, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::to_scalar<E: core::marker::Copy + 'static>(&self) -> incin_core::error::Result<E> where B: incin_core::backend_authoring::HostInterop
@@ -7101,9 +7177,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G>::transpose<L, R>(&self, L, R) -> 
 pub fn incin_core::prelude::Tensor<S, B, K, G>::transpose_structural<L, R>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::SwapAxes<L, R>>::Output, B, K, G>> where L: incin_core::shapes::StaticCursor, R: incin_core::shapes::StaticCursor, S: incin_core::shapes::SwapAxes<L, R>, <S as incin_core::shapes::SwapAxes<L, R>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::tril(&self, i64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::triu(&self, i64) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Triu> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Triu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::trunc(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Trunc>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Trunc>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::try_concat_slice(&[&incin_core::prelude::Tensor<S, B, K, G>], usize) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G>::try_neg(&self) -> incin_core::error::Result<Self> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::try_stack_slice(&[&incin_core::prelude::Tensor<S, B, K, G>], usize) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::StackExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::StackExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::unfold(&self, usize, usize, usize) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Unfold>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Unfold>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::unsqueeze<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector>::Output, B, K, G>> where A: incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7937,6 +8011,7 @@ pub incin_core::backend_authoring::operations::DistributionAttributes::parameter
 pub incin_core::backend_authoring::operations::DistributionAttributes::shape: alloc::vec::Vec<usize>
 pub incin_core::backend_authoring::operations::DropoutAttributes::probability: f64
 pub incin_core::backend_authoring::operations::DropoutAttributes::training: bool
+pub incin_core::backend_authoring::operations::DuplicateIndexRule::Accumulate
 pub incin_core::backend_authoring::operations::DuplicateIndexRule::LastWriteWins
 pub incin_core::backend_authoring::operations::DuplicateIndexRule::Reject
 pub incin_core::backend_authoring::operations::EmptyRule::Allowed
@@ -8758,6 +8833,7 @@ pub incin_core::exec::catalog::DistributionAttributes::parameters: alloc::vec::V
 pub incin_core::exec::catalog::DistributionAttributes::shape: alloc::vec::Vec<usize>
 pub incin_core::exec::catalog::DropoutAttributes::probability: f64
 pub incin_core::exec::catalog::DropoutAttributes::training: bool
+pub incin_core::exec::catalog::DuplicateIndexRule::Accumulate
 pub incin_core::exec::catalog::DuplicateIndexRule::LastWriteWins
 pub incin_core::exec::catalog::DuplicateIndexRule::Reject
 pub incin_core::exec::catalog::EmptyRule::Allowed
@@ -9817,6 +9893,9 @@ pub incin_core::prelude::OperationKind::Linspace
 pub incin_core::prelude::OperationKind::Log
 pub incin_core::prelude::OperationKind::Log10
 pub incin_core::prelude::OperationKind::Log2
+pub incin_core::prelude::OperationKind::LogSoftmax
+pub incin_core::prelude::OperationKind::LogSumExpDim
+pub incin_core::prelude::OperationKind::LogSumExpKeepDim
 pub incin_core::prelude::OperationKind::LogicalAnd
 pub incin_core::prelude::OperationKind::LogicalNot
 pub incin_core::prelude::OperationKind::LogicalOr
@@ -9874,6 +9953,7 @@ pub incin_core::prelude::OperationKind::Rsqrt
 pub incin_core::prelude::OperationKind::Sample
 pub incin_core::prelude::OperationKind::ScaledDotProductAttention
 pub incin_core::prelude::OperationKind::Scatter
+pub incin_core::prelude::OperationKind::ScatterAdd
 pub incin_core::prelude::OperationKind::SgdStep
 pub incin_core::prelude::OperationKind::Sigmoid
 pub incin_core::prelude::OperationKind::Sign
@@ -10179,6 +10259,9 @@ pub incin_core::shapes::OperationKind::Linspace
 pub incin_core::shapes::OperationKind::Log
 pub incin_core::shapes::OperationKind::Log10
 pub incin_core::shapes::OperationKind::Log2
+pub incin_core::shapes::OperationKind::LogSoftmax
+pub incin_core::shapes::OperationKind::LogSumExpDim
+pub incin_core::shapes::OperationKind::LogSumExpKeepDim
 pub incin_core::shapes::OperationKind::LogicalAnd
 pub incin_core::shapes::OperationKind::LogicalNot
 pub incin_core::shapes::OperationKind::LogicalOr
@@ -10236,6 +10319,7 @@ pub incin_core::shapes::OperationKind::Rsqrt
 pub incin_core::shapes::OperationKind::Sample
 pub incin_core::shapes::OperationKind::ScaledDotProductAttention
 pub incin_core::shapes::OperationKind::Scatter
+pub incin_core::shapes::OperationKind::ScatterAdd
 pub incin_core::shapes::OperationKind::SgdStep
 pub incin_core::shapes::OperationKind::Sigmoid
 pub incin_core::shapes::OperationKind::Sign
@@ -10442,6 +10526,9 @@ pub incin_core::shapes::error::OperationKind::Linspace
 pub incin_core::shapes::error::OperationKind::Log
 pub incin_core::shapes::error::OperationKind::Log10
 pub incin_core::shapes::error::OperationKind::Log2
+pub incin_core::shapes::error::OperationKind::LogSoftmax
+pub incin_core::shapes::error::OperationKind::LogSumExpDim
+pub incin_core::shapes::error::OperationKind::LogSumExpKeepDim
 pub incin_core::shapes::error::OperationKind::LogicalAnd
 pub incin_core::shapes::error::OperationKind::LogicalNot
 pub incin_core::shapes::error::OperationKind::LogicalOr
@@ -10499,6 +10586,7 @@ pub incin_core::shapes::error::OperationKind::Rsqrt
 pub incin_core::shapes::error::OperationKind::Sample
 pub incin_core::shapes::error::OperationKind::ScaledDotProductAttention
 pub incin_core::shapes::error::OperationKind::Scatter
+pub incin_core::shapes::error::OperationKind::ScatterAdd
 pub incin_core::shapes::error::OperationKind::SgdStep
 pub incin_core::shapes::error::OperationKind::Sigmoid
 pub incin_core::shapes::error::OperationKind::Sign
@@ -10699,6 +10787,9 @@ pub incin_core::shapes::prelude::OperationKind::Linspace
 pub incin_core::shapes::prelude::OperationKind::Log
 pub incin_core::shapes::prelude::OperationKind::Log10
 pub incin_core::shapes::prelude::OperationKind::Log2
+pub incin_core::shapes::prelude::OperationKind::LogSoftmax
+pub incin_core::shapes::prelude::OperationKind::LogSumExpDim
+pub incin_core::shapes::prelude::OperationKind::LogSumExpKeepDim
 pub incin_core::shapes::prelude::OperationKind::LogicalAnd
 pub incin_core::shapes::prelude::OperationKind::LogicalNot
 pub incin_core::shapes::prelude::OperationKind::LogicalOr
@@ -10756,6 +10847,7 @@ pub incin_core::shapes::prelude::OperationKind::Rsqrt
 pub incin_core::shapes::prelude::OperationKind::Sample
 pub incin_core::shapes::prelude::OperationKind::ScaledDotProductAttention
 pub incin_core::shapes::prelude::OperationKind::Scatter
+pub incin_core::shapes::prelude::OperationKind::ScatterAdd
 pub incin_core::shapes::prelude::OperationKind::SgdStep
 pub incin_core::shapes::prelude::OperationKind::Sigmoid
 pub incin_core::shapes::prelude::OperationKind::Sign
@@ -11036,6 +11128,7 @@ pub mod incin_core::shapes::dim
 pub mod incin_core::shapes::dynamic
 pub mod incin_core::shapes::error
 pub mod incin_core::shapes::idx
+pub mod incin_core::shapes::layout
 pub mod incin_core::shapes::named
 pub mod incin_core::shapes::prelude
 pub mod incin_core::shapes::rank
@@ -11183,6 +11276,9 @@ pub struct incin_core::backend_authoring::op::Linspace
 pub struct incin_core::backend_authoring::op::Log
 pub struct incin_core::backend_authoring::op::Log10
 pub struct incin_core::backend_authoring::op::Log2
+pub struct incin_core::backend_authoring::op::LogSoftmax
+pub struct incin_core::backend_authoring::op::LogSumExpDim
+pub struct incin_core::backend_authoring::op::LogSumExpKeepDim
 pub struct incin_core::backend_authoring::op::LogicalAnd
 pub struct incin_core::backend_authoring::op::LogicalNot
 pub struct incin_core::backend_authoring::op::LogicalOr
@@ -11231,6 +11327,7 @@ pub struct incin_core::backend_authoring::op::Rsqrt
 pub struct incin_core::backend_authoring::op::Sample
 pub struct incin_core::backend_authoring::op::ScaledDotProductAttention
 pub struct incin_core::backend_authoring::op::Scatter
+pub struct incin_core::backend_authoring::op::ScatterAdd
 pub struct incin_core::backend_authoring::op::SgdStep
 pub struct incin_core::backend_authoring::op::Sigmoid
 pub struct incin_core::backend_authoring::op::Sign
@@ -11414,6 +11511,9 @@ pub struct incin_core::backend_authoring::operations::op::Linspace
 pub struct incin_core::backend_authoring::operations::op::Log
 pub struct incin_core::backend_authoring::operations::op::Log10
 pub struct incin_core::backend_authoring::operations::op::Log2
+pub struct incin_core::backend_authoring::operations::op::LogSoftmax
+pub struct incin_core::backend_authoring::operations::op::LogSumExpDim
+pub struct incin_core::backend_authoring::operations::op::LogSumExpKeepDim
 pub struct incin_core::backend_authoring::operations::op::LogicalAnd
 pub struct incin_core::backend_authoring::operations::op::LogicalNot
 pub struct incin_core::backend_authoring::operations::op::LogicalOr
@@ -11462,6 +11562,7 @@ pub struct incin_core::backend_authoring::operations::op::Rsqrt
 pub struct incin_core::backend_authoring::operations::op::Sample
 pub struct incin_core::backend_authoring::operations::op::ScaledDotProductAttention
 pub struct incin_core::backend_authoring::operations::op::Scatter
+pub struct incin_core::backend_authoring::operations::op::ScatterAdd
 pub struct incin_core::backend_authoring::operations::op::SgdStep
 pub struct incin_core::backend_authoring::operations::op::Sigmoid
 pub struct incin_core::backend_authoring::operations::op::Sign
@@ -11696,6 +11797,9 @@ pub struct incin_core::exec::catalog::op::Linspace
 pub struct incin_core::exec::catalog::op::Log
 pub struct incin_core::exec::catalog::op::Log10
 pub struct incin_core::exec::catalog::op::Log2
+pub struct incin_core::exec::catalog::op::LogSoftmax
+pub struct incin_core::exec::catalog::op::LogSumExpDim
+pub struct incin_core::exec::catalog::op::LogSumExpKeepDim
 pub struct incin_core::exec::catalog::op::LogicalAnd
 pub struct incin_core::exec::catalog::op::LogicalNot
 pub struct incin_core::exec::catalog::op::LogicalOr
@@ -11744,6 +11848,7 @@ pub struct incin_core::exec::catalog::op::Rsqrt
 pub struct incin_core::exec::catalog::op::Sample
 pub struct incin_core::exec::catalog::op::ScaledDotProductAttention
 pub struct incin_core::exec::catalog::op::Scatter
+pub struct incin_core::exec::catalog::op::ScatterAdd
 pub struct incin_core::exec::catalog::op::SgdStep
 pub struct incin_core::exec::catalog::op::Sigmoid
 pub struct incin_core::exec::catalog::op::Sign
@@ -11876,6 +11981,9 @@ pub struct incin_core::exec::op::Linspace
 pub struct incin_core::exec::op::Log
 pub struct incin_core::exec::op::Log10
 pub struct incin_core::exec::op::Log2
+pub struct incin_core::exec::op::LogSoftmax
+pub struct incin_core::exec::op::LogSumExpDim
+pub struct incin_core::exec::op::LogSumExpKeepDim
 pub struct incin_core::exec::op::LogicalAnd
 pub struct incin_core::exec::op::LogicalNot
 pub struct incin_core::exec::op::LogicalOr
@@ -11924,6 +12032,7 @@ pub struct incin_core::exec::op::Rsqrt
 pub struct incin_core::exec::op::Sample
 pub struct incin_core::exec::op::ScaledDotProductAttention
 pub struct incin_core::exec::op::Scatter
+pub struct incin_core::exec::op::ScatterAdd
 pub struct incin_core::exec::op::SgdStep
 pub struct incin_core::exec::op::Sigmoid
 pub struct incin_core::exec::op::Sign
@@ -12264,6 +12373,7 @@ pub struct incin_core::prelude::Ranked<R: typenum::marker_traits::Unsigned + cor
 pub struct incin_core::prelude::ReLU
 pub struct incin_core::prelude::Recall
 pub struct incin_core::prelude::ResourceLimits
+pub struct incin_core::prelude::RowMajor<S>(_)
 pub struct incin_core::prelude::SGD<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType>
 pub struct incin_core::prelude::Sequential<L1, L2>(pub L1, pub L2)
 pub struct incin_core::prelude::ShapeArgs<S: incin_core::shapes::Shape + incin_core::shapes::DynShape>
@@ -12280,11 +12390,12 @@ pub struct incin_core::prelude::StrideBuf
 pub struct incin_core::prelude::StructuralFlatten<Start, End>(_)
 pub struct incin_core::prelude::Swish
 pub struct incin_core::prelude::Tanh
-pub struct incin_core::prelude::Tensor<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement>
+pub struct incin_core::prelude::Tensor<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout>
 pub struct incin_core::prelude::TensorArgsData<S, T, D, G>
 pub struct incin_core::prelude::Trainable
 pub struct incin_core::prelude::True
 pub struct incin_core::prelude::Uniform<K>
+pub struct incin_core::prelude::Unknown
 pub struct incin_core::prelude::init::Fan
 pub struct incin_core::prelude::init::InitContext
 pub struct incin_core::resource::ResourceLimits
@@ -12313,12 +12424,14 @@ pub struct incin_core::shapes::Next<I>(pub core::marker::PhantomData<I>)
 pub struct incin_core::shapes::Nil
 pub struct incin_core::shapes::Ranked<R: typenum::marker_traits::Unsigned + core::fmt::Debug + core::cmp::Eq + core::marker::Send + core::marker::Sync + 'static>(_)
 pub struct incin_core::shapes::ReverseAxis<I: incin_core::shapes::StaticCursor>(_)
+pub struct incin_core::shapes::RowMajor<S>(_)
 pub struct incin_core::shapes::ShapeArgs<S: incin_core::shapes::Shape + incin_core::shapes::DynShape>
 pub struct incin_core::shapes::ShapeBuf
 pub struct incin_core::shapes::ShapeValue<S: incin_core::shapes::Shape>
 pub struct incin_core::shapes::Slice<Start, End, Diff>
 pub struct incin_core::shapes::StaticAxis<I: incin_core::shapes::StaticCursor>(_)
 pub struct incin_core::shapes::StrideBuf
+pub struct incin_core::shapes::Unknown
 pub struct incin_core::shapes::dim::AddDim<A, B>(pub core::marker::PhantomData<(A, B)>)
 pub struct incin_core::shapes::dim::AxisKey
 pub struct incin_core::shapes::dim::AxisSchema<Root>(_)
@@ -12340,6 +12453,8 @@ pub struct incin_core::shapes::idx::Next<I>(pub core::marker::PhantomData<I>)
 pub struct incin_core::shapes::idx::ReverseAxis<I: incin_core::shapes::StaticCursor>(_)
 pub struct incin_core::shapes::idx::Slice<Start, End, Diff>
 pub struct incin_core::shapes::idx::StaticAxis<I: incin_core::shapes::StaticCursor>(_)
+pub struct incin_core::shapes::layout::RowMajor<S>(_)
+pub struct incin_core::shapes::layout::Unknown
 pub struct incin_core::shapes::named::Anon
 pub struct incin_core::shapes::prelude::AddDim<A, B>(pub core::marker::PhantomData<(A, B)>)
 pub struct incin_core::shapes::prelude::Anon
@@ -12371,7 +12486,7 @@ pub struct incin_core::shapes::shape::ShapeArgs<S: incin_core::shapes::Shape + i
 pub struct incin_core::shapes::shape::ShapeValue<S: incin_core::shapes::Shape>
 pub struct incin_core::tensor::allocation::CheckedByteLen(_)
 pub struct incin_core::tensor::arg_into::TensorArgsData<S, T, D, G>
-pub struct incin_core::tensor::base::Tensor<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement>
+pub struct incin_core::tensor::base::Tensor<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout>
 pub struct incin_core::tensor::device::Cpu
 pub struct incin_core::tensor::device::CudaDevice
 pub struct incin_core::tensor::device::DeviceId
@@ -12396,7 +12511,7 @@ pub struct incin_core::tensor::prelude::Gradients<B: incin_core::backend_authori
 pub struct incin_core::tensor::prelude::NoGrad
 pub struct incin_core::tensor::prelude::Q8_0
 pub struct incin_core::tensor::prelude::StorageEncoding
-pub struct incin_core::tensor::prelude::Tensor<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement>
+pub struct incin_core::tensor::prelude::Tensor<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout>
 pub struct incin_core::tensor::prelude::TensorArgsData<S, T, D, G>
 pub struct incin_core::tensor::prelude::TracingBackend<B: incin_core::backend_authoring::Backend>
 pub struct incin_core::tensor::reduction::Mean
@@ -12557,6 +12672,7 @@ pub trait incin_core::prelude::ConcatShape<S2, Axis>
 pub trait incin_core::prelude::ConcreteStaticExtent: incin_core::shapes::Dim + incin_core::shapes::dim::sealed::ConcreteStaticExtent
 pub trait incin_core::prelude::ConstDType: incin_core::prelude::DType<Arg = ()>
 pub trait incin_core::prelude::ConstDevice: core::default::Default + incin_core::tensor::device::Device<Arg = ()>
+pub trait incin_core::prelude::Contiguous: incin_core::shapes::layout::Layout
 pub trait incin_core::prelude::Conv1dShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::prelude::Conv2dShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::prelude::DType: 'static + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::PartialEq
@@ -12574,6 +12690,7 @@ pub trait incin_core::prelude::HasChannels2D<D: incin_core::shapes::Dim>: incin_
 pub trait incin_core::prelude::IntDType: incin_core::prelude::PlainDType
 pub trait incin_core::prelude::LRScheduler
 pub trait incin_core::prelude::LayerNormShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
+pub trait incin_core::prelude::Layout: 'static + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
 pub trait incin_core::prelude::LinearShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::prelude::LstmShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::prelude::MatMulShape<Rhs: incin_core::shapes::Shape>: incin_core::shapes::Shape + incin_core::shapes::DynShape
@@ -12624,6 +12741,7 @@ pub trait incin_core::prelude::VisitStateMut<B: incin_core::backend_authoring::V
 pub trait incin_core::serialization::ModelExt<B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::shapes::AdaptiveAvgPool2dShape<HOut, WOut>: incin_core::shapes::Shape
 pub trait incin_core::shapes::AddOneRank
+pub trait incin_core::shapes::AlignedTo<N: typenum::marker_traits::Unsigned>: incin_core::shapes::layout::Layout
 pub trait incin_core::shapes::AppendDim<D: incin_core::shapes::Dim>
 pub trait incin_core::shapes::At<Cursor>: incin_core::shapes::Shape
 pub trait incin_core::shapes::AtFromEnd<Cursor>: incin_core::shapes::Shape
@@ -12632,6 +12750,7 @@ pub trait incin_core::shapes::AxisIdentity: incin_core::shapes::AxisTag
 pub trait incin_core::shapes::AxisTag: 'static + core::marker::Copy + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
 pub trait incin_core::shapes::BroadcastShape<Rhs: incin_core::shapes::Shape>: incin_core::shapes::Shape
 pub trait incin_core::shapes::ConcreteStaticExtent: incin_core::shapes::Dim + incin_core::shapes::dim::sealed::ConcreteStaticExtent
+pub trait incin_core::shapes::Contiguous: incin_core::shapes::layout::Layout
 pub trait incin_core::shapes::Dim: incin_core::shapes::dim::sealed::Dim + 'static + core::marker::Copy + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
 pub trait incin_core::shapes::DimCompatible<Rhs: incin_core::shapes::Dim>: incin_core::shapes::Dim
 pub trait incin_core::shapes::DimIdx
@@ -12644,6 +12763,8 @@ pub trait incin_core::shapes::HasChannels1D<D: incin_core::shapes::Dim>: incin_c
 pub trait incin_core::shapes::HasChannels2D<D: incin_core::shapes::Dim>: incin_core::shapes::Shape
 pub trait incin_core::shapes::InsertAt<Cursor, NewDim: incin_core::shapes::Dim>: incin_core::shapes::Shape
 pub trait incin_core::shapes::InsertAxis<Cursor, NewDim: incin_core::shapes::Dim>: incin_core::shapes::Shape
+pub trait incin_core::shapes::Layout: 'static + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
+pub trait incin_core::shapes::LayoutOf<S: incin_core::shapes::Shape>: incin_core::shapes::layout::Layout
 pub trait incin_core::shapes::NamedAxisLookup<Tag: incin_core::shapes::AxisTag>: incin_core::shapes::Shape
 pub trait incin_core::shapes::Pool2dShape<K, S, P, D>: incin_core::shapes::Shape
 pub trait incin_core::shapes::PrependDim<D: incin_core::shapes::Dim>: incin_core::shapes::Shape
@@ -12698,6 +12819,10 @@ pub trait incin_core::shapes::idx::SliceIdx
 pub trait incin_core::shapes::idx::SliceTarget<In: incin_core::shapes::Shape>
 pub trait incin_core::shapes::idx::StaticCursor: 'static + core::marker::Copy + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
 pub trait incin_core::shapes::idx::ToAxisIndex
+pub trait incin_core::shapes::layout::AlignedTo<N: typenum::marker_traits::Unsigned>: incin_core::shapes::layout::Layout
+pub trait incin_core::shapes::layout::Contiguous: incin_core::shapes::layout::Layout
+pub trait incin_core::shapes::layout::Layout: 'static + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
+pub trait incin_core::shapes::layout::LayoutOf<S: incin_core::shapes::Shape>: incin_core::shapes::layout::Layout
 pub trait incin_core::shapes::prelude::AdaptiveAvgPool2dShape<HOut, WOut>: incin_core::shapes::Shape
 pub trait incin_core::shapes::prelude::AddOneRank
 pub trait incin_core::shapes::prelude::AnonymousDim: incin_core::shapes::Dim
@@ -13058,6 +13183,9 @@ pub type incin_core::exec::catalog::op::Linspace::Attributes = incin_core::exec:
 pub type incin_core::exec::catalog::op::Log10::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Log2::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Log::Attributes = incin_core::exec::catalog::NoAttributes
+pub type incin_core::exec::catalog::op::LogSoftmax::Attributes = incin_core::exec::catalog::AxisAttributes
+pub type incin_core::exec::catalog::op::LogSumExpDim::Attributes = incin_core::exec::catalog::AxisAttributes
+pub type incin_core::exec::catalog::op::LogSumExpKeepDim::Attributes = incin_core::exec::catalog::AxisAttributes
 pub type incin_core::exec::catalog::op::LogicalAnd::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::LogicalNot::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::LogicalOr::Attributes = incin_core::exec::catalog::NoAttributes
@@ -13106,6 +13234,7 @@ pub type incin_core::exec::catalog::op::Rsqrt::Attributes = incin_core::exec::ca
 pub type incin_core::exec::catalog::op::Sample::Attributes = incin_core::exec::catalog::DistributionAttributes
 pub type incin_core::exec::catalog::op::ScaledDotProductAttention::Attributes = incin_core::exec::catalog::AttentionAttributes
 pub type incin_core::exec::catalog::op::Scatter::Attributes = incin_core::exec::catalog::ScatterAttributes
+pub type incin_core::exec::catalog::op::ScatterAdd::Attributes = incin_core::exec::catalog::ScatterAttributes
 pub type incin_core::exec::catalog::op::SgdStep::Attributes = incin_core::exec::catalog::SgdAttributes
 pub type incin_core::exec::catalog::op::Sigmoid::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Sign::Attributes = incin_core::exec::catalog::NoAttributes
@@ -13443,6 +13572,7 @@ pub type incin_core::prelude::Conv2dShape::WeightShape: incin_core::shapes::Shap
 pub type incin_core::prelude::ConvOutDim<InSize, KernelSize, Stride, Padding> = typenum::operator_aliases::Sum<typenum::operator_aliases::Quot<typenum::operator_aliases::Diff<typenum::operator_aliases::Sum<InSize, typenum::operator_aliases::Prod<typenum::gen::consts::U2, Padding>>, KernelSize>, Stride>, typenum::gen::consts::U1>
 pub type incin_core::prelude::DType::Arg
 pub type incin_core::prelude::DType::Field: core::fmt::Debug + core::clone::Clone + core::default::Default
+pub type incin_core::prelude::Dense<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin_core::prelude::Device::Arg: core::clone::Clone
 pub type incin_core::prelude::Device::Field: core::fmt::Debug + core::clone::Clone + core::default::Default
 pub type incin_core::prelude::Dim::Arg: core::clone::Clone + core::default::Default + core::fmt::Debug
@@ -13529,6 +13659,7 @@ pub type incin_core::shapes::ConstDim<N>::KeepDim = typenum::uint::UInt<typenum:
 pub type incin_core::shapes::ConstDim<N>::Output = incin_core::shapes::ConstDim<N>
 pub type incin_core::shapes::ConstDim<N>::Output = usize
 pub type incin_core::shapes::ConvOutDim<InSize, KernelSize, Stride, Padding> = typenum::operator_aliases::Sum<typenum::operator_aliases::Quot<typenum::operator_aliases::Diff<typenum::operator_aliases::Sum<InSize, typenum::operator_aliases::Prod<typenum::gen::consts::U2, Padding>>, KernelSize>, Stride>, typenum::gen::consts::U1>
+pub type incin_core::shapes::Dense<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin_core::shapes::Dim::Arg: core::clone::Clone + core::default::Default + core::fmt::Debug
 pub type incin_core::shapes::Dim::KeepDim: incin_core::shapes::Dim
 pub type incin_core::shapes::DimCons<B, incin_core::shapes::DimCons<CIn, incin_core::shapes::DimCons<HIn, incin_core::shapes::DimCons<WIn, incin_core::shapes::Nil>>>>::Output = incin_core::shapes::DimCons<B, incin_core::shapes::DimCons<COut, incin_core::shapes::DimCons<<<<<HIn as core::ops::arith::Add<<typenum::uint::UInt<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>, typenum::bit::B0> as core::ops::arith::Mul<Padding>>::Output>>::Output as core::ops::arith::Sub<KH>>::Output as core::ops::arith::Div<Stride>>::Output as core::ops::arith::Add<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>>>::Output, incin_core::shapes::DimCons<<<<<WIn as core::ops::arith::Add<<typenum::uint::UInt<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>, typenum::bit::B0> as core::ops::arith::Mul<Padding>>::Output>>::Output as core::ops::arith::Sub<KW>>::Output as core::ops::arith::Div<Stride>>::Output as core::ops::arith::Add<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>>>::Output, incin_core::shapes::Nil>>>>
@@ -13763,6 +13894,7 @@ pub type incin_core::shapes::idx::DimIdx::Resolved: incin_core::shapes::Dim
 pub type incin_core::shapes::idx::ReshapeTarget::Output: incin_core::shapes::Shape
 pub type incin_core::shapes::idx::SliceIdx::Resolved: incin_core::shapes::Dim
 pub type incin_core::shapes::idx::SliceTarget::Output: incin_core::shapes::Shape
+pub type incin_core::shapes::layout::Dense<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin_core::shapes::named::NamedAxis<Name, Extent> = incin_core::shapes::NamedDim<Name, Extent>
 pub type incin_core::shapes::named::Runtime = usize
 pub type incin_core::shapes::named::Static<N> = N

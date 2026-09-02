@@ -155,9 +155,13 @@ a wrong one. Where the stronger, fully-static form matters, write it directly:
 
 ## 4. Tensors: creation, dtype, device
 
-`Tensor<S, B, K, G, P>`: shape, backend, element type (defaults to `f32`),
-gradient-tracking marker (`Grad` or `NoGrad`, defaults to `NoGrad`), and
-placement (defaults to `Local`). Most code only ever writes the first two.
+`Tensor<S, B, K, G, P, L>`: shape, backend, element type (defaults to `f32`),
+gradient-tracking marker (`Grad` or `NoGrad`, defaults to `NoGrad`), placement
+(defaults to `Local`), and layout (defaults to `Unknown`). Most code only ever
+writes the first two.
+
+Every default is the option that claims the least, so leaving one off never
+credits your tensor with a property nobody checked.
 
 The stable construction story is target-first. A target such as `Cpu` owns the
 backend and device choice, while the shape specification carries static proof

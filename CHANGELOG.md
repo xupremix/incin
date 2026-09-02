@@ -6,6 +6,65 @@
 All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Typed layout.** `Tensor` gained a sixth parameter, `L: Layout`, describing
+  where a tensor's elements live: strides, offset, alignment and contiguity.
+  It defaults to `Unknown`, which claims nothing, so existing code is unchanged
+  and every runtime path stays available. `RowMajor<S>` derives its strides from
+  the shape; `Dense<S, B, ..>` is the ergonomic alias. Facts are traits --
+  `Contiguous`, `AlignedTo<N>` -- and `LayoutOf<S>` states rank congruence.
+  See the [Layout chapter](docs/book/src/layout.md).
+- `Tensor::into_row_major`, a *checked* promotion from runtime strides to a
+  type-level layout. There is deliberately no unchecked counterpart.
+- `Tensor::reshape_view`, bounded on `L: Contiguous`: reinterprets a buffer
+  under a new shape without copying. Reshaping a non-contiguous tensor is a
+  compile error rather than the runtime failure it is elsewhere.
+- `Shape::STATIC_EXTENTS`, per-axis extents settled by the shape type, carried
+  to backends on `ShapeEvidence` alongside the existing proof level, rank and
+  element count.
+- Proof-directed CUDA kernel specialisation. `ShapeEvidence` had no backend
+  readers; it now has three. A statically proven element count that divides the
+  vector width proves a packed kernel's ragged tail unreachable, so it is not
+  emitted; proven per-axis extents let a strided kernel use literal divisors,
+  which the compiler lowers to multiply-and-shift; and the `shape` array and its
+  per-launch upload are dropped entirely when the extents are baked in.
+- CUDA pointwise kernels are now lowered from `codegen`'s expression IR rather
+  than from hand-written CUDA C literals, via `codegen::fragment::lower_scalar`.
+  Derivatives come from `IrExpr::diff` rather than a second hand-written string,
+  so a forward and its backward can no longer disagree.
+- Fused CUDA unary backward: `grad_out * f'(x)` in one kernel, removing a launch
+  and a full-size intermediate per operation per backward pass.
+- `log_softmax`, `logsumexp` and `scatter_add`, with `DuplicateIndexRule::Accumulate`.
+
+### Fixed
+
+- **The CUDA module cache could serve the wrong kernel.** `KernelKey::cache_id`
+  was built from the operation name and never the source, so callers that format
+  a runtime value into their expression under a fixed name collided with
+  themselves: `powf(2, 3)` returned `4` after `powf(x, 2)` had been compiled.
+  Also reachable through `clamp` and through `mean`'s backward, which renders
+  `x * 1/axis_len` under the constant name `"mul_scalar"`. The cache key now
+  includes a digest of the kernel source.
+- `IrUnaryOp::Gelu`'s symbolic derivative dropped a product-rule term, silently
+  understating the gradient everywhere.
+- A CUDA product reduction over a contiguous last axis reached `unreachable!()`:
+  `prod` was accepted by the renderer and present in its warp-shuffle arm but
+  missing from the load arm.
+- CUDA `conv2d` refused a bias, making biased convolution executable on CPU and
+  unreachable on CUDA, though both the CPU binder and the CUDA kernel already
+  supported it.
+- Compiled fusion offered candidates it could not justify: `find_candidates`
+  paired nodes by position and never counted consumers, so a value with two
+  readers was a candidate. It now proves exclusive consumption from the graph's
+  own edges.
+
+### Changed
+
+- `DuplicateIndexRule` is `#[non_exhaustive]`.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

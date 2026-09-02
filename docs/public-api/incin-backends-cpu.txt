@@ -20,6 +20,7 @@ impl incin_backends::codegen::attention::AttentionSpec
 impl incin_backends::codegen::autotune_config::AutotuneSpace
 impl incin_backends::codegen::conv::ImplicitConv2dSpec
 impl incin_backends::codegen::cross_entropy::CrossEntropySpec
+impl incin_backends::codegen::fragment::ScalarFragment
 impl incin_backends::codegen::fused_epilogue::FusedEpilogueSpec
 impl incin_backends::codegen::fusion::CompositeFusionSpec
 impl incin_backends::codegen::gemm::GemmSpec
@@ -174,6 +175,9 @@ impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Log10> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Log2> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Log> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogSoftmax> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogSumExpDim> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogSumExpKeepDim> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogicalAnd> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogicalNot> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogicalOr> for incin_backends::cpu::CpuBackendImpl<D>
@@ -228,6 +232,7 @@ impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Rsqrt> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::ScaledDotProductAttention> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Scatter> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::ScatterAdd> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Sigmoid> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Sign> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Sin> for incin_backends::cpu::CpuBackendImpl<D>
@@ -340,6 +345,8 @@ pub const fn incin_backends::dispatch::DispatchBackend<D>::new() -> Self
 pub const fn incin_backends::simd::simd_lanes<T: core::marker::Sized>() -> usize
 pub const fn incin_backends::simd::simd_vector_bytes() -> usize
 pub const fn incin_backends::simd_lanes<T: core::marker::Sized>() -> usize
+pub const incin_backends::codegen::catalog::BINARY_OPS: &[&str]
+pub const incin_backends::codegen::catalog::UNARY_OPS: &[&str]
 pub const incin_backends::conformance::RANK_CAP: usize
 pub const incin_backends::cpu::CpuBackendImpl<D>::BACKEND_NAME: &'static str
 pub const incin_backends::cpu::typed_kernel::PARALLEL_GRAIN: usize
@@ -465,6 +472,10 @@ pub fn incin_backends::codegen::attention::AttentionSpec::render_wgsl(&self) -> 
 pub fn incin_backends::codegen::autotune_config::AutotuneSpace::for_matmul(usize, usize, usize, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::autotune_config::GpuArchProfile) -> Self
 pub fn incin_backends::codegen::autotune_config::AutotuneSpace::generate_candidates(&self) -> alloc::vec::Vec<incin_backends::codegen::autotune_config::AutotuneCandidate>
 pub fn incin_backends::codegen::autotune_config::AutotuneSpace::select_best_heuristic(&self) -> incin_backends::codegen::autotune_config::AutotuneCandidate
+pub fn incin_backends::codegen::binary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::catalog::binary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::catalog::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::catalog::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::codegen::conv::ImplicitConv2dSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, (usize, usize), (usize, usize), (usize, usize)) -> Self
 pub fn incin_backends::codegen::conv::ImplicitConv2dSpec::render_cuda(&self) -> alloc::string::String
 pub fn incin_backends::codegen::cross_entropy::CrossEntropySpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize, f64) -> Self
@@ -478,6 +489,9 @@ pub fn incin_backends::codegen::dsl::define_ternary_custom_op(&'static str, inci
 pub fn incin_backends::codegen::dsl::define_unary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
 pub fn incin_backends::codegen::exp(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::fma(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::fragment::ScalarFragment::literal(&str) -> Self
+pub fn incin_backends::codegen::fragment::ScalarFragment::prologue_block(&self, &str) -> alloc::string::String
+pub fn incin_backends::codegen::fragment::lower_scalar(&incin_backends::codegen::ir::IrExpr, &[&str], incin_core::tensor::dtype::registry::DTypeId) -> incin_core::err::Result<incin_backends::codegen::fragment::ScalarFragment>
 pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::fused_epilogue::FusedEpilogueKind) -> Self
 pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::render_cuda(&self) -> alloc::string::String
 pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::render_msl(&self) -> alloc::string::String
@@ -514,6 +528,7 @@ pub fn incin_backends::codegen::ir::IrExpr::neg(self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::neg(self) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::ir::IrExpr::optimize(&self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::relu(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::remap_args(&self, &impl core::ops::function::Fn(usize) -> usize) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::render_cuda_expr(&self, incin_core::tensor::dtype::registry::DTypeId) -> alloc::string::String
 pub fn incin_backends::codegen::ir::IrExpr::rsqrt(self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::sigmoid(self) -> Self
@@ -542,6 +557,7 @@ pub fn incin_backends::codegen::ir::tanh(incin_backends::codegen::ir::IrExpr) ->
 pub fn incin_backends::codegen::jit::CpuJitKernel::eval_backward_f32(&self, &[f32], &[&[f32]], usize, &mut [f32]) -> incin_core::err::Result<()>
 pub fn incin_backends::codegen::jit::CpuJitKernel::eval_f32(&self, &[&[f32]], &mut [f32]) -> incin_core::err::Result<()>
 pub fn incin_backends::codegen::log(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::lower_scalar(&incin_backends::codegen::ir::IrExpr, &[&str], incin_core::tensor::dtype::registry::DTypeId) -> incin_core::err::Result<incin_backends::codegen::fragment::ScalarFragment>
 pub fn incin_backends::codegen::mma::TensorCoreMmaSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, usize, usize) -> Self
 pub fn incin_backends::codegen::mma::TensorCoreMmaSpec::render_cuda(&self) -> alloc::string::String
 pub fn incin_backends::codegen::moe::MoeGatingSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize, usize) -> Self
@@ -594,6 +610,8 @@ pub fn incin_backends::codegen::strided::FastDivisor::new(u32) -> Self
 pub fn incin_backends::codegen::strided::StridedIndexSpec::new(alloc::vec::Vec<usize>, alloc::vec::Vec<isize>) -> Self
 pub fn incin_backends::codegen::strided::StridedIndexSpec::render_cuda_offset_expression(&self, &str) -> alloc::string::String
 pub fn incin_backends::codegen::tanh(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::binary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::BinaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::vectorized::VectorWidth) -> Self
 pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_cuda(&self) -> alloc::string::String
 pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_msl(&self) -> alloc::string::String
@@ -681,6 +699,9 @@ pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Log, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Log10, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Log2, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogSoftmax, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogSumExpDim, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogSumExpKeepDim, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogicalAnd, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogicalNot, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogicalOr, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
@@ -724,6 +745,7 @@ pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Rsqrt, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::ScaledDotProductAttention, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Scatter, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::ScatterAdd, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Sigmoid, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Sign, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Sin, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
@@ -1199,6 +1221,8 @@ pub incin_backends::codegen::RopeSpec::name: alloc::string::String
 pub incin_backends::codegen::RopeSpec::rotary_dim: usize
 pub incin_backends::codegen::RopeSpec::theta_base: f64
 pub incin_backends::codegen::RopeSpec::use_precomputed_freqs: bool
+pub incin_backends::codegen::ScalarFragment::prologue: alloc::vec::Vec<alloc::string::String>
+pub incin_backends::codegen::ScalarFragment::value: alloc::string::String
 pub incin_backends::codegen::ScanOpKind::Max
 pub incin_backends::codegen::ScanOpKind::Min
 pub incin_backends::codegen::ScanOpKind::Product
@@ -1290,6 +1314,8 @@ pub incin_backends::codegen::cross_entropy::CrossEntropySpec::dtype: incin_core:
 pub incin_backends::codegen::cross_entropy::CrossEntropySpec::label_smoothing: f64
 pub incin_backends::codegen::cross_entropy::CrossEntropySpec::name: alloc::string::String
 pub incin_backends::codegen::cross_entropy::CrossEntropySpec::vocab_size: usize
+pub incin_backends::codegen::fragment::ScalarFragment::prologue: alloc::vec::Vec<alloc::string::String>
+pub incin_backends::codegen::fragment::ScalarFragment::value: alloc::string::String
 pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::Bias
 pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasGelu
 pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasRelu
@@ -1599,9 +1625,11 @@ pub mod incin_backends::capability_docs
 pub mod incin_backends::codegen
 pub mod incin_backends::codegen::attention
 pub mod incin_backends::codegen::autotune_config
+pub mod incin_backends::codegen::catalog
 pub mod incin_backends::codegen::conv
 pub mod incin_backends::codegen::cross_entropy
 pub mod incin_backends::codegen::dsl
+pub mod incin_backends::codegen::fragment
 pub mod incin_backends::codegen::fused_epilogue
 pub mod incin_backends::codegen::fusion
 pub mod incin_backends::codegen::gemm
@@ -1659,6 +1687,7 @@ pub struct incin_backends::codegen::PrefixScanSpec
 pub struct incin_backends::codegen::QuantGemmSpec
 pub struct incin_backends::codegen::ReductionOpSpec
 pub struct incin_backends::codegen::RopeSpec
+pub struct incin_backends::codegen::ScalarFragment
 pub struct incin_backends::codegen::SotaGemmSpec
 pub struct incin_backends::codegen::StridedIndexSpec
 pub struct incin_backends::codegen::TensorCoreMmaSpec
@@ -1668,6 +1697,7 @@ pub struct incin_backends::codegen::autotune_config::AutotuneCandidate
 pub struct incin_backends::codegen::autotune_config::AutotuneSpace
 pub struct incin_backends::codegen::conv::ImplicitConv2dSpec
 pub struct incin_backends::codegen::cross_entropy::CrossEntropySpec
+pub struct incin_backends::codegen::fragment::ScalarFragment
 pub struct incin_backends::codegen::fused_epilogue::FusedEpilogueSpec
 pub struct incin_backends::codegen::fusion::CompositeFusionSpec
 pub struct incin_backends::codegen::gemm::GemmSpec
