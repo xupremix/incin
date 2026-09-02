@@ -1,6 +1,6 @@
 //! Turning a tensor's runtime layout into a type-level one.
 //!
-//! A [`Layout`](crate::shapes::Layout) parameter is a claim about where a
+//! A [`Layout`](Layout) parameter is a claim about where a
 //! tensor's elements sit, and a claim is only worth having if it cannot be made
 //! falsely. There are two honest ways to acquire one: inherit it from an
 //! operation whose output layout is determined by its inputs, or *check* it
@@ -21,6 +21,7 @@ use super::Tensor;
 use crate::backend_authoring::Backend;
 use crate::dist::Placement;
 use crate::err::{Error, Result};
+use crate::shapes::Layout;
 use crate::shapes::{RowMajor, Shape, Unknown};
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
@@ -103,7 +104,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::shapes::Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     Tensor<S, B, K, G, P, L>
 {
     /// Reinterprets the tensor's elements under a new shape without copying.

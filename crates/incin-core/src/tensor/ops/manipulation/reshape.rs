@@ -12,6 +12,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::{Dyn, DynShape, FlattenAt, Shape, ShapeBuf, ShapeSpec, ShapeValue};
 use crate::tensor::base::Tensor;
@@ -86,7 +87,7 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-    L: crate::shapes::Layout,
+    L: Layout,
 > Tensor<S, B, K, G, P, L>
 {
     /// Reshape this tensor using a [`ShapeSpec`].
@@ -470,13 +471,8 @@ impl<
     }
 }
 
-impl<
-    S: Shape + DynShape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    L: crate::shapes::Layout,
-> Tensor<S, B, K, G, crate::dist::Local, L>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     /// Flattens a statically selected inclusive axis range.
     /// Flattens an axis interval selected by compile-time axis selectors.

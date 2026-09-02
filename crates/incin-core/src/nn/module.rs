@@ -176,11 +176,11 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
 ///     bias: Param<s![128], B>,
 /// }
 ///
-/// impl<B: VariableBackend, TLayout: crate::shapes::Layout> Module<Tensor<s![1, 128], B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, TLayout>> for MyLayer<B> {
-///     type Output = Tensor<s![1, 128], B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, TLayout>;
+/// impl<B: VariableBackend, TLayout: Layout> Module<Tensor<s![1, 128], B, f32, crate::tensor::grad::NoGrad, Local, TLayout>> for MyLayer<B> {
+///     type Output = Tensor<s![1, 128], B, f32, crate::tensor::grad::NoGrad, Local, TLayout>;
 ///     type Error = Error;
 ///
-///     fn forward(&self, x: Tensor<s![1, 128], B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, TLayout>) -> Result<Self::Output> {
+///     fn forward(&self, x: Tensor<s![1, 128], B, f32, crate::tensor::grad::NoGrad, Local, TLayout>) -> Result<Self::Output> {
 ///         // Custom logic here
 ///         Ok(x)
 ///     }

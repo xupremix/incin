@@ -13,6 +13,7 @@ use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, op};
 use crate::exec::request::TensorHandle;
 use crate::shapes::Dyn;
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::prelude::{
     Axis, BroadcastShape, Dim, DimCons, DimensionConstraint, DynShape, Nil, RankExpectation, Shape,
@@ -319,27 +320,22 @@ impl MatMulShape<Dyn> for Dyn {
 /// Generic over both operands' layouts, which need not agree. The result's
 /// layout is stated rather than carried: a matmul produces a differently shaped
 /// tensor, and a layout is only meaningful against the shape it describes.
-impl<
-    S1: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G1: RequiresGrad,
-    TLayout: crate::shapes::Layout,
-> Tensor<S1, B, K, G1, crate::dist::Local, TLayout>
+impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TLayout: Layout>
+    Tensor<S1, B, K, G1, Local, TLayout>
 {
     /// Batched matrix multiplication over the trailing two dimensions,
     /// with the output shape checked at compile time via `MatMulShape`.
     #[allow(clippy::type_complexity)]
-    pub fn matmul<S2, G2, L2: crate::shapes::Layout>(
+    pub fn matmul<S2, G2, L2: Layout>(
         &self,
-        rhs: &Tensor<S2, B, K, G2, crate::dist::Local, L2>,
+        rhs: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<
         Tensor<
             S1::Output,
             B,
             K,
             crate::tensor::grad::JoinedGrad<G1, G2>,
-            crate::dist::Local,
+            Local,
             crate::shapes::Unknown,
         >,
     >
@@ -396,9 +392,9 @@ impl<
     }
 
     /// Computes vector dot product of 1D/matching tensors `self` and `rhs`, returning a scalar tensor.
-    pub fn dot<S2: Shape, L2: crate::shapes::Layout>(
+    pub fn dot<S2: Shape, L2: Layout>(
         &self,
-        rhs: &Tensor<S2, B, K, G1, crate::dist::Local, L2>,
+        rhs: &Tensor<S2, B, K, G1, Local, L2>,
         // A dot product collapses to a scalar, so the result describes a
         // different geometry and cannot carry either operand's layout. It takes
         // the parameter's default, `Unknown`, which is what leaving the

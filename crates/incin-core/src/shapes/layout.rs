@@ -55,6 +55,7 @@
 //! identity element and the default, so adding this parameter changes the
 //! meaning of nothing that already exists.
 
+use crate::dist::Local;
 use crate::shapes::{MAX_STATIC_RANK, ProofLevel, Shape};
 use core::fmt::Debug;
 use core::marker::PhantomData;
@@ -250,5 +251,5 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
 /// Note the shape appears once rather than twice: `RowMajor` is always
 /// congruent with the shape it describes, so repeating it is noise the alias
 /// removes. That congruence is exactly what [`LayoutOf`] states.
-pub type Dense<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = crate::dist::Local> =
+pub type Dense<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = Local> =
     crate::tensor::base::Tensor<S, B, K, G, P, RowMajor<S>>;

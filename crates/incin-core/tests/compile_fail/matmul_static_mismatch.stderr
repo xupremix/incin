@@ -19,7 +19,7 @@ error[E0277]: Cannot contract dimension `UInt<UInt<UTerm, B1>, B1>` with `UInt<U
 note: required by a bound in `matmul::<impl incin::prelude::Tensor<S1, B, K, G1, incin::dist::Local, TLayout>>::matmul`
   --> src/tensor/matmul.rs
    |
-   |     pub fn matmul<S2, G2, L2: crate::shapes::Layout>(
+   |     pub fn matmul<S2, G2, L2: Layout>(
    |            ------ required by a bound in this associated function
 ...
    |         S1: MatMulShape<S2>,

@@ -12,6 +12,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{ExecutionDescriptor, GradMode};
+use crate::shapes::Layout;
 use crate::shapes::ShapeBuf;
 use crate::shapes::StaticCursor;
 use crate::shapes::error::OperationKind;
@@ -184,14 +185,8 @@ macro_rules! impl_reduction_op {
 /// buffers, so where a signature returns a differently shaped tensor its layout
 /// is stated rather than carried: a reduction changes the shape, and a layout
 /// is only meaningful against the shape it describes.
-impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    P: Placement,
-    L: crate::shapes::Layout,
-> Tensor<S, B, K, G, P, L>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement, L: Layout>
+    Tensor<S, B, K, G, P, L>
 {
     /// Sums over a static, named, or runtime axis selector.
     pub fn sum<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
@@ -507,7 +502,7 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-    L: crate::shapes::Layout,
+    L: Layout,
 > Tensor<S, B, K, G, P, L>
 where
     <S as crate::shapes::RemoveOneRank>::Output: crate::shapes::Shape,
@@ -559,13 +554,8 @@ where
 /// Generic over the operand's layout. Each collapses to a scalar, so the
 /// result describes a different geometry and its layout is stated by the
 /// macro rather than carried.
-impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    L: crate::shapes::Layout,
-> Tensor<S, B, K, G, Local, L>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.

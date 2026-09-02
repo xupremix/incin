@@ -7,6 +7,7 @@ use crate::exec::Capabilities;
 use crate::exec::catalog::{TransposeAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::idx::StaticCursor;
 use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue, SwapAxes};
 use crate::tensor::base::Tensor;
@@ -18,8 +19,8 @@ impl<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    TLayout: crate::shapes::Layout,
-> Tensor<S, B, K, G, crate::dist::Local, TLayout>
+    TLayout: Layout,
+> Tensor<S, B, K, G, Local, TLayout>
 {
     /// Transposes two axis selectors while preserving the strongest available
     /// output shape proof.

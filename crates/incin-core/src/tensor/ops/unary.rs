@@ -5,6 +5,7 @@
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
 use crate::err::Result;
 use crate::exec::catalog::op;
+use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
@@ -39,13 +40,8 @@ macro_rules! impl_unary_op {
 /// The invariant a new layout must respect: if `L` can describe something other
 /// than a dense buffer, these signatures stop being true and the output layout
 /// has to be named explicitly rather than carried through as `Self`.
-impl<
-    S: Shape,
-    B: Backend,
-    K: crate::tensor::dtype::DType,
-    G: RequiresGrad,
-    L: crate::shapes::Layout,
-> Tensor<S, B, K, G, crate::dist::Local, L>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     impl_unary_op!(
         /// Elementwise tangent.
@@ -411,7 +407,7 @@ pub(crate) fn execute_unary_descriptor<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    L: crate::shapes::Layout,
+    L: Layout,
 >(
     tensor: &Tensor<S, B, K, G, Local, L>,
 ) -> Result<Tensor<S, B, K, G, Local, L>>
@@ -443,7 +439,7 @@ pub(crate) fn execute_unary_descriptor_with_attributes<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    L: crate::shapes::Layout,
+    L: Layout,
 >(
     tensor: &Tensor<S, B, K, G, Local, L>,
     attributes: O::Attributes,

@@ -7,6 +7,7 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::module::ShapeInfo;
 use crate::nn::{Module, Param};
+use crate::shapes::Layout;
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
@@ -227,19 +228,18 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::LayerNorm>,
     K: DType,
     Train: TrainState,
-    L: crate::shapes::Layout,
-> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
-    for LayerNorm<S, B, K, Train>
+    L: Layout,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for LayerNorm<S, B, K, Train>
 where
     <B as Execute<op::LayerNorm>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>;
     type Error = Error;
 
     #[inline]
     fn forward(
         &self,
-        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = self.bias.as_tensor()?;

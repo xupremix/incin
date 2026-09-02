@@ -1,7 +1,9 @@
 use crate::backend_authoring::SupportsDType;
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::op;
 use crate::nn::{Module, Param};
+use crate::shapes::Layout;
 use crate::shapes::idx::{FromEnd, Here};
 use crate::shapes::shape_ops::ReduceKeepAt;
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
@@ -187,9 +189,8 @@ impl<
         + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
-    L: crate::shapes::Layout,
-> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
-    for RMSNorm<S, B, K, Train>
+    L: Layout,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
     <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
@@ -205,7 +206,7 @@ where
     #[inline]
     fn forward(
         &self,
-        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();

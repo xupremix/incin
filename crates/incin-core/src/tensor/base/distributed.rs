@@ -1,6 +1,7 @@
 use super::Tensor;
 use crate::backend_authoring::{Backend, SupportsDType};
 use crate::dist::{Placement, PlacementKind};
+use crate::shapes::Layout;
 use crate::shapes::{Dyn, Shape, ShapeValue};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
@@ -109,7 +110,7 @@ pub enum PlacedTensorError {
     },
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::shapes::Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     Tensor<S, B, K, G, P, L>
 {
     /// Join one rank's storage to a sealed distributed lowering proof.

@@ -15,6 +15,7 @@ use crate::exec::catalog::{AttributeContract, CanonicalOperation, NoAttributes, 
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::ShapeValue;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Backend;
@@ -35,8 +36,8 @@ pub(crate) fn execute_binary_descriptor<
     G1: RequiresGrad,
     G2: RequiresGrad,
     GOut: RequiresGrad,
-    L1: crate::shapes::Layout,
-    L2: crate::shapes::Layout,
+    L1: Layout,
+    L2: Layout,
 >(
     lhs: &Tensor<S, B, KIn, G1, Local, L1>,
     rhs: &Tensor<S2, B, KIn, G2, Local, L2>,
@@ -226,11 +227,11 @@ macro_rules! impl_exact_binary_op {
         $(#[$meta:meta])*
         $op:ident, $method:ident, $op_marker:ident
     ) => {
-        impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad, L1: crate::shapes::Layout>
+        impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad, L1: Layout>
             Tensor<S, B, K, G1, Local, L1>
         {
             $(#[$meta])*
-            pub fn $method<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout>(
+            pub fn $method<S2: Shape, G2: RequiresGrad, L2: Layout>(
                 &self,
                 rhs: &Tensor<S2, B, K, G2, Local, L2>,
             ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>, Local, L1>>

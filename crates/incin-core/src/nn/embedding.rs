@@ -6,6 +6,7 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{AppendDim, Dim, Dyn, DynShape, Shape, ShapeValue};
@@ -190,9 +191,8 @@ impl<
     InK: DType,
     K: DType,
     Train: TrainState,
-    L: crate::shapes::Layout,
-> Module<Tensor<InS, B, InK, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
-    for Embedding<S, B, K, Train>
+    L: Layout,
+> Module<Tensor<InS, B, InK, crate::tensor::grad::NoGrad, Local, L>> for Embedding<S, B, K, Train>
 where
     B: crate::tensor::backend::VariableBackend
         + crate::exec::Capabilities
@@ -208,7 +208,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<InS, B, InK, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<InS, B, InK, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let x_handle = TensorHandle::from_storage::<B, InK, Local>(x.inner());

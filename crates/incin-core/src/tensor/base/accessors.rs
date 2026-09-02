@@ -2,12 +2,13 @@ use super::Tensor;
 use crate::backend_authoring::Backend;
 use crate::dist::{Placement, PlacementKind};
 use crate::err::Result;
+use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape, ShapeBuf};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeId};
 use crate::tensor::grad::RequiresGrad;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::shapes::Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     Tensor<S, B, K, G, P, L>
 {
     #[inline]
@@ -91,14 +92,8 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::sh
     }
 }
 
-impl<
-    S: Shape + DynShape,
-    B: Backend,
-    K: DType,
-    G: RequiresGrad,
-    P: Placement,
-    L: crate::shapes::Layout,
-> Tensor<S, B, K, G, P, L>
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
+    Tensor<S, B, K, G, P, L>
 {
     #[inline]
     /// Returns the number of dimensions (rank) of the tensor.

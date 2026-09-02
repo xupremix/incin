@@ -7,6 +7,7 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
+use crate::shapes::Layout;
 use crate::shapes::ShapeValue;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
@@ -53,22 +54,15 @@ impl<
     P: Unsigned,
     D: Unsigned,
     B: crate::tensor::backend::VariableBackend + Execute<op::AvgPool2d>,
-    L: crate::shapes::Layout,
-> Module<Tensor<I, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
-    for AvgPool2d<K, S, P, D>
+    L: Layout,
+> Module<Tensor<I, B, f32, crate::tensor::grad::NoGrad, Local, L>> for AvgPool2d<K, S, P, D>
 where
     B: Capabilities,
     <B as Execute<op::AvgPool2d>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<
-        I::Output,
-        B,
-        f32,
-        crate::tensor::grad::NoGrad,
-        crate::dist::Local,
-        crate::shapes::Unknown,
-    >;
+    type Output =
+        Tensor<I::Output, B, f32, crate::tensor::grad::NoGrad, Local, crate::shapes::Unknown>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -76,7 +70,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<I, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<I, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         let shape = <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(
             &x.shape_buf_value(),

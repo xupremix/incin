@@ -3,6 +3,7 @@ use super::error::validate_gradient_dtype;
 use crate::backend_authoring::Backend;
 use crate::dist::Local;
 use crate::err::{Error, Result};
+use crate::shapes::Layout;
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
@@ -26,9 +27,7 @@ enum ConstructionWitness {
 /// Generic over the layout parameter so a caller that has proven something
 /// about its buffer keeps that proof through construction. `Self` carries `L`,
 /// so these neither invent nor discard a claim.
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: crate::shapes::Layout>
-    Tensor<S, B, K, G, Local, L>
-{
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout> Tensor<S, B, K, G, Local, L> {
     /// Wraps a gradient buffer produced for `source`.
     ///
     /// The gradient's layout is deliberately `Unknown` rather than `source`'s.

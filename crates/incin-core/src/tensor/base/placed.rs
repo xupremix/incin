@@ -3,13 +3,14 @@ use super::error::validate_gradient_dtype;
 use crate::backend_authoring::Backend;
 use crate::dist::Placement;
 use crate::err::Result;
+use crate::shapes::Layout;
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
 use core::marker::PhantomData;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::shapes::Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     Tensor<S, B, K, G, P, L>
 {
     /// Rebuilds tensor metadata after a checked operation while retaining the

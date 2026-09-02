@@ -1,5 +1,7 @@
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::nn::module::{Module, ShapeInfo, TrainMode};
+use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
@@ -39,13 +41,13 @@ impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Relu>,
     G: RequiresGrad,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, G, crate::dist::Local, L>> for ReLU
+    L: Layout,
+> Module<Tensor<S, B, f32, G, Local, L>> for ReLU
 where
     <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, G, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, G, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -53,8 +55,8 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, G, crate::dist::Local, L>,
-    ) -> core::result::Result<Tensor<S, B, f32, G, crate::dist::Local, L>, Error> {
+        x: Tensor<S, B, f32, G, Local, L>,
+    ) -> core::result::Result<Tensor<S, B, f32, G, Local, L>, Error> {
         x.relu()
     }
 }
@@ -73,16 +75,13 @@ impl_stateless_shape_info!(GELU);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for GELU {}
 
-impl<
-    S: Shape + DynShape,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Gelu>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for GELU
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Gelu>, L: Layout>
+    Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for GELU
 where
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -90,7 +89,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.gelu()
     }
@@ -113,13 +112,13 @@ impl TrainMode for Swish {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Swish>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for Swish
+    L: Layout,
+> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Swish
 where
     <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -127,7 +126,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.swish()
     }
@@ -147,16 +146,13 @@ impl_stateless_shape_info!(Mish);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Mish {}
 
-impl<
-    S: Shape + DynShape,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Mish>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for Mish
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Mish>, L: Layout>
+    Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Mish
 where
     <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -164,7 +160,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.mish()
     }
@@ -186,16 +182,13 @@ impl_stateless_shape_info!(ELU);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for ELU {}
 
-impl<
-    S: Shape + DynShape,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Elu>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for ELU
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Elu>, L: Layout>
+    Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for ELU
 where
     <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -203,7 +196,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.elu()
     }
@@ -243,14 +236,14 @@ impl<
     S: Shape + DynShape + crate::shapes::RuntimeRankProjection,
     B: crate::tensor::backend::VariableBackend
         + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for Softmax
+    L: Layout,
+> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Softmax
 where
     <B as crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>>::Output:
         Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -258,7 +251,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.softmax(self.dim as isize)
     }
@@ -280,13 +273,13 @@ impl TrainMode for Sigmoid {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Sigmoid>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for Sigmoid
+    L: Layout,
+> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Sigmoid
 where
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -294,7 +287,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.sigmoid()
     }
@@ -313,16 +306,13 @@ impl_stateless_shape_info!(Tanh);
 /// that do have one (e.g. `Dropout`).
 impl TrainMode for Tanh {}
 
-impl<
-    S: Shape + DynShape,
-    B: crate::tensor::backend::VariableBackend + Execute<op::Tanh>,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>> for Tanh
+impl<S: Shape + DynShape, B: crate::tensor::backend::VariableBackend + Execute<op::Tanh>, L: Layout>
+    Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Tanh
 where
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -330,7 +320,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.tanh()
     }

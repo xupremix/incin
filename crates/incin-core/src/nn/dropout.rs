@@ -5,6 +5,7 @@ use crate::exec::catalog::{DropoutAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
+use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Execute;
 use crate::tensor::backend::SupportsDType;
@@ -110,20 +111,20 @@ impl<
     B: crate::tensor::backend::VariableBackend,
     K: BuiltinDType,
     G: RequiresGrad,
-    L: crate::shapes::Layout,
-> Module<Tensor<S, B, K, G, crate::dist::Local, L>> for Dropout
+    L: Layout,
+> Module<Tensor<S, B, K, G, Local, L>> for Dropout
 where
     B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,
     <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G, crate::dist::Local, L>;
+    type Output = Tensor<S, B, K, G, Local, L>;
     type Error = Error;
 
     #[inline]
     fn forward(
         &self,
-        x: Tensor<S, B, K, G, crate::dist::Local, L>,
+        x: Tensor<S, B, K, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         if !self.is_training || self.p <= 0.0 {
             return Ok(x);
