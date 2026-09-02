@@ -178,8 +178,20 @@ macro_rules! impl_reduction_op {
     };
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+/// Reductions.
+///
+/// Generic over the operand's layout. The results are freshly allocated dense
+/// buffers, so where a signature returns a differently shaped tensor its layout
+/// is stated rather than carried: a reduction changes the shape, and a layout
+/// is only meaningful against the shape it describes.
+impl<
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, P, L>
 {
     /// Sums over a static, named, or runtime axis selector.
     pub fn sum<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
@@ -495,7 +507,8 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-> Tensor<S, B, K, G, P>
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, P, L>
 where
     <S as crate::shapes::RemoveOneRank>::Output: crate::shapes::Shape,
     <S as crate::shapes::PreserveRank>::Output: crate::shapes::Shape,

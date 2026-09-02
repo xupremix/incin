@@ -59,6 +59,27 @@ fn a_proven_tensor_can_still_be_operated_on() {
     assert_eq!(summed.dims().as_ref(), &[3, 4]);
 }
 
+/// Reductions accept a proven operand.
+///
+/// A reduction changes the shape, so its result's layout is stated rather than
+/// carried -- a layout is only meaningful against the shape it describes, and
+/// carrying the operand's would be claiming something about a different
+/// geometry.
+#[test]
+fn a_reduction_accepts_a_proven_operand() {
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .unwrap();
+
+    let summed = t
+        .sum(incin_core::shapes::idx::ForwardAxis::<
+            incin_core::shapes::idx::Here,
+        >::default())
+        .expect("a reduction applies to a proven tensor");
+    assert_eq!(summed.dims().as_ref(), &[4]);
+}
+
 /// A pointwise op preserves the operand's layout rather than upgrading or
 /// discarding it.
 ///

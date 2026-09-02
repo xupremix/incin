@@ -80,12 +80,6 @@ pub trait Layout: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// type settles it.
     const STATIC_OFFSET: Option<usize> = None;
 
-    /// Alignment of the base address in *elements*, when the type settles it.
-    ///
-    /// In elements rather than bytes so a caller can compare it against a
-    /// vector width without knowing the dtype's size.
-    const STATIC_ALIGNMENT: Option<usize> = None;
-
     /// How much of this layout came from the type rather than a runtime scan.
     ///
     /// Defaults to [`ProofLevel::Dynamic`], so an implementation that says
@@ -125,18 +119,28 @@ pub trait LayoutOf<S: Shape>: Layout {}
 /// runtime path.
 pub trait Contiguous: Layout {}
 
-/// The base address is a multiple of `N` elements.
-///
-/// Lets a vectorised load be a bound rather than a runtime test. The backend
-/// currently decides this with `offset.is_multiple_of(width)` at launch time.
-pub trait AlignedTo<N: typenum::Unsigned>: Layout {}
+// There is deliberately no `AlignedTo<N>` trait, and no `STATIC_ALIGNMENT`
+// constant, though the design note listed both.
+//
+// Alignment is a property of the *allocation*, not of the shape: `TensorMeta`
+// receives an `allocation_alignment` at construction, and nothing about `S`
+// implies it. So no layout derived from a shape -- `RowMajor<S>` included --
+// can implement such a trait. Making it real would need a separate wrapper
+// layout produced by a checked promotion, in the style of `into_row_major`, and
+// a backend that consumes the bound.
+//
+// Neither exists, and the win is small: the only place the fact would be used
+// is `select_unary_strategy`, which decides packing with a single
+// `offset.is_multiple_of(width)` test. Shipping the vocabulary without either
+// half would be exactly the unexecuted public surface tracked by #111, so it
+// waits for a consumer that justifies it.
 
 /// Nothing proven about layout.
 ///
 /// The default for [`Layout`] parameters and what every tensor carries until a
 /// more specific layout is threaded through. Implements [`Layout`] with every
-/// constant at its default, and deliberately implements neither [`Contiguous`]
-/// nor [`AlignedTo`].
+/// constant at its default, and deliberately does not implement
+/// [`Contiguous`].
 ///
 /// # Why this is not just `Dyn`
 ///

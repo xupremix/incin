@@ -73,8 +73,11 @@ They are exposed as traits you bound where you need them:
 | Trait | Means |
 |---|---|
 | `Contiguous` | the elements form one unbroken ascending run |
-| `AlignedTo<N>` | the base address is a multiple of `N` elements |
 | `LayoutOf<S>` | this layout describes a tensor of shape `S` |
+
+There is no alignment trait yet. Alignment is a property of the allocation
+rather than of the shape, so no layout derived from a shape can claim it; it
+would need its own checked promotion and a backend that consumes the bound.
 
 This is the same pattern [shapes](./advanced_shapes.md) use: a single parameter
 carrying the bundle, with the individual facts as bounds. `L: Contiguous` reads
@@ -109,6 +112,15 @@ module. Operations that have been converted carry their operand's layout
 through; operations that have not still bind `L` to `Unknown`, which means a
 tensor carrying a proof cannot call them yet.
 
-Pointwise unary operations and the accessors are converted. If a method is
-unavailable on a proven tensor, that module is not yet converted — call
-`.into_row_major()` later in the chain, or work with `Unknown` until it is.
+Converted so far: the accessors, the local constructors, `Clone`, pointwise
+unary and binary operations, and reductions.
+
+Not yet: shape manipulation, matmul, and the `nn` layers. If a method is
+unavailable on a proven tensor, that module is one of these — call
+`.into_row_major()` later in the chain, or work with `Unknown` until it is
+converted.
+
+Pointwise operations carry the operand's layout through, so a proof survives a
+chain and `reshape_view` is still reachable at the end of one. Reductions state
+their result's layout instead of carrying it, because a reduction changes the
+shape and a layout is only meaningful against the shape it describes.
