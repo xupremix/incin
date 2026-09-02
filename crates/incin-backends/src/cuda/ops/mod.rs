@@ -13,6 +13,8 @@ pub(crate) mod quant;
 pub(crate) mod reduce;
 pub(crate) mod select;
 pub(crate) mod shape;
+#[cfg(all(test, feature = "std"))]
+mod view_cost_bench;
 
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
