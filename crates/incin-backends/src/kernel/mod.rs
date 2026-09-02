@@ -18,6 +18,8 @@ use crate::codegen::ScalarFragment;
 #[cfg(any(feature = "cuda", test))]
 use alloc::boxed::Box;
 use alloc::string::String;
+#[cfg(any(feature = "cuda", test))]
+use core::fmt::Write as _;
 use incin_core::error::{Error, Result};
 #[cfg(feature = "cuda")]
 use incin_core::exec::PrecisionRequest;

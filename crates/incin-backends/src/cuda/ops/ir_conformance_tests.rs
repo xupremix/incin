@@ -614,9 +614,11 @@ fn a_proven_element_count_elides_the_packed_tail() {
     // f32 packs four lanes wide, so 16 divides it and 14 does not.
     let divisible = KernelSpecialization {
         static_numel: Some(16),
+        static_extents: &[Some(16)],
     };
     let indivisible = KernelSpecialization {
         static_numel: Some(14),
+        static_extents: &[Some(14)],
     };
     assert!(divisible.packed_tail_is_dead(4));
     assert!(!indivisible.packed_tail_is_dead(4));
@@ -694,6 +696,7 @@ fn the_elided_tail_is_absent_from_the_emitted_source() {
     let general = render(NO_PROOF);
     let specialized = render(KernelSpecialization {
         static_numel: Some(16),
+        static_extents: &[Some(16)],
     });
 
     assert!(
@@ -712,6 +715,153 @@ fn the_elided_tail_is_absent_from_the_emitted_source() {
     // removing: the launch rounds up to whole blocks regardless.
     assert!(general.contains("if (base >= numel)"));
     assert!(specialized.contains("if (base >= numel)"));
+}
+
+/// Proven extents must replace the strided kernel's loaded divisors with
+/// literals, and must not change an address.
+///
+/// The strided walk costs one modulo and one division per axis per element, and
+/// a divisor living in device memory cannot be strength-reduced -- integer
+/// division stays integer division. Substituting the extents as literals lets
+/// nvcc lower each one to a multiply-and-shift.
+///
+/// Strides are deliberately *not* substituted: they describe the view, so a
+/// transposed or narrowed tensor has strides no shape type can settle.
+#[test]
+fn proven_extents_replace_the_strided_divisors_with_literals() {
+    use crate::codegen::ScalarFragment;
+    use crate::kernel::render_cuda_unary_for_layout_body;
+    use incin_core::exec::LayoutClass;
+
+    let body = ScalarFragment::literal("x");
+    let render = |extents| {
+        render_cuda_unary_for_layout_body(
+            "probe",
+            &body,
+            DTypeId::F32,
+            LayoutClass::Strided,
+            1,
+            extents,
+        )
+        .unwrap()
+        .source
+    };
+
+    let general = render(None);
+    let unrolled = render(Some(alloc::vec![3, 4]));
+
+    assert!(
+        general.contains("temp % shape[i]"),
+        "the general kernel divides by a loaded extent"
+    );
+    assert!(
+        !unrolled.contains("shape[i]"),
+        "a proven shape must not read extents from memory:\n{unrolled}"
+    );
+    assert!(
+        unrolled.contains("temp % 4") && unrolled.contains("temp % 3"),
+        "each extent should appear as a literal divisor:\n{unrolled}"
+    );
+    // Strides stay dynamic in both: they are a property of the view.
+    assert!(general.contains("strides[i]"));
+    assert!(unrolled.contains("strides[1]") && unrolled.contains("strides[0]"));
+    // The outermost axis consumes what is left, so its division is dead.
+    assert!(
+        !unrolled.contains("temp /= 3"),
+        "the outermost division is dead and should not be emitted:\n{unrolled}"
+    );
+}
+
+/// The unrolled index walk must address a real transposed tensor identically to
+/// the loaded-divisor one.
+///
+/// The emitted-source test proves the literals appear; this proves they index
+/// correctly. A transpose is the case that matters: it is genuinely strided, so
+/// the kernel takes the walk rather than addressing linearly, and its strides
+/// are *not* derivable from the shape -- which is exactly why only the extents
+/// are substituted.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn the_unrolled_index_walk_addresses_a_transposed_tensor_correctly() {
+    if !has_cuda() {
+        return;
+    }
+    // 3 x 4 laid out row-major, then viewed transposed to 4 x 3. The view is
+    // non-contiguous, so the launcher selects the strided layout.
+    let values: Vec<f32> = (0..12).map(|index| index as f32).collect();
+    let base = storage(&[3, 4], values.clone());
+    let transposed = crate::cuda::backend::CudaBackendImpl::<incin_core::tensor::device::Cuda>::transpose::<f32>(&base, 0, 1)
+        .expect("a 3x4 tensor transposes to 4x3");
+    assert_eq!(&transposed.shape[..], &[4, 3]);
+
+    let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
+    let proven = KernelSpecialization {
+        static_numel: Some(12),
+        static_extents: &[Some(4), Some(3)],
+    };
+
+    let unrolled = launch_unary_body(probe_name("unroll", "neg"), &body, &transposed, proven)
+        .expect("the unrolled strided kernel must compile and launch");
+    let general = launch_unary_body(probe_name("dynidx", "neg"), &body, &transposed, NO_PROOF)
+        .expect("the general strided kernel must still work");
+
+    let unrolled_values = download_f32_host(&unrolled).unwrap();
+    let general_values = download_f32_host(&general).unwrap();
+
+    // Transposed traversal visits column-major order, so the expected output is
+    // the negation of the transpose of the original 3x4 buffer.
+    for row in 0..4usize {
+        for col in 0..3usize {
+            let index = row * 3 + col;
+            let expected = -(values[col * 4 + row]);
+            assert!(
+                close(f64::from(unrolled_values[index]), f64::from(expected)),
+                "unrolled neg at [{row},{col}] gave {}, expected {expected}",
+                unrolled_values[index]
+            );
+            assert!(
+                close(
+                    f64::from(unrolled_values[index]),
+                    f64::from(general_values[index])
+                ),
+                "the unrolled walk disagreed with the loaded-divisor walk at [{row},{col}]"
+            );
+        }
+    }
+}
+
+/// The unroll must decline when the proof disagrees with the iterated shape.
+///
+/// A mismatch would emit literal divisors for a geometry the kernel is not
+/// walking, which silently computes wrong addresses rather than failing. The
+/// guard is what makes substituting literals safe.
+#[test]
+fn the_unroll_declines_when_the_proof_does_not_match_the_iterated_shape() {
+    let proven = KernelSpecialization {
+        static_numel: Some(12),
+        static_extents: &[Some(3), Some(4)],
+    };
+    assert_eq!(proven.unrollable_extents(&[3, 4]), Some(alloc::vec![3, 4]));
+    assert_eq!(
+        proven.unrollable_extents(&[4, 3]),
+        None,
+        "a permuted shape is a different geometry and must not be unrolled"
+    );
+    assert_eq!(
+        proven.unrollable_extents(&[3, 4, 1]),
+        None,
+        "rank must agree"
+    );
+    assert_eq!(proven.unrollable_extents(&[]), None);
+
+    // One runtime axis disqualifies the whole unroll: the loop needs every
+    // divisor to be a literal.
+    let partly = KernelSpecialization {
+        static_numel: None,
+        static_extents: &[None, Some(4)],
+    };
+    assert_eq!(partly.unrollable_extents(&[3, 4]), None);
+    assert_eq!(NO_PROOF.unrollable_extents(&[3, 4]), None);
 }
 
 /// SSA lowering must not duplicate a repeated subexpression's text.

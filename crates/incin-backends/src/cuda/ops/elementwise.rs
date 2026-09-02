@@ -314,6 +314,7 @@ fn render_unary_strategy(
     layout: LayoutClass,
     strategy: PointwiseStrategy,
     specialization: crate::kernel::KernelSpecialization,
+    iterated_shape: &[usize],
 ) -> Result<crate::kernel::RenderedKernel> {
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
@@ -324,6 +325,9 @@ fn render_unary_strategy(
                 builtin_id,
                 layout,
                 unroll_width,
+                // Resolved here because this is the only layer holding both the
+                // frontend's proof and the shape the kernel will actually walk.
+                specialization.unrollable_extents(iterated_shape),
             )
         }
         PointwiseStrategy::Packed { .. } => crate::kernel::render_cuda_unary_packed_body(
@@ -482,7 +486,15 @@ pub(crate) fn launch_unary_body(
     let layout = plan.layout_class();
     let numel = plan.numel;
     let strategy = select_unary_strategy(b.dtype, layout, numel, plan.operand.offset)?;
-    let kernel = render_unary_strategy(op_name, body, b.dtype, layout, strategy, specialization)?;
+    let kernel = render_unary_strategy(
+        op_name,
+        body,
+        b.dtype,
+        layout,
+        strategy,
+        specialization,
+        &plan.output_shape,
+    )?;
     let packed_width = crate::tuning::preferred_pointwise_width(b.dtype);
     let dense = layout == LayoutClass::Contiguous;
     let selection = pointwise_launch_selection(
@@ -495,7 +507,15 @@ pub(crate) fn launch_unary_body(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, b.dtype, |strategy| {
-        render_unary_strategy(op_name, body, b.dtype, layout, strategy, specialization)
+        render_unary_strategy(
+            op_name,
+            body,
+            b.dtype,
+            layout,
+            strategy,
+            specialization,
+            &plan.output_shape,
+        )
     })?;
     let dtype = prepared
         .first()

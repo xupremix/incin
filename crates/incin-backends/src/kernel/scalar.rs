@@ -144,17 +144,66 @@ extern "C" __global__ void {ENTRY_POINT}(
     if (idx < numel) {
         int flat_idx = offset;
         int temp = idx;
-        for (int i = ndim - 1; i >= 0; i--) {
-            int dim_idx = temp % shape[i];
-            temp /= shape[i];
-            flat_idx += dim_idx * strides[i];
-        }
+{INDEX_CALC}
         {COMPUTE_TYPE} x = {LOAD_PREFIX}input[flat_idx]{LOAD_SUFFIX};
 {PROLOGUE}        {COMPUTE_TYPE} out_val = {OP};
         output[idx] = {STORE_PREFIX}out_val{STORE_SUFFIX};
     }
 }
 "#;
+
+/// The general runtime index walk: one modulo and one division per axis, both
+/// by values read from device memory.
+///
+/// Integer division is among the most expensive operations on the device, and
+/// a divisor that only exists in a buffer cannot be strength-reduced by the
+/// compiler.
+#[cfg(any(feature = "cuda", test))]
+const DYNAMIC_INDEX_CALC: &str = "\
+        for (int i = ndim - 1; i >= 0; i--) {
+            int dim_idx = temp % shape[i];
+            temp /= shape[i];
+            flat_idx += dim_idx * strides[i];
+        }";
+
+/// The same walk with the extents substituted as literals.
+///
+/// Strides stay dynamic: they describe the *view*, not the shape, so a
+/// transposed or narrowed tensor has strides the type cannot settle. Extents
+/// are what the shape type knows, and they are the divisors -- which is the
+/// half that matters, because nvcc lowers a division by a literal to a
+/// multiply-and-shift while a division by a loaded value stays a division.
+///
+/// The loop is emitted fully unrolled rather than as a counted loop so every
+/// divisor is a distinct constant at its use site.
+#[cfg(any(feature = "cuda", test))]
+fn static_index_calc(extents: &[usize]) -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "        // extents proven by the shape type: {extents:?}"
+    );
+    for axis in (0..extents.len()).rev() {
+        let extent = extents[axis];
+        let _ = writeln!(
+            out,
+            "        flat_idx += (temp % {extent}) * strides[{axis}];"
+        );
+        // The outermost axis consumes what is left, so its division is dead.
+        // Its modulo is kept: dropping it would make correctness depend on
+        // `numel` equalling the product of the extents, and the guard in
+        // `unrollable_extents` deliberately proves agreement with the iterated
+        // shape rather than with the element count.
+        if axis > 0 {
+            let _ = writeln!(out, "        temp /= {extent};");
+        }
+    }
+    // Trim the trailing newline; the slot supplies its own line break.
+    while out.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
 
 #[cfg(any(feature = "cuda", test))]
 const CUDA_BINARY_TEMPLATE: &str = r#"
@@ -254,6 +303,7 @@ fn render_cuda(
         &ScalarFragment::literal(op_expr),
         dtype,
         unroll_width,
+        None,
     )
 }
 
@@ -288,10 +338,17 @@ fn render_cuda_body(
     body: &ScalarFragment,
     dtype: DTypeId,
     unroll_width: u8,
+    index_calc: Option<alloc::vec::Vec<usize>>,
 ) -> Result<RenderedKernel> {
     let prologue = body.prologue_block(&prologue_indent(template));
     let prologue = prologue.as_str();
     let op_expr = body.value.as_str();
+    // Only the strided templates carry an index walk; the dense ones address
+    // linearly and leave the slot absent.
+    let index_calc = match &index_calc {
+        Some(extents) => static_index_calc(extents),
+        None => DYNAMIC_INDEX_CALC.into(),
+    };
     if !matches!(unroll_width, 1 | 2 | 4) {
         return Err(Error::Msg(format!(
             "unsupported CUDA pointwise unroll width {unroll_width}"
@@ -336,6 +393,7 @@ fn render_cuda_body(
         .replace("{STORE_SUFFIX}", scalar.store_suffix)
         .replace("{UNROLL_WIDTH}", &unroll_width.to_string())
         .replace("{PROLOGUE}", prologue)
+        .replace("{INDEX_CALC}", &index_calc)
         .replace("{OP}", op_expr);
 
     Ok(RenderedKernel {
@@ -382,6 +440,7 @@ pub(crate) fn render_cuda_unary_for_layout(
         dtype,
         layout,
         unroll_width,
+        None,
     )
 }
 
@@ -398,6 +457,7 @@ pub(crate) fn render_cuda_unary_for_layout_body(
     dtype: DTypeId,
     layout: LayoutClass,
     unroll_width: u8,
+    index_extents: Option<alloc::vec::Vec<usize>>,
 ) -> Result<RenderedKernel> {
     match layout {
         LayoutClass::Contiguous => render_cuda_body(
@@ -407,6 +467,7 @@ pub(crate) fn render_cuda_unary_for_layout_body(
             body,
             dtype,
             unroll_width,
+            None,
         ),
         LayoutClass::Strided if unroll_width == 1 => render_cuda_body(
             CUDA_UNARY_TEMPLATE,
@@ -415,6 +476,7 @@ pub(crate) fn render_cuda_unary_for_layout_body(
             body,
             dtype,
             1,
+            index_extents,
         ),
         LayoutClass::Strided => Err(Error::Msg(
             "strided CUDA unary kernels require unroll width 1".into(),
@@ -499,6 +561,7 @@ pub(crate) fn render_cuda_binary_for_layout_body(
                 body,
                 dtype,
                 1,
+                None,
             );
         }
         LayoutClass::Strided => {
@@ -516,7 +579,7 @@ pub(crate) fn render_cuda_binary_for_layout_body(
     let template = CUDA_BINARY_DENSE_TEMPLATE
         .replace("{LHS_INDEX}", lhs_index)
         .replace("{RHS_INDEX}", rhs_index);
-    render_cuda_body(&template, family, op_name, body, dtype, unroll_width)
+    render_cuda_body(&template, family, op_name, body, dtype, unroll_width, None)
 }
 
 /// The compute type an IR fragment for `dtype` must be lowered in.

@@ -294,12 +294,20 @@ impl KernelKey {
 pub(crate) struct KernelSpecialization {
     /// Element count known before runtime, from the shape type.
     pub(crate) static_numel: Option<usize>,
+    /// Per-axis extents the shape type settled, outermost first.
+    ///
+    /// Empty when the rank was not known. Otherwise rank-long, with a hole for
+    /// each axis whose extent is only a runtime fact.
+    pub(crate) static_extents: &'static [Option<usize>],
 }
 
 #[cfg(any(feature = "cuda", test))]
 impl KernelSpecialization {
     /// The "nothing was proven" value, which specializes nothing.
-    pub(crate) const NONE: Self = Self { static_numel: None };
+    pub(crate) const NONE: Self = Self {
+        static_numel: None,
+        static_extents: &[],
+    };
 
     /// Projects the facts this module can act on out of a frontend proof.
     ///
@@ -317,12 +325,18 @@ impl KernelSpecialization {
         // A `Mixed` proof has a static rank but at least one runtime axis, so
         // its numel is not a constant even when `static_numel` is populated.
         // Only `Static` licenses baking the count into the source.
-        if evidence.proof().is_static() {
-            Self {
-                static_numel: evidence.static_numel(),
-            }
-        } else {
-            Self::NONE
+        Self {
+            // Only `Static` licenses a whole-shape element count; a `Mixed`
+            // proof has a static rank but at least one runtime axis.
+            static_numel: if evidence.proof().is_static() {
+                evidence.static_numel()
+            } else {
+                None
+            },
+            // Extents are per-axis and already carry a hole where the type
+            // settled nothing, so a `Mixed` shape can still contribute the axes
+            // it does know.
+            static_extents: evidence.static_extents(),
         }
     }
 
@@ -336,6 +350,34 @@ impl KernelSpecialization {
     pub(crate) fn packed_tail_is_dead(self, vector_width: u8) -> bool {
         let width = usize::from(vector_width);
         width != 0 && self.static_numel.is_some_and(|n| n % width == 0)
+    }
+
+    /// The extents to unroll a strided index computation over, if every axis is
+    /// known *and* agrees with the shape the kernel will actually iterate.
+    ///
+    /// The agreement check is not paranoia. The proof describes the descriptor's
+    /// output geometry, while the kernel iterates the iteration plan's output
+    /// shape; these should be the same, but "should" is not a basis for emitting
+    /// literal divisors. A mismatch silently produces wrong addresses rather
+    /// than a failure, so a disagreement declines to specialize instead.
+    // Reached only from the CUDA launcher, so a `test` build without the
+    // `cuda` feature compiles this and calls nothing.
+    #[cfg_attr(not(feature = "cuda"), allow(dead_code))]
+    pub(crate) fn unrollable_extents(self, iterated: &[usize]) -> Option<alloc::vec::Vec<usize>> {
+        if self.static_extents.len() != iterated.len() || iterated.is_empty() {
+            return None;
+        }
+        let mut extents = alloc::vec::Vec::with_capacity(iterated.len());
+        for (proven, actual) in self.static_extents.iter().zip(iterated) {
+            // A hole means this axis is a runtime fact; the loop needs every
+            // divisor to be a literal, so one hole disqualifies the whole
+            // unroll.
+            if (*proven)? != *actual {
+                return None;
+            }
+            extents.push(*actual);
+        }
+        Some(extents)
     }
 }
 
