@@ -89,5 +89,34 @@ change with a result you can see in the emitted source and measure on the device
 If it lands, extending `ShapeEvidence` with static extents becomes the argument
 for the rest.
 
+**Update: that slice has landed.** `KernelSpecialization` is the backend-side
+projection of the evidence; `Execute<op::*>` for the canonical unary family
+builds one from `request.operation.shape_evidence()` and threads it to the
+renderers, which drop the packed ragged tail when the count is a proven multiple
+of the vector width. Absent or non-`Static` evidence specializes nothing.
+
+Two things the implementation clarified that this note had guessed at.
+
+The provenance seal is tighter than expected, and usefully so. `ShapeEvidence::of`
+is `pub(crate)` to `incin-core`, so a backend cannot construct evidence at all --
+it can only receive what a `Validated` carries. That means the test that a real
+static shape type yields a usable count has to live in `incin-core`, and the
+backend can only test the absent case. That is the seal working: there is no way
+to write a backend test that fakes a proof, which is exactly the property
+`exec::proof` was built for.
+
+And the grid-overhang guard is not eliminable. `if (base >= numel) return;` looks
+like it should fall to the same proof, but the launch rounds up to whole blocks
+regardless of how well-known the element count is, so the overhang is a property
+of the launch geometry rather than of the shape. Only the *ragged tail within a
+packet* is what the divisibility proof settles. Worth stating because the two
+look alike in the source.
+
+Next along this line, in order of value: extend `ShapeEvidence` with static
+extents so strides fold to literals and the two `clone_htod` uploads disappear;
+apply the same projection to the binary family and to reductions; and measure
+what fraction of a real workload arrives through the typed frontend at all,
+since `dispatch::execute` reports `Dynamic` and bounds the reachable win.
+
 Depends on: the `ScalarFragment` seam in `codegen-adoption-landed.md`, which is
 where a specialised body would be emitted.
