@@ -112,11 +112,37 @@ of the launch geometry rather than of the shape. Only the *ragged tail within a
 packet* is what the divisibility proof settles. Worth stating because the two
 look alike in the source.
 
-Next along this line, in order of value: extend `ShapeEvidence` with static
-extents so strides fold to literals and the two `clone_htod` uploads disappear;
-apply the same projection to the binary family and to reductions; and measure
-what fraction of a real workload arrives through the typed frontend at all,
-since `dispatch::execute` reports `Dynamic` and bounds the reachable win.
+**The reachability question is settled, in favour of extending this.** The
+concern was that `dispatch::execute` reports `Dynamic`, so the win might only
+reach a sliver of real calls. It does not: the typed tensor surface does not use
+that entry point. `Tensor::relu` and its siblings call
+`execute_unary_descriptor`, which calls `dispatch::execute_shaped::<O, B, S>`,
+which calls `O::infer_invocation_typed` and builds the evidence from `S`. So
+every operation reached through the typed frontend -- the primary API -- carries
+its proof, and `dispatch::execute` is the escape hatch for callers who genuinely
+have no shape type. `a_typed_invocation_carries_a_static_element_count_to_the_backend`
+pins the end of that chain, because a break anywhere in it would silently drop
+every kernel onto the general path with nothing failing.
+
+Next along this line, in order of value:
+
+1. Extend `ShapeEvidence` with static extents, so strides fold to literals, the
+   `%` and `/` per axis per element become multiply-shifts, and both
+   `clone_htod` uploads and both pointer parameters disappear. **This has a real
+   design question in front of it**: `ShapeEvidence` is `Copy` with fixed fields,
+   and extents are variable-length. A `&'static [usize]` cannot be built from a
+   `DimCons` chain in a const context, so the options are a fixed
+   `[Option<usize>; MAX_RANK]` array (simple, caps rank, costs size in a type
+   that is copied on every dispatch) or a trait-level associated const array
+   parameterised on rank. Worth deciding deliberately rather than discovering
+   halfway through.
+2. Apply the same projection to the binary family and to reductions. Mechanical
+   once (1) settles the representation, since binary needs two operands' extents.
+3. Weigh cache pressure once extents are in. Specialising on exact extents rather
+   than on `ShapeBucket` multiplies distinct compiled kernels by the number of
+   static shapes a program instantiates. That is bounded, but it is not small for
+   a model with many differently-shaped layers, and the source-scoped cache key
+   means each variant is a separate NVRTC compile.
 
 Depends on: the `ScalarFragment` seam in `codegen-adoption-landed.md`, which is
 where a specialised body would be emitted.
