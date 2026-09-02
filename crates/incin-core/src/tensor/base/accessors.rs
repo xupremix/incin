@@ -7,7 +7,9 @@ use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeId};
 use crate::tensor::grad::RequiresGrad;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::shapes::Layout>
+    Tensor<S, B, K, G, P, L>
+{
     #[inline]
     /// Returns a reference to the backend-specific rank-local storage handle.
     pub fn inner(&self) -> &B::Storage<K> {

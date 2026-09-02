@@ -23,6 +23,7 @@ mod creation;
 #[cfg(feature = "distributed")]
 mod distributed;
 mod error;
+mod layout_proof;
 mod local;
 mod placed;
 mod types;

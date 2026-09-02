@@ -9,7 +9,9 @@ use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
 use core::marker::PhantomData;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::shapes::Layout>
+    Tensor<S, B, K, G, P, L>
+{
     /// Rebuilds tensor metadata after a checked operation while retaining the
     /// tensor's placement marker and runtime placement field.
     pub(crate) fn from_shape_value_placed<T: Shape>(
