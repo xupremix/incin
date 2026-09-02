@@ -373,3 +373,56 @@ executor. Only after all three backends offer both should `transpose`'s output
 layout be tightened to `RowMajor`, because tightening it while any backend still
 returns a view would be exactly the false claim the earlier conformance test
 caught.
+
+## "Is there an approach that needs fewer type definitions?"
+
+Asked after the conversion landed, and worth recording because two of the three
+candidates were prototyped rather than reasoned about.
+
+**Most of the verbosity was self-inflicted.** The conversion was scripted, so it
+spelled every bound `L: crate::shapes::Layout` and every placement
+`crate::dist::Local` -- 70 and 60 fully-qualified paths in positions where the
+short name is unambiguous. Importing them turns
+
+```rust
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: crate::shapes::Layout>
+    Tensor<S, B, K, G, crate::dist::Local, L>
+```
+
+into
+
+```rust
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
+```
+
+No design change, and it accounts for a large share of what looked like the
+parameter's cost.
+
+**A proof-carrying wrapper would remove the parameter and lose propagation.**
+Prototyped: `struct Dense<T>(T)` with `Deref<Target = T>` gives the entire
+tensor API for free, with zero threading through any impl -- genuinely the
+cheapest option on that axis. But `d.neg()` derefs, calls the inherent method,
+and returns a plain tensor, so the proof dies at every operation and a chain
+cannot end in `reshape_view`. `a_proof_survives_a_pointwise_chain` is exactly
+the behaviour that would be lost. The wrapper is the better design *if* proofs
+are meant to be established immediately before use and not carried; the
+parameter is better if they are meant to survive a pipeline. The latter is what
+makes the feature worth having.
+
+**Bundling all six into `Tensor<M>` over a metadata trait** shortens
+declarations and lengthens every bound, since each constraint routes through
+`M::`, and it makes construction name a type nobody wants to write. It trades
+verbosity at the declaration for verbosity at every use.
+
+**What was adopted:** `AnyTensor`, which collapses the parameter list only where
+it actually hurts -- generic code -- while leaving construction and inherent
+methods alone. A helper writes `fn f<T: AnyTensor>(t: &T)` and reaches any
+parameter it genuinely constrains as an associated type. It is one trait with
+one method rather than a facade, because mirroring the tensor API here would
+double the surface and drift from it immediately.
+
+The general shape of the answer: the cost of a type parameter is not uniform.
+It falls on declarations (fixed, one-time, and mostly formatting), on
+propagation (which is the feature, not the cost), and on generic callers (which
+is where it genuinely hurts and where a collapsing trait pays for itself).
