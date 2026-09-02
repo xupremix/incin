@@ -39,6 +39,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and a full-size intermediate per operation per backward pass.
 - `log_softmax`, `logsumexp` and `scatter_add`, with `DuplicateIndexRule::Accumulate`.
 
+### Changed (editor integrations)
+
+- Hover and `expected .. found ..` diagnostics no longer print a tensor's
+  layout argument when it is the default `Unknown`, which asserts nothing. A
+  layout that is anything else is a real claim -- the difference between a
+  tensor that can call `reshape_view` and one that cannot -- and is always
+  shown. A `Dyn` *shape* is likewise never elided, which is the property that
+  decided the layout marker should be its own type rather than a reuse of
+  `Dyn`.
+
 ### Fixed
 
 - **The CUDA module cache could serve the wrong kernel.** `KernelKey::cache_id`

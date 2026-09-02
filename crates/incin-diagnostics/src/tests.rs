@@ -592,3 +592,73 @@ fn equal_axes_are_not_reported_as_a_contraction_mismatch() {
     let text = "Cannot contract dimension `3` with `3`";
     assert!(parse_contraction_mismatch(text).is_none());
 }
+
+// -- layout parameter elision --------------------------------------------
+
+/// The default layout says nothing and should not be shown.
+///
+/// `Tensor` gained a sixth parameter that defaults to `Unknown`, meaning the
+/// compiler settled nothing about where the elements live. Printing it costs a
+/// reader attention and returns no information.
+#[test]
+fn an_unknown_layout_is_elided_from_a_tensor_type() {
+    let translated = humanize_type_signature(
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, incin_core::shapes::Unknown>",
+        false,
+    );
+    assert_eq!(
+        translated.text,
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local>"
+    );
+}
+
+/// A layout that is not the default is a real claim and must survive.
+///
+/// Eliding it would misrepresent the type: `RowMajor` is the difference between
+/// a tensor that can call `reshape_view` and one that cannot.
+#[test]
+fn a_proven_layout_is_never_elided() {
+    let label = "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, RowMajor<Dyn>>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// A `Dyn` shape must survive, even though it means the same thing one slot
+/// over.
+///
+/// This is the property that decided against spelling the layout marker `Dyn`:
+/// an unknown *layout* is noise, a dynamic *shape* is information, and only
+/// distinct types let the humanizer tell them apart.
+#[test]
+fn a_dynamic_shape_is_not_confused_with_an_unknown_layout() {
+    let translated = humanize_type_signature(
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Unknown>",
+        false,
+    );
+    assert!(
+        translated.text.starts_with("Tensor<Dyn,"),
+        "the shape must survive: {}",
+        translated.text
+    );
+    assert!(
+        !translated.text.contains("Unknown"),
+        "the layout must not: {}",
+        translated.text
+    );
+}
+
+/// Only the outermost argument list is considered.
+///
+/// A nested type that happens to end in something named `Unknown` is not a
+/// layout and must be left alone.
+#[test]
+fn a_nested_unknown_is_not_mistaken_for_the_layout_slot() {
+    let label = "Tensor<DimCons<A, Unknown>, CpuBackendImpl, f32, NoGrad, Local, RowMajor<S>>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// A tensor written without the layout argument is unchanged.
+#[test]
+fn a_tensor_without_a_layout_argument_is_untouched() {
+    let label = "Tensor<Dyn, CpuBackendImpl>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}

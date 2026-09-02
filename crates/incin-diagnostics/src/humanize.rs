@@ -31,6 +31,9 @@ pub fn humanize_diagnostic(text: &str) -> Translated {
         }
     }
     let text = collapse_dimcons_chains(&text);
+    // Before any shortening: the default layout says nothing, so it is noise in
+    // every rendering, including the ones that deliberately keep the backend.
+    let text = elide_unknown_layout(&text);
     Translated { text, hints }
 }
 
@@ -245,12 +248,89 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
     // Treat both spellings as the same display shape. `collapse_*` fails
     // closed for partial/truncated chains, preserving incomplete labels.
     let text = collapse_dimcons_chains(&text);
+    // Before any shortening: the default layout says nothing, so it is noise in
+    // every rendering, including the ones that deliberately keep the backend.
+    let text = elide_unknown_layout(&text);
     let text = if shorten_backend {
         shorten_collapsed_tensor_tail(&text).unwrap_or(text)
     } else {
         text
     };
     Translated { text, hints }
+}
+
+/// Removes a trailing `Unknown` layout argument from every `Tensor<..>` in a
+/// type label.
+///
+/// The layout parameter defaults to `Unknown`, which by definition asserts
+/// nothing about the tensor. Printing it costs a reader attention and returns
+/// no information, and it does so in the *full* rendering -- hover and the
+/// `expected .. found ..` notes -- where `shorten_collapsed_tensor_tail` does
+/// not apply because those callers want the backend and dtype kept.
+///
+/// Only the last argument is considered, and only when it names `Unknown`.
+/// `Unknown` exists solely as a layout marker, which is what makes this
+/// unambiguous: the marker cannot appear in any other position, so there is no
+/// risk of eliding something that mattered. That property is the reason the
+/// layout marker is a distinct type rather than a reuse of `Dyn` -- a `Dyn`
+/// *shape* carries real information and must never be elided, and if the two
+/// shared a spelling this function could not tell them apart.
+///
+/// A layout that is anything other than `Unknown` is left alone: it is a claim
+/// the tensor actually carries, and hiding it would misrepresent the type.
+fn elide_unknown_layout(label: &str) -> String {
+    let mut result = String::with_capacity(label.len());
+    let mut last_end = 0;
+    let mut search_idx = 0;
+
+    while let Some(rel_start) = label[search_idx..].find("Tensor<") {
+        let tensor_start = search_idx + rel_start;
+        let generic_open = tensor_start + "Tensor".len();
+        let Some(generic_close_rel) = matching_bracket(&label[generic_open..], '<', '>') else {
+            search_idx = generic_open + 1;
+            continue;
+        };
+        let generic_close = generic_open + generic_close_rel;
+        let args = &label[generic_open + 1..generic_close];
+
+        let Some(trimmed) = strip_trailing_unknown(args) else {
+            search_idx = generic_close + 1;
+            continue;
+        };
+        result.push_str(&label[last_end..=generic_open]);
+        result.push_str(trimmed);
+        result.push('>');
+        last_end = generic_close + 1;
+        search_idx = last_end;
+    }
+    result.push_str(&label[last_end..]);
+    result
+}
+
+/// Returns `args` without its final argument when that argument is `Unknown`.
+///
+/// Splits on the last comma at nesting depth zero, so a nested
+/// `DimCons<.., Unknown>` -- which would not be a layout -- is never mistaken
+/// for the outer list's tail.
+fn strip_trailing_unknown(args: &str) -> Option<&str> {
+    let mut depth = 0i32;
+    let mut last_comma = None;
+    for (index, ch) in args.char_indices() {
+        match ch {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth -= 1,
+            ',' if depth == 0 => last_comma = Some(index),
+            _ => {}
+        }
+    }
+    let comma = last_comma?;
+    let tail = args[comma + 1..].trim();
+    let is_unknown = tail == "Unknown" || tail.rsplit("::").next() == Some("Unknown");
+    if is_unknown {
+        Some(args[..comma].trim_end())
+    } else {
+        None
+    }
 }
 
 fn convert_tensor_tuples_to_brackets(label: &str, hints: &mut Vec<(String, String)>) -> String {
