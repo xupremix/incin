@@ -150,13 +150,21 @@ Next along this line, in order of value:
    length, and 16 bytes rather than `MAX_RANK` elements' worth. That matters
    because `ShapeEvidence` is `Copy` and rides along on every dispatch.
 
-   The rank cap moves to the construction buffer, where exceeding it is a
-   compile-time `evaluation panicked: mid > len` rather than a silent
-   truncation — the correct failure mode for a proof, which must never quietly
-   report less than it knows. Prefer `Option<usize>` per axis over `usize`, so
-   a `Mixed` shape can still contribute the axes it does know: a static inner
-   dimension is enough to fold that axis's stride even when the batch axis is
-   dynamic.
+   Use `Option<usize>` per axis over `usize`, so a `Mixed` shape can still
+   contribute the axes it does know: a static inner dimension is enough to fold
+   that axis's stride even when the batch axis is dynamic.
+
+   **Correction, from implementing it.** An earlier revision of this note said
+   exceeding the buffer should be a compile-time panic, "the correct failure
+   mode for a proof, which must never quietly report less than it knows". That
+   was wrong twice over. It conflated reporting a *truncated* geometry, which
+   would be a miscompile, with reporting *no* geometry, which is only a missed
+   optimisation — and the trait's whole convention is already that an
+   unprovable fact is reported as absent. It was also immediately falsified:
+   `tensor_ops` constructs a rank-18 shape, and the panic broke its
+   compilation. A shape deeper than the buffer must keep working and simply
+   forgo the specialisation. Landed that way, with the rank-18 case as a
+   regression test.
 
    There is no const heap allocation to reach for here, and none is wanted.
    `Vec::push` is not const-stable on 1.97.1 (rust-lang/rust#143874). `'static`
