@@ -296,3 +296,58 @@ The one structural thing incin cannot copy without deeper change: CuTe shapes
 nest (`((_2,_3),_4)`), and the nesting *is* the tiling structure.
 `DimCons<H: Dim, T: Shape>` takes a `Dim` as its head, so shapes here are flat.
 Flat shapes can carry strides; they cannot carry tiling.
+
+---
+
+## Implementation notes: what the migration plan got wrong
+
+Steps 1 and 2 landed as designed. Step 3 is where the plan breaks, and the
+reason is worth recording before anyone picks this up.
+
+**Adding the parameter is free; adopting it is not.** `Tensor` gained
+`L: Layout = Unknown` and the entire workspace compiled unchanged -- the only
+churn was trybuild snapshots re-rendering the type with a sixth parameter, with
+every diagnostic's substance identical. That is the default doing its job.
+
+But an `impl<S, B, K, G, P> Tensor<S, B, K, G, P>` binds `L` to its default, so
+**a tensor carrying a proof loses every method defined that way**. The parameter
+is additive precisely because nothing produced a non-`Unknown` layout; the
+moment something does, that tensor has almost no API.
+
+**And converting those impls is not a rename.** Rewriting eighteen impl headers
+to be generic over `L` produced 95 errors, and they were not mechanical. Two
+kinds:
+
+- Methods return `Tensor<..>` without naming `L`, so the parameter is
+  uninferrable at the construction site.
+- Methods call each other across impls, and a caller generic over `L` cannot
+  reach a callee whose impl pinned it.
+
+Both reduce to one question the design note never asked: **what layout does an
+operation produce?** `a.mul(b)` allocates a fresh dense buffer today, so
+`RowMajor<S>` is the truthful answer -- but only because every backend
+materialises contiguously, which is a property of the current implementations
+rather than of the operation contract. Answering it per operation family is the
+actual step 3, and it is a design exercise, not a refactor.
+
+The intermediate state that works, and is what is on `develop`:
+
+- `into_row_major` is the sound way in: a checked promotion from runtime
+  strides, defined only on `Unknown`. Deliberately no `assume_row_major`.
+- `reshape_view` is the one consumer of `L: Contiguous`, and demonstrates the
+  payoff -- reinterpreting a non-contiguous buffer stops compiling.
+- Three of the eighteen impls are generic over `L`; the rest still pin it.
+
+Revised ordering for whoever continues:
+
+1. Decide the output layout for each operation family, starting with pointwise
+   (where the answer is `RowMajor` and defensible) and stopping at anything that
+   materialises for reasons the contract does not state.
+2. Convert impls family by family, using that answer, rather than all at once.
+3. Only then make creation return `RowMajor<S>`, since until step 1 covers an
+   operation the tensor it returns will be stranded without an API.
+
+The measurement that should gate all of it is still unmade: whether
+materialising views actually costs anything on real workloads. If it does not,
+this stops at reshape safety, which is real but a much smaller prize for a sixth
+type parameter and this much churn.
