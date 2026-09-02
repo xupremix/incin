@@ -180,3 +180,89 @@ Next along this line, in order of value:
 
 Depends on: the `ScalarFragment` seam in `codegen-adoption-landed.md`, which is
 where a specialised body would be emitted.
+
+---
+
+## Measurement: the strided path is unreachable, and that reframes typed strides
+
+The question was what fraction of real work takes the strided pointwise path
+versus the contiguous one, to decide whether folding its per-axis divisors was
+worth extending. The answer is that on CUDA the fraction is zero, and not for a
+subtle reason.
+
+Every CUDA operation that could produce a non-contiguous result materialises
+instead. `launch_transpose` runs a permutation kernel into a fresh buffer;
+`launch_broadcast` and `launch_narrow` say so in their own doc comments. All
+nineteen `CudaStorage::try_from_parts` call sites pass
+`crate::layout::contiguous_strides(&out_shape)`. Probed directly: a 3x4 tensor
+transposed to 4x3 comes back as `strides=[3, 1]`, `offset=0`,
+`LayoutClass::Contiguous`.
+
+So no public operation reaches the strided kernel. The extent folding and the
+retired shape upload are correct and tested, but they are currently latent: they
+optimise a path nothing takes.
+
+This also caught a false claim. The test added alongside that work called
+`transpose` and asserted it was exercising the strided path. It was not -- it ran
+the contiguous kernel and passed for the wrong reason, and the commit message
+said "verified against a genuinely non-contiguous tensor", which was untrue. The
+test now builds the view from parts and asserts `LayoutClass::Strided` before
+relying on anything, so it fails if the path stops being what it claims.
+
+The useful part is what this says about putting strides in the type. The case
+for it was going to be "fold the stride literals too, and the whole index walk
+becomes constants". That case is weak: the walk is already unreachable, so
+making it faster buys nothing.
+
+The real cost is one layer up. Because views materialise, every `transpose`,
+`narrow` and `broadcast` pays a full copy of the tensor -- an allocation, a
+kernel launch and `numel` elements of bandwidth -- to produce a result that is
+mathematically a relabelling of the same memory. An attention block transposes
+constantly. That copy, not the divisions inside a kernel that never runs, is what
+typed strides would remove: a layout in the type is what lets a view *be* a view,
+because the consumer can then be compiled against the stride pattern instead of
+discovering it at runtime.
+
+So the ordering inverts. Typed strides are not an optimisation on top of the
+strided kernel; the strided kernel is the prerequisite that makes non-copying
+views possible, and it now exists and is verified. Whether to take the next step
+is a question about the frontend's type surface, not about codegen.
+
+Two caveats before anyone scopes that. The materialising design is not obviously
+wrong -- a contiguous copy can beat a strided read for a consumer that touches
+the data repeatedly, and it keeps every downstream kernel on the fast path -- so
+the comparison needs measuring, not assuming. And the copy is only avoidable
+where the consumer can handle arbitrary strides, which pointwise can and matmul
+generally cannot.
+
+## How CUTLASS does it, and how that differs from here
+
+CuTe (CUTLASS 3.x) makes `Layout = (Shape, Stride)` a first-class type: a tuple
+pair that maps a coordinate within `Shape` to an index via `Stride`. Both halves
+are congruent -- same tuple profile, one stride integer per shape integer -- and
+each integer independently may be a *static* integer (`Int<N>`, spelled `_N`,
+carrying its value as a `constexpr` member) or an ordinary dynamic `int`. On top
+of that sits a layout algebra -- composition, complement, division, product --
+and the algebra is written to preserve staticness through transformations where
+it can, so a statically known divisibility survives into the result rather than
+being erased.
+
+Against that, incin has half the structure. Shape is typed, and typed through
+operations: `transpose_structural::<L, R>` returns
+`Tensor<<S as SwapAxes<L, R>>::Output, ..>`, so the type system already knows
+which axes swapped. Stride is absent from the type entirely, and `LayoutClass` is
+a four-valued runtime classification computed by scanning
+(`is_contiguous(&operand, dims)`), not a type.
+
+The gap is therefore narrower than "adopt CuTe" and more specific: incin already
+computes, at the type level, the fact from which the new strides follow. It
+discards it. CuTe's contribution is not that strides can be static -- it is the
+congruence requirement and the algebra that keeps shape and stride in step
+through every transformation, which is exactly the part that makes a
+`Tensor<S, L, ..>` tractable rather than a second set of parameters to keep
+manually consistent.
+
+The mixed static/dynamic-per-mode design is also directly applicable and matches
+the choice already made here: `Shape::STATIC_EXTENTS` is `Option<usize>` per
+axis for the same reason CuTe allows a dynamic integer in one mode of an
+otherwise static shape.

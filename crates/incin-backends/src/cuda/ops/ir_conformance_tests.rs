@@ -793,27 +793,46 @@ fn proven_extents_replace_the_strided_divisors_with_literals() {
     );
 }
 
-/// The unrolled index walk must address a real transposed tensor identically to
-/// the loaded-divisor one.
+/// The unrolled index walk must address a genuinely non-contiguous view
+/// identically to the loaded-divisor one.
 ///
-/// The emitted-source test proves the literals appear; this proves they index
-/// correctly. A transpose is the case that matters: it is genuinely strided, so
-/// the kernel takes the walk rather than addressing linearly, and its strides
-/// are *not* derivable from the shape -- which is exactly why only the extents
-/// are substituted.
+/// The view is built directly from parts rather than by calling `transpose`,
+/// and that is the point. Every CUDA operation that could produce a
+/// non-contiguous result -- `transpose`, `narrow`, `broadcast` -- materialises
+/// into a fresh contiguous buffer instead, so no public operation reaches the
+/// strided kernel at all. An earlier version of this test called `transpose`
+/// and believed it was exercising that path; it was not, and it passed for the
+/// wrong reason. See `docs/plan/research/0.2.0/proof-directed-codegen.md`.
+///
+/// Constructing the view by hand keeps the kernel honest while the path is
+/// otherwise unreachable, and it is exactly the case that becomes reachable if
+/// views ever stop materialising.
 #[test]
 #[ignore = "requires CUDA hardware"]
-fn the_unrolled_index_walk_addresses_a_transposed_tensor_correctly() {
+fn the_unrolled_index_walk_addresses_a_strided_view_correctly() {
     if !has_cuda() {
         return;
     }
-    // 3 x 4 laid out row-major, then viewed transposed to 4 x 3. The view is
-    // non-contiguous, so the launcher selects the strided layout.
+    // A 3x4 row-major buffer, viewed as its 4x3 transpose without copying:
+    // shape [4, 3] with strides [1, 4] reads element (r, c) from base (c, r).
     let values: Vec<f32> = (0..12).map(|index| index as f32).collect();
     let base = storage(&[3, 4], values.clone());
-    let transposed = crate::cuda::backend::CudaBackendImpl::<incin_core::tensor::device::Cuda>::transpose::<f32>(&base, 0, 1)
-        .expect("a 3x4 tensor transposes to 4x3");
-    assert_eq!(&transposed.shape[..], &[4, 3]);
+    let view =
+        CudaStorage::try_from_parts(base.buffer.clone(), alloc::vec![4, 3], alloc::vec![1, 4], 0)
+            .expect("a transposed view of a 3x4 buffer is valid metadata");
+
+    // Confirm this really is the strided path before relying on the test.
+    let plan = crate::iteration::UnaryIterationPlan::new(crate::iteration::OperandLayout {
+        shape: &view.shape,
+        strides: &view.strides,
+        offset: view.offset_elements,
+    })
+    .unwrap();
+    assert_eq!(
+        plan.layout_class(),
+        incin_core::exec::LayoutClass::Strided,
+        "the view must be non-contiguous or this test proves nothing"
+    );
 
     let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
     let proven = KernelSpecialization {
@@ -821,16 +840,14 @@ fn the_unrolled_index_walk_addresses_a_transposed_tensor_correctly() {
         static_extents: &[Some(4), Some(3)],
     };
 
-    let unrolled = launch_unary_body(probe_name("unroll", "neg"), &body, &transposed, proven)
+    let unrolled = launch_unary_body(probe_name("unroll", "neg"), &body, &view, proven)
         .expect("the unrolled strided kernel must compile and launch");
-    let general = launch_unary_body(probe_name("dynidx", "neg"), &body, &transposed, NO_PROOF)
+    let general = launch_unary_body(probe_name("dynidx", "neg"), &body, &view, NO_PROOF)
         .expect("the general strided kernel must still work");
 
     let unrolled_values = download_f32_host(&unrolled).unwrap();
     let general_values = download_f32_host(&general).unwrap();
 
-    // Transposed traversal visits column-major order, so the expected output is
-    // the negation of the transpose of the original 3x4 buffer.
     for row in 0..4usize {
         for col in 0..3usize {
             let index = row * 3 + col;
