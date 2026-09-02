@@ -278,8 +278,50 @@ which asserts reductions and pointwise operations are dense and asserts the CPU
 transpose is a view, so a backend changing its mind fails a test rather than
 silently changing what a type would mean.
 
-The decision this forces, and it belongs to the operation contract rather than
-to the layout parameter: either views are views everywhere and CUDA stops
-copying, or views materialise everywhere and CPU starts. Typed layout makes the
-difference *expressible* -- a view returns a permuted layout, a copy returns
-`RowMajor` -- which is the argument for settling it rather than for picking one.
+### Measured, and the framing was wrong
+
+That framing -- pick one and make both backends do it -- does not survive the
+measurement. On a GTX 1650, transpose plus one pointwise pass over the result:
+
+| elements | materialise | strided view | view/mat |
+|---:|---:|---:|---:|
+| 4,096 | 42.2 | 42.2 | 1.00 |
+| 1,048,576 | 830.5 | 731.8 | 0.88 |
+| 4,194,304 | 3375.1 | 2998.5 | 0.89 |
+
+And with the result consumed `k` times, at 1M elements:
+
+| k | materialise | strided view | view/mat |
+|---:|---:|---:|---:|
+| 1 | 812.4 | 721.0 | 0.89 |
+| 2 | 895.6 | 844.4 | 0.94 |
+| 4 | 1064.8 | 1093.4 | 1.03 |
+| 8 | 1367.6 | 1569.2 | 1.15 |
+
+The copy's read-plus-write loses to the strided read for a single consumer at
+scale, and wins from about four consumers on. The crossover is between two and
+four; below ~64k elements launch overhead swamps both.
+
+So the two are within roughly 11% in *opposite directions* depending on how
+often the result is read -- a fact about the consumer, which the producing
+operation cannot know. Unifying on either behaviour makes the framework
+reliably wrong for half its callers, and choosing the one that wins a
+microbenchmark would be choosing by the shape of the benchmark.
+
+The resolution is to stop treating it as one operation: `transpose`
+materialises and returns `RowMajor<S>`, `transpose_view` does not copy and
+returns a permuted layout. The caller picks and the type records which they
+got, so a downstream `L: Contiguous` bound is satisfiable in one case and
+correctly refused in the other.
+
+This is the strongest available argument for the layout parameter, and it is a
+measurement rather than an aesthetic: the backends' disagreement is not a bug
+to resolve by fiat, it is evidence that both behaviours are needed and that the
+type should distinguish them. It also unblocks the deferred decision above --
+a materialising `transpose` *can* honestly claim `RowMajor`, because it is the
+operation that copies.
+
+Caveats on the numbers: one GPU, one dtype, square shapes, a pointwise
+consumer. A consumer that cannot take arbitrary strides -- matmul, generally --
+will move the crossover. The shape of the conclusion should survive; the exact
+`k` should not be treated as a constant.
