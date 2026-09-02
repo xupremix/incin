@@ -26,6 +26,7 @@ pub mod dynamic;
 pub mod error;
 /// Type-level axis, slice, and reshape selectors.
 pub mod idx;
+pub mod layout;
 /// Named dimensions and their compile-time compatibility rules.
 pub mod named;
 mod proof;
@@ -50,6 +51,7 @@ pub use dim::*;
 pub use dynamic::*;
 pub use error::*;
 pub use idx::*;
+pub use layout::{AlignedTo, Contiguous, Layout, LayoutOf, RowMajor, Unknown};
 pub use named::*;
 pub use proof::ProofLevel;
 pub use rank::*;

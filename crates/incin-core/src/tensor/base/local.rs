@@ -8,6 +8,7 @@ use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{NoGrad, RequiresGrad};
 use alloc::string::ToString;
+use core::marker::PhantomData;
 
 /// Proof that raw storage and tensor metadata may be joined without repeating
 /// their invariant checks inside the constructor.
@@ -50,6 +51,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
             _device: device,
             _grad: grad,
             _placement: core::marker::PhantomData,
+            _layout: PhantomData,
         }
     }
 
@@ -86,6 +88,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
             _device: device,
             _grad: grad,
             _placement: core::marker::PhantomData,
+            _layout: PhantomData,
         })
     }
 
@@ -103,6 +106,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
             _device: device,
             _grad: grad,
             _placement: core::marker::PhantomData,
+            _layout: PhantomData,
         }
     }
 

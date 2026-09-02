@@ -244,3 +244,75 @@ fn a_shape_deeper_than_the_buffer_reports_nothing_rather_than_a_prefix() {
     assert_eq!(<AtBound as Shape>::RANK, Some(MAX_STATIC_RANK));
     assert_eq!(<AtBound as Shape>::STATIC_EXTENTS.len(), MAX_STATIC_RANK);
 }
+
+// -- typed layout --------------------------------------------------------
+
+/// A row-major layout must derive its strides from the shape's extents.
+#[test]
+fn a_row_major_layout_derives_suffix_product_strides() {
+    use incin_core::shapes::{Layout, RowMajor};
+
+    // 3 x 4 row-major: outer stride is 4 (one row), inner is 1.
+    assert_eq!(
+        <RowMajor<s![3, 4]> as Layout>::STATIC_STRIDES,
+        &[Some(4), Some(1)][..]
+    );
+    // 2 x 3 x 4: strides are the suffix products 12, 4, 1.
+    assert_eq!(
+        <RowMajor<s![2, 3, 4]> as Layout>::STATIC_STRIDES,
+        &[Some(12), Some(4), Some(1)][..]
+    );
+    // A scalar has no axes and therefore no strides.
+    assert_eq!(<RowMajor<Nil> as Layout>::STATIC_STRIDES, &[][..]);
+    assert_eq!(<RowMajor<s![3, 4]> as Layout>::STATIC_OFFSET, Some(0));
+}
+
+/// An unknown extent must void the strides outside it and spare those inside.
+///
+/// This is the asymmetry that justifies reporting per axis instead of
+/// all-or-nothing. Each stride is a product of the extents inner to it, so a
+/// dynamic batch axis leaves every inner stride perfectly well known.
+#[test]
+fn a_dynamic_axis_voids_only_the_strides_outside_it() {
+    use incin_core::shapes::{Layout, RowMajor};
+
+    // Batch is dynamic, so the batch stride depends on 3 x 4 and is known,
+    // while nothing outside it exists to be voided.
+    assert_eq!(
+        <RowMajor<s![Batch, 3, 4]> as Layout>::STATIC_STRIDES,
+        &[Some(12), Some(4), Some(1)][..],
+        "a dynamic outermost axis leaves every stride knowable"
+    );
+    // A dynamic *inner* axis voids the strides outside it, because each of
+    // those is a product that includes it.
+    assert_eq!(
+        <RowMajor<s![2, Batch, 4]> as Layout>::STATIC_STRIDES,
+        &[None, Some(4), Some(1)][..],
+        "the outer stride is a product including the dynamic axis"
+    );
+}
+
+/// A row-major layout is exactly as proven as the shape behind it.
+#[test]
+fn a_row_major_layout_inherits_the_shapes_proof() {
+    use incin_core::shapes::{Layout, RowMajor, Unknown};
+
+    assert_eq!(<RowMajor<s![3, 4]> as Layout>::PROOF, ProofLevel::Static);
+    assert_eq!(<RowMajor<s![Batch, 4]> as Layout>::PROOF, ProofLevel::Mixed);
+    assert_eq!(<RowMajor<Dyn> as Layout>::PROOF, ProofLevel::Dynamic);
+
+    // The identity element claims nothing at all.
+    assert_eq!(<Unknown as Layout>::PROOF, ProofLevel::Dynamic);
+    assert_eq!(<Unknown as Layout>::STATIC_STRIDES, &[][..]);
+    assert_eq!(<Unknown as Layout>::STATIC_OFFSET, None);
+}
+
+/// A shape deeper than the buffer reports no strides rather than a prefix.
+#[test]
+fn a_layout_deeper_than_the_buffer_reports_nothing() {
+    use incin_core::shapes::{Layout, MAX_STATIC_RANK, RowMajor};
+
+    type TooDeep = s![1, 1, 1, 1, 1, 1, 1, 1, 2];
+    assert!(<TooDeep as incin_core::shapes::Shape>::RANK.unwrap() > MAX_STATIC_RANK);
+    assert_eq!(<RowMajor<TooDeep> as Layout>::STATIC_STRIDES, &[][..]);
+}

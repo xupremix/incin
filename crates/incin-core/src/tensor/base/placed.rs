@@ -7,6 +7,7 @@ use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
+use core::marker::PhantomData;
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P> {
     /// Rebuilds tensor metadata after a checked operation while retaining the
@@ -37,6 +38,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
             _device: device,
             _grad: grad,
             _placement: placement,
+            _layout: PhantomData,
         })
     }
 

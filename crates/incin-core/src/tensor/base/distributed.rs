@@ -6,6 +6,7 @@ use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 use crate::tensor::grad::RequiresGrad;
 use alloc::string::ToString;
+use core::marker::PhantomData;
 
 /// Failure while joining a distributed proof to one rank's physical storage.
 ///
@@ -201,6 +202,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
             _device: device,
             _grad: grad,
             _placement: placement,
+            _layout: PhantomData,
         })
     }
 

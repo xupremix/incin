@@ -385,6 +385,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType, Train: Trai
             _device: self._device.clone(),
             _grad: <Train::TensorGrad as RequiresGrad>::init(()),
             _placement: PhantomData,
+            _layout: PhantomData,
         })
     }
 
@@ -939,6 +940,7 @@ impl<S: Shape, B: crate::tensor::backend::VariableBackend, K: DType> Buffer<S, B
             _device: self._device.clone(),
             _grad: PhantomData,
             _placement: PhantomData,
+            _layout: PhantomData,
         })
     }
 }
