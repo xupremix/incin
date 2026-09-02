@@ -309,7 +309,7 @@ where
 
 fn render_unary_strategy(
     op_name: &'static str,
-    op_expr: &str,
+    body: &crate::codegen::ScalarFragment,
     dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
@@ -317,23 +317,23 @@ fn render_unary_strategy(
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
         PointwiseStrategy::Scalar { unroll_width, .. } => {
-            crate::kernel::render_cuda_unary_for_layout(
+            crate::kernel::render_cuda_unary_for_layout_body(
                 op_name,
-                op_expr,
+                body,
                 builtin_id,
                 layout,
                 unroll_width,
             )
         }
         PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_unary_packed(op_name, op_expr, builtin_id, layout)
+            crate::kernel::render_cuda_unary_packed_body(op_name, body, builtin_id, layout)
         }
     }
 }
 
 fn render_binary_strategy(
     op_name: &'static str,
-    op_expr: &str,
+    body: &crate::codegen::ScalarFragment,
     dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
@@ -341,16 +341,16 @@ fn render_binary_strategy(
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
         PointwiseStrategy::Scalar { unroll_width, .. } => {
-            crate::kernel::render_cuda_binary_for_layout(
+            crate::kernel::render_cuda_binary_for_layout_body(
                 op_name,
-                op_expr,
+                body,
                 builtin_id,
                 layout,
                 unroll_width,
             )
         }
         PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_binary_packed(op_name, op_expr, builtin_id, layout)
+            crate::kernel::render_cuda_binary_packed_body(op_name, body, builtin_id, layout)
         }
     }
 }
@@ -431,6 +431,26 @@ pub(crate) fn launch_unary_op(
     op_expr: &str,
     t: &CudaStorage,
 ) -> Result<CudaStorage> {
+    launch_unary_body(
+        op_name,
+        &crate::codegen::ScalarFragment::literal(op_expr),
+        t,
+    )
+}
+
+/// Launches a unary pointwise kernel whose body is an already-lowered fragment.
+///
+/// This is the shared implementation behind both the hand-written literal path
+/// and the IR path: strategy selection, occupancy pruning, autotuning, the
+/// strided/dense argument split and the launch itself are identical, and the
+/// fragment is the only thing that varies. Routing an operation through the IR
+/// therefore cannot change how it is scheduled, only what arithmetic it does.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_unary_body(
+    op_name: &'static str,
+    body: &crate::codegen::ScalarFragment,
+    t: &CudaStorage,
+) -> Result<CudaStorage> {
     let b = &*t.buffer;
     validate_elementwise_dtype(b.dtype, "elementwise_unary")?;
     let plan = UnaryIterationPlan::new(OperandLayout {
@@ -450,7 +470,7 @@ pub(crate) fn launch_unary_op(
     let layout = plan.layout_class();
     let numel = plan.numel;
     let strategy = select_unary_strategy(b.dtype, layout, numel, plan.operand.offset)?;
-    let kernel = render_unary_strategy(op_name, op_expr, b.dtype, layout, strategy)?;
+    let kernel = render_unary_strategy(op_name, body, b.dtype, layout, strategy)?;
     let packed_width = crate::tuning::preferred_pointwise_width(b.dtype);
     let dense = layout == LayoutClass::Contiguous;
     let selection = pointwise_launch_selection(
@@ -463,7 +483,7 @@ pub(crate) fn launch_unary_op(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, b.dtype, |strategy| {
-        render_unary_strategy(op_name, op_expr, b.dtype, layout, strategy)
+        render_unary_strategy(op_name, body, b.dtype, layout, strategy)
     })?;
     let dtype = prepared
         .first()
@@ -572,6 +592,27 @@ pub(crate) fn launch_binary_op(
     rhs: &CudaStorage,
     out_shape: &[usize],
 ) -> Result<CudaStorage> {
+    launch_binary_body(
+        op_name,
+        &crate::codegen::ScalarFragment::literal(op_expr),
+        lhs,
+        rhs,
+        out_shape,
+    )
+}
+
+/// Launches a binary pointwise kernel whose body is an already-lowered fragment.
+///
+/// The binary counterpart of [`launch_unary_body`]: everything except the body
+/// expression is shared with the literal path.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_binary_body(
+    op_name: &'static str,
+    body: &crate::codegen::ScalarFragment,
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    out_shape: &[usize],
+) -> Result<CudaStorage> {
     let (lhs_b, rhs_b) = (&*lhs.buffer, &*rhs.buffer);
     if lhs_b.dtype != rhs_b.dtype {
         return Err(Error::DTypeStorageMismatch {
@@ -618,7 +659,7 @@ pub(crate) fn launch_binary_op(
     let rhs_plan = &plan.operands[1];
     let strategy =
         select_binary_strategy(lhs_b.dtype, layout, numel, lhs_plan.offset, rhs_plan.offset)?;
-    let kernel = render_binary_strategy(op_name, op_expr, lhs_b.dtype, layout, strategy)?;
+    let kernel = render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy)?;
     let packed_width = crate::tuning::preferred_pointwise_width(lhs_b.dtype);
     let packed_aligned = match layout {
         LayoutClass::Contiguous => {
@@ -645,7 +686,7 @@ pub(crate) fn launch_binary_op(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, lhs_b.dtype, |strategy| {
-        render_binary_strategy(op_name, op_expr, lhs_b.dtype, layout, strategy)
+        render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy)
     })?;
     let dtype = prepared
         .first()

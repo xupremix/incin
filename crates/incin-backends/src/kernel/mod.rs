@@ -14,6 +14,8 @@
 //! `#[cfg(any(feature = "cuda", test))]`, matching the original file.
 
 #[cfg(any(feature = "cuda", test))]
+use crate::codegen::ScalarFragment;
+#[cfg(any(feature = "cuda", test))]
 use alloc::boxed::Box;
 use alloc::string::String;
 use incin_core::error::{Error, Result};
@@ -34,12 +36,28 @@ mod types;
 
 #[cfg(any(feature = "cuda", test))]
 pub(crate) use normalization::render_cuda_normalization;
+// The `_body` entry points are the live ones; the `&str` wrappers beside them
+// are retained for the literal-expression call sites in `tests`.
 #[cfg(any(feature = "cuda", test))]
-pub(crate) use packed::{render_cuda_binary_packed, render_cuda_unary_packed};
+#[allow(unused_imports)]
+pub(crate) use packed::{
+    render_cuda_binary_packed, render_cuda_binary_packed_body, render_cuda_unary_packed,
+    render_cuda_unary_packed_body,
+};
 #[cfg(any(feature = "cuda", test))]
 pub(crate) use reduction::render_cuda_reduction;
 #[cfg(any(feature = "cuda", test))]
-pub(crate) use scalar::{render_cuda_binary_for_layout, render_cuda_unary_for_layout};
+#[allow(unused_imports)]
+pub(crate) use scalar::{
+    render_cuda_binary_for_layout, render_cuda_binary_for_layout_body,
+    render_cuda_unary_for_layout, render_cuda_unary_for_layout_body,
+};
+// The IR-lowered counterparts of the two entry points above. They render the
+// same templates through the same cache keys; only the producer of the body
+// expression differs. See `crate::codegen::fragment`.
+#[cfg(any(feature = "cuda", test))]
+#[allow(unused_imports)]
+pub(crate) use scalar::{lower_binary_body, lower_unary_body};
 // Test-only from a non-test build's perspective: every current call site is
 // inside `#[cfg(test)]` code (`cuda::ops::elementwise`'s own tests exercise
 // it directly rather than through `render_cuda_unary_for_layout`).
@@ -48,6 +66,8 @@ pub(crate) use scalar::{render_cuda_binary_for_layout, render_cuda_unary_for_lay
 pub(crate) use scalar::render_cuda_unary;
 #[cfg(any(feature = "cuda", test))]
 pub(crate) use types::RenderedKernel;
+#[cfg(any(feature = "cuda", test))]
+use types::source_scoped_cache_id;
 // Test-only: `KernelDType` is otherwise private to `types` (every non-test
 // caller goes through `KernelKey`'s own constructors) and reached only by
 // `tests`, so a non-test build reports it unused.

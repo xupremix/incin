@@ -116,6 +116,29 @@ impl IrExpr {
         Self::Var(name.into())
     }
 
+    /// Rewrites every argument index through `map`.
+    ///
+    /// Fusing two expressions means placing them over one shared operand list,
+    /// and an expression built in isolation numbers its arguments from zero. A
+    /// unary operation's derivative refers to its input as `Arg(0)`; to combine
+    /// it with an incoming gradient that occupies `Arg(0)` of the fused kernel,
+    /// its own argument has to move to `Arg(1)` first.
+    #[must_use]
+    pub fn remap_args(&self, map: &impl Fn(usize) -> usize) -> Self {
+        match self {
+            Self::Arg(index) => Self::Arg(map(*index)),
+            Self::Const(value) => Self::Const(*value),
+            Self::Var(name) => Self::Var(name.clone()),
+            Self::Unary(op, inner) => Self::unary(*op, inner.remap_args(map)),
+            Self::Binary(op, lhs, rhs) => {
+                Self::binary(*op, lhs.remap_args(map), rhs.remap_args(map))
+            }
+            Self::Ternary(op, a, b, c) => {
+                Self::ternary(*op, a.remap_args(map), b.remap_args(map), c.remap_args(map))
+            }
+        }
+    }
+
     /// Builds a unary operation node.
     #[must_use]
     pub fn unary(op: IrUnaryOp, arg: Self) -> Self {
@@ -439,14 +462,25 @@ impl IrExpr {
                         d_silu_du.mul(du)
                     }
                     IrUnaryOp::Gelu => {
-                        // Approximate derivative for GELU
-                        let k = 0.797_884_560_802_865_4;
-                        let tanh_arg = Self::Const(k).mul(u.clone().add(
-                            Self::Const(0.044715).mul(u.clone().mul(u.clone()).mul(u.clone())),
-                        ));
-                        let th = Self::unary(IrUnaryOp::Tanh, tanh_arg);
-                        let cdf = Self::Const(0.5).mul(Self::Const(1.0).add(th));
-                        cdf.mul(du)
+                        // gelu(u) = 0.5 * u * (1 + tanh(g(u))) with
+                        // g(u) = k * (u + c * u^3), so gelu is a product and its
+                        // derivative needs both terms of the product rule:
+                        //   0.5 * (1 + tanh(g)) + 0.5 * u * (1 - tanh(g)^2) * g'(u)
+                        // where g'(u) = k * (1 + 3c * u^2). Dropping the second
+                        // term understates the gradient everywhere except where
+                        // sech^2(g) is zero.
+                        let k = Self::Const(super::fragment::GELU_K);
+                        let c = Self::Const(super::fragment::GELU_C);
+                        let u2 = u.clone().mul(u.clone());
+                        let g = k
+                            .clone()
+                            .mul(u.clone().add(c.clone().mul(u2.clone().mul(u.clone()))));
+                        let th = Self::unary(IrUnaryOp::Tanh, g);
+                        let cdf = Self::Const(0.5).mul(Self::Const(1.0).add(th.clone()));
+                        let sech2 = Self::Const(1.0).sub(th.clone().mul(th));
+                        let g_prime = k.mul(Self::Const(1.0).add(Self::Const(3.0).mul(c).mul(u2)));
+                        let pdf_term = Self::Const(0.5).mul(u.clone()).mul(sech2).mul(g_prime);
+                        cdf.add(pdf_term).mul(du)
                     }
                 }
             }

@@ -67,7 +67,6 @@ pub(crate) fn render_cuda_normalization(op_name: &str, dtype: DTypeId) -> Result
             KernelAccess::Scalar { unroll_width: 1 }
         },
     )?;
-    let cache_key = key.cache_id();
     let inverse_std = if dtype == DTypeId::F64 {
         "1.0 / sqrt(variance + (double)eps)"
     } else {
@@ -417,7 +416,7 @@ extern "C" __global__ void {entry_point}(
     };
     Ok(RenderedKernel {
         entry_point,
-        cache_key,
+        cache_key: source_scoped_cache_id(&key, &source),
         source,
         dtype,
         element_size: scalar.element_size,

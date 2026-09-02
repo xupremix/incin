@@ -105,15 +105,20 @@ pub(crate) fn render_cuda_reduction(
             KernelAccess::Scalar { unroll_width: 1 }
         },
     )?;
-    let cache_key = key.cache_id();
 
     let source = if contiguous_last_axis {
+        // `combine` folds one warp lane into another; `fast_update` folds one
+        // loaded element into the accumulator. Both must cover exactly the set
+        // of operations accepted above, and the two are written out separately
+        // because the warp-shuffle path names its operand `other` and the load
+        // path names it `value`. Keeping them as two matches over the same set
+        // is what let `prod` be present in one and missing from the other.
         let combine = match op_name {
             "sum" | "mean" => "acc += other;",
             "max" => "if (other > acc) acc = other;",
             "min" => "if (other < acc) acc = other;",
             "prod" => "acc *= other;",
-            _ => unreachable!(),
+            _ => unreachable!("op_name was validated against this same set above"),
         };
         format!(
             r#"
@@ -167,7 +172,8 @@ extern "C" __global__ void {entry_point}(
                 "sum" | "mean" => "acc += value;",
                 "max" => "if (value > acc) acc = value;",
                 "min" => "if (value < acc) acc = value;",
-                _ => unreachable!(),
+                "prod" => "acc *= value;",
+                _ => unreachable!("op_name was validated against this same set above"),
             },
             load_prefix = scalar.load_prefix,
             load_suffix = scalar.load_suffix,
@@ -250,7 +256,7 @@ extern "C" __global__ void {entry_point}(
 
     Ok(RenderedKernel {
         entry_point,
-        cache_key,
+        cache_key: source_scoped_cache_id(&key, &source),
         source,
         dtype,
         element_size: scalar.element_size,

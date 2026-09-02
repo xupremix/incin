@@ -8,9 +8,11 @@
 
 pub mod attention;
 pub mod autotune_config;
+pub mod catalog;
 pub mod conv;
 pub mod cross_entropy;
 pub mod dsl;
+pub mod fragment;
 pub mod fused_epilogue;
 pub mod fusion;
 pub mod gemm;
@@ -32,9 +34,11 @@ pub mod vectorized;
 
 pub use attention::AttentionSpec;
 pub use autotune_config::{AutotuneCandidate, AutotuneSpace, GpuArchProfile};
+pub use catalog::{binary_forward, unary_forward, unary_fused_backward};
 pub use conv::ImplicitConv2dSpec;
 pub use cross_entropy::CrossEntropySpec;
 pub use dsl::{define_binary_custom_op, define_ternary_custom_op, define_unary_custom_op};
+pub use fragment::{ScalarFragment, lower_scalar};
 pub use fused_epilogue::{FusedEpilogueKind, FusedEpilogueSpec};
 pub use fusion::{CompositeFusionSpec, FusedNode};
 pub use gemm::{GemmSpec, GemmTileConfig};

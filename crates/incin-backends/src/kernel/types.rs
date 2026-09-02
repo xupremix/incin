@@ -274,6 +274,40 @@ impl KernelKey {
     }
 }
 
+/// The module-cache identity for a kernel, scoped to the text it compiles.
+///
+/// `KernelKey::cache_id` describes the *problem* a kernel solves -- family,
+/// operation name, dtypes, layout, access pattern -- and deliberately says
+/// nothing about the kernel body, because that is what makes it usable as a
+/// tuning identity. It is not sufficient as a compilation identity: several
+/// callers format a runtime value directly into their expression while passing a
+/// fixed operation name, so `powf(x, 2.0)` and `powf(x, 3.0)` are both rendered
+/// under `"powf"`, and `x * 0.25` and `x * 0.5` are both rendered under
+/// `"mul_scalar"`. Keyed on the problem alone, the first of each pair to be
+/// compiled would be served to the second, which is a silent wrong answer rather
+/// than a miss.
+///
+/// Mixing a digest of the source into the key makes bodies that differ compile
+/// separately and bodies that match continue to share, which is what the cache
+/// is for. `tuning_problem_id` is left alone, so autotuning still groups the
+/// variants as one problem.
+#[cfg(any(feature = "cuda", test))]
+pub(crate) fn source_scoped_cache_id(key: &KernelKey, source: &str) -> String {
+    format!("{}/src={:016x}", key.cache_id(), fnv1a64(source))
+}
+
+/// FNV-1a, 64-bit. Chosen for being short, dependency-free and stable across
+/// runs; this is a cache discriminator, not a security boundary.
+#[cfg(any(feature = "cuda", test))]
+fn fnv1a64(text: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in text.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
 /// A rendered kernel and the identity used by the backend module cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(any(feature = "cuda", test))]

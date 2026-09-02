@@ -1,6 +1,8 @@
 pub(crate) mod compare;
 pub(crate) mod conv;
 pub(crate) mod elementwise;
+#[cfg(test)]
+mod ir_conformance_tests;
 pub(crate) mod kernels;
 pub(crate) mod logical;
 pub(crate) mod matmul;
