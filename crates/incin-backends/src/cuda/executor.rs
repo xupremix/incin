@@ -196,11 +196,20 @@ impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
         &self,
         request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
-        let [input, weight] = request.inputs else {
-            return Err(invalid(
-                OperationKind::Conv2dExact,
-                "conv2d expects 2 inputs",
-            ));
+        // Bias is optional, matching the CPU binder in `cpu::canonical::nn` and
+        // the `Option<&Storage>` the kernel below already accepts. Refusing the
+        // three-operand form here made biased conv2d executable on CPU and
+        // unreachable on CUDA, even though `conv2d_with_bias_adds_per_channel_constant`
+        // covers the kernel's biased path directly.
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    OperationKind::Conv2dExact,
+                    "conv2d expects an activation, a weight and an optional bias",
+                ));
+            }
         };
         let input = input
             .downcast_ref::<CudaStorage>()
@@ -208,11 +217,17 @@ impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
         let weight = weight
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::Conv2dExact, "weight is not CUDA storage"))?;
+        let bias = bias
+            .map(|bias| {
+                bias.downcast_ref::<CudaStorage>()
+                    .ok_or_else(|| invalid(OperationKind::Conv2dExact, "bias is not CUDA storage"))
+            })
+            .transpose()?;
         let attrs = request.operation.descriptor().attributes();
         Self::conv2d::<f32>(
             input,
             weight,
-            None,
+            bias,
             attrs.stride[0],
             attrs.padding[0],
             attrs.dilation[0],
