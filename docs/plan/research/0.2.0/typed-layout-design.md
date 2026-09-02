@@ -351,3 +351,61 @@ The measurement that should gate all of it is still unmade: whether
 materialising views actually costs anything on real workloads. If it does not,
 this stops at reshape safety, which is real but a much smaller prize for a sixth
 type parameter and this much churn.
+
+## The migration order was wrong, and the corrected one costs 650 sites
+
+The plan above adds `L: Layout = Unknown` first and converts the API
+afterwards. That is backwards. A default lets every existing impl bind `L`
+silently, so the workspace compiles, nothing looks wrong, and the unconverted
+API is invisible until something produces a non-`Unknown` layout. The 95 errors
+that appeared when converting impl headers were not the migration going wrong --
+they were the work arriving late, all at once, after the default had hidden it.
+
+The right order is: add the parameter **without** a default, let the compiler
+enumerate every site that must decide, convert them, and add the default last as
+pure ergonomics for downstream callers.
+
+**Rust does not allow that surgically.** Defaulted generic parameters must be
+trailing, so `L` cannot be undefaulted while `K`, `G` and `P` carry defaults:
+
+```
+error: generic parameters with a default must be trailing
+```
+
+The faithful version is therefore to strip the defaults from `K`, `G` and `P`
+too for the duration. Measured, that is **650 errors in `incin-core`, all of one
+class** -- "struct takes N generic arguments but M were supplied" -- and they
+land where the decisions are:
+
+| module | sites |
+|---|---|
+| `tensor/ops/binary.rs` | 158 |
+| `tensor/ops/unary.rs` | 79 |
+| `tensor/ops/reduce.rs` | 42 |
+| `tensor/ops/manipulation/indexing.rs` | 35 |
+| `nn/activation.rs` | 32 |
+| `nn/lstm.rs` | 29 |
+
+That is a clean work list rather than a cascade, which is the point of the
+approach: one error class, every site named, nothing hidden.
+
+The decision rule that makes it tractable, and the reason it cannot be scripted
+blindly:
+
+- **Input positions and impl headers** take the generic `L`. Mechanical.
+- **Return positions** take a layout the operation can actually justify.
+  `Unknown` is always sound because it claims nothing, and is the correct
+  starting answer for every operation whose output is a fresh allocation.
+  Tightening a family to `RowMajor` is a separate, deliberate step that also
+  needs the operation *contract* to state it, not merely the current backends to
+  happen to do it.
+
+The danger is that inputs and outputs of the same signature look identical to a
+regex, and giving an output the input's `L` is a silent lie rather than a
+compile error. So the conversion is per-module and reviewed, not a
+search-and-replace over 650 sites.
+
+Estimated as a dedicated piece of work rather than a tail-end task. What is on
+`develop` is the intermediate state with the default present -- correct, tested,
+and honest about being unfinished -- and the conversion should restart from the
+undefaulted parameter rather than continuing from here.
