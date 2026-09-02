@@ -182,3 +182,21 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
     }
     out
 }
+
+/// A tensor whose buffer is proven dense and row-major.
+///
+/// The layout parameter is precise but verbose to write out, and the dense case
+/// is overwhelmingly the common one. This alias is the ergonomic spelling:
+///
+/// ```text
+/// // instead of
+/// fn f(t: Tensor<s![3, 4], B, f32, NoGrad, Local, RowMajor<s![3, 4]>>) {}
+/// // write
+/// fn f(t: Dense<s![3, 4], B>) {}
+/// ```
+///
+/// Note the shape appears once rather than twice: `RowMajor` is always
+/// congruent with the shape it describes, so repeating it is noise the alias
+/// removes. That congruence is exactly what [`LayoutOf`] states.
+pub type Dense<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = crate::dist::Local> =
+    crate::tensor::base::Tensor<S, B, K, G, P, RowMajor<S>>;

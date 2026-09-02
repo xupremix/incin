@@ -175,7 +175,10 @@ pub mod prelude {
     pub use crate::dim;
 
     pub use crate::dist::{Local, Placement, PlacementKind};
+    // The layout vocabulary. `Dense` is the ergonomic spelling for the common
+    // case; `Contiguous` is the bound operations like `reshape_view` require.
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
+    pub use crate::shapes::{Contiguous, Dense, Layout, RowMajor, Unknown};
 
     pub use super::exec::{AxisSet, RankSupport};
     pub use super::tensor::matmul::{StaticDim, StaticOrNamedDim};

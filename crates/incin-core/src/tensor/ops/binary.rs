@@ -478,6 +478,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             B,
             K,
             G,
+            crate::shapes::Unknown,
         >(self, crate::exec::catalog::ScalarAttributes { value: val })
     }
 
@@ -493,6 +494,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             B,
             K,
             G,
+            crate::shapes::Unknown,
         >(self, crate::exec::catalog::ScalarAttributes { value: val })
     }
 

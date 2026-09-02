@@ -91,8 +91,14 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: crate::sh
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, P, L>
 {
     #[inline]
     /// Returns the number of dimensions (rank) of the tensor.

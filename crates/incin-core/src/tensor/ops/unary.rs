@@ -23,12 +23,30 @@ macro_rules! impl_unary_op {
             B: Execute<op::$operation>,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
         {
-            execute_unary_descriptor::<op::$operation, S, B, K, G>(self)
+            execute_unary_descriptor::<op::$operation, S, B, K, G, L>(self)
         }
     };
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tensor<S, B, K, G> {
+/// Unary pointwise operations.
+///
+/// These preserve the operand's layout parameter, which is sound because they
+/// are pointwise: the output is a freshly allocated buffer with the operand's
+/// shape, so a dense operand yields a dense result and an operand that has
+/// proven nothing yields a result claiming nothing. Both existing layouts
+/// satisfy that.
+///
+/// The invariant a new layout must respect: if `L` can describe something other
+/// than a dense buffer, these signatures stop being true and the output layout
+/// has to be named explicitly rather than carried through as `Self`.
+impl<
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
+{
     impl_unary_op!(
         /// Elementwise tangent.
         tan, Tan
@@ -88,7 +106,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Abs>,
         <B as Execute<op::Abs>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Abs, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Abs, S, B, K, G, L>(self)
     }
 
     /// Applies the Rectified Linear Unit (ReLU) function element-wise.
@@ -97,7 +115,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Relu>,
         <B as Execute<op::Relu>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Relu, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Relu, S, B, K, G, L>(self)
     }
 
     /// Applies the Gaussian Error Linear Unit (GELU) function element-wise.
@@ -106,7 +124,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Gelu>,
         <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Gelu, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Gelu, S, B, K, G, L>(self)
     }
 
     /// Applies the Step function element-wise.
@@ -115,7 +133,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Step>,
         <B as Execute<op::Step>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Step, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Step, S, B, K, G, L>(self)
     }
 
     /// Applies the Mish function element-wise.
@@ -124,7 +142,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Mish>,
         <B as Execute<op::Mish>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Mish, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Mish, S, B, K, G, L>(self)
     }
 
     /// Applies the Exponential Linear Unit (ELU) function element-wise with alpha=1.0.
@@ -133,7 +151,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Elu>,
         <B as Execute<op::Elu>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Elu, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Elu, S, B, K, G, L>(self)
     }
 
     /// Applies the Swish function element-wise (also known as SiLU).
@@ -142,19 +160,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Swish>,
         <B as Execute<op::Swish>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Swish, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Swish, S, B, K, G, L>(self)
     }
 
     /// Applies the Softmax function over the specified dimension.
     #[inline]
-    pub fn softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G>>
+    pub fn softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G, Local, L>>
     where
         S: DynShape,
         B: Execute<op::Softmax>,
         <B as Execute<op::Softmax>>::Output: Into<B::Storage<K>>,
     {
         let dim = axis.resolve(self.shape_buf().rank())?;
-        execute_unary_descriptor_with_attributes::<op::Softmax, S, B, K, G>(
+        execute_unary_descriptor_with_attributes::<op::Softmax, S, B, K, G, L>(
             self,
             crate::exec::catalog::AxisAttributes { axis: dim },
         )
@@ -186,14 +204,14 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
     /// assert!((mass - 1.0).abs() < 1e-5);
     /// ```
     #[inline]
-    pub fn log_softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G>>
+    pub fn log_softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G, Local, L>>
     where
         S: DynShape,
         B: Execute<op::LogSoftmax>,
         <B as Execute<op::LogSoftmax>>::Output: Into<B::Storage<K>>,
     {
         let dim = axis.resolve(self.shape_buf().rank())?;
-        execute_unary_descriptor_with_attributes::<op::LogSoftmax, S, B, K, G>(
+        execute_unary_descriptor_with_attributes::<op::LogSoftmax, S, B, K, G, L>(
             self,
             crate::exec::catalog::AxisAttributes { axis: dim },
         )
@@ -205,7 +223,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Neg>,
         <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Neg, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Neg, S, B, K, G, L>(self)
     }
 
     /// Checked compatibility spelling. Prefer [`Self::try_neg`] in new code.
@@ -224,7 +242,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Sqrt>,
         <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Sqrt, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Sqrt, S, B, K, G, L>(self)
     }
 
     /// Computes the exponential of each element.
@@ -233,7 +251,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Exp>,
         <B as Execute<op::Exp>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Exp, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Exp, S, B, K, G, L>(self)
     }
 
     /// Raises tensor elements to power `exponent`.
@@ -243,7 +261,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Powf>,
         <B as Execute<op::Powf>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor_with_attributes::<op::Powf, S, B, K, G>(
+        execute_unary_descriptor_with_attributes::<op::Powf, S, B, K, G, L>(
             self,
             crate::exec::catalog::ScalarAttributes { value: exponent },
         )
@@ -256,7 +274,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Clamp>,
         <B as Execute<op::Clamp>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor_with_attributes::<op::Clamp, S, B, K, G>(
+        execute_unary_descriptor_with_attributes::<op::Clamp, S, B, K, G, L>(
             self,
             crate::exec::catalog::ClampAttributes { min, max },
         )
@@ -308,7 +326,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Log>,
         <B as Execute<op::Log>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Log, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Log, S, B, K, G, L>(self)
     }
 
     /// Computes the hyperbolic tangent of each element.
@@ -317,7 +335,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Tanh>,
         <B as Execute<op::Tanh>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Tanh, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Tanh, S, B, K, G, L>(self)
     }
 
     /// Computes the sigmoid of each element.
@@ -326,7 +344,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::Sigmoid>,
         <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor::<op::Sigmoid, S, B, K, G>(self)
+        execute_unary_descriptor::<op::Sigmoid, S, B, K, G, L>(self)
     }
 
     /// Multiplies the tensor by a scalar value element-wise.
@@ -347,7 +365,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::MulScalar>,
         <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor_with_attributes::<op::MulScalar, S, B, K, G>(
+        execute_unary_descriptor_with_attributes::<op::MulScalar, S, B, K, G, L>(
             self,
             crate::exec::catalog::ScalarAttributes {
                 value: scalar.into().to_f64(),
@@ -373,7 +391,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad> Tens
         B: Execute<op::AddScalar>,
         <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
     {
-        execute_unary_descriptor_with_attributes::<op::AddScalar, S, B, K, G>(
+        execute_unary_descriptor_with_attributes::<op::AddScalar, S, B, K, G, L>(
             self,
             crate::exec::catalog::ScalarAttributes {
                 value: scalar.into().to_f64(),
@@ -393,9 +411,10 @@ pub(crate) fn execute_unary_descriptor<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
+    L: crate::shapes::Layout,
 >(
-    tensor: &Tensor<S, B, K, G>,
-) -> Result<Tensor<S, B, K, G>>
+    tensor: &Tensor<S, B, K, G, Local, L>,
+) -> Result<Tensor<S, B, K, G, Local, L>>
 where
     O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
     B: Execute<O>,
@@ -424,10 +443,11 @@ pub(crate) fn execute_unary_descriptor_with_attributes<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
+    L: crate::shapes::Layout,
 >(
-    tensor: &Tensor<S, B, K, G>,
+    tensor: &Tensor<S, B, K, G, Local, L>,
     attributes: O::Attributes,
-) -> Result<Tensor<S, B, K, G>>
+) -> Result<Tensor<S, B, K, G, Local, L>>
 where
     O: CanonicalOperation,
     O::Attributes: AttributeContract,

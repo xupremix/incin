@@ -3,10 +3,75 @@
 
 extern crate incin_core as incin;
 
+use incin_backends::cpu::CpuBackendImpl;
 use incin_core::shapes::{Contiguous, Layout, LayoutOf, RowMajor, Shape, Unknown};
 use incin_macros::s;
 
 incin_core::dim!(Batch);
+
+/// A tensor carrying a real layout must keep the API a plain one has.
+///
+/// This is the check the parameter's default would otherwise hide. An
+/// `impl<S, B, K, G, P> Tensor<S, B, K, G, P>` binds `L` to its default, so it
+/// silently stops applying to a tensor that has proven something -- the crate
+/// still compiles and the loss is invisible until someone holds a proven
+/// tensor and finds it has no methods.
+///
+/// Every accessor exercised here is one that used to be unreachable that way.
+/// Extend this as further modules are converted; a method that stops compiling
+/// here is a module that still pins `L`.
+#[test]
+fn a_proven_tensor_keeps_the_ordinary_api() {
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .expect("a freshly created tensor is dense row-major");
+
+    assert_eq!(t.dims().as_ref(), &[3, 4]);
+    assert_eq!(t.shape_buf().as_ref(), &[3, 4]);
+    assert_eq!(t.dtype(), incin_core::prelude::DTypeId::F32.into());
+    assert_eq!(t.numel(), 12);
+    let _ = t.inner();
+}
+
+/// The same, for the operation surface rather than the accessors.
+///
+/// Kept separate because these are the conversions still outstanding: an
+/// operation has to decide what layout its *output* carries, which is a
+/// contract question rather than a rename, so the modules behind these calls
+/// are converted deliberately and one at a time.
+#[test]
+fn a_proven_tensor_can_still_be_operated_on() {
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .unwrap();
+
+    let negated = t.neg().expect("a unary op applies to a proven tensor");
+    assert_eq!(negated.dims().as_ref(), &[3, 4]);
+}
+
+/// The `Dense` alias names the common case without repeating the shape.
+///
+/// `Tensor<S, B, K, G, P, RowMajor<S>>` mentions the shape twice, which is
+/// noise: `RowMajor` is congruent with the shape it describes by construction.
+#[test]
+fn the_dense_alias_is_the_ergonomic_spelling() {
+    // Aliased once locally, which is how a caller would actually write it and
+    // what keeps `clippy::type_complexity` quiet: `s![3, 4]` still expands to a
+    // typenum chain, so `Dense` shortens the spelling rather than the type.
+    type Batch34 = incin_core::prelude::Dense<s![3, 4], CpuBackendImpl>;
+
+    fn takes_dense(t: &Batch34) -> usize {
+        t.numel()
+    }
+
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .unwrap();
+    assert_eq!(takes_dense(&t), 12);
+}
 
 /// Row-major strides are the suffix products of the shape's extents.
 #[test]

@@ -13,6 +13,7 @@
 - [Tensors](./tensors.md)
 - [Shapes: static, dynamic, and mixed](./shapes.md)
 - [Advanced shapes](./advanced_shapes.md)
+- [Layout: proving where elements live](./layout.md)
 - [Autograd](./autograd.md)
 - [Errors](./errors.md)
 
