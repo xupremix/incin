@@ -35,11 +35,13 @@ pub(crate) fn execute_binary_descriptor<
     G1: RequiresGrad,
     G2: RequiresGrad,
     GOut: RequiresGrad,
+    L1: crate::shapes::Layout,
+    L2: crate::shapes::Layout,
 >(
-    lhs: &Tensor<S, B, KIn, G1>,
-    rhs: &Tensor<S2, B, KIn, G2>,
+    lhs: &Tensor<S, B, KIn, G1, Local, L1>,
+    rhs: &Tensor<S2, B, KIn, G2, Local, L2>,
     grad_out: GOut::Field,
-) -> Result<Tensor<S, B, KOut, GOut>>
+) -> Result<Tensor<S, B, KOut, GOut, Local, L1>>
 where
     O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
     S: ShapeEq<S2>,
@@ -224,12 +226,14 @@ macro_rules! impl_exact_binary_op {
         $(#[$meta:meta])*
         $op:ident, $method:ident, $op_marker:ident
     ) => {
-        impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S, B, K, G1> {
+        impl<S: Shape, B: Backend, K: DType, G1: RequiresGrad, L1: crate::shapes::Layout>
+            Tensor<S, B, K, G1, Local, L1>
+        {
             $(#[$meta])*
-            pub fn $method<S2: Shape, G2: RequiresGrad>(
+            pub fn $method<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout>(
                 &self,
-                rhs: &Tensor<S2, B, K, G2>,
-            ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>>>
+                rhs: &Tensor<S2, B, K, G2, Local, L2>,
+            ) -> Result<Tensor<S, B, K, JoinedGrad<G1, G2>, Local, L1>>
             where
                 S: ShapeEq<S2>,
                 G1: GradJoin<G2>,
@@ -238,7 +242,7 @@ macro_rules! impl_exact_binary_op {
             {
                 let grad_out = <G1 as GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
                 JoinedGrad::<G1, G2>::grad_mode(&grad_out).restrict(|| {
-                    execute_binary_descriptor::<op::$op_marker, S, S2, B, K, K, _, _, _>(self, rhs, grad_out)
+                    execute_binary_descriptor::<op::$op_marker, S, S2, B, K, K, _, _, _, _, _>(self, rhs, grad_out)
                 })
             }
         }
@@ -383,11 +387,19 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
         <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<op::Add, S, S2, B, K, K, G, G2, G>(
-            self,
-            rhs,
-            self._grad.clone(),
-        )?;
+        let res = execute_binary_descriptor::<
+            op::Add,
+            S,
+            S2,
+            B,
+            K,
+            K,
+            G,
+            G2,
+            G,
+            crate::shapes::Unknown,
+            crate::shapes::Unknown,
+        >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
     }
@@ -400,11 +412,19 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
         <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<op::Sub, S, S2, B, K, K, G, G2, G>(
-            self,
-            rhs,
-            self._grad.clone(),
-        )?;
+        let res = execute_binary_descriptor::<
+            op::Sub,
+            S,
+            S2,
+            B,
+            K,
+            K,
+            G,
+            G2,
+            G,
+            crate::shapes::Unknown,
+            crate::shapes::Unknown,
+        >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
     }
@@ -417,11 +437,19 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<op::Mul, S, S2, B, K, K, G, G2, G>(
-            self,
-            rhs,
-            self._grad.clone(),
-        )?;
+        let res = execute_binary_descriptor::<
+            op::Mul,
+            S,
+            S2,
+            B,
+            K,
+            K,
+            G,
+            G2,
+            G,
+            crate::shapes::Unknown,
+            crate::shapes::Unknown,
+        >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
     }
@@ -434,11 +462,19 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
         <B as Execute<op::Div>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<op::Div, S, S2, B, K, K, G, G2, G>(
-            self,
-            rhs,
-            self._grad.clone(),
-        )?;
+        let res = execute_binary_descriptor::<
+            op::Div,
+            S,
+            S2,
+            B,
+            K,
+            K,
+            G,
+            G2,
+            G,
+            crate::shapes::Unknown,
+            crate::shapes::Unknown,
+        >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
     }

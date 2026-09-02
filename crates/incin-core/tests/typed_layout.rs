@@ -49,6 +49,41 @@ fn a_proven_tensor_can_still_be_operated_on() {
 
     let negated = t.neg().expect("a unary op applies to a proven tensor");
     assert_eq!(negated.dims().as_ref(), &[3, 4]);
+
+    // Binary ops take a second operand with its own, independent layout: the
+    // two need not agree, and neither is required to have proven anything.
+    let unproven = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
+    let summed = negated
+        .add_exact(&unproven)
+        .expect("a proven operand and an unproven one combine");
+    assert_eq!(summed.dims().as_ref(), &[3, 4]);
+}
+
+/// A pointwise op preserves the operand's layout rather than upgrading or
+/// discarding it.
+///
+/// This is the propagation rule, and it is what keeps the parameter usable: a
+/// proven tensor stays proven through a chain, so `reshape_view` is still
+/// reachable at the end of one. Asserting `RowMajor` on every output instead
+/// would be equally truthful -- the buffer is dense either way -- but it forces
+/// every downstream signature that says `Tensor<S, B, K, G>` to be rewritten,
+/// because `Unknown` and `RowMajor` are different types.
+#[test]
+fn a_proof_survives_a_pointwise_chain() {
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .unwrap();
+
+    // Still contiguous after two ops, so the `Contiguous` bound is satisfied.
+    let flat = t
+        .neg()
+        .unwrap()
+        .neg()
+        .unwrap()
+        .reshape_view::<s![12]>()
+        .expect("contiguity survives a pointwise chain");
+    assert_eq!(flat.dims().as_ref(), &[12]);
 }
 
 /// The `Dense` alias names the common case without repeating the shape.

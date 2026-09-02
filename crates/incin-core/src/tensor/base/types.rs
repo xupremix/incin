@@ -68,8 +68,8 @@ pub struct Tensor<
     pub(crate) _placement: P::Field,
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Clone
-    for Tensor<S, B, K, G, P>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout> Clone
+    for Tensor<S, B, K, G, P, L>
 {
     fn clone(&self) -> Self {
         Self {
