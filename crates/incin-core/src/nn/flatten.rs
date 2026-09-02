@@ -70,7 +70,8 @@ impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> f
     }
 }
 
-impl<S, B, K, G> Module<Tensor<S, B, K, G>> for FlattenAxes
+impl<S, B, K, G, L: crate::shapes::Layout> Module<Tensor<S, B, K, G, crate::dist::Local, L>>
+    for FlattenAxes
 where
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend
@@ -84,12 +85,13 @@ where
     type Output = Tensor<Dyn, B, K, G>;
     type Error = crate::err::Error;
 
-    fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
+    fn forward(&self, x: Tensor<S, B, K, G, crate::dist::Local, L>) -> Result<Self::Output> {
         x.flatten_runtime(self.start, self.end)
     }
 }
 
-impl<S, B, K, G, Start: Copy, End: Copy> Module<Tensor<S, B, K, G>> for Flatten<Start, End>
+impl<S, B, K, G, Start: Copy, End: Copy, L: crate::shapes::Layout>
+    Module<Tensor<S, B, K, G, crate::dist::Local, L>> for Flatten<Start, End>
 where
     S: Shape + DynShape,
     (): FlattenSelector<S, Start, End>,
@@ -105,12 +107,13 @@ where
     type Output = Tensor<<() as FlattenSelector<S, Start, End>>::Output, B, K, G>;
     type Error = crate::err::Error;
 
-    fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
+    fn forward(&self, x: Tensor<S, B, K, G, crate::dist::Local, L>) -> Result<Self::Output> {
         x.flatten(self.start, self.end)
     }
 }
 
-impl<S, B, K, G, Start, End> Module<Tensor<S, B, K, G>> for StructuralFlatten<Start, End>
+impl<S, B, K, G, Start, End, L: crate::shapes::Layout>
+    Module<Tensor<S, B, K, G, crate::dist::Local, L>> for StructuralFlatten<Start, End>
 where
     Start: StaticCursor,
     End: StaticCursor,
@@ -127,7 +130,7 @@ where
     type Output = Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>;
     type Error = crate::err::Error;
 
-    fn forward(&self, x: Tensor<S, B, K, G>) -> Result<Self::Output> {
+    fn forward(&self, x: Tensor<S, B, K, G, crate::dist::Local, L>) -> Result<Self::Output> {
         x.flatten_structural::<Start, End>()
     }
 }

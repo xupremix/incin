@@ -112,15 +112,20 @@ module. Operations that have been converted carry their operand's layout
 through; operations that have not still bind `L` to `Unknown`, which means a
 tensor carrying a proof cannot call them yet.
 
-Converted so far: the accessors, the local constructors, `Clone`, pointwise
-unary and binary operations, and reductions.
+The conversion is complete: accessors, constructors, `Clone`, pointwise unary
+and binary operations, reductions, shape manipulation, matmul, and the `nn`
+layers all accept a tensor that carries a layout.
 
-Not yet: shape manipulation, matmul, and the `nn` layers. If a method is
-unavailable on a proven tensor, that module is one of these — call
-`.into_row_major()` later in the chain, or work with `Unknown` until it is
-converted.
+Two rules govern what an operation's *result* carries, and the difference is
+not a style choice:
 
-Pointwise operations carry the operand's layout through, so a proof survives a
-chain and `reshape_view` is still reachable at the end of one. Reductions state
-their result's layout instead of carrying it, because a reduction changes the
-shape and a layout is only meaningful against the shape it describes.
+- **Shape-preserving operations carry the operand's layout through.** A proof
+  survives a chain of them, so `reshape_view` is still reachable at the end of
+  one.
+- **Shape-changing operations state their result's layout, and state it as
+  `Unknown`.** A layout describes one geometry and cannot be carried to
+  another. They *could* claim `RowMajor`, since the result is a fresh
+  allocation — except that is not true on every backend: CPU `transpose`
+  returns a view while CUDA's returns a copy. Until that is settled
+  ([#113](https://github.com/xupremix/incin/issues/113)) the honest answer is
+  to claim nothing, and `into_row_major` recovers a proof where one is wanted.

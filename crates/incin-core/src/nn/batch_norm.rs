@@ -276,18 +276,23 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::BatchNorm>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InS, B, K>> for BatchNorm2d<S, B, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for BatchNorm2d<S, B, K, Train>
 where
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InS, B, K>;
+    type Output = Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Self::Error> {
+    fn forward(
+        &self,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Self::Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();
         let running_mean = self.running_mean.as_tensor()?.into_dyn();

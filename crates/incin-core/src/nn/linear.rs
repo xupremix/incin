@@ -438,7 +438,9 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::True, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<Dyn, B, K, G, crate::dist::Local, L>>
+    for Linear<Dyn, B, crate::nn::optional::True, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
     JoinedGrad<G, Train::TensorGrad>: GradJoin<Train::TensorGrad>,
@@ -446,10 +448,20 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = Tensor<
+        Dyn,
+        B,
+        K,
+        JoinedGrad<G, Train::TensorGrad>,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<Dyn, B, K, G, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         let out = x.matmul(&weight_t)?;
         let bias_t = self.bias.as_ref().unwrap().as_tensor()?;
@@ -472,16 +484,28 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::False, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<Dyn, B, K, G, crate::dist::Local, L>>
+    for Linear<Dyn, B, crate::nn::optional::False, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = Tensor<
+        Dyn,
+        B,
+        K,
+        JoinedGrad<G, Train::TensorGrad>,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<Dyn, B, K, G, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         x.matmul(&weight_t)
     }
@@ -495,16 +519,21 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<Dyn, B, K>> for Linear<Dyn, B, Dyn, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<Dyn, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for Linear<Dyn, B, Dyn, K, Train>
 where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K>;
+    type Output = Tensor<Dyn, B, K, crate::tensor::grad::NoGrad>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K>) -> core::result::Result<Tensor<Dyn, B, K>, Error> {
+    fn forward(
+        &self,
+        x: Tensor<Dyn, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         let out = x.matmul(&weight_t)?;
         if let Some(b) = &self.bias {
@@ -541,7 +570,8 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<InShape, B, K, G>>
+    L: crate::shapes::Layout,
+> Module<Tensor<InShape, B, K, G, crate::dist::Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
     InShape::Output: DynShape,
@@ -551,10 +581,20 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = Tensor<
+        InShape::Output,
+        B,
+        K,
+        JoinedGrad<G, Train::TensorGrad>,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InShape, B, K, G, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -594,7 +634,8 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<InShape, B, K, G>>
+    L: crate::shapes::Layout,
+> Module<Tensor<InShape, B, K, G, crate::dist::Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
     InShape::Output: DynShape,
@@ -602,10 +643,20 @@ where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = Tensor<
+        InShape::Output,
+        B,
+        K,
+        JoinedGrad<G, Train::TensorGrad>,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InShape, B, K, G, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -637,17 +688,29 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InShape, B, K>> for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<InShape, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
 where
     InShape::Output: DynShape,
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K>;
+    type Output = Tensor<
+        InShape::Output,
+        B,
+        K,
+        crate::tensor::grad::NoGrad,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InShape, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 

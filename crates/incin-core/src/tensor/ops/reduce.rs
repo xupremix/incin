@@ -554,8 +554,18 @@ where
     }
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G, Local>
+/// Whole-tensor reductions.
+///
+/// Generic over the operand's layout. Each collapses to a scalar, so the
+/// result describes a different geometry and its layout is stated by the
+/// macro rather than carried.
+impl<
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, Local, L>
 {
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.

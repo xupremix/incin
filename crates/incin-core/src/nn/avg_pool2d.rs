@@ -53,19 +53,31 @@ impl<
     P: Unsigned,
     D: Unsigned,
     B: crate::tensor::backend::VariableBackend + Execute<op::AvgPool2d>,
-> Module<Tensor<I, B>> for AvgPool2d<K, S, P, D>
+    L: crate::shapes::Layout,
+> Module<Tensor<I, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for AvgPool2d<K, S, P, D>
 where
     B: Capabilities,
     <B as Execute<op::AvgPool2d>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B>;
+    type Output = Tensor<
+        I::Output,
+        B,
+        f32,
+        crate::tensor::grad::NoGrad,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<I, B, f32, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let shape = <I as crate::shapes::Pool2dShape<K, S, P, D>>::compute_output_shape(
             &x.shape_buf_value(),
         )?;

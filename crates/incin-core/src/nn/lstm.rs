@@ -516,23 +516,50 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
+    L: crate::shapes::Layout,
 >
     Module<(
-        Tensor<D2<Batch, In>, B, K>,
-        (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+        Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        (
+            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        ),
     )> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<D2<In, Out>, B, BiasIh, K, Train>:
-        Module<Tensor<D2<Batch, In>, B, K>, Output = Tensor<D2<Batch, Out>, B, K>, Error = Error>,
-    Linear<D2<Out, Out>, B, BiasHh, K, Train>:
-        Module<Tensor<D2<Batch, Out>, B, K>, Output = Tensor<D2<Batch, Out>, B, K>, Error = Error>,
+    Linear<D2<In, Out>, B, BiasIh, K, Train>: Module<
+            Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+            Output = Tensor<
+                D2<Batch, Out>,
+                B,
+                K,
+                crate::tensor::grad::NoGrad,
+                crate::dist::Local,
+                L,
+            >,
+            Error = Error,
+        >,
+    Linear<D2<Out, Out>, B, BiasHh, K, Train>: Module<
+            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+            Output = Tensor<
+                D2<Batch, Out>,
+                B,
+                K,
+                crate::tensor::grad::NoGrad,
+                crate::dist::Local,
+                L,
+            >,
+            Error = Error,
+        >,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>);
+    type Output = (
+        Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+        Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    );
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -541,8 +568,11 @@ where
     fn forward(
         &self,
         (x, (h_prev, c_prev)): (
-            Tensor<D2<Batch, In>, B, K>,
-            (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+            Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+            (
+                Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+                Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+            ),
         ),
     ) -> core::result::Result<Self::Output, Error> {
         let i = self

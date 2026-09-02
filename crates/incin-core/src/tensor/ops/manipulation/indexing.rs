@@ -73,8 +73,13 @@ where
     .map(Into::into)?)
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -242,8 +247,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, P, L>
 {
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
@@ -376,8 +387,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
 {
     /// Fills elements where `mask` is true with `value`.
     pub fn masked_fill<S2: Shape, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
@@ -391,8 +407,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
     {
         let val_f64 = value.into().to_f64();
-        G::grad_mode(&self._grad)
-            .restrict(|| execute_masked_fill_descriptor::<S, S2, B, K, G, G2>(self, mask, val_f64))
+        G::grad_mode(&self._grad).restrict(|| {
+            execute_masked_fill_descriptor::<S, S2, B, K, G, G2, L, _>(self, mask, val_f64)
+        })
     }
 
     /// Gathers values along `dim` specified by `index`.
@@ -857,11 +874,13 @@ pub(crate) fn execute_masked_fill_descriptor<
     K: DType,
     G1: RequiresGrad,
     G2: RequiresGrad,
+    L1: crate::shapes::Layout,
+    L2: crate::shapes::Layout,
 >(
-    input: &Tensor<S, B, K, G1>,
-    mask: &Tensor<S2, B, bool, G2>,
+    input: &Tensor<S, B, K, G1, crate::dist::Local, L1>,
+    mask: &Tensor<S2, B, bool, G2, crate::dist::Local, L2>,
     value: f64,
-) -> Result<Tensor<S, B, K, G1>>
+) -> Result<Tensor<S, B, K, G1, crate::dist::Local, L1>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::MaskedFill>,
@@ -895,10 +914,15 @@ pub(crate) fn execute_where_cond_descriptor<
     K: DType,
     G1: RequiresGrad,
     G2: RequiresGrad,
+    L1: crate::shapes::Layout,
+    L2: crate::shapes::Layout,
 >(
-    mask: &Tensor<S, B, bool, G1>,
-    on_true: &Tensor<S2, B, K, G2>,
-    on_false: &Tensor<S2, B, K, G2>,
+    mask: &Tensor<S, B, bool, G1, crate::dist::Local, L1>,
+    on_true: &Tensor<S2, B, K, G2, crate::dist::Local, L2>,
+    on_false: &Tensor<S2, B, K, G2, crate::dist::Local, L2>,
+    // The selected values come from a fresh buffer, and the two branches need
+    // not share the mask's layout, so the result states `Unknown` rather than
+    // carrying either operand's claim.
 ) -> Result<Tensor<S2, B, K, G2>>
 where
     S: ShapeEq<S2>,
@@ -927,8 +951,12 @@ where
     )
 }
 
-impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad>
-    Tensor<S, B, bool, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend + Capabilities + Default,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, bool, G, crate::dist::Local, L>
 {
     /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
     pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad>(
@@ -942,7 +970,7 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad>
         <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {
         G2::grad_mode(&on_true._grad).restrict(|| {
-            execute_where_cond_descriptor::<S, S2, B, K, G, G2>(self, on_true, on_false)
+            execute_where_cond_descriptor::<S, S2, B, K, G, G2, L, _>(self, on_true, on_false)
         })
     }
 }

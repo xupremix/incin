@@ -192,6 +192,40 @@ fn a_dynamic_axis_voids_only_the_strides_that_enclose_it() {
     );
 }
 
+/// Every converted module accepts a proven tensor.
+///
+/// This is the enumeration mechanism: a method that stops compiling here names
+/// a module that still pins `L` to its default. It grew one call at a time as
+/// the conversion proceeded, which is how each unconverted module was found.
+#[test]
+fn a_proven_tensor_reaches_every_converted_module() {
+    use incin_core::shapes::idx::{ForwardAxis, Here, Next};
+
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .unwrap();
+
+    // pointwise, unary and binary
+    let _ = t.neg().unwrap();
+    let _ = t.add_exact(&t).unwrap();
+    // reductions, per-axis and whole-tensor
+    let _ = t.sum(ForwardAxis::<Here>::default()).unwrap();
+    let _ = t.clone().sum_all().unwrap();
+    // shape manipulation
+    let _ = t.transpose_structural::<Here, Next<Here>>().unwrap();
+    let _ = t.clone().into_shape::<incin_core::shapes::Dyn>().unwrap();
+    let _ = t.clone();
+    // matmul
+    let square = incin_core::prelude::Tensor::<s![4, 3], CpuBackendImpl>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .unwrap();
+    let _ = t.matmul(&square).unwrap();
+    // an nn layer, through the Module trait
+    let _ = incin_core::nn::Module::forward(&incin_core::nn::ReLU, t.clone());
+}
+
 /// Shape-changing operations really do produce dense buffers.
 ///
 /// This backs a claim the type system would otherwise make on faith. A

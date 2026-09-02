@@ -187,7 +187,9 @@ impl<
         + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InS, B, K>> for RMSNorm<S, B, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
     <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
@@ -201,7 +203,10 @@ where
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();
 

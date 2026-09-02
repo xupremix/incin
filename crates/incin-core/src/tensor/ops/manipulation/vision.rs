@@ -20,7 +20,8 @@ impl<
     B: Backend + Execute<op::MaxPool2d>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-> Tensor<S, B, K, G>
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
 where
     B: Capabilities,
     <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<K>>,
@@ -79,8 +80,13 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
 {
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
     pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>>

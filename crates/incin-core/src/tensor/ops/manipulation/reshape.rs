@@ -80,8 +80,14 @@ where
     .map(Into::into)?)
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, P, L>
 {
     /// Reshape this tensor using a [`ShapeSpec`].
     ///
@@ -464,8 +470,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
 {
     /// Flattens a statically selected inclusive axis range.
     /// Flattens an axis interval selected by compile-time axis selectors.

@@ -86,7 +86,13 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
     }
 }
 
-impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S1, B, K, G> {
+/// Reinterpretations that change the shape type.
+///
+/// Generic over the operand's layout, and the result states `Unknown`: a layout
+/// describes one geometry and cannot be carried to another.
+impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: crate::shapes::Layout>
+    Tensor<S1, B, K, G, crate::dist::Local, L>
+{
     /// Converts this tensor to a new static shape S2.
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G>> {
         let dims = self._shape.shape_buf();

@@ -190,7 +190,9 @@ impl<
     InK: DType,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InS, B, InK>> for Embedding<S, B, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<InS, B, InK, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for Embedding<S, B, K, Train>
 where
     B: crate::tensor::backend::VariableBackend
         + crate::exec::Capabilities
@@ -204,7 +206,10 @@ where
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InS, B, InK>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InS, B, InK, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let x_handle = TensorHandle::from_storage::<B, InK, Local>(x.inner());
         let weight_handle = TensorHandle::from_storage::<B, K, Local>(weight.inner());

@@ -299,7 +299,8 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState> Module<Tensor<I, B, K>>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: crate::shapes::Layout>
+    Module<Tensor<I, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
     for Conv2d<S, B, crate::nn::optional::True, K, Train>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
@@ -314,13 +315,23 @@ where
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B, K>;
+    type Output = Tensor<
+        I::Output,
+        B,
+        K,
+        crate::tensor::grad::NoGrad,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<I, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = self.bias.as_ref().unwrap().as_tensor()?;
 
@@ -392,7 +403,8 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState> Module<Tensor<I, B, K>>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: crate::shapes::Layout>
+    Module<Tensor<I, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
     for Conv2d<S, B, crate::nn::optional::False, K, Train>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
@@ -407,13 +419,23 @@ where
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B, K>;
+    type Output = Tensor<
+        I::Output,
+        B,
+        K,
+        crate::tensor::grad::NoGrad,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<I, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
 
         let x_shape = x.dims();
@@ -483,7 +505,8 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState> Module<Tensor<I, B, K>>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: crate::shapes::Layout>
+    Module<Tensor<I, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
     for Conv2d<S, B, Dyn, K, Train>
 where
     S: Conv2dShape<OutC = COut, InC = CIn>,
@@ -498,13 +521,23 @@ where
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B, K>;
+    type Output = Tensor<
+        I::Output,
+        B,
+        K,
+        crate::tensor::grad::NoGrad,
+        crate::dist::Local,
+        crate::shapes::Unknown,
+    >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<I, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = match &self.bias {
             Some(b) => Some(b.as_tensor()?),

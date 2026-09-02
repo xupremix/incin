@@ -227,15 +227,20 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::LayerNorm>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InS, B, K>> for LayerNorm<S, B, K, Train>
+    L: crate::shapes::Layout,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>>
+    for LayerNorm<S, B, K, Train>
 where
     <B as Execute<op::LayerNorm>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B, K>;
+    type Output = Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = self.bias.as_tensor()?;
 

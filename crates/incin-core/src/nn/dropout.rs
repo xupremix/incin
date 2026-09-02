@@ -110,17 +110,21 @@ impl<
     B: crate::tensor::backend::VariableBackend,
     K: BuiltinDType,
     G: RequiresGrad,
-> Module<Tensor<S, B, K, G>> for Dropout
+    L: crate::shapes::Layout,
+> Module<Tensor<S, B, K, G, crate::dist::Local, L>> for Dropout
 where
     B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,
     <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G>;
+    type Output = Tensor<S, B, K, G, crate::dist::Local, L>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<S, B, K, G>) -> core::result::Result<Tensor<S, B, K, G>, Error> {
+    fn forward(
+        &self,
+        x: Tensor<S, B, K, G, crate::dist::Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         if !self.is_training || self.p <= 0.0 {
             return Ok(x);
         }

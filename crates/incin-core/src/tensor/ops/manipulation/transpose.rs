@@ -13,8 +13,13 @@ use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
 use crate::tensor::ops::manipulation::selectors::AxisPairSelector;
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    TLayout: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, TLayout>
 {
     /// Transposes two axis selectors while preserving the strongest available
     /// output shape proof.
