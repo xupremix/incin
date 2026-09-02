@@ -23,6 +23,29 @@
 //! relationship once rather than leaving two independent parameters to be kept
 //! consistent by hand.
 //!
+//! # Where the runtime value lives
+//!
+//! A layout parameter is a marker, not a container. When it settles nothing,
+//! the answer still has to come from somewhere, and that somewhere already
+//! exists: `TensorMeta` carries the strides, the offset and the shape of every
+//! tensor, and a backend reads them as it always has.
+//!
+//! This mirrors how shapes work. `Tensor` holds a `ShapeValue<S>`, which pairs
+//! the shape *type* with the runtime dimensions; a `Dyn` shape gets its answer
+//! from the value, and a static one has the same answer in both places.
+//! `Layout` is the type half of the same pairing, with `TensorMeta` as the
+//! value half -- so no new field is needed, and
+//! [`Tensor::into_row_major`](crate::prelude::Tensor::into_row_major) is
+//! exactly the operation that reads the value and, if it agrees, promotes it
+//! into the type.
+//!
+//! The consequence worth noticing is that a *fully static* layout makes the
+//! runtime copy redundant. Nothing exploits that yet at the tensor level, but
+//! the CUDA pointwise path already does the kernel-side version: when the
+//! extents are proven, the `shape` array and its per-launch upload are not
+//! emitted at all, because the values are baked into the source instead. The
+//! same reasoning applies to strides once enough of the API carries a layout.
+//!
 //! # Silence is never credited
 //!
 //! Every associated constant defaults to "nothing known", exactly as
@@ -115,7 +138,32 @@ pub trait AlignedTo<N: typenum::Unsigned>: Layout {}
 /// constant at its default, and deliberately implements neither [`Contiguous`]
 /// nor [`AlignedTo`].
 ///
-/// This is to `Layout` what `Dyn` is to `Shape`.
+/// # Why this is not just `Dyn`
+///
+/// `Unknown` and [`Dyn`](crate::shapes::Dyn) express the same idea -- the
+/// compiler settled nothing, so the answer is read at runtime -- and `Dyn` can
+/// implement [`Layout`] without any conflict. Reusing it was tried and
+/// rejected, for three reasons that only became visible in the output.
+///
+/// A diagnostic ends up naming the marker twice, once per slot, and the reader
+/// has to count positions to tell which is which:
+///
+/// ```text
+/// expected struct `Tensor<Dyn, CpuBackendImpl, f32, NoGrad, _, Dyn>`
+/// ```
+///
+/// The humanizer behind the editor integrations cannot fix that. A layout of
+/// `Unknown` carries no information and should simply be elided from a hover;
+/// a *shape* of `Dyn` carries a great deal and must stay. Spelled the same,
+/// eliding one would elide the other.
+///
+/// And `Dyn` is not a pure marker: it is a `Shape` with `Arg = Vec<usize>` and
+/// its own `resolve`, because a dynamic shape is *constructed* from runtime
+/// dimensions. An unknown layout is constructed from nothing -- it is the
+/// absence of a claim, not a runtime value with a constructor.
+///
+/// So the concepts are siblings and the types are separate. This is to
+/// `Layout` what `Dyn` is to `Shape`, without being the same type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct Unknown;
 

@@ -156,3 +156,51 @@ unary descriptor helpers, binary pointwise and its descriptor helper.
 Not converted: `reduce`, `manipulation/*`, `matmul`, `nn/*`. A proven tensor
 cannot call those yet, and the symptom is a missing method rather than a clear
 error -- which is why the book chapter states explicitly which modules are done.
+
+## Reusing `Dyn` as the layout marker: tried, rejected on diagnostics
+
+`Unknown` and `Dyn` express the same idea -- the compiler settled nothing, read
+it at runtime -- so spelling the layout marker `Dyn` would remove a concept.
+`impl Layout for Dyn` was written and compiles with no conflict, so nothing
+technical stops it. Three things emerged only in the output.
+
+**The diagnostic names the marker twice.** With `Dyn` in both the shape and
+layout slots, a reader counts positions to tell which is which:
+
+```text
+expected struct `Tensor<Dyn, CpuBackendImpl, f32, NoGrad, _, Dyn>`
+   found struct `Tensor<_, _, _, _, _, incin::shapes::Unknown>`
+```
+
+**The humanizer cannot separate them.** An unknown *layout* carries no
+information and should be elided from a hover entirely; a `Dyn` *shape* carries
+a great deal and must stay. Spelled the same, eliding one elides the other, and
+`incin-diagnostics` has no way to tell the positions apart in the general case.
+This is the deciding reason: the eliding is the ergonomic fix for the sixth
+parameter making rustc's own output noisier, and reuse would foreclose it.
+
+**`Dyn` is not a pure marker.** It is a `Shape` with `Arg = Vec<usize>` and its
+own `resolve`, because a dynamic shape is *constructed* from runtime dimensions.
+An unknown layout is constructed from nothing: it is the absence of a claim, not
+a runtime value with a constructor. Giving one type both roles conflates
+"determined at runtime from a value you supply" with "not determined".
+
+Kept as siblings rather than one type. The relationship is documented on
+`Unknown` so the equivalence is not lost.
+
+### The associated-value half of the question was already right
+
+The instinct that a marker needs a runtime counterpart when the type cannot
+settle it is exactly how shapes work, and layout inherits it for free.
+`Tensor` holds a `ShapeValue<S>` pairing the shape type with runtime dimensions;
+`TensorMeta` already carries strides, offset and shape for every tensor.
+`Layout` is the type half, `TensorMeta` the value half, so no new field is
+needed -- and `into_row_major` is precisely the operation that reads the value
+and promotes it into the type when the two agree.
+
+The latent optimisation is the converse: a *fully static* layout makes the
+runtime copy redundant. The CUDA pointwise path already does the kernel-side
+version -- proven extents mean the `shape` array and its per-launch upload are
+not emitted, because the values are in the source instead. The tensor-side
+version, not storing strides a type already determines, is open and becomes
+worthwhile once enough of the API carries a layout.
