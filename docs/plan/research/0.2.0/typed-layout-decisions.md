@@ -148,14 +148,46 @@ accumulator is resolved at runtime, so "f16 storage, f32 accumulate" is
 invisible in the signature; and quantization block structure, under `K` per
 above.
 
-## Conversion status
+## Conversion status: complete
 
-Converted: accessors, local constructors, `Clone`, unary pointwise and both
-unary descriptor helpers, binary pointwise and its descriptor helper.
+Every tensor module accepts a layout-carrying operand: accessors, constructors,
+`Clone`, pointwise unary and binary, reductions (per-axis and whole-tensor),
+shape manipulation, matmul, concat/stack, conversions, and the `nn` layers.
 
-Not converted: `reduce`, `manipulation/*`, `matmul`, `nn/*`. A proven tensor
-cannot call those yet, and the symptom is a missing method rather than a clear
-error -- which is why the book chapter states explicitly which modules are done.
+The rule that emerged, and it is forced rather than chosen:
+
+- **Shape-preserving** operations carry the operand's `L`.
+- **Shape-changing** operations state theirs, as `Unknown`, because a layout
+  describes one geometry and cannot be carried to another.
+
+The second could state `RowMajor` -- every such result is a fresh allocation --
+and that remains the more valuable end state. It is blocked on #113, not on
+migration cost: CPU `transpose` returns a view where CUDA's returns a copy, so
+the claim would be false on one backend.
+
+### Things the completion surfaced
+
+**Naming a parameter forces the ones before it to be named.** `L` is positional
+after `P`, so writing it means writing `Local`, which means rustc prints
+`Local` in diagnostics where it was previously elided as a default. That
+exposed a path-rendering instability: rustc spells it `incin::prelude::Local`
+under CI's feature set and `incin_core::dist::placement::Local` under workspace
+defaults. Only one spelling can be stored in a trybuild snapshot. Recorded
+under CI's invocation, with the divergence documented in the owning test.
+
+The general lesson for any future parameter: appending to a defaulted list is
+not free even when every existing signature keeps compiling, because it changes
+what *diagnostics* print for everything to its left.
+
+**`forward` should name `Self::Output`.** Several `nn` modules restated their
+output type in the signature, which let it drift from `type Output` during the
+conversion and produced a class of error that was pure duplication. Naming the
+associated type makes them the same thing by construction.
+
+**Spell the default by omitting it.** Several return types were written as
+`Tensor<.., crate::dist::Local, crate::shapes::Unknown>` during conversion, which
+is exactly what `Tensor<..>` already means. Removing the explicit form also
+cleared a `clippy::type_complexity`.
 
 ## Reusing `Dyn` as the layout marker: tried, rejected on diagnostics
 

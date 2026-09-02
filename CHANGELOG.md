@@ -16,10 +16,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and every runtime path stays available. `RowMajor<S>` derives its strides from
   the shape; `Dense<S, B, ..>` is the ergonomic alias. Facts are traits --
   `Contiguous`, `AlignedTo<N>` -- and `LayoutOf<S>` states rank congruence.
-  See the [Layout chapter](docs/book/src/layout.md). Pointwise operations carry
-  the operand's layout through, so a proof survives a chain; reductions state
-  their result's layout, since a reduction changes the shape and a layout is
-  only meaningful against the shape it describes.
+  See the [Layout chapter](docs/book/src/layout.md). Every tensor module accepts
+  a layout-carrying operand. Shape-preserving operations carry the operand's
+  layout through, so a proof survives a chain; shape-changing ones state theirs
+  as `Unknown`, since a layout describes one geometry and cannot be carried to
+  another.
 - `Tensor::into_row_major`, a *checked* promotion from runtime strides to a
   type-level layout. There is deliberately no unchecked counterpart.
 - `Tensor::reshape_view`, bounded on `L: Contiguous`: reinterprets a buffer
