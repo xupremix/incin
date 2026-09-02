@@ -156,8 +156,16 @@ impl<D: Device> CudaBackendImpl<D> {
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let unb_grad = crate::cuda::tape::unbroadcast(grad_out, &t_shape)?;
             let unb_prod = crate::cuda::tape::unbroadcast(&out_capture, &t_shape)?;
-            let grad_scaled = crate::cuda::backend::cuda_mul_storage(&unb_grad, &unb_prod)?;
-            crate::cuda::backend::cuda_div_storage(&grad_scaled, &t_capture)
+            let grad_scaled = crate::cuda::backend::cuda_mul_storage(
+                &unb_grad,
+                &unb_prod,
+                crate::kernel::KernelSpecialization::NONE,
+            )?;
+            crate::cuda::backend::cuda_div_storage(
+                &grad_scaled,
+                &t_capture,
+                crate::kernel::KernelSpecialization::NONE,
+            )
         });
         Ok(out)
     }
@@ -170,8 +178,16 @@ impl<D: Device> CudaBackendImpl<D> {
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             let unb_grad = crate::cuda::tape::unbroadcast(grad_out, &t_shape)?;
             let unb_prod = crate::cuda::tape::unbroadcast(&out_capture, &t_shape)?;
-            let grad_scaled = crate::cuda::backend::cuda_mul_storage(&unb_grad, &unb_prod)?;
-            crate::cuda::backend::cuda_div_storage(&grad_scaled, &t_capture)
+            let grad_scaled = crate::cuda::backend::cuda_mul_storage(
+                &unb_grad,
+                &unb_prod,
+                crate::kernel::KernelSpecialization::NONE,
+            )?;
+            crate::cuda::backend::cuda_div_storage(
+                &grad_scaled,
+                &t_capture,
+                crate::kernel::KernelSpecialization::NONE,
+            )
         });
         Ok(out)
     }

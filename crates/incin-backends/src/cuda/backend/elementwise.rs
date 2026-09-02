@@ -5,10 +5,20 @@
 
 use super::*;
 
-pub(crate) fn cuda_add_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn cuda_add_storage(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    spec: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out =
-        crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", lhs, rhs, &out_shape)?;
+    let out = crate::cuda::ops::elementwise::launch_binary_body(
+        "add",
+        &crate::codegen::ScalarFragment::literal("a + b"),
+        lhs,
+        rhs,
+        &out_shape,
+        spec,
+    )?;
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
@@ -24,10 +34,20 @@ pub(crate) fn cuda_add_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<C
     Ok(out)
 }
 
-pub(crate) fn cuda_sub_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn cuda_sub_storage(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    spec: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out =
-        crate::cuda::ops::elementwise::launch_binary_op("sub", "a - b", lhs, rhs, &out_shape)?;
+    let out = crate::cuda::ops::elementwise::launch_binary_body(
+        "sub",
+        &crate::codegen::ScalarFragment::literal("a - b"),
+        lhs,
+        rhs,
+        &out_shape,
+        spec,
+    )?;
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
     crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
@@ -44,10 +64,20 @@ pub(crate) fn cuda_sub_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<C
     Ok(out)
 }
 
-pub(crate) fn cuda_mul_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn cuda_mul_storage(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    spec: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out =
-        crate::cuda::ops::elementwise::launch_binary_op("mul", "a * b", lhs, rhs, &out_shape)?;
+    let out = crate::cuda::ops::elementwise::launch_binary_body(
+        "mul",
+        &crate::codegen::ScalarFragment::literal("a * b"),
+        lhs,
+        rhs,
+        &out_shape,
+        spec,
+    )?;
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -82,10 +112,20 @@ pub(crate) fn cuda_mul_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<C
     Ok(out)
 }
 
-pub(crate) fn cuda_div_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+pub(crate) fn cuda_div_storage(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    spec: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let out =
-        crate::cuda::ops::elementwise::launch_binary_op("div", "a / b", lhs, rhs, &out_shape)?;
+    let out = crate::cuda::ops::elementwise::launch_binary_body(
+        "div",
+        &crate::codegen::ScalarFragment::literal("a / b"),
+        lhs,
+        rhs,
+        &out_shape,
+        spec,
+    )?;
     let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
     let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
     let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -143,7 +183,7 @@ impl<D: Device> CudaBackendImpl<D> {
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        cuda_add_storage(lhs, rhs)
+        cuda_add_storage(lhs, rhs, crate::kernel::KernelSpecialization::NONE)
     }
 }
 
@@ -300,9 +340,20 @@ macro_rules! cuda_pointwise {
             }
         )*
         $(
-            pub(crate) fn $fn_name_bin(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+            pub(crate) fn $fn_name_bin(
+                lhs: &CudaStorage,
+                rhs: &CudaStorage,
+                spec: crate::kernel::KernelSpecialization,
+            ) -> Result<CudaStorage> {
                 let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-                let out = crate::cuda::ops::elementwise::launch_binary_op($op_name_bin, $fwd_expr_bin, lhs, rhs, &out_shape)?;
+                let out = crate::cuda::ops::elementwise::launch_binary_body(
+                    $op_name_bin,
+                    &crate::codegen::ScalarFragment::literal($fwd_expr_bin),
+                    lhs,
+                    rhs,
+                    &out_shape,
+                    spec,
+                )?;
                 let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
                 let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
                 let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
@@ -464,9 +515,9 @@ pub(crate) fn cuda_lerp_storage(
     end: &CudaStorage,
     weight: f64,
 ) -> Result<CudaStorage> {
-    let diff = cuda_sub_storage(end, start)?;
+    let diff = cuda_sub_storage(end, start, crate::kernel::KernelSpecialization::NONE)?;
     let scaled = CudaBackendImpl::<Cuda>::mul_scalar_float::<f32>(&diff, weight)?;
-    cuda_add_storage(start, &scaled)
+    cuda_add_storage(start, &scaled, crate::kernel::KernelSpecialization::NONE)
 }
 
 /// `exp(x - max(x)) / sum(exp(x - max(x)))` along `axis`, composed entirely
@@ -478,19 +529,27 @@ pub(crate) fn cuda_lerp_storage(
 /// `scaled_dot_product_attention`, which both need this exact composition.
 pub(crate) fn cuda_softmax<D: Device>(input: &CudaStorage, axis: usize) -> Result<CudaStorage> {
     let max_val = CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)?;
-    let shifted = cuda_sub_storage(input, &max_val)?;
+    let shifted = cuda_sub_storage(input, &max_val, crate::kernel::KernelSpecialization::NONE)?;
     let exp_vals = cuda_exp_storage(&shifted, crate::kernel::KernelSpecialization::NONE)?;
     let sum_val = CudaBackendImpl::<D>::sum_keepdim::<f32>(&exp_vals, axis)?;
-    cuda_div_storage(&exp_vals, &sum_val)
+    cuda_div_storage(
+        &exp_vals,
+        &sum_val,
+        crate::kernel::KernelSpecialization::NONE,
+    )
 }
 
 pub(crate) fn cuda_log_softmax<D: Device>(input: &CudaStorage, axis: usize) -> Result<CudaStorage> {
     let max_val = CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)?;
-    let shifted = cuda_sub_storage(input, &max_val)?;
+    let shifted = cuda_sub_storage(input, &max_val, crate::kernel::KernelSpecialization::NONE)?;
     let exp_vals = cuda_exp_storage(&shifted, crate::kernel::KernelSpecialization::NONE)?;
     let sum_val = CudaBackendImpl::<D>::sum_keepdim::<f32>(&exp_vals, axis)?;
     let log_sum = cuda_log_storage(&sum_val, crate::kernel::KernelSpecialization::NONE)?;
-    cuda_sub_storage(&shifted, &log_sum)
+    cuda_sub_storage(
+        &shifted,
+        &log_sum,
+        crate::kernel::KernelSpecialization::NONE,
+    )
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
