@@ -325,3 +325,51 @@ Caveats on the numbers: one GPU, one dtype, square shapes, a pointwise
 consumer. A consumer that cannot take arbitrary strides -- matmul, generally --
 will move the crossover. The shape of the conclusion should survive; the exact
 `k` should not be treated as a constant.
+
+## Implementing `transpose_view`: the spec, and why it was not started here
+
+The measurement above says the resolution is two operations rather than one. That
+is a catalog-level change, not a frontend one, and it is larger than it looks.
+
+**What it touches.** A new operation is not a function; it is a row in a
+taxonomy that several tables are checked against:
+
+- `incin-core/src/operation_catalog.rs` -- the row itself, beside
+  `(TransposeExact, "transpose", Storage, Shape, TransposeAttributes, 1, 1, "::transpose")`.
+- `incin-backends/src/capability/declarations.rs` and `capability/rules.rs` --
+  what each backend advertises for it.
+- `incin-backends/src/conformance/fixtures/families.rs` -- operands the oracle
+  builds to exercise it.
+- Three executors: `cpu/canonical/shape_ops.rs`, `cuda/executor.rs`,
+  `wgpu/executor.rs`.
+- `docs/OPERATION_SEMANTICS.md` and `docs/capabilities.md`, both generated, so
+  regenerated with `INCIN_DOCS=overwrite` rather than edited.
+- `docs/public-api/*` baselines.
+- The conformance oracle's covered-operation floor, which is a ratchet.
+
+**What it should do.** The view produces no kernel launch at all: it is
+metadata. On CUDA that is `CudaStorage::try_from_parts(buffer.clone(), permuted_shape,
+permuted_strides, offset)`; the CPU backend already does exactly this inside
+`transpose_structural`, which is why CPU's transpose is a view today. So the
+executor bodies are small; the surface around them is not.
+
+**Typing.** `transpose_view` returns `Unknown`, not a new `Strided` marker. A
+marker meaning "known not contiguous" would behave identically to `Unknown`
+everywhere that matters -- both fail a `Contiguous` bound, which is the whole
+safety property -- so it would be a type with no distinguishing behaviour, and
+the same objection #111 raises applies. Introduce one only when something needs
+to *distinguish* an unproven layout from a known-permuted one; carrying the
+permutation at the type level, so a consumer can specialise on it, would be that
+reason.
+
+Conversely, once `transpose` is unambiguously the materialising operation on
+every backend, it *can* return `RowMajor<S::Output>` honestly, which is the
+deferred output-layout decision recorded above.
+
+**Order.** Add the operation and the CUDA executor first, since CUDA is the
+backend that currently lacks the view and the one where the measurement was
+taken; CPU's existing `transpose_structural` body is then reused for its
+executor. Only after all three backends offer both should `transpose`'s output
+layout be tightened to `RowMajor`, because tightening it while any backend still
+returns a view would be exactly the false claim the earlier conformance test
+caught.
