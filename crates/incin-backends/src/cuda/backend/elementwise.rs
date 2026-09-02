@@ -159,6 +159,49 @@ pub(crate) fn push_unary_tape_entry(
     });
 }
 
+/// Computes `grad_out * f'(x)` in one kernel, when the IR can express `f`.
+///
+/// The fallback path below this one evaluates `f'(x)` into a fresh buffer the
+/// size of the input and then launches a second kernel to multiply it by the
+/// incoming gradient. Both kernels are pointwise over the same shape, so the
+/// intermediate exists only because the two halves are written as separate
+/// strings. `codegen::catalog::unary_fused_backward` differentiates the forward
+/// symbolically and performs the multiply inside the IR, which collapses the
+/// pair into a single binary kernel and removes one launch and one `numel`
+/// allocation per operation per backward pass.
+///
+/// Returns `Ok(None)` for an operation the IR has no definition for, leaving the
+/// caller on its hand-written path. That is what keeps this an incremental
+/// change: an operation is fused when the catalog covers it and is otherwise
+/// untouched.
+///
+/// Only valid where the derivative is a function of the *input*. The
+/// `unary_wrt_output` family deliberately captures its output instead of its
+/// input to avoid keeping the input alive, and its hand-written derivative is
+/// written in terms of that output; `diff` produces a derivative in terms of the
+/// input, so those operations are not eligible and do not call this.
+#[cfg(feature = "cuda")]
+fn fused_unary_backward(
+    op_name: &'static str,
+    fused_name: &'static str,
+    grad_out: &CudaStorage,
+    input: &CudaStorage,
+) -> Result<Option<CudaStorage>> {
+    let Some(fused) = crate::codegen::unary_fused_backward(op_name) else {
+        return Ok(None);
+    };
+    let dtype = crate::cuda::backend::require_cuda_builtin_dtype(input.buffer.dtype, op_name)?;
+    let body = crate::kernel::lower_binary_body(&fused, dtype)?;
+    crate::cuda::ops::elementwise::launch_binary_body(
+        fused_name,
+        &body,
+        grad_out,
+        input,
+        &grad_out.shape,
+    )
+    .map(Some)
+}
+
 macro_rules! cuda_pointwise {
     (
         $(
@@ -179,6 +222,14 @@ macro_rules! cuda_pointwise {
                 let out = crate::cuda::ops::elementwise::launch_unary_op($op_name, $fwd_expr, t)?;
                 let t_capture = t.clone();
                 push_unary_tape_entry(t.id, out.id, move |grad_out| {
+                    if let Some(grad) = fused_unary_backward(
+                        $op_name,
+                        concat!($op_name, "_fused_grad"),
+                        grad_out,
+                        &t_capture,
+                    )? {
+                        return Ok(grad);
+                    }
                     let deriv = crate::cuda::ops::elementwise::launch_unary_op(
                         concat!($op_name, "_grad"),
                         $deriv_expr,
