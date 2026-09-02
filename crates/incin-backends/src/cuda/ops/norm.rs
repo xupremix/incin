@@ -567,7 +567,10 @@ pub(crate) fn launch_softmax(input: &CudaStorage, dim: usize) -> Result<CudaStor
         // Fallback for non-last dimension: safe composed path
         let max = crate::cuda::ops::reduce::launch_reduce_op("max", input, dim, true)?;
         let diff = crate::cuda::backend::cuda_sub_storage(input, &max)?;
-        let exp = crate::cuda::backend::cuda_exp_storage(&diff)?;
+        let exp = crate::cuda::backend::cuda_exp_storage(
+            &diff,
+            crate::kernel::KernelSpecialization::NONE,
+        )?;
         let sum = crate::cuda::ops::reduce::launch_reduce_op("sum", &exp, dim, true)?;
         crate::cuda::backend::cuda_div_storage(&exp, &sum)
     }

@@ -198,6 +198,9 @@ fn fused_unary_backward(
         grad_out,
         input,
         &grad_out.shape,
+        // A gradient's geometry comes from the tape at runtime, not from a
+        // shape type, so the backward pass has nothing proven to specialize on.
+        crate::kernel::KernelSpecialization::NONE,
     )
     .map(Some)
 }
@@ -218,8 +221,16 @@ macro_rules! cuda_pointwise {
         )*
     ) => {
         $(
-            pub(crate) fn $fn_name(t: &CudaStorage) -> Result<CudaStorage> {
-                let out = crate::cuda::ops::elementwise::launch_unary_op($op_name, $fwd_expr, t)?;
+            pub(crate) fn $fn_name(
+                t: &CudaStorage,
+                spec: crate::kernel::KernelSpecialization,
+            ) -> Result<CudaStorage> {
+                let out = crate::cuda::ops::elementwise::launch_unary_body(
+                    $op_name,
+                    &crate::codegen::ScalarFragment::literal($fwd_expr),
+                    t,
+                    spec,
+                )?;
                 let t_capture = t.clone();
                 push_unary_tape_entry(t.id, out.id, move |grad_out| {
                     if let Some(grad) = fused_unary_backward(
@@ -247,8 +258,16 @@ macro_rules! cuda_pointwise {
             }
         )*
         $(
-            pub(crate) fn $fn_name_out(t: &CudaStorage) -> Result<CudaStorage> {
-                let out = crate::cuda::ops::elementwise::launch_unary_op($op_name_out, $fwd_expr_out, t)?;
+            pub(crate) fn $fn_name_out(
+                t: &CudaStorage,
+                spec: crate::kernel::KernelSpecialization,
+            ) -> Result<CudaStorage> {
+                let out = crate::cuda::ops::elementwise::launch_unary_body(
+                    $op_name_out,
+                    &crate::codegen::ScalarFragment::literal($fwd_expr_out),
+                    t,
+                    spec,
+                )?;
                 let out_capture = out.clone();
                 push_unary_tape_entry(t.id, out.id, move |grad_out| {
                     let deriv = crate::cuda::ops::elementwise::launch_unary_op(
@@ -268,8 +287,16 @@ macro_rules! cuda_pointwise {
             }
         )*
         $(
-            pub(crate) fn $fn_name_ng(t: &CudaStorage) -> Result<CudaStorage> {
-                crate::cuda::ops::elementwise::launch_unary_op($op_name_ng, $fwd_expr_ng, t)
+            pub(crate) fn $fn_name_ng(
+                t: &CudaStorage,
+                spec: crate::kernel::KernelSpecialization,
+            ) -> Result<CudaStorage> {
+                crate::cuda::ops::elementwise::launch_unary_body(
+                    $op_name_ng,
+                    &crate::codegen::ScalarFragment::literal($fwd_expr_ng),
+                    t,
+                    spec,
+                )
             }
         )*
         $(
@@ -452,7 +479,7 @@ pub(crate) fn cuda_lerp_storage(
 pub(crate) fn cuda_softmax<D: Device>(input: &CudaStorage, axis: usize) -> Result<CudaStorage> {
     let max_val = CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)?;
     let shifted = cuda_sub_storage(input, &max_val)?;
-    let exp_vals = cuda_exp_storage(&shifted)?;
+    let exp_vals = cuda_exp_storage(&shifted, crate::kernel::KernelSpecialization::NONE)?;
     let sum_val = CudaBackendImpl::<D>::sum_keepdim::<f32>(&exp_vals, axis)?;
     cuda_div_storage(&exp_vals, &sum_val)
 }
@@ -460,115 +487,115 @@ pub(crate) fn cuda_softmax<D: Device>(input: &CudaStorage, axis: usize) -> Resul
 pub(crate) fn cuda_log_softmax<D: Device>(input: &CudaStorage, axis: usize) -> Result<CudaStorage> {
     let max_val = CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)?;
     let shifted = cuda_sub_storage(input, &max_val)?;
-    let exp_vals = cuda_exp_storage(&shifted)?;
+    let exp_vals = cuda_exp_storage(&shifted, crate::kernel::KernelSpecialization::NONE)?;
     let sum_val = CudaBackendImpl::<D>::sum_keepdim::<f32>(&exp_vals, axis)?;
-    let log_sum = cuda_log_storage(&sum_val)?;
+    let log_sum = cuda_log_storage(&sum_val, crate::kernel::KernelSpecialization::NONE)?;
     cuda_sub_storage(&shifted, &log_sum)
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
 impl<D: Device> CudaBackendImpl<D> {
     pub(crate) fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_relu_storage(t)
+        cuda_relu_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn step<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_step_storage(t)
+        cuda_step_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn mish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_mish_storage(t)
+        cuda_mish_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn elu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_elu_storage(t)
+        cuda_elu_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn gelu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_gelu_storage(t)
+        cuda_gelu_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn abs<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_abs_storage(t)
+        cuda_abs_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn exp<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_exp_storage(t)
+        cuda_exp_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn neg<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_neg_storage(t)
+        cuda_neg_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn sqrt<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_sqrt_storage(t)
+        cuda_sqrt_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn log<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_log_storage(t)
+        cuda_log_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn tanh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_tanh_storage(t)
+        cuda_tanh_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn sigmoid<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_sigmoid_storage(t)
+        cuda_sigmoid_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn swish<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_swish_storage(t)
+        cuda_swish_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn sign<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_sign_storage(t)
+        cuda_sign_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn floor<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_floor_storage(t)
+        cuda_floor_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn ceil<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_ceil_storage(t)
+        cuda_ceil_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn round<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_round_storage(t)
+        cuda_round_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn log2<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_log2_storage(t)
+        cuda_log2_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn log10<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_log10_storage(t)
+        cuda_log10_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn sin<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_sin_storage(t)
+        cuda_sin_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn cos<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_cos_storage(t)
+        cuda_cos_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn tan<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_tan_storage(t)
+        cuda_tan_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn asin<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_asin_storage(t)
+        cuda_asin_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn acos<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_acos_storage(t)
+        cuda_acos_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn atan<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_atan_storage(t)
+        cuda_atan_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn sinh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_sinh_storage(t)
+        cuda_sinh_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn cosh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_cosh_storage(t)
+        cuda_cosh_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn asinh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_asinh_storage(t)
+        cuda_asinh_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn acosh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_acosh_storage(t)
+        cuda_acosh_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn atanh<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_atanh_storage(t)
+        cuda_atanh_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn erf<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_erf_storage(t)
+        cuda_erf_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn rsqrt<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_rsqrt_storage(t)
+        cuda_rsqrt_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn trunc<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_trunc_storage(t)
+        cuda_trunc_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn frac<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {
-        cuda_frac_storage(t)
+        cuda_frac_storage(t, crate::kernel::KernelSpecialization::NONE)
     }
     pub(crate) fn powf<K: DType>(t: &CudaStorage, exp: f64) -> Result<CudaStorage> {
         cuda_powf_storage(t, exp)

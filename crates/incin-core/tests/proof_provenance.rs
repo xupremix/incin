@@ -129,3 +129,36 @@ fn of_is_usable_in_a_const_so_a_backend_can_branch_at_compile_time() {
     assert_eq!(STATIC_PAIR, ProofLevel::Static);
     assert_eq!(COMBINED, ProofLevel::Mixed);
 }
+
+// -- what a backend can specialize on ------------------------------------
+
+/// A fully static shape must carry a concrete element count, not just a level.
+///
+/// `ProofLevel` alone tells a backend how much was settled; `Shape::STATIC_NUMEL`
+/// is the value it can act on, and it is what `ShapeEvidence` forwards across
+/// the backend boundary. The CUDA pointwise path uses it to prove a packed
+/// kernel's ragged-tail branch unreachable, so a regression here would silently
+/// turn that specialization off rather than break anything visibly.
+#[test]
+fn a_fully_static_shape_carries_a_usable_element_count() {
+    use incin_core::shapes::Shape;
+
+    assert_eq!(<s![3, 4] as Shape>::STATIC_NUMEL, Some(12));
+    assert_eq!(<s![4, 4] as Shape>::STATIC_NUMEL, Some(16));
+    // A scalar has no axes, so its count is the empty product.
+    assert_eq!(<Nil as Shape>::STATIC_NUMEL, Some(1));
+}
+
+/// A shape with any runtime axis must not offer a count to specialize on.
+///
+/// This is the case that would be unsound to get wrong: a backend handed a
+/// count for a shape whose extent is only known at runtime would bake a
+/// constant that does not exist.
+#[test]
+fn a_shape_with_a_runtime_axis_offers_no_element_count() {
+    use incin_core::shapes::Shape;
+
+    assert_eq!(<Dyn as Shape>::STATIC_NUMEL, None);
+    assert_eq!(<s![Batch, 4] as Shape>::STATIC_NUMEL, None);
+    assert!(!ProofLevel::of::<s![Batch, 4]>().is_static());
+}

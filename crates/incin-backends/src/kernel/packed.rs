@@ -90,6 +90,7 @@ fn render_cuda_packed(
     op_name: &str,
     body: &ScalarFragment,
     dtype: DTypeId,
+    specialization: KernelSpecialization,
     arguments: &str,
     packed_loads: &str,
     lane_bindings: impl Fn(&str) -> String,
@@ -141,18 +142,26 @@ fn render_cuda_packed(
         lanes.push_str("        }\n");
     }
     let packed_store = packed.packed_store_expr("packed_output");
-    let source = format!(
-        r#"
-{preamble}
-extern "C" __global__ void {entry_point}(
-{arguments}
-) {{
-    int packet_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int base = packet_idx * {width};
-    if (base >= numel) {{
-        return;
-    }}
-    if (base + {width} <= numel) {{
+    // With a statically proven element count that divides the vector width, no
+    // packet can ever be partial, so the scalar tail is unreachable. Dropping it
+    // removes a branch the hardware would otherwise have to predicate, and the
+    // dead scalar body with it. See `KernelSpecialization::packed_tail_is_dead`
+    // for why only a *proven* count licenses this.
+    let body = if specialization.packed_tail_is_dead(packed.width) {
+        format!(
+            r#"    // numel is a proven multiple of {width}; the ragged tail cannot occur.
+{packed_loads}
+    {packed_compute_type} packed_output;
+{lanes}
+    reinterpret_cast<{packed_storage_type}*>(output)[packet_idx] = {packed_store};
+"#,
+            width = packed.width,
+            packed_compute_type = packed.compute_type,
+            packed_storage_type = packed.storage_type,
+        )
+    } else {
+        format!(
+            r#"    if (base + {width} <= numel) {{
 {packed_loads}
         {packed_compute_type} packed_output;
 {lanes}
@@ -166,12 +175,27 @@ extern "C" __global__ void {entry_point}(
             }}
         }}
     }}
-}}
+"#,
+            width = packed.width,
+            packed_compute_type = packed.compute_type,
+            packed_storage_type = packed.storage_type,
+        )
+    };
+    let source = format!(
+        r#"
+{preamble}
+extern "C" __global__ void {entry_point}(
+{arguments}
+) {{
+    int packet_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int base = packet_idx * {width};
+    if (base >= numel) {{
+        return;
+    }}
+{body}}}
 "#,
         preamble = packed.scalar.preamble,
         width = packed.width,
-        packed_compute_type = packed.compute_type,
-        packed_storage_type = packed.storage_type,
     );
     Ok(RenderedKernel {
         cache_key: source_scoped_cache_id(&key, &source),
@@ -193,7 +217,13 @@ pub(crate) fn render_cuda_unary_packed(
     dtype: DTypeId,
     layout: LayoutClass,
 ) -> Result<RenderedKernel> {
-    render_cuda_unary_packed_body(op_name, &ScalarFragment::literal(op_expr), dtype, layout)
+    render_cuda_unary_packed_body(
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        layout,
+        KernelSpecialization::NONE,
+    )
 }
 
 /// The packed unary renderer over a body that may carry its own bindings.
@@ -208,6 +238,7 @@ pub(crate) fn render_cuda_unary_packed_body(
     body: &ScalarFragment,
     dtype: DTypeId,
     layout: LayoutClass,
+    specialization: KernelSpecialization,
 ) -> Result<RenderedKernel> {
     if layout != LayoutClass::Contiguous {
         return Err(Error::Msg(
@@ -242,6 +273,7 @@ pub(crate) fn render_cuda_unary_packed_body(
         op_name,
         body,
         dtype,
+        specialization,
         &arguments,
         &packed_loads,
         |component| {
@@ -262,7 +294,13 @@ pub(crate) fn render_cuda_binary_packed(
     dtype: DTypeId,
     layout: LayoutClass,
 ) -> Result<RenderedKernel> {
-    render_cuda_binary_packed_body(op_name, &ScalarFragment::literal(op_expr), dtype, layout)
+    render_cuda_binary_packed_body(
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        layout,
+        KernelSpecialization::NONE,
+    )
 }
 
 /// The packed binary renderer over a body that may carry its own bindings.
@@ -277,6 +315,7 @@ pub(crate) fn render_cuda_binary_packed_body(
     body: &ScalarFragment,
     dtype: DTypeId,
     layout: LayoutClass,
+    specialization: KernelSpecialization,
 ) -> Result<RenderedKernel> {
     let packed = CudaPackedSpec::for_float(dtype)?;
     let scalar = packed.scalar;
@@ -384,6 +423,7 @@ pub(crate) fn render_cuda_binary_packed_body(
         op_name,
         body,
         dtype,
+        specialization,
         &arguments,
         &packed_loads,
         lane_bindings,

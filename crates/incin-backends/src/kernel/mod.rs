@@ -65,6 +65,8 @@ pub(crate) use scalar::{lower_binary_body, lower_unary_body};
 #[allow(unused_imports)]
 pub(crate) use scalar::render_cuda_unary;
 #[cfg(any(feature = "cuda", test))]
+pub(crate) use types::KernelSpecialization;
+#[cfg(any(feature = "cuda", test))]
 pub(crate) use types::RenderedKernel;
 #[cfg(any(feature = "cuda", test))]
 use types::source_scoped_cache_id;

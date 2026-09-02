@@ -81,7 +81,14 @@ macro_rules! impl_cuda_canonical_unary {
                     return Err(invalid(operation, "operation expects exactly one operand"));
                 };
                 let input = input.downcast_ref::<CudaStorage>().ok_or_else(|| invalid(operation, "operand is not CUDA storage"))?;
-                crate::cuda::backend::$func(input)
+                // The one place a pointwise kernel can learn what the *type*
+                // proved rather than what the buffer happens to measure.
+                // `Validated` carries the frontend's `ShapeEvidence`, and this
+                // is the first consumer of it in any backend.
+                let specialization = crate::kernel::KernelSpecialization::from_evidence(
+                    Some(request.operation.shape_evidence()),
+                );
+                crate::cuda::backend::$func(input, specialization)
                     .map_err(|error| kernel_error("Cuda", operation, error))
             }
         }
@@ -1685,7 +1692,11 @@ impl<D: Device> Execute<op::Dropout> for CudaBackendImpl<D> {
             -attributes.probability,
         )
         .map_err(wrap)?;
-        let mask = crate::cuda::backend::elementwise::cuda_step_storage(&shifted).map_err(wrap)?;
+        let mask = crate::cuda::backend::elementwise::cuda_step_storage(
+            &shifted,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
         let kept =
             crate::cuda::backend::elementwise::cuda_mul_storage(input, &mask).map_err(wrap)?;
         crate::cuda::backend::elementwise::cuda_mul_scalar_float(
@@ -1997,7 +2008,10 @@ pub(crate) fn cuda_group_norm_storage(
     let squared = crate::cuda::backend::elementwise::cuda_mul_storage(&centered, &centered)?;
     let variance = crate::cuda::backend::reduce::cuda_mean_dim_keepdim(&squared, 1)?;
     let guarded = crate::cuda::backend::elementwise::cuda_add_scalar_float(&variance, eps)?;
-    let std = crate::cuda::backend::elementwise::cuda_sqrt_storage(&guarded)?;
+    let std = crate::cuda::backend::elementwise::cuda_sqrt_storage(
+        &guarded,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
     let normalized = crate::cuda::backend::elementwise::cuda_div_storage(&centered, &std)?;
     crate::cuda::backend::shape_ops::cuda_reshape_storage(&normalized, &t.shape)
 }
@@ -2236,7 +2250,10 @@ pub(crate) fn cuda_l1_loss_storage(
     reduction: incin_core::tensor::reduction::Reduction,
 ) -> Result<CudaStorage, incin_core::error::Error> {
     let diff = crate::cuda::backend::elementwise::cuda_sub_storage(pred, target)?;
-    let absolute = crate::cuda::backend::elementwise::cuda_abs_storage(&diff)?;
+    let absolute = crate::cuda::backend::elementwise::cuda_abs_storage(
+        &diff,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
     cuda_reduce_loss(absolute, reduction)
 }
 
@@ -2245,15 +2262,30 @@ pub(crate) fn cuda_bce_with_logits_loss_storage(
     target: &CudaStorage,
     reduction: incin_core::tensor::reduction::Reduction,
 ) -> Result<CudaStorage, incin_core::error::Error> {
-    let max_x_0 = crate::cuda::backend::elementwise::cuda_relu_storage(pred)?;
+    let max_x_0 = crate::cuda::backend::elementwise::cuda_relu_storage(
+        pred,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
     let x_times_z = crate::cuda::backend::elementwise::cuda_mul_storage(pred, target)?;
     let term1 = crate::cuda::backend::elementwise::cuda_sub_storage(&max_x_0, &x_times_z)?;
-    let abs_x = crate::cuda::backend::elementwise::cuda_abs_storage(pred)?;
-    let neg_abs_x = crate::cuda::backend::elementwise::cuda_neg_storage(&abs_x)?;
-    let exp_neg_abs_x = crate::cuda::backend::elementwise::cuda_exp_storage(&neg_abs_x)?;
+    let abs_x = crate::cuda::backend::elementwise::cuda_abs_storage(
+        pred,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let neg_abs_x = crate::cuda::backend::elementwise::cuda_neg_storage(
+        &abs_x,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let exp_neg_abs_x = crate::cuda::backend::elementwise::cuda_exp_storage(
+        &neg_abs_x,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
     let one_plus_exp =
         crate::cuda::backend::elementwise::cuda_add_scalar_float(&exp_neg_abs_x, 1.0)?;
-    let log_term = crate::cuda::backend::elementwise::cuda_log_storage(&one_plus_exp)?;
+    let log_term = crate::cuda::backend::elementwise::cuda_log_storage(
+        &one_plus_exp,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
     let unreduced = crate::cuda::backend::elementwise::cuda_add_storage(&term1, &log_term)?;
     cuda_reduce_loss(unreduced, reduction)
 }
@@ -2290,8 +2322,11 @@ impl<D: Device> Execute<op::CrossEntropyLoss> for CudaBackendImpl<D> {
                 .map_err(wrap)?;
         let gathered = crate::cuda::ops::shape::launch_gather(&log_probs, last_dim, &target_exp)
             .map_err(wrap)?;
-        let neg_gathered =
-            crate::cuda::backend::elementwise::cuda_neg_storage(&gathered).map_err(wrap)?;
+        let neg_gathered = crate::cuda::backend::elementwise::cuda_neg_storage(
+            &gathered,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
         let squeezed_shape = target.shape.to_vec();
         let nll =
             crate::cuda::backend::shape_ops::cuda_reshape_storage(&neg_gathered, &squeezed_shape)
@@ -2317,8 +2352,11 @@ impl<D: Device> Execute<op::Norm> for CudaBackendImpl<D> {
 
         const NORM_ORDER_TOLERANCE: f64 = 1e-6;
         if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
-            let magnitude =
-                crate::cuda::backend::elementwise::cuda_abs_storage(input).map_err(wrap)?;
+            let magnitude = crate::cuda::backend::elementwise::cuda_abs_storage(
+                input,
+                crate::kernel::KernelSpecialization::NONE,
+            )
+            .map_err(wrap)?;
             return crate::cuda::backend::reduce::cuda_sum_all_storage(&magnitude).map_err(wrap);
         }
         if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
@@ -2326,9 +2364,17 @@ impl<D: Device> Execute<op::Norm> for CudaBackendImpl<D> {
                 crate::cuda::backend::elementwise::cuda_mul_storage(input, input).map_err(wrap)?;
             let summed =
                 crate::cuda::backend::reduce::cuda_sum_all_storage(&squared).map_err(wrap)?;
-            return crate::cuda::backend::elementwise::cuda_sqrt_storage(&summed).map_err(wrap);
+            return crate::cuda::backend::elementwise::cuda_sqrt_storage(
+                &summed,
+                crate::kernel::KernelSpecialization::NONE,
+            )
+            .map_err(wrap);
         }
-        let magnitude = crate::cuda::backend::elementwise::cuda_abs_storage(input).map_err(wrap)?;
+        let magnitude = crate::cuda::backend::elementwise::cuda_abs_storage(
+            input,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
         let raised = crate::cuda::backend::elementwise::cuda_powf_storage(&magnitude, order)
             .map_err(wrap)?;
         let summed = crate::cuda::backend::reduce::cuda_sum_all_storage(&raised).map_err(wrap)?;

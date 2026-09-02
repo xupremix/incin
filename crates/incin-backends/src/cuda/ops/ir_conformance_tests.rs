@@ -21,7 +21,11 @@ use super::elementwise::{
 use crate::codegen::catalog;
 use crate::cuda::backend::{cuda_from_f32, download_f32_host};
 use crate::cuda::storage::CudaStorage;
-use crate::kernel::{lower_binary_body, lower_unary_body};
+use crate::kernel::{KernelSpecialization, lower_binary_body, lower_unary_body};
+
+/// These probes construct storage directly rather than going through a typed
+/// frontend, so there is no shape type behind them and nothing to specialize on.
+const NO_PROOF: KernelSpecialization = KernelSpecialization::NONE;
 use alloc::vec::Vec;
 use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::DTypeId;
@@ -218,7 +222,8 @@ fn ir_unary_forward_matches_the_hand_written_literal() {
             .unwrap_or_else(|| panic!("{op_name} is listed in UNARY_OPS but has no IR"));
         let body = lower_unary_body(&ir, DTypeId::F32).unwrap();
 
-        let from_ir = launch_unary_body(probe_name("ir", op_name), &body, &input).unwrap();
+        let from_ir =
+            launch_unary_body(probe_name("ir", op_name), &body, &input, NO_PROOF).unwrap();
         let from_literal = launch_unary_op(probe_name("lit", op_name), literal, &input).unwrap();
 
         let ir_values = download_f32_host(&from_ir).unwrap();
@@ -264,8 +269,15 @@ fn ir_binary_forward_matches_the_hand_written_literal() {
             .unwrap_or_else(|| panic!("{op_name} is listed in BINARY_OPS but has no IR"));
         let body = lower_binary_body(&ir, DTypeId::F32).unwrap();
 
-        let from_ir =
-            launch_binary_body(probe_name("ir", op_name), &body, &lhs, &rhs, &out_shape).unwrap();
+        let from_ir = launch_binary_body(
+            probe_name("ir", op_name),
+            &body,
+            &lhs,
+            &rhs,
+            &out_shape,
+            NO_PROOF,
+        )
+        .unwrap();
         let from_literal =
             launch_binary_op(probe_name("lit", op_name), literal, &lhs, &rhs, &out_shape).unwrap();
 
@@ -334,7 +346,8 @@ fn ir_symbolic_derivatives_match_a_numerical_reference() {
         let forward = catalog::unary_forward(op_name).unwrap();
         let derivative = forward.diff(0);
         let body = lower_unary_body(&derivative, DTypeId::F32).unwrap();
-        let from_ir = launch_unary_body(probe_name("irgrad", op_name), &body, &input).unwrap();
+        let from_ir =
+            launch_unary_body(probe_name("irgrad", op_name), &body, &input, NO_PROOF).unwrap();
         let ir_values = download_f32_host(&from_ir).unwrap();
 
         for (index, &x) in sample.iter().enumerate() {
@@ -463,13 +476,15 @@ fn the_fused_backward_matches_the_two_launch_backward() {
         // Two launches: derivative into a temporary, then multiply.
         let derivative = catalog::unary_forward(op_name).unwrap().diff(0);
         let deriv_body = lower_unary_body(&derivative, DTypeId::F32).unwrap();
-        let deriv = launch_unary_body(probe_name("twostep_d", op_name), &deriv_body, &x).unwrap();
+        let deriv =
+            launch_unary_body(probe_name("twostep_d", op_name), &deriv_body, &x, NO_PROOF).unwrap();
         let two_step = launch_binary_body(
             probe_name("twostep_m", op_name),
             &lower_binary_body(&catalog::binary_forward("mul").unwrap(), DTypeId::F32).unwrap(),
             &grad_out,
             &deriv,
             &out_shape,
+            NO_PROOF,
         )
         .unwrap();
 
@@ -482,6 +497,7 @@ fn the_fused_backward_matches_the_two_launch_backward() {
             &grad_out,
             &x,
             &out_shape,
+            NO_PROOF,
         )
         .unwrap();
 
@@ -525,7 +541,7 @@ fn the_shipped_backward_is_correct_for_every_fused_operation() {
     #[allow(clippy::type_complexity)]
     let fused: [(
         &str,
-        fn(&CudaStorage) -> incin_core::error::Result<CudaStorage>,
+        fn(&CudaStorage, KernelSpecialization) -> incin_core::error::Result<CudaStorage>,
     ); 12] = [
         ("relu", ops::cuda_relu_storage),
         ("gelu", ops::cuda_gelu_storage),
@@ -553,7 +569,7 @@ fn the_shipped_backward_is_correct_for_every_fused_operation() {
         let input = storage(&[sample.len()], sample.clone());
         let input_id = input.id;
 
-        let out = forward(&input).unwrap();
+        let out = forward(&input, NO_PROOF).unwrap();
         let grads = crate::cuda::tape::backward(&out).unwrap();
         let grad = grads
             .get(input_id)
@@ -575,6 +591,127 @@ fn the_shipped_backward_is_correct_for_every_fused_operation() {
             );
         }
     }
+}
+
+/// A proven element count must remove the packed kernel's ragged-tail branch,
+/// and must not change a single result.
+///
+/// This is the first thing in any backend that reads the frontend's shape proof.
+/// `ShapeEvidence` has ridden along on every `Validated` descriptor since it was
+/// introduced, carrying `proof`, `static_rank` and `static_numel`, and until now
+/// nothing opened it.
+///
+/// The distinction being tested is not "does the kernel know the numel" -- the
+/// launcher always knows that at runtime. It is that a *statically* known count
+/// is a constant of the program, so specialising on it produces a bounded number
+/// of kernels rather than one per observed shape.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn a_proven_element_count_elides_the_packed_tail() {
+    if !has_cuda() {
+        return;
+    }
+    // f32 packs four lanes wide, so 16 divides it and 14 does not.
+    let divisible = KernelSpecialization {
+        static_numel: Some(16),
+    };
+    let indivisible = KernelSpecialization {
+        static_numel: Some(14),
+    };
+    assert!(divisible.packed_tail_is_dead(4));
+    assert!(!indivisible.packed_tail_is_dead(4));
+    assert!(
+        !NO_PROOF.packed_tail_is_dead(4),
+        "an unproven count must never license eliding the tail"
+    );
+
+    let values: Vec<f32> = (0..16).map(|index| index as f32 - 8.0).collect();
+    let input = storage(&[values.len()], values.clone());
+    let body = lower_unary_body(&catalog::unary_forward("relu").unwrap(), DTypeId::F32).unwrap();
+
+    let specialized = launch_unary_body(probe_name("spec", "relu"), &body, &input, divisible)
+        .expect("a specialized packed kernel must compile and launch");
+    let general = launch_unary_body(probe_name("gen", "relu"), &body, &input, NO_PROOF)
+        .expect("the unspecialized kernel must still work");
+
+    let specialized_values = download_f32_host(&specialized).unwrap();
+    let general_values = download_f32_host(&general).unwrap();
+
+    for (index, &x) in values.iter().enumerate() {
+        let expected = f64::from(x).max(0.0);
+        assert!(
+            close(f64::from(specialized_values[index]), expected),
+            "specialized relu({x}) gave {}",
+            specialized_values[index]
+        );
+        assert!(
+            close(
+                f64::from(specialized_values[index]),
+                f64::from(general_values[index])
+            ),
+            "specialization changed relu({x})"
+        );
+    }
+}
+
+/// Absent evidence must specialize nothing.
+///
+/// A backend cannot fabricate a `ShapeEvidence`: `ShapeEvidence::of` is
+/// `pub(crate)` to `incin-core`, so the only way to obtain one is from a
+/// `Validated` descriptor that a lowering rule produced. That is the provenance
+/// guarantee `exec::proof` exists to provide, and it is why this test can check
+/// the `None` case but not construct the `Static` one -- the corresponding
+/// assertion for a real shape type lives in `incin-core`'s `proof_provenance`
+/// suite, on the side of the boundary that is allowed to build the value.
+#[test]
+fn absent_evidence_specializes_nothing() {
+    assert_eq!(
+        KernelSpecialization::from_evidence(None),
+        KernelSpecialization::NONE
+    );
+    assert!(!KernelSpecialization::NONE.packed_tail_is_dead(4));
+}
+
+/// The specialization must be visible in the emitted source, not merely
+/// harmless.
+///
+/// A passing numerical test would also pass if the specialization silently did
+/// nothing, so this asserts on the text: the scalar tail disappears when the
+/// count is proven divisible, and survives when it is not.
+#[test]
+fn the_elided_tail_is_absent_from_the_emitted_source() {
+    use crate::codegen::ScalarFragment;
+    use crate::kernel::render_cuda_unary_packed_body;
+    use incin_core::exec::LayoutClass;
+
+    let body = ScalarFragment::literal("x");
+    let render = |spec| {
+        render_cuda_unary_packed_body("probe", &body, DTypeId::F32, LayoutClass::Contiguous, spec)
+            .unwrap()
+            .source
+    };
+
+    let general = render(NO_PROOF);
+    let specialized = render(KernelSpecialization {
+        static_numel: Some(16),
+    });
+
+    assert!(
+        general.contains("for (int lane"),
+        "the general kernel should carry a scalar tail loop"
+    );
+    assert!(
+        !specialized.contains("for (int lane"),
+        "a proven count should remove the scalar tail loop:\n{specialized}"
+    );
+    assert!(
+        specialized.contains("packed_output"),
+        "the packed body must survive specialization:\n{specialized}"
+    );
+    // Both still guard the grid overhang, which a proven numel does not license
+    // removing: the launch rounds up to whole blocks regardless.
+    assert!(general.contains("if (base >= numel)"));
+    assert!(specialized.contains("if (base >= numel)"));
 }
 
 /// SSA lowering must not duplicate a repeated subexpression's text.

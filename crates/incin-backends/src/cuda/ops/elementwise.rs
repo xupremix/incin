@@ -313,6 +313,7 @@ fn render_unary_strategy(
     dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
+    specialization: crate::kernel::KernelSpecialization,
 ) -> Result<crate::kernel::RenderedKernel> {
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
@@ -325,9 +326,13 @@ fn render_unary_strategy(
                 unroll_width,
             )
         }
-        PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_unary_packed_body(op_name, body, builtin_id, layout)
-        }
+        PointwiseStrategy::Packed { .. } => crate::kernel::render_cuda_unary_packed_body(
+            op_name,
+            body,
+            builtin_id,
+            layout,
+            specialization,
+        ),
     }
 }
 
@@ -337,6 +342,7 @@ fn render_binary_strategy(
     dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
+    specialization: crate::kernel::KernelSpecialization,
 ) -> Result<crate::kernel::RenderedKernel> {
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
@@ -349,9 +355,13 @@ fn render_binary_strategy(
                 unroll_width,
             )
         }
-        PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_binary_packed_body(op_name, body, builtin_id, layout)
-        }
+        PointwiseStrategy::Packed { .. } => crate::kernel::render_cuda_binary_packed_body(
+            op_name,
+            body,
+            builtin_id,
+            layout,
+            specialization,
+        ),
     }
 }
 
@@ -435,6 +445,7 @@ pub(crate) fn launch_unary_op(
         op_name,
         &crate::codegen::ScalarFragment::literal(op_expr),
         t,
+        crate::kernel::KernelSpecialization::NONE,
     )
 }
 
@@ -450,6 +461,7 @@ pub(crate) fn launch_unary_body(
     op_name: &'static str,
     body: &crate::codegen::ScalarFragment,
     t: &CudaStorage,
+    specialization: crate::kernel::KernelSpecialization,
 ) -> Result<CudaStorage> {
     let b = &*t.buffer;
     validate_elementwise_dtype(b.dtype, "elementwise_unary")?;
@@ -470,7 +482,7 @@ pub(crate) fn launch_unary_body(
     let layout = plan.layout_class();
     let numel = plan.numel;
     let strategy = select_unary_strategy(b.dtype, layout, numel, plan.operand.offset)?;
-    let kernel = render_unary_strategy(op_name, body, b.dtype, layout, strategy)?;
+    let kernel = render_unary_strategy(op_name, body, b.dtype, layout, strategy, specialization)?;
     let packed_width = crate::tuning::preferred_pointwise_width(b.dtype);
     let dense = layout == LayoutClass::Contiguous;
     let selection = pointwise_launch_selection(
@@ -483,7 +495,7 @@ pub(crate) fn launch_unary_body(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, b.dtype, |strategy| {
-        render_unary_strategy(op_name, body, b.dtype, layout, strategy)
+        render_unary_strategy(op_name, body, b.dtype, layout, strategy, specialization)
     })?;
     let dtype = prepared
         .first()
@@ -598,6 +610,7 @@ pub(crate) fn launch_binary_op(
         lhs,
         rhs,
         out_shape,
+        crate::kernel::KernelSpecialization::NONE,
     )
 }
 
@@ -612,6 +625,7 @@ pub(crate) fn launch_binary_body(
     lhs: &CudaStorage,
     rhs: &CudaStorage,
     out_shape: &[usize],
+    specialization: crate::kernel::KernelSpecialization,
 ) -> Result<CudaStorage> {
     let (lhs_b, rhs_b) = (&*lhs.buffer, &*rhs.buffer);
     if lhs_b.dtype != rhs_b.dtype {
@@ -659,7 +673,8 @@ pub(crate) fn launch_binary_body(
     let rhs_plan = &plan.operands[1];
     let strategy =
         select_binary_strategy(lhs_b.dtype, layout, numel, lhs_plan.offset, rhs_plan.offset)?;
-    let kernel = render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy)?;
+    let kernel =
+        render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy, specialization)?;
     let packed_width = crate::tuning::preferred_pointwise_width(lhs_b.dtype);
     let packed_aligned = match layout {
         LayoutClass::Contiguous => {
@@ -686,7 +701,7 @@ pub(crate) fn launch_binary_body(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, lhs_b.dtype, |strategy| {
-        render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy)
+        render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy, specialization)
     })?;
     let dtype = prepared
         .first()

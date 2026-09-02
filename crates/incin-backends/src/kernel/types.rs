@@ -274,6 +274,71 @@ impl KernelKey {
     }
 }
 
+/// What the frontend proved about an operand's geometry, as far as kernel
+/// specialization is concerned.
+///
+/// This is the backend-side projection of `incin_core::exec::ShapeEvidence`,
+/// which rides along on every `Validated` descriptor and reports what
+/// `Shape::PROOF` established from the shape *type* rather than from a runtime
+/// measurement. The distinction is the whole point. A launcher always knows the
+/// runtime element count, and could always specialize on it -- but doing so
+/// would compile a fresh kernel per observed shape and turn the module cache
+/// into a leak. A *statically* known count is a constant of the program, so the
+/// number of specializations it can produce is bounded by the number of shape
+/// types the program instantiates, which is finite and small.
+///
+/// So the proof is not a faster way to learn the numel. It is the thing that
+/// makes specializing on the numel affordable.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg(any(feature = "cuda", test))]
+pub(crate) struct KernelSpecialization {
+    /// Element count known before runtime, from the shape type.
+    pub(crate) static_numel: Option<usize>,
+}
+
+#[cfg(any(feature = "cuda", test))]
+impl KernelSpecialization {
+    /// The "nothing was proven" value, which specializes nothing.
+    pub(crate) const NONE: Self = Self { static_numel: None };
+
+    /// Projects the facts this module can act on out of a frontend proof.
+    ///
+    /// `None` evidence means the call arrived through a path that carries no
+    /// shape type -- `dispatch::execute` is generic over the operation but not
+    /// over operand shapes, so it reports `Dynamic` for everything -- and is
+    /// treated exactly like a dynamic proof.
+    // The only caller is the CUDA executor, so a `test` build without the
+    // `cuda` feature compiles this and reaches nothing.
+    #[cfg_attr(not(feature = "cuda"), allow(dead_code))]
+    pub(crate) fn from_evidence(evidence: Option<incin_core::exec::ShapeEvidence>) -> Self {
+        let Some(evidence) = evidence else {
+            return Self::NONE;
+        };
+        // A `Mixed` proof has a static rank but at least one runtime axis, so
+        // its numel is not a constant even when `static_numel` is populated.
+        // Only `Static` licenses baking the count into the source.
+        if evidence.proof().is_static() {
+            Self {
+                static_numel: evidence.static_numel(),
+            }
+        } else {
+            Self::NONE
+        }
+    }
+
+    /// Whether a packed kernel's ragged-tail branch is provably unreachable.
+    ///
+    /// The packed templates handle a trailing partial vector with a scalar
+    /// `else` branch. When the element count is a proven multiple of the vector
+    /// width, no packet is ever partial, so that branch is dead code: emitting
+    /// it costs instruction cache and forces the compiler to keep a divergent
+    /// path it can never take.
+    pub(crate) fn packed_tail_is_dead(self, vector_width: u8) -> bool {
+        let width = usize::from(vector_width);
+        width != 0 && self.static_numel.is_some_and(|n| n % width == 0)
+    }
+}
+
 /// The module-cache identity for a kernel, scoped to the text it compiles.
 ///
 /// `KernelKey::cache_id` describes the *problem* a kernel solves -- family,
