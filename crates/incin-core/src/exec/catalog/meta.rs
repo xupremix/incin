@@ -124,7 +124,11 @@ impl CreationPayload {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 /// Policy for duplicate indices in scatter-style ops.
+///
+/// Non-exhaustive: adding a rule is a routine catalog extension, and it should
+/// not break every downstream `match` the way `Accumulate` would have.
 pub enum DuplicateIndexRule {
     /// Conflicting writes resolve by last writer wins.
     LastWriteWins,
