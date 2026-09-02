@@ -162,3 +162,85 @@ fn a_shape_with_a_runtime_axis_offers_no_element_count() {
     assert_eq!(<s![Batch, 4] as Shape>::STATIC_NUMEL, None);
     assert!(!ProofLevel::of::<s![Batch, 4]>().is_static());
 }
+
+// -- per-axis extents ----------------------------------------------------
+
+/// A fully static shape must expose its axes individually, not just their
+/// product.
+///
+/// `STATIC_NUMEL` is enough to prove a packed kernel's ragged tail unreachable
+/// but not enough to index, which is what folding a strided kernel's per-axis
+/// division needs.
+#[test]
+fn a_fully_static_shape_exposes_each_axis() {
+    use incin_core::shapes::Shape;
+
+    assert_eq!(
+        <s![3, 4] as Shape>::STATIC_EXTENTS,
+        &[Some(3), Some(4)][..],
+        "extents are outermost first and exactly rank-long"
+    );
+    assert_eq!(<Nil as Shape>::STATIC_EXTENTS, &[][..]);
+}
+
+/// A partly dynamic shape must contribute the axes it does know.
+///
+/// This is the case an all-or-nothing answer would throw away. A batch axis
+/// that is only known at runtime does not stop the inner axes from being
+/// constants, and folding those is the common transformer case.
+#[test]
+fn a_named_axis_leaves_a_hole_without_erasing_its_neighbours() {
+    use incin_core::shapes::Shape;
+
+    assert_eq!(
+        <s![Batch, 4] as Shape>::STATIC_EXTENTS,
+        &[None, Some(4)][..],
+        "the dynamic axis is a hole; the static one beside it survives"
+    );
+    // The whole-shape answers stay honest about it being unproven.
+    assert_eq!(<s![Batch, 4] as Shape>::STATIC_NUMEL, None);
+    assert!(!ProofLevel::of::<s![Batch, 4]>().is_static());
+}
+
+/// A runtime-rank shape has no axes to report.
+#[test]
+fn an_unranked_shape_reports_no_extents() {
+    use incin_core::shapes::Shape;
+
+    assert_eq!(<Dyn as Shape>::STATIC_EXTENTS, &[][..]);
+}
+
+/// A shape deeper than the extent buffer must still compile, and must report
+/// nothing rather than a truncated prefix.
+///
+/// The first version of this feature panicked at const evaluation when the rank
+/// exceeded the buffer, on the reasoning that failing loudly beats reporting a
+/// wrong geometry. That conflated two different things. Reporting a *truncated*
+/// geometry would indeed be a miscompile; reporting *no* geometry is just an
+/// optimisation left on the table. The panic broke compilation of an existing
+/// rank-18 shape in `tensor_ops`, which is the case this pins.
+#[test]
+fn a_shape_deeper_than_the_buffer_reports_nothing_rather_than_a_prefix() {
+    use incin_core::shapes::{MAX_STATIC_RANK, Shape};
+
+    assert_eq!(MAX_STATIC_RANK, 8);
+
+    // Rank 9: one past the buffer.
+    type TooDeep = s![1, 1, 1, 1, 1, 1, 1, 1, 2];
+    assert_eq!(<TooDeep as Shape>::RANK, Some(9));
+    assert_eq!(
+        <TooDeep as Shape>::STATIC_EXTENTS,
+        &[][..],
+        "a rank past the buffer must report no extents, not the eight that fit"
+    );
+
+    // Everything else the shape knows is unaffected -- only the per-axis
+    // answer is withheld.
+    assert_eq!(<TooDeep as Shape>::STATIC_NUMEL, Some(2));
+    assert!(ProofLevel::of::<TooDeep>().is_static());
+
+    // Exactly at the bound still reports.
+    type AtBound = s![1, 1, 1, 1, 1, 1, 1, 2];
+    assert_eq!(<AtBound as Shape>::RANK, Some(MAX_STATIC_RANK));
+    assert_eq!(<AtBound as Shape>::STATIC_EXTENTS.len(), MAX_STATIC_RANK);
+}

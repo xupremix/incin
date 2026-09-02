@@ -1478,6 +1478,11 @@ fn a_typed_invocation_carries_a_static_element_count_to_the_backend() {
         "2 x 3 must reach the backend as a count of 6"
     );
     assert_eq!(evidence.static_rank(), Some(2));
+    assert_eq!(
+        evidence.static_extents(),
+        &[Some(2), Some(3)][..],
+        "per-axis extents must survive to the descriptor, not just their product"
+    );
 
     // The same request with nothing known must offer no count to specialize on.
     let erased = ValidatedInvocation::<op::Zeros>::infer_runtime(created, vec![])
@@ -1489,4 +1494,5 @@ fn a_typed_invocation_carries_a_static_element_count_to_the_backend() {
         None,
         "an unproven shape must never hand a backend a constant to bake in"
     );
+    assert_eq!(erased_evidence.static_extents(), &[][..]);
 }

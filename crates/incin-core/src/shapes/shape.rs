@@ -1,5 +1,38 @@
 use crate::shapes::ShapeBuf;
 use crate::shapes::broadcast::ReverseShape;
+/// The deepest rank whose per-axis extents can be carried statically.
+///
+/// This bounds only the compile-time construction buffer behind
+/// [`Shape::STATIC_EXTENTS`], never the rank of a shape: a deeper shape is
+/// still a perfectly good `Shape` and still works everywhere, it simply reports
+/// no per-axis extents and forgoes the specialisations that need them.
+///
+/// Eight covers the ranks the operation catalog admits -- the deepest is
+/// `Conv3d`'s five -- with headroom. The test suite does construct deeper
+/// shapes than this (`tensor_ops` builds a rank-18 one), which is precisely why
+/// exceeding the bound has to degrade rather than fail.
+pub const MAX_STATIC_RANK: usize = 8;
+
+/// Prepends one axis to an extent buffer, dropping what falls off the end.
+///
+/// The dropped tail never escapes: `STATIC_EXTENTS` reports an empty slice for
+/// any rank past the buffer rather than the prefix that survived here.
+#[doc(hidden)]
+#[must_use]
+pub const fn prepend_extent(
+    head: Option<usize>,
+    tail: [Option<usize>; MAX_STATIC_RANK],
+) -> [Option<usize>; MAX_STATIC_RANK] {
+    let mut out = [None; MAX_STATIC_RANK];
+    out[0] = head;
+    let mut index = 0;
+    while index < MAX_STATIC_RANK - 1 {
+        out[index + 1] = tail[index];
+        index += 1;
+    }
+    out
+}
+
 use crate::shapes::idx::{FromEnd, Here, Next};
 pub use crate::shapes::rank::{AddOneRank, PreserveRank, Ranked, RemoveOneRank};
 use crate::shapes::{Dim, Dyn};
@@ -69,6 +102,50 @@ pub trait Shape: sealed::Shape + 'static + Clone + Debug + Send + Sync + Eq + Pa
     /// follows.
     const STATIC_NUMEL: Option<usize> = None;
 
+    /// Per-axis extents the type settles, outermost first.
+    ///
+    /// [`STATIC_NUMEL`](Shape::STATIC_NUMEL) collapses the whole geometry to
+    /// one number, which is enough to prove a packed kernel's ragged tail
+    /// unreachable but not enough to index. This is the per-axis form, and it
+    /// is deliberately `Option` per axis rather than all-or-nothing: a shape
+    /// with a dynamic batch axis and static inner axes still lets a backend
+    /// fold the inner divisions, which is the common transformer case and is
+    /// exactly what an all-or-nothing answer would throw away.
+    ///
+    /// The slice's length is the rank when the rank is known, and zero
+    /// otherwise. `&[]` is the honest default, following the same rule as
+    /// `PROOF` and `STATIC_NUMEL`: a `Shape` implemented outside this crate is
+    /// credited with nothing it has not shown.
+    ///
+    /// See [`EXTENT_BUF`](Shape::EXTENT_BUF) for why this is a slice rather
+    /// than an array.
+    const STATIC_EXTENTS: &'static [Option<usize>] = &[];
+
+    /// Construction buffer behind [`STATIC_EXTENTS`](Shape::STATIC_EXTENTS).
+    ///
+    /// Building the extent list for `DimCons<H, T>` means prepending `H` to
+    /// `T`'s list, and the result's length depends on `Self::RANK`. An array
+    /// whose length is an associated const would need `generic_const_exprs`,
+    /// which is unstable, so the recursion runs through a fixed-size buffer
+    /// instead.
+    ///
+    /// The buffer is the construction vehicle, never the payload:
+    /// `STATIC_EXTENTS` slices the used prefix out of it, and const promotion
+    /// puts that slice in read-only static memory. So what travels on
+    /// `ShapeEvidence` is a two-word slice of exact length rather than a
+    /// rank-sized array, which matters because that type is `Copy` and rides
+    /// along on every dispatch.
+    ///
+    /// A rank above [`MAX_STATIC_RANK`] reports no extents at all rather than
+    /// the prefix that fits. The distinction matters: a proof that quietly
+    /// claims less than the truth costs an optimisation, while one that quietly
+    /// claims a *wrong* geometry is a miscompile. Deep shapes are rare and the
+    /// loss is only a missed specialisation, so silence is the safe direction
+    /// and it matches what the rest of this trait does when it cannot prove
+    /// something.
+    #[doc(hidden)]
+    const EXTENT_BUF: [Option<usize>; MAX_STATIC_RANK] = [None; MAX_STATIC_RANK];
+
     /// The user-facing constructor argument type (e.g. a tuple of
     /// `usize`/`typenum` values, or `Vec<usize>` for `Dyn`).
     type Arg;
@@ -103,6 +180,8 @@ impl Shape for Nil {
     const RANK: Option<usize> = Some(0);
     const PROOF: crate::shapes::ProofLevel = crate::shapes::ProofLevel::Static;
     const STATIC_NUMEL: Option<usize> = Some(1);
+    const STATIC_EXTENTS: &'static [Option<usize>] = &[];
+    const EXTENT_BUF: [Option<usize>; MAX_STATIC_RANK] = [None; MAX_STATIC_RANK];
     type Arg = ();
     #[inline(always)]
     fn resolve(_: Self::Arg) -> core::result::Result<ShapeBuf, crate::shapes::error::ShapeError> {
@@ -147,6 +226,25 @@ impl<H: Dim, T: Shape> Shape for DimCons<H, T> {
     const STATIC_NUMEL: Option<usize> = match (H::STATIC, T::STATIC_NUMEL) {
         (crate::shapes::StaticExtent::Value(h), Some(t)) => h.checked_mul(t),
         _ => None,
+    };
+
+    const EXTENT_BUF: [Option<usize>; MAX_STATIC_RANK] = prepend_extent(
+        match H::STATIC {
+            crate::shapes::StaticExtent::Value(head) => Some(head),
+            // A named or runtime axis contributes a hole rather than
+            // collapsing the whole list: the axes around it are still known.
+            _ => None,
+        },
+        T::EXTENT_BUF,
+    );
+
+    // A rank past the buffer reports nothing rather than reporting a prefix.
+    // Truncation would be a wrong geometry, which is a miscompile; silence is
+    // just an optimisation left on the table, and it is what the rest of this
+    // trait already does when it cannot prove something.
+    const STATIC_EXTENTS: &'static [Option<usize>] = match Self::RANK {
+        Some(rank) if rank <= MAX_STATIC_RANK => Self::EXTENT_BUF.split_at(rank).0,
+        _ => &[],
     };
 
     type Arg = (H::Arg, T::Arg);
