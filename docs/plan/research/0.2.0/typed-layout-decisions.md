@@ -204,3 +204,50 @@ version -- proven extents mean the `shape` array and its per-launch upload are
 not emitted, because the values are in the source instead. The tensor-side
 version, not storing strides a type already determines, is open and becomes
 worthwhile once enough of the API carries a layout.
+
+## The backends disagree about whether `transpose` copies
+
+Found by writing the conformance test that was supposed to *back* a type claim,
+before making it. It refuted the claim instead.
+
+Shape-changing operations cannot carry their operand's layout -- the shape
+changes, and a layout is only meaningful against the shape it describes -- so
+their result's layout has to be stated. Stating `RowMajor` is only honest if the
+buffer is dense, and the CUDA measurement said every view materialises, so the
+claim looked safe.
+
+It is not. On CPU:
+
+```
+transpose_structural on s![3, 4]  ->  shape [4, 3], strides [1, 4]
+```
+
+That is a genuine non-contiguous **view** sharing the original buffer. On CUDA
+the same operation returns shape `[4, 3]` with strides `[3, 1]` -- a fresh
+contiguous copy.
+
+**Same operation, different memory semantics per backend, and nothing states
+which is correct.** Consequences:
+
+- A type claiming `RowMajor` for a transpose would be false on CPU and true on
+  CUDA. So shape-changing operations keep `Unknown` outputs until the contract
+  is settled, and `into_row_major` remains the way to recover a proof.
+- The earlier finding that "the strided path is unreachable" was correctly
+  scoped to CUDA in the note, but it is not a framework-wide property. The
+  strided kernel path *is* reachable on CPU. The extent-folding work is dead on
+  CUDA specifically because CUDA copies, not because nothing is ever strided.
+- It is a portability hazard independent of layouts: user code that transposes
+  and then mutates through the original buffer observes different results per
+  backend, and code that relies on a transpose being cheap silently pays a copy
+  on CUDA.
+
+Both behaviours are pinned by `shape_changing_operations_produce_dense_results`,
+which asserts reductions and pointwise operations are dense and asserts the CPU
+transpose is a view, so a backend changing its mind fails a test rather than
+silently changing what a type would mean.
+
+The decision this forces, and it belongs to the operation contract rather than
+to the layout parameter: either views are views everywhere and CUDA stops
+copying, or views materialise everywhere and CPU starts. Typed layout makes the
+difference *expressible* -- a view returns a permuted layout, a copy returns
+`RowMajor` -- which is the argument for settling it rather than for picking one.

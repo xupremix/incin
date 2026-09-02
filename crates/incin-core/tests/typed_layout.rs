@@ -191,3 +191,69 @@ fn a_dynamic_axis_voids_only_the_strides_that_enclose_it() {
         &[None, Some(4), Some(1)][..]
     );
 }
+
+/// Shape-changing operations really do produce dense buffers.
+///
+/// This backs a claim the type system would otherwise make on faith. A
+/// reduction or a transpose cannot carry its operand's layout -- the shape
+/// changes, and a layout is only meaningful against the shape it describes --
+/// so its result's layout has to be *stated*. Stating `RowMajor` is only honest
+/// if the buffer is actually dense.
+///
+/// Checked here at runtime rather than assumed, because the density is a
+/// property of what every current backend happens to do rather than something
+/// the operation contract states. If a backend ever returns a strided result,
+/// this fails and the type claim has to be withdrawn before it becomes a
+/// silent mis-read.
+#[test]
+fn shape_changing_operations_produce_dense_results() {
+    use incin_core::shapes::idx::{ForwardAxis, Here};
+
+    fn assert_dense<S: Shape, B, K, G, P, L>(t: &incin_core::prelude::Tensor<S, B, K, G, P, L>)
+    where
+        B: incin_core::backend_authoring::Backend,
+        K: incin_core::prelude::DType,
+        G: incin_core::tensor::grad::RequiresGrad,
+        P: incin_core::dist::Placement,
+        L: incin_core::shapes::Layout,
+    {
+        let meta = <B as incin_core::backend_authoring::StorageBackend>::metadata::<K>(t.inner());
+        let dims = meta.shape().as_ref();
+        let strides = meta.strides().as_ref();
+        let mut expected = 1usize;
+        for axis in (0..dims.len()).rev() {
+            assert_eq!(
+                strides[axis], expected,
+                "axis {axis} of {dims:?} has stride {} but a dense buffer needs {expected}",
+                strides[axis]
+            );
+            expected *= dims[axis];
+        }
+        assert_eq!(meta.offset_elements(), 0, "a fresh buffer starts at zero");
+    }
+
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
+
+    // Reductions and pointwise operations allocate.
+    assert_dense(&t.sum(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense(&t.mean(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense(&t.neg().unwrap());
+
+    // `transpose` does *not*, on this backend. It returns a view: shape
+    // [4, 3] over strides [1, 4], sharing the original buffer. Asserted rather
+    // than assumed, because the CUDA backend materialises the same operation
+    // into a fresh contiguous buffer -- the two disagree, and a type claiming
+    // `RowMajor` for a transpose would be false on exactly one of them.
+    let transposed = t
+        .transpose_structural::<Here, incin_core::shapes::idx::Next<Here>>()
+        .unwrap();
+    let meta = <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::metadata::<f32>(
+        transposed.inner(),
+    );
+    assert_eq!(meta.shape().as_ref(), &[4, 3]);
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "CPU transpose is a view; if this becomes [3, 1] it started copying"
+    );
+}
