@@ -179,6 +179,8 @@ pub mod prelude {
     // case; `Contiguous` is the bound operations like `reshape_view` require.
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
     pub use crate::shapes::{Contiguous, Dense, Layout, RowMajor, Unknown};
+    // Lets generic code take one type parameter instead of six.
+    pub use crate::tensor::base::{AnyTensor, TensorOf};
 
     pub use super::exec::{AxisSet, RankSupport};
     pub use super::tensor::matmul::{StaticDim, StaticOrNamedDim};

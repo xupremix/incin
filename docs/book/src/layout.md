@@ -87,6 +87,32 @@ well; a separate type parameter per fact would not.
 is why layout is a bundle rather than several independent parameters that
 would have to be kept consistent by hand.
 
+## Writing generic code without naming six parameters
+
+`Tensor<S, B, K, G, P, L>` earns each of its parameters, but a helper that wants
+to be generic over tensors would otherwise pay for all of them at once — six
+type parameters and six bounds before it can say anything.
+
+`AnyTensor` collapses that to one:
+
+```rust,ignore
+fn numel_of<T: AnyTensor>(t: &T) -> usize
+where
+    T::Shape: DynShape,
+{
+    t.as_tensor().numel()
+}
+```
+
+The parameters are still reachable as associated types, so a bound that
+genuinely needs one writes `T::Backend: Execute<op::Add>` or
+`T::Layout: Contiguous`. What changes is that a helper names only the parts it
+constrains.
+
+For the concrete case there is `Dense<S, B>`, which also avoids naming the
+shape twice — `RowMajor` is congruent with the shape it describes, so
+`Tensor<S, .., RowMajor<S>>` repeats it for nothing.
+
 ## What the backend does with it
 
 A layout, like a shape, travels to the backend as evidence rather than as a

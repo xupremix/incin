@@ -1435,6 +1435,7 @@ impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, G:
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G1: incin_core::tensor::grad::RequiresGrad, L1: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, L: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout> core::clone::Clone for incin_core::prelude::Tensor<S, B, K, G, P, L>
+impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout> incin_core::prelude::AnyTensor for incin_core::prelude::Tensor<S, B, K, G, P, L>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout> incin_core::prelude::Tensor<S, B, K, G, P, L>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::Unknown>
 impl<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::Backend, K: incin_core::prelude::DType, P: incin_core::dist::placement::Placement> incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::Grad, P>
@@ -6917,6 +6918,7 @@ pub fn incin_core::optim::scheduler::StepLR::get_lr(&self) -> f64
 pub fn incin_core::optim::scheduler::StepLR::new(f64, usize, f64) -> Self
 pub fn incin_core::optim::scheduler::StepLR::step(&mut self)
 pub fn incin_core::prelude::AdaptiveAvgPool2dShape::compute_output_shape(&incin_core::shapes::ShapeBuf) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
+pub fn incin_core::prelude::AnyTensor::as_tensor(&self) -> &incin_core::prelude::TensorOf<Self>
 pub fn incin_core::prelude::ArgInto::into_arg(self) -> Target
 pub fn incin_core::prelude::AxisTag::key() -> incin_core::shapes::AxisKey
 pub fn incin_core::prelude::AxisTag::selector() -> incin_core::shapes::NamedAxisSelector<Self> where Self: core::marker::Sized
@@ -6989,6 +6991,7 @@ pub fn incin_core::prelude::StateMutVisitor::visit_buffer<S, K>(&mut self, &inci
 pub fn incin_core::prelude::StateMutVisitor::visit_param<S, K, Train>(&mut self, &incin_core::nn::state::StatePath, &mut incin_core::nn::param::Param<S, B, K, Train>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop, Train: incin_core::nn::param::TrainState
 pub fn incin_core::prelude::StateVisitor::visit_buffer<S, K>(&mut self, &incin_core::nn::state::StatePath, &incin_core::nn::param::Buffer<S, B, K>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop
 pub fn incin_core::prelude::StateVisitor::visit_param<S, K, Train>(&mut self, &incin_core::nn::state::StatePath, &incin_core::nn::param::Param<S, B, K, Train>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop, Train: incin_core::nn::param::TrainState
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::as_tensor(&self) -> &incin_core::prelude::TensorOf<Self>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::broadcast_to<S2: incin_core::shapes::Shape + incin_core::shapes::DynShape>(&self, <S2 as incin_core::shapes::Shape>::Arg) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P>> where S: incin_core::shapes::broadcast::BroadcastShape<S2, Output = S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::exec::capability::Capabilities
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::builtin_dtype_id(&self) -> core::option::Option<incin_core::prelude::DTypeId>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::clone(&self) -> Self
@@ -7554,6 +7557,7 @@ pub fn incin_core::tensor::allocation::checked_byte_len_from_dims(&[usize], inci
 pub fn incin_core::tensor::arg::TensorArgs::construct(Self::Args) -> core::result::Result<(incin_core::shapes::ShapeBuf, <K as incin_core::prelude::DType>::Field, <D as incin_core::tensor::device::Device>::Field, <G as incin_core::tensor::grad::RequiresGrad>::Field), incin_core::shapes::ShapeError>
 pub fn incin_core::tensor::arg_into::ArgInto::into_arg(self) -> Target
 pub fn incin_core::tensor::arg_into::LayerArgInto::into_layer_arg(self) -> Target
+pub fn incin_core::tensor::base::AnyTensor::as_tensor(&self) -> &incin_core::prelude::TensorOf<Self>
 pub fn incin_core::tensor::conv2d::KernelConv2dShape::output_shape(&incin_core::shapes::ShapeBuf, &incin_core::shapes::ShapeBuf) -> incin_core::shapes::ShapeBuf
 pub fn incin_core::tensor::device::Cpu::init(Self::Arg) -> Self::Field
 pub fn incin_core::tensor::device::Cpu::into_arg(self) -> incin_core::tensor::device::Cpu
@@ -12652,6 +12656,7 @@ pub trait incin_core::optim::ScaledOptimizer<B: incin_core::backend_authoring::V
 pub trait incin_core::optim::ValueClippingBackend<K: incin_core::prelude::DType>: incin_core::optim::OptimizerBackend<K>
 pub trait incin_core::optim::scheduler::LRScheduler
 pub trait incin_core::prelude::AdaptiveAvgPool2dShape<HOut, WOut>: incin_core::shapes::Shape
+pub trait incin_core::prelude::AnyTensor
 pub trait incin_core::prelude::AppendDim<D: incin_core::shapes::Dim>
 pub trait incin_core::prelude::ArgInto<Target>
 pub trait incin_core::prelude::AxisIdentity: incin_core::shapes::AxisTag
@@ -12923,6 +12928,7 @@ pub trait incin_core::tensor::arg_into::LayerArgInto<Target>
 pub trait incin_core::tensor::arg_into::NotUnit
 pub trait incin_core::tensor::arg_into::UnitTree: core::default::Default + core::marker::Copy + core::clone::Clone + core::fmt::Debug
 pub trait incin_core::tensor::auto_device::IgnoreOrdinal
+pub trait incin_core::tensor::base::AnyTensor
 pub trait incin_core::tensor::conv2d::KernelConv2dShape<K: incin_core::shapes::Shape, Stride: incin_core::tensor::matmul::StaticDim, Padding: incin_core::tensor::matmul::StaticDim>: incin_core::shapes::Shape
 pub trait incin_core::tensor::device::ConstDevice: core::default::Default + incin_core::tensor::device::Device<Arg = ()>
 pub trait incin_core::tensor::device::Device: 'static + core::marker::Send + core::marker::Sync + core::clone::Clone + core::cmp::Eq + core::cmp::PartialEq + core::fmt::Debug + core::marker::Sized
@@ -13529,6 +13535,12 @@ pub type incin_core::nn::rnn::RnnShape::In: incin_core::shapes::Dim
 pub type incin_core::nn::rnn::RnnShape::Out: incin_core::shapes::Dim
 pub type incin_core::nn::stats::LayerStats::Output = incin_core::nn::stats::LayerStats
 pub type incin_core::prelude::AdaptiveAvgPool2dShape::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape
+pub type incin_core::prelude::AnyTensor::Backend: incin_core::backend_authoring::Backend
+pub type incin_core::prelude::AnyTensor::DType: incin_core::prelude::DType
+pub type incin_core::prelude::AnyTensor::Grad: incin_core::tensor::grad::RequiresGrad
+pub type incin_core::prelude::AnyTensor::Layout: incin_core::shapes::layout::Layout
+pub type incin_core::prelude::AnyTensor::Placement: incin_core::dist::placement::Placement
+pub type incin_core::prelude::AnyTensor::Shape: incin_core::shapes::Shape
 pub type incin_core::prelude::AppendDim::Output: incin_core::shapes::Shape
 pub type incin_core::prelude::AxisIdentity::Id: typenum::marker_traits::Unsigned
 pub type incin_core::prelude::AxisIdentity::Schema: 'static
@@ -13623,10 +13635,17 @@ pub type incin_core::prelude::SpatialOut::Output
 pub type incin_core::prelude::StackShape::Output: incin_core::shapes::Shape
 pub type incin_core::prelude::StructuralConcatShape::Output: incin_core::shapes::Shape
 pub type incin_core::prelude::SwapAt::Output: incin_core::shapes::Shape
+pub type incin_core::prelude::Tensor<S, B, K, G, P, L>::Backend = B
+pub type incin_core::prelude::Tensor<S, B, K, G, P, L>::DType = K
+pub type incin_core::prelude::Tensor<S, B, K, G, P, L>::Grad = G
+pub type incin_core::prelude::Tensor<S, B, K, G, P, L>::Layout = L
+pub type incin_core::prelude::Tensor<S, B, K, G, P, L>::Placement = P
+pub type incin_core::prelude::Tensor<S, B, K, G, P, L>::Shape = S
 pub type incin_core::prelude::Tensor<S, B, K, G>::Output = incin_core::prelude::Tensor<S, <B as incin_core::backend_authoring::StorageTransfer<NewD>>::Output, K>
 pub type incin_core::prelude::Tensor<S, B, K, G>::Output = incin_core::prelude::Tensor<S, B, K, G>
 pub type incin_core::prelude::Tensor<S1, B, K, G1>::Output = incin_core::prelude::Tensor<<S1 as incin_core::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, <G1 as incin_core::tensor::grad::GradJoin<G2>>::Output>
 pub type incin_core::prelude::TensorArgs::Args
+pub type incin_core::prelude::TensorOf<T> = incin_core::prelude::Tensor<<T as incin_core::prelude::AnyTensor>::Shape, <T as incin_core::prelude::AnyTensor>::Backend, <T as incin_core::prelude::AnyTensor>::DType, <T as incin_core::prelude::AnyTensor>::Grad, <T as incin_core::prelude::AnyTensor>::Placement, <T as incin_core::prelude::AnyTensor>::Layout>
 pub type incin_core::prelude::ToDevice::Output
 pub type incin_core::prelude::TrainState::TensorGrad: incin_core::tensor::grad::RequiresGrad<Arg = ()>
 pub type incin_core::prelude::TryConcatShape::Output: incin_core::shapes::Shape
@@ -13998,6 +14017,13 @@ pub type incin_core::tensor::auto_device::BestDevice = incin_core::tensor::devic
 pub type incin_core::tensor::auto_device::BestDeviceAt<N> = incin_core::tensor::auto_device::CpuAt<N>
 pub type incin_core::tensor::auto_device::CpuAt<N> = <(incin_core::tensor::device::Cpu, core::marker::PhantomData<N>) as incin_core::tensor::auto_device::IgnoreOrdinal>::Device
 pub type incin_core::tensor::auto_device::IgnoreOrdinal::Device
+pub type incin_core::tensor::base::AnyTensor::Backend: incin_core::backend_authoring::Backend
+pub type incin_core::tensor::base::AnyTensor::DType: incin_core::prelude::DType
+pub type incin_core::tensor::base::AnyTensor::Grad: incin_core::tensor::grad::RequiresGrad
+pub type incin_core::tensor::base::AnyTensor::Layout: incin_core::shapes::layout::Layout
+pub type incin_core::tensor::base::AnyTensor::Placement: incin_core::dist::placement::Placement
+pub type incin_core::tensor::base::AnyTensor::Shape: incin_core::shapes::Shape
+pub type incin_core::tensor::base::TensorOf<T> = incin_core::prelude::Tensor<<T as incin_core::prelude::AnyTensor>::Shape, <T as incin_core::prelude::AnyTensor>::Backend, <T as incin_core::prelude::AnyTensor>::DType, <T as incin_core::prelude::AnyTensor>::Grad, <T as incin_core::prelude::AnyTensor>::Placement, <T as incin_core::prelude::AnyTensor>::Layout>
 pub type incin_core::tensor::conv2d::KernelConv2dShape::Output: incin_core::shapes::Shape
 pub type incin_core::tensor::device::Cpu::Arg = ()
 pub type incin_core::tensor::device::Cpu::Field = core::marker::PhantomData<incin_core::tensor::device::Cpu>

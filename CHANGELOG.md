@@ -26,6 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `Tensor::reshape_view`, bounded on `L: Contiguous`: reinterprets a buffer
   under a new shape without copying. Reshaping a non-contiguous tensor is a
   compile error rather than the runtime failure it is elsewhere.
+- `AnyTensor` and `TensorOf<T>`, so generic code names one type parameter
+  instead of six. The parameters stay reachable as associated types, so a bound
+  that genuinely needs one still writes `T::Layout: Contiguous`; only the ones a
+  helper does not constrain stop having to be written down.
 - `Shape::STATIC_EXTENTS`, per-axis extents settled by the shape type, carried
   to backends on `ShapeEvidence` alongside the existing proof level, rank and
   element count.

@@ -18,6 +18,7 @@
 //! `local.rs`, the only file that constructs or consumes it.
 
 mod accessors;
+mod any;
 mod convert;
 mod creation;
 #[cfg(feature = "distributed")]
@@ -28,6 +29,7 @@ mod local;
 mod placed;
 mod types;
 
+pub use any::{AnyTensor, TensorOf};
 pub use types::Tensor;
 
 #[cfg(feature = "distributed")]
