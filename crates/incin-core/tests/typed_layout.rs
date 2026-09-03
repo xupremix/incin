@@ -388,3 +388,87 @@ fn asking_for_nothing_still_yields_unknown() {
         "a tensor that proved nothing must report nothing"
     );
 }
+
+/// A pointwise operation returns a dense buffer even from a strided operand.
+///
+/// This is the evidence a stronger type claim needs, and it is the case the
+/// existing density test does not reach. `shape_changing_operations_produce_
+/// dense_results` feeds every operation a tensor that is *already* dense, so a
+/// backend that simply forwarded its operand's strides would pass it. The
+/// question that decides whether a pointwise result may assert `RowMajor` is
+/// the opposite one: given an operand that is genuinely non-contiguous, is the
+/// output still dense?
+///
+/// `transpose_view` gives a real strided operand on CPU -- shape `[4, 3]` over
+/// strides `[1, 4]` -- so a pointwise operation applied to it either allocates
+/// a fresh packed buffer, in which case the claim is honest for every operand,
+/// or propagates the strides, in which case it is honest only for dense ones
+/// and pointwise must keep carrying `L` through.
+///
+/// Checked for both arities. A binary operation has a second way to go wrong:
+/// it could adopt either operand's layout, so it is fed one strided and one
+/// dense operand rather than two of a kind.
+#[test]
+fn a_pointwise_result_is_dense_even_from_a_strided_operand() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{Here, Next};
+
+    /// Asserts row-major suffix-product strides and a zero offset.
+    fn assert_dense<S: Shape, B, K, G, P, L>(
+        label: &str,
+        t: &incin_core::prelude::Tensor<S, B, K, G, P, L>,
+    ) where
+        B: incin_core::backend_authoring::Backend,
+        K: incin_core::prelude::DType,
+        G: incin_core::tensor::grad::RequiresGrad,
+        P: incin_core::dist::Placement,
+        L: Layout,
+    {
+        let meta = <B as StorageBackend>::metadata::<K>(t.inner());
+        let dims = meta.shape().as_ref();
+        let strides = meta.strides().as_ref();
+        let mut expected = 1usize;
+        for axis in (0..dims.len()).rev() {
+            assert_eq!(
+                strides[axis], expected,
+                "{label}: axis {axis} of {dims:?} has stride {} but a dense buffer needs {expected}",
+                strides[axis]
+            );
+            expected *= dims[axis];
+        }
+        assert_eq!(meta.offset_elements(), 0, "{label}: must start at zero");
+    }
+
+    let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::ones(()).unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+
+    // The premise. If this stops holding the rest of the test proves nothing,
+    // so it is asserted rather than trusted.
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(strided.inner());
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "the operand must actually be non-contiguous for this test to mean anything"
+    );
+
+    assert_dense("neg", &strided.neg().unwrap());
+    assert_dense("abs", &strided.abs().unwrap());
+    assert_dense("exp", &strided.exp().unwrap());
+    assert_dense("mul_scalar", &strided.mul_scalar(2.0).unwrap());
+
+    let dense_43 = incin_core::prelude::Tensor::<s![4, 3], CpuBackendImpl>::ones(()).unwrap();
+    assert_dense(
+        "add(strided, dense)",
+        &strided.add_exact(&dense_43).unwrap(),
+    );
+    assert_dense(
+        "add(dense, strided)",
+        &dense_43.add_exact(&strided).unwrap(),
+    );
+    assert_dense(
+        "mul(strided, dense)",
+        &strided.mul_exact(&dense_43).unwrap(),
+    );
+}
