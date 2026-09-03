@@ -77,6 +77,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   was missing. This survived because `tests/cuda_optimizer.rs` recomputed Adam,
   AdamW and SGD in its own body and asserted its own arithmetic, calling no incin
   code at all.
+- **CUDA `argmax`/`argmin` computed only the first output row.** The kernel
+  reads its output position from `blockIdx.x` and uses a whole block to stride
+  the reduction axis, but the launch sized the grid as `out_numel / 256` -- one
+  thread per output rather than one block. For any output up to 256 elements
+  that is a single block: row zero correct, every other row left at its
+  zero-initialised value. Silently wrong, not an error. Found by rewriting
+  `tests/cuda_reduce_ops.rs`, which had asserted that `size_bytes` returns `Ok`
+  for three dtypes. The neighbouring welford, cumsum and topk launches already
+  sized their grids correctly.
 - **The CUDA module cache could serve the wrong kernel.** `KernelKey::cache_id`
   was built from the operation name and never the source, so callers that format
   a runtime value into their expression under a fixed name collided with

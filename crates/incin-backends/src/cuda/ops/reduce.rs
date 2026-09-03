@@ -666,7 +666,14 @@ pub(crate) fn launch_argmax_argmin_op(
     let reduce_dim = checked_i32(reduce_dim_size, "reduce dimension")?;
     let out_numel_i32 = checked_i32(out_numel, "output element count")?;
     let block_size = 256u32;
-    let grid_size = crate::cuda::checked_u32(out_numel.div_ceil(block_size as usize), "grid size")?;
+    // One block per output element, not one thread. The kernel reads its output
+    // position from `blockIdx.x` and uses the whole block to stride over the
+    // reduction axis, cooperating through a warp shuffle -- so a grid sized as
+    // `out_numel / block_size` launches one block for any output up to 256
+    // elements, computes row zero, and leaves every other row at its
+    // zero-initialised value. That is silently wrong rather than an error:
+    // `argmax` over a 2 x N returns a correct first row and a zero second one.
+    let grid_size = crate::cuda::checked_u32(out_numel.max(1), "grid size")?;
     // SAFETY: Launches reduction kernel with bounds-checked arguments and exclusive output buffer access.
     unsafe {
         let out_u8 = Arc::get_mut(&mut out_buffer.data)
