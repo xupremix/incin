@@ -67,6 +67,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The CUDA optimizers did nothing and returned zeros.** `launch_sgd_step`,
+  `launch_adam_step` and `launch_adamw_step` each allocated a zeroed output,
+  compiled the kernel module, discarded their gradient and attributes with
+  `let _ = (grad, attrs)`, and returned the zeros. No optimizer kernel was ever
+  launched -- there was not one `.launch(` call in the file. Any model trained on
+  CUDA had its parameters zeroed on the first optimizer step. The kernels
+  themselves were complete and correct in `kernels/optimizer.cu`; only the launch
+  was missing. This survived because `tests/cuda_optimizer.rs` recomputed Adam,
+  AdamW and SGD in its own body and asserted its own arithmetic, calling no incin
+  code at all.
 - **The CUDA module cache could serve the wrong kernel.** `KernelKey::cache_id`
   was built from the operation name and never the source, so callers that format
   a runtime value into their expression under a fixed name collided with
