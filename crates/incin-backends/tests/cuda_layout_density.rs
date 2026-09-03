@@ -175,3 +175,52 @@ fn a_cuda_reduction_is_dense_and_refuses_a_strided_operand() {
          changed and the RowMajor claim needs re-earning"
     );
 }
+
+/// A CUDA matmul result is dense, and a strided operand is refused outright.
+///
+/// Same shape of argument as the reduction test: `matmul_layouts` is
+/// `CONTIGUOUS` on this backend, so the dispatcher rejects a strided operand
+/// before cuBLAS is reached, and a `RowMajor` result cannot be wrong for an
+/// operand the backend will not accept.
+///
+/// Asserted on both sides for the same reason. The claim is contingent on that
+/// capability row, so if the row is ever widened this fails and whoever widens
+/// it has to show the strided GEMM path writes a dense result.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn a_cuda_matmul_is_dense_and_refuses_a_strided_operand() {
+    incin_backends::cuda::testing::require_cuda();
+
+    let lhs = Tensor::<s![4, 3], Cuda>::from_slice(
+        &[
+            1.0f32, 5.0, 9.0, 2.0, 6.0, 10.0, 3.0, 7.0, 11.0, 4.0, 8.0, 12.0,
+        ],
+        (),
+    )
+    .unwrap();
+    let rhs = Tensor::<s![3, 2], Cuda>::ones(()).unwrap();
+
+    let product = lhs.matmul(&rhs).unwrap();
+    assert_dense("matmul", &product);
+    assert_eq!(
+        product.to_vec1::<f32>().unwrap(),
+        alloc_vec(&[15.0, 15.0, 18.0, 18.0, 21.0, 21.0, 24.0, 24.0]),
+        "the same product the CPU test checks, so the two backends are \
+         compared against one answer rather than each against itself"
+    );
+
+    let bias = Tensor::<s![4, 2], Cuda>::ones(()).unwrap();
+    assert_dense("addmm", &bias.addmm(&lhs, &rhs, 1.0, 1.0).unwrap());
+
+    // A strided operand: refused, not silently multiplied wrongly.
+    let base = Tensor::<s![3, 4], Cuda>::ones(()).unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+    assert!(
+        strided.matmul(&rhs).is_err(),
+        "CUDA advertises only contiguous matmul layouts, so a strided operand \
+         must be refused; if this now succeeds the capability row changed and \
+         the RowMajor claim needs re-earning"
+    );
+}

@@ -61,10 +61,11 @@ it would propagate only what the caller already had, and would be wrong the
 moment a layout that is not row-major exists — a `ChannelsLast` operand would
 hand its claim to a row-major result.
 
-`Linear` and `matmul` deliberately do not do this. They allocate too, but the
-claim here rests on conformance tests that feed a genuinely strided operand and
-check the result, and those cover the pointwise surface only. A layout is
-claimed by a test that fails without it.
+`matmul`, `addmm` and `Linear` say the same thing, and for the same reason —
+but they only started to once the conformance test existed. A layout is claimed
+by a test that fails without it, never by an argument that the allocation
+"must" be dense, so each of these waited on a test feeding a genuinely strided
+operand through a real GEMM and checking both the strides *and* the numbers.
 
 ### Ask for it at construction
 
@@ -200,11 +201,12 @@ a style choice:
 - **An operation that is known to allocate a fresh packed buffer states
   `RowMajor` of its own result shape.** Pointwise unary and binary operations
   (broadcasting ones included), the comparison and logical families,
-  `masked_fill`, `where_cond`, `lerp`, `cumsum` and every reduction do this, so
-  a proof appears out of the middle of a chain and `reshape_view` is reachable
-  at the end of one. The claim is *stated*, never carried: carrying the operand's
-  layout would propagate only what the caller already had, and would be false
-  the moment a non-row-major layout exists.
+  `masked_fill`, `where_cond`, `lerp`, `cumsum`, every reduction, `matmul`,
+  `addmm` and `Linear` do this, so a proof appears out of the middle of a chain
+  and `reshape_view` is reachable at the end of one. The claim is *stated*,
+  never carried: carrying the operand's layout would propagate only what the
+  caller already had, and would be false the moment a non-row-major layout
+  exists.
 - **An operation whose result's memory order is not settled states `Dyn`.**
   A layout describes one geometry and cannot be carried to another, and
   shape-changing operations do not agree across backends: CPU `transpose`

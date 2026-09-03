@@ -170,7 +170,8 @@ fn matmul_preserves_named_static_output_type() {
     let rhs: Tensor<R, B> = Tensor::ones(()).unwrap();
     let output = lhs.matmul(&rhs).unwrap();
 
-    fn output_type(_: &Tensor<Expected, B>) {}
+    // `Dense`, not `Tensor`: matmul allocates and states so.
+    fn output_type(_: &incin_core::shapes::Dense<Expected, B>) {}
     output_type(&output);
     assert_eq!(output.shape_buf().as_ref(), &[25, 3, 5]);
 }

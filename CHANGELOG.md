@@ -44,6 +44,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   matching `Dense` alias that defaults its backend the same way. The alias fixed
   `L` to the default, so a facade user could not name the type of anything that
   returned a proof.
+- **`matmul`, `addmm` and `Linear` prove their results are dense.** They were
+  the operations explicitly left claiming nothing, on the grounds that the
+  conformance evidence covered the pointwise surface only. That evidence now
+  exists on both backends, so they claim: `matmul` returns
+  `Dense<S1::Output, ..>`, `addmm` returns `Dense<S1, ..>` (it previously
+  returned `Self`, so like `cumsum` it handed the *bias operand's* layout to a
+  GEMM result), and all four `Linear` `Module` impls return `Dense`. `addmm`'s
+  `mat1`/`mat2` and `matmul`'s operands accept any layout.
+- The CPU test feeds a real strided operand through a GEMM and checks the
+  numbers, not only the strides -- a kernel reading the operand linearly would
+  return a correctly shaped buffer of wrong values. The CUDA test checks the
+  same product, so the backends are compared against one answer rather than
+  each against itself.
 - `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
   where the promotion is fallible, since claiming less can never claim wrongly.
   It exists for the case where two branches must meet and only one allocates;
@@ -126,9 +139,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   **Breaking**: roughly forty methods change return type. A signature written
   as `Tensor<S, B, K, G>` for a pointwise result becomes `Dense<S, B, K, G>`,
   or keeps its shape by calling `forget_layout`; which is right depends on
-  whether the caller wants the proof. `Linear` and `matmul` are unaffected --
-  both still state `Dyn`, because neither has the conformance evidence the
-  pointwise claim rests on.
+  whether the caller wants the proof.
 - The "output carries the operand's layout" contract from the reduction,
   comparison, logical, `masked_fill` and `lerp` surfaces as well. **Breaking**:
   `sum`, `mean`, `max`, `min`, `logsumexp`, their `_keepdim` forms, `cumsum`,

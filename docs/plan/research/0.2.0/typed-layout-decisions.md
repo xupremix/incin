@@ -326,6 +326,36 @@ associated function takes no `self` and nothing else constrained `L`. Fixed by
 tying its `q` operand to the impl block's own layout parameter, which was the
 right signature anyway -- it had been refusing proven operands.
 
+### `matmul` and `Linear` were waiting on evidence, and the evidence was cheap
+
+Both were deliberately left claiming nothing, on the recorded grounds that the
+conformance tests backing the pointwise claim "cover the pointwise surface
+only". That was the right call at the time and the wrong state to leave things
+in, because the missing test was about twenty lines: transpose a `[3, 4]` into a
+strided `[4, 3]`, multiply by a dense `[3, 2]`, check the result.
+
+It found the same bug one more time. `addmm` returned `Self` -- shape-preserving
+again, because the result takes the *bias* operand's shape -- so it handed the
+bias's layout to a buffer a GEMM wrote. Third instance of the pattern after
+`cumsum` and the pointwise surface, and the third time it was the only
+shape-preserving member of its family.
+
+The test checks the numbers, not only the strides. A GEMM that walked the
+strided operand linearly would return a correctly shaped dense buffer of wrong
+values, and a strides-only assertion would pass. The CUDA test multiplies the
+same matrices and asserts the same product, so the two backends are compared
+against one answer rather than each against itself.
+
+One thing fell out for free: `Linear`'s bias-free `Module` impl had a
+`forget_layout()` in it, with a comment explaining that the two arms disagreed
+-- the bias path allocated through a pointwise add and was `RowMajor`, the
+bias-free path handed back `matmul`'s result, which claimed nothing. Once
+`matmul` claimed, both arms agreed and the weakening deleted itself. **A
+`forget_layout` call is a marker for an operation upstream that has not made its
+claim yet**, which makes the remaining ones worth reading as a to-do list rather
+than as settled design. The one in `rnn.rs` is not: a loop variable can only
+hold what every assignment satisfies, and the seed is the caller's.
+
 ### What CUDA contributes, and what it does not
 
 The reduction claim rests on different evidence from the pointwise one, because

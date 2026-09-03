@@ -330,14 +330,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
         &self,
         rhs: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<
-        Tensor<
-            S1::Output,
-            B,
-            K,
-            crate::tensor::grad::JoinedGrad<G1, G2>,
-            Local,
-            crate::shapes::Dyn,
-        >,
+        crate::shapes::Dense<S1::Output, B, K, crate::tensor::grad::JoinedGrad<G1, G2>, Local>,
     >
     where
         S2: Shape + DynShape,
@@ -428,13 +421,13 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     }
 
     /// Fused add-matmul: `beta * self + alpha * (mat1 x mat2)`.
-    pub fn addmm<S2: Shape, S3: Shape>(
+    pub fn addmm<S2: Shape, S3: Shape, L2: Layout, L3: Layout>(
         &self,
-        mat1: &Tensor<S2, B, K, G1>,
-        mat2: &Tensor<S3, B, K, G1>,
+        mat1: &Tensor<S2, B, K, G1, Local, L2>,
+        mat2: &Tensor<S3, B, K, G1, Local, L3>,
         beta: f64,
         alpha: f64,
-    ) -> Result<Self>
+    ) -> Result<crate::shapes::Dense<S1, B, K, G1, Local>>
     where
         S1: DynShape,
         S2: Shape + DynShape,

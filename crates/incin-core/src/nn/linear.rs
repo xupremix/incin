@@ -449,7 +449,7 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
+    type Output = crate::shapes::Dense<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local>;
     type Error = Error;
 
     fn forward(
@@ -485,7 +485,7 @@ where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
+    type Output = crate::shapes::Dense<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local>;
     type Error = Error;
 
     fn forward(
@@ -512,7 +512,7 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, crate::tensor::grad::NoGrad>;
+    type Output = crate::shapes::Dense<Dyn, B, K, crate::tensor::grad::NoGrad, Local>;
     type Error = Error;
 
     fn forward(
@@ -671,7 +671,7 @@ where
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
     type Output =
-        Tensor<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
+        crate::shapes::Dense<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local>;
     type Error = Error;
 
     fn forward(
@@ -693,14 +693,14 @@ where
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_dyn = x_dyn.matmul(&weight_t)?;
 
-        // The two arms disagree about layout: the bias path allocates through
-        // a pointwise add and so is `RowMajor`, while the bias-free path hands
-        // back `matmul`'s result unchanged. Only the weaker of the two is true
-        // of both, so the proof is dropped here rather than claimed for a
-        // buffer one arm never touched.
+        // The two arms used to disagree about layout -- the bias path allocated
+        // through a pointwise add and was `RowMajor`, while the bias-free path
+        // handed back `matmul`'s result, which claimed nothing -- so the proof
+        // was dropped to whatever was true of both. Now that `matmul` states
+        // its own result is dense, both arms agree and the weakening is gone.
         let out_final = if let Some(b) = &self.bias {
             let bias_dyn = b.as_tensor()?.into_shape::<Dyn>()?;
-            out_dyn.broadcast_add(&bias_dyn)?.forget_layout()
+            out_dyn.broadcast_add(&bias_dyn)?
         } else {
             out_dyn
         };

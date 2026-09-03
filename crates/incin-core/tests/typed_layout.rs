@@ -520,3 +520,60 @@ fn a_reduction_result_is_dense_even_from_a_strided_operand() {
     // Last: `sum_all` consumes the receiver.
     assert_dense("sum_all", &strided.sum_all().unwrap());
 }
+
+/// A matmul result is dense whatever its operands' strides were.
+///
+/// The evidence `matmul` and `addmm` were explicitly waiting on. Both allocate,
+/// but until this test the claim rested on what the backends happen to do
+/// rather than on anything checked -- and `addmm` was worse than merely weak:
+/// it returned `Self`, so like `cumsum` before it, it handed the *bias
+/// operand's* layout to a buffer produced by a GEMM.
+///
+/// CPU advertises `matmul_layouts = CPU_LAYOUTS`, so it genuinely accepts a
+/// strided operand here rather than refusing it the way CUDA does. That makes
+/// this the backend where the question has a non-vacuous answer.
+#[test]
+fn a_matmul_result_is_dense_even_from_a_strided_operand() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{Here, Next};
+
+    // [3, 4] transposed to [4, 3] over strides [1, 4]: a real strided operand
+    // whose shape still lines up for a [4, 3] x [3, 2] product.
+    let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::from_slice(
+        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+        (),
+    )
+    .unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(strided.inner());
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "the operand must actually be non-contiguous for this test to mean anything"
+    );
+
+    let rhs = incin_core::prelude::Tensor::<s![3, 2], CpuBackendImpl>::ones(()).unwrap();
+    let product = strided.matmul(&rhs).unwrap();
+    assert_dense("matmul(strided, dense)", &product);
+
+    // A GEMM that read the strided operand linearly would produce a dense
+    // buffer of the wrong numbers, so the values are checked too. Row i of the
+    // transpose is [i+1, i+5, i+9], and every rhs entry is one, so each output
+    // row is that row's sum repeated twice.
+    assert_eq!(
+        product.to_vec1::<f32>().unwrap(),
+        vec![15.0, 15.0, 18.0, 18.0, 21.0, 21.0, 24.0, 24.0],
+        "the GEMM must read the operand by its strides, not linearly"
+    );
+
+    // `addmm` adds a bias to the product. Its result used to carry the bias's
+    // layout; the buffer it writes is a fresh dense one.
+    let bias = incin_core::prelude::Tensor::<s![4, 2], CpuBackendImpl>::ones(()).unwrap();
+    assert_dense(
+        "addmm",
+        &bias.addmm(&strided, &rhs, 1.0, 1.0).unwrap(),
+    );
+}
