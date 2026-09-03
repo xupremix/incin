@@ -16,7 +16,7 @@
 #![cfg(feature = "cuda")]
 
 use incin_backends::cuda::testing::{
-    argmax_argmin, cuda_available, cumsum, download_f32, download_i64, reduce, topk,
+    argmax_argmin, cumsum, download_f32, download_i64, reduce, require_cuda, topk,
     upload_f32_shaped,
 };
 
@@ -33,9 +33,7 @@ fn matrix() -> (Vec<usize>, Vec<f32>) {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn axis_reductions_match_their_definitions() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (shape, values) = matrix();
     let input = upload_f32_shaped(&shape, &values);
     let rows: Vec<&[f32]> = values.chunks(4).collect();
@@ -64,9 +62,7 @@ fn axis_reductions_match_their_definitions() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn keepdim_retains_the_reduced_axis() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (shape, values) = matrix();
     let input = upload_f32_shaped(&shape, &values);
 
@@ -85,9 +81,7 @@ fn keepdim_retains_the_reduced_axis() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn argmax_and_argmin_return_positions() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (shape, values) = matrix();
     let input = upload_f32_shaped(&shape, &values);
 
@@ -104,9 +98,7 @@ fn argmax_and_argmin_return_positions() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cumsum_accumulates_along_the_axis() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (shape, values) = matrix();
     let input = upload_f32_shaped(&shape, &values);
 
@@ -134,9 +126,7 @@ fn cumsum_accumulates_along_the_axis() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn topk_returns_ordered_values_and_their_indices() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (shape, values) = matrix();
     let input = upload_f32_shaped(&shape, &values);
 

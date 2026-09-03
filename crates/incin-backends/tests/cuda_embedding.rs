@@ -15,7 +15,7 @@
 #![cfg(feature = "cuda")]
 
 use incin_backends::cuda::testing::{
-    cuda_available, download_f32, embedding, embedding_backward, upload_f32_shaped, upload_i64,
+    download_f32, embedding, embedding_backward, require_cuda, upload_f32_shaped, upload_i64,
 };
 
 fn close(left: f64, right: f64) -> bool {
@@ -43,9 +43,7 @@ fn weight() -> (Vec<usize>, Vec<f32>) {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn embedding_gathers_the_rows_its_indices_name() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (shape, values) = weight();
     let w = upload_f32_shaped(&shape, &values);
     let ids = [2_i64, 0, 3, 2];
@@ -76,9 +74,7 @@ fn embedding_gathers_the_rows_its_indices_name() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn embedding_backward_accumulates_repeated_indices() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (vocab_size, hidden_size) = (4usize, 3usize);
     let ids = [2_i64, 0, 3, 2];
     let indices = upload_i64(&[ids.len()], &ids);
@@ -130,9 +126,7 @@ fn embedding_backward_accumulates_repeated_indices() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn embedding_backward_leaves_unreferenced_rows_at_zero() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (vocab_size, hidden_size) = (4usize, 3usize);
     // Row 1 is never named.
     let ids = [0_i64, 2, 3];

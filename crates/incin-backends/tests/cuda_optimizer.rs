@@ -15,7 +15,7 @@
 
 #![cfg(feature = "cuda")]
 
-use incin_backends::cuda::testing::{cuda_available, download_f32, upload_f32};
+use incin_backends::cuda::testing::{download_f32, require_cuda, upload_f32};
 use incin_core::exec::catalog::{AdamAttributes, AdamWAttributes, SgdAttributes};
 
 /// Single-precision tolerance, relative where the magnitude warrants it.
@@ -34,9 +34,7 @@ fn grads() -> Vec<f32> {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn sgd_step_matches_the_update_rule() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (p, g) = (params(), grads());
     let learning_rate = 0.1;
 
@@ -66,9 +64,7 @@ fn sgd_step_matches_the_update_rule() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn adam_step_matches_the_update_rule_including_bias_correction() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (p, g) = (params(), grads());
     let attrs = AdamAttributes {
         learning_rate: 1e-3,
@@ -121,9 +117,7 @@ fn adam_step_matches_the_update_rule_including_bias_correction() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn adamw_decouples_weight_decay_from_the_gradient() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (p, g) = (params(), grads());
     // Chosen so the decay term, `lr * weight_decay * p`, is comfortably above
     // the comparison tolerance. At a realistic 1e-3 learning rate and 0.01
@@ -188,9 +182,7 @@ fn adamw_decouples_weight_decay_from_the_gradient() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn adam_carries_moment_state_between_steps() {
-    if !cuda_available() {
-        return;
-    }
+    require_cuda();
     let (p, g) = (params(), grads());
     let mut attrs = AdamAttributes {
         learning_rate: 1e-3,

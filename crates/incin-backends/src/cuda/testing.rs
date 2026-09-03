@@ -18,10 +18,30 @@ use incin_core::exec::catalog::{AdamAttributes, AdamWAttributes, SgdAttributes};
 use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::DTypeId;
 
-/// Whether a CUDA device is present, so a suite can skip rather than fail.
-#[must_use]
-pub fn cuda_available() -> bool {
-    cudarc::driver::CudaContext::new(0).is_ok()
+/// Aborts unless a CUDA device is present.
+///
+/// This deliberately replaces an earlier `cuda_available() -> bool`, which
+/// existed "so a suite can skip rather than fail". Skipping is the wrong
+/// behaviour here and reintroduced the exact defect these suites were rewritten
+/// to remove: every hardware test is `#[ignore]`d, so reaching one at all means
+/// the caller explicitly asked for the hardware run. Returning early in that
+/// situation reports `ok` for a test that launched nothing -- indistinguishable
+/// in any log, summary or CI badge from a test that ran and passed.
+///
+/// That is how three real defects survived: a vacuous suite and a skipped suite
+/// produce the same green line. Failing loudly makes "no device" look like what
+/// it is.
+///
+/// # Panics
+///
+/// If no CUDA device can be opened on ordinal 0.
+pub fn require_cuda() {
+    assert!(
+        cudarc::driver::CudaContext::new(0).is_ok(),
+        "no CUDA device, but these tests are #[ignore]d -- running them is an \
+         explicit request for hardware. Skipping here would report `ok` for a \
+         test that launched nothing."
+    );
 }
 
 /// Uploads `values` as a rank-1 `f32` tensor on device 0.
