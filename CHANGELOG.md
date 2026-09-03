@@ -108,6 +108,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **CUDA pointwise refused the only operand that made its strided kernel
+  reachable.** `elementwise_layouts` declared `CONTIGUOUS`, so the descriptor
+  path answered `layout strided is unsupported for neg` for any non-contiguous
+  CUDA tensor -- while the strided elementwise kernel exists, is benchmarked,
+  and beats materialising for a single consumer. The declaration was true when
+  written, since every CUDA operation materialised and no strided CUDA tensor
+  could be built; `transpose_view` ended that and the row was not revisited,
+  which meant this changelog's own "~45% faster for a single pointwise
+  consumer" described a path callers could not take. 54 CUDA elementwise
+  operations now advertise `strided`. The other capability rows stay narrow
+  until each has the same evidence.
+- The `Module` doctest had not compiled since the layout conversion introduced
+  it: it spelled `crate::tensor::grad::NoGrad`, and inside a doctest `crate` is
+  the doctest's own crate. Missed because `cargo test --all-targets`, the CI
+  invocation, is the one form that does not build doctests.
+
 - **Every codegen module rendered CUDA that could not compile.** All 21 emitted
   `#include <math.h>`, which NVRTC rejects outright -- it compiles a translation
   unit with no host headers on the include path. That is the shared reason
