@@ -77,6 +77,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   was missing. This survived because `tests/cuda_optimizer.rs` recomputed Adam,
   AdamW and SGD in its own body and asserted its own arithmetic, calling no incin
   code at all.
+- **CUDA kernels were compiled for NVRTC's default architecture, not the
+  device's.** No `--gpu-architecture` was passed, so every kernel targeted a
+  pre-sm_60 virtual architecture. That is not merely a lost optimisation: an
+  intrinsic introduced after the default does not exist, so a kernel using one
+  fails to *compile*, taking its whole module with it. The embedding module did
+  exactly that -- `embedding_backward` needs `atomicAdd(double*, double)` from
+  sm_60 -- which took the forward lookup down alongside it, so CUDA embeddings
+  were entirely non-functional. The dispatcher now queries its device's compute
+  capability and names the newest virtual architecture it supports.
 - **CUDA `argmax`/`argmin` computed only the first output row.** The kernel
   reads its output position from `blockIdx.x` and uses a whole block to stride
   the reduction axis, but the launch sized the grid as `out_numel / 256` -- one

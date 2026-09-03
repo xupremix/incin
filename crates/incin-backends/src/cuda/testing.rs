@@ -131,6 +131,76 @@ pub fn topk(
     crate::cuda::ops::reduce::launch_topk_op(storage, k, axis, largest, DTypeId::I64)
 }
 
+/// Uploads `values` as an `i64` tensor on device 0.
+///
+/// Index operands are genuinely integer, so they cannot go through the `f32`
+/// upload path.
+///
+/// # Panics
+///
+/// Panics if the allocation or transfer fails.
+#[must_use]
+pub fn upload_i64(shape: &[usize], values: &[i64]) -> CudaStorage {
+    let bytes = bytemuck::cast_slice::<i64, u8>(values);
+    crate::cuda::backend::cuda_from_bytes(shape, DTypeId::I64.into(), 0, bytes)
+        .expect("uploading an i64 slice to device 0")
+}
+
+/// Gathers embedding rows named by `indices`.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn embedding(weight: &CudaStorage, indices: &CudaStorage) -> Result<CudaStorage> {
+    crate::cuda::ops::shape::launch_embedding(weight, indices)
+}
+
+/// Scatters an embedding gradient back into a vocabulary-sized buffer.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn embedding_backward(
+    grad_output: &CudaStorage,
+    indices: &CudaStorage,
+    vocab_size: usize,
+    hidden_size: usize,
+) -> Result<CudaStorage> {
+    crate::cuda::ops::shape::launch_embedding_backward(
+        grad_output,
+        indices,
+        vocab_size,
+        hidden_size,
+    )
+}
+
+/// Transposes two axes by materialising a fresh contiguous buffer.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Result<CudaStorage> {
+    crate::cuda::ops::shape::launch_transpose(t, dim1, dim2)
+}
+
+/// Broadcasts `t` to `target_shape`, materialising the result.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn broadcast(t: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
+    crate::cuda::ops::shape::launch_broadcast(t, target_shape)
+}
+
+/// Narrows `t` along `dim`, materialising the result.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn narrow(t: &CudaStorage, dim: usize, start: usize, len: usize) -> Result<CudaStorage> {
+    crate::cuda::ops::shape::launch_narrow(t, dim, start, len)
+}
+
 /// Runs the fused SGD step kernel.
 ///
 /// # Errors
