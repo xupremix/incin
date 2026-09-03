@@ -90,13 +90,22 @@ pub(crate) mod cuda {
         alloc::vec::Vec::new()
     }
 
-    /// Compiles a CUDA C/C++ source string to PTX, wiring up `--include-path`
-    /// so kernels that need `cuda_fp16.h`/`cuda_bf16.h` for half/bfloat16
-    /// support can find them.
+    /// Compiles CUDA C to PTX for device 0's architecture.
+    ///
+    /// The convenience form for callers that have no dispatcher to hand --
+    /// notably the template-compilation smoke tests, which check that a rendered
+    /// kernel is valid CUDA C. Those must target the same architecture the real
+    /// path does, or they would certify sources that cannot build on the device
+    /// that will actually run them.
+    // Reached only from `kernel::tests`, so a non-test build sees it unused.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn compile_ptx_with_cuda_includes(
         src: &str,
     ) -> core::result::Result<cudarc::nvrtc::Ptx, cudarc::nvrtc::CompileError> {
-        compile_ptx_for_arch(src, None)
+        let capability = cudarc::driver::CudaContext::new(0)
+            .ok()
+            .and_then(|ctx| ctx.compute_capability().ok());
+        compile_ptx_for_arch(src, capability)
     }
 
     /// The virtual architectures a compute capability may be compiled against.
