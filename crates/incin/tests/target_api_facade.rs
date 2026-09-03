@@ -41,9 +41,6 @@ fn the_whole_surface_is_reachable_from_the_facade_prelude() {
 /// asserts nothing.
 #[test]
 fn target_api_compile_fail_diagnostics() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     // Snapshots here are recorded under CI's invocation:
     //
     //   cargo test --all-targets --no-default-features \

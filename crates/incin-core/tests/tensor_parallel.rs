@@ -340,9 +340,6 @@ fn identities_empty_duplicate_and_bad_rank_are_structured_errors() {
 
 #[test]
 fn static_tp_contract_rejections_are_compile_errors() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let tests = trybuild::TestCases::new();
     tests.compile_fail("tests/tensor_parallel_compile_fail/*.rs");
     if std::env::var_os("TRYBUILD").as_deref() != Some(std::ffi::OsStr::new("overwrite")) {

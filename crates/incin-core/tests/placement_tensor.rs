@@ -294,9 +294,6 @@ fn dyn_reshard_uses_the_runtime_legal_transition_table() {
 
 #[test]
 fn illegal_static_reshards_are_compile_errors() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/placement_tensor_compile_fail/*.rs");
 }

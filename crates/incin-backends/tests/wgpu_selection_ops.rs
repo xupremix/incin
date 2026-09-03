@@ -33,14 +33,32 @@ type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
 const LHS: [f32; 6] = [1.0, 5.0, 3.0, 3.0, -2.0, 0.5];
 const RHS: [f32; 6] = [4.0, 2.0, 3.0, 3.0, -7.0, 0.5];
 
-fn has_wgpu() -> bool {
-    <TestBackend as HostInterop>::from_bytes::<f32>(
-        &[0u8; 4],
-        &[1],
-        DTypeId::F32.descriptor(),
-        &DeviceId::wgpu(0),
-    )
-    .is_ok()
+/// Aborts unless a WGPU adapter is present.
+///
+/// Replaces a `has_wgpu() -> bool` predicate that callers used to skip with an
+/// early `return`. That reports `ok` for a test that ran nothing, so the job
+/// named "WGPU Software Adapter Tests" stayed green whether or not an adapter
+/// existed -- the same defect that let three CUDA bugs survive behind suites
+/// that launched no kernel.
+///
+/// Failing is right here because these suites are `#![cfg(feature = "wgpu")]`:
+/// compiling them at all is an explicit request for the backend, and both CI
+/// jobs that enable it install a software adapter first.
+///
+/// # Panics
+///
+/// If no WGPU adapter can be reached.
+fn require_wgpu() {
+    assert!(
+        <TestBackend as HostInterop>::from_bytes::<f32>(
+            &[0u8; 4],
+            &[1],
+            DTypeId::F32.descriptor(),
+            &DeviceId::wgpu(0),
+        )
+        .is_ok(),
+        "no WGPU adapter, but the `wgpu` feature is enabled -- that is an explicit request for this backend. Skipping here would report `ok` for a test that ran nothing."
+    );
 }
 
 fn upload(values: &[f32]) -> TestStorage {
@@ -82,9 +100,7 @@ where
 
 #[test]
 fn maximum_matches_the_cpu_reference_and_records_a_gradient() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let (lhs, rhs) = (upload(&LHS), upload(&RHS));
     let (out, recorded) = run::<op::Maximum>(&lhs, &rhs);
     assert_eq!(read(&out), vec![4.0, 5.0, 3.0, 3.0, -2.0, 0.5]);
@@ -99,9 +115,7 @@ fn maximum_matches_the_cpu_reference_and_records_a_gradient() {
 
 #[test]
 fn minimum_matches_the_cpu_reference_and_records_a_gradient() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let (lhs, rhs) = (upload(&LHS), upload(&RHS));
     let (out, recorded) = run::<op::Minimum>(&lhs, &rhs);
     assert_eq!(read(&out), vec![1.0, 2.0, 3.0, 3.0, -7.0, 0.5]);
@@ -110,9 +124,7 @@ fn minimum_matches_the_cpu_reference_and_records_a_gradient() {
 
 #[test]
 fn abs_diff_matches_the_cpu_reference_and_records_a_gradient() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let (lhs, rhs) = (upload(&LHS), upload(&RHS));
     let (out, recorded) = run::<op::AbsDiff>(&lhs, &rhs);
     assert_eq!(read(&out), vec![3.0, 3.0, 0.0, 0.0, 5.0, 0.0]);

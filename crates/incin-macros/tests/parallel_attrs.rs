@@ -32,9 +32,6 @@ fn parallel_and_shard_field_attributes_pass() {
 
 #[test]
 fn parallel_attrs_compile_fail_diagnostics() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/parallel_attrs_compile_fail/*.rs");
 }

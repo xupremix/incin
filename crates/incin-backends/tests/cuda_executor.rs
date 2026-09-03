@@ -18,14 +18,28 @@ use incin_core::typenum::U0;
 type TestBackend = CudaBackendImpl<CudaN<U0>>;
 type TestStorage = <TestBackend as incin_core::backend_authoring::StorageBackend>::Storage<f32>;
 
-fn has_cuda() -> bool {
-    TestBackend::from_bytes::<f32>(
-        bytemuck::cast_slice(&[1.0f32]),
-        &[1],
-        DTypeId::F32.into(),
-        &DeviceId::cuda(0),
-    )
-    .is_ok()
+/// Aborts unless a CUDA device is present.
+///
+/// Replaces a `has_cuda() -> bool` predicate that callers used to skip with an
+/// early `return`. Every caller is `#[ignore]`d, so reaching one is a deliberate
+/// request for the hardware run, and returning early there reports `ok` for a
+/// test that launched nothing -- the pattern that kept three real CUDA defects
+/// green for as long as they existed.
+///
+/// # Panics
+///
+/// If no CUDA device can be opened on ordinal 0.
+fn require_cuda() {
+    assert!(
+        TestBackend::from_bytes::<f32>(
+            bytemuck::cast_slice(&[1.0f32]),
+            &[1],
+            DTypeId::F32.into(),
+            &DeviceId::cuda(0),
+        )
+        .is_ok(),
+        "no CUDA device, but this test is #[ignore]d -- running it is an explicit request for hardware. Skipping here would report `ok` for a test that launched nothing."
+    );
 }
 
 fn storage(shape: &[usize], values: &[f32]) -> TestStorage {
@@ -113,9 +127,7 @@ where
 
 #[test]
 fn cuda_matmul_descriptor_execution_matches_matrix_multiplication() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let lhs = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
     let rhs = storage(&[3, 2], &[7., 8., 9., 10., 11., 12.]);
     let validated = lower_matmul(&[2, 3], &[3, 2]);
@@ -141,9 +153,7 @@ fn cuda_matmul_descriptor_execution_matches_matrix_multiplication() {
 
 #[test]
 fn cuda_conv2d_descriptor_execution_matches_direct_convolution() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let input_values: Vec<f32> = (0..32).map(|value| value as f32 * 0.25 - 4.0).collect();
     let weight_values: Vec<f32> = (0..54).map(|value| value as f32 * 0.1 - 2.5).collect();
     let bias_values = [0.5_f32, -0.25, 1.0];
@@ -173,9 +183,7 @@ fn cuda_conv2d_descriptor_execution_matches_direct_convolution() {
 
 #[test]
 fn cuda_reduction_descriptor_routes_to_the_accumulation_it_names() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let input = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
 
     macro_rules! check {
@@ -202,9 +210,7 @@ fn cuda_reduction_descriptor_routes_to_the_accumulation_it_names() {
 
 #[test]
 fn cuda_pool_descriptor_routes_to_the_accumulation_it_names() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let values: Vec<f32> = (1..=16).map(|value| value as f32).collect();
     let input = storage(&[1, 1, 4, 4], &values);
 
@@ -250,9 +256,7 @@ fn cuda_pool_descriptor_routes_to_the_accumulation_it_names() {
 
 #[test]
 fn cuda_every_advertised_unary_activation_is_reachable_through_canonical_dispatch() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     use incin_core::backend_authoring::execute;
     use incin_core::backend_authoring::operations::NoAttributes;
 
@@ -303,9 +307,7 @@ fn cuda_every_advertised_unary_activation_is_reachable_through_canonical_dispatc
 
 #[test]
 fn cuda_fused_rms_norm_matches_analytical_reference() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let input = storage(&[2, 4], &[1.0, 2.0, 3.0, 4.0, 2.0, 2.0, 2.0, 2.0]);
     let weight = storage(&[4], &[1.0, 1.0, 1.0, 1.0]);
 
@@ -352,9 +354,7 @@ fn cuda_fused_rms_norm_matches_analytical_reference() {
 
 #[test]
 fn cuda_fused_softmax_matches_analytical_reference() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let input = storage(&[2, 3], &[0.0, 1.0, 2.0, -1.0, 0.0, 1.0]);
 
     let validated = Descriptor::<op::Softmax>::infer_runtime(
@@ -380,9 +380,7 @@ fn cuda_fused_softmax_matches_analytical_reference() {
 
 #[test]
 fn cuda_scaled_dot_product_attention_executes_cleanly() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     use incin_core::exec::catalog::AttentionAttributes;
 
     let q = storage(&[2, 4], &[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);

@@ -35,9 +35,6 @@ fn placement_expansion_and_projections() {
 
 #[test]
 fn placement_compile_fail_diagnostics() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/placement_compile_fail/*.rs");
 }

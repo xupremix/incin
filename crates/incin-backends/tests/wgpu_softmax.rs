@@ -34,14 +34,32 @@ const VALUES: [f32; 8] = [1.0, 2.0, 3.0, 4.0, -8.0, 0.0, 8.0, 0.0];
 const ROWS: usize = 2;
 const COLS: usize = 4;
 
-fn has_wgpu() -> bool {
-    <TestBackend as HostInterop>::from_bytes::<f32>(
-        &[0u8; 4],
-        &[1],
-        DTypeId::F32.descriptor(),
-        &DeviceId::wgpu(0),
-    )
-    .is_ok()
+/// Aborts unless a WGPU adapter is present.
+///
+/// Replaces a `has_wgpu() -> bool` predicate that callers used to skip with an
+/// early `return`. That reports `ok` for a test that ran nothing, so the job
+/// named "WGPU Software Adapter Tests" stayed green whether or not an adapter
+/// existed -- the same defect that let three CUDA bugs survive behind suites
+/// that launched no kernel.
+///
+/// Failing is right here because these suites are `#![cfg(feature = "wgpu")]`:
+/// compiling them at all is an explicit request for the backend, and both CI
+/// jobs that enable it install a software adapter first.
+///
+/// # Panics
+///
+/// If no WGPU adapter can be reached.
+fn require_wgpu() {
+    assert!(
+        <TestBackend as HostInterop>::from_bytes::<f32>(
+            &[0u8; 4],
+            &[1],
+            DTypeId::F32.descriptor(),
+            &DeviceId::wgpu(0),
+        )
+        .is_ok(),
+        "no WGPU adapter, but the `wgpu` feature is enabled -- that is an explicit request for this backend. Skipping here would report `ok` for a test that ran nothing."
+    );
 }
 
 fn upload(values: &[f32], shape: &[usize]) -> TestStorage {
@@ -97,9 +115,7 @@ fn reference(values: &[f32], rows: usize, cols: usize) -> Vec<f64> {
 
 #[test]
 fn softmax_matches_the_reference_and_records_a_gradient() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[ROWS, COLS]);
     let (out, recorded) = softmax(&input, 1);
     let got = read(&out);
@@ -125,9 +141,7 @@ fn softmax_matches_the_reference_and_records_a_gradient() {
 /// breaks first: each row sums to exactly one.
 #[test]
 fn every_row_sums_to_one() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[ROWS, COLS]);
     let (out, _) = softmax(&input, 1);
     let got = read(&out);
@@ -146,9 +160,7 @@ fn every_row_sums_to_one() {
 /// pass every assertion above and fail this one.
 #[test]
 fn the_axis_attribute_is_honoured() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[ROWS, COLS]);
     let (down_columns, _) = softmax(&input, 0);
     let (across_rows, _) = softmax(&input, 1);
@@ -174,9 +186,7 @@ fn the_axis_attribute_is_honoured() {
 /// no shift and drift or overflow on a wider row than this one.
 #[test]
 fn a_wide_row_stays_finite_and_normalised() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     const WIDE: [f32; 4] = [-100.0, 0.0, 100.0, 50.0];
     let input = upload(&WIDE, &[1, 4]);
     let (out, _) = softmax(&input, 1);

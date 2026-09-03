@@ -34,8 +34,22 @@ use incin_core::tensor::device::DeviceId;
 use incin_core::tensor::dtype::DTypeId;
 use std::time::Instant;
 
-fn has_cuda() -> bool {
-    cudarc::driver::CudaContext::new(0).is_ok()
+/// Aborts unless a CUDA device is present.
+///
+/// Replaces a `has_cuda() -> bool` predicate that callers used to skip with an
+/// early `return`. Every caller is `#[ignore]`d, so reaching one is a deliberate
+/// request for the hardware run, and returning early there reports `ok` for a
+/// test that launched nothing -- the pattern that kept three real CUDA defects
+/// green for as long as they existed.
+///
+/// # Panics
+///
+/// If no CUDA device can be opened on ordinal 0.
+fn require_cuda() {
+    assert!(
+        cudarc::driver::CudaContext::new(0).is_ok(),
+        "no CUDA device, but this test is #[ignore]d -- running it is an explicit request for hardware. Skipping here would report `ok` for a test that launched nothing."
+    );
 }
 
 fn storage(shape: &[usize], values: Vec<f32>) -> CudaStorage {
@@ -86,9 +100,7 @@ fn timed(iterations: u32, mut body: impl FnMut() -> CudaStorage) -> f64 {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn view_cost_amortised_over_repeated_reads() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
     let iterations = 100;
     let (rows, cols) = (1024usize, 1024usize);
@@ -160,9 +172,7 @@ fn view_cost_amortised_over_repeated_reads() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn extent_folding_on_the_strided_path() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
     let iterations = 200;
 
@@ -213,9 +223,7 @@ fn extent_folding_on_the_strided_path() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn view_cost_materialise_versus_strided_read() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
     let iterations = 200;
 

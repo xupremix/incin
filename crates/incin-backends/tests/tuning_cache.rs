@@ -311,9 +311,6 @@ fn measured_records_require_real_measurement_provenance() {
 
 #[test]
 fn static_cache_contracts_are_compile_checked() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/tuning_cache_compile_fail/*.rs");
 }

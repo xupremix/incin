@@ -19,9 +19,6 @@ use std::path::Path;
 #[test]
 /// Compile fail.
 fn compile_fail() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let t = trybuild::TestCases::new();
     t.pass("tests/compile_pass/*.rs");
     t.compile_fail("tests/compile_fail/*.rs");

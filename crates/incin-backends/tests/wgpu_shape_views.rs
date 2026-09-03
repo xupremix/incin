@@ -25,14 +25,32 @@ type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
 /// mistake shows up as a different vector rather than a coincidence.
 const VALUES: [f32; 6] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
 
-fn has_wgpu() -> bool {
-    <TestBackend as HostInterop>::from_bytes::<f32>(
-        &[0u8; 4],
-        &[1],
-        DTypeId::F32.descriptor(),
-        &DeviceId::wgpu(0),
-    )
-    .is_ok()
+/// Aborts unless a WGPU adapter is present.
+///
+/// Replaces a `has_wgpu() -> bool` predicate that callers used to skip with an
+/// early `return`. That reports `ok` for a test that ran nothing, so the job
+/// named "WGPU Software Adapter Tests" stayed green whether or not an adapter
+/// existed -- the same defect that let three CUDA bugs survive behind suites
+/// that launched no kernel.
+///
+/// Failing is right here because these suites are `#![cfg(feature = "wgpu")]`:
+/// compiling them at all is an explicit request for the backend, and both CI
+/// jobs that enable it install a software adapter first.
+///
+/// # Panics
+///
+/// If no WGPU adapter can be reached.
+fn require_wgpu() {
+    assert!(
+        <TestBackend as HostInterop>::from_bytes::<f32>(
+            &[0u8; 4],
+            &[1],
+            DTypeId::F32.descriptor(),
+            &DeviceId::wgpu(0),
+        )
+        .is_ok(),
+        "no WGPU adapter, but the `wgpu` feature is enabled -- that is an explicit request for this backend. Skipping here would report `ok` for a test that ran nothing."
+    );
 }
 
 fn upload(values: &[f32], shape: &[usize]) -> TestStorage {
@@ -69,9 +87,7 @@ where
 /// a swap that did nothing would be caught.
 #[test]
 fn transpose_reorders_a_rectangular_tensor() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[2, 3]);
     let out = run::<op::TransposeExact>(
         &input,
@@ -89,9 +105,7 @@ fn transpose_reorders_a_rectangular_tensor() {
 /// entry uses for its backward.
 #[test]
 fn transpose_is_its_own_inverse() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[2, 3]);
     let swap = || TransposeAttributes {
         first: 0,
@@ -105,9 +119,7 @@ fn transpose_is_its_own_inverse() {
 
 #[test]
 fn flatten_collapses_an_axis_range_without_moving_data() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[1, 2, 3]);
     let out = run::<op::FlattenExact>(
         &input,
@@ -126,9 +138,7 @@ fn flatten_collapses_an_axis_range_without_moving_data() {
 
 #[test]
 fn squeeze_drops_a_unit_axis_without_moving_data() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[1, 2, 3]);
     let out = run::<op::SqueezeExact>(&input, AxisAttributes { axis: 0 });
 
@@ -140,9 +150,7 @@ fn squeeze_drops_a_unit_axis_without_moving_data() {
 
 #[test]
 fn unsqueeze_then_squeeze_round_trips() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[2, 3]);
     let widened = run::<op::UnsqueezeExact>(&input, AxisAttributes { axis: 0 });
     let narrowed = run::<op::SqueezeExact>(&widened, AxisAttributes { axis: 0 });
@@ -159,9 +167,7 @@ fn unsqueeze_then_squeeze_round_trips() {
 /// asked for, which every downstream shape check would then trust.
 #[test]
 fn squeeze_refuses_a_non_unit_axis() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     let input = upload(&VALUES, &[2, 3]);
     let context = ExecutionContext::new(TestBackend::default());
     let inputs = [TensorHandle::from_storage::<TestBackend, f32, _>(&input)];

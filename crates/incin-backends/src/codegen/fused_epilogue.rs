@@ -90,7 +90,6 @@ impl FusedEpilogueSpec {
         .unwrap();
         writeln!(out, "#include <cuda_fp16.h>").unwrap();
         writeln!(out, "#include <cuda_bf16.h>").unwrap();
-        writeln!(out, "#include <math.h>").unwrap();
         writeln!(out).unwrap();
 
         write!(out, "__global__ void {}(", self.name).unwrap();

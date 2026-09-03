@@ -5,6 +5,25 @@ use incin_backends::codegen::{
 };
 use incin_core::tensor::dtype::DTypeId;
 
+/// Aborts unless a CUDA device is present.
+///
+/// Replaces a `catch_unwind` probe whose result was bound and then used to
+/// `return` early, reporting `ok` for a test that compiled and launched
+/// nothing. The JIT test below is the one place this file exercises real
+/// hardware, so a missing device is a broken run rather than a lighter one.
+///
+/// # Panics
+///
+/// If no CUDA device can be opened on ordinal 0.
+#[cfg(feature = "cuda")]
+fn require_cuda() {
+    assert!(
+        cudarc::driver::CudaContext::new(0).is_ok(),
+        "no CUDA device, but the `cuda` feature is enabled -- that is an explicit request \
+         for this backend. Skipping here would report `ok` for a test that ran nothing."
+    );
+}
+
 #[test]
 fn test_ir_expression_dsl_and_eval() {
     // f(x, y) = x^2 + 2*x*y + y^2 = (x + y)^2
@@ -205,26 +224,16 @@ fn test_cuda_jit_kernel_forward_and_backward() {
     use incin_core::tensor::device::Cuda;
     use incin_core::tensor::device::DeviceId;
 
-    let has_cuda = std::panic::catch_unwind(|| {
-        CudaBackendImpl::<Cuda>::from_bytes::<f32>(
-            bytemuck::cast_slice(&[1.0f32]),
-            &[1],
-            DTypeId::F32.into(),
-            &DeviceId::cuda(0),
-        )
-        .is_ok()
-    })
-    .unwrap_or(false);
-
-    if !has_cuda {
-        return;
-    }
+    require_cuda();
 
     let op = define_unary_custom_op("swish_cuda_jit", DTypeId::F32, |x| x.clone() * sigmoid(x));
-    let jit_kernel = match CudaJitKernel::compile(op, 0) {
-        Ok(k) => k,
-        Err(_) => return,
-    };
+    // A compile failure used to `return`, which reported `ok`. That is the
+    // defect this whole file is meant to catch: the CUDA embedding module
+    // failed to compile for want of a `--gpu-architecture` flag and nothing
+    // noticed, because the only test that would have seen it swallowed the
+    // error and passed.
+    let jit_kernel = CudaJitKernel::compile(op, 0)
+        .expect("the JIT must compile swish; a failure here is the bug, not a reason to skip");
 
     let values = [1.0f32, 2.0, -1.0, 0.0];
     let in_storage = CudaBackendImpl::<Cuda>::from_bytes::<f32>(

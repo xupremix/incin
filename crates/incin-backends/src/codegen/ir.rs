@@ -854,7 +854,6 @@ impl KernelDefinition {
         writeln!(out, "// Generated forward kernel for {} (CUDA)", self.name).unwrap();
         writeln!(out, "#include <cuda_fp16.h>").unwrap();
         writeln!(out, "#include <cuda_bf16.h>").unwrap();
-        writeln!(out, "#include <math.h>").unwrap();
         writeln!(out).unwrap();
 
         write!(out, "extern \"C\" __global__ void {}_forward(", self.name).unwrap();
@@ -900,7 +899,6 @@ impl KernelDefinition {
         .unwrap();
         writeln!(out, "#include <cuda_fp16.h>").unwrap();
         writeln!(out, "#include <cuda_bf16.h>").unwrap();
-        writeln!(out, "#include <math.h>").unwrap();
         writeln!(out).unwrap();
 
         write!(

@@ -41,8 +41,22 @@ fn storage(shape: &[usize], values: Vec<f32>) -> CudaStorage {
     .unwrap()
 }
 
-fn has_cuda() -> bool {
-    cudarc::driver::CudaContext::new(0).is_ok()
+/// Aborts unless a CUDA device is present.
+///
+/// Replaces a `has_cuda() -> bool` predicate that callers used to skip with an
+/// early `return`. Every caller is `#[ignore]`d, so reaching one is a deliberate
+/// request for the hardware run, and returning early there reports `ok` for a
+/// test that launched nothing -- the pattern that kept three real CUDA defects
+/// green for as long as they existed.
+///
+/// # Panics
+///
+/// If no CUDA device can be opened on ordinal 0.
+fn require_cuda() {
+    assert!(
+        cudarc::driver::CudaContext::new(0).is_ok(),
+        "no CUDA device, but this test is #[ignore]d -- running it is an explicit request for hardware. Skipping here would report `ok` for a test that launched nothing."
+    );
 }
 
 /// A distinct `&'static str` kernel name per (path, operation) pair.
@@ -202,9 +216,7 @@ fn close(left: f64, right: f64) -> bool {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn ir_unary_forward_matches_the_hand_written_literal() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     for &op_name in catalog::UNARY_OPS {
         // `square` and `reciprocal` have IR definitions but no literal in the
         // backend's macro table, so there is nothing to compare them against
@@ -249,9 +261,7 @@ fn ir_unary_forward_matches_the_hand_written_literal() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn ir_binary_forward_matches_the_hand_written_literal() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let lhs_sample = signed_sample();
     // Rotated so no lane divides by zero and the max/min comparisons see both
     // orderings.
@@ -309,9 +319,7 @@ fn ir_binary_forward_matches_the_hand_written_literal() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn ir_symbolic_derivatives_match_a_numerical_reference() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     // Operations whose derivative is well-defined and continuous on the signed
     // sample. `relu`, `abs`, `step` and `sign` are excluded: their derivatives
     // are discontinuous at zero and a central difference across the kink does
@@ -388,9 +396,7 @@ fn ir_symbolic_derivatives_match_a_numerical_reference() {
 fn a_baked_in_constant_participates_in_the_kernel_cache_key() {
     use crate::cuda::backend::elementwise::{cuda_clamp_storage, cuda_powf_storage};
 
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let values = vec![2.0_f32, 3.0, 4.0];
     let input = storage(&[values.len()], values.clone());
 
@@ -437,9 +443,7 @@ fn a_baked_in_constant_participates_in_the_kernel_cache_key() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn the_fused_backward_matches_the_two_launch_backward() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let fusible = [
         "neg",
         "log",
@@ -531,9 +535,7 @@ fn the_fused_backward_matches_the_two_launch_backward() {
 fn the_shipped_backward_is_correct_for_every_fused_operation() {
     use crate::cuda::backend::elementwise as ops;
 
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
 
     // The `unary_wrt_input` operations the catalog covers, so exactly the set
     // that now takes the fused path. Anything else in the macro still runs its
@@ -608,9 +610,7 @@ fn the_shipped_backward_is_correct_for_every_fused_operation() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn a_proven_element_count_elides_the_packed_tail() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     // f32 packs four lanes wide, so 16 divides it and 14 does not.
     let divisible = KernelSpecialization {
         static_numel: Some(16),
@@ -810,9 +810,7 @@ fn proven_extents_replace_the_strided_divisors_with_literals() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn the_unrolled_index_walk_addresses_a_strided_view_correctly() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     // A 3x4 row-major buffer, viewed as its 4x3 transpose without copying:
     // shape [4, 3] with strides [1, 4] reads element (r, c) from base (c, r).
     let values: Vec<f32> = (0..12).map(|index| index as f32).collect();
@@ -952,9 +950,7 @@ fn repeated_subexpressions_are_evaluated_once() {
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn the_cuda_transpose_view_is_strided_and_correct() {
-    if !has_cuda() {
-        return;
-    }
+    require_cuda();
     let values: Vec<f32> = (0..12).map(|index| index as f32).collect();
     let base = storage(&[3, 4], values.clone());
 

@@ -476,9 +476,6 @@ fn an_imported_winner_not_in_the_legal_set_is_never_used() {
 
 #[test]
 fn service_static_contracts_are_compile_checked() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/tuning_service_compile_fail/*.rs");
 }

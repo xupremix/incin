@@ -137,9 +137,6 @@ fn two_meshes_with_one_world_size_keep_their_own_degrees() {
 
 #[test]
 fn the_mesh_rejections_are_compile_errors() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/mesh_compile_fail/*.rs");
 }

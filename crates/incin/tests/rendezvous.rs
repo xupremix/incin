@@ -271,17 +271,19 @@ fn two_real_processes_use_from_env_and_coordinate_shutdown() {
 
 #[test]
 fn static_context_compile_failures_name_the_proof_they_pin() {
-    let common = std::env::var("SNAP_USER_COMMON")
-        .unwrap_or_else(|_| "/home/xupremix/snap/antigravity-cli/common".to_string());
-    // SAFETY: test-scoped environment variable setup for subprocesses
-    unsafe {
-        std::env::set_var("CARGO_HOME", format!("{common}/.cargo"));
-        std::env::set_var("RUSTUP_HOME", format!("{common}/.rustup"));
-        std::env::set_var("HOME", &common);
-    }
-    if fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        // Sandbox environment where ancestor config.toml is blocked by AppArmor; skip trybuild
-        return;
+    // Only redirect the toolchain home when actually running inside the snap
+    // sandbox that needs it. This used to be unconditional, defaulting to one
+    // developer's snap path, which pointed HOME at a directory that does not
+    // exist anywhere else -- and the `is_err` check below it then skipped the
+    // test rather than reporting the breakage. Together they meant these cases
+    // ran on exactly one machine.
+    if let Ok(common) = std::env::var("SNAP_USER_COMMON") {
+        // SAFETY: test-scoped environment variable setup for subprocesses.
+        unsafe {
+            std::env::set_var("CARGO_HOME", format!("{common}/.cargo"));
+            std::env::set_var("RUSTUP_HOME", format!("{common}/.rustup"));
+            std::env::set_var("HOME", &common);
+        }
     }
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/rendezvous_compile_fail/*.rs");

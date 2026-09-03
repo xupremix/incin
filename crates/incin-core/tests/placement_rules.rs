@@ -423,9 +423,6 @@ fn a_partial_value_becomes_complete_only_through_its_collective_transition() {
 
 #[test]
 fn placement_rejections_are_compile_errors() {
-    if std::fs::read("/home/xupremix/.cargo/config.toml").is_err() {
-        return;
-    }
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/placement_compile_fail/*.rs");
 }

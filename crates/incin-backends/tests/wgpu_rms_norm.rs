@@ -27,14 +27,32 @@ type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
 
 const EPSILON: f64 = 1e-5;
 
-fn has_wgpu() -> bool {
-    <TestBackend as HostInterop>::from_bytes::<f32>(
-        &[0u8; 4],
-        &[1],
-        DTypeId::F32.descriptor(),
-        &DeviceId::wgpu(0),
-    )
-    .is_ok()
+/// Aborts unless a WGPU adapter is present.
+///
+/// Replaces a `has_wgpu() -> bool` predicate that callers used to skip with an
+/// early `return`. That reports `ok` for a test that ran nothing, so the job
+/// named "WGPU Software Adapter Tests" stayed green whether or not an adapter
+/// existed -- the same defect that let three CUDA bugs survive behind suites
+/// that launched no kernel.
+///
+/// Failing is right here because these suites are `#![cfg(feature = "wgpu")]`:
+/// compiling them at all is an explicit request for the backend, and both CI
+/// jobs that enable it install a software adapter first.
+///
+/// # Panics
+///
+/// If no WGPU adapter can be reached.
+fn require_wgpu() {
+    assert!(
+        <TestBackend as HostInterop>::from_bytes::<f32>(
+            &[0u8; 4],
+            &[1],
+            DTypeId::F32.descriptor(),
+            &DeviceId::wgpu(0),
+        )
+        .is_ok(),
+        "no WGPU adapter, but the `wgpu` feature is enabled -- that is an explicit request for this backend. Skipping here would report `ok` for a test that ran nothing."
+    );
 }
 
 fn upload(values: &[f32], shape: &[usize]) -> TestStorage {
@@ -94,9 +112,7 @@ fn reference(values: &[f32], rows: usize, cols: usize, weight: &[f32]) -> Vec<f6
 
 #[test]
 fn rms_norm_matches_the_reference_and_records_a_gradient() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     const VALUES: [f32; 8] = [1.0, 2.0, 3.0, 4.0, -1.0, 0.5, -2.0, 3.0];
     const WEIGHT: [f32; 4] = [1.0, 0.5, 2.0, 1.5];
 
@@ -125,9 +141,7 @@ fn rms_norm_matches_the_reference_and_records_a_gradient() {
 /// fails this.
 #[test]
 fn the_weight_is_applied_per_feature() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     const VALUES: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
     let uniform = rms_norm(&VALUES, &[1, 4], &[1.0, 1.0, 1.0, 1.0]).0;
     let scaled = rms_norm(&VALUES, &[1, 4], &[1.0, 1.0, 3.0, 1.0]).0;
@@ -147,9 +161,7 @@ fn the_weight_is_applied_per_feature() {
 /// pull on a row beside it. Reducing the wrong axis breaks this first.
 #[test]
 fn rows_are_normalised_independently() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     const SMALL: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
     const WEIGHT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
@@ -177,9 +189,7 @@ fn rows_are_normalised_independently() {
 /// ordering is pinned by the reference comparison above instead.
 #[test]
 fn an_all_zero_row_stays_finite() {
-    if !has_wgpu() {
-        return;
-    }
+    require_wgpu();
     const ZEROS: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
     const WEIGHT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
