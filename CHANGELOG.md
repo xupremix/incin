@@ -15,12 +15,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   It defaults to `Unknown`, which claims nothing, so existing code is unchanged
   and every runtime path stays available. `RowMajor<S>` derives its strides from
   the shape; `Dense<S, B, ..>` is the ergonomic alias. Facts are traits --
-  `Contiguous`, `AlignedTo<N>` -- and `LayoutOf<S>` states rank congruence.
+  `Contiguous` -- and `LayoutOf<S>` states rank congruence. There is
+  deliberately no `AlignedTo<N>`: alignment is a property of the allocation
+  rather than of the shape, so no layout derived from `S` can honestly imply it.
   See the [Layout chapter](docs/book/src/layout.md). Every tensor module accepts
   a layout-carrying operand. Shape-preserving operations carry the operand's
   layout through, so a proof survives a chain; shape-changing ones state theirs
   as `Unknown`, since a layout describes one geometry and cannot be carried to
   another.
+- **Constructors yield a layout proof.** `zeros`, `ones`, `randn`, `full` and
+  their siblings are generic over `L`, so `let t: Dense<s![3, 4], B> =
+  Tensor::zeros(())?` produces a real `RowMajor` from the allocation itself,
+  with no runtime promotion. Asking for `Tensor<S, B>` still yields `Unknown`,
+  so nothing that predates the parameter changed. Before this, `reshape_view`
+  was the only API bounded on `Contiguous` and nothing could satisfy it without
+  going through `into_row_major` -- a runtime stride scan -- which left the
+  static layout system behaviourally equal to a runtime check.
+- `FreshDense<S>`, the **sealed** bound that makes the above safe. A constructor
+  generic over `L` is otherwise a minting press: name any layout and receive a
+  tensor claiming it. That is harmless while a fresh allocation genuinely is
+  both `Unknown` and `RowMajor`, and stops being harmless the moment a second
+  real layout such as `ChannelsLast` exists. Only this crate decides what a
+  fresh allocation may claim.
 - `Tensor::into_row_major`, a *checked* promotion from runtime strides to a
   type-level layout. There is deliberately no unchecked counterpart.
 - `Tensor::reshape_view`, bounded on `L: Contiguous`: reinterprets a buffer
@@ -66,6 +82,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `Dyn`.
 
 ### Fixed
+
+- **Every codegen module rendered CUDA that could not compile.** All 21 emitted
+  `#include <math.h>`, which NVRTC rejects outright -- it compiles a translation
+  unit with no host headers on the include path. That is the shared reason
+  behind the "modules with no consumer" backlog (#111): they could not have had
+  one. The working kernel templates never did this; they include only
+  `cuda_fp16.h`/`cuda_bf16.h` and call `expf`, `sqrtf` and `tanhf` directly,
+  which NVRTC provides as builtins. `codegen_nvrtc_smoke` now compiles all 20
+  CUDA entry points against the real device so this cannot return.
+- **Hardware tests reported `ok` when there was no hardware.** Every CUDA and
+  WGPU suite opened with a predicate and an early `return`, so a missing device
+  produced a green line indistinguishable from a test that ran. `require_cuda`
+  and `require_wgpu` fail instead. Verified in both directions: the suites pass
+  with a device and fail under `CUDA_VISIBLE_DEVICES=""`.
+- **The trybuild suites ran on exactly one machine.** Twenty-three test files
+  guarded their compile-fail cases behind
+  `if std::fs::read("/home/<user>/.cargo/config.toml").is_err() { return; }`, an
+  absolute path into one developer's home directory. Anywhere else -- every CI
+  runner included -- the read fails and the suite returns early reporting `ok`.
+  That silently disabled all 70 compile-fail and compile-pass cases, which are
+  the proof surface this framework exists for. They now run; all 70 pass.
+- **The hardware floor could not see a suite disappear.** The workflow required
+  at least 60 ignored CUDA tests against 66 actually running, leaving room for a
+  whole suite to evaporate inside the guard meant to detect exactly that.
+  `cargo xtask hardware-tests` derives the expectation from the `#[ignore]`
+  reasons in the tree, and fails on an unclassified reason rather than
+  defaulting to either side.
 
 - **The CUDA optimizers did nothing and returned zeros.** `launch_sgd_step`,
   `launch_adam_step` and `launch_adamw_step` each allocated a zeroed output,

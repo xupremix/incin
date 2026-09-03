@@ -40,6 +40,30 @@ changed.
 - Link the issue the pull request resolves and list any hardware or broad
   validation that was not run.
 
+### Tests that need a device
+
+A test which cannot run everywhere is marked `#[ignore]` with a reason string,
+and it **fails** when the device is absent rather than returning early. Call
+`require_cuda()` or `require_wgpu()`; do not write
+
+```rust,ignore
+if !device_available() { return; }   // reports `ok` for a test that ran nothing
+```
+
+A skipped test and a passing test produce the same green line, in the log, the
+summary and the badge. Three CUDA defects survived release-to-release behind
+that pattern — optimizers that never launched, an `argmax` that computed one
+row, and an embedding module that did not compile — because the suites covering
+them were reporting success without running.
+
+The same applies to swallowing a failure: `Err(_) => return` inside a test hides
+exactly the breakage the test exists to find.
+
+`cargo xtask hardware-tests` derives the expected hardware-test count from the
+`#[ignore]` reasons in the tree, so a new reason string must be classified in
+`xtask/src/hardware.rs` as either running on the CUDA runner or deliberately
+excluded. An unrecognised reason fails the gate on purpose.
+
 ## Code of Conduct
 
 Participation in the Incin project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md)

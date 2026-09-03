@@ -29,8 +29,34 @@ whole mechanism.
 
 ## Earning a proof
 
-A tensor's strides are a runtime fact, so the way to acquire a layout is to
-check them:
+There are two ways, and the cheap one is usually the right one.
+
+### Ask for it at construction
+
+A constructor allocates a packed row-major buffer, so it already knows the
+answer. Name the layout you want and it hands one back — no check, because
+there is nothing to check:
+
+```rust,ignore
+// A real `RowMajor` proof, straight from the allocation.
+let dense: Dense<s![3, 4], B> = Tensor::zeros(())?;
+```
+
+`Dense<S, B>` is the alias for `Tensor<S, B, .., RowMajor<S>>`; it avoids naming
+the shape twice, since a row-major layout is always congruent with the shape it
+describes.
+
+This works because the constructors are generic over the layout parameter, and
+that generality is bounded on the sealed `FreshDense<S>`. The bound is what
+stops the same mechanism from being a way to *forge* a proof: an unbounded
+constructor would hand you a tensor claiming whatever layout you named. A fresh
+allocation genuinely is `Unknown` and genuinely is `RowMajor`, so those two
+implement it and nothing else can — not even a layout defined downstream.
+
+### Check the strides of one you already have
+
+When the tensor came from somewhere else, its strides are a runtime fact and the
+only honest route is to look:
 
 ```rust,ignore
 let proven = t.into_row_major()?;   // Tensor<s![3, 4], B, .., RowMajor<s![3, 4]>>
@@ -40,12 +66,6 @@ let proven = t.into_row_major()?;   // Tensor<s![3, 4], B, .., RowMajor<s![3, 4]
 row-major pattern and only succeeds if they match. There is deliberately **no**
 `assume_row_major`. An unchecked promotion would make every downstream bound
 meaningless, and the check it saves is a stride comparison over the rank.
-
-For the common case there is an alias, which avoids naming the shape twice:
-
-```rust,ignore
-fn takes_dense(t: &Dense<s![3, 4], B>) { /* .. */ }
-```
 
 ## What a proof buys
 
