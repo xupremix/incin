@@ -8700,31 +8700,31 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/testing.rs:57",
+    "site": "crates/incin-backends/src/cuda/testing.rs:62",
     "code": ".expect(\"uploading an f32 slice to device 0\")",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/testing.rs:63",
+    "site": "crates/incin-backends/src/cuda/testing.rs:68",
     "code": "crate::cuda::backend::download_f32_host(storage).expect(\"reading f32 storage back to the host\")",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/testing.rs:76",
+    "site": "crates/incin-backends/src/cuda/testing.rs:81",
     "code": ".expect(\"uploading an f32 slice to device 0\")",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/testing.rs:100",
+    "site": "crates/incin-backends/src/cuda/testing.rs:105",
     "code": ".expect(\"reading i64 storage back to the host\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/testing.rs:166",
+    "site": "crates/incin-backends/src/cuda/testing.rs:171",
     "code": ".expect(\"uploading an i64 slice to device 0\")",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"

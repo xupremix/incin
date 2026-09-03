@@ -8,9 +8,14 @@
 //! its own body and checked its own arithmetic.
 //!
 //! This is that seam, kept as narrow as the tests require: upload, download, and
-//! the optimizer entry points. It is `#[doc(hidden)]` because it is a test
-//! affordance rather than API, and feature-gated with `cuda` so it cannot exist
-//! on a build that has no kernels to reach.
+//! the optimizer entry points. It is hidden from the rendered documentation
+//! because it is a test affordance rather than API, and feature-gated with
+//! `cuda` so it cannot exist on a build that has no kernels to reach.
+//!
+//! The attribute is named in `docs/public-api/hidden-items.md` rather than
+//! spelled here: `tools/check-hidden-items.py` scans for the literal
+//! attribute and does not skip doc-comment prose, so writing it in a sentence
+//! produces an inventory entry for an item that does not exist.
 
 use crate::cuda::storage::CudaStorage;
 use incin_core::error::Result;

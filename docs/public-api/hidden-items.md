@@ -18,6 +18,7 @@ The current inventory has four reviewed groups:
 The source inventory is:
 
 - `crates/incin-backends/src/cpu/var.rs`
+- `crates/incin-backends/src/cuda/mod.rs`
 - `crates/incin-backends/src/dispatch.rs`
 - `crates/incin-backends/src/lib.rs`
 - `crates/incin-backends/src/target/ext.rs`
@@ -28,6 +29,7 @@ The source inventory is:
 - `crates/incin-core/src/nn/module.rs`
 - `crates/incin-core/src/shapes/dim.rs`
 - `crates/incin-core/src/shapes/idx.rs`
+- `crates/incin-core/src/shapes/layout.rs`
 - `crates/incin-core/src/shapes/proof.rs`
 - `crates/incin-core/src/shapes/rank.rs`
 - `crates/incin-core/src/shapes/shape.rs`
@@ -121,3 +123,8 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-core/src/tensor/ops/reduce.rs::argmin_runtime` | C | Runtime argmin lowers the canonical reduction API. |
 | `crates/incin-core/src/tensor/ops/unary.rs::neg` | B | The old negation spelling remains as a documented compatibility path. |
 | `crates/incin-macros/src/lib.rs::impl_layer_args` | A | The exported helper macro is the expansion entry point for layer arguments. |
+| `crates/incin-backends/src/cuda/mod.rs::testing` | C | The CUDA test seam exposes upload, download, and optimizer entry points so the integration suites, which are separate crates, can reach `pub(crate)` launch functions without the kernels becoming API. |
+| `crates/incin-core/src/shapes/layout.rs::STRIDE_BUF` | B | Layout implementors provide the stride construction buffer; a stride list sized by an associated constant would need `generic_const_exprs`. |
+| `crates/incin-core/src/shapes/layout.rs::row_major_strides` | B | The const stride derivation is public so `RowMajor`'s associated constant can be evaluated in a const context. |
+| `crates/incin-core/src/shapes/shape.rs::EXTENT_BUF` | B | Shape implementors provide the extent construction buffer, for the same const-generics reason as `STRIDE_BUF`. |
+| `crates/incin-core/src/shapes/shape.rs::prepend_extent` | B | The const extent prepend is public so shape associated constants can be built in a const context. |
