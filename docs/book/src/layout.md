@@ -43,7 +43,28 @@ by name.
 
 ## Earning a proof
 
-There are two ways, and the cheap one is usually the right one.
+There are three ways, and the cheapest is usually the right one.
+
+### Let a pointwise operation give you one
+
+A pointwise operation allocates a fresh packed buffer whatever its operand's
+strides were, so its result says so:
+
+```rust,ignore
+let t: Tensor<s![3, 4], B> = Tensor::zeros(())?;  // proves nothing
+let r = t.relu()?;                                 // proves RowMajor
+let flat = r.reshape_view::<s![12]>()?;            // opens, with no check
+```
+
+This is why the claim is *stated* rather than carried from the operand. Carrying
+it would propagate only what the caller already had, and would be wrong the
+moment a layout that is not row-major exists — a `ChannelsLast` operand would
+hand its claim to a row-major result.
+
+`Linear` and `matmul` deliberately do not do this. They allocate too, but the
+claim here rests on conformance tests that feed a genuinely strided operand and
+check the result, and those cover the pointwise surface only. A layout is
+claimed by a test that fails without it.
 
 ### Ask for it at construction
 
@@ -167,28 +188,33 @@ produces a bounded number of kernels rather than one per observed shape.
 
 ## Current status
 
-Layout is newer than the rest of the type system and is being adopted module by
-module. Operations that have been converted carry their operand's layout
-through; operations that have not still bind `L` to `Dyn`, which means a
-tensor carrying a proof cannot call them yet.
+Layout is newer than the rest of the type system, but every operation now
+accepts a tensor that carries one: accessors, constructors, `Clone`, pointwise
+unary and binary operations, reductions, shape manipulation, matmul, and the
+`nn` layers. A tensor that has earned a proof can be passed anywhere a tensor
+without one can.
 
-The conversion is complete: accessors, constructors, `Clone`, pointwise unary
-and binary operations, reductions, shape manipulation, matmul, and the `nn`
-layers all accept a tensor that carries a layout.
+Two rules govern what an operation's *result* claims, and the difference is not
+a style choice:
 
-Two rules govern what an operation's *result* carries, and the difference is
-not a style choice:
-
-- **Shape-preserving operations carry the operand's layout through.** A proof
-  survives a chain of them, so `reshape_view` is still reachable at the end of
-  one.
-- **Shape-changing operations state their result's layout, and state it as
-  `Dyn`.** A layout describes one geometry and cannot be carried to
-  another. They *could* claim `RowMajor`, since the result is a fresh
-  allocation — except that is not true on every backend: CPU `transpose`
+- **An operation that is known to allocate a fresh packed buffer states
+  `RowMajor` of its own result shape.** Pointwise unary and binary operations
+  (broadcasting ones included) and reductions to a scalar do this, so a proof
+  appears out of the middle of a chain and `reshape_view` is reachable at the
+  end of one. The claim is *stated*, never carried: carrying the operand's
+  layout would propagate only what the caller already had, and would be false
+  the moment a non-row-major layout exists.
+- **An operation whose result's memory order is not settled states `Dyn`.**
+  A layout describes one geometry and cannot be carried to another, and
+  shape-changing operations do not agree across backends: CPU `transpose`
   returns a view while CUDA's returns a copy. Until that is settled
   ([#113](https://github.com/xupremix/incin/issues/113)) the honest answer is
   to claim nothing, and `into_row_major` recovers a proof where one is wanted.
+
+Nothing carries `L` from an operand into a result. The layout parameter is an
+input — it is what `reshape_view` reads and what `forget_layout` discards — and
+every result's claim is made by the operation itself, backed by a conformance
+test that feeds a genuinely strided operand and fails if the claim is wrong.
 
 If you want the no-copy behaviour explicitly, `transpose_view` is a separate
 operation that permutes shape and strides over the same buffer. Which of the two

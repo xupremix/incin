@@ -10,6 +10,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **A pointwise result proves it is dense.** Unary and binary pointwise
+  operations, the scalar forms and the `core::ops` operators now state
+  `RowMajor<S>` instead of carrying the operand's layout, so
+  `t.relu()?.reshape_view::<s![12]>()?` needs no runtime stride scan even when
+  `t` proved nothing. Backed by conformance tests on CPU and CUDA that feed a
+  genuinely strided operand, rather than by what the backends happen to do.
+  Carrying the operand's layout was also latently false: it would have handed a
+  `ChannelsLast` claim to a row-major buffer.
+- `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
+  where the promotion is fallible, since claiming less can never claim wrongly.
+  It exists for the case where two branches must meet and only one allocates;
+  using it on a value that stays proven discards exactly what the layout
+  parameter carries.
+- The `incin` facade prelude now re-exports `Dense`, `RowMajor`, `Layout`,
+  `Contiguous` and `FreshDense`. They reached `incin-core`'s prelude when the
+  parameter landed but not the facade, so a user of the `incin` crate could hold
+  a layout-carrying tensor and had no way to name its type.
+- `Debug`, `Display`, `backward`, `backward_with`, the loss family and all four
+  `core::ops` operator impls accept layout-carrying tensors. Each previously
+  bound `L` to its default, so `-t` and `a + b` did not compile for a proven
+  tensor.
 - **Typed layout.** `Tensor` gained a sixth parameter, `L: Layout`, describing
   where a tensor's elements live: strides, offset, alignment and contiguity.
   It defaults to `Dyn` -- the same runtime-selected marker the shape, dtype,
@@ -75,6 +96,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Removed
 
+- The pointwise operations' "output carries the operand's layout" contract.
+  **Breaking**: roughly forty methods change return type. A signature written
+  as `Tensor<S, B, K, G>` for a pointwise result becomes `Dense<S, B, K, G>`,
+  or keeps its shape by calling `forget_layout`; which is right depends on
+  whether the caller wants the proof. `Linear` and `matmul` are unaffected --
+  both still state `Dyn`, because neither has the conformance evidence the
+  pointwise claim rests on.
 - `Unknown`, the layout marker, in favour of the existing `Dyn`. **Breaking**
   for anyone who named it: `incin_core::shapes::Unknown` and the prelude
   re-export are gone, and `Tensor`'s sixth parameter now defaults to `Dyn`.
