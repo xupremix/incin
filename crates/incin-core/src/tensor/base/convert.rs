@@ -10,7 +10,9 @@ use crate::tensor::dtype::{DType, FloatDType};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
 use core::marker::PhantomData;
 
-impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<S, B, K, Grad, P> {
+impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: crate::shapes::Layout>
+    Tensor<S, B, K, Grad, P, L>
+{
     /// Computes a vector-Jacobian product using an explicit output cotangent.
     pub fn backward_with(
         &self,
@@ -32,7 +34,9 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor
     }
 }
 
-impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement> Tensor<Nil, B, K, Grad, P> {
+impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: crate::shapes::Layout>
+    Tensor<Nil, B, K, Grad, P, L>
+{
     /// Computes the backward pass for a scalar tensor.
     pub fn backward(&self) -> Result<crate::autograd::Gradients<B>> {
         B::backward(&self.inner).map(crate::autograd::Gradients::from_backend)

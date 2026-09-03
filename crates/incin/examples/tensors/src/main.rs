@@ -31,7 +31,9 @@ impl Mlp {
     /// Forward pass through the network: Linear -> ReLU -> Linear -> ReLU -> Linear.
     pub fn forward(
         &self,
-        x: Tensor<s![4, 10], Backend>,
+        // `Dense` because the caller builds this with a pointwise add, which
+        // allocates a packed buffer and says so in the type.
+        x: Dense<s![4, 10], Backend>,
     ) -> Result<Tensor<s![4, 10], Backend, f32, Grad>> {
         // 1. First hidden layer + ReLU
         let h1 = self.l1.forward(x)?;

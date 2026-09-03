@@ -69,7 +69,7 @@ where
         let out = self.bn2.forward(out)?;
 
         let out = out.try_add(&x)?;
-        out.relu()
+        Ok(out.relu()?.forget_layout())
     }
 }
 
@@ -125,7 +125,7 @@ where
     pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B, f32, Grad>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
-        let x = x.relu()?;
+        let x = x.relu()?.forget_layout();
 
         let x = self.layer1.forward(x)?;
 

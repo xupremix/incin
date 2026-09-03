@@ -15,9 +15,9 @@ use crate::exec::catalog::{AttributeContract, CanonicalOperation, NoAttributes, 
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::shapes::Layout;
 use crate::shapes::ShapeValue;
 use crate::shapes::{DynShape, Shape};
+use crate::shapes::{Layout, RowMajor};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
@@ -114,11 +114,13 @@ pub(crate) fn execute_broadcast_binary_descriptor<
     G1: RequiresGrad,
     G2: RequiresGrad,
     GOut: RequiresGrad,
+    L1: Layout,
+    L2: Layout,
 >(
-    lhs: &Tensor<S1, B, K, G1>,
-    rhs: &Tensor<S2, B, K, G2>,
+    lhs: &Tensor<S1, B, K, G1, Local, L1>,
+    rhs: &Tensor<S2, B, K, G2, Local, L2>,
     grad_out: GOut::Field,
-) -> Result<Tensor<SOut, B, K, GOut>>
+) -> Result<Tensor<SOut, B, K, GOut, Local, RowMajor<SOut>>>
 where
     O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
     S1: crate::shapes::broadcast::BroadcastShape<S2, Output = SOut>,
@@ -504,7 +506,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
     }
 
     /// Subtracts a scalar: `self - scalar`.
-    pub fn sub_scalar(&self, val: f64) -> Result<Self>
+    pub fn sub_scalar(&self, val: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::SubScalar>,
         <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
@@ -520,7 +522,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
     }
 
     /// Divides by a scalar: `self / scalar`.
-    pub fn div_scalar(&self, val: f64) -> Result<Self>
+    pub fn div_scalar(&self, val: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::DivScalar>,
         <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
@@ -561,11 +563,12 @@ macro_rules! impl_broadcast_binary_op {
         $(#[$meta:meta])*
         $try_method:ident, $method:ident, $op:ident
     ) => {
-        impl<S1: Shape + DynShape, B: Backend, K: DType, G1: RequiresGrad> Tensor<S1, B, K, G1>
+        impl<S1: Shape + DynShape, B: Backend, K: DType, G1: RequiresGrad, L1: Layout>
+            Tensor<S1, B, K, G1, Local, L1>
         {
             $(#[$meta])*
             #[inline]
-            pub fn $try_method<S2, G2>(&self, rhs: &Tensor<S2, B, K, G2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>>>
+            pub fn $try_method<S2, G2, L2: Layout>(&self, rhs: &Tensor<S2, B, K, G2, Local, L2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>, Local, RowMajor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output>>>
             where
                 S2: Shape + DynShape,
                 G2: RequiresGrad,
@@ -577,13 +580,13 @@ macro_rules! impl_broadcast_binary_op {
             {
                 let grad_out = <G1 as GradJoin<G2>>::join_field(&self._grad, &rhs._grad);
                 JoinedGrad::<G1, G2>::grad_mode(&grad_out).restrict(|| {
-                    execute_broadcast_binary_descriptor::<op::$op, S1, S2, _, B, K, _, _, _>(self, rhs, grad_out)
+                    execute_broadcast_binary_descriptor::<op::$op, S1, S2, _, B, K, _, _, _, _, _>(self, rhs, grad_out)
                 })
             }
 
             $(#[$meta])*
             #[inline]
-            pub fn $method<S2, G2>(&self, rhs: &Tensor<S2, B, K, G2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>>>
+            pub fn $method<S2, G2, L2: Layout>(&self, rhs: &Tensor<S2, B, K, G2, Local, L2>) -> Result<Tensor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output, B, K, JoinedGrad<G1, G2>, Local, RowMajor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output>>>
             where
                 S2: Shape + DynShape,
                 G2: RequiresGrad,
@@ -628,7 +631,9 @@ macro_rules! impl_std_ops {
             K: DType,
             G1: RequiresGrad,
             G2: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
+            L1: Layout,
+            L2: Layout,
+        > core::ops::$trait<Tensor<S2, B, K, G2, Local, L2>> for Tensor<S1, B, K, G1, Local, L1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -640,8 +645,10 @@ macro_rules! impl_std_ops {
                 B,
                 K,
                 JoinedGrad<G1, G2>,
+                Local,
+                RowMajor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output>,
             >;
-            fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, G2, Local, L2>) -> Self::Output {
                 crate::tensor::ops::operator_or_panic($operator, self.$backend_method(&rhs))
             }
         }
@@ -655,7 +662,10 @@ macro_rules! impl_std_ops {
             K: DType,
             G1: RequiresGrad,
             G2: RequiresGrad,
-        > core::ops::$trait<&'b Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
+            L1: Layout,
+            L2: Layout,
+        > core::ops::$trait<&'b Tensor<S2, B, K, G2, Local, L2>>
+            for &'a Tensor<S1, B, K, G1, Local, L1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -667,8 +677,10 @@ macro_rules! impl_std_ops {
                 B,
                 K,
                 JoinedGrad<G1, G2>,
+                Local,
+                RowMajor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output>,
             >;
-            fn $method(self, rhs: &'b Tensor<S2, B, K, G2>) -> Self::Output {
+            fn $method(self, rhs: &'b Tensor<S2, B, K, G2, Local, L2>) -> Self::Output {
                 crate::tensor::ops::operator_or_panic($operator, self.$backend_method(rhs))
             }
         }
@@ -681,7 +693,9 @@ macro_rules! impl_std_ops {
             K: DType,
             G1: RequiresGrad,
             G2: RequiresGrad,
-        > core::ops::$trait<&'a Tensor<S2, B, K, G2>> for Tensor<S1, B, K, G1>
+            L1: Layout,
+            L2: Layout,
+        > core::ops::$trait<&'a Tensor<S2, B, K, G2, Local, L2>> for Tensor<S1, B, K, G1, Local, L1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -693,8 +707,10 @@ macro_rules! impl_std_ops {
                 B,
                 K,
                 JoinedGrad<G1, G2>,
+                Local,
+                RowMajor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output>,
             >;
-            fn $method(self, rhs: &'a Tensor<S2, B, K, G2>) -> Self::Output {
+            fn $method(self, rhs: &'a Tensor<S2, B, K, G2, Local, L2>) -> Self::Output {
                 crate::tensor::ops::operator_or_panic($operator, self.$backend_method(rhs))
             }
         }
@@ -707,7 +723,9 @@ macro_rules! impl_std_ops {
             K: DType,
             G1: RequiresGrad,
             G2: RequiresGrad,
-        > core::ops::$trait<Tensor<S2, B, K, G2>> for &'a Tensor<S1, B, K, G1>
+            L1: Layout,
+            L2: Layout,
+        > core::ops::$trait<Tensor<S2, B, K, G2, Local, L2>> for &'a Tensor<S1, B, K, G1, Local, L1>
         where
             G1: GradJoin<G2>,
             S1: crate::shapes::broadcast::BroadcastShape<S2>,
@@ -719,8 +737,10 @@ macro_rules! impl_std_ops {
                 B,
                 K,
                 JoinedGrad<G1, G2>,
+                Local,
+                RowMajor<<S1 as crate::shapes::broadcast::BroadcastShape<S2>>::Output>,
             >;
-            fn $method(self, rhs: Tensor<S2, B, K, G2>) -> Self::Output {
+            fn $method(self, rhs: Tensor<S2, B, K, G2, Local, L2>) -> Self::Output {
                 crate::tensor::ops::operator_or_panic($operator, self.$backend_method(&rhs))
             }
         }

@@ -106,7 +106,8 @@ fn batches() -> Vec<(Tensor<Dyn, Backend>, Tensor<Dyn, Backend>)> {
             let target = Tensor::<Dyn, Backend>::zeros(vec![2, 2])
                 .expect("a 2x2 target")
                 .add_scalar(f64::from(i))
-                .expect("a shifted target");
+                .expect("a shifted target")
+                .forget_layout();
             (input, target)
         })
         .collect()

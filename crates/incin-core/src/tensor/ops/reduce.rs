@@ -147,7 +147,9 @@ macro_rules! impl_reduction_op {
         $method:ident, $operation:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(self) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
+        pub fn $method(
+            self,
+        ) -> Result<Tensor<crate::shapes::Nil, B, K, G, Local, crate::shapes::RowMajor<crate::shapes::Nil>>>
         where
             B: Execute<op::$operation> + crate::exec::Capabilities,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
@@ -650,7 +652,12 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
-    pub fn norm(&self, p: f64) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
+    pub fn norm(
+        &self,
+        p: f64,
+    ) -> Result<
+        Tensor<crate::shapes::Nil, B, K, G, Local, crate::shapes::RowMajor<crate::shapes::Nil>>,
+    >
     where
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: Execute<op::Mul>
@@ -951,7 +958,12 @@ where
     <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
-    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<crate::shapes::Nil, B, K, G>> {
+    pub fn var_all(
+        &self,
+        unbiased: bool,
+    ) -> Result<
+        Tensor<crate::shapes::Nil, B, K, G, Local, crate::shapes::RowMajor<crate::shapes::Nil>>,
+    > {
         let mean = self.clone().mean_all()?;
         let dyn_self = self.clone().into_dyn();
         let dyn_mean = mean.into_dyn();
@@ -970,7 +982,12 @@ where
     }
 
     /// Computes the standard deviation over all elements.
-    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<crate::shapes::Nil, B, K, G>> {
+    pub fn std_all(
+        &self,
+        unbiased: bool,
+    ) -> Result<
+        Tensor<crate::shapes::Nil, B, K, G, Local, crate::shapes::RowMajor<crate::shapes::Nil>>,
+    > {
         self.var_all(unbiased)?.sqrt()
     }
 }

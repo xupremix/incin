@@ -1,8 +1,8 @@
 use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::nn::module::{Module, ShapeInfo, TrainMode};
-use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
+use crate::shapes::{Layout, RowMajor};
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::grad::RequiresGrad;
@@ -47,7 +47,7 @@ where
     <B as Execute<op::Relu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, G, Local, L>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -56,7 +56,7 @@ where
     fn forward(
         &self,
         x: Tensor<S, B, f32, G, Local, L>,
-    ) -> core::result::Result<Tensor<S, B, f32, G, Local, L>, Error> {
+    ) -> core::result::Result<Tensor<S, B, f32, G, Local, RowMajor<S>>, Error> {
         x.relu()
     }
 }
@@ -81,7 +81,7 @@ where
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -118,7 +118,7 @@ where
     <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -152,7 +152,7 @@ where
     <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -188,7 +188,7 @@ where
     <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -243,7 +243,7 @@ where
         Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -279,7 +279,7 @@ where
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -312,7 +312,7 @@ where
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>;
+    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor<S>>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 

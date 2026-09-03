@@ -90,7 +90,8 @@ impl<
     K: DType,
     G: RequiresGrad,
     P: Placement,
-> core::fmt::Display for Tensor<S, B, K, G, P>
+    L: Layout,
+> core::fmt::Display for Tensor<S, B, K, G, P, L>
 {
     /// Renders values the way PyTorch's `print(tensor)` does: the backend's
     /// bracketed, right-aligned value grid (`HostInterop::host_format_display`)
@@ -139,7 +140,8 @@ impl<
     K: DType,
     G: RequiresGrad,
     P: Placement,
-> core::fmt::Debug for Tensor<S, B, K, G, P>
+    L: Layout,
+> core::fmt::Debug for Tensor<S, B, K, G, P, L>
 {
     /// Prints the backend type name, runtime shape, and the backend's own
     /// debug rendering of its storage.

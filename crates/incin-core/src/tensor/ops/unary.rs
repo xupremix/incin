@@ -5,8 +5,8 @@
 //! operations that interact with a scalar (e.g., `mul_scalar`, `add_scalar`).
 use crate::err::Result;
 use crate::exec::catalog::op;
-use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
+use crate::shapes::{Layout, RowMajor};
 use crate::tensor::backend::Backend;
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
@@ -19,7 +19,7 @@ macro_rules! impl_unary_op {
         $method:ident, $operation:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(&self) -> Result<Self>
+        pub fn $method(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
         where
             B: Execute<op::$operation>,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
@@ -31,15 +31,23 @@ macro_rules! impl_unary_op {
 
 /// Unary pointwise operations.
 ///
-/// These preserve the operand's layout parameter, which is sound because they
-/// are pointwise: the output is a freshly allocated buffer with the operand's
-/// shape, so a dense operand yields a dense result and an operand that has
-/// proven nothing yields a result claiming nothing. Both existing layouts
-/// satisfy that.
+/// These *state* their output layout as `RowMajor<S>` rather than carrying the
+/// operand's `L` through. The output is a freshly allocated packed buffer with
+/// the operand's shape, whatever the operand's own strides were, so the claim
+/// is true for every operand rather than only for dense ones.
 ///
-/// The invariant a new layout must respect: if `L` can describe something other
-/// than a dense buffer, these signatures stop being true and the output layout
-/// has to be named explicitly rather than carried through as `Self`.
+/// Two reasons it is stated rather than carried. It is strictly more
+/// informative: an operand that has proven nothing yields a result that has,
+/// so contiguity is recoverable from any pointwise step instead of only from
+/// `into_row_major`'s runtime scan. And carrying `L` is *false* for any layout
+/// that is not row-major -- a `ChannelsLast` operand would hand its claim to a
+/// row-major result -- so the carry-through was sound only while `RowMajor` was
+/// the sole real layout.
+///
+/// Backed by conformance tests rather than by inspection:
+/// `a_pointwise_result_is_dense_even_from_a_strided_operand` on CPU and
+/// `a_cuda_pointwise_result_is_dense_even_from_a_strided_operand` on CUDA both
+/// feed a genuinely strided operand and assert the result is packed.
 impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
     Tensor<S, B, K, G, Local, L>
 {
@@ -97,7 +105,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     );
 
     /// Computes the absolute value of each element in the tensor.
-    pub fn abs(&self) -> Result<Self>
+    pub fn abs(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Abs>,
         <B as Execute<op::Abs>>::Output: Into<B::Storage<K>>,
@@ -106,7 +114,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Rectified Linear Unit (ReLU) function element-wise.
-    pub fn relu(&self) -> Result<Self>
+    pub fn relu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Relu>,
         <B as Execute<op::Relu>>::Output: Into<B::Storage<K>>,
@@ -115,7 +123,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Gaussian Error Linear Unit (GELU) function element-wise.
-    pub fn gelu(&self) -> Result<Self>
+    pub fn gelu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Gelu>,
         <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>,
@@ -124,7 +132,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Step function element-wise.
-    pub fn step(&self) -> Result<Self>
+    pub fn step(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Step>,
         <B as Execute<op::Step>>::Output: Into<B::Storage<K>>,
@@ -133,7 +141,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Mish function element-wise.
-    pub fn mish(&self) -> Result<Self>
+    pub fn mish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Mish>,
         <B as Execute<op::Mish>>::Output: Into<B::Storage<K>>,
@@ -142,7 +150,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Exponential Linear Unit (ELU) function element-wise with alpha=1.0.
-    pub fn elu(&self) -> Result<Self>
+    pub fn elu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Elu>,
         <B as Execute<op::Elu>>::Output: Into<B::Storage<K>>,
@@ -151,7 +159,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Swish function element-wise (also known as SiLU).
-    pub fn swish(&self) -> Result<Self>
+    pub fn swish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Swish>,
         <B as Execute<op::Swish>>::Output: Into<B::Storage<K>>,
@@ -161,7 +169,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
 
     /// Applies the Softmax function over the specified dimension.
     #[inline]
-    pub fn softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G, Local, L>>
+    pub fn softmax<A: ReduceSelector<S>>(
+        &self,
+        axis: A,
+    ) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         S: DynShape,
         B: Execute<op::Softmax>,
@@ -200,7 +211,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// assert!((mass - 1.0).abs() < 1e-5);
     /// ```
     #[inline]
-    pub fn log_softmax<A: ReduceSelector<S>>(&self, axis: A) -> Result<Tensor<S, B, K, G, Local, L>>
+    pub fn log_softmax<A: ReduceSelector<S>>(
+        &self,
+        axis: A,
+    ) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         S: DynShape,
         B: Execute<op::LogSoftmax>,
@@ -214,7 +228,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Negates the tensor element-wise, returning recoverable execution errors.
-    pub fn try_neg(&self) -> Result<Self>
+    pub fn try_neg(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Neg>,
         <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
@@ -224,7 +238,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
 
     /// Checked compatibility spelling. Prefer [`Self::try_neg`] in new code.
     #[doc(hidden)]
-    pub fn neg(&self) -> Result<Self>
+    pub fn neg(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Neg>,
         <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
@@ -233,7 +247,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the square root of each element.
-    pub fn sqrt(&self) -> Result<Self>
+    pub fn sqrt(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Sqrt>,
         <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
@@ -242,7 +256,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the exponential of each element.
-    pub fn exp(&self) -> Result<Self>
+    pub fn exp(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Exp>,
         <B as Execute<op::Exp>>::Output: Into<B::Storage<K>>,
@@ -252,7 +266,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
 
     /// Raises tensor elements to power `exponent`.
     #[inline]
-    pub fn powf(&self, exponent: f64) -> Result<Self>
+    pub fn powf(&self, exponent: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Powf>,
         <B as Execute<op::Powf>>::Output: Into<B::Storage<K>>,
@@ -265,7 +279,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
 
     /// Clamps tensor elements to range `[min, max]`.
     #[inline]
-    pub fn clamp(&self, min: f64, max: f64) -> Result<Self>
+    pub fn clamp(&self, min: f64, max: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Clamp>,
         <B as Execute<op::Clamp>>::Output: Into<B::Storage<K>>,
@@ -317,7 +331,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     );
 
     /// Computes the natural logarithm of each element.
-    pub fn log(&self) -> Result<Self>
+    pub fn log(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Log>,
         <B as Execute<op::Log>>::Output: Into<B::Storage<K>>,
@@ -326,7 +340,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the hyperbolic tangent of each element.
-    pub fn tanh(&self) -> Result<Self>
+    pub fn tanh(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Tanh>,
         <B as Execute<op::Tanh>>::Output: Into<B::Storage<K>>,
@@ -335,7 +349,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the sigmoid of each element.
-    pub fn sigmoid(&self) -> Result<Self>
+    pub fn sigmoid(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::Sigmoid>,
         <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<K>>,
@@ -356,7 +370,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     pub fn mul_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
         &self,
         scalar: Sc,
-    ) -> Result<Self>
+    ) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::MulScalar>,
         <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
@@ -382,7 +396,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     pub fn add_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
         &self,
         scalar: Sc,
-    ) -> Result<Self>
+    ) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where
         B: Execute<op::AddScalar>,
         <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
@@ -410,7 +424,7 @@ pub(crate) fn execute_unary_descriptor<
     L: Layout,
 >(
     tensor: &Tensor<S, B, K, G, Local, L>,
-) -> Result<Tensor<S, B, K, G, Local, L>>
+) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
 where
     O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
     B: Execute<O>,
@@ -443,7 +457,7 @@ pub(crate) fn execute_unary_descriptor_with_attributes<
 >(
     tensor: &Tensor<S, B, K, G, Local, L>,
     attributes: O::Attributes,
-) -> Result<Tensor<S, B, K, G, Local, L>>
+) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
 where
     O: CanonicalOperation,
     O::Attributes: AttributeContract,
@@ -513,7 +527,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
             #[inline]
             /// `tensor * scalar` panics if [`Tensor::mul_scalar`] fails.
             fn mul(self, rhs: $t) -> Self::Output {
@@ -527,7 +541,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar multiplication preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
             #[inline]
             /// `tensor * scalar` panics if [`Tensor::mul_scalar`] fails.
             fn mul(self, rhs: $t) -> Self::Output {
@@ -541,7 +555,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
             #[inline]
             /// `tensor + scalar` panics if [`Tensor::add_scalar`] fails.
             fn add(self, rhs: $t) -> Self::Output {
@@ -555,7 +569,7 @@ macro_rules! impl_std_scalar_ops {
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
         {
             /// Scalar addition preserves shape/dtype/device.
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
             #[inline]
             /// `tensor + scalar` panics if [`Tensor::add_scalar`] fails.
             fn add(self, rhs: $t) -> Self::Output {
@@ -569,7 +583,7 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
 
             fn sub(self, rhs: $t) -> Self::Output {
                 crate::tensor::ops::operator_or_panic("- (scalar)", self.sub_scalar(rhs as f64))
@@ -582,7 +596,7 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
 
             fn sub(self, rhs: $t) -> Self::Output {
                 crate::tensor::ops::operator_or_panic("- (scalar)", self.sub_scalar(rhs as f64))
@@ -595,7 +609,7 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
 
             fn div(self, rhs: $t) -> Self::Output {
                 crate::tensor::ops::operator_or_panic("/ (scalar)", self.div_scalar(rhs as f64))
@@ -608,7 +622,7 @@ macro_rules! impl_std_scalar_ops {
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
         {
-            type Output = Tensor<S, B, K, G>;
+            type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
 
             fn div(self, rhs: $t) -> Self::Output {
                 crate::tensor::ops::operator_or_panic("/ (scalar)", self.div_scalar(rhs as f64))
@@ -628,7 +642,7 @@ where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G>;
+    type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
 
     fn neg(self) -> Self::Output {
         crate::tensor::ops::operator_or_panic("- (unary)", self.try_neg())
@@ -641,7 +655,7 @@ where
     B: Execute<op::Neg>,
     <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G>;
+    type Output = Tensor<S, B, K, G, Local, RowMajor<S>>;
 
     fn neg(self) -> Self::Output {
         crate::tensor::ops::operator_or_panic("- (unary)", self.try_neg())

@@ -107,6 +107,50 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     Tensor<S, B, K, G, P, L>
 {
+    /// Discards whatever the type settled about layout, returning the same
+    /// tensor claiming nothing.
+    ///
+    /// The counterpart to [`into_row_major`](Tensor::into_row_major), and the
+    /// only direction that needs no check: weakening a claim cannot make a
+    /// false one, so this is total where the promotion is fallible. The buffer,
+    /// shape and contents are untouched.
+    ///
+    /// It exists for the case where two paths must agree on one type and only
+    /// one of them has a proof -- a bias that is applied on one branch and not
+    /// the other, say. The alternative there is to assert the stronger layout
+    /// for both branches, which would credit a claim to a buffer that one
+    /// branch never touched.
+    ///
+    /// Reach for it only when the types must meet. Calling it on a value that
+    /// stays proven throws away exactly the knowledge the layout parameter
+    /// exists to carry, and the proof cannot be recovered without
+    /// `into_row_major`'s runtime stride scan.
+    ///
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_core::prelude::*;
+    /// # use incin_backends::cpu::CpuBackendImpl as B;
+    /// # fn main() -> incin_core::error::Result<()> {
+    /// let dense: Dense<s![3, 4], B> = Tensor::zeros(())?;
+    /// let unproven = dense.forget_layout();
+    /// // `unproven` no longer satisfies `L: Contiguous`, and every runtime
+    /// // path it had before is still available.
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn forget_layout(self) -> Tensor<S, B, K, G, P, crate::shapes::Dyn> {
+        Tensor {
+            inner: self.inner,
+            _shape: self._shape,
+            _dtype: self._dtype,
+            _device: self._device,
+            _grad: self._grad,
+            _placement: self._placement,
+            _layout: PhantomData,
+        }
+    }
+
     /// Reinterprets the tensor's elements under a new shape without copying.
     ///
     /// Only callable when the layout is proven [`Contiguous`]. That bound is

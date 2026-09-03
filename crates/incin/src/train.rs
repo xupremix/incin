@@ -730,7 +730,9 @@ impl Trainer {
                     at(
                         epoch,
                         batch,
-                        unscaled_loss_tensor.mul_scalar(current_scale as f64),
+                        unscaled_loss_tensor
+                            .mul_scalar(current_scale as f64)
+                            .map(|scaled| scaled.forget_layout()),
                     )?
                 } else {
                     unscaled_loss_tensor.clone()

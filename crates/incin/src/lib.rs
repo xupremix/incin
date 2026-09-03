@@ -700,6 +700,11 @@ pub mod prelude {
         AxisIdentity, AxisSchema, ConstDim, Dim, Dyn, DynShape, InferShape, NamedDim, Ranked,
         Shape, ShapeArgs, ShapeSpec, ShapeValue,
     };
+    // The layout vocabulary. It reached `incin-core`'s prelude when the
+    // parameter landed but not this facade, so a user of the `incin` crate
+    // could hold a layout-carrying tensor and had no way to name its type.
+    // `Dense` is the spelling nearly all of them want.
+    pub use incin_core::shapes::{Contiguous, Dense, FreshDense, Layout, RowMajor};
     pub use incin_core::tensor::device::{
         ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
     };

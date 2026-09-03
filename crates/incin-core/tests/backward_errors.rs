@@ -36,7 +36,10 @@ type B = CpuBackendImpl;
 /// a loss that still looks like a number, produced by an operation whose
 /// derivative did not.
 #[allow(clippy::type_complexity)]
-fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
+fn non_finite_chain() -> (
+    Tensor<s![2, 2], B, f32, Grad, incin::dist::Local, incin::shapes::RowMajor<s![2, 2]>>,
+    TensorId,
+) {
     let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
     let zero = Tensor::<s![2, 2], B, f32, Grad>::zeros(()).unwrap();
     let numerator = TapeStorage::id(a.inner());
@@ -44,8 +47,8 @@ fn non_finite_chain() -> (Tensor<s![2, 2], B, f32, Grad>, TensorId) {
 }
 
 #[allow(clippy::type_complexity)]
-fn seeded_backward(
-    loss: &Tensor<s![2, 2], B, f32, Grad>,
+fn seeded_backward<L: incin::shapes::Layout>(
+    loss: &Tensor<s![2, 2], B, f32, Grad, incin::dist::Local, L>,
 ) -> Result<incin_core::optim::Gradients<B>> {
     let seed = Tensor::<s![2, 2], B, f32>::ones(()).unwrap();
     loss.backward_with(&seed)

@@ -43,7 +43,10 @@ impl TransformerBlock {
     pub fn forward(
         &self,
         x: Tensor<s![2, 8, 64], Backend, f32, Grad>,
-    ) -> incin::Result<Tensor<s![2, 8, 64], Backend, f32, Grad>> {
+        // A pointwise residual add allocates a dense buffer, so the block can
+        // state that rather than claiming nothing. `Dense` is the alias that
+        // keeps the signature readable.
+    ) -> incin::Result<Dense<s![2, 8, 64], Backend, f32, Grad>> {
         // 1. Q, K, V Projections (linear layers preserve gradient tracking)
         let q = self.q_proj.forward(x.clone())?;
         let k = self.k_proj.forward(x.clone())?;

@@ -399,7 +399,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
         // different geometry and cannot carry either operand's layout. It takes
         // the parameter's default, `Dyn`, which is what leaving the
         // argument off means.
-    ) -> Result<Tensor<crate::shapes::Nil, B, K, JoinedGrad<G1, G1>>>
+    ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
         B: Execute<op::Mul> + Execute<op::SumAll> + crate::exec::Capabilities,
@@ -415,7 +415,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     pub fn outer<S2: Shape + DynShape>(
         &self,
         rhs: &Tensor<S2, B, K, G1>,
-    ) -> Result<Tensor<Dyn, B, K, JoinedGrad<G1, G1>>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
         B: Execute<op::Mul> + Execute<op::UnsqueezeExact> + crate::exec::Capabilities,

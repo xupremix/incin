@@ -30,9 +30,11 @@ fn execute_loss_descriptor<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     G2: RequiresGrad,
+    L: crate::shapes::Layout,
+    L2: crate::shapes::Layout,
 >(
-    prediction: &Tensor<S, B, K, G>,
-    target: &Tensor<S2, B, K, G2>,
+    prediction: &Tensor<S, B, K, G, Local, L>,
+    target: &Tensor<S2, B, K, G2, Local, L2>,
     reduction: Reduction,
 ) -> Result<<B as Execute<O>>::Output>
 where
@@ -58,7 +60,8 @@ impl<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-> Tensor<S, B, K, G>
+    L: crate::shapes::Layout,
+> Tensor<S, B, K, G, crate::dist::Local, L>
 {
     /// Computes the Cross Entropy loss between predictions and target labels.
     /// Uses the default `Mean` reduction.
@@ -162,8 +165,11 @@ impl<
         B: Execute<op::MseLoss> + crate::exec::Capabilities,
         <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
-        let inner =
-            execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G, G2>(self, target, R::as_enum())?;
+        let inner = execute_loss_descriptor::<op::MseLoss, S, S2, B, K, G, G2, _, _>(
+            self,
+            target,
+            R::as_enum(),
+        )?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -201,8 +207,11 @@ impl<
         B: Execute<op::L1Loss> + crate::exec::Capabilities,
         <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
-        let inner =
-            execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G, G2>(self, target, R::as_enum())?;
+        let inner = execute_loss_descriptor::<op::L1Loss, S, S2, B, K, G, G2, _, _>(
+            self,
+            target,
+            R::as_enum(),
+        )?;
         let mut out_shape_dims: Vec<usize> = vec![];
         if R::as_enum() == Reduction::None {
             out_shape_dims = self.dims().into();
@@ -240,7 +249,7 @@ impl<
         B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
         <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
-        let inner = execute_loss_descriptor::<op::BceWithLogitsLoss, S, S2, B, K, G, G2>(
+        let inner = execute_loss_descriptor::<op::BceWithLogitsLoss, S, S2, B, K, G, G2, _, _>(
             self,
             target,
             R::as_enum(),

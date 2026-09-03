@@ -59,7 +59,9 @@ impl Module<Input> for TransformerBlock {
                 .forward(attention_residual.clone())?
                 .gelu()?,
         )?;
-        Ok(attention_residual + &feed_forward)
+        // A residual add is pointwise, so its result is dense; this module's
+        // declared output makes no layout claim, so the proof is dropped here.
+        Ok((attention_residual + &feed_forward).forget_layout())
     }
 }
 
