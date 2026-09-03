@@ -670,8 +670,7 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output =
-        crate::shapes::Dense<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local>;
+    type Output = crate::shapes::Dense<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local>;
     type Error = Error;
 
     fn forward(

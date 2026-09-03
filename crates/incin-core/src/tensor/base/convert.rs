@@ -110,9 +110,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     /// A layout proof survives: `S2::try_from_dims` fails unless `S2` covers
     /// the very dims the tensor already has, so a `RowMajor<S>` operand comes
     /// back as `RowMajor<S2>` over the identical strides.
-    pub fn into_shape<S2: Shape + DynShape>(
-        self,
-    ) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
+    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
     where
         L: crate::shapes::RestateFor<S2>,
     {
@@ -125,9 +123,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     ///
     /// Erases the *shape* proof, not the layout one. Widening `S` to `Dyn`
     /// leaves the buffer and its strides untouched.
-    pub fn into_dyn(
-        self,
-    ) -> Tensor<crate::shapes::Dyn, B, K, G, Local, L::Restated>
+    pub fn into_dyn(self) -> Tensor<crate::shapes::Dyn, B, K, G, Local, L::Restated>
     where
         L: crate::shapes::RestateFor<crate::shapes::Dyn>,
     {
@@ -148,9 +144,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     }
 
     /// Copies and converts this tensor to a new static shape S2.
-    pub fn to_shape<S2: Shape + DynShape>(
-        &self,
-    ) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
+    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
     where
         L: crate::shapes::RestateFor<S2>,
     {

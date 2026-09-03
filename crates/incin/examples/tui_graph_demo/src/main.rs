@@ -55,7 +55,7 @@ where
     }
 
     /// Forward.
-    pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B, f32, Grad>> {
+    pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Dense<Dyn, B, f32, Grad>> {
         let x = self.fc1.forward(x)?.relu()?;
         let x = self.fc2.forward(x)?.relu()?;
         self.fc3.forward(x)

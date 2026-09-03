@@ -401,19 +401,12 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
         <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<
-            op::Add,
-            S,
-            S2,
-            B,
-            K,
-            K,
-            G,
-            G2,
-            G,
-            L,
-            crate::shapes::Dyn,
-        >(self, rhs, self._grad.clone())?;
+        let res =
+            execute_binary_descriptor::<op::Add, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
+                self,
+                rhs,
+                self._grad.clone(),
+            )?;
         self.inner = res.inner;
         Ok(())
     }
@@ -426,19 +419,12 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
         <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<
-            op::Sub,
-            S,
-            S2,
-            B,
-            K,
-            K,
-            G,
-            G2,
-            G,
-            L,
-            crate::shapes::Dyn,
-        >(self, rhs, self._grad.clone())?;
+        let res =
+            execute_binary_descriptor::<op::Sub, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
+                self,
+                rhs,
+                self._grad.clone(),
+            )?;
         self.inner = res.inner;
         Ok(())
     }
@@ -451,19 +437,12 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
         <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<
-            op::Mul,
-            S,
-            S2,
-            B,
-            K,
-            K,
-            G,
-            G2,
-            G,
-            L,
-            crate::shapes::Dyn,
-        >(self, rhs, self._grad.clone())?;
+        let res =
+            execute_binary_descriptor::<op::Mul, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
+                self,
+                rhs,
+                self._grad.clone(),
+            )?;
         self.inner = res.inner;
         Ok(())
     }
@@ -476,19 +455,12 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
         <B as Execute<op::Div>>::Output: Into<B::Storage<K>>,
     {
         <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res = execute_binary_descriptor::<
-            op::Div,
-            S,
-            S2,
-            B,
-            K,
-            K,
-            G,
-            G2,
-            G,
-            L,
-            crate::shapes::Dyn,
-        >(self, rhs, self._grad.clone())?;
+        let res =
+            execute_binary_descriptor::<op::Div, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
+                self,
+                rhs,
+                self._grad.clone(),
+            )?;
         self.inner = res.inner;
         Ok(())
     }

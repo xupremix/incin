@@ -207,9 +207,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     /// Sums over a compile-time structural axis cursor.
     #[doc(hidden)]
     #[allow(clippy::type_complexity)]
-    pub fn sum_at<C>(
-        &self,
-    ) -> Result<crate::shapes::Dense<<S as ReduceAt<C>>::Output, B, K, G, P>>
+    pub fn sum_at<C>(&self) -> Result<crate::shapes::Dense<<S as ReduceAt<C>>::Output, B, K, G, P>>
     where
         C: crate::shapes::idx::AxisCursor,
         S: DynShape + ReduceAt<C>,
@@ -672,12 +670,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
-    pub fn norm(
-        &self,
-        p: f64,
-    ) -> Result<
-        crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>,
-    >
+    pub fn norm(&self, p: f64) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>>
     where
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: Execute<op::Mul>
@@ -981,9 +974,7 @@ where
     pub fn var_all(
         &self,
         unbiased: bool,
-    ) -> Result<
-        crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>,
-    > {
+    ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>> {
         let mean = self.clone().mean_all()?;
         let dyn_self = self.clone().into_dyn();
         let dyn_mean = mean.into_dyn();
@@ -1005,9 +996,7 @@ where
     pub fn std_all(
         &self,
         unbiased: bool,
-    ) -> Result<
-        crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>,
-    > {
+    ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>> {
         self.var_all(unbiased)?.sqrt()
     }
 }

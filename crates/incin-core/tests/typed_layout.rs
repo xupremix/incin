@@ -461,14 +461,8 @@ fn a_pointwise_result_is_dense_even_from_a_strided_operand() {
     let other_mask = dense_43.le(&strided).unwrap();
     assert_dense("logical_and", &mask.logical_and(&other_mask).unwrap());
     assert_dense("logical_or", &mask.logical_or(&other_mask).unwrap());
-    assert_dense(
-        "masked_fill",
-        &strided.masked_fill(&mask, 0.0).unwrap(),
-    );
-    assert_dense(
-        "where_cond",
-        &mask.where_cond(&strided, &dense_43).unwrap(),
-    );
+    assert_dense("masked_fill", &strided.masked_fill(&mask, 0.0).unwrap());
+    assert_dense("where_cond", &mask.where_cond(&strided, &dense_43).unwrap());
     assert_dense(
         "mul(strided, dense)",
         &strided.mul_exact(&dense_43).unwrap(),
@@ -506,7 +500,10 @@ fn a_reduction_result_is_dense_even_from_a_strided_operand() {
     );
 
     assert_dense("sum", &strided.sum(ForwardAxis::<Here>::default()).unwrap());
-    assert_dense("mean", &strided.mean(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense(
+        "mean",
+        &strided.mean(ForwardAxis::<Here>::default()).unwrap(),
+    );
     assert_dense("max", &strided.max(ForwardAxis::<Here>::default()).unwrap());
     assert_dense("min", &strided.min(ForwardAxis::<Here>::default()).unwrap());
     assert_dense(
@@ -540,7 +537,9 @@ fn a_matmul_result_is_dense_even_from_a_strided_operand() {
     // [3, 4] transposed to [4, 3] over strides [1, 4]: a real strided operand
     // whose shape still lines up for a [4, 3] x [3, 2] product.
     let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::from_slice(
-        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+        &[
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ],
         (),
     )
     .unwrap();
@@ -572,10 +571,7 @@ fn a_matmul_result_is_dense_even_from_a_strided_operand() {
     // `addmm` adds a bias to the product. Its result used to carry the bias's
     // layout; the buffer it writes is a fresh dense one.
     let bias = incin_core::prelude::Tensor::<s![4, 2], CpuBackendImpl>::ones(()).unwrap();
-    assert_dense(
-        "addmm",
-        &bias.addmm(&strided, &rhs, 1.0, 1.0).unwrap(),
-    );
+    assert_dense("addmm", &bias.addmm(&strided, &rhs, 1.0, 1.0).unwrap());
 }
 
 /// `BatchNorm2d` allocates unconditionally, so its result is dense.
@@ -612,8 +608,8 @@ fn batch_norm_produces_a_dense_result() {
 #[test]
 fn dropout_carries_its_operand_layout_and_both_branches_earn_it() {
     use incin_core::backend_authoring::StorageBackend;
-    use incin_core::nn::module::Module;
     use incin_core::nn::TrainMode;
+    use incin_core::nn::module::Module;
     use incin_core::prelude::Dropout;
 
     let x = incin_core::prelude::Tensor::<s![4, 4], CpuBackendImpl>::ones(())
@@ -681,4 +677,35 @@ fn a_layout_proof_survives_into_shape() {
         .into_dyn();
     assert_dense("into_dyn", &dyn_proven);
     let _: incin_core::prelude::Tensor<Dyn, CpuBackendImpl, f32, _, _, RowMajor<Dyn>> = dyn_proven;
+}
+
+/// A loss allocates its result, so the result is dense.
+///
+/// The loss family was the last surface still pinning `L` on *both* operands
+/// while stating nothing about its output. It only surfaced when a proof
+/// reached one: `Linear` began returning `Dense`, an example fed that straight
+/// into `MseLoss::forward`, and the call stopped compiling.
+///
+/// Both halves are checked. The operands are a proven tensor and an unproven
+/// one, so the signature has to accept either; the result is asserted dense,
+/// which is the claim the return type now makes.
+#[test]
+fn a_loss_result_is_dense() {
+    use incin_core::nn::loss::{MSELoss, Mean};
+    use incin_core::prelude::*;
+
+    let proven = incin_core::prelude::Tensor::<s![4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+    let plain =
+        incin_core::prelude::Tensor::<s![4], CpuBackendImpl, f32, NoGrad>::zeros(()).unwrap();
+
+    // Mixed layouts across the two operands: the proof must not be required,
+    // and must not be refused.
+    let loss = MSELoss::<Mean>::default();
+    assert_dense(
+        "mse(proven, plain)",
+        &loss.forward(&proven, &plain).unwrap(),
+    );
 }

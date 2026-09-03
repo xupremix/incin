@@ -154,10 +154,7 @@ fn a_cuda_reduction_is_dense_and_refuses_a_strided_operand() {
         alloc_vec(&[15.0, 18.0, 21.0, 24.0]),
         "summing axis 0 of a 3x4 adds the three rows"
     );
-    assert_dense(
-        "mean",
-        &base.mean(ForwardAxis::<Here>::default()).unwrap(),
-    );
+    assert_dense("mean", &base.mean(ForwardAxis::<Here>::default()).unwrap());
     assert_dense(
         "cumsum",
         &base.cumsum(ForwardAxis::<Here>::default()).unwrap(),

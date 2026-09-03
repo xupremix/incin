@@ -81,6 +81,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `RmsNorm` returns `Dense`. Its chain ends in `broadcast_mul`, which allocates;
   the proof was being lost on the `into_shape` back to a static shape. That was
   the concrete thing `RestateFor` was written for.
+- The four loss `forward` methods -- `MSELoss`, `L1Loss`, `CrossEntropyLoss`,
+  `BCEWithLogitsLoss` -- accept operands carrying any layout and state `Dense`
+  for the result they allocate. They pinned `L` on *both* arguments, so once
+  `Linear` returned a proof, feeding its output straight into a loss stopped
+  compiling.
 - `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
   where the promotion is fallible, since claiming less can never claim wrongly.
   It exists for the case where two branches must meet and only one allocates;

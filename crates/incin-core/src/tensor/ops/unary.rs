@@ -481,7 +481,13 @@ where
     )
 }
 
-pub(crate) fn execute_logical_unary_descriptor<O, S: Shape, B: Backend, G: RequiresGrad, L: Layout>(
+pub(crate) fn execute_logical_unary_descriptor<
+    O,
+    S: Shape,
+    B: Backend,
+    G: RequiresGrad,
+    L: Layout,
+>(
     tensor: &Tensor<S, B, bool, G, Local, L>,
 ) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad, Local, RowMajor<S>>>
 where

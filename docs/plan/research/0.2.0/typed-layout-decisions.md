@@ -433,6 +433,27 @@ is not knowable at macro-expansion time. And two test helpers took
 `&Tensor<Dyn, ..>`, which pinned `L` -- the same class of gap widening keeps
 finding, this time in test code rather than library code.
 
+### The last two gaps were found by a full-workspace check, not by the test suite
+
+Running the complete CI matrix before merging turned up two failures the
+session's own verification had missed, and both were missed for the same
+structural reason: **`cargo test --all-targets --features ...` does not build
+workspace-member examples.** Those are separate crates under
+`crates/incin/examples/*/`, reached only by `cargo check --workspace
+--all-targets`.
+
+Three of them returned `Result<Tensor<Dyn, B, f32, Grad>>` from a `forward`
+that ends in `Linear`, which had started returning `Dense`. Annotation churn,
+and not interesting on its own -- except that fixing it exposed the second
+failure, which was a library gap: all four loss `forward` methods pinned `L` on
+*both* operands, so a proven prediction could not be fed to a loss at all.
+
+That is the same detector as before, one level out. Returning a proof forces the
+reachable graph to typecheck; the reachable graph is only as large as the thing
+you compile. The lesson to carry: **the per-feature test command is not the
+widest net the repo has**, and a parameter conversion should be checked against
+`--workspace --all-targets --locked` before it is called finished.
+
 ### What CUDA contributes, and what it does not
 
 The reduction claim rests on different evidence from the pointwise one, because
