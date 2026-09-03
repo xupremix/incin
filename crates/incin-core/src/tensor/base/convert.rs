@@ -90,7 +90,7 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
 
 /// Reinterpretations that change the shape type.
 ///
-/// Generic over the operand's layout, and the result states `Unknown`: a layout
+/// Generic over the operand's layout, and the result states `Dyn`: a layout
 /// describes one geometry and cannot be carried to another.
 impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     Tensor<S1, B, K, G, Local, L>

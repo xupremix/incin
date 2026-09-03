@@ -12,8 +12,8 @@ help: the trait `FreshDense<DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt
 help: the following other types implement trait `FreshDense<S>`
   --> src/shapes/layout.rs
    |
-   | impl<S: Shape> FreshDense<S> for Unknown {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `incin::shapes::Unknown`
+   | impl<S: Shape> FreshDense<S> for Dyn {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Dyn`
 ...
    | impl<S: Shape> FreshDense<S> for RowMajor<S> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RowMajor<S>`

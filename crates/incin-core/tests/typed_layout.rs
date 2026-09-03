@@ -4,7 +4,7 @@
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::shapes::{Contiguous, Layout, LayoutOf, RowMajor, Shape, Unknown};
+use incin_core::shapes::{Contiguous, Dyn, Layout, LayoutOf, RowMajor, Shape};
 use incin_macros::s;
 
 incin_core::dim!(Batch);
@@ -88,7 +88,7 @@ fn a_reduction_accepts_a_proven_operand() {
 /// reachable at the end of one. Asserting `RowMajor` on every output instead
 /// would be equally truthful -- the buffer is dense either way -- but it forces
 /// every downstream signature that says `Tensor<S, B, K, G>` to be rewritten,
-/// because `Unknown` and `RowMajor` are different types.
+/// because `Dyn` and `RowMajor` are different types.
 #[test]
 fn a_proof_survives_a_pointwise_chain() {
     let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(())
@@ -153,7 +153,7 @@ fn a_row_major_layout_derives_its_strides_from_the_shape() {
 fn only_a_proven_layout_satisfies_contiguous() {
     fn needs_contiguous<L: Contiguous>() {}
     needs_contiguous::<RowMajor<s![3, 4]>>();
-    // needs_contiguous::<Unknown>() does not compile.
+    // needs_contiguous::<Dyn>() does not compile.
 
     // The two carry different evidence, so the distinction is real rather than
     // a marker that everything happens to satisfy.
@@ -161,8 +161,8 @@ fn only_a_proven_layout_satisfies_contiguous() {
         <RowMajor<s![3, 4]> as Layout>::STATIC_STRIDES,
         &[Some(4), Some(1)][..]
     );
-    assert_eq!(<Unknown as Layout>::STATIC_STRIDES, &[][..]);
-    assert_eq!(<Unknown as Layout>::STATIC_OFFSET, None);
+    assert_eq!(<Dyn as Layout>::STATIC_STRIDES, &[][..]);
+    assert_eq!(<Dyn as Layout>::STATIC_OFFSET, None);
 }
 
 /// Congruence: a layout describes a shape of the same rank.
@@ -171,8 +171,8 @@ fn congruence_relates_a_layout_to_its_shape() {
     fn describes<S: Shape, L: LayoutOf<S>>() {}
 
     describes::<s![3, 4], RowMajor<s![3, 4]>>();
-    // `Unknown` describes anything, because it claims nothing about it.
-    describes::<s![3, 4], Unknown>();
+    // `Dyn` describes anything, because it claims nothing about it.
+    describes::<s![3, 4], Dyn>();
 }
 
 /// A dynamic axis voids the strides outside it and spares those inside.
@@ -367,7 +367,7 @@ fn a_constructor_yields_a_layout_proof_without_a_runtime_check() {
         "row-major strides are the suffix products of the extents"
     );
 
-    // And it satisfies the bound that `Unknown` cannot, so the view path opens.
+    // And it satisfies the bound that `Dyn` cannot, so the view path opens.
     fn needs_contiguous<L: Contiguous>() {}
     needs_contiguous::<RowMajor<s![3, 4]>>();
 
@@ -383,7 +383,7 @@ fn asking_for_nothing_still_yields_unknown() {
     let plain = incin_core::prelude::Tensor::<s![2, 2], CpuBackendImpl>::zeros(()).unwrap();
     assert_eq!(plain.numel(), 4);
     assert_eq!(
-        <Unknown as Layout>::STATIC_STRIDES,
+        <Dyn as Layout>::STATIC_STRIDES,
         &[] as &[Option<usize>],
         "a tensor that proved nothing must report nothing"
     );

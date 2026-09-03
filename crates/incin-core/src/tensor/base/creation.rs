@@ -17,7 +17,7 @@ use crate::tensor::grad::RequiresGrad;
 
 /// Constructors, which allocate a packed row-major buffer.
 ///
-/// Generic over the layout parameter rather than fixed to the `Unknown`
+/// Generic over the layout parameter rather than fixed to the `Dyn`
 /// default, so a caller who asks for [`Dense<S, B>`](crate::shapes::Dense) gets
 /// a genuine [`RowMajor<S>`](crate::shapes::RowMajor) proof out of the same
 /// allocation, while `Tensor<S, B>` keeps meaning exactly what it did.

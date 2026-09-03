@@ -51,12 +51,12 @@
 //! Every associated constant defaults to "nothing known", exactly as
 //! `Shape::PROOF` and `Shape::STATIC_EXTENTS` do. A layout implemented outside
 //! this crate, or one carried by a tensor that came through a dynamically
-//! dispatched path, reports no strides rather than a guess. [`Unknown`] is the
+//! dispatched path, reports no strides rather than a guess. [`Dyn`] is the
 //! identity element and the default, so adding this parameter changes the
 //! meaning of nothing that already exists.
 
 use crate::dist::Local;
-use crate::shapes::{MAX_STATIC_RANK, ProofLevel, Shape};
+use crate::shapes::{Dyn, MAX_STATIC_RANK, ProofLevel, Shape};
 use core::fmt::Debug;
 use core::marker::PhantomData;
 
@@ -112,14 +112,14 @@ pub trait LayoutOf<S: Shape>: Layout {}
 ///
 /// Constructors like [`Tensor::zeros`](crate::prelude::Tensor::zeros) allocate a
 /// packed row-major buffer, so they are entitled to hand back a layout proof
-/// rather than [`Unknown`]. This trait is what entitles them, and it is the
+/// rather than [`Dyn`]. This trait is what entitles them, and it is the
 /// reason they can do so without also becoming a way to *forge* one.
 ///
 /// # Why a bound and not just a return type
 ///
 /// Naming `RowMajor<S>` in the return type would work, and would break every
 /// existing call site that expects the default. Bounding the constructor on this
-/// instead lets the caller choose: ask for `Tensor<S, B>` and get `Unknown` as
+/// instead lets the caller choose: ask for `Tensor<S, B>` and get `Dyn` as
 /// before, ask for [`Dense<S, B>`](Dense) and get a real proof, from the same
 /// function and the same allocation.
 ///
@@ -127,7 +127,7 @@ pub trait LayoutOf<S: Shape>: Layout {}
 ///
 /// A constructor generic over `L` is a minting press: whatever layout the caller
 /// names, it produces a tensor claiming it. That is harmless while the only
-/// layouts are `Unknown` and `RowMajor`, because a fresh allocation genuinely is
+/// layouts are `Dyn` and `RowMajor`, because a fresh allocation genuinely is
 /// both. It stops being harmless the moment a second real layout exists -- a
 /// `ChannelsLast<S>` would be mintable from `zeros` despite a fresh allocation
 /// not being channels-last at all, and the proof would be a lie with no unsafe
@@ -139,7 +139,7 @@ pub trait LayoutOf<S: Shape>: Layout {}
 pub trait FreshDense<S: Shape>: LayoutOf<S> + sealed::SealedFresh {}
 
 /// A fresh allocation is free to claim nothing.
-impl<S: Shape> FreshDense<S> for Unknown {}
+impl<S: Shape> FreshDense<S> for Dyn {}
 
 /// A fresh allocation is packed row-major, which is exactly this claim.
 impl<S: Shape> FreshDense<S> for RowMajor<S> {}
@@ -150,7 +150,7 @@ mod sealed {
     /// Without this, a downstream layout could assert that a fresh allocation
     /// satisfies it and mint the proof from any constructor.
     pub trait SealedFresh {}
-    impl SealedFresh for super::Unknown {}
+    impl SealedFresh for super::Dyn {}
     impl<S> SealedFresh for super::RowMajor<S> {}
 }
 
@@ -161,7 +161,7 @@ mod sealed {
 /// *pattern* rather than about the values. That is why it is a marker trait and
 /// not a predicate over [`Layout::STATIC_STRIDES`].
 ///
-/// Deliberately not implemented for [`Unknown`]. A tensor that has proven
+/// Deliberately not implemented for [`Dyn`]. A tensor that has proven
 /// nothing cannot satisfy a bound that needs this, and falls back to the
 /// runtime path.
 pub trait Contiguous: Layout {}
@@ -182,46 +182,48 @@ pub trait Contiguous: Layout {}
 // half would be exactly the unexecuted public surface tracked by #111, so it
 // waits for a consumer that justifies it.
 
-/// Nothing proven about layout.
+/// Nothing proven about layout: [`Dyn`] is the identity element.
 ///
-/// The default for [`Layout`] parameters and what every tensor carries until a
-/// more specific layout is threaded through. Implements [`Layout`] with every
-/// constant at its default, and deliberately does not implement
+/// [`Dyn`] is the runtime-selected marker the shape, dtype, device and
+/// placement slots already use, and it means the same thing in the layout
+/// slot -- the compiler settled nothing, so the answer is read from
+/// `TensorMeta` at runtime. It is the default for [`Layout`] parameters and
+/// what every tensor carries until a more specific layout is threaded through.
+/// Every constant stays at its default, and it deliberately does not implement
 /// [`Contiguous`].
 ///
-/// # Why this is not just `Dyn`
+/// # Why the marker is shared rather than its own type
 ///
-/// `Unknown` and [`Dyn`](crate::shapes::Dyn) express the same idea -- the
-/// compiler settled nothing, so the answer is read at runtime -- and `Dyn` can
-/// implement [`Layout`] without any conflict. Reusing it was tried and
-/// rejected, for three reasons that only became visible in the output.
+/// An earlier version spelled this `Unknown`, a distinct unit struct. The
+/// argument for separating them was that `Dyn` is not a pure marker -- it is a
+/// [`Shape`] with `Arg = Vec<usize>` and its own `resolve`, because a dynamic
+/// shape is *constructed* from runtime dimensions, whereas an unproven layout
+/// is constructed from nothing.
 ///
-/// A diagnostic ends up naming the marker twice, once per slot, and the reader
-/// has to count positions to tell which is which:
+/// That is true and it costs nothing: a trait impl does not oblige the layout
+/// slot to use `Shape::resolve`, and the layout slot never constructs a value
+/// at all. What the separation did cost was a second name for one idea. A
+/// reader who has learned that `Dyn` means "decided at runtime" in five slots
+/// had to learn that the sixth slot spells the same concept differently, and
+/// every `where` clause that wanted "unproven anything" named two types.
+///
+/// The one real objection was legibility of the rendered type, where the marker
+/// now appears twice:
 ///
 /// ```text
-/// expected struct `Tensor<Dyn, CpuBackendImpl, f32, NoGrad, _, Dyn>`
+/// Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Dyn>
 /// ```
 ///
-/// The humanizer behind the editor integrations cannot fix that. A layout of
-/// `Unknown` carries no information and should simply be elided from a hover;
-/// a *shape* of `Dyn` carries a great deal and must stay. Spelled the same,
-/// eliding one would elide the other.
-///
-/// And `Dyn` is not a pure marker: it is a `Shape` with `Arg = Vec<usize>` and
-/// its own `resolve`, because a dynamic shape is *constructed* from runtime
-/// dimensions. An unknown layout is constructed from nothing -- it is the
-/// absence of a claim, not a runtime value with a constructor.
-///
-/// So the concepts are siblings and the types are separate. This is to
-/// `Layout` what `Dyn` is to `Shape`, without being the same type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub struct Unknown;
+/// A `Dyn` layout carries no information and should be elided from a hover; a
+/// `Dyn` *shape* carries a great deal and must never be. The humanizer
+/// distinguishes them by **position** rather than by name -- the layout is the
+/// sixth of six arguments -- which is what the old spelling was standing in
+/// for. Position is the more precise test anyway: it cannot be fooled by an
+/// unrelated type that happens to share a name.
+impl Layout for Dyn {}
 
-impl Layout for Unknown {}
-
-/// `Unknown` describes any shape, because it claims nothing about it.
-impl<S: Shape> LayoutOf<S> for Unknown {}
+/// `Dyn` describes any shape, because it claims nothing about it.
+impl<S: Shape> LayoutOf<S> for Dyn {}
 
 /// The dense row-major layout implied by a shape.
 ///

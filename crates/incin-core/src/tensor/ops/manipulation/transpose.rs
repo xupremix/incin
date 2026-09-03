@@ -80,7 +80,7 @@ impl<
     /// the choice is the caller's.
     ///
     /// The result is non-contiguous, and its layout says so: it carries
-    /// [`Unknown`](crate::shapes::Unknown), so an operation bounded on
+    /// [`Dyn`](crate::shapes::Dyn), so an operation bounded on
     /// `L: Contiguous` -- `reshape_view`, for instance -- will not accept it
     /// without a fresh proof.
     ///

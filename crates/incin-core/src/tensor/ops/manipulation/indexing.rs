@@ -912,7 +912,7 @@ pub(crate) fn execute_where_cond_descriptor<
     on_true: &Tensor<S2, B, K, G2, Local, L2>,
     on_false: &Tensor<S2, B, K, G2, Local, L2>,
     // The selected values come from a fresh buffer, and the two branches need
-    // not share the mask's layout, so the result states `Unknown` rather than
+    // not share the mask's layout, so the result states `Dyn` rather than
     // carrying either operand's claim.
 ) -> Result<Tensor<S2, B, K, G2>>
 where

@@ -33,7 +33,7 @@ pub fn humanize_diagnostic(text: &str) -> Translated {
     let text = collapse_dimcons_chains(&text);
     // Before any shortening: the default layout says nothing, so it is noise in
     // every rendering, including the ones that deliberately keep the backend.
-    let text = elide_unknown_layout(&text);
+    let text = elide_default_layout(&text);
     Translated { text, hints }
 }
 
@@ -250,7 +250,7 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
     let text = collapse_dimcons_chains(&text);
     // Before any shortening: the default layout says nothing, so it is noise in
     // every rendering, including the ones that deliberately keep the backend.
-    let text = elide_unknown_layout(&text);
+    let text = elide_default_layout(&text);
     let text = if shorten_backend {
         shorten_collapsed_tensor_tail(&text).unwrap_or(text)
     } else {
@@ -259,26 +259,38 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
     Translated { text, hints }
 }
 
-/// Removes a trailing `Unknown` layout argument from every `Tensor<..>` in a
-/// type label.
+/// Removes a defaulted `Dyn` layout argument from every `Tensor<..>` in a type
+/// label.
 ///
-/// The layout parameter defaults to `Unknown`, which by definition asserts
-/// nothing about the tensor. Printing it costs a reader attention and returns
-/// no information, and it does so in the *full* rendering -- hover and the
+/// The layout parameter defaults to `Dyn`, which by definition asserts nothing
+/// about the tensor. Printing it costs a reader attention and returns no
+/// information, and it does so in the *full* rendering -- hover and the
 /// `expected .. found ..` notes -- where `shorten_collapsed_tensor_tail` does
 /// not apply because those callers want the backend and dtype kept.
 ///
-/// Only the last argument is considered, and only when it names `Unknown`.
-/// `Unknown` exists solely as a layout marker, which is what makes this
-/// unambiguous: the marker cannot appear in any other position, so there is no
-/// risk of eliding something that mattered. That property is the reason the
-/// layout marker is a distinct type rather than a reuse of `Dyn` -- a `Dyn`
-/// *shape* carries real information and must never be elided, and if the two
-/// shared a spelling this function could not tell them apart.
+/// # Why this keys on position, not on the name
 ///
-/// A layout that is anything other than `Unknown` is left alone: it is a claim
-/// the tensor actually carries, and hiding it would misrepresent the type.
-fn elide_unknown_layout(label: &str) -> String {
+/// `Dyn` is the marker for *every* runtime-selected slot, so the same spelling
+/// appears in the shape position, where it carries a great deal of information
+/// and must never be hidden:
+///
+/// ```text
+/// Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Dyn>
+/// //     ^ a dynamic shape: keep      the layout: elide ^
+/// ```
+///
+/// The two are told apart by which argument they are. `Tensor` has exactly six
+/// parameters and the layout is the sixth, so a trailing `Dyn` is a layout only
+/// in a fully spelled-out argument list. Anything else -- a shorter list, a
+/// list rustc has abbreviated with `...`, a nested type that happens to end in
+/// `Dyn` -- fails the count and is left untouched.
+///
+/// This is stricter than the name test it replaces, which fired on any trailing
+/// argument called `Unknown` regardless of arity.
+///
+/// A layout that is anything other than `Dyn` is left alone: it is a claim the
+/// tensor actually carries, and hiding it would misrepresent the type.
+fn elide_default_layout(label: &str) -> String {
     let mut result = String::with_capacity(label.len());
     let mut last_end = 0;
     let mut search_idx = 0;
@@ -293,7 +305,7 @@ fn elide_unknown_layout(label: &str) -> String {
         let generic_close = generic_open + generic_close_rel;
         let args = &label[generic_open + 1..generic_close];
 
-        let Some(trimmed) = strip_trailing_unknown(args) else {
+        let Some(trimmed) = strip_default_layout(args) else {
             search_idx = generic_close + 1;
             continue;
         };
@@ -307,31 +319,49 @@ fn elide_unknown_layout(label: &str) -> String {
     result
 }
 
-/// Returns `args` without its final argument when that argument is `Unknown`.
+/// Returns `args` without its final argument when that argument is the
+/// defaulted `Dyn` layout.
 ///
-/// Splits on the last comma at nesting depth zero, so a nested
-/// `DimCons<.., Unknown>` -- which would not be a layout -- is never mistaken
-/// for the outer list's tail.
-fn strip_trailing_unknown(args: &str) -> Option<&str> {
+/// Splits on top-level commas only, so a nested `DimCons<.., Dyn>` is never
+/// mistaken for the outer list's tail, and requires the list to hold exactly
+/// [`TENSOR_PARAM_COUNT`] arguments so that a `Dyn` in any other position --
+/// most importantly the shape -- cannot be reached.
+fn strip_default_layout(args: &str) -> Option<&str> {
     let mut depth = 0i32;
+    let mut commas = 0usize;
     let mut last_comma = None;
     for (index, ch) in args.char_indices() {
         match ch {
             '<' | '(' | '[' => depth += 1,
             '>' | ')' | ']' => depth -= 1,
-            ',' if depth == 0 => last_comma = Some(index),
+            ',' if depth == 0 => {
+                commas += 1;
+                last_comma = Some(index);
+            }
             _ => {}
         }
     }
+    // Six parameters means five separators. A different count is either a
+    // partially elided rendering or not a tensor's parameter list at all;
+    // either way the last argument is not known to be the layout.
+    if commas != TENSOR_PARAM_COUNT - 1 {
+        return None;
+    }
     let comma = last_comma?;
     let tail = args[comma + 1..].trim();
-    let is_unknown = tail == "Unknown" || tail.rsplit("::").next() == Some("Unknown");
-    if is_unknown {
+    let is_default = tail == "Dyn" || tail.rsplit("::").next() == Some("Dyn");
+    if is_default {
         Some(args[..comma].trim_end())
     } else {
         None
     }
 }
+
+/// Type parameters on `Tensor`: shape, backend, dtype, grad, placement, layout.
+///
+/// The layout is the last of them, which is what makes a trailing `Dyn`
+/// identifiable as one.
+const TENSOR_PARAM_COUNT: usize = 6;
 
 fn convert_tensor_tuples_to_brackets(label: &str, hints: &mut Vec<(String, String)>) -> String {
     let mut result = String::with_capacity(label.len());

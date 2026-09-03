@@ -398,8 +398,8 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             G,
             G2,
             G,
-            crate::shapes::Unknown,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
+            crate::shapes::Dyn,
         >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
@@ -423,8 +423,8 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             G,
             G2,
             G,
-            crate::shapes::Unknown,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
+            crate::shapes::Dyn,
         >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
@@ -448,8 +448,8 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             G,
             G2,
             G,
-            crate::shapes::Unknown,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
+            crate::shapes::Dyn,
         >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
@@ -473,8 +473,8 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             G,
             G2,
             G,
-            crate::shapes::Unknown,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
+            crate::shapes::Dyn,
         >(self, rhs, self._grad.clone())?;
         self.inner = res.inner;
         Ok(())
@@ -515,7 +515,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             B,
             K,
             G,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
         >(self, crate::exec::catalog::ScalarAttributes { value: val })
     }
 
@@ -531,7 +531,7 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad> T
             B,
             K,
             G,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
         >(self, crate::exec::catalog::ScalarAttributes { value: val })
     }
 

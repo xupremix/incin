@@ -1,6 +1,6 @@
 use crate::backend_authoring::{Backend, HostInterop};
 use crate::dist::{Local, Placement};
-use crate::shapes::{Layout, Unknown};
+use crate::shapes::{Dyn, Layout};
 use crate::shapes::{Shape, ShapeValue};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{ConstDType, DType};
@@ -54,9 +54,9 @@ pub struct Tensor<
     G: RequiresGrad = NoGrad,
     P: Placement = Local,
     // What the type settles about *where* the elements live: strides, offset,
-    // alignment, contiguity. Defaulted to `Unknown`, which claims nothing, so
+    // alignment, contiguity. Defaulted to `Dyn`, which claims nothing, so
     // every signature written before this parameter existed keeps its meaning.
-    L: Layout = Unknown,
+    L: Layout = Dyn,
 > {
     pub(crate) inner: B::Storage<K>,
     pub(crate) _layout: PhantomData<fn() -> L>,

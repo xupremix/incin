@@ -62,5 +62,5 @@ fn a_needed_parameter_is_still_reachable() {
         .unwrap();
     assert!(is_dense(&proven));
 
-    // is_dense(&plain) does not compile: `Unknown` is not `Contiguous`.
+    // is_dense(&plain) does not compile: `Dyn` is not `Contiguous`.
 }

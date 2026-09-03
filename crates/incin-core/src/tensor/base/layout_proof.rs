@@ -22,12 +22,12 @@ use crate::backend_authoring::Backend;
 use crate::dist::Placement;
 use crate::err::{Error, Result};
 use crate::shapes::Layout;
-use crate::shapes::{RowMajor, Shape, Unknown};
+use crate::shapes::{Dyn, RowMajor, Shape};
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
 use core::marker::PhantomData;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P, Unknown> {
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B, K, G, P, Dyn> {
     /// Checks the tensor's runtime strides against the dense row-major pattern
     /// and, if they match, returns the same tensor carrying that proof.
     ///
@@ -36,7 +36,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     /// it changes -- but the claim is earned rather than asserted, so a
     /// downstream `L: Contiguous` bound means what it says.
     ///
-    /// Only defined on [`Unknown`], which is the state a tensor is in when
+    /// Only defined on [`Dyn`](crate::shapes::Dyn), which is the state a tensor is in when
     /// nothing has been established about it. A tensor that already carries a
     /// layout got it from somewhere that knew, and re-deriving it from runtime
     /// metadata would be a step backwards.
@@ -52,7 +52,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     ///
     /// ```text
     /// let t: Tensor<s![3, 4], B> = Tensor::zeros(())?;
-    /// // `reshape_flat` needs `L: Contiguous`, which `Unknown` cannot satisfy.
+    /// // `reshape_flat` needs `L: Contiguous`, which `Dyn` cannot satisfy.
     /// let proven = t.into_row_major()?;
     /// let flat = proven.reshape_flat::<s![12]>()?;
     /// ```

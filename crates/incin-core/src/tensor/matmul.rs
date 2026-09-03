@@ -336,7 +336,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
             K,
             crate::tensor::grad::JoinedGrad<G1, G2>,
             Local,
-            crate::shapes::Unknown,
+            crate::shapes::Dyn,
         >,
     >
     where
@@ -397,7 +397,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
         rhs: &Tensor<S2, B, K, G1, Local, L2>,
         // A dot product collapses to a scalar, so the result describes a
         // different geometry and cannot carry either operand's layout. It takes
-        // the parameter's default, `Unknown`, which is what leaving the
+        // the parameter's default, `Dyn`, which is what leaving the
         // argument off means.
     ) -> Result<Tensor<crate::shapes::Nil, B, K, JoinedGrad<G1, G1>>>
     where

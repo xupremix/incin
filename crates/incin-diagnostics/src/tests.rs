@@ -597,13 +597,13 @@ fn equal_axes_are_not_reported_as_a_contraction_mismatch() {
 
 /// The default layout says nothing and should not be shown.
 ///
-/// `Tensor` gained a sixth parameter that defaults to `Unknown`, meaning the
+/// `Tensor` gained a sixth parameter that defaults to `Dyn`, meaning the
 /// compiler settled nothing about where the elements live. Printing it costs a
 /// reader attention and returns no information.
 #[test]
-fn an_unknown_layout_is_elided_from_a_tensor_type() {
+fn a_default_layout_is_elided_from_a_tensor_type() {
     let translated = humanize_type_signature(
-        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, incin_core::shapes::Unknown>",
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, incin_core::shapes::Dyn>",
         false,
     );
     assert_eq!(
@@ -622,37 +622,32 @@ fn a_proven_layout_is_never_elided() {
     assert_eq!(humanize_type_signature(label, false).text, label);
 }
 
-/// A `Dyn` shape must survive, even though it means the same thing one slot
-/// over.
+/// A `Dyn` shape must survive, even though the layout slot spells its default
+/// the same way.
 ///
-/// This is the property that decided against spelling the layout marker `Dyn`:
-/// an unknown *layout* is noise, a dynamic *shape* is information, and only
-/// distinct types let the humanizer tell them apart.
+/// This is the property that the layout marker sharing `Dyn` puts at risk: an
+/// unproven *layout* is noise, a dynamic *shape* is information. They are told
+/// apart by position, so both `Dyn`s here are handled correctly in one pass --
+/// the sixth is dropped, the first is kept.
 #[test]
-fn a_dynamic_shape_is_not_confused_with_an_unknown_layout() {
+fn a_dynamic_shape_is_not_confused_with_a_default_layout() {
     let translated = humanize_type_signature(
-        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Unknown>",
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Dyn>",
         false,
     );
-    assert!(
-        translated.text.starts_with("Tensor<Dyn,"),
-        "the shape must survive: {}",
-        translated.text
-    );
-    assert!(
-        !translated.text.contains("Unknown"),
-        "the layout must not: {}",
-        translated.text
+    assert_eq!(
+        translated.text,
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local>"
     );
 }
 
 /// Only the outermost argument list is considered.
 ///
-/// A nested type that happens to end in something named `Unknown` is not a
-/// layout and must be left alone.
+/// A nested type that happens to end in `Dyn` is not a layout and must be left
+/// alone, whatever its depth.
 #[test]
-fn a_nested_unknown_is_not_mistaken_for_the_layout_slot() {
-    let label = "Tensor<DimCons<A, Unknown>, CpuBackendImpl, f32, NoGrad, Local, RowMajor<S>>";
+fn a_nested_dyn_is_not_mistaken_for_the_layout_slot() {
+    let label = "Tensor<DimCons<A, Dyn>, CpuBackendImpl, f32, NoGrad, Local, RowMajor<S>>";
     assert_eq!(humanize_type_signature(label, false).text, label);
 }
 
@@ -660,5 +655,27 @@ fn a_nested_unknown_is_not_mistaken_for_the_layout_slot() {
 #[test]
 fn a_tensor_without_a_layout_argument_is_untouched() {
     let label = "Tensor<Dyn, CpuBackendImpl>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// A trailing `Dyn` in a list too short to reach the layout slot is kept.
+///
+/// This is the case the old name-based test could not express, because the
+/// marker used to be a spelling no other slot could produce. With one shared
+/// marker the arity is the only thing separating a layout from a placement, so
+/// a five-argument list must fail closed rather than drop its last argument.
+#[test]
+fn a_trailing_dyn_outside_the_layout_slot_is_kept() {
+    let label = "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Dyn>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// An argument list rustc has abbreviated is left alone.
+///
+/// `...` collapses an unknown number of arguments, so the position of the
+/// trailing one is no longer knowable and eliding it could hide a shape.
+#[test]
+fn an_abbreviated_argument_list_is_not_elided() {
+    let label = "Tensor<Dyn, ..., Dyn>";
     assert_eq!(humanize_type_signature(label, false).text, label);
 }

@@ -30,7 +30,7 @@ enum ConstructionWitness {
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout> Tensor<S, B, K, G, Local, L> {
     /// Wraps a gradient buffer produced for `source`.
     ///
-    /// The gradient's layout is deliberately `Unknown` rather than `source`'s.
+    /// The gradient's layout is deliberately `Dyn` rather than `source`'s.
     /// A gradient is a fresh allocation the backend made on its own terms, and
     /// carrying the source's claim across would be asserting something about a
     /// buffer this function never inspected. The source is still generic over
@@ -39,7 +39,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout> Tensor<S, B, K,
     pub(crate) fn from_gradient_storage(
         source: &Tensor<S, B, K, G, Local, L>,
         inner: B::Storage<K>,
-    ) -> Result<Tensor<S, B, K, NoGrad, Local, crate::shapes::Unknown>> {
+    ) -> Result<Tensor<S, B, K, NoGrad, Local, crate::shapes::Dyn>> {
         Tensor::from_parts(
             inner,
             source.shape_buf().clone(),

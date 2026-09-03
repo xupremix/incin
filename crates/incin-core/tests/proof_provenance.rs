@@ -295,16 +295,16 @@ fn a_dynamic_axis_voids_only_the_strides_outside_it() {
 /// A row-major layout is exactly as proven as the shape behind it.
 #[test]
 fn a_row_major_layout_inherits_the_shapes_proof() {
-    use incin_core::shapes::{Layout, RowMajor, Unknown};
+    use incin_core::shapes::{Dyn, Layout, RowMajor};
 
     assert_eq!(<RowMajor<s![3, 4]> as Layout>::PROOF, ProofLevel::Static);
     assert_eq!(<RowMajor<s![Batch, 4]> as Layout>::PROOF, ProofLevel::Mixed);
     assert_eq!(<RowMajor<Dyn> as Layout>::PROOF, ProofLevel::Dynamic);
 
     // The identity element claims nothing at all.
-    assert_eq!(<Unknown as Layout>::PROOF, ProofLevel::Dynamic);
-    assert_eq!(<Unknown as Layout>::STATIC_STRIDES, &[][..]);
-    assert_eq!(<Unknown as Layout>::STATIC_OFFSET, None);
+    assert_eq!(<Dyn as Layout>::PROOF, ProofLevel::Dynamic);
+    assert_eq!(<Dyn as Layout>::STATIC_STRIDES, &[][..]);
+    assert_eq!(<Dyn as Layout>::STATIC_OFFSET, None);
 }
 
 /// A shape deeper than the buffer reports no strides rather than a prefix.

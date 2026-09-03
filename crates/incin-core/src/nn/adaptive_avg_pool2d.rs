@@ -63,8 +63,7 @@ where
     <B as Execute<op::AdaptiveAvgPool2dExact>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output =
-        Tensor<I::Output, B, f32, crate::tensor::grad::NoGrad, Local, crate::shapes::Unknown>;
+    type Output = Tensor<I::Output, B, f32, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 

@@ -449,8 +449,7 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output =
-        Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Unknown>;
+    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
     type Error = Error;
 
     fn forward(
@@ -486,8 +485,7 @@ where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output =
-        Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Unknown>;
+    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
     type Error = Error;
 
     fn forward(
@@ -568,14 +566,8 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<
-        InShape::Output,
-        B,
-        K,
-        JoinedGrad<G, Train::TensorGrad>,
-        Local,
-        crate::shapes::Unknown,
-    >;
+    type Output =
+        Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
     type Error = Error;
 
     fn forward(
@@ -630,14 +622,8 @@ where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<
-        InShape::Output,
-        B,
-        K,
-        JoinedGrad<G, Train::TensorGrad>,
-        Local,
-        crate::shapes::Unknown,
-    >;
+    type Output =
+        Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
     type Error = Error;
 
     fn forward(
@@ -685,7 +671,7 @@ where
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
     type Output =
-        Tensor<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::Unknown>;
+        Tensor<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
     type Error = Error;
 
     fn forward(
