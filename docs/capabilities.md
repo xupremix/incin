@@ -190,6 +190,7 @@ run time.
 | `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `topk` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
+| `transpose_view` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `trunc` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -346,6 +347,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `cmp_gt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |
 | `cmp_ge` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |
 | `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 2+ | yes | native |
+| `transpose_view` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 2+ | yes | native |
 | `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | yes | native |
 | `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1–2 | yes | native |
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1–2 | yes | native |
@@ -535,6 +537,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `cmp_gt` | `f32` | `contiguous` | any | yes | native |
 | `cmp_ge` | `f32` | `contiguous` | any | yes | native |
 | `transpose` | `f32` | `contiguous` | 2+ | yes | native |
+| `transpose_view` | `f32` | `contiguous` | 2+ | yes | native |
 | `narrow` | `f32` | `contiguous` | 1+ | yes | native |
 | `triu` | `f32` | `contiguous` | 1–2 | yes | native |
 | `tril` | `f32` | `contiguous` | 1–2 | yes | native |

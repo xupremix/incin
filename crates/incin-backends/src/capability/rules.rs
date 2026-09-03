@@ -381,7 +381,7 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // least the one axis its attributes name. `unsqueeze` is the exception
         // that keeps this table honest: it inserts an axis, so a scalar is a
         // legitimate operand and its minimum stays at zero.
-        OperationKind::TransposeExact => 2,
+        OperationKind::TransposeExact | OperationKind::TransposeView => 2,
         OperationKind::Narrow
         | OperationKind::FlattenExact
         | OperationKind::SqueezeExact

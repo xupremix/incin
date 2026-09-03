@@ -215,6 +215,42 @@ pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Res
     launch_shape_op(2, t, out_shape, &aux, launch_n)
 }
 
+/// Transposes by permuting metadata, without touching the buffer.
+///
+/// The counterpart to `launch_transpose`, which runs a permutation kernel into
+/// a fresh contiguous allocation. This one shares the original buffer and
+/// permutes the shape and strides, so it costs an `Arc` clone and no device
+/// work at all.
+///
+/// Neither is universally better, which is why both exist. Measured on a
+/// GTX 1650 for a transpose followed by pointwise consumption of the result,
+/// the view beats the copy by roughly 11% when the result is read once, and
+/// loses by roughly 15% when it is read eight times; the crossover sits between
+/// two and four reads. That is a property of the *consumer*, which the
+/// transpose cannot know, so the caller chooses. See
+/// `cuda::ops::view_cost_bench` and issue #113.
+///
+/// The result is genuinely non-contiguous, so it takes the strided pointwise
+/// kernels rather than the dense ones.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_transpose_view(
+    t: &CudaStorage,
+    dim1: usize,
+    dim2: usize,
+) -> Result<CudaStorage> {
+    let mut out_shape = t.shape.to_vec();
+    let mut out_strides = t.strides.to_vec();
+    if dim1 >= out_shape.len() || dim2 >= out_shape.len() {
+        return Err(incin_core::error::Error::Msg(alloc::format!(
+            "transpose_view dims ({dim1}, {dim2}) out of range for shape {:?}",
+            t.shape
+        )));
+    }
+    out_shape.swap(dim1, dim2);
+    out_strides.swap(dim1, dim2);
+    CudaStorage::try_from_parts(t.buffer.clone(), out_shape, out_strides, t.offset_elements)
+}
+
 /// Broadcasts `t` to `target_shape`. Materializes (see `launch_narrow`'s doc
 /// for why). Caller must validate shape compatibility first - this function
 /// assumes `target_shape` is already a legal broadcast target of `t.shape`.

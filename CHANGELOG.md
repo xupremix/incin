@@ -26,6 +26,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `Tensor::reshape_view`, bounded on `L: Contiguous`: reinterprets a buffer
   under a new shape without copying. Reshaping a non-contiguous tensor is a
   compile error rather than the runtime failure it is elsewhere.
+- `transpose_view`, a transpose that permutes shape and strides over the same
+  buffer instead of copying, and the `TransposeView` operation behind it. CPU
+  and CUDA implement it; WGPU deliberately does not advertise it, because its
+  pointwise shaders address linearly and would read a view's elements in the
+  wrong order. Which of the two transposes is faster depends on how often the
+  result is read, so the framework offers both rather than choosing (#113).
 - `AnyTensor` and `TensorOf<T>`, so generic code names one type parameter
   instead of six. The parameters stay reachable as associated types, so a bound
   that genuinely needs one still writes `T::Layout: Contiguous`; only the ones a

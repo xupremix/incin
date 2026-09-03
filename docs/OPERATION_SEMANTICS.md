@@ -4,13 +4,13 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 178
-Backend-executable operations: 162
+Canonical operations: 179
+Backend-executable operations: 163
 Non-backend execution sites: 16
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 144 |
+| `Kernel` | 145 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -103,6 +103,7 @@ Non-backend execution sites: 16
 | `fill_in_place` | `Descriptor<op::FillInPlace>` | `ScalarAttributes` | `Mutation` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::fill_` |
 | `reshape` | `Descriptor<op::ReshapeExact>` | `ShapeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::reshape` |
 | `transpose` | `Descriptor<op::TransposeExact>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose` |
+| `transpose_view` | `Descriptor<op::TransposeView>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose_view` |
 | `matmul` | `Descriptor<op::MatMulExact>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-18446744073709551615 | `TypedContract` | `Floating` / `MatMul` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::matmul` |
 | `dot` | `Descriptor<op::Dot>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 1-1 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::dot` |
 | `outer` | `Descriptor<op::Outer>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 1-1 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::outer` |

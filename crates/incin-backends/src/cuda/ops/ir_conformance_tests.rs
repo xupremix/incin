@@ -941,3 +941,53 @@ fn repeated_subexpressions_are_evaluated_once() {
         single.prologue
     );
 }
+
+/// The CUDA transpose view must permute metadata, take the strided path, and
+/// address correctly.
+///
+/// This is the capability the backend did not have: every CUDA operation that
+/// could produce a non-contiguous result materialised instead, which is why the
+/// strided pointwise kernels were unreachable. The view makes them live, so it
+/// is also what turns the extent-folding work from latent into used.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn the_cuda_transpose_view_is_strided_and_correct() {
+    if !has_cuda() {
+        return;
+    }
+    let values: Vec<f32> = (0..12).map(|index| index as f32).collect();
+    let base = storage(&[3, 4], values.clone());
+
+    let viewed = crate::cuda::ops::shape::launch_transpose_view(&base, 0, 1)
+        .expect("a 3x4 tensor has a 4x3 transposed view");
+    assert_eq!(&viewed.shape[..], &[4, 3]);
+    assert_eq!(
+        &viewed.strides[..],
+        &[1, 4],
+        "a view permutes strides; [3, 1] would mean it copied"
+    );
+
+    // It really is the strided path, not the dense one.
+    let plan = crate::iteration::UnaryIterationPlan::new(crate::iteration::OperandLayout {
+        shape: &viewed.shape,
+        strides: &viewed.strides,
+        offset: viewed.offset_elements,
+    })
+    .unwrap();
+    assert_eq!(plan.layout_class(), incin_core::exec::LayoutClass::Strided);
+
+    // And it addresses the right elements.
+    let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
+    let out = launch_unary_body(probe_name("tview", "neg"), &body, &viewed, NO_PROOF).unwrap();
+    let got = download_f32_host(&out).unwrap();
+    for row in 0..4usize {
+        for col in 0..3usize {
+            let expected = -(values[col * 4 + row]);
+            assert!(
+                close(f64::from(got[row * 3 + col]), f64::from(expected)),
+                "view neg at [{row},{col}] gave {}, expected {expected}",
+                got[row * 3 + col]
+            );
+        }
+    }
+}

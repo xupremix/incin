@@ -522,6 +522,35 @@ impl<D: Device> Execute<op::TransposeExact> for CudaBackendImpl<D> {
     }
 }
 
+/// A transpose that permutes metadata instead of copying.
+///
+/// `TransposeExact` on this backend runs a permutation kernel into a fresh
+/// contiguous buffer; this shares the buffer and permutes shape and strides, so
+/// it does no device work at all. The result is genuinely non-contiguous and
+/// takes the strided pointwise kernels.
+///
+/// Both exist because neither is universally better, and which wins is a
+/// property of the consumer rather than of the transpose. Measured here for a
+/// transpose plus pointwise consumption: the view is ~11% faster when the
+/// result is read once and ~15% slower when it is read eight times, crossing
+/// over between two and four reads. See `ops::view_cost_bench` and issue #113.
+impl<D: Device> Execute<op::TransposeView> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TransposeView, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::TransposeView;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "transpose_view expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        crate::cuda::ops::shape::launch_transpose_view(input, attrs.first, attrs.second)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
 impl<D: Device> Execute<op::Narrow> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(

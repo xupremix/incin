@@ -138,7 +138,7 @@ macro_rules! cpu_descriptor_operations {
                 ArgMax, ArgMin, Argsort, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
-                TransposeExact, Narrow, Triu, Tril, Diag,
+                TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
                 // Same operands and the same row as `scatter` beside it, and
                 // declared on this backend only. The rule it advertises is a
@@ -285,7 +285,7 @@ macro_rules! cuda_descriptor_operations {
                 ArgMax, ArgMin, Argsort, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
-                TransposeExact, Narrow, Triu, Tril, Diag,
+                TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
                 PixelShuffle,
                 ToDType
@@ -385,6 +385,13 @@ macro_rules! wgpu_descriptor_operations {
             // transpose is its own inverse), so it is native rather than
             // composed. It sat unregistered until now: the kernel existed,
             // nothing advertised it, and dispatch refused it.
+            // `TransposeView` is deliberately absent. It returns a
+            // non-contiguous view, and this backend's pointwise shaders
+            // (`unary.wgsl`, `binary.wgsl`) address linearly -- neither
+            // mentions a stride -- so handing them a view would read the wrong
+            // elements silently rather than fail. It can be advertised once
+            // those shaders take strides, which is the same work the CUDA
+            // strided kernels already do.
             native_tensor = [Maximum, Minimum, AbsDiff, TransposeExact],
             // `rms_norm` only, not the whole normalization family: it is the
             // one member WGPU can answer, by rewriting into `mul`,

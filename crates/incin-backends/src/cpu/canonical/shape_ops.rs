@@ -140,6 +140,39 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
     }
 }
 
+/// A transpose that is explicitly a view.
+///
+/// Shares `transpose_storage` with `TransposeExact`, because on this backend
+/// that function already returns a view -- permuted metadata over the same
+/// buffer, no copy. The two operations are distinct in the catalog so a caller
+/// can *say* which behaviour they want: CUDA's `TransposeExact` materialises,
+/// and a caller who needs the no-copy path had no way to ask for it.
+///
+/// Which one to reach for is a property of the consumer, not of the transpose.
+/// Measured on a GTX 1650, a materialised transpose loses to a strided read by
+/// about 11% when the result is read once and wins by about 15% when it is read
+/// eight times, crossing over between two and four reads. See
+/// `cuda::ops::view_cost_bench` and issue #113.
+impl<D: Device> Execute<op::TransposeView> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TransposeView, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::TransposeView;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let attributes = request.operation.descriptor().attributes();
+        transpose_storage(input, attributes.first, attributes.second)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
 impl<D: Device> Execute<op::Narrow> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 

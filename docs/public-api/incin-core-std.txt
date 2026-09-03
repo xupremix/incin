@@ -373,6 +373,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::ToHostIntVec
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::TopK
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::TransposeExact
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::TransposeView
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Tril
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Triu
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Trunc
@@ -555,6 +556,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::ToH
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::ToHostIntVec
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::TopK
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::TransposeExact
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::TransposeView
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Tril
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Triu
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Trunc
@@ -3156,6 +3158,8 @@ pub const incin_core::exec::catalog::op::TopK::ID: incin_core::shapes::Operation
 pub const incin_core::exec::catalog::op::TopK::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::TransposeExact::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::TransposeExact::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::TransposeView::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::TransposeView::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Tril::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Tril::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Triu::ID: incin_core::shapes::OperationKind
@@ -5875,6 +5879,9 @@ pub fn incin_core::exec::catalog::op::TopK::infer_outputs(&Self::Attributes, &[i
 pub fn incin_core::exec::catalog::op::TransposeExact::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::TransposeExact::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::TransposeExact::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::TransposeView::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::TransposeView::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::TransposeView::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Tril::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Tril::infer_invocation_typed<S: incin_core::shapes::Shape>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &incin_core::shapes::ShapeValue<S>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Tril::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -7111,6 +7118,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::unsqueeze<A>(&self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector>::Output, B, K, G>> where A: incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose<L, R>(&self, L, R) -> incin_core::error::Result<incin_core::prelude::Tensor<<() as incin_core::tensor::ops::manipulation::selectors::AxisPairSelector<S, L, R>>::Output, B, K, G>> where (): incin_core::tensor::ops::manipulation::selectors::AxisPairSelector<S, L, R>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose_structural<L, R>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::SwapAxes<L, R>>::Output, B, K, G>> where L: incin_core::shapes::StaticCursor, R: incin_core::shapes::StaticCursor, S: incin_core::shapes::SwapAxes<L, R>, <S as incin_core::shapes::SwapAxes<L, R>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose_view<Lx, Rx>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::SwapAxes<Lx, Rx>>::Output, B, K, G>> where Lx: incin_core::shapes::StaticCursor, Rx: incin_core::shapes::StaticCursor, S: incin_core::shapes::SwapAxes<Lx, Rx>, <S as incin_core::shapes::SwapAxes<Lx, Rx>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeView> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeView>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::abs_diff<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::add_exact<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::atan2<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, L1>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan2>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atan2>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -9992,6 +10000,7 @@ pub incin_core::prelude::OperationKind::ToHostIntVec
 pub incin_core::prelude::OperationKind::TopK
 pub incin_core::prelude::OperationKind::Transpose
 pub incin_core::prelude::OperationKind::TransposeExact
+pub incin_core::prelude::OperationKind::TransposeView
 pub incin_core::prelude::OperationKind::Tril
 pub incin_core::prelude::OperationKind::Triu
 pub incin_core::prelude::OperationKind::Trunc
@@ -10358,6 +10367,7 @@ pub incin_core::shapes::OperationKind::ToHostIntVec
 pub incin_core::shapes::OperationKind::TopK
 pub incin_core::shapes::OperationKind::Transpose
 pub incin_core::shapes::OperationKind::TransposeExact
+pub incin_core::shapes::OperationKind::TransposeView
 pub incin_core::shapes::OperationKind::Tril
 pub incin_core::shapes::OperationKind::Triu
 pub incin_core::shapes::OperationKind::Trunc
@@ -10625,6 +10635,7 @@ pub incin_core::shapes::error::OperationKind::ToHostIntVec
 pub incin_core::shapes::error::OperationKind::TopK
 pub incin_core::shapes::error::OperationKind::Transpose
 pub incin_core::shapes::error::OperationKind::TransposeExact
+pub incin_core::shapes::error::OperationKind::TransposeView
 pub incin_core::shapes::error::OperationKind::Tril
 pub incin_core::shapes::error::OperationKind::Triu
 pub incin_core::shapes::error::OperationKind::Trunc
@@ -10886,6 +10897,7 @@ pub incin_core::shapes::prelude::OperationKind::ToHostIntVec
 pub incin_core::shapes::prelude::OperationKind::TopK
 pub incin_core::shapes::prelude::OperationKind::Transpose
 pub incin_core::shapes::prelude::OperationKind::TransposeExact
+pub incin_core::shapes::prelude::OperationKind::TransposeView
 pub incin_core::shapes::prelude::OperationKind::Tril
 pub incin_core::shapes::prelude::OperationKind::Triu
 pub incin_core::shapes::prelude::OperationKind::Trunc
@@ -11361,6 +11373,7 @@ pub struct incin_core::backend_authoring::op::ToHostIntScalar
 pub struct incin_core::backend_authoring::op::ToHostIntVec
 pub struct incin_core::backend_authoring::op::TopK
 pub struct incin_core::backend_authoring::op::TransposeExact
+pub struct incin_core::backend_authoring::op::TransposeView
 pub struct incin_core::backend_authoring::op::Tril
 pub struct incin_core::backend_authoring::op::Triu
 pub struct incin_core::backend_authoring::op::Trunc
@@ -11596,6 +11609,7 @@ pub struct incin_core::backend_authoring::operations::op::ToHostIntScalar
 pub struct incin_core::backend_authoring::operations::op::ToHostIntVec
 pub struct incin_core::backend_authoring::operations::op::TopK
 pub struct incin_core::backend_authoring::operations::op::TransposeExact
+pub struct incin_core::backend_authoring::operations::op::TransposeView
 pub struct incin_core::backend_authoring::operations::op::Tril
 pub struct incin_core::backend_authoring::operations::op::Triu
 pub struct incin_core::backend_authoring::operations::op::Trunc
@@ -11882,6 +11896,7 @@ pub struct incin_core::exec::catalog::op::ToHostIntScalar
 pub struct incin_core::exec::catalog::op::ToHostIntVec
 pub struct incin_core::exec::catalog::op::TopK
 pub struct incin_core::exec::catalog::op::TransposeExact
+pub struct incin_core::exec::catalog::op::TransposeView
 pub struct incin_core::exec::catalog::op::Tril
 pub struct incin_core::exec::catalog::op::Triu
 pub struct incin_core::exec::catalog::op::Trunc
@@ -12066,6 +12081,7 @@ pub struct incin_core::exec::op::ToHostIntScalar
 pub struct incin_core::exec::op::ToHostIntVec
 pub struct incin_core::exec::op::TopK
 pub struct incin_core::exec::op::TransposeExact
+pub struct incin_core::exec::op::TransposeView
 pub struct incin_core::exec::op::Tril
 pub struct incin_core::exec::op::Triu
 pub struct incin_core::exec::op::Trunc
@@ -13268,6 +13284,7 @@ pub type incin_core::exec::catalog::op::ToHostIntScalar::Attributes = incin_core
 pub type incin_core::exec::catalog::op::ToHostIntVec::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::TopK::Attributes = incin_core::exec::catalog::TopKAttributes
 pub type incin_core::exec::catalog::op::TransposeExact::Attributes = incin_core::exec::catalog::TransposeAttributes
+pub type incin_core::exec::catalog::op::TransposeView::Attributes = incin_core::exec::catalog::TransposeAttributes
 pub type incin_core::exec::catalog::op::Tril::Attributes = incin_core::exec::catalog::DiagonalAttributes
 pub type incin_core::exec::catalog::op::Triu::Attributes = incin_core::exec::catalog::DiagonalAttributes
 pub type incin_core::exec::catalog::op::Trunc::Attributes = incin_core::exec::catalog::NoAttributes

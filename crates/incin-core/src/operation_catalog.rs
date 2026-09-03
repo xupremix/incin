@@ -97,6 +97,7 @@ macro_rules! incin_operation_catalog {
 
             (ReshapeExact, "reshape", Storage, Shape, ShapeAttributes, 1, 1, "::reshape"),
             (TransposeExact, "transpose", Storage, Shape, TransposeAttributes, 1, 1, "::transpose"),
+            (TransposeView, "transpose_view", Storage, Shape, TransposeAttributes, 1, 1, "::transpose_view"),
             (MatMulExact, "matmul", Reduction, MatMul, NoAttributes, 2, 2, "::matmul"),
             (Dot, "dot", Reduction, MatMul, NoAttributes, 2, 2, "Tensor::dot"),
             (Outer, "outer", Reduction, MatMul, NoAttributes, 2, 2, "Tensor::outer"),

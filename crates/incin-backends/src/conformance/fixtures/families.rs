@@ -443,7 +443,7 @@ family!(
     transposing,
     Operands::UnaryAxis,
     transposing_first_two,
-    [TransposeExact]
+    [TransposeExact, TransposeView]
 );
 
 family!(

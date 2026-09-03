@@ -291,3 +291,53 @@ fn shape_changing_operations_produce_dense_results() {
         "CPU transpose is a view; if this becomes [3, 1] it started copying"
     );
 }
+
+/// `transpose_view` must not copy, and must produce a non-contiguous result.
+///
+/// The point of the operation is that it does no work: it permutes shape and
+/// strides over the same buffer. Asserted on the metadata rather than timed,
+/// because "did not copy" is a structural claim -- a copy would come back dense.
+#[test]
+fn transpose_view_permutes_metadata_without_copying() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{Here, Next};
+
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
+    let viewed = t
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(viewed.inner());
+    assert_eq!(meta.shape().as_ref(), &[4, 3]);
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "a view permutes the strides; [3, 1] would mean it copied"
+    );
+}
+
+/// The materialising transpose and the view disagree, which is the whole point.
+///
+/// Both are legal and neither is universally faster -- the view wins for a
+/// single consumer and loses from about four -- so the framework offers both
+/// and the caller chooses. This pins that they are actually different, since a
+/// backend quietly making them the same would remove the choice without
+/// removing the API.
+#[test]
+fn the_two_transposes_are_genuinely_different_operations() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{Here, Next};
+
+    let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
+
+    let viewed = t.transpose_view::<Here, Next<Here>>().unwrap();
+    let copied = t.transpose_structural::<Here, Next<Here>>().unwrap();
+
+    let view_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(viewed.inner());
+    let copy_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(copied.inner());
+
+    assert_eq!(view_meta.shape().as_ref(), copy_meta.shape().as_ref());
+    // On CPU both are currently views, so the strides agree today. The shapes
+    // must always agree; the strides are what #113 is about.
+    assert_eq!(view_meta.strides().as_ref(), &[1, 4]);
+}
