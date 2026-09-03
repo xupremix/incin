@@ -25,21 +25,21 @@ impl<
     /// Transposes two axis selectors while preserving the strongest available
     /// output shape proof.
     #[allow(clippy::type_complexity)]
-    pub fn transpose<L, R>(
+    pub fn transpose<Lx, Rx>(
         &self,
-        left: L,
-        right: R,
-    ) -> Result<Tensor<<() as AxisPairSelector<S, L, R>>::Output, B, K, G>>
+        left: Lx,
+        right: Rx,
+    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G>>
     where
-        (): AxisPairSelector<S, L, R>,
+        (): AxisPairSelector<S, Lx, Rx>,
         B: Execute<op::TransposeExact> + Capabilities,
         <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
         let (first, second) =
-            <() as AxisPairSelector<S, L, R>>::resolve(&(left, right), self.shape_buf().rank())?;
+            <() as AxisPairSelector<S, Lx, Rx>>::resolve(&(left, right), self.shape_buf().rank())?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(first, second);
-        let output_shape = ShapeValue::<<() as AxisPairSelector<S, L, R>>::Output>::try_new(
+        let output_shape = ShapeValue::<<() as AxisPairSelector<S, Lx, Rx>>::Output>::try_new(
             ShapeBuf::from_slice(&out_dims),
         )
         .map_err(crate::err::Error::Shape)?;
@@ -49,7 +49,7 @@ impl<
             dispatch::execute_shaped::<
                 op::TransposeExact,
                 B,
-                <() as AxisPairSelector<S, L, R>>::Output,
+                <() as AxisPairSelector<S, Lx, Rx>>::Output,
             >(
                 &context,
                 TransposeAttributes { first, second },
@@ -135,29 +135,29 @@ impl<
 
     /// Advanced structural transpose retained for shape-proof internals.
     #[allow(clippy::type_complexity)]
-    pub fn transpose_structural<L, R>(
+    pub fn transpose_structural<Lx, Rx>(
         &self,
-    ) -> Result<Tensor<<S as SwapAxes<L, R>>::Output, B, K, G>>
+    ) -> Result<Tensor<<S as SwapAxes<Lx, Rx>>::Output, B, K, G>>
     where
-        L: StaticCursor,
-        R: StaticCursor,
-        S: SwapAxes<L, R>,
-        <S as SwapAxes<L, R>>::Output: Shape + DynShape,
+        Lx: StaticCursor,
+        Rx: StaticCursor,
+        S: SwapAxes<Lx, Rx>,
+        <S as SwapAxes<Lx, Rx>>::Output: Shape + DynShape,
         B: Execute<op::TransposeExact> + Capabilities,
         <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     {
-        let axes = crate::shapes::idx::AxisSelector::new(&[L::INDEX, R::INDEX])
+        let axes = crate::shapes::idx::AxisSelector::new(&[Lx::INDEX, Rx::INDEX])
             .normalize(self.shape_buf().rank())?;
         let mut out_dims = self.shape_buf().as_ref().to_vec();
         out_dims.swap(axes[0], axes[1]);
         let output_shape =
-            ShapeValue::<<S as SwapAxes<L, R>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
+            ShapeValue::<<S as SwapAxes<Lx, Rx>>::Output>::try_new(ShapeBuf::from_slice(&out_dims))
                 .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
         let inner = G::grad_mode(&self._grad)
             .restrict(|| {
-                dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<L, R>>::Output>(
+                dispatch::execute_shaped::<op::TransposeExact, B, <S as SwapAxes<Lx, Rx>>::Output>(
                     &context,
                     TransposeAttributes {
                         first: axes[0],
@@ -168,7 +168,7 @@ impl<
                 )
             })?
             .into();
-        Tensor::<<S as SwapAxes<L, R>>::Output, B, K, G>::from_shape_value(
+        Tensor::<<S as SwapAxes<Lx, Rx>>::Output, B, K, G>::from_shape_value(
             inner,
             output_shape,
             self._dtype.clone(),

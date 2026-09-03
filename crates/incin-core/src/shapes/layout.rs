@@ -108,6 +108,52 @@ pub trait Layout: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
 /// be congruent -- same tuple profile, one stride integer per shape integer.
 pub trait LayoutOf<S: Shape>: Layout {}
 
+/// `Self` is a truthful description of a freshly allocated dense buffer of `S`.
+///
+/// Constructors like [`Tensor::zeros`](crate::prelude::Tensor::zeros) allocate a
+/// packed row-major buffer, so they are entitled to hand back a layout proof
+/// rather than [`Unknown`]. This trait is what entitles them, and it is the
+/// reason they can do so without also becoming a way to *forge* one.
+///
+/// # Why a bound and not just a return type
+///
+/// Naming `RowMajor<S>` in the return type would work, and would break every
+/// existing call site that expects the default. Bounding the constructor on this
+/// instead lets the caller choose: ask for `Tensor<S, B>` and get `Unknown` as
+/// before, ask for [`Dense<S, B>`](Dense) and get a real proof, from the same
+/// function and the same allocation.
+///
+/// # Why it is sealed
+///
+/// A constructor generic over `L` is a minting press: whatever layout the caller
+/// names, it produces a tensor claiming it. That is harmless while the only
+/// layouts are `Unknown` and `RowMajor`, because a fresh allocation genuinely is
+/// both. It stops being harmless the moment a second real layout exists -- a
+/// `ChannelsLast<S>` would be mintable from `zeros` despite a fresh allocation
+/// not being channels-last at all, and the proof would be a lie with no unsafe
+/// block and no runtime check anywhere near it.
+///
+/// Sealing means only this module decides what a fresh allocation may claim, so
+/// adding `ChannelsLast` cannot silently make it claimable. The compiler asks
+/// the question at the point where the answer is known.
+pub trait FreshDense<S: Shape>: LayoutOf<S> + sealed::SealedFresh {}
+
+/// A fresh allocation is free to claim nothing.
+impl<S: Shape> FreshDense<S> for Unknown {}
+
+/// A fresh allocation is packed row-major, which is exactly this claim.
+impl<S: Shape> FreshDense<S> for RowMajor<S> {}
+
+mod sealed {
+    /// Prevents [`FreshDense`](super::FreshDense) being implemented downstream.
+    ///
+    /// Without this, a downstream layout could assert that a fresh allocation
+    /// satisfies it and mint the proof from any constructor.
+    pub trait SealedFresh {}
+    impl SealedFresh for super::Unknown {}
+    impl<S> SealedFresh for super::RowMajor<S> {}
+}
+
 /// The layout visits memory in one unbroken ascending run with no gaps.
 ///
 /// This is a structural claim, not a numeric one: it holds for a row-major

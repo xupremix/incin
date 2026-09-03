@@ -1,5 +1,6 @@
 use super::Tensor;
 use crate::backend_authoring::{Backend, Execute, SupportsDType};
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::Capabilities;
 use crate::exec::catalog::{
@@ -14,10 +15,23 @@ use crate::tensor::device::Device;
 use crate::tensor::dtype::{BuiltinDType, DType, PlainDType};
 use crate::tensor::grad::RequiresGrad;
 
-impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G>
+/// Constructors, which allocate a packed row-major buffer.
+///
+/// Generic over the layout parameter rather than fixed to the `Unknown`
+/// default, so a caller who asks for [`Dense<S, B>`](crate::shapes::Dense) gets
+/// a genuine [`RowMajor<S>`](crate::shapes::RowMajor) proof out of the same
+/// allocation, while `Tensor<S, B>` keeps meaning exactly what it did.
+///
+/// The [`FreshDense<S>`](crate::shapes::FreshDense) bound is what keeps that
+/// from being a way to forge a layout: it is sealed, and only the layouts a
+/// fresh dense allocation actually has implement it. See its documentation for
+/// why an unbounded `L` here would become a minting press as soon as a second
+/// real layout exists.
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L> Tensor<S, B, K, G, Local, L>
 where
     (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>,
     B: SupportsDType<K>,
+    L: crate::shapes::FreshDense<S>,
 {
     /// Creates a tensor filled with zeros.
     pub fn zeros<A>(args: A) -> Result<Self>

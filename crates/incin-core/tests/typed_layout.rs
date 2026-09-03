@@ -341,3 +341,50 @@ fn the_two_transposes_are_genuinely_different_operations() {
     // must always agree; the strides are what #113 is about.
     assert_eq!(view_meta.strides().as_ref(), &[1, 4]);
 }
+
+/// A constructor hands back the proof directly, with no runtime promotion.
+///
+/// This is the property that makes the layout parameter worth its plumbing.
+/// Before it, `RowMajor` was reachable only through `into_row_major`, a runtime
+/// scan of the strides -- so every static claim in the tree bottomed out in a
+/// dynamic check, and the type parameter bought nothing a boolean would not
+/// have. `zeros` allocates a packed row-major buffer, so it is entitled to say
+/// so, and the `FreshDense` bound is what lets it say so without becoming a way
+/// to forge the claim.
+#[test]
+fn a_constructor_yields_a_layout_proof_without_a_runtime_check() {
+    // The alias is what a caller writes; naming it once keeps the point of the
+    // test in view rather than the type.
+    type DenseMatrix = incin_core::shapes::Dense<s![3, 4], CpuBackendImpl>;
+
+    // No `into_row_major` anywhere: the proof comes from the allocation.
+    let dense: DenseMatrix = incin_core::prelude::Tensor::zeros(()).unwrap();
+
+    assert_eq!(dense.dims().as_ref(), &[3, 4]);
+    assert_eq!(
+        <RowMajor<s![3, 4]> as Layout>::STATIC_STRIDES,
+        &[Some(4), Some(1)],
+        "row-major strides are the suffix products of the extents"
+    );
+
+    // And it satisfies the bound that `Unknown` cannot, so the view path opens.
+    fn needs_contiguous<L: Contiguous>() {}
+    needs_contiguous::<RowMajor<s![3, 4]>>();
+
+    let reshaped = dense
+        .reshape_view::<s![12]>()
+        .expect("a dense 3x4 reinterprets as a dense 12");
+    assert_eq!(reshaped.dims().as_ref(), &[12]);
+}
+
+/// The default is unchanged, so nothing that predates the parameter shifted.
+#[test]
+fn asking_for_nothing_still_yields_unknown() {
+    let plain = incin_core::prelude::Tensor::<s![2, 2], CpuBackendImpl>::zeros(()).unwrap();
+    assert_eq!(plain.numel(), 4);
+    assert_eq!(
+        <Unknown as Layout>::STATIC_STRIDES,
+        &[] as &[Option<usize>],
+        "a tensor that proved nothing must report nothing"
+    );
+}

@@ -34,6 +34,8 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
         // Shape rules, all unsatisfied trait bounds.
         ("broadcast_static_mismatch", "E0277"),
+        // A downstream layout cannot be minted by a constructor: `FreshDense` is sealed.
+        ("layout_proof_cannot_be_forged", "E0277"),
         ("named_broadcast_identity_mismatch", "E0277"),
         ("concat_static_mismatch", "E0277"),
         ("checked_byte_len_is_private", "E0423"),
