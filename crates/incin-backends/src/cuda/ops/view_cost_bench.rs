@@ -50,11 +50,18 @@ fn storage(shape: &[usize], values: Vec<f32>) -> CudaStorage {
 }
 
 /// Runs `iterations` of a closure and returns the mean wall time in
-/// microseconds, forcing completion with a device-to-host copy each round.
+/// microseconds, synchronising the stream once at the end.
 ///
-/// The readback is the synchronisation barrier and is inside the timed region,
-/// so it taxes both arms identically and cancels in the ratio.
+/// An earlier version forced completion with a device-to-host copy of the
+/// output every round. That is a barrier, but it is also four megabytes of
+/// transfer at a million elements -- a large constant added to both arms, which
+/// compresses every ratio toward one and hides exactly the differences the
+/// benchmark exists to find. Synchronising the stream instead measures the work
+/// and nothing else.
 fn timed(iterations: u32, mut body: impl FnMut() -> CudaStorage) -> f64 {
+    let context = cudarc::driver::CudaContext::new(0).unwrap();
+    let stream = context.default_stream();
+
     // Warm up: the first call compiles and caches the kernel, which would
     // otherwise dominate the first measurement entirely.
     let warm = body();
@@ -62,9 +69,9 @@ fn timed(iterations: u32, mut body: impl FnMut() -> CudaStorage) -> f64 {
 
     let start = Instant::now();
     for _ in 0..iterations {
-        let out = body();
-        let _ = download_f32_host(&out).unwrap();
+        let _out = body();
     }
+    stream.synchronize().unwrap();
     start.elapsed().as_secs_f64() * 1e6 / f64::from(iterations)
 }
 
@@ -134,6 +141,70 @@ fn view_cost_amortised_over_repeated_reads() {
         println!(
             "{passes:>4} {materialise:>14.1} {view:>14.1} {:>10.2}",
             view / materialise
+        );
+    }
+    println!();
+}
+
+/// Does folding proven extents into the strided walk actually pay?
+///
+/// The folding replaces the per-axis modulo and division -- both by values read
+/// from device memory -- with literal divisors the compiler lowers to
+/// multiply-and-shift, and drops the `shape` upload that fed them. It was
+/// written before anything could reach the strided path on CUDA, because every
+/// operation materialised; `transpose_view` makes it reachable, so this is the
+/// first time the work can be measured rather than argued for.
+///
+/// Both arms run the identical kernel body over the identical strided view. The
+/// only difference is whether the extents were proven.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn extent_folding_on_the_strided_path() {
+    if !has_cuda() {
+        return;
+    }
+    let body = lower_unary_body(&catalog::unary_forward("neg").unwrap(), DTypeId::F32).unwrap();
+    let iterations = 200;
+
+    println!();
+    println!("strided walk over a transposed view, mean microseconds over {iterations} iterations");
+    println!(
+        "{:>12} {:>16} {:>14} {:>12}",
+        "elements", "loaded divisors", "folded", "folded/loaded"
+    );
+
+    for &(rows, cols) in &[(16usize, 16usize), (64, 64), (256, 256), (1024, 1024)] {
+        let numel = rows * cols;
+        let values: Vec<f32> = (0..numel).map(|index| index as f32 * 0.001).collect();
+        let source = storage(&[rows, cols], values);
+        let view = || {
+            CudaStorage::try_from_parts(
+                source.buffer.clone(),
+                alloc::vec![cols, rows],
+                alloc::vec![1, cols],
+                0,
+            )
+            .unwrap()
+        };
+
+        // The extents the shape type would settle for the transposed view.
+        let extents: &'static [Option<usize>] =
+            alloc::boxed::Box::leak(alloc::vec![Some(cols), Some(rows)].into_boxed_slice());
+        let proven = KernelSpecialization {
+            static_numel: Some(numel),
+            static_extents: extents,
+        };
+
+        let loaded = timed(iterations, || {
+            launch_unary_body("fold_dyn", &body, &view(), KernelSpecialization::NONE).unwrap()
+        });
+        let folded = timed(iterations, || {
+            launch_unary_body("fold_static", &body, &view(), proven).unwrap()
+        });
+
+        println!(
+            "{numel:>12} {loaded:>16.1} {folded:>14.1} {:>12.2}",
+            folded / loaded
         );
     }
     println!();

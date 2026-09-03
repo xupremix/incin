@@ -285,28 +285,28 @@ measurement. On a GTX 1650, transpose plus one pointwise pass over the result:
 
 | elements | materialise | strided view | view/mat |
 |---:|---:|---:|---:|
-| 4,096 | 42.2 | 42.2 | 1.00 |
-| 1,048,576 | 830.5 | 731.8 | 0.88 |
-| 4,194,304 | 3375.1 | 2998.5 | 0.89 |
+| 4,096 | 31.0 | 27.4 | 0.88 |
+| 65,536 | 30.9 | 27.2 | 0.88 |
+| 1,048,576 | 227.6 | 126.8 | **0.56** |
+| 4,194,304 | 921.0 | 527.8 | **0.57** |
 
 And with the result consumed `k` times, at 1M elements:
 
 | k | materialise | strided view | view/mat |
 |---:|---:|---:|---:|
-| 1 | 812.4 | 721.0 | 0.89 |
-| 2 | 895.6 | 844.4 | 0.94 |
-| 4 | 1064.8 | 1093.4 | 1.03 |
-| 8 | 1367.6 | 1569.2 | 1.15 |
+| 1 | 233.4 | 128.6 | **0.55** |
+| 2 | 313.4 | 252.0 | 0.80 |
+| 4 | 480.1 | 503.6 | 1.05 |
+| 8 | 827.9 | 1016.8 | **1.23** |
 
-The copy's read-plus-write loses to the strided read for a single consumer at
-scale, and wins from about four consumers on. The crossover is between two and
-four; below ~64k elements launch overhead swamps both.
+The copy's read-plus-write loses badly to the strided read for a single
+consumer at scale -- the view is about 45% faster -- and wins by about 23% by
+eight consumers. The crossover is at roughly four reads.
 
-So the two are within roughly 11% in *opposite directions* depending on how
-often the result is read -- a fact about the consumer, which the producing
+So the two differ substantially in *opposite directions* depending on how often
+the result is read, which is a fact about the consumer that the producing
 operation cannot know. Unifying on either behaviour makes the framework
-reliably wrong for half its callers, and choosing the one that wins a
-microbenchmark would be choosing by the shape of the benchmark.
+reliably wrong for half its callers.
 
 The resolution is to stop treating it as one operation: `transpose`
 materialises and returns `RowMajor<S>`, `transpose_view` does not copy and
@@ -315,16 +315,44 @@ got, so a downstream `L: Contiguous` bound is satisfiable in one case and
 correctly refused in the other.
 
 This is the strongest available argument for the layout parameter, and it is a
-measurement rather than an aesthetic: the backends' disagreement is not a bug
-to resolve by fiat, it is evidence that both behaviours are needed and that the
-type should distinguish them. It also unblocks the deferred decision above --
-a materialising `transpose` *can* honestly claim `RowMajor`, because it is the
-operation that copies.
+measurement rather than an aesthetic.
 
-Caveats on the numbers: one GPU, one dtype, square shapes, a pointwise
-consumer. A consumer that cannot take arbitrary strides -- matmul, generally --
-will move the crossover. The shape of the conclusion should survive; the exact
-`k` should not be treated as a constant.
+**These numbers replace an earlier set that were wrong.** The first harness
+forced completion by copying the whole output back to the host every iteration.
+That is a valid barrier, but at a million floats it is four megabytes of
+transfer added to both arms -- roughly 80% of the measured time -- which
+compressed every ratio toward one. It reported the single-consumer view
+advantage as 11% rather than 45%, and put the crossover between two and four
+reads rather than at four. The qualitative conclusion survived; the magnitudes
+did not. Synchronising the stream instead measures the work and nothing else.
+
+The lesson is worth more than the numbers: a barrier that costs more than the
+thing being measured does not merely add noise, it systematically biases every
+ratio toward unity, which reads as "no difference" and is the easiest possible
+result to believe.
+
+Caveats that remain: one GPU, one dtype, square shapes, a pointwise consumer. A
+consumer that cannot take arbitrary strides -- matmul, generally -- will move
+the crossover. The shape of the conclusion should survive; the exact `k` should
+not be treated as a constant.
+
+### Does folding proven extents into the strided walk pay?
+
+Yes, and it could not be measured until `transpose_view` existed, because
+nothing could reach the strided path on CUDA before it. Same kernel body, same
+strided view, differing only in whether the extents were proven:
+
+| elements | loaded divisors | folded | folded/loaded |
+|---:|---:|---:|---:|
+| 256 | 26.6 | 23.3 | 0.88 |
+| 4,096 | 26.9 | 25.0 | 0.90 |
+| 65,536 | 26.7 | 24.4 | 0.90 |
+| 1,048,576 | 124.3 | 120.9 | 0.94 |
+
+A consistent 6-12%, largest at small sizes where the eliminated `shape` upload
+is the bigger share of the launch. Under the original readback-bound harness
+this measured as 0.97-1.03 -- indistinguishable from nothing -- which would have
+been read as evidence the optimisation was pointless.
 
 ## Implementing `transpose_view`: the spec, and why it was not started here
 

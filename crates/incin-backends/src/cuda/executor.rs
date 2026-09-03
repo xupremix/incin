@@ -531,9 +531,9 @@ impl<D: Device> Execute<op::TransposeExact> for CudaBackendImpl<D> {
 ///
 /// Both exist because neither is universally better, and which wins is a
 /// property of the consumer rather than of the transpose. Measured here for a
-/// transpose plus pointwise consumption: the view is ~11% faster when the
-/// result is read once and ~15% slower when it is read eight times, crossing
-/// over between two and four reads. See `ops::view_cost_bench` and issue #113.
+/// transpose plus pointwise consumption: the view is ~45% faster when the
+/// result is read once and ~23% slower when it is read eight times, crossing
+/// over at about four reads. See `ops::view_cost_bench` and issue #113.
 impl<D: Device> Execute<op::TransposeView> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(

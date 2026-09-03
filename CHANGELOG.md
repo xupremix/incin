@@ -32,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   pointwise shaders address linearly and would read a view's elements in the
   wrong order. Which of the two transposes is faster depends on how often the
   result is read, so the framework offers both rather than choosing (#113).
+  Measured on a GTX 1650: the view is ~45% faster for a single pointwise
+  consumer and ~23% slower by eight, crossing over at about four reads.
 - `AnyTensor` and `TensorOf<T>`, so generic code names one type parameter
   instead of six. The parameters stay reachable as associated types, so a bound
   that genuinely needs one still writes `T::Layout: Contiguous`; only the ones a

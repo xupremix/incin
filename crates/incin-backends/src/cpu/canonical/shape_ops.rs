@@ -150,8 +150,8 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
 ///
 /// Which one to reach for is a property of the consumer, not of the transpose.
 /// Measured on a GTX 1650, a materialised transpose loses to a strided read by
-/// about 11% when the result is read once and wins by about 15% when it is read
-/// eight times, crossing over between two and four reads. See
+/// about 45% when the result is read once and wins by about 23% when it is read
+/// eight times, crossing over at about four reads. See
 /// `cuda::ops::view_cost_bench` and issue #113.
 impl<D: Device> Execute<op::TransposeView> for CpuBackendImpl<D> {
     type Output = CpuStorage;

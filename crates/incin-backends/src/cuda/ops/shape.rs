@@ -224,11 +224,11 @@ pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Res
 ///
 /// Neither is universally better, which is why both exist. Measured on a
 /// GTX 1650 for a transpose followed by pointwise consumption of the result,
-/// the view beats the copy by roughly 11% when the result is read once, and
-/// loses by roughly 15% when it is read eight times; the crossover sits between
-/// two and four reads. That is a property of the *consumer*, which the
-/// transpose cannot know, so the caller chooses. See
-/// `cuda::ops::view_cost_bench` and issue #113.
+/// the view beats the copy by roughly 45% when the result is read once, and
+/// loses by roughly 23% when it is read eight times; the crossover sits at
+/// about four reads. That is a property of the *consumer*, which the transpose
+/// cannot know, so the caller chooses. See `cuda::ops::view_cost_bench` and
+/// issue #113.
 ///
 /// The result is genuinely non-contiguous, so it takes the strided pointwise
 /// kernels rather than the dense ones.

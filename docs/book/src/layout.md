@@ -155,3 +155,10 @@ not a style choice:
   returns a view while CUDA's returns a copy. Until that is settled
   ([#113](https://github.com/xupremix/incin/issues/113)) the honest answer is
   to claim nothing, and `into_row_major` recovers a proof where one is wanted.
+
+If you want the no-copy behaviour explicitly, `transpose_view` is a separate
+operation that permutes shape and strides over the same buffer. Which of the two
+is faster depends on how often you read the result — measured on a GTX 1650, the
+view is about 45% faster for a single pointwise consumer and about 23% slower by
+eight, crossing over at roughly four. That is a property of your consumer, so the
+choice is yours to make rather than the framework's.

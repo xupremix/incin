@@ -74,10 +74,10 @@ impl<
     ///
     /// Neither is universally faster, which is why both exist. Measured on a
     /// GTX 1650 for a transpose followed by pointwise consumption, the view
-    /// beats the copy by roughly 11% when the result is read once, and loses by
-    /// roughly 15% when it is read eight times, crossing over between two and
-    /// four reads. That depends on the *consumer*, which a transpose cannot
-    /// know, so the choice is the caller's.
+    /// beats the copy by roughly 45% when the result is read once and loses by
+    /// roughly 23% when it is read eight times, crossing over at about four
+    /// reads. That depends on the *consumer*, which a transpose cannot know, so
+    /// the choice is the caller's.
     ///
     /// The result is non-contiguous, and its layout says so: it carries
     /// [`Unknown`](crate::shapes::Unknown), so an operation bounded on
