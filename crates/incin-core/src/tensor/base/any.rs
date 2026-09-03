@@ -61,8 +61,8 @@ pub type TensorOf<T> = Tensor<
 /// A tensor, with its parameters reachable as associated types.
 ///
 /// Implemented for every [`Tensor`] and nothing else. The point is to let a
-/// generic function take one type parameter instead of six; see the
-/// [module documentation](self).
+/// generic function take one type parameter instead of six, and [`TensorOf<T>`]
+/// spells the reconstruction where a caller needs the concrete type back.
 pub trait AnyTensor {
     /// The tensor's shape type.
     type Shape: Shape;

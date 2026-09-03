@@ -35,7 +35,7 @@
 //! from the value, and a static one has the same answer in both places.
 //! `Layout` is the type half of the same pairing, with `TensorMeta` as the
 //! value half -- so no new field is needed, and
-//! [`Tensor::into_row_major`](crate::prelude::Tensor::into_row_major) is
+//! [`Tensor::into_row_major`](crate::tensor::base::Tensor::into_row_major) is
 //! exactly the operation that reads the value and, if it agrees, promotes it
 //! into the type.
 //!
@@ -130,7 +130,7 @@ pub trait LayoutOf<S: Shape>: Layout {}
 /// obligation is stated rather than enforced: `Restated` must denote the same
 /// strides `Self` does, for a shape with the same extents.
 ///
-/// [`into_shape`]: crate::prelude::Tensor::into_shape
+/// [`into_shape`]: crate::tensor::base::Tensor::into_shape
 pub trait RestateFor<S2: Shape>: Layout {
     /// The same layout, spelled against `S2`.
     type Restated: LayoutOf<S2>;
@@ -149,7 +149,7 @@ impl<S1: Shape, S2: Shape> RestateFor<S2> for RowMajor<S1> {
 
 /// `Self` is a truthful description of a freshly allocated dense buffer of `S`.
 ///
-/// Constructors like [`Tensor::zeros`](crate::prelude::Tensor::zeros) allocate a
+/// Constructors like [`Tensor::zeros`](crate::tensor::base::Tensor::zeros) allocate a
 /// packed row-major buffer, so they are entitled to hand back a layout proof
 /// rather than [`Dyn`]. This trait is what entitles them, and it is the
 /// reason they can do so without also becoming a way to *forge* one.
