@@ -57,6 +57,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   return a correctly shaped buffer of wrong values. The CUDA test checks the
   same product, so the backends are compared against one answer rather than
   each against itself.
+- **`BatchNorm2d` proves its result is dense; `Dropout` earns the right to carry
+  its operand's.** Both were shape-preserving `nn` layers returning the
+  operand's layout. `BatchNorm2d` has no identity path -- every call dispatches
+  and writes a fresh buffer -- so it now returns `Dense`. `Dropout` genuinely
+  does: in eval mode, or at `p == 0`, it hands back the very tensor it was
+  given, strides and all, so carrying is right there. Its bound moved from
+  `Layout` to the sealed `FreshDense<S>`, which is what makes the *other* branch
+  honest: that branch writes a dense buffer, so the layout carried across both
+  has to be one a fresh dense allocation also satisfies. Bounding on `Layout`
+  compiles today only because `Dyn` and `RowMajor` are the only layouts and both
+  are dense.
 - `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
   where the promotion is fallible, since claiming less can never claim wrongly.
   It exists for the case where two branches must meet and only one allocates;

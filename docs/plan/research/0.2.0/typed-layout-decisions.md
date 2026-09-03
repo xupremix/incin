@@ -356,6 +356,40 @@ claim yet**, which makes the remaining ones worth reading as a to-do list rather
 than as settled design. The one in `rnn.rs` is not: a loop variable can only
 hold what every assignment satisfies, and the seed is the caller's.
 
+### The one operation for which carrying *is* right
+
+`Dropout` and `BatchNorm2d` were the last two shape-preserving `nn` layers
+returning the operand's layout, and they turned out to be opposite cases.
+
+`BatchNorm2d` has no identity path. Every call dispatches and writes a fresh
+buffer, so carrying was the same mistake as everywhere else and `Dense` is the
+answer.
+
+`Dropout` is different, and it is the shape of exception worth naming. In eval
+mode, or at `p == 0`, it returns the very tensor it was handed -- same buffer,
+same strides. For that branch the operand's layout is not merely compatible with
+the result, it *is* the result's. So carrying is right, and forcing `Dense` here
+would be a lie in the other direction.
+
+What makes the carry sound is the branch that *does* allocate. It writes a dense
+buffer, so the layout carried across both branches has to be one a fresh dense
+allocation also satisfies. That is exactly [`FreshDense<S>`], the sealed bound
+the constructors already use, so the signature says it rather than relying on an
+accident:
+
+```rust,ignore
+impl<.., L: FreshDense<S>> Module<Tensor<S, B, K, G, Local, L>> for Dropout {
+    type Output = Tensor<S, B, K, G, Local, L>;
+```
+
+Bounding on `Layout` compiles today and would keep compiling for a long time,
+because `Dyn` and `RowMajor` are the only layouts and a dense buffer satisfies
+both. It starts lying the day a `ChannelsLast` exists, and nothing would ask.
+**The general rule: an operation may carry its operand's layout exactly when
+every branch either returns the operand itself or writes a buffer the carried
+layout describes** -- and when the second kind of branch exists, the bound has to
+say so.
+
 ### What CUDA contributes, and what it does not
 
 The reduction claim rests on different evidence from the pointwise one, because

@@ -202,22 +202,30 @@ a style choice:
   `RowMajor` of its own result shape.** Pointwise unary and binary operations
   (broadcasting ones included), the comparison and logical families,
   `masked_fill`, `where_cond`, `lerp`, `cumsum`, every reduction, `matmul`,
-  `addmm` and `Linear` do this, so a proof appears out of the middle of a chain
-  and `reshape_view` is reachable at the end of one. The claim is *stated*,
-  never carried: carrying the operand's layout would propagate only what the
-  caller already had, and would be false the moment a non-row-major layout
-  exists.
+  `addmm`, `Linear` and `BatchNorm2d` do this, so a proof appears out of the
+  middle of a chain and `reshape_view` is reachable at the end of one. The
+  claim is *stated*, never carried: carrying the operand's layout would
+  propagate only what the caller already had, and would be false the moment a
+  non-row-major layout exists.
 - **An operation whose result's memory order is not settled states `Dyn`.**
   A layout describes one geometry and cannot be carried to another, and
   shape-changing operations do not agree across backends: CPU `transpose`
   returns a view while CUDA's returns a copy. Until that is settled
   ([#113](https://github.com/xupremix/incin/issues/113)) the honest answer is
   to claim nothing, and `into_row_major` recovers a proof where one is wanted.
+- **`Dropout` is the exception, and it is the shape of exception to look for.**
+  It carries the operand's layout, because in eval mode -- or at `p == 0` -- it
+  returns the very tensor it was handed, strides and all. That is the only
+  branch in the crate where the operand's claim describes the result. Its
+  *other* branch writes a dense buffer, which is why its bound is the sealed
+  `FreshDense<S>` rather than `Layout`: the layout carried across both branches
+  has to be one a fresh dense allocation also satisfies.
 
-Nothing carries `L` from an operand into a result. The layout parameter is an
-input — it is what `reshape_view` reads and what `forget_layout` discards — and
-every result's claim is made by the operation itself, backed by a conformance
-test that feeds a genuinely strided operand and fails if the claim is wrong.
+Apart from that one exception, nothing carries `L` from an operand into a
+result. The layout parameter is an input — it is what `reshape_view` reads and
+what `forget_layout` discards — and every result's claim is made by the
+operation itself, backed by a conformance test that feeds a genuinely strided
+operand and fails if the claim is wrong.
 
 If you want the no-copy behaviour explicitly, `transpose_view` is a separate
 operation that permutes shape and strides over the same buffer. Which of the two

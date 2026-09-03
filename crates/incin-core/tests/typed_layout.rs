@@ -577,3 +577,65 @@ fn a_matmul_result_is_dense_even_from_a_strided_operand() {
         &bias.addmm(&strided, &rhs, 1.0, 1.0).unwrap(),
     );
 }
+
+/// `BatchNorm2d` allocates unconditionally, so its result is dense.
+///
+/// It was carrying the operand's layout, which is the fourth instance of the
+/// pattern: a shape-preserving operation where returning the operand's claim
+/// typechecks. Unlike `Dropout` below it has no identity path -- every call
+/// dispatches and writes a fresh buffer -- so there is nothing for the carry to
+/// have been right about.
+#[test]
+fn batch_norm_produces_a_dense_result() {
+    use incin_core::nn::module::Module;
+    use incin_core::prelude::*;
+
+    type Bn = BatchNorm2d<s![2], CpuBackendImpl>;
+    let bn: Bn = BatchNorm2d::build((1e-5, 0.1)).unwrap();
+    let x = incin_core::prelude::Tensor::<s![1, 2, 2, 2], CpuBackendImpl>::ones(()).unwrap();
+    assert_dense("batch_norm", &bn.forward(x).unwrap());
+}
+
+/// `Dropout` is the one place carrying the operand's layout is *right*.
+///
+/// Every other shape-preserving operation in the crate writes a fresh buffer on
+/// every call, so carrying is a claim about a buffer the operand never touched.
+/// Dropout has a genuine identity path -- eval mode, or `p == 0` -- which
+/// returns the very tensor it was handed, strides and all. Its output layout
+/// really is its input's.
+///
+/// That is only sound because the *other* branch writes a dense buffer, so the
+/// carried layout has to be one a dense buffer also satisfies. The signature
+/// says so by bounding `L` on the sealed `FreshDense<S>` rather than on
+/// `Layout`, which is the same bound the constructors use and for the same
+/// reason. Both halves are checked here, because the argument needs both.
+#[test]
+fn dropout_carries_its_operand_layout_and_both_branches_earn_it() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::nn::module::Module;
+    use incin_core::nn::TrainMode;
+    use incin_core::prelude::Dropout;
+
+    let x = incin_core::prelude::Tensor::<s![4, 4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+
+    // Training: allocates, and the buffer it writes is dense, so the carried
+    // `RowMajor` is true of it.
+    let trained = Dropout::new(0.5).forward(x.clone()).unwrap();
+    assert_dense("dropout(training)", &trained);
+
+    // Eval: identity. The result must be the operand, not a copy of it, or the
+    // carry is describing something the caller cannot observe.
+    let mut eval = Dropout::new(0.5);
+    eval.set_training(false);
+    let passed = eval.forward(x.clone()).unwrap();
+    let before = <CpuBackendImpl as StorageBackend>::metadata::<f32>(x.inner());
+    let after = <CpuBackendImpl as StorageBackend>::metadata::<f32>(passed.inner());
+    assert_eq!(
+        before.strides().as_ref(),
+        after.strides().as_ref(),
+        "eval-mode dropout must hand back the operand unchanged"
+    );
+}

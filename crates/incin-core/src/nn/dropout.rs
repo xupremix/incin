@@ -5,7 +5,6 @@ use crate::exec::catalog::{DropoutAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, TrainMode};
-use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::backend::Execute;
 use crate::tensor::backend::SupportsDType;
@@ -111,13 +110,32 @@ impl<
     B: crate::tensor::backend::VariableBackend,
     K: BuiltinDType,
     G: RequiresGrad,
-    L: Layout,
+    L: crate::shapes::FreshDense<S>,
 > Module<Tensor<S, B, K, G, Local, L>> for Dropout
 where
     B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,
     <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
 {
+    /// The operand's own layout, which is the one place in the crate where
+    /// carrying it is right rather than merely typechecking.
+    ///
+    /// Every other shape-preserving operation writes a fresh buffer on every
+    /// call, so returning the operand's claim describes memory the operand
+    /// never touched. Dropout has a real identity path -- eval mode, or
+    /// `p == 0` -- which hands back the very tensor it was given, strides and
+    /// all, so for that branch the operand's layout is exactly right.
+    ///
+    /// The training branch is what constrains the bound. It writes a dense
+    /// buffer, so the layout carried across both branches has to be one a fresh
+    /// dense allocation also satisfies -- which is precisely
+    /// [`FreshDense<S>`](crate::shapes::FreshDense), the sealed bound the
+    /// constructors use, rather than [`Layout`](crate::shapes::Layout). Bounding
+    /// on `Layout` would compile today, because `Dyn` and `RowMajor` are the
+    /// only layouts and both are dense; it would start lying the day a
+    /// `ChannelsLast` exists, and the compiler would not ask.
+    ///
+    /// Pinned by `dropout_carries_its_operand_layout_and_both_branches_earn_it`.
     type Output = Tensor<S, B, K, G, Local, L>;
     type Error = Error;
 

@@ -283,7 +283,12 @@ where
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>;
+    ///
+    /// `Dense`, not the operand's layout. Every call dispatches and writes a
+    /// fresh buffer -- there is no identity path here the way there is in
+    /// [`Dropout`](crate::nn::Dropout) -- so carrying the operand's claim would
+    /// describe a buffer the operand never touched.
+    type Output = crate::shapes::Dense<InS, B, K, crate::tensor::grad::NoGrad, Local>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
