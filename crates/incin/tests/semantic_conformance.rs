@@ -64,7 +64,9 @@ fn tensor_for(shape: &[usize], values: &[f64]) -> Tensor<Dyn, CpuBackendImpl, f6
     }
 }
 
-fn read_all(tensor: &Tensor<Dyn, CpuBackendImpl, f64>) -> Vec<f64> {
+fn read_all<L: Layout>(
+    tensor: &Tensor<Dyn, CpuBackendImpl, f64, NoGrad, Local, L>,
+) -> Vec<f64> {
     if tensor.dims().dims().is_empty() {
         vec![tensor.to_scalar::<f64>().unwrap()]
     } else {

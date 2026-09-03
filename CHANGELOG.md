@@ -68,6 +68,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   has to be one a fresh dense allocation also satisfies. Bounding on `Layout`
   compiles today only because `Dyn` and `RowMajor` are the only layouts and both
   are dense.
+- **`RestateFor<S2>`, and a layout proof that survives `into_shape`.** The rule
+  that a layout cannot be carried across a shape change has one exception, and
+  `into_shape`/`into_dyn`/`to_shape` are it: they change no dimension. They
+  re-describe the *same* extents under a different shape type, over the same
+  buffer, with the same strides -- `S2::try_from_dims` is what makes them
+  fallible, and what rules out the case where the two shapes disagree. So
+  `RowMajor<S1>` and `RowMajor<S2>` denote identical strides whenever the
+  conversion succeeds, and dropping to `Dyn` there discarded a fact that was
+  still true. `RestateFor` is the type-level half of that argument; it is not
+  sealed, because unlike `FreshDense` nothing about it can be minted.
+- `RmsNorm` returns `Dense`. Its chain ends in `broadcast_mul`, which allocates;
+  the proof was being lost on the `into_shape` back to a static shape. That was
+  the concrete thing `RestateFor` was written for.
 - `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
   where the promotion is fallible, since claiming less can never claim wrongly.
   It exists for the case where two branches must meet and only one allocates;

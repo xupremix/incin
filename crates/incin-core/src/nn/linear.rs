@@ -555,7 +555,7 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-    L: Layout,
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
 > Module<Tensor<InShape, B, K, G, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
@@ -613,7 +613,7 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-    L: Layout,
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
 > Module<Tensor<InShape, B, K, G, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
@@ -661,7 +661,7 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
 > Module<Tensor<InShape, B, K, crate::tensor::grad::NoGrad, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
 where

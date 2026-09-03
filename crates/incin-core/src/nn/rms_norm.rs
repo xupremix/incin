@@ -3,7 +3,6 @@ use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::op;
 use crate::nn::{Module, Param};
-use crate::shapes::Layout;
 use crate::shapes::idx::{FromEnd, Here};
 use crate::shapes::shape_ops::ReduceKeepAt;
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
@@ -189,7 +188,7 @@ impl<
         + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
 > Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
@@ -200,7 +199,9 @@ where
     <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B, K, Train::TensorGrad>;
+    /// `Dense`: the chain ends in `broadcast_mul`, which allocates, and
+    /// `into_shape` re-describes that buffer without moving it.
+    type Output = crate::shapes::Dense<InS, B, K, Train::TensorGrad, Local>;
     type Error = Error;
 
     #[inline]

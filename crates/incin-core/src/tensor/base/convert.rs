@@ -94,20 +94,43 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
 
 /// Reinterpretations that change the shape type.
 ///
-/// Generic over the operand's layout, and the result states `Dyn`: a layout
-/// describes one geometry and cannot be carried to another.
+/// Generic over the operand's layout, and the result *keeps* it -- restated
+/// against the new shape type by
+/// [`RestateFor`](crate::shapes::RestateFor). These are the exception to "a
+/// layout describes one geometry and cannot be carried to another", because
+/// they change no geometry: the same buffer keeps the same strides over the
+/// same extents, and only the type describing those extents differs. The
+/// runtime check that makes them fallible is exactly the check that the two
+/// shapes agree.
 impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     Tensor<S1, B, K, G, Local, L>
 {
     /// Converts this tensor to a new static shape S2.
-    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G>> {
+    ///
+    /// A layout proof survives: `S2::try_from_dims` fails unless `S2` covers
+    /// the very dims the tensor already has, so a `RowMajor<S>` operand comes
+    /// back as `RowMajor<S2>` over the identical strides.
+    pub fn into_shape<S2: Shape + DynShape>(
+        self,
+    ) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
+    where
+        L: crate::shapes::RestateFor<S2>,
+    {
         let dims = self._shape.shape_buf();
         let s2_shape = S2::try_from_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Tensor::from_parts(self.inner, s2_shape, self._dtype, self._device, self._grad)
     }
 
     /// Converts this tensor to a dynamically-shaped `Tensor<Dyn>`.
-    pub fn into_dyn(self) -> Tensor<crate::shapes::Dyn, B, K, G> {
+    ///
+    /// Erases the *shape* proof, not the layout one. Widening `S` to `Dyn`
+    /// leaves the buffer and its strides untouched.
+    pub fn into_dyn(
+        self,
+    ) -> Tensor<crate::shapes::Dyn, B, K, G, Local, L::Restated>
+    where
+        L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+    {
         let dims = self._shape.shape_buf();
         // `Dyn`'s field *is* the dimension vector, so there is nothing to
         // re-parse and nothing that can fail - the old
@@ -125,7 +148,12 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     }
 
     /// Copies and converts this tensor to a new static shape S2.
-    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G>> {
+    pub fn to_shape<S2: Shape + DynShape>(
+        &self,
+    ) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
+    where
+        L: crate::shapes::RestateFor<S2>,
+    {
         let dims = self._shape.shape_buf();
         let s2_shape = S2::try_from_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
         Tensor::from_parts(

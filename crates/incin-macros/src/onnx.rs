@@ -602,7 +602,14 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
                 #(#input_parameters),*
             ) -> ::incin::prelude::Result<::incin::prelude::Tensor<#output_shape, B, K>> {
                 #(#statements)*
-                #final_output.into_shape::<#output_shape>()
+                // The graph's last operation is whatever the file says it is,
+                // so its layout is not knowable here: a `Relu` ends dense and a
+                // `Transpose` does not. `into_shape` now preserves the layout
+                // it is handed, so the claim is dropped deliberately rather
+                // than by the old signature's accident.
+                #final_output
+                    .into_shape::<#output_shape>()
+                    .map(|output| output.forget_layout())
             }
         }
         });
@@ -716,7 +723,11 @@ fn expand_model(model: &ModelProto, root_name: &Ident) -> Result<proc_macro2::To
             ) -> ::incin::prelude::Result<::incin::prelude::Tensor<#output_shape, B, f32, ::incin::prelude::Grad>> {
                 #(#initializer_loads)*
                 #(#statements)*
-                #final_output.into_shape::<#output_shape>()
+                // See the stateless variant: the imported graph's final layout
+                // is a property of the file, so the generated API claims none.
+                #final_output
+                    .into_shape::<#output_shape>()
+                    .map(|output| output.forget_layout())
             }
         }
     })

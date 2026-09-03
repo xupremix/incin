@@ -639,3 +639,46 @@ fn dropout_carries_its_operand_layout_and_both_branches_earn_it() {
         "eval-mode dropout must hand back the operand unchanged"
     );
 }
+
+/// A layout proof survives a shape-*proof* change, because the buffer does not
+/// move.
+///
+/// `into_shape` is the one shape-changing operation for which the general rule
+/// -- "a layout describes one geometry and cannot be carried to another" --
+/// does not apply. It changes no dimension: it re-describes the *same* runtime
+/// dims under a different shape type, and `S2::try_from_dims` is what makes it
+/// fallible rather than free. Same buffer, same strides, same extents.
+///
+/// So `RowMajor<S1>` and `RowMajor<S2>` describe the identical strides here,
+/// and dropping to `Dyn` threw away a fact that was still true. The proof that
+/// it is still true is that `reshape_view` -- which needs `Contiguous` and does
+/// no runtime check -- accepts the result.
+#[test]
+fn a_layout_proof_survives_into_shape() {
+    let proven = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+
+    // Widening the shape proof away keeps the layout proof.
+    let widened = proven.clone().into_shape::<Dyn>().unwrap();
+    assert_dense("into_shape::<Dyn>", &widened);
+
+    // And the layout proof is still usable: this call does not compile if
+    // `into_shape` returned `Dyn`, because `reshape_view` is bounded on
+    // `Contiguous`.
+    let narrowed = widened.into_shape::<s![3, 4]>().unwrap();
+    let flat = narrowed
+        .reshape_view::<s![12]>()
+        .expect("a dense 3x4 reinterprets as a 12");
+    assert_eq!(flat.dims().as_ref(), &[12]);
+
+    // `into_dyn` is the infallible sibling and keeps it too.
+    let dyn_proven = incin_core::prelude::Tensor::<s![2, 6], CpuBackendImpl>::ones(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major")
+        .into_dyn();
+    assert_dense("into_dyn", &dyn_proven);
+    let _: incin_core::prelude::Tensor<Dyn, CpuBackendImpl, f32, _, _, RowMajor<Dyn>> = dyn_proven;
+}

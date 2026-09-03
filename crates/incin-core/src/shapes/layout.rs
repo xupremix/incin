@@ -108,6 +108,45 @@ pub trait Layout: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
 /// be congruent -- same tuple profile, one stride integer per shape integer.
 pub trait LayoutOf<S: Shape>: Layout {}
 
+/// `Self`, re-described against a shape type covering the same runtime dims.
+///
+/// The general rule is that a layout cannot be carried across a shape change,
+/// because it describes one geometry. [`into_shape`] is the exception, and it is
+/// worth being precise about why: it changes no dimension. It re-describes the
+/// *same* extents under a different shape type, over the same buffer, with the
+/// same strides -- `S2::try_from_dims` is what makes it fallible rather than
+/// free, and what rules out the case where the two shapes disagree.
+///
+/// So `RowMajor<S1>` and `RowMajor<S2>` denote identical strides whenever that
+/// conversion succeeds, and dropping to [`Dyn`] there discarded a fact that was
+/// still true. This trait is the type-level half of that argument: it maps a
+/// layout to the way the same layout is spelled against another shape.
+///
+/// # Why it is not sealed
+///
+/// Unlike [`FreshDense`], nothing here can be minted. A downstream layout
+/// author naming their own `Restated` is describing their own type, which is
+/// the same trust already extended to them by [`Layout::STATIC_STRIDES`]. The
+/// obligation is stated rather than enforced: `Restated` must denote the same
+/// strides `Self` does, for a shape with the same extents.
+///
+/// [`into_shape`]: crate::prelude::Tensor::into_shape
+pub trait RestateFor<S2: Shape>: Layout {
+    /// The same layout, spelled against `S2`.
+    type Restated: LayoutOf<S2>;
+}
+
+/// Claiming nothing about one shape is claiming nothing about any other.
+impl<S2: Shape> RestateFor<S2> for Dyn {
+    type Restated = Dyn;
+}
+
+/// Row-major strides are a function of the extents, and `into_shape` does not
+/// change the extents.
+impl<S1: Shape, S2: Shape> RestateFor<S2> for RowMajor<S1> {
+    type Restated = RowMajor<S2>;
+}
+
 /// `Self` is a truthful description of a freshly allocated dense buffer of `S`.
 ///
 /// Constructors like [`Tensor::zeros`](crate::prelude::Tensor::zeros) allocate a

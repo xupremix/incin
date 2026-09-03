@@ -202,9 +202,9 @@ a style choice:
   `RowMajor` of its own result shape.** Pointwise unary and binary operations
   (broadcasting ones included), the comparison and logical families,
   `masked_fill`, `where_cond`, `lerp`, `cumsum`, every reduction, `matmul`,
-  `addmm`, `Linear` and `BatchNorm2d` do this, so a proof appears out of the
-  middle of a chain and `reshape_view` is reachable at the end of one. The
-  claim is *stated*, never carried: carrying the operand's layout would
+  `addmm`, `Linear`, `BatchNorm2d` and `RmsNorm` do this, so a proof appears out
+  of the middle of a chain and `reshape_view` is reachable at the end of one.
+  The claim is *stated*, never carried: carrying the operand's layout would
   propagate only what the caller already had, and would be false the moment a
   non-row-major layout exists.
 - **An operation whose result's memory order is not settled states `Dyn`.**
@@ -213,6 +213,13 @@ a style choice:
   returns a view while CUDA's returns a copy. Until that is settled
   ([#113](https://github.com/xupremix/incin/issues/113)) the honest answer is
   to claim nothing, and `into_row_major` recovers a proof where one is wanted.
+- **A shape *reinterpretation* keeps the proof.** `into_shape`, `into_dyn` and
+  `to_shape` look like shape changes and are not: they re-describe the same
+  extents under a different shape type, over the same buffer, with the same
+  strides. `RowMajor<S1>` and `RowMajor<S2>` denote identical strides whenever
+  the conversion succeeds, so the layout is restated rather than dropped --
+  that mapping is the `RestateFor<S2>` trait. The runtime check that makes
+  these fallible is exactly the check that the two shapes agree.
 - **`Dropout` is the exception, and it is the shape of exception to look for.**
   It carries the operand's layout, because in eval mode -- or at `p == 0` -- it
   returns the very tensor it was handed, strides and all. That is the only

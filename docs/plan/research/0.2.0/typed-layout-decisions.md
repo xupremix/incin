@@ -390,6 +390,49 @@ every branch either returns the operand itself or writes a buffer the carried
 layout describes** -- and when the second kind of branch exists, the bound has to
 say so.
 
+### The rule had an exception hiding inside it
+
+"A layout describes one geometry and cannot be carried to another" was the
+sentence justifying why every shape-changing operation states `Dyn`. It is
+correct, and `into_shape` was filed under it by name resemblance rather than by
+argument.
+
+`into_shape` changes no geometry. It re-describes the *same* extents under a
+different shape type -- same buffer, same strides, same dims -- and
+`S2::try_from_dims` is precisely the check that the two shapes agree, which is
+why the operation is fallible at all. So `RowMajor<S1>` and `RowMajor<S2>`
+denote identical strides whenever it succeeds, and dropping to `Dyn` threw away
+a fact that was still true.
+
+`RestateFor<S2>` is the type-level half:
+
+```rust,ignore
+pub trait RestateFor<S2: Shape>: Layout {
+    type Restated: LayoutOf<S2>;
+}
+impl<S2: Shape> RestateFor<S2> for Dyn { type Restated = Dyn; }
+impl<S1: Shape, S2: Shape> RestateFor<S2> for RowMajor<S1> { type Restated = RowMajor<S2>; }
+```
+
+Deliberately **not** sealed, unlike [`FreshDense`]. The seal there exists because
+a constructor generic over `L` is a minting press. Nothing here can be minted: a
+downstream layout author naming their own `Restated` is describing their own
+type, which is the same trust [`Layout::STATIC_STRIDES`] already extends. The
+obligation is stated in the doc rather than enforced.
+
+The cost is a `where L: RestateFor<S2>` on the three reinterpretations, which
+propagates to callers that are generic over `L`. That turned out to be four impl
+blocks -- three in `linear.rs`, one in `rms_norm.rs` -- and it bought `RmsNorm`
+a `Dense` output, since its chain ends in `broadcast_mul` and was losing the
+proof on the way back to a static shape.
+
+Two call sites had to *drop* the proof deliberately, and both are informative.
+The ONNX `import_model!` codegen now ends `.map(|o| o.forget_layout())`: the
+imported graph's last operation is whatever the file says it is, so its layout
+is not knowable at macro-expansion time. And two test helpers took
+`&Tensor<Dyn, ..>`, which pinned `L` -- the same class of gap widening keeps
+finding, this time in test code rather than library code.
+
 ### What CUDA contributes, and what it does not
 
 The reduction claim rests on different evidence from the pointwise one, because
