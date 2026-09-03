@@ -84,6 +84,7 @@
     include_str!("../../../docs/book/src/tensors.md"),
     include_str!("../../../docs/book/src/shapes.md"),
     include_str!("../../../docs/book/src/advanced_shapes.md"),
+    include_str!("../../../docs/book/src/layout.md"),
     include_str!("../../../docs/book/src/autograd.md"),
     include_str!("../../../docs/book/src/building_models.md"),
     include_str!("../../../docs/book/src/sequential.md"),

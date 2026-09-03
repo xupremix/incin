@@ -157,6 +157,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and a full-size intermediate per operation per backward pass.
 - `log_softmax`, `logsumexp` and `scatter_add`, with `DuplicateIndexRule::Accumulate`.
 
+- The Layout chapter is now part of the Cargo-backed doctest aggregation. It was
+  added to `SUMMARY.md` when the parameter landed and never to
+  `crates/incin/src/lib.rs`, so `tools/check-docs.py` -- which only runs in the
+  Pages workflow, off `master` -- had been failing on `develop` unnoticed and
+  the chapter's samples were compiled by nothing.
+
 ### Removed
 
 - The pointwise operations' "output carries the operand's layout" contract.
