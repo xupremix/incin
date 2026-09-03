@@ -15,17 +15,31 @@ Tensor<S, B, K, G, P, L>
 
 ## Nothing is credited that has not been shown
 
-The default is `Unknown`, and it means exactly what it says: nothing has been
-established. An `Unknown` tensor works exactly as it always did — every
-operation is available and every check happens at runtime.
+The default is `Dyn` — the same marker the shape, dtype, device and placement
+slots use for "decided at runtime" — and in the layout slot it means exactly
+that: nothing has been established. Such a tensor works exactly as it always
+did; every operation is available and every check happens at runtime.
 
 ```rust,ignore
-// `Unknown` is the default, so this is unchanged from before layouts existed.
+// `Dyn` is the default, so this is unchanged from before layouts existed.
 let t: Tensor<s![3, 4], B> = Tensor::zeros(())?;
 ```
 
-What `Unknown` cannot do is satisfy a bound that needs a proof. That is the
-whole mechanism.
+What `Dyn` cannot do is satisfy a bound that needs a proof. That is the whole
+mechanism.
+
+One marker does duty in every slot, so a fully written-out tensor can name it
+twice, once for a dynamic shape and once for an unproven layout:
+
+```rust,ignore
+Tensor<Dyn, B, f32, NoGrad, Local, Dyn>
+//     ^ shape decided at runtime      ^ layout not proven
+```
+
+Editor hover and the `expected .. found ..` notes drop the layout one, because
+it carries no information, and keep the shape one, because it carries a great
+deal. They are told apart by position — the layout is the sixth argument — not
+by name.
 
 ## Earning a proof
 
@@ -50,7 +64,7 @@ This works because the constructors are generic over the layout parameter, and
 that generality is bounded on the sealed `FreshDense<S>`. The bound is what
 stops the same mechanism from being a way to *forge* a proof: an unbounded
 constructor would hand you a tensor claiming whatever layout you named. A fresh
-allocation genuinely is `Unknown` and genuinely is `RowMajor`, so those two
+allocation genuinely is `Dyn` and genuinely is `RowMajor`, so those two
 implement it and nothing else can — not even a layout defined downstream.
 
 ### Check the strides of one you already have
@@ -155,7 +169,7 @@ produces a bounded number of kernels rather than one per observed shape.
 
 Layout is newer than the rest of the type system and is being adopted module by
 module. Operations that have been converted carry their operand's layout
-through; operations that have not still bind `L` to `Unknown`, which means a
+through; operations that have not still bind `L` to `Dyn`, which means a
 tensor carrying a proof cannot call them yet.
 
 The conversion is complete: accessors, constructors, `Clone`, pointwise unary
@@ -169,7 +183,7 @@ not a style choice:
   survives a chain of them, so `reshape_view` is still reachable at the end of
   one.
 - **Shape-changing operations state their result's layout, and state it as
-  `Unknown`.** A layout describes one geometry and cannot be carried to
+  `Dyn`.** A layout describes one geometry and cannot be carried to
   another. They *could* claim `RowMajor`, since the result is a fresh
   allocation — except that is not true on every backend: CPU `transpose`
   returns a view while CUDA's returns a copy. Until that is settled

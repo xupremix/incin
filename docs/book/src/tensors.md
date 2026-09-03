@@ -10,9 +10,9 @@ two almost always and let the rest default:
 | `K` | Element dtype | `f32` |
 | `G` | Gradient tracking (`Grad` / `NoGrad`) | `NoGrad` |
 | `P` | Placement (distributed only) | `Local` |
-| `L` | Layout (see [Layout](./layout.md)) | `Unknown` |
+| `L` | Layout (see [Layout](./layout.md)) | `Dyn` |
 
-Each default is the option that claims the least. `Unknown` means nothing has
+Each default is the option that claims the least. `Dyn` means nothing has
 been established about where the elements live, which is why adding `L` changed
 nothing about existing code: a tensor that has proven nothing behaves exactly as
 it always did, and checks it could have skipped happen at runtime instead.

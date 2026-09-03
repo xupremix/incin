@@ -64,11 +64,9 @@ Every existing call site must keep compiling, so the parameter needs a default
 that claims nothing:
 
 ```rust
-/// Nothing proven about layout. The default, and what any runtime-shaped or
-/// dynamically dispatched tensor carries.
-pub struct Unknown;
-
-impl Layout for Unknown {}   // every associated const takes its default
+// `Dyn` already exists as the runtime-selected marker for shapes, dtypes,
+// devices and placements. It serves as the layout default too.
+impl Layout for Dyn {}   // every associated const takes its default
 
 pub struct Tensor<
     S: Shape,
@@ -76,12 +74,17 @@ pub struct Tensor<
     K: DType = f32,
     G: RequiresGrad = NoGrad,
     P: Placement = Local,
-    L: Layout = Unknown,      // <- added, defaulted
+    L: Layout = Dyn,          // <- added, defaulted
 > { /* .. */ }
 ```
 
-`Unknown` is to `Layout` what `Dyn` is to `Shape` and `ProofLevel::Dynamic` is
-to a proof. Nothing that exists today changes meaning.
+`Dyn` is to `Layout` what it already is to `Shape`, and what
+`ProofLevel::Dynamic` is to a proof. Nothing that exists today changes meaning.
+
+> This note originally proposed a distinct `Unknown` marker here. It was
+> implemented that way and then reversed in favour of reusing `Dyn`; see
+> [typed-layout-decisions.md](./typed-layout-decisions.md) for both the
+> objections and what overturned them.
 
 ## Congruence
 
@@ -118,7 +121,7 @@ pub trait Contiguous: Layout {}
 pub trait AlignedTo<N: Unsigned>: Layout {}
 ```
 
-Nothing implements `Contiguous` for `Unknown`, so an unproven tensor simply
+Nothing implements `Contiguous` for `Dyn`, so an unproven tensor simply
 cannot satisfy a bound that needs it -- and falls back to the runtime path.
 
 ## Example 1: reshape stops being a runtime error
@@ -256,11 +259,12 @@ leave the dtype contract just as unchecked.
 
 ## Migration
 
-1. Add `Layout`, `Unknown`, `RowMajor<S>`, `LayoutOf<S>`, `Contiguous`. Nothing
+1. Add `Layout`, `RowMajor<S>`, `LayoutOf<S>`, `Contiguous`, and `impl Layout
+   for Dyn`. Nothing
    uses them; nothing breaks.
-2. Add `L: Layout = Unknown` to `Tensor`. Every existing signature still
+2. Add `L: Layout = Dyn` to `Tensor`. Every existing signature still
    compiles, because the default claims nothing.
-3. Have creation operations return `RowMajor<S>` instead of `Unknown`. Now
+3. Have creation operations return `RowMajor<S>` instead of `Dyn`. Now
    `Contiguous` bounds start being satisfiable.
 4. Add `reshape`'s `L: Contiguous` bound. This is the first breaking change and
    the first real payoff.
@@ -305,13 +309,13 @@ Steps 1 and 2 landed as designed. Step 3 is where the plan breaks, and the
 reason is worth recording before anyone picks this up.
 
 **Adding the parameter is free; adopting it is not.** `Tensor` gained
-`L: Layout = Unknown` and the entire workspace compiled unchanged -- the only
+`L: Layout = Dyn` and the entire workspace compiled unchanged -- the only
 churn was trybuild snapshots re-rendering the type with a sixth parameter, with
 every diagnostic's substance identical. That is the default doing its job.
 
 But an `impl<S, B, K, G, P> Tensor<S, B, K, G, P>` binds `L` to its default, so
 **a tensor carrying a proof loses every method defined that way**. The parameter
-is additive precisely because nothing produced a non-`Unknown` layout; the
+is additive precisely because nothing produced a non-`Dyn` layout; the
 moment something does, that tensor has almost no API.
 
 **And converting those impls is not a rename.** Rewriting eighteen impl headers
@@ -333,7 +337,7 @@ actual step 3, and it is a design exercise, not a refactor.
 The intermediate state that works, and is what is on `develop`:
 
 - `into_row_major` is the sound way in: a checked promotion from runtime
-  strides, defined only on `Unknown`. Deliberately no `assume_row_major`.
+  strides, defined only on `Dyn`. Deliberately no `assume_row_major`.
 - `reshape_view` is the one consumer of `L: Contiguous`, and demonstrates the
   payoff -- reinterpreting a non-contiguous buffer stops compiling.
 - Three of the eighteen impls are generic over `L`; the rest still pin it.
@@ -354,10 +358,10 @@ type parameter and this much churn.
 
 ## The migration order was wrong, and the corrected one costs 650 sites
 
-The plan above adds `L: Layout = Unknown` first and converts the API
+The plan above adds `L: Layout = Dyn` first and converts the API
 afterwards. That is backwards. A default lets every existing impl bind `L`
 silently, so the workspace compiles, nothing looks wrong, and the unconverted
-API is invisible until something produces a non-`Unknown` layout. The 95 errors
+API is invisible until something produces a non-`Dyn` layout. The 95 errors
 that appeared when converting impl headers were not the migration going wrong --
 they were the work arriving late, all at once, after the default had hidden it.
 
@@ -394,7 +398,7 @@ blindly:
 
 - **Input positions and impl headers** take the generic `L`. Mechanical.
 - **Return positions** take a layout the operation can actually justify.
-  `Unknown` is always sound because it claims nothing, and is the correct
+  `Dyn` is always sound because it claims nothing, and is the correct
   starting answer for every operation whose output is a fresh allocation.
   Tightening a family to `RowMajor` is a separate, deliberate step that also
   needs the operation *contract* to state it, not merely the current backends to

@@ -14,7 +14,7 @@ Tensor<S, B, K, G, P, L>
 ```
 
 The last four default, and each default is the one that claims the least:
-`f32`, `NoGrad`, `Local`, `Unknown`. That is the same rule `ProofLevel` follows
+`f32`, `NoGrad`, `Local`, `Dyn`. That is the same rule `ProofLevel` follows
 -- silence is never credited -- applied to the type parameters themselves.
 
 [Shapes](./shapes.md) and [Advanced shapes](./advanced_shapes.md) cover

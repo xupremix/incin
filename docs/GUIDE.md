@@ -157,7 +157,7 @@ a wrong one. Where the stronger, fully-static form matters, write it directly:
 
 `Tensor<S, B, K, G, P, L>`: shape, backend, element type (defaults to `f32`),
 gradient-tracking marker (`Grad` or `NoGrad`, defaults to `NoGrad`), placement
-(defaults to `Local`), and layout (defaults to `Unknown`). Most code only ever
+(defaults to `Local`), and layout (defaults to `Dyn`). Most code only ever
 writes the first two.
 
 Every default is the option that claims the least, so leaving one off never

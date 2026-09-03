@@ -12,7 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Typed layout.** `Tensor` gained a sixth parameter, `L: Layout`, describing
   where a tensor's elements live: strides, offset, alignment and contiguity.
-  It defaults to `Unknown`, which claims nothing, so existing code is unchanged
+  It defaults to `Dyn` -- the same runtime-selected marker the shape, dtype,
+  device and placement slots use -- which claims nothing, so existing code is
+  unchanged
   and every runtime path stays available. `RowMajor<S>` derives its strides from
   the shape; `Dense<S, B, ..>` is the ergonomic alias. Facts are traits --
   `Contiguous` -- and `LayoutOf<S>` states rank congruence. There is
@@ -21,12 +23,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   See the [Layout chapter](docs/book/src/layout.md). Every tensor module accepts
   a layout-carrying operand. Shape-preserving operations carry the operand's
   layout through, so a proof survives a chain; shape-changing ones state theirs
-  as `Unknown`, since a layout describes one geometry and cannot be carried to
+  as `Dyn`, since a layout describes one geometry and cannot be carried to
   another.
 - **Constructors yield a layout proof.** `zeros`, `ones`, `randn`, `full` and
   their siblings are generic over `L`, so `let t: Dense<s![3, 4], B> =
   Tensor::zeros(())?` produces a real `RowMajor` from the allocation itself,
-  with no runtime promotion. Asking for `Tensor<S, B>` still yields `Unknown`,
+  with no runtime promotion. Asking for `Tensor<S, B>` still yields `Dyn`,
   so nothing that predates the parameter changed. Before this, `reshape_view`
   was the only API bounded on `Contiguous` and nothing could satisfy it without
   going through `into_row_major` -- a runtime stride scan -- which left the
@@ -34,7 +36,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `FreshDense<S>`, the **sealed** bound that makes the above safe. A constructor
   generic over `L` is otherwise a minting press: name any layout and receive a
   tensor claiming it. That is harmless while a fresh allocation genuinely is
-  both `Unknown` and `RowMajor`, and stops being harmless the moment a second
+  both `Dyn` and `RowMajor`, and stops being harmless the moment a second
   real layout such as `ChannelsLast` exists. Only this crate decides what a
   fresh allocation may claim.
 - `Tensor::into_row_major`, a *checked* promotion from runtime strides to a
@@ -71,15 +73,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and a full-size intermediate per operation per backward pass.
 - `log_softmax`, `logsumexp` and `scatter_add`, with `DuplicateIndexRule::Accumulate`.
 
+### Removed
+
+- `Unknown`, the layout marker, in favour of the existing `Dyn`. **Breaking**
+  for anyone who named it: `incin_core::shapes::Unknown` and the prelude
+  re-export are gone, and `Tensor`'s sixth parameter now defaults to `Dyn`.
+  Code that never wrote the marker down is unaffected, since the default is
+  what changed name rather than meaning.
+
+  One marker now covers every "decided at runtime" slot instead of two spellings
+  for one idea, so a `where` clause that wants "unproven anything" names a single
+  type. The objection this overrides is that a fully spelled-out tensor can now
+  say `Dyn` twice, once for a dynamic shape and once for an unproven layout; the
+  humanizer resolves that by position rather than by name, which is the more
+  precise test in any case.
+
+  Measured cost: with the default renamed, rustc stopped abbreviating one
+  `compile_fail` rendering, which now spells out `f32, NoGrad, Local, Dyn` where
+  it previously printed neither. The humanizer still strips the layout argument
+  from it. The reason rustc's default-elision changed behaviour was not pinned
+  down -- a reduced standalone case with the same parameter structure, defaults
+  and trait impls still elides correctly.
+
 ### Changed (editor integrations)
 
 - Hover and `expected .. found ..` diagnostics no longer print a tensor's
-  layout argument when it is the default `Unknown`, which asserts nothing. A
-  layout that is anything else is a real claim -- the difference between a
-  tensor that can call `reshape_view` and one that cannot -- and is always
-  shown. A `Dyn` *shape* is likewise never elided, which is the property that
-  decided the layout marker should be its own type rather than a reuse of
-  `Dyn`.
+  layout argument when it is the default `Dyn`, which asserts nothing. A layout
+  that is anything else is a real claim -- the difference between a tensor that
+  can call `reshape_view` and one that cannot -- and is always shown. A `Dyn`
+  *shape* is never elided, even though the layout slot spells its default the
+  same way: the two are told apart by **position**, since the layout is the
+  sixth of six parameters. That test is stricter than the name test it
+  replaced, which fired on any trailing argument regardless of arity.
 
 ### Fixed
 

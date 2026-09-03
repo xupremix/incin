@@ -13,8 +13,9 @@ bounds. Rejected: a parameter per fact, which gives
 traits over it. Bundling is also what makes rank congruence (`LayoutOf<S>`)
 expressible at all, which is the rule taken from CuTe.
 
-**`Unknown` is the default, and it claims nothing.** This is the same shape of
-decision as `Dyn` for shapes and `ProofLevel::Dynamic` for proofs: the escape
+**`Dyn` is the default, and it claims nothing.** This is not merely the same
+shape of decision as `Dyn` for shapes and `ProofLevel::Dynamic` for proofs --
+it is the same marker: the escape
 hatch is the default, static knowledge is opt-in, and silence is never credited.
 A tensor that has proven nothing keeps every runtime path it had. Rejected:
 having no default (see below) and defaulting to `RowMajor` (would credit a claim
@@ -36,10 +37,10 @@ working and simply forgo the specialisation.
 **`into_row_major` is checked; there is no `assume_row_major`.** An unchecked
 promotion is the single API that could make every downstream `L: Contiguous`
 bound meaningless, and the check it saves is a stride comparison over the rank.
-Defined only on `Unknown`, since a tensor that already carries a layout got it
+Defined only on `Dyn`, since a tensor that already carries a layout got it
 from somewhere that knew.
 
-**A gradient's layout is `Unknown`, not its source's.** A gradient is an
+**A gradient's layout is `Dyn`, not its source's.** A gradient is an
 allocation the backend made on its own terms; carrying the source's claim across
 would assert something about a buffer the function never inspected. The source
 stays generic, so the proof simply does not transfer.
@@ -60,7 +61,7 @@ op under broadcast cannot alias either operand. `RowMajor<S>` is strictly more
 informative -- it would *upgrade* an unproven operand, so contiguity would be
 recoverable anywhere rather than only where someone called `into_row_major`.
 
-It was tried first and reverted. Because `Unknown` and `RowMajor` are different
+It was tried first and reverted. Because `Dyn` and `RowMajor` are different
 types, asserting `RowMajor` forces every downstream signature that says
 `Tensor<S, B, K, G>` to be rewritten; `nn/lstm` failed on the first attempt.
 Carrying `L` propagates exactly as much knowledge as the caller already had, so
@@ -129,7 +130,7 @@ objects to elsewhere. Either wire it or remove it.
 
 **Hover diagnostics.** Inlay hints are unaffected --
 `shorten_collapsed_tensor_tail` already drops everything after the shape. Hover
-shows the full type and will now display `Unknown`, a parameter that by
+shows the full type and will now display `Dyn`, a parameter that by
 definition carries no information; eliding it there is a clear improvement.
 Separately, rustc elides more aggressively with six parameters (`CpuBackendImpl`
 became `...` in one refreshed fixture), so raw diagnostics are slightly harder
@@ -157,7 +158,7 @@ shape manipulation, matmul, concat/stack, conversions, and the `nn` layers.
 The rule that emerged, and it is forced rather than chosen:
 
 - **Shape-preserving** operations carry the operand's `L`.
-- **Shape-changing** operations state theirs, as `Unknown`, because a layout
+- **Shape-changing** operations state theirs, as `Dyn`, because a layout
   describes one geometry and cannot be carried to another.
 
 The second could state `RowMajor` -- every such result is a fresh allocation --
@@ -185,40 +186,75 @@ conversion and produced a class of error that was pure duplication. Naming the
 associated type makes them the same thing by construction.
 
 **Spell the default by omitting it.** Several return types were written as
-`Tensor<.., crate::dist::Local, crate::shapes::Unknown>` during conversion, which
+`Tensor<.., crate::dist::Local, crate::shapes::Dyn>` during conversion, which
 is exactly what `Tensor<..>` already means. Removing the explicit form also
 cleared a `clippy::type_complexity`.
 
-## Reusing `Dyn` as the layout marker: tried, rejected on diagnostics
+## Reusing `Dyn` as the layout marker: rejected, then reversed
+
+The layout marker was first a distinct unit struct, `Unknown`. It is now `Dyn`,
+the same marker the shape, dtype, device and placement slots use. Both the
+original reasoning and what overturned it are recorded here, because the
+objections were real and only one of them survived contact.
+
+### Why it was rejected first
 
 `Unknown` and `Dyn` express the same idea -- the compiler settled nothing, read
-it at runtime -- so spelling the layout marker `Dyn` would remove a concept.
-`impl Layout for Dyn` was written and compiles with no conflict, so nothing
-technical stops it. Three things emerged only in the output.
+it at runtime -- so sharing the spelling removes a concept. `impl Layout for
+Dyn` compiles with no conflict, so nothing technical stopped it. Three things
+argued against:
 
-**The diagnostic names the marker twice.** With `Dyn` in both the shape and
-layout slots, a reader counts positions to tell which is which:
+1. **The diagnostic names the marker twice**, once per slot, so a reader counts
+   positions to tell which is which.
+2. **The humanizer cannot separate them.** An unproven *layout* carries no
+   information and should be elided from a hover; a `Dyn` *shape* carries a
+   great deal and must stay. Spelled the same, eliding one elides the other.
+   This was called the deciding reason.
+3. **`Dyn` is not a pure marker.** It is a `Shape` with `Arg = Vec<usize>` and
+   its own `resolve`, because a dynamic shape is *constructed* from runtime
+   dimensions, whereas an unproven layout is constructed from nothing.
 
-```text
-expected struct `Tensor<Dyn, CpuBackendImpl, f32, NoGrad, _, Dyn>`
-   found struct `Tensor<_, _, _, _, _, incin::shapes::Unknown>`
-```
+### Why that was reversed
 
-**The humanizer cannot separate them.** An unknown *layout* carries no
-information and should be elided from a hover entirely; a `Dyn` *shape* carries
-a great deal and must stay. Spelled the same, eliding one elides the other, and
-`incin-diagnostics` has no way to tell the positions apart in the general case.
-This is the deciding reason: the eliding is the ergonomic fix for the sixth
-parameter making rustc's own output noisier, and reuse would foreclose it.
+Objection 2, the deciding one, was **wrong about its own premise**. It assumed
+the humanizer must identify the marker by name. It does not have to: `Tensor`
+has exactly six parameters and the layout is the sixth, so a trailing `Dyn` is a
+layout precisely when the argument list is fully spelled out. Keying on position
+is not a workaround -- it is stricter than the name test it replaced, which
+fired on any trailing argument called `Unknown` whatever the arity, and which a
+downstream type of that name could have tripped. Both `Dyn`s in
+`Tensor<Dyn, B, f32, NoGrad, Local, Dyn>` are now handled correctly in one pass:
+the sixth is dropped, the first is kept.
 
-**`Dyn` is not a pure marker.** It is a `Shape` with `Arg = Vec<usize>` and its
-own `resolve`, because a dynamic shape is *constructed* from runtime dimensions.
-An unknown layout is constructed from nothing: it is the absence of a claim, not
-a runtime value with a constructor. Giving one type both roles conflates
-"determined at runtime from a value you supply" with "not determined".
+Objection 3 is true and costs nothing. A trait impl does not oblige the layout
+slot to use `Shape::resolve`, and the layout slot never constructs a value at
+all -- it is `PhantomData`. The two roles coexist in one type without either
+reaching the other.
 
-Kept as siblings rather than one type. The relationship is documented on
-`Unknown` so the equivalence is not lost.
+Objection 1 is the one that stands, and it is a matter of taste: a fully
+written-out tensor does say `Dyn` twice. Set against it is that a reader who has
+learned `Dyn` means "decided at runtime" in five slots no longer has to learn a
+sixth spelling for the same concept, and a `where` clause wanting "unproven
+anything" names one type instead of two.
+
+### The measured cost
+
+Renaming the default changed one recorded rustc rendering.
+`named_dim_identity_mismatch.stderr` previously abbreviated its `found` type to
+`Tensor<Shape, CpuBackendImpl>`, eliding four arguments that all equalled their
+defaults; it now spells out `f32, NoGrad, incin::dist::Local, Dyn`. Verified
+that this is caused by the rename and not by pre-existing snapshot drift:
+regenerating every snapshot on the unmodified tree produces no diff at all.
+
+**Why rustc's default-elision changed behaviour was not pinned down.** A reduced
+standalone case reproducing the parameter structure, the four defaults, the
+unit-versus-tuple struct difference, the module layout and glob re-export, and
+the marker implementing both `Shape` and `Layout`, still elides correctly. The
+in-tree experiment that would have isolated it -- swapping the default for a
+third, distinct marker -- does not compile, because `into_row_major` is defined
+on the default layout and moving the default moves that impl with it. Recorded
+as unexplained rather than guessed at; the practical impact is bounded, since
+the humanizer strips the layout argument from the rendering either way.
 
 ### The associated-value half of the question was already right
 
@@ -262,7 +298,7 @@ contiguous copy.
 which is correct.** Consequences:
 
 - A type claiming `RowMajor` for a transpose would be false on CPU and true on
-  CUDA. So shape-changing operations keep `Unknown` outputs until the contract
+  CUDA. So shape-changing operations keep `Dyn` outputs until the contract
   is settled, and `into_row_major` remains the way to recover a proof.
 - The earlier finding that "the strided path is unreachable" was correctly
   scoped to CUDA in the note, but it is not a framework-wide property. The
@@ -381,8 +417,8 @@ permuted_strides, offset)`; the CPU backend already does exactly this inside
 `transpose_structural`, which is why CPU's transpose is a view today. So the
 executor bodies are small; the surface around them is not.
 
-**Typing.** `transpose_view` returns `Unknown`, not a new `Strided` marker. A
-marker meaning "known not contiguous" would behave identically to `Unknown`
+**Typing.** `transpose_view` returns `Dyn`, not a new `Strided` marker. A
+marker meaning "known not contiguous" would behave identically to `Dyn`
 everywhere that matters -- both fail a `Contiguous` bound, which is the whole
 safety property -- so it would be a type with no distinguishing behaviour, and
 the same objection #111 raises applies. Introduce one only when something needs
