@@ -1,8 +1,51 @@
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchGrads
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchStorage
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchVar
+impl core::default::Default for incin_backends::codegen::gemm::GemmTileConfig
+impl core::ops::arith::Add for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Add<f64> for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Add<incin_backends::codegen::ir::IrExpr> for f64
+impl core::ops::arith::Div for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Div<f64> for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Div<incin_backends::codegen::ir::IrExpr> for f64
+impl core::ops::arith::Mul for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Mul<f64> for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Mul<incin_backends::codegen::ir::IrExpr> for f64
+impl core::ops::arith::Neg for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Sub for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Sub<f64> for incin_backends::codegen::ir::IrExpr
+impl core::ops::arith::Sub<incin_backends::codegen::ir::IrExpr> for f64
 impl core::ops::deref::Deref for incin_backends::cpu::CpuStorage
+impl incin_backends::codegen::attention::AttentionSpec
+impl incin_backends::codegen::autotune_config::AutotuneSpace
+impl incin_backends::codegen::conv::ImplicitConv2dSpec
+impl incin_backends::codegen::cross_entropy::CrossEntropySpec
+impl incin_backends::codegen::fragment::ScalarFragment
+impl incin_backends::codegen::fused_epilogue::FusedEpilogueSpec
+impl incin_backends::codegen::fusion::CompositeFusionSpec
+impl incin_backends::codegen::gemm::GemmSpec
+impl incin_backends::codegen::ir::IrExpr
+impl incin_backends::codegen::ir::KernelDefinition
+impl incin_backends::codegen::jit::CpuJitKernel
+impl incin_backends::codegen::mma::TensorCoreMmaSpec
+impl incin_backends::codegen::moe::MoeGatingSpec
+impl incin_backends::codegen::normalization::NormalizationSpec
+impl incin_backends::codegen::optim::FusedOptimizerSpec
 impl incin_backends::codegen::pointwise::PointwiseOpSpec
+impl incin_backends::codegen::quant_gemm::QuantGemmSpec
+impl incin_backends::codegen::reduction::ReductionOpSpec
+impl incin_backends::codegen::rope::RopeSpec
+impl incin_backends::codegen::scan::PrefixScanSpec
+impl incin_backends::codegen::scheduler::BlockTensorPtr
+impl incin_backends::codegen::scheduler::KernelScheduler
+impl incin_backends::codegen::sota_gemm::SotaGemmSpec
+impl incin_backends::codegen::strided::FastDivisor
+impl incin_backends::codegen::strided::StridedIndexSpec
+impl incin_backends::codegen::vectorized::VectorWidth
+impl incin_backends::codegen::vectorized::VectorizedOpSpec
+impl incin_backends::conformance::AdvertisedTuple
+impl incin_backends::conformance::OracleReport
+impl incin_backends::conformance::Verdict
 impl incin_backends::cpu::CpuBuffer
 impl incin_backends::cpu::CpuGrads
 impl incin_backends::cpu::CpuStorage
@@ -132,6 +175,9 @@ impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Log10> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Log2> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Log> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogSoftmax> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogSumExpDim> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogSumExpKeepDim> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogicalAnd> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogicalNot> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::LogicalOr> for incin_backends::cpu::CpuBackendImpl<D>
@@ -186,6 +232,7 @@ impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Rsqrt> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::ScaledDotProductAttention> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Scatter> for incin_backends::cpu::CpuBackendImpl<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::ScatterAdd> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Sigmoid> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Sign> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Sin> for incin_backends::cpu::CpuBackendImpl<D>
@@ -224,6 +271,7 @@ impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::TopK> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::TransposeExact> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::TransposeExact> for incin_backends::dispatch::DispatchBackend<D>
+impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::TransposeView> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Tril> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Triu> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device> incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::Trunc> for incin_backends::cpu::CpuBackendImpl<D>
@@ -281,12 +329,26 @@ impl<const A: usize> incin_backends::target::TensorData for [f64; A] where incin
 impl<const A: usize> incin_backends::target::TensorData for [i64; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
 impl<const A: usize> incin_backends::target::TensorData for [u32; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
 impl<const A: usize> incin_backends::target::TensorData for [u8; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
+pub const fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::has_bias(&self) -> bool
+pub const fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::has_residual(&self) -> bool
+pub const fn incin_backends::codegen::gemm::GemmSpec::with_static_dims(self, usize, usize, usize) -> Self
+pub const fn incin_backends::codegen::gemm::GemmSpec::with_tile(self, incin_backends::codegen::gemm::GemmTileConfig) -> Self
+pub const fn incin_backends::codegen::ir::IrExpr::arg(usize) -> Self
+pub const fn incin_backends::codegen::ir::IrExpr::constant(f64) -> Self
+pub const fn incin_backends::codegen::jit::CpuJitKernel::new(incin_backends::codegen::ir::KernelDefinition) -> Self
+pub const fn incin_backends::codegen::vectorized::VectorWidth::from_numel(usize) -> Self
+pub const fn incin_backends::codegen::vectorized::VectorWidth::lanes(self) -> usize
+pub const fn incin_backends::conformance::AdvertisedTuple::query(&self) -> incin_core::exec::capability::CapabilityQuery
+pub const fn incin_backends::conformance::Verdict::is_finding(&self) -> bool
 pub const fn incin_backends::cpu::CpuBackendImpl<D>::new() -> Self
 pub const fn incin_backends::detect::is_compiled_in(incin_core::tensor::device::DeviceKind) -> bool
 pub const fn incin_backends::dispatch::DispatchBackend<D>::new() -> Self
 pub const fn incin_backends::simd::simd_lanes<T: core::marker::Sized>() -> usize
 pub const fn incin_backends::simd::simd_vector_bytes() -> usize
 pub const fn incin_backends::simd_lanes<T: core::marker::Sized>() -> usize
+pub const incin_backends::codegen::catalog::BINARY_OPS: &[&str]
+pub const incin_backends::codegen::catalog::UNARY_OPS: &[&str]
+pub const incin_backends::conformance::RANK_CAP: usize
 pub const incin_backends::cpu::CpuBackendImpl<D>::BACKEND_NAME: &'static str
 pub const incin_backends::cpu::typed_kernel::PARALLEL_GRAIN: usize
 pub const incin_backends::detect::PREFERENCE: &[incin_core::tensor::device::DeviceKind]
@@ -295,15 +357,53 @@ pub const incin_backends::external::conformance::Tolerance::EXACT: Self
 pub const incin_backends::external::conformance::Tolerance::F32_ACCUMULATED: Self
 pub const incin_backends::external::conformance::Tolerance::F32_WIDE: Self
 pub enum incin_backends::codegen::BinaryOp
+pub enum incin_backends::codegen::EpilogueActivation
+pub enum incin_backends::codegen::FusedEpilogueKind
+pub enum incin_backends::codegen::FusedNode
+pub enum incin_backends::codegen::GemmComputeEngine
+pub enum incin_backends::codegen::GpuArchProfile
+pub enum incin_backends::codegen::IrBinaryOp
+pub enum incin_backends::codegen::IrExpr
+pub enum incin_backends::codegen::IrTernaryOp
+pub enum incin_backends::codegen::IrUnaryOp
 pub enum incin_backends::codegen::LayoutKind
+pub enum incin_backends::codegen::LoopScheduleKind
+pub enum incin_backends::codegen::MemorySpace
+pub enum incin_backends::codegen::NormKind
+pub enum incin_backends::codegen::OptimizerKind
 pub enum incin_backends::codegen::PointwiseExpr
+pub enum incin_backends::codegen::ReductionLayout
+pub enum incin_backends::codegen::ReductionOpKind
+pub enum incin_backends::codegen::ScanOpKind
+pub enum incin_backends::codegen::TensorCoreMmaLayout
 pub enum incin_backends::codegen::TernaryOp
 pub enum incin_backends::codegen::UnaryOp
+pub enum incin_backends::codegen::VectorWidth
+pub enum incin_backends::codegen::autotune_config::GpuArchProfile
+pub enum incin_backends::codegen::fused_epilogue::FusedEpilogueKind
+pub enum incin_backends::codegen::fusion::FusedNode
+pub enum incin_backends::codegen::ir::IrBinaryOp
+pub enum incin_backends::codegen::ir::IrExpr
+pub enum incin_backends::codegen::ir::IrTernaryOp
+pub enum incin_backends::codegen::ir::IrUnaryOp
+pub enum incin_backends::codegen::mma::TensorCoreMmaLayout
+pub enum incin_backends::codegen::normalization::NormKind
+pub enum incin_backends::codegen::optim::OptimizerKind
 pub enum incin_backends::codegen::pointwise::BinaryOp
 pub enum incin_backends::codegen::pointwise::LayoutKind
 pub enum incin_backends::codegen::pointwise::PointwiseExpr
 pub enum incin_backends::codegen::pointwise::TernaryOp
 pub enum incin_backends::codegen::pointwise::UnaryOp
+pub enum incin_backends::codegen::reduction::ReductionLayout
+pub enum incin_backends::codegen::reduction::ReductionOpKind
+pub enum incin_backends::codegen::scan::ScanOpKind
+pub enum incin_backends::codegen::scheduler::LoopScheduleKind
+pub enum incin_backends::codegen::scheduler::MemorySpace
+pub enum incin_backends::codegen::sota_gemm::EpilogueActivation
+pub enum incin_backends::codegen::sota_gemm::GemmComputeEngine
+pub enum incin_backends::codegen::vectorized::VectorWidth
+pub enum incin_backends::conformance::Coverage
+pub enum incin_backends::conformance::Verdict
 pub enum incin_backends::cpu::CpuBuffer
 pub enum incin_backends::external::conformance::Outcome
 pub enum incin_backends::prelude::GeneratedFill
@@ -346,8 +446,12 @@ pub fn [u8; A]::dims() -> alloc::vec::Vec<usize>
 pub fn [u8; A]::into_row_major(self) -> alloc::vec::Vec<u8>
 pub fn f32::map_binary(&[Self], &[Self], &mut [Self], impl core::ops::function::Fn(Self, Self) -> Self + core::marker::Send + core::marker::Sync)
 pub fn f32::map_unary(&[Self], &mut [Self], impl core::ops::function::Fn(Self) -> Self + core::marker::Send + core::marker::Sync)
+pub fn f64::add(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn f64::div(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn f64::map_binary(&[Self], &[Self], &mut [Self], impl core::ops::function::Fn(Self, Self) -> Self + core::marker::Send + core::marker::Sync)
 pub fn f64::map_unary(&[Self], &mut [Self], impl core::ops::function::Fn(Self) -> Self + core::marker::Send + core::marker::Sync)
+pub fn f64::mul(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn f64::sub(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn half::bfloat::bf16::map_binary(&[Self], &[Self], &mut [Self], impl core::ops::function::Fn(Self, Self) -> Self + core::marker::Send + core::marker::Sync)
 pub fn half::bfloat::bf16::map_unary(&[Self], &mut [Self], impl core::ops::function::Fn(Self) -> Self + core::marker::Send + core::marker::Sync)
 pub fn half::binary16::f16::map_binary(&[Self], &[Self], &mut [Self], impl core::ops::function::Fn(Self, Self) -> Self + core::marker::Send + core::marker::Sync)
@@ -362,6 +466,109 @@ pub fn incin_backends::capability::coverage_report() -> alloc::vec::Vec<incin_ba
 pub fn incin_backends::capability::registry(incin_core::tensor::device::DeviceKind) -> incin_core::exec::capability::CapabilityRegistry
 pub fn incin_backends::capability::support(incin_core::tensor::device::DeviceKind, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
 pub fn incin_backends::capability_docs::document() -> alloc::string::String
+pub fn incin_backends::codegen::attention::AttentionSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize, bool) -> Self
+pub fn incin_backends::codegen::attention::AttentionSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::attention::AttentionSpec::render_msl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::attention::AttentionSpec::render_wgsl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::autotune_config::AutotuneSpace::for_matmul(usize, usize, usize, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::autotune_config::GpuArchProfile) -> Self
+pub fn incin_backends::codegen::autotune_config::AutotuneSpace::generate_candidates(&self) -> alloc::vec::Vec<incin_backends::codegen::autotune_config::AutotuneCandidate>
+pub fn incin_backends::codegen::autotune_config::AutotuneSpace::select_best_heuristic(&self) -> incin_backends::codegen::autotune_config::AutotuneCandidate
+pub fn incin_backends::codegen::binary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::catalog::binary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::catalog::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::catalog::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::conv::ImplicitConv2dSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, (usize, usize), (usize, usize), (usize, usize)) -> Self
+pub fn incin_backends::codegen::conv::ImplicitConv2dSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::cross_entropy::CrossEntropySpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize, f64) -> Self
+pub fn incin_backends::codegen::cross_entropy::CrossEntropySpec::render_cuda_backward(&self) -> alloc::string::String
+pub fn incin_backends::codegen::cross_entropy::CrossEntropySpec::render_cuda_forward(&self) -> alloc::string::String
+pub fn incin_backends::codegen::define_binary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
+pub fn incin_backends::codegen::define_ternary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
+pub fn incin_backends::codegen::define_unary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
+pub fn incin_backends::codegen::dsl::define_binary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
+pub fn incin_backends::codegen::dsl::define_ternary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
+pub fn incin_backends::codegen::dsl::define_unary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
+pub fn incin_backends::codegen::exp(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::fma(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::fragment::ScalarFragment::literal(&str) -> Self
+pub fn incin_backends::codegen::fragment::ScalarFragment::prologue_block(&self, &str) -> alloc::string::String
+pub fn incin_backends::codegen::fragment::lower_scalar(&incin_backends::codegen::ir::IrExpr, &[&str], incin_core::tensor::dtype::registry::DTypeId) -> incin_core::err::Result<incin_backends::codegen::fragment::ScalarFragment>
+pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::fused_epilogue::FusedEpilogueKind) -> Self
+pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::render_msl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::render_wgsl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::with_cols(self, usize) -> Self
+pub fn incin_backends::codegen::fusion::CompositeFusionSpec::add_node(&mut self, incin_backends::codegen::fusion::FusedNode) -> &mut Self
+pub fn incin_backends::codegen::fusion::CompositeFusionSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize) -> Self
+pub fn incin_backends::codegen::fusion::CompositeFusionSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::fusion::CompositeFusionSpec::set_final_var(&mut self, impl core::convert::Into<alloc::string::String>) -> &mut Self
+pub fn incin_backends::codegen::fusion::CompositeFusionSpec::swiglu_residual(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId) -> Self
+pub fn incin_backends::codegen::gelu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::gemm::GemmSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId) -> Self
+pub fn incin_backends::codegen::gemm::GemmSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::gemm::GemmSpec::render_msl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::gemm::GemmSpec::render_wgsl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::gemm::GemmTileConfig::default() -> Self
+pub fn incin_backends::codegen::ir::IrExpr::add(self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::add(self, f64) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::add(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::binary(incin_backends::codegen::ir::IrBinaryOp, Self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::diff(&self, usize) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::div(self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::div(self, f64) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::div(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::eval(&self, &[f64]) -> f64
+pub fn incin_backends::codegen::ir::IrExpr::exp(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::fma(Self, Self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::gelu(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::log(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::mul(self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::mul(self, f64) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::mul(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::neg(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::neg(self) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::optimize(&self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::relu(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::remap_args(&self, &impl core::ops::function::Fn(usize) -> usize) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::render_cuda_expr(&self, incin_core::tensor::dtype::registry::DTypeId) -> alloc::string::String
+pub fn incin_backends::codegen::ir::IrExpr::rsqrt(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::sigmoid(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::silu(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::sqrt(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::sub(self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::sub(self, f64) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::sub(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::IrExpr::tanh(self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::ternary(incin_backends::codegen::ir::IrTernaryOp, Self, Self, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::unary(incin_backends::codegen::ir::IrUnaryOp, Self) -> Self
+pub fn incin_backends::codegen::ir::IrExpr::var(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn incin_backends::codegen::ir::KernelDefinition::new(impl core::convert::Into<alloc::string::String>, usize, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::ir::IrExpr) -> Self
+pub fn incin_backends::codegen::ir::KernelDefinition::render_backward_cuda(&self, usize) -> core::option::Option<alloc::string::String>
+pub fn incin_backends::codegen::ir::KernelDefinition::render_forward_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::ir::exp(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::fma(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::gelu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::log(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::relu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::rsqrt(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::sigmoid(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::silu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::sqrt(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::ir::tanh(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::jit::CpuJitKernel::eval_backward_f32(&self, &[f32], &[&[f32]], usize, &mut [f32]) -> incin_core::err::Result<()>
+pub fn incin_backends::codegen::jit::CpuJitKernel::eval_f32(&self, &[&[f32]], &mut [f32]) -> incin_core::err::Result<()>
+pub fn incin_backends::codegen::log(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::lower_scalar(&incin_backends::codegen::ir::IrExpr, &[&str], incin_core::tensor::dtype::registry::DTypeId) -> incin_core::err::Result<incin_backends::codegen::fragment::ScalarFragment>
+pub fn incin_backends::codegen::mma::TensorCoreMmaSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, usize, usize) -> Self
+pub fn incin_backends::codegen::mma::TensorCoreMmaSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::moe::MoeGatingSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize, usize) -> Self
+pub fn incin_backends::codegen::moe::MoeGatingSpec::render_cuda_gating(&self) -> alloc::string::String
+pub fn incin_backends::codegen::normalization::NormalizationSpec::new(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::normalization::NormKind, incin_core::tensor::dtype::registry::DTypeId, usize, f64, bool) -> Self
+pub fn incin_backends::codegen::normalization::NormalizationSpec::render_cuda_backward(&self) -> alloc::string::String
+pub fn incin_backends::codegen::normalization::NormalizationSpec::render_cuda_forward(&self) -> alloc::string::String
+pub fn incin_backends::codegen::optim::FusedOptimizerSpec::adamw(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, f64, f64, f64, f64, f64) -> Self
+pub fn incin_backends::codegen::optim::FusedOptimizerSpec::lion(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, f64, f64, f64, f64) -> Self
+pub fn incin_backends::codegen::optim::FusedOptimizerSpec::render_cuda(&self) -> alloc::string::String
 pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::binary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::BinaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId) -> Self
 pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::render_cuda(&self) -> alloc::string::String
 pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::render_msl(&self) -> alloc::string::String
@@ -370,9 +577,55 @@ pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::unary(impl core::con
 pub fn incin_backends::codegen::pointwise::render_cuda(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::pointwise::render_msl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::pointwise::render_wgsl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
+pub fn incin_backends::codegen::quant_gemm::QuantGemmSpec::q8_0_gemv(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId) -> Self
+pub fn incin_backends::codegen::quant_gemm::QuantGemmSpec::render_cuda_gemv(&self) -> alloc::string::String
+pub fn incin_backends::codegen::reduction::ReductionOpSpec::all_elements(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::reduction::ReductionOpKind, incin_core::tensor::dtype::registry::DTypeId) -> Self
+pub fn incin_backends::codegen::reduction::ReductionOpSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::reduction::ReductionOpSpec::render_msl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::reduction::ReductionOpSpec::render_wgsl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::reduction::ReductionOpSpec::row_wise(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::reduction::ReductionOpKind, incin_core::tensor::dtype::registry::DTypeId) -> Self
+pub fn incin_backends::codegen::reduction::ReductionOpSpec::with_reduction_size(self, usize) -> Self
+pub fn incin_backends::codegen::relu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::render_cuda(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::render_msl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::render_wgsl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
+pub fn incin_backends::codegen::rope::RopeSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize, f64, bool) -> Self
+pub fn incin_backends::codegen::rope::RopeSpec::render_cuda_backward(&self) -> alloc::string::String
+pub fn incin_backends::codegen::rope::RopeSpec::render_cuda_forward(&self) -> alloc::string::String
+pub fn incin_backends::codegen::rsqrt(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::scan::PrefixScanSpec::new(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::scan::ScanOpKind, incin_core::tensor::dtype::registry::DTypeId, bool) -> Self
+pub fn incin_backends::codegen::scan::PrefixScanSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::scheduler::BlockTensorPtr::global(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, alloc::vec::Vec<usize>, alloc::vec::Vec<isize>) -> Self
+pub fn incin_backends::codegen::scheduler::BlockTensorPtr::is_innermost_contiguous(&self) -> bool
+pub fn incin_backends::codegen::scheduler::BlockTensorPtr::optimal_vector_width(&self) -> usize
+pub fn incin_backends::codegen::scheduler::KernelScheduler::new(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::scheduler::LoopScheduleKind, alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>, alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>) -> Self
+pub fn incin_backends::codegen::scheduler::KernelScheduler::recommended_grid_dim(&self) -> (usize, usize, usize)
+pub fn incin_backends::codegen::scheduler::KernelScheduler::render_cuda_preamble(&self) -> alloc::string::String
+pub fn incin_backends::codegen::sigmoid(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::silu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::sota_gemm::SotaGemmSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::sota_gemm::SotaGemmSpec::simd_tiled_f32(impl core::convert::Into<alloc::string::String>, bool, incin_backends::codegen::sota_gemm::EpilogueActivation) -> Self
+pub fn incin_backends::codegen::sota_gemm::SotaGemmSpec::tensor_core_f16(impl core::convert::Into<alloc::string::String>, bool, incin_backends::codegen::sota_gemm::EpilogueActivation) -> Self
+pub fn incin_backends::codegen::sqrt(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::strided::FastDivisor::new(u32) -> Self
+pub fn incin_backends::codegen::strided::StridedIndexSpec::new(alloc::vec::Vec<usize>, alloc::vec::Vec<isize>) -> Self
+pub fn incin_backends::codegen::strided::StridedIndexSpec::render_cuda_offset_expression(&self, &str) -> alloc::string::String
+pub fn incin_backends::codegen::tanh(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
+pub fn incin_backends::codegen::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
+pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::binary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::BinaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::vectorized::VectorWidth) -> Self
+pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_cuda(&self) -> alloc::string::String
+pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_msl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_wgsl(&self) -> alloc::string::String
+pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::unary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::UnaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::vectorized::VectorWidth) -> Self
+pub fn incin_backends::conformance::AdvertisedTuple::label(&self) -> alloc::string::String
+pub fn incin_backends::conformance::OracleReport::covered_operations(&self) -> alloc::vec::Vec<incin_core::shapes::error::OperationKind>
+pub fn incin_backends::conformance::OracleReport::executed(&self) -> usize
+pub fn incin_backends::conformance::OracleReport::findings(&self) -> impl core::iter::traits::iterator::Iterator<Item = &incin_backends::conformance::Observation>
+pub fn incin_backends::conformance::OracleReport::findings_text(&self) -> alloc::string::String
+pub fn incin_backends::conformance::OracleReport::unfixtured_operations(&self) -> alloc::vec::Vec<(incin_core::shapes::error::OperationKind, &'static str)>
+pub fn incin_backends::conformance::advertised_tuples(incin_core::tensor::device::DeviceKind) -> alloc::vec::Vec<incin_backends::conformance::AdvertisedTuple>
+pub fn incin_backends::conformance::run_cpu_self_check() -> incin_backends::conformance::OracleReport
 pub fn incin_backends::cpu::CpuBackendImpl<D>::assign_var<K: incin_core::tensor::dtype::traits::DType>(&mut Self::Var, &Self::Storage) -> incin_core::err::Result<()>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::backward<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage) -> incin_core::err::Result<Self::Grads>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::backward_with<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage, &Self::Storage) -> incin_core::err::Result<Self::Grads>
@@ -447,6 +700,9 @@ pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Log, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Log10, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Log2, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogSoftmax, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogSumExpDim, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogSumExpKeepDim, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogicalAnd, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogicalNot, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::LogicalOr, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
@@ -490,6 +746,7 @@ pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Rsqrt, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::ScaledDotProductAttention, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Scatter, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::ScatterAdd, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Sigmoid, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Sign, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Sin, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
@@ -522,6 +779,7 @@ pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::ToHostIntVec, Self>) -> core::result::Result<alloc::vec::Vec<i64>, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::TopK, Self>) -> core::result::Result<(incin_backends::cpu::CpuStorage, incin_backends::cpu::CpuStorage), incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::TransposeExact, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::TransposeView, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Tril, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Triu, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::execute(&self, incin_core::tensor::backend::execute::ExecutionRequest<'_, incin_core::exec::catalog::descriptor::op::Trunc, Self>) -> core::result::Result<incin_backends::cpu::CpuStorage, incin_core::err::BackendError>
@@ -743,6 +1001,23 @@ pub incin_backends::capability::BackendCoverageRow::cuda_rules: usize
 pub incin_backends::capability::BackendCoverageRow::metal_rules: usize
 pub incin_backends::capability::BackendCoverageRow::operation: incin_core::shapes::error::OperationKind
 pub incin_backends::capability::BackendCoverageRow::wgpu_rules: usize
+pub incin_backends::codegen::AttentionSpec::block_kv: usize
+pub incin_backends::codegen::AttentionSpec::block_q: usize
+pub incin_backends::codegen::AttentionSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::AttentionSpec::head_dim: usize
+pub incin_backends::codegen::AttentionSpec::is_causal: bool
+pub incin_backends::codegen::AttentionSpec::name: alloc::string::String
+pub incin_backends::codegen::AttentionSpec::scale: f64
+pub incin_backends::codegen::AutotuneCandidate::block_k: usize
+pub incin_backends::codegen::AutotuneCandidate::block_m: usize
+pub incin_backends::codegen::AutotuneCandidate::block_n: usize
+pub incin_backends::codegen::AutotuneCandidate::num_warps: usize
+pub incin_backends::codegen::AutotuneCandidate::shared_memory_bytes: usize
+pub incin_backends::codegen::AutotuneCandidate::thread_m: usize
+pub incin_backends::codegen::AutotuneCandidate::thread_n: usize
+pub incin_backends::codegen::AutotuneSpace::arch: incin_backends::codegen::autotune_config::GpuArchProfile
+pub incin_backends::codegen::AutotuneSpace::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::AutotuneSpace::problem_shape: (usize, usize, usize)
 pub incin_backends::codegen::BinaryOp::Add
 pub incin_backends::codegen::BinaryOp::Div
 pub incin_backends::codegen::BinaryOp::Maximum
@@ -750,9 +1025,162 @@ pub incin_backends::codegen::BinaryOp::Minimum
 pub incin_backends::codegen::BinaryOp::Mul
 pub incin_backends::codegen::BinaryOp::Pow
 pub incin_backends::codegen::BinaryOp::Sub
+pub incin_backends::codegen::BlockTensorPtr::block_shape: alloc::vec::Vec<usize>
+pub incin_backends::codegen::BlockTensorPtr::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::BlockTensorPtr::name: alloc::string::String
+pub incin_backends::codegen::BlockTensorPtr::requires_mask: bool
+pub incin_backends::codegen::BlockTensorPtr::space: incin_backends::codegen::scheduler::MemorySpace
+pub incin_backends::codegen::BlockTensorPtr::strides: alloc::vec::Vec<isize>
+pub incin_backends::codegen::CompositeFusionSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::CompositeFusionSpec::final_var: alloc::string::String
+pub incin_backends::codegen::CompositeFusionSpec::name: alloc::string::String
+pub incin_backends::codegen::CompositeFusionSpec::nodes: alloc::vec::Vec<incin_backends::codegen::fusion::FusedNode>
+pub incin_backends::codegen::CompositeFusionSpec::num_inputs: usize
+pub incin_backends::codegen::CpuJitKernel::definition: incin_backends::codegen::ir::KernelDefinition
+pub incin_backends::codegen::CrossEntropySpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::CrossEntropySpec::label_smoothing: f64
+pub incin_backends::codegen::CrossEntropySpec::name: alloc::string::String
+pub incin_backends::codegen::CrossEntropySpec::vocab_size: usize
+pub incin_backends::codegen::EpilogueActivation::Gelu
+pub incin_backends::codegen::EpilogueActivation::None
+pub incin_backends::codegen::EpilogueActivation::Relu
+pub incin_backends::codegen::EpilogueActivation::Silu
+pub incin_backends::codegen::FastDivisor::divisor: u32
+pub incin_backends::codegen::FastDivisor::multiplier: u64
+pub incin_backends::codegen::FastDivisor::shift: u32
+pub incin_backends::codegen::FusedEpilogueKind::Bias
+pub incin_backends::codegen::FusedEpilogueKind::BiasGelu
+pub incin_backends::codegen::FusedEpilogueKind::BiasRelu
+pub incin_backends::codegen::FusedEpilogueKind::BiasResidual
+pub incin_backends::codegen::FusedEpilogueKind::BiasResidualGelu
+pub incin_backends::codegen::FusedEpilogueKind::BiasSilu
+pub incin_backends::codegen::FusedEpilogueKind::Identity
+pub incin_backends::codegen::FusedEpilogueSpec::cols: core::option::Option<usize>
+pub incin_backends::codegen::FusedEpilogueSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::FusedEpilogueSpec::kind: incin_backends::codegen::fused_epilogue::FusedEpilogueKind
+pub incin_backends::codegen::FusedEpilogueSpec::name: alloc::string::String
+pub incin_backends::codegen::FusedEpilogueSpec::work_group_size: usize
+pub incin_backends::codegen::FusedNode::Binary
+pub incin_backends::codegen::FusedNode::Binary::lhs_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Binary::op: char
+pub incin_backends::codegen::FusedNode::Binary::out_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Binary::rhs_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Fma
+pub incin_backends::codegen::FusedNode::Fma::a_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Fma::b_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Fma::c_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Fma::out_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::LoadInput
+pub incin_backends::codegen::FusedNode::LoadInput::slot: usize
+pub incin_backends::codegen::FusedNode::LoadInput::var_name: alloc::string::String
+pub incin_backends::codegen::FusedNode::Unary
+pub incin_backends::codegen::FusedNode::Unary::input_var: alloc::string::String
+pub incin_backends::codegen::FusedNode::Unary::op: alloc::string::String
+pub incin_backends::codegen::FusedNode::Unary::out_var: alloc::string::String
+pub incin_backends::codegen::FusedOptimizerSpec::beta1: f64
+pub incin_backends::codegen::FusedOptimizerSpec::beta2: f64
+pub incin_backends::codegen::FusedOptimizerSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::FusedOptimizerSpec::eps: f64
+pub incin_backends::codegen::FusedOptimizerSpec::grad_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::FusedOptimizerSpec::kind: incin_backends::codegen::optim::OptimizerKind
+pub incin_backends::codegen::FusedOptimizerSpec::lr: f64
+pub incin_backends::codegen::FusedOptimizerSpec::name: alloc::string::String
+pub incin_backends::codegen::FusedOptimizerSpec::weight_decay: f64
+pub incin_backends::codegen::GemmComputeEngine::SimdFmaTiled
+pub incin_backends::codegen::GemmComputeEngine::TensorCoreMma
+pub incin_backends::codegen::GemmSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::GemmSpec::name: alloc::string::String
+pub incin_backends::codegen::GemmSpec::static_k: core::option::Option<usize>
+pub incin_backends::codegen::GemmSpec::static_m: core::option::Option<usize>
+pub incin_backends::codegen::GemmSpec::static_n: core::option::Option<usize>
+pub incin_backends::codegen::GemmSpec::tile: incin_backends::codegen::gemm::GemmTileConfig
+pub incin_backends::codegen::GemmTileConfig::bk: usize
+pub incin_backends::codegen::GemmTileConfig::bm: usize
+pub incin_backends::codegen::GemmTileConfig::bn: usize
+pub incin_backends::codegen::GemmTileConfig::tm: usize
+pub incin_backends::codegen::GemmTileConfig::tn: usize
+pub incin_backends::codegen::GpuArchProfile::AppleSilicon
+pub incin_backends::codegen::GpuArchProfile::GenericWebGpu
+pub incin_backends::codegen::GpuArchProfile::NvidiaModern
+pub incin_backends::codegen::ImplicitConv2dSpec::dilation: (usize, usize)
+pub incin_backends::codegen::ImplicitConv2dSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::ImplicitConv2dSpec::kernel_size: (usize, usize)
+pub incin_backends::codegen::ImplicitConv2dSpec::name: alloc::string::String
+pub incin_backends::codegen::ImplicitConv2dSpec::padding: (usize, usize)
+pub incin_backends::codegen::ImplicitConv2dSpec::stride: (usize, usize)
+pub incin_backends::codegen::IrBinaryOp::Add
+pub incin_backends::codegen::IrBinaryOp::Div
+pub incin_backends::codegen::IrBinaryOp::Max
+pub incin_backends::codegen::IrBinaryOp::Min
+pub incin_backends::codegen::IrBinaryOp::Mul
+pub incin_backends::codegen::IrBinaryOp::Pow
+pub incin_backends::codegen::IrBinaryOp::Sub
+pub incin_backends::codegen::IrExpr::Arg(usize)
+pub incin_backends::codegen::IrExpr::Binary(incin_backends::codegen::ir::IrBinaryOp, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>)
+pub incin_backends::codegen::IrExpr::Const(f64)
+pub incin_backends::codegen::IrExpr::Ternary(incin_backends::codegen::ir::IrTernaryOp, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>)
+pub incin_backends::codegen::IrExpr::Unary(incin_backends::codegen::ir::IrUnaryOp, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>)
+pub incin_backends::codegen::IrExpr::Var(alloc::string::String)
+pub incin_backends::codegen::IrTernaryOp::Clamp
+pub incin_backends::codegen::IrTernaryOp::Fma
+pub incin_backends::codegen::IrTernaryOp::Select
+pub incin_backends::codegen::IrUnaryOp::Abs
+pub incin_backends::codegen::IrUnaryOp::Cos
+pub incin_backends::codegen::IrUnaryOp::Exp
+pub incin_backends::codegen::IrUnaryOp::Gelu
+pub incin_backends::codegen::IrUnaryOp::Log
+pub incin_backends::codegen::IrUnaryOp::Neg
+pub incin_backends::codegen::IrUnaryOp::Reciprocal
+pub incin_backends::codegen::IrUnaryOp::Relu
+pub incin_backends::codegen::IrUnaryOp::Rsqrt
+pub incin_backends::codegen::IrUnaryOp::Sigmoid
+pub incin_backends::codegen::IrUnaryOp::Silu
+pub incin_backends::codegen::IrUnaryOp::Sin
+pub incin_backends::codegen::IrUnaryOp::Sqrt
+pub incin_backends::codegen::IrUnaryOp::Square
+pub incin_backends::codegen::IrUnaryOp::Step
+pub incin_backends::codegen::IrUnaryOp::Tanh
+pub incin_backends::codegen::KernelDefinition::backward_derivatives: alloc::vec::Vec<incin_backends::codegen::ir::IrExpr>
+pub incin_backends::codegen::KernelDefinition::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::KernelDefinition::forward: incin_backends::codegen::ir::IrExpr
+pub incin_backends::codegen::KernelDefinition::input_arity: usize
+pub incin_backends::codegen::KernelDefinition::name: alloc::string::String
+pub incin_backends::codegen::KernelScheduler::inputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
+pub incin_backends::codegen::KernelScheduler::kind: incin_backends::codegen::scheduler::LoopScheduleKind
+pub incin_backends::codegen::KernelScheduler::name: alloc::string::String
+pub incin_backends::codegen::KernelScheduler::outputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
+pub incin_backends::codegen::KernelScheduler::threads_per_block: usize
 pub incin_backends::codegen::LayoutKind::Contiguous
 pub incin_backends::codegen::LayoutKind::ScalarBroadcast
 pub incin_backends::codegen::LayoutKind::Strided
+pub incin_backends::codegen::LoopScheduleKind::Pointwise1D
+pub incin_backends::codegen::LoopScheduleKind::Pointwise1D::elements_per_thread: usize
+pub incin_backends::codegen::LoopScheduleKind::Pointwise1D::numel: usize
+pub incin_backends::codegen::LoopScheduleKind::Reduction
+pub incin_backends::codegen::LoopScheduleKind::Reduction::num_rows: usize
+pub incin_backends::codegen::LoopScheduleKind::Reduction::reduction_dim: usize
+pub incin_backends::codegen::LoopScheduleKind::Tiled2D
+pub incin_backends::codegen::LoopScheduleKind::Tiled2D::block_k: usize
+pub incin_backends::codegen::LoopScheduleKind::Tiled2D::block_m: usize
+pub incin_backends::codegen::LoopScheduleKind::Tiled2D::block_n: usize
+pub incin_backends::codegen::MemorySpace::Global
+pub incin_backends::codegen::MemorySpace::Register
+pub incin_backends::codegen::MemorySpace::Shared
+pub incin_backends::codegen::MoeGatingSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::MoeGatingSpec::name: alloc::string::String
+pub incin_backends::codegen::MoeGatingSpec::num_experts: usize
+pub incin_backends::codegen::MoeGatingSpec::top_k: usize
+pub incin_backends::codegen::NormKind::LayerNorm
+pub incin_backends::codegen::NormKind::RmsNorm
+pub incin_backends::codegen::NormalizationSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::NormalizationSpec::eps: f64
+pub incin_backends::codegen::NormalizationSpec::has_affine: bool
+pub incin_backends::codegen::NormalizationSpec::kind: incin_backends::codegen::normalization::NormKind
+pub incin_backends::codegen::NormalizationSpec::name: alloc::string::String
+pub incin_backends::codegen::NormalizationSpec::norm_dim: usize
+pub incin_backends::codegen::OptimizerKind::AdamW
+pub incin_backends::codegen::OptimizerKind::Lion
+pub incin_backends::codegen::OptimizerKind::SgdMomentum
 pub incin_backends::codegen::PointwiseExpr::Arg(usize)
 pub incin_backends::codegen::PointwiseExpr::Binary(incin_backends::codegen::pointwise::BinaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
 pub incin_backends::codegen::PointwiseExpr::ScalarConst(f64)
@@ -764,6 +1192,72 @@ pub incin_backends::codegen::PointwiseOpSpec::layout: incin_backends::codegen::p
 pub incin_backends::codegen::PointwiseOpSpec::name: alloc::string::String
 pub incin_backends::codegen::PointwiseOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
 pub incin_backends::codegen::PointwiseOpSpec::work_group_size: usize
+pub incin_backends::codegen::PrefixScanSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::PrefixScanSpec::is_inclusive: bool
+pub incin_backends::codegen::PrefixScanSpec::name: alloc::string::String
+pub incin_backends::codegen::PrefixScanSpec::op: incin_backends::codegen::scan::ScanOpKind
+pub incin_backends::codegen::QuantGemmSpec::act_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::QuantGemmSpec::block_size: usize
+pub incin_backends::codegen::QuantGemmSpec::name: alloc::string::String
+pub incin_backends::codegen::QuantGemmSpec::weight_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::ReductionLayout::AllElements
+pub incin_backends::codegen::ReductionLayout::RowWise
+pub incin_backends::codegen::ReductionOpKind::L2Norm
+pub incin_backends::codegen::ReductionOpKind::Max
+pub incin_backends::codegen::ReductionOpKind::Mean
+pub incin_backends::codegen::ReductionOpKind::Min
+pub incin_backends::codegen::ReductionOpKind::Prod
+pub incin_backends::codegen::ReductionOpKind::Sum
+pub incin_backends::codegen::ReductionOpKind::WelfordStd
+pub incin_backends::codegen::ReductionOpKind::WelfordStd::unbiased: bool
+pub incin_backends::codegen::ReductionOpKind::WelfordVar
+pub incin_backends::codegen::ReductionOpKind::WelfordVar::unbiased: bool
+pub incin_backends::codegen::ReductionOpSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::ReductionOpSpec::layout: incin_backends::codegen::reduction::ReductionLayout
+pub incin_backends::codegen::ReductionOpSpec::name: alloc::string::String
+pub incin_backends::codegen::ReductionOpSpec::op: incin_backends::codegen::reduction::ReductionOpKind
+pub incin_backends::codegen::ReductionOpSpec::reduction_size: core::option::Option<usize>
+pub incin_backends::codegen::ReductionOpSpec::work_group_size: usize
+pub incin_backends::codegen::RopeSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::RopeSpec::name: alloc::string::String
+pub incin_backends::codegen::RopeSpec::rotary_dim: usize
+pub incin_backends::codegen::RopeSpec::theta_base: f64
+pub incin_backends::codegen::RopeSpec::use_precomputed_freqs: bool
+pub incin_backends::codegen::ScalarFragment::prologue: alloc::vec::Vec<alloc::string::String>
+pub incin_backends::codegen::ScalarFragment::value: alloc::string::String
+pub incin_backends::codegen::ScanOpKind::Max
+pub incin_backends::codegen::ScanOpKind::Min
+pub incin_backends::codegen::ScanOpKind::Product
+pub incin_backends::codegen::ScanOpKind::Sum
+pub incin_backends::codegen::SotaGemmSpec::activation: incin_backends::codegen::sota_gemm::EpilogueActivation
+pub incin_backends::codegen::SotaGemmSpec::block_k: usize
+pub incin_backends::codegen::SotaGemmSpec::block_m: usize
+pub incin_backends::codegen::SotaGemmSpec::block_n: usize
+pub incin_backends::codegen::SotaGemmSpec::dtype_a: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::SotaGemmSpec::dtype_accum: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::SotaGemmSpec::dtype_b: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::SotaGemmSpec::dtype_c: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::SotaGemmSpec::engine: incin_backends::codegen::sota_gemm::GemmComputeEngine
+pub incin_backends::codegen::SotaGemmSpec::has_bias: bool
+pub incin_backends::codegen::SotaGemmSpec::has_residual: bool
+pub incin_backends::codegen::SotaGemmSpec::name: alloc::string::String
+pub incin_backends::codegen::SotaGemmSpec::pipeline_stages: usize
+pub incin_backends::codegen::SotaGemmSpec::swizzle_factor: usize
+pub incin_backends::codegen::SotaGemmSpec::thread_m: usize
+pub incin_backends::codegen::SotaGemmSpec::thread_n: usize
+pub incin_backends::codegen::SotaGemmSpec::use_cp_async: bool
+pub incin_backends::codegen::SotaGemmSpec::use_l2_swizzle: bool
+pub incin_backends::codegen::StridedIndexSpec::shape: alloc::vec::Vec<usize>
+pub incin_backends::codegen::StridedIndexSpec::strides: alloc::vec::Vec<isize>
+pub incin_backends::codegen::TensorCoreMmaLayout::M16N8K16
+pub incin_backends::codegen::TensorCoreMmaLayout::M16N8K32
+pub incin_backends::codegen::TensorCoreMmaSpec::accum_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::TensorCoreMmaSpec::input_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::TensorCoreMmaSpec::layout: incin_backends::codegen::mma::TensorCoreMmaLayout
+pub incin_backends::codegen::TensorCoreMmaSpec::name: alloc::string::String
+pub incin_backends::codegen::TensorCoreMmaSpec::use_cp_async: bool
+pub incin_backends::codegen::TensorCoreMmaSpec::warp_tiles_m: usize
+pub incin_backends::codegen::TensorCoreMmaSpec::warp_tiles_n: usize
 pub incin_backends::codegen::TernaryOp::Clamp
 pub incin_backends::codegen::TernaryOp::Fma
 pub incin_backends::codegen::UnaryOp::Abs
@@ -783,6 +1277,163 @@ pub incin_backends::codegen::UnaryOp::Sin
 pub incin_backends::codegen::UnaryOp::Sqrt
 pub incin_backends::codegen::UnaryOp::Square
 pub incin_backends::codegen::UnaryOp::Tanh
+pub incin_backends::codegen::VectorWidth::Scalar = 1
+pub incin_backends::codegen::VectorWidth::Vec2 = 2
+pub incin_backends::codegen::VectorWidth::Vec4 = 4
+pub incin_backends::codegen::VectorizedOpSpec::expr: incin_backends::codegen::pointwise::PointwiseExpr
+pub incin_backends::codegen::VectorizedOpSpec::inputs: alloc::vec::Vec<incin_core::tensor::dtype::registry::DTypeId>
+pub incin_backends::codegen::VectorizedOpSpec::name: alloc::string::String
+pub incin_backends::codegen::VectorizedOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::VectorizedOpSpec::vector_width: incin_backends::codegen::vectorized::VectorWidth
+pub incin_backends::codegen::VectorizedOpSpec::work_group_size: usize
+pub incin_backends::codegen::attention::AttentionSpec::block_kv: usize
+pub incin_backends::codegen::attention::AttentionSpec::block_q: usize
+pub incin_backends::codegen::attention::AttentionSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::attention::AttentionSpec::head_dim: usize
+pub incin_backends::codegen::attention::AttentionSpec::is_causal: bool
+pub incin_backends::codegen::attention::AttentionSpec::name: alloc::string::String
+pub incin_backends::codegen::attention::AttentionSpec::scale: f64
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::block_k: usize
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::block_m: usize
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::block_n: usize
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::num_warps: usize
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::shared_memory_bytes: usize
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::thread_m: usize
+pub incin_backends::codegen::autotune_config::AutotuneCandidate::thread_n: usize
+pub incin_backends::codegen::autotune_config::AutotuneSpace::arch: incin_backends::codegen::autotune_config::GpuArchProfile
+pub incin_backends::codegen::autotune_config::AutotuneSpace::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::autotune_config::AutotuneSpace::problem_shape: (usize, usize, usize)
+pub incin_backends::codegen::autotune_config::GpuArchProfile::AppleSilicon
+pub incin_backends::codegen::autotune_config::GpuArchProfile::GenericWebGpu
+pub incin_backends::codegen::autotune_config::GpuArchProfile::NvidiaModern
+pub incin_backends::codegen::conv::ImplicitConv2dSpec::dilation: (usize, usize)
+pub incin_backends::codegen::conv::ImplicitConv2dSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::conv::ImplicitConv2dSpec::kernel_size: (usize, usize)
+pub incin_backends::codegen::conv::ImplicitConv2dSpec::name: alloc::string::String
+pub incin_backends::codegen::conv::ImplicitConv2dSpec::padding: (usize, usize)
+pub incin_backends::codegen::conv::ImplicitConv2dSpec::stride: (usize, usize)
+pub incin_backends::codegen::cross_entropy::CrossEntropySpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::cross_entropy::CrossEntropySpec::label_smoothing: f64
+pub incin_backends::codegen::cross_entropy::CrossEntropySpec::name: alloc::string::String
+pub incin_backends::codegen::cross_entropy::CrossEntropySpec::vocab_size: usize
+pub incin_backends::codegen::fragment::ScalarFragment::prologue: alloc::vec::Vec<alloc::string::String>
+pub incin_backends::codegen::fragment::ScalarFragment::value: alloc::string::String
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::Bias
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasGelu
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasRelu
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasResidual
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasResidualGelu
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::BiasSilu
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueKind::Identity
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::cols: core::option::Option<usize>
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::kind: incin_backends::codegen::fused_epilogue::FusedEpilogueKind
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::name: alloc::string::String
+pub incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::work_group_size: usize
+pub incin_backends::codegen::fusion::CompositeFusionSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::fusion::CompositeFusionSpec::final_var: alloc::string::String
+pub incin_backends::codegen::fusion::CompositeFusionSpec::name: alloc::string::String
+pub incin_backends::codegen::fusion::CompositeFusionSpec::nodes: alloc::vec::Vec<incin_backends::codegen::fusion::FusedNode>
+pub incin_backends::codegen::fusion::CompositeFusionSpec::num_inputs: usize
+pub incin_backends::codegen::fusion::FusedNode::Binary
+pub incin_backends::codegen::fusion::FusedNode::Binary::lhs_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Binary::op: char
+pub incin_backends::codegen::fusion::FusedNode::Binary::out_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Binary::rhs_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Fma
+pub incin_backends::codegen::fusion::FusedNode::Fma::a_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Fma::b_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Fma::c_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Fma::out_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::LoadInput
+pub incin_backends::codegen::fusion::FusedNode::LoadInput::slot: usize
+pub incin_backends::codegen::fusion::FusedNode::LoadInput::var_name: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Unary
+pub incin_backends::codegen::fusion::FusedNode::Unary::input_var: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Unary::op: alloc::string::String
+pub incin_backends::codegen::fusion::FusedNode::Unary::out_var: alloc::string::String
+pub incin_backends::codegen::gemm::GemmSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::gemm::GemmSpec::name: alloc::string::String
+pub incin_backends::codegen::gemm::GemmSpec::static_k: core::option::Option<usize>
+pub incin_backends::codegen::gemm::GemmSpec::static_m: core::option::Option<usize>
+pub incin_backends::codegen::gemm::GemmSpec::static_n: core::option::Option<usize>
+pub incin_backends::codegen::gemm::GemmSpec::tile: incin_backends::codegen::gemm::GemmTileConfig
+pub incin_backends::codegen::gemm::GemmTileConfig::bk: usize
+pub incin_backends::codegen::gemm::GemmTileConfig::bm: usize
+pub incin_backends::codegen::gemm::GemmTileConfig::bn: usize
+pub incin_backends::codegen::gemm::GemmTileConfig::tm: usize
+pub incin_backends::codegen::gemm::GemmTileConfig::tn: usize
+pub incin_backends::codegen::ir::IrBinaryOp::Add
+pub incin_backends::codegen::ir::IrBinaryOp::Div
+pub incin_backends::codegen::ir::IrBinaryOp::Max
+pub incin_backends::codegen::ir::IrBinaryOp::Min
+pub incin_backends::codegen::ir::IrBinaryOp::Mul
+pub incin_backends::codegen::ir::IrBinaryOp::Pow
+pub incin_backends::codegen::ir::IrBinaryOp::Sub
+pub incin_backends::codegen::ir::IrExpr::Arg(usize)
+pub incin_backends::codegen::ir::IrExpr::Binary(incin_backends::codegen::ir::IrBinaryOp, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>)
+pub incin_backends::codegen::ir::IrExpr::Const(f64)
+pub incin_backends::codegen::ir::IrExpr::Ternary(incin_backends::codegen::ir::IrTernaryOp, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>)
+pub incin_backends::codegen::ir::IrExpr::Unary(incin_backends::codegen::ir::IrUnaryOp, alloc::boxed::Box<incin_backends::codegen::ir::IrExpr>)
+pub incin_backends::codegen::ir::IrExpr::Var(alloc::string::String)
+pub incin_backends::codegen::ir::IrTernaryOp::Clamp
+pub incin_backends::codegen::ir::IrTernaryOp::Fma
+pub incin_backends::codegen::ir::IrTernaryOp::Select
+pub incin_backends::codegen::ir::IrUnaryOp::Abs
+pub incin_backends::codegen::ir::IrUnaryOp::Cos
+pub incin_backends::codegen::ir::IrUnaryOp::Exp
+pub incin_backends::codegen::ir::IrUnaryOp::Gelu
+pub incin_backends::codegen::ir::IrUnaryOp::Log
+pub incin_backends::codegen::ir::IrUnaryOp::Neg
+pub incin_backends::codegen::ir::IrUnaryOp::Reciprocal
+pub incin_backends::codegen::ir::IrUnaryOp::Relu
+pub incin_backends::codegen::ir::IrUnaryOp::Rsqrt
+pub incin_backends::codegen::ir::IrUnaryOp::Sigmoid
+pub incin_backends::codegen::ir::IrUnaryOp::Silu
+pub incin_backends::codegen::ir::IrUnaryOp::Sin
+pub incin_backends::codegen::ir::IrUnaryOp::Sqrt
+pub incin_backends::codegen::ir::IrUnaryOp::Square
+pub incin_backends::codegen::ir::IrUnaryOp::Step
+pub incin_backends::codegen::ir::IrUnaryOp::Tanh
+pub incin_backends::codegen::ir::KernelDefinition::backward_derivatives: alloc::vec::Vec<incin_backends::codegen::ir::IrExpr>
+pub incin_backends::codegen::ir::KernelDefinition::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::ir::KernelDefinition::forward: incin_backends::codegen::ir::IrExpr
+pub incin_backends::codegen::ir::KernelDefinition::input_arity: usize
+pub incin_backends::codegen::ir::KernelDefinition::name: alloc::string::String
+pub incin_backends::codegen::jit::CpuJitKernel::definition: incin_backends::codegen::ir::KernelDefinition
+pub incin_backends::codegen::mma::TensorCoreMmaLayout::M16N8K16
+pub incin_backends::codegen::mma::TensorCoreMmaLayout::M16N8K32
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::accum_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::input_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::layout: incin_backends::codegen::mma::TensorCoreMmaLayout
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::name: alloc::string::String
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::use_cp_async: bool
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::warp_tiles_m: usize
+pub incin_backends::codegen::mma::TensorCoreMmaSpec::warp_tiles_n: usize
+pub incin_backends::codegen::moe::MoeGatingSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::moe::MoeGatingSpec::name: alloc::string::String
+pub incin_backends::codegen::moe::MoeGatingSpec::num_experts: usize
+pub incin_backends::codegen::moe::MoeGatingSpec::top_k: usize
+pub incin_backends::codegen::normalization::NormKind::LayerNorm
+pub incin_backends::codegen::normalization::NormKind::RmsNorm
+pub incin_backends::codegen::normalization::NormalizationSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::normalization::NormalizationSpec::eps: f64
+pub incin_backends::codegen::normalization::NormalizationSpec::has_affine: bool
+pub incin_backends::codegen::normalization::NormalizationSpec::kind: incin_backends::codegen::normalization::NormKind
+pub incin_backends::codegen::normalization::NormalizationSpec::name: alloc::string::String
+pub incin_backends::codegen::normalization::NormalizationSpec::norm_dim: usize
+pub incin_backends::codegen::optim::FusedOptimizerSpec::beta1: f64
+pub incin_backends::codegen::optim::FusedOptimizerSpec::beta2: f64
+pub incin_backends::codegen::optim::FusedOptimizerSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::optim::FusedOptimizerSpec::eps: f64
+pub incin_backends::codegen::optim::FusedOptimizerSpec::grad_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::optim::FusedOptimizerSpec::kind: incin_backends::codegen::optim::OptimizerKind
+pub incin_backends::codegen::optim::FusedOptimizerSpec::lr: f64
+pub incin_backends::codegen::optim::FusedOptimizerSpec::name: alloc::string::String
+pub incin_backends::codegen::optim::FusedOptimizerSpec::weight_decay: f64
+pub incin_backends::codegen::optim::OptimizerKind::AdamW
+pub incin_backends::codegen::optim::OptimizerKind::Lion
+pub incin_backends::codegen::optim::OptimizerKind::SgdMomentum
 pub incin_backends::codegen::pointwise::BinaryOp::Add
 pub incin_backends::codegen::pointwise::BinaryOp::Div
 pub incin_backends::codegen::pointwise::BinaryOp::Maximum
@@ -823,6 +1474,121 @@ pub incin_backends::codegen::pointwise::UnaryOp::Sin
 pub incin_backends::codegen::pointwise::UnaryOp::Sqrt
 pub incin_backends::codegen::pointwise::UnaryOp::Square
 pub incin_backends::codegen::pointwise::UnaryOp::Tanh
+pub incin_backends::codegen::quant_gemm::QuantGemmSpec::act_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::quant_gemm::QuantGemmSpec::block_size: usize
+pub incin_backends::codegen::quant_gemm::QuantGemmSpec::name: alloc::string::String
+pub incin_backends::codegen::quant_gemm::QuantGemmSpec::weight_dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::reduction::ReductionLayout::AllElements
+pub incin_backends::codegen::reduction::ReductionLayout::RowWise
+pub incin_backends::codegen::reduction::ReductionOpKind::L2Norm
+pub incin_backends::codegen::reduction::ReductionOpKind::Max
+pub incin_backends::codegen::reduction::ReductionOpKind::Mean
+pub incin_backends::codegen::reduction::ReductionOpKind::Min
+pub incin_backends::codegen::reduction::ReductionOpKind::Prod
+pub incin_backends::codegen::reduction::ReductionOpKind::Sum
+pub incin_backends::codegen::reduction::ReductionOpKind::WelfordStd
+pub incin_backends::codegen::reduction::ReductionOpKind::WelfordStd::unbiased: bool
+pub incin_backends::codegen::reduction::ReductionOpKind::WelfordVar
+pub incin_backends::codegen::reduction::ReductionOpKind::WelfordVar::unbiased: bool
+pub incin_backends::codegen::reduction::ReductionOpSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::reduction::ReductionOpSpec::layout: incin_backends::codegen::reduction::ReductionLayout
+pub incin_backends::codegen::reduction::ReductionOpSpec::name: alloc::string::String
+pub incin_backends::codegen::reduction::ReductionOpSpec::op: incin_backends::codegen::reduction::ReductionOpKind
+pub incin_backends::codegen::reduction::ReductionOpSpec::reduction_size: core::option::Option<usize>
+pub incin_backends::codegen::reduction::ReductionOpSpec::work_group_size: usize
+pub incin_backends::codegen::rope::RopeSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::rope::RopeSpec::name: alloc::string::String
+pub incin_backends::codegen::rope::RopeSpec::rotary_dim: usize
+pub incin_backends::codegen::rope::RopeSpec::theta_base: f64
+pub incin_backends::codegen::rope::RopeSpec::use_precomputed_freqs: bool
+pub incin_backends::codegen::scan::PrefixScanSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::scan::PrefixScanSpec::is_inclusive: bool
+pub incin_backends::codegen::scan::PrefixScanSpec::name: alloc::string::String
+pub incin_backends::codegen::scan::PrefixScanSpec::op: incin_backends::codegen::scan::ScanOpKind
+pub incin_backends::codegen::scan::ScanOpKind::Max
+pub incin_backends::codegen::scan::ScanOpKind::Min
+pub incin_backends::codegen::scan::ScanOpKind::Product
+pub incin_backends::codegen::scan::ScanOpKind::Sum
+pub incin_backends::codegen::scheduler::BlockTensorPtr::block_shape: alloc::vec::Vec<usize>
+pub incin_backends::codegen::scheduler::BlockTensorPtr::dtype: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::scheduler::BlockTensorPtr::name: alloc::string::String
+pub incin_backends::codegen::scheduler::BlockTensorPtr::requires_mask: bool
+pub incin_backends::codegen::scheduler::BlockTensorPtr::space: incin_backends::codegen::scheduler::MemorySpace
+pub incin_backends::codegen::scheduler::BlockTensorPtr::strides: alloc::vec::Vec<isize>
+pub incin_backends::codegen::scheduler::KernelScheduler::inputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
+pub incin_backends::codegen::scheduler::KernelScheduler::kind: incin_backends::codegen::scheduler::LoopScheduleKind
+pub incin_backends::codegen::scheduler::KernelScheduler::name: alloc::string::String
+pub incin_backends::codegen::scheduler::KernelScheduler::outputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
+pub incin_backends::codegen::scheduler::KernelScheduler::threads_per_block: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Pointwise1D
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Pointwise1D::elements_per_thread: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Pointwise1D::numel: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Reduction
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Reduction::num_rows: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Reduction::reduction_dim: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D::block_k: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D::block_m: usize
+pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D::block_n: usize
+pub incin_backends::codegen::scheduler::MemorySpace::Global
+pub incin_backends::codegen::scheduler::MemorySpace::Register
+pub incin_backends::codegen::scheduler::MemorySpace::Shared
+pub incin_backends::codegen::sota_gemm::EpilogueActivation::Gelu
+pub incin_backends::codegen::sota_gemm::EpilogueActivation::None
+pub incin_backends::codegen::sota_gemm::EpilogueActivation::Relu
+pub incin_backends::codegen::sota_gemm::EpilogueActivation::Silu
+pub incin_backends::codegen::sota_gemm::GemmComputeEngine::SimdFmaTiled
+pub incin_backends::codegen::sota_gemm::GemmComputeEngine::TensorCoreMma
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::activation: incin_backends::codegen::sota_gemm::EpilogueActivation
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::block_k: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::block_m: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::block_n: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::dtype_a: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::dtype_accum: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::dtype_b: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::dtype_c: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::engine: incin_backends::codegen::sota_gemm::GemmComputeEngine
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::has_bias: bool
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::has_residual: bool
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::name: alloc::string::String
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::pipeline_stages: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::swizzle_factor: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::thread_m: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::thread_n: usize
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::use_cp_async: bool
+pub incin_backends::codegen::sota_gemm::SotaGemmSpec::use_l2_swizzle: bool
+pub incin_backends::codegen::strided::FastDivisor::divisor: u32
+pub incin_backends::codegen::strided::FastDivisor::multiplier: u64
+pub incin_backends::codegen::strided::FastDivisor::shift: u32
+pub incin_backends::codegen::strided::StridedIndexSpec::shape: alloc::vec::Vec<usize>
+pub incin_backends::codegen::strided::StridedIndexSpec::strides: alloc::vec::Vec<isize>
+pub incin_backends::codegen::vectorized::VectorWidth::Scalar = 1
+pub incin_backends::codegen::vectorized::VectorWidth::Vec2 = 2
+pub incin_backends::codegen::vectorized::VectorWidth::Vec4 = 4
+pub incin_backends::codegen::vectorized::VectorizedOpSpec::expr: incin_backends::codegen::pointwise::PointwiseExpr
+pub incin_backends::codegen::vectorized::VectorizedOpSpec::inputs: alloc::vec::Vec<incin_core::tensor::dtype::registry::DTypeId>
+pub incin_backends::codegen::vectorized::VectorizedOpSpec::name: alloc::string::String
+pub incin_backends::codegen::vectorized::VectorizedOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
+pub incin_backends::codegen::vectorized::VectorizedOpSpec::vector_width: incin_backends::codegen::vectorized::VectorWidth
+pub incin_backends::codegen::vectorized::VectorizedOpSpec::work_group_size: usize
+pub incin_backends::conformance::AdvertisedTuple::dtype: incin_core::tensor::dtype::registry::DTypeDescriptor
+pub incin_backends::conformance::AdvertisedTuple::layout: incin_core::exec::meta::LayoutClass
+pub incin_backends::conformance::AdvertisedTuple::math_mode: incin_core::exec::policy::MathMode
+pub incin_backends::conformance::AdvertisedTuple::operation: incin_core::shapes::error::OperationKind
+pub incin_backends::conformance::AdvertisedTuple::rank: usize
+pub incin_backends::conformance::AdvertisedTuple::training: bool
+pub incin_backends::conformance::Coverage::Unbuildable(alloc::string::String)
+pub incin_backends::conformance::Coverage::Unfixtured(&'static str)
+pub incin_backends::conformance::Observation::tuple: incin_backends::conformance::AdvertisedTuple
+pub incin_backends::conformance::Observation::verdict: incin_backends::conformance::Verdict
+pub incin_backends::conformance::OracleReport::device: incin_core::tensor::device::DeviceKind
+pub incin_backends::conformance::OracleReport::observations: alloc::vec::Vec<incin_backends::conformance::Observation>
+pub incin_backends::conformance::Verdict::Executed
+pub incin_backends::conformance::Verdict::Failed(alloc::string::String)
+pub incin_backends::conformance::Verdict::NotCovered(incin_backends::conformance::Coverage)
+pub incin_backends::conformance::Verdict::Panicked(alloc::string::String)
+pub incin_backends::conformance::Verdict::Refused(alloc::string::String)
+pub incin_backends::conformance::Verdict::Rejected(alloc::string::String)
 pub incin_backends::cpu::CpuBuffer::BF16(alloc::vec::Vec<half::bfloat::bf16>)
 pub incin_backends::cpu::CpuBuffer::Bool(alloc::vec::Vec<u8>)
 pub incin_backends::cpu::CpuBuffer::F16(alloc::vec::Vec<half::binary16::f16>)
@@ -859,7 +1625,32 @@ pub mod incin_backends::backend_kind
 pub mod incin_backends::capability
 pub mod incin_backends::capability_docs
 pub mod incin_backends::codegen
+pub mod incin_backends::codegen::attention
+pub mod incin_backends::codegen::autotune_config
+pub mod incin_backends::codegen::catalog
+pub mod incin_backends::codegen::conv
+pub mod incin_backends::codegen::cross_entropy
+pub mod incin_backends::codegen::dsl
+pub mod incin_backends::codegen::fragment
+pub mod incin_backends::codegen::fused_epilogue
+pub mod incin_backends::codegen::fusion
+pub mod incin_backends::codegen::gemm
+pub mod incin_backends::codegen::ir
+pub mod incin_backends::codegen::jit
+pub mod incin_backends::codegen::mma
+pub mod incin_backends::codegen::moe
+pub mod incin_backends::codegen::normalization
+pub mod incin_backends::codegen::optim
 pub mod incin_backends::codegen::pointwise
+pub mod incin_backends::codegen::quant_gemm
+pub mod incin_backends::codegen::reduction
+pub mod incin_backends::codegen::rope
+pub mod incin_backends::codegen::scan
+pub mod incin_backends::codegen::scheduler
+pub mod incin_backends::codegen::sota_gemm
+pub mod incin_backends::codegen::strided
+pub mod incin_backends::codegen::vectorized
+pub mod incin_backends::conformance
 pub mod incin_backends::cpu
 pub mod incin_backends::cpu::typed_kernel
 pub mod incin_backends::detect
@@ -876,8 +1667,63 @@ pub static incin_backends::capability::METAL_CAPABILITIES: &[incin_core::exec::c
 pub static incin_backends::capability::WGPU_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
 pub struct incin_backends::DispatchBackend<D>(_)
 pub struct incin_backends::capability::BackendCoverageRow
+pub struct incin_backends::codegen::AttentionSpec
+pub struct incin_backends::codegen::AutotuneCandidate
+pub struct incin_backends::codegen::AutotuneSpace
+pub struct incin_backends::codegen::BlockTensorPtr
+pub struct incin_backends::codegen::CompositeFusionSpec
+pub struct incin_backends::codegen::CpuJitKernel
+pub struct incin_backends::codegen::CrossEntropySpec
+pub struct incin_backends::codegen::FastDivisor
+pub struct incin_backends::codegen::FusedEpilogueSpec
+pub struct incin_backends::codegen::FusedOptimizerSpec
+pub struct incin_backends::codegen::GemmSpec
+pub struct incin_backends::codegen::GemmTileConfig
+pub struct incin_backends::codegen::ImplicitConv2dSpec
+pub struct incin_backends::codegen::KernelDefinition
+pub struct incin_backends::codegen::KernelScheduler
+pub struct incin_backends::codegen::MoeGatingSpec
+pub struct incin_backends::codegen::NormalizationSpec
 pub struct incin_backends::codegen::PointwiseOpSpec
+pub struct incin_backends::codegen::PrefixScanSpec
+pub struct incin_backends::codegen::QuantGemmSpec
+pub struct incin_backends::codegen::ReductionOpSpec
+pub struct incin_backends::codegen::RopeSpec
+pub struct incin_backends::codegen::ScalarFragment
+pub struct incin_backends::codegen::SotaGemmSpec
+pub struct incin_backends::codegen::StridedIndexSpec
+pub struct incin_backends::codegen::TensorCoreMmaSpec
+pub struct incin_backends::codegen::VectorizedOpSpec
+pub struct incin_backends::codegen::attention::AttentionSpec
+pub struct incin_backends::codegen::autotune_config::AutotuneCandidate
+pub struct incin_backends::codegen::autotune_config::AutotuneSpace
+pub struct incin_backends::codegen::conv::ImplicitConv2dSpec
+pub struct incin_backends::codegen::cross_entropy::CrossEntropySpec
+pub struct incin_backends::codegen::fragment::ScalarFragment
+pub struct incin_backends::codegen::fused_epilogue::FusedEpilogueSpec
+pub struct incin_backends::codegen::fusion::CompositeFusionSpec
+pub struct incin_backends::codegen::gemm::GemmSpec
+pub struct incin_backends::codegen::gemm::GemmTileConfig
+pub struct incin_backends::codegen::ir::KernelDefinition
+pub struct incin_backends::codegen::jit::CpuJitKernel
+pub struct incin_backends::codegen::mma::TensorCoreMmaSpec
+pub struct incin_backends::codegen::moe::MoeGatingSpec
+pub struct incin_backends::codegen::normalization::NormalizationSpec
+pub struct incin_backends::codegen::optim::FusedOptimizerSpec
 pub struct incin_backends::codegen::pointwise::PointwiseOpSpec
+pub struct incin_backends::codegen::quant_gemm::QuantGemmSpec
+pub struct incin_backends::codegen::reduction::ReductionOpSpec
+pub struct incin_backends::codegen::rope::RopeSpec
+pub struct incin_backends::codegen::scan::PrefixScanSpec
+pub struct incin_backends::codegen::scheduler::BlockTensorPtr
+pub struct incin_backends::codegen::scheduler::KernelScheduler
+pub struct incin_backends::codegen::sota_gemm::SotaGemmSpec
+pub struct incin_backends::codegen::strided::FastDivisor
+pub struct incin_backends::codegen::strided::StridedIndexSpec
+pub struct incin_backends::codegen::vectorized::VectorizedOpSpec
+pub struct incin_backends::conformance::AdvertisedTuple
+pub struct incin_backends::conformance::Observation
+pub struct incin_backends::conformance::OracleReport
 pub struct incin_backends::cpu::CpuBackendImpl<D>(_)
 pub struct incin_backends::cpu::CpuGrads
 pub struct incin_backends::cpu::CpuStorage
@@ -927,9 +1773,11 @@ pub type [u32; A]::Elem = u32
 pub type [u32; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
 pub type [u8; A]::Elem = u8
 pub type [u8; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
+pub type f64::Output = incin_backends::codegen::ir::IrExpr
 pub type incin_backends::EngineBackend<E, D> = incin_backends::target::EngineBackend<E, D>
 pub type incin_backends::IncinBackend<D> = incin_backends::NativeBackend<D>
 pub type incin_backends::NativeBackend<D> = incin_backends::target::NativeBackend<D>
+pub type incin_backends::codegen::ir::IrExpr::Output = incin_backends::codegen::ir::IrExpr
 pub type incin_backends::cpu::CpuBackendImpl<D>::Device = D
 pub type incin_backends::cpu::CpuBackendImpl<D>::Grads = incin_backends::cpu::CpuGrads
 pub type incin_backends::cpu::CpuBackendImpl<D>::InnerBackend = incin_backends::cpu::CpuBackendImpl<D>

@@ -1,6 +1,6 @@
 # Tensors
 
-`Tensor<S, B, K, G, P>` has five type parameters, but you'll write the first
+`Tensor<S, B, K, G, P, L>` has six type parameters, but you'll write the first
 two almost always and let the rest default:
 
 | Parameter | Meaning | Default |
@@ -10,6 +10,12 @@ two almost always and let the rest default:
 | `K` | Element dtype | `f32` |
 | `G` | Gradient tracking (`Grad` / `NoGrad`) | `NoGrad` |
 | `P` | Placement (distributed only) | `Local` |
+| `L` | Layout (see [Layout](./layout.md)) | `Dyn` |
+
+Each default is the option that claims the least. `Dyn` means nothing has
+been established about where the elements live, which is why adding `L` changed
+nothing about existing code: a tensor that has proven nothing behaves exactly as
+it always did, and checks it could have skipped happen at runtime instead.
 
 ## Creating tensors
 
@@ -20,7 +26,22 @@ Concrete application code selects a target device directly:
 ```rust,no_run
 use incin::prelude::*;
 
+// 1. Static compile-time target (Cpu, or Cuda::new(0))
 let x = Cpu.randn(shape![2, 3])?; // ~ N(0, 1) standard normal
+
+// 2. Rebinding to a specific static dtype (f16, bf16, f64, i64, etc.):
+let half_target = Cpu.dtype::<f16>()?;
+let h = half_target.zeros(shape![2, 3])?;
+
+// 3. Dynamic runtime-chosen device (detect_device() or DeviceId):
+let device = incin_backends::detect_device().unwrap_or_else(DeviceId::cpu);
+let target: Target<Native, Dyn> = Target::new((), device, ());
+let dynamic_zeros = target.zeros([2, 3])?;
+
+// 4. Dynamic runtime-chosen dtype (.dtype_dynamic):
+let desc = DTypeId::F64.descriptor();
+let f64_target = target.dtype_dynamic(desc)?;
+let dynamic_f64 = f64_target.ones([2, 3])?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -74,8 +95,52 @@ let ints = Tensor::<s![2, 2], B, i64>::zeros(())?;
 // of in the type:
 let runtime_dtype = Tensor::<Dyn, B, Dyn>::ones((vec![2, 2], DTypeId::F64.descriptor()))?;
 assert_eq!(runtime_dtype.dtype(), DTypeId::F64.descriptor());
+
+// Or use target-first dynamic rebinding:
+let target: Target<Native, Dyn> = Target::new((), DeviceId::cpu(), ());
+let dynamic_target = target.dtype_dynamic(DTypeId::F64.descriptor())?;
+let dynamic_tensor = dynamic_target.zeros([2, 2])?;
 # Ok::<(), incin::Error>(())
 ```
+
+### Declaring a dtype is not computing in one
+
+Every dtype above *allocates*. Far fewer of them *execute*, and the two are
+separate questions with separate answers. On CPU today `matmul` is `f32` only,
+and elementwise arithmetic is float only, so `i64` addition and `f16` matmul
+are both refused:
+
+```text
+backend 'Cpu' refused the request: dtype f16 is unsupported for matmul
+```
+
+That refusal is generated from the same capability tables as
+[`docs/capabilities.md`](https://github.com/xupremix/incin/blob/master/docs/capabilities.md),
+so the table, the error message, and the kernel cannot disagree. You can ask
+the registry directly instead of trying and catching, which is what
+`cargo incin doctor` does:
+
+```rust,no_run
+use incin::prelude::*;
+use incin_core::exec::{Capabilities, CapabilityQuery, LayoutClass, MathMode};
+use incin_core::shapes::OperationKind;
+use incin_core::tensor::device::DeviceKind;
+use incin_core::tensor::dtype::DTypeId;
+
+let query = CapabilityQuery {
+    operation: incin_core::exec::OperationIdentity::Builtin(OperationKind::MatMul),
+    dtype: DTypeId::F16.descriptor(),
+    layout: LayoutClass::Contiguous,
+    rank: 2,
+    training: false,
+    math_mode: MathMode::Precise,
+};
+let level = incin_backends::capability::registry(DeviceKind::Cpu).support(&query);
+```
+
+`cargo run -p incin --example dtypes --features cpu` runs the whole axis
+end to end: allocation in all eight built-in dtypes, `to_dtype` conversions,
+the registry query above, and the refusal.
 
 ## Arithmetic
 

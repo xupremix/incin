@@ -57,6 +57,14 @@ pub(crate) fn broadcast_storage(t: &WgpuStorage, shape: &[usize]) -> Result<Wgpu
 /// already resolved the output shape at the type level, and made
 /// `Linear::forward` - a matmul plus a rank-one bias add - unusable on this
 /// backend for every model. The backward pass never had that gap: both tape
+/// Op modes of `shaders/binary.wgsl`, named where a gradient path needs one.
+/// The shader's header comment is the full list; these are the ones reached
+/// from a backward closure, where a bare integer would be unreadable.
+const SUB: u32 = 1;
+const MUL: u32 = 2;
+const CMP_LT: u32 = 9;
+const CMP_GT: u32 = 11;
+
 /// entries here have always called `unbroadcast`, which only does anything
 /// when a broadcast actually happened.
 #[allow(clippy::extra_unused_type_parameters)]
@@ -197,6 +205,81 @@ impl<D: Device> WgpuBackendImpl<D> {
             }),
         });
         Ok(out)
+    }
+
+    /// `maximum`, elementwise, with the cotangent routed to the winning side.
+    ///
+    /// The shader's fused mode is the forward. The gradient cannot come from
+    /// it, so the tape entry rebuilds the selection with the comparison mode
+    /// facing the same way the CPU reference does: `cpu::canonical`'s
+    /// `Execute<op::Maximum>` masks on `a > b` and selects `where(mask, lhs,
+    /// rhs)`, so a tie resolves to the right operand and its whole cotangent
+    /// goes there. Masking on `>=` here would agree on every value and disagree
+    /// on every tie, which is the kind of divergence an oracle finds late.
+    pub(crate) fn maximum<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        Self::select_binary::<K>(lhs, rhs, 15, CMP_GT, "maximum")
+    }
+
+    /// `minimum`. See [`maximum`](Self::maximum); the mask faces `a < b`,
+    /// which is what the CPU reference compares on.
+    pub(crate) fn minimum<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        Self::select_binary::<K>(lhs, rhs, 16, CMP_LT, "minimum")
+    }
+
+    /// The shared body of `maximum`/`minimum`: one fused forward, one tape
+    /// entry that splits the cotangent by a 0/1 mask.
+    ///
+    /// `grad_rhs` is `grad_out - grad_lhs` rather than a second masked
+    /// multiply, because the two masks are complements by construction and
+    /// subtracting keeps them that way exactly. Building the complement with a
+    /// separate comparison would let a NaN operand answer `false` to both.
+    fn select_binary<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+        forward_mode: u32,
+        mask_mode: u32,
+        op_name: &'static str,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = binary_op::<K>(lhs, rhs, forward_mode, op_name)?;
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let mask = binary_op::<K>(&lhs_capture, &rhs_capture, mask_mode, op_name)?;
+                let grad_lhs = binary_op::<K>(grad_out, &mask, MUL, op_name)?;
+                let grad_rhs = binary_op::<K>(grad_out, &grad_lhs, SUB, op_name)?;
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(&grad_lhs, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `abs_diff`, composed exactly as the CPU reference composes it.
+    ///
+    /// The shader has a fused mode for this too, and it is deliberately not
+    /// used: `sub` and `abs` each push their own tape entry, so composing them
+    /// gets the gradient for free and gets the same one the CPU path produces,
+    /// including at `a == b` where the subgradient is a convention rather than
+    /// a derivative. A fused forward would need that convention restated here,
+    /// in a second place, where it could drift.
+    pub(crate) fn abs_diff<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let diff = Self::sub::<K>(lhs, rhs)?;
+        Self::abs::<K>(&diff)
     }
 }
 
@@ -413,6 +496,43 @@ impl<D: Device> WgpuBackendImpl<D> {
         });
         Ok(out)
     }
+    /// `softmax(x, axis) = exp(log_softmax(x, axis))`, composed exactly the way
+    /// CPU's kernel composes it, which in turn matches `candle-nn`'s:
+    ///
+    /// ```text
+    /// max     = max_keepdim(x, axis)
+    /// diff    = x - max                     // subtracting the max is what
+    /// exp_d   = exp(diff)                   // keeps exp from overflowing
+    /// sum_exp = sum_keepdim(exp_d, axis)
+    /// log_sm  = diff - log(sum_exp)
+    /// out     = exp(log_sm)
+    /// ```
+    ///
+    /// Every step is already a tape-tracked primitive, so this writes no
+    /// backward code at all: the composite's gradient is the replay of the six
+    /// entries below. `softmax` advertises `training = true`, and that claim is
+    /// only honest because each link in this chain records its own entry.
+    ///
+    /// Going through `log_softmax` rather than the shorter `exp(diff) /
+    /// sum_exp` is deliberate: it is the numerically stable form, and it is the
+    /// form the CPU reference uses, so the two backends agree bit for bit on
+    /// the same input rather than merely agreeing to a tolerance.
+    ///
+    /// The subtractions broadcast: `max` and `sum_exp` keep the reduced axis at
+    /// extent 1, and `binary_op` aligns them against the full shape.
+    pub(crate) fn softmax<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        axis: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let max = Self::max_keepdim::<K>(t, axis)?;
+        let diff = Self::sub::<K>(t, &max)?;
+        let exp_diff = Self::exp::<K>(&diff)?;
+        let sum_exp = Self::sum_keepdim::<K>(&exp_diff, axis)?;
+        let log_sum_exp = Self::log::<K>(&sum_exp)?;
+        let log_softmax = Self::sub::<K>(&diff, &log_sum_exp)?;
+        Self::exp::<K>(&log_softmax)
+    }
+
     /// `log`.
     pub(crate) fn log<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,

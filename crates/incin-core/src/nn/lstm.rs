@@ -1,4 +1,5 @@
 use crate::backend_authoring::SupportsDType;
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::op;
 use crate::nn::init::Init;
@@ -6,6 +7,7 @@ use crate::nn::linear::LinearShape;
 use crate::nn::optional::{False, True};
 use crate::nn::param::{Frozen, TrainState, Trainable};
 use crate::nn::{Linear, Module, VisitParameters};
+use crate::shapes::Layout;
 use crate::shapes::shape::{DimCons, Nil};
 use crate::shapes::{Dim, Dyn, DynShape, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
@@ -516,23 +518,64 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
+    L: Layout,
 >
     Module<(
-        Tensor<D2<Batch, In>, B, K>,
-        (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+        Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+        (
+            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+        ),
     )> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<D2<In, Out>, B, BiasIh, K, Train>:
-        Module<Tensor<D2<Batch, In>, B, K>, Output = Tensor<D2<Batch, Out>, B, K>, Error = Error>,
-    Linear<D2<Out, Out>, B, BiasHh, K, Train>:
-        Module<Tensor<D2<Batch, Out>, B, K>, Output = Tensor<D2<Batch, Out>, B, K>, Error = Error>,
+    Linear<D2<In, Out>, B, BiasIh, K, Train>: Module<
+            Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            Output = Tensor<
+                D2<Batch, Out>,
+                B,
+                K,
+                crate::tensor::grad::NoGrad,
+                Local,
+                crate::shapes::RowMajor<D2<Batch, Out>>,
+            >,
+            Error = Error,
+        >,
+    Linear<D2<Out, Out>, B, BiasHh, K, Train>: Module<
+            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            Output = Tensor<
+                D2<Batch, Out>,
+                B,
+                K,
+                crate::tensor::grad::NoGrad,
+                Local,
+                crate::shapes::RowMajor<D2<Batch, Out>>,
+            >,
+            Error = Error,
+        >,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>);
+    type Output = (
+        Tensor<
+            D2<Batch, Out>,
+            B,
+            K,
+            crate::tensor::grad::NoGrad,
+            Local,
+            crate::shapes::RowMajor<D2<Batch, Out>>,
+        >,
+        Tensor<
+            D2<Batch, Out>,
+            B,
+            K,
+            crate::tensor::grad::NoGrad,
+            Local,
+            crate::shapes::RowMajor<D2<Batch, Out>>,
+        >,
+    );
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -541,8 +584,11 @@ where
     fn forward(
         &self,
         (x, (h_prev, c_prev)): (
-            Tensor<D2<Batch, In>, B, K>,
-            (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+            Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            (
+                Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+                Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            ),
         ),
     ) -> core::result::Result<Self::Output, Error> {
         let i = self

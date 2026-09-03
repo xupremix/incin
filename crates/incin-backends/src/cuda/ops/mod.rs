@@ -1,14 +1,20 @@
 pub(crate) mod compare;
 pub(crate) mod conv;
 pub(crate) mod elementwise;
+#[cfg(test)]
+mod ir_conformance_tests;
 pub(crate) mod kernels;
 pub(crate) mod logical;
 pub(crate) mod matmul;
 pub(crate) mod norm;
+pub(crate) mod optimizer;
 pub(crate) mod pool;
+pub(crate) mod quant;
 pub(crate) mod reduce;
 pub(crate) mod select;
 pub(crate) mod shape;
+#[cfg(all(test, feature = "std"))]
+mod view_cost_bench;
 
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};

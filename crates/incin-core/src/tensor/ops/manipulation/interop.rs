@@ -8,6 +8,7 @@ use crate::exec::Capabilities;
 use crate::exec::catalog::{DTypeAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
@@ -64,8 +65,8 @@ pub(crate) fn scalar_type_matches_dtype<E: 'static>(
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     /// Cast the tensor's elements to another dtype.
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(&self) -> Result<Tensor<S, B, T2, G>>

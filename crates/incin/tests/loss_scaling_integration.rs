@@ -175,7 +175,7 @@ fn test_trainer_fit_scaled_integration() -> TestResult {
         &mut optimizer,
         &mut scaler,
         dataset,
-        |m, batch| m.forward(batch)?.sum_all(),
+        |m, batch| Ok(m.forward(batch)?.sum_all()?.forget_layout()),
     )?;
 
     assert_eq!(outcome.epochs, 2);

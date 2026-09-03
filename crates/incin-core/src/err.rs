@@ -248,14 +248,23 @@ pub enum Error {
     /// A backward pass failed (`GRD-005`).
     Backward(#[from] BackwardError),
 
-    #[error("Backend '{backend}' is unavailable in this build")]
+    #[error(
+        "Backend '{backend}' is unavailable in this build\n  requested: {backend}\n  rule: a backend is compiled in by a cargo feature; selecting one at \
+         run time cannot enable code that was never built\n  fix: add the matching feature to your incin dependency (for example \
+         features = [\"cpu\"], [\"cuda\"], [\"metal\"] or [\"wgpu\"]) and rebuild"
+    )]
     /// A runtime-selected backend was not enabled in this build.
     BackendUnavailable {
         /// Name of the backend involved.
         backend: &'static str,
     },
 
-    #[error("Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'")]
+    #[error(
+        "Dtype {dtype:?} is unsupported by backend '{backend}' for '{op}'\n  operation: {op}\n  backend: {backend}\n  requested dtype: {dtype:?}\n  rule: a capability row states which dtypes an operation accepts on a \
+         backend, and the executor behind it refuses the rest\n  fix: convert the operand with `.to_dtype(..)` to a dtype this row \
+         advertises, or run the operation on a backend that advertises this \
+         one; docs/capabilities.md lists the rows per backend"
+    )]
     /// The backend or operation cannot represent the requested dtype.
     UnsupportedDType {
         /// Dtype the query asks about.

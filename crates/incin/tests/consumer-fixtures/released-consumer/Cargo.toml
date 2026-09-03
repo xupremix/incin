@@ -1,0 +1,15 @@
+[package]
+name = "incin-released-consumer"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+# By version, from the registry, not by path. Every other fixture beside this
+# one resolves `incin` to the working tree, which answers "does the surface
+# exist in this checkout" and cannot answer "does the artifact a reader
+# actually installs work". The version requirement is the one the README's
+# quick start prints, and `the_released_consumer_tracks_the_readme_quick_start`
+# in `facade_contract.rs` fails if the two ever disagree.
+[dependencies]
+incin = "0.1.0"

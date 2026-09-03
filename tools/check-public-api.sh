@@ -4,7 +4,10 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
-python3 tools/check-public-api-baseline.py
+# Forward arguments: the baseline script takes `--update` and an optional crate
+# name, and without "$@" the documented `check-public-api.sh --update` was a
+# silent no-op that re-ran the check and reported the same drift.
+python3 tools/check-public-api-baseline.py "$@"
 
 # Stable facades must name every exported item.  Internal module aggregation
 # may still use local globs, but a wildcard in either consumer-facing facade

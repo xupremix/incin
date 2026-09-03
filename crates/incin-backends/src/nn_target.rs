@@ -90,7 +90,7 @@ where
             let tensor = target.state_tensor(shape_val, GeneratedFill::Uniform)?;
             let range = high - low;
             let scaled = if range != 1.0 {
-                tensor.mul_scalar(range)?
+                tensor.mul_scalar(range)?.forget_layout()
             } else {
                 tensor
             };
@@ -104,7 +104,7 @@ where
         InitPlan::Normal { mean, std } => {
             let tensor = target.state_tensor(shape_val, GeneratedFill::Normal)?;
             let scaled = if std != 1.0 {
-                tensor.mul_scalar(std)?
+                tensor.mul_scalar(std)?.forget_layout()
             } else {
                 tensor
             };

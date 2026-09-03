@@ -15,7 +15,7 @@ dim!(Batch, Seq, Feature);
 /// A function that only accepts a `(Batch, Feature)`-shaped tensor, for example
 /// the output of some per-token feature projection, ready to feed into a
 /// classifier head.
-fn classify(x: &Tensor<s![Batch, Feature]>) -> Tensor<s![Batch]> {
+fn classify(x: &Tensor<s![Batch, Feature]>) -> Dense<s![Batch]> {
     x.sum(axis!(1)).unwrap()
 }
 
@@ -65,7 +65,7 @@ fn main() -> incin::Result<()> {
     // multiply with a named batch dimension, exactly like a real
     // per-sample linear layer applied across a batch:
     let weights: Tensor<s![4, 5]> = Tensor::zeros(()).unwrap();
-    let projected_again: Tensor<s![Batch, 5]> = half.matmul(&weights).unwrap();
+    let projected_again: Dense<s![Batch, 5]> = half.matmul(&weights).unwrap();
     println!("matmul output shape: {:?}", projected_again.dims());
 
     // The ordinary `+` operator, not just `.add()`, works between two

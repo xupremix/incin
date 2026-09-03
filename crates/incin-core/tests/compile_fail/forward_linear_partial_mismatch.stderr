@@ -25,14 +25,14 @@ help: the following other types implement trait `ArgInto<Target>`
   | | }
   | |_- in this macro invocation
   = note: required for `{integer}` to implement `ArgInto<TensorArgsData<(usize, ((), ())), (), (), ()>>`
-note: required by a bound in `base::creation::<impl incin::prelude::Tensor<S, B, K, G>>::zeros`
+note: required by a bound in `base::creation::<impl incin::prelude::Tensor<S, B, K, G, incin::dist::Local, L>>::zeros`
  --> src/tensor/base/creation.rs
   |
   |     pub fn zeros<A>(args: A) -> Result<Self>
   |            ----- required by a bound in this associated function
   |     where
   |         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `base::creation::<impl Tensor<S, B, K, G>>::zeros`
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `base::creation::<impl Tensor<S, B, K, G, Local, L>>::zeros`
   = note: this error originates in the macro `impl_self_arginto` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: Cannot use shape `DimCons<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, Nil>` here: its last dimension must be `UInt<UInt<UTerm, B1>, B1>`

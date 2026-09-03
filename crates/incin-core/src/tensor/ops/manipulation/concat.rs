@@ -7,6 +7,7 @@ use crate::exec::Capabilities;
 use crate::exec::catalog::{PadAttributes, RepeatAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::{Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::base::Tensor;
@@ -15,13 +16,13 @@ use crate::tensor::ops::manipulation::selectors::{ConcatSelector, StackSelector}
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     /// Dynamically concatenates a slice of tensors along `dim`.
     /// This is fallible at runtime if shapes mismatch or dim is out of bounds.
     pub fn try_concat_slice(
-        tensors: &[&Tensor<S, B, K, G>],
+        tensors: &[&Tensor<S, B, K, G, Local, L>],
         dim: usize,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
@@ -307,7 +308,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Dynamically stacks a slice of tensors along `dim`.
     pub fn try_stack_slice(
-        tensors: &[&Tensor<S, B, K, G>],
+        tensors: &[&Tensor<S, B, K, G, Local, L>],
         dim: usize,
     ) -> Result<Tensor<Dyn, B, K, G>>
     where
@@ -615,8 +616,9 @@ pub fn try_stack_tensors<
     B: Backend + Execute<op::StackExact> + Capabilities,
     K: crate::tensor::dtype::DType,
     G: crate::tensor::grad::RequiresGrad,
+    L: Layout,
 >(
-    tensors: &[&Tensor<S, B, K, G>],
+    tensors: &[&Tensor<S, B, K, G, Local, L>],
     dim: usize,
 ) -> Result<Tensor<Dyn, B, K, G>>
 where

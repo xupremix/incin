@@ -1,3 +1,4 @@
+impl core::fmt::Display for incin::update::UpdateStatus
 impl incin::MnistTargetExt for incin_data::vision::mnist::MnistDataset
 impl incin::doctor::Cache
 impl incin::doctor::Feature
@@ -11,8 +12,10 @@ pub const incin::doctor::EXIT_USAGE: i32
 pub const incin::doctor::SCHEMA_VERSION: u32
 pub const incin::experimental::tuning_report::EXIT_OK: i32
 pub const incin::experimental::tuning_report::EXIT_USAGE: i32
+pub const incin::update::CURRENT: &str
 pub enum incin::doctor::CacheState
 pub enum incin::doctor::Severity
+pub enum incin::update::UpdateStatus
 pub fn incin::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 pub fn incin::TargetBatch<T>::batch(&self, alloc::vec::Vec<f32>, alloc::vec::Vec<u8>, usize) -> incin_data::loader::BatchResult<(Self::Images, Self::Labels)>
 pub fn incin::data::MnistTargetExt::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
@@ -41,6 +44,8 @@ pub fn incin::doctor::Report::to_text(&self) -> alloc::string::String
 pub fn incin::doctor::cache_state(&std::path::Path) -> incin::doctor::CacheState
 pub fn incin::doctor::run(&[alloc::string::String]) -> (alloc::string::String, i32)
 pub fn incin::experimental::tuning_report::run(&[alloc::string::String]) -> (alloc::string::String, i32)
+pub fn incin::update::UpdateStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin::update::check() -> incin::update::UpdateStatus
 pub fn incin_data::vision::mnist::MnistDataset::loader_on<T>(self, T) -> incin_data::loader::DataLoaderBuilder<incin_data::vision::mnist::MnistDataset, incin_data::vision::mnist::TensorCollate<incin::TargetBatch<T>>> where T: incin_backends::target::place::TensorTarget + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static, <T as incin_backends::target::place::TensorTarget>::Backend: incin_core::tensor::backend::capability::HostInterop, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Backend as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <<T as incin_backends::target::place::TensorTarget>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 pub incin::doctor::Cache::detail: core::option::Option<alloc::string::String>
 pub incin::doctor::Cache::name: alloc::string::String
@@ -83,6 +88,15 @@ pub incin::doctor::Severity::Note
 pub incin::doctor::Severity::Warning
 pub incin::doctor::Toolchain::incin: alloc::string::String
 pub incin::doctor::Toolchain::rustc: core::option::Option<alloc::string::String>
+pub incin::update::UpdateStatus::Available
+pub incin::update::UpdateStatus::Available::latest: alloc::string::String
+pub incin::update::UpdateStatus::Available::running: alloc::string::String
+pub incin::update::UpdateStatus::Current
+pub incin::update::UpdateStatus::Current::running: alloc::string::String
+pub incin::update::UpdateStatus::NotCompiledIn
+pub incin::update::UpdateStatus::Offline
+pub incin::update::UpdateStatus::Unknown
+pub incin::update::UpdateStatus::Unknown::reason: alloc::string::String
 pub mod incin
 pub mod incin::advanced
 pub mod incin::data
@@ -99,6 +113,7 @@ pub mod incin::state
 pub mod incin::transforms
 pub mod incin::types
 pub mod incin::types::dtype
+pub mod incin::update
 pub struct incin::TargetBatch<T>(pub T)
 pub struct incin::doctor::Cache
 pub struct incin::doctor::DeviceReport
@@ -118,6 +133,7 @@ pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
 pub type incin::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
 pub type incin::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
 pub type incin::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::Dense<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
 pub type incin::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
 pub type incin::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
@@ -128,19 +144,20 @@ pub type incin::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
 pub type incin::Sequential<L1, L2> = incin_core::nn::module::Sequential<L1, L2>
 pub type incin::TargetBatch<T>::Images = incin_core::tensor::base::types::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::place::TensorTarget>::Backend>
 pub type incin::TargetBatch<T>::Labels = incin_core::tensor::base::types::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::place::TensorTarget>::Backend, u8>
-pub type incin::Tensor<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P>
+pub type incin::Tensor<S, B, K, G, P, L> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, L>
 pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
 pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
 pub type incin::prelude::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
 pub type incin::prelude::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
 pub type incin::prelude::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::prelude::Dense<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin::prelude::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
 pub type incin::prelude::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
 pub type incin::prelude::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
 pub type incin::prelude::Param<T, B> = incin_core::nn::param::Param<T, B>
 pub type incin::prelude::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
 pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
-pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P>
+pub type incin::prelude::Tensor<S, B, K, G, P, L> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, L>
 pub use incin::Adam
 pub use incin::AdamW
 pub use incin::BackendError
@@ -236,6 +253,7 @@ pub use incin::data::Downloader
 pub use incin::data::MnistBatchTarget
 pub use incin::data::vision
 pub use incin::dim
+pub use incin::experimental::autotune
 pub use incin::experimental::import_model
 pub use incin::experimental::model
 pub use incin::f16
@@ -369,6 +387,7 @@ pub use incin::prelude::ConstDType
 pub use incin::prelude::ConstDevice
 pub use incin::prelude::ConstDim
 pub use incin::prelude::ConstantLR
+pub use incin::prelude::Contiguous
 pub use incin::prelude::ConversionFailure
 pub use incin::prelude::CosineAnnealingLR
 pub use incin::prelude::Cpu
@@ -398,6 +417,7 @@ pub use incin::prelude::FlattenAxes
 pub use incin::prelude::FloatDType
 pub use incin::prelude::FloatToIntPolicy
 pub use incin::prelude::Format
+pub use incin::prelude::FreshDense
 pub use incin::prelude::GELU
 pub use incin::prelude::GeneratedFill
 pub use incin::prelude::Grad
@@ -411,6 +431,7 @@ pub use incin::prelude::L1Loss
 pub use incin::prelude::LRScheduler
 pub use incin::prelude::LSTM
 pub use incin::prelude::LSTMCell
+pub use incin::prelude::Layout
 pub use incin::prelude::LinearLR
 pub use incin::prelude::LossScaleState
 pub use incin::prelude::LossScaling
@@ -442,6 +463,7 @@ pub use incin::prelude::Reduction
 pub use incin::prelude::RequiresGrad
 pub use incin::prelude::ReshapeShape
 pub use incin::prelude::Result
+pub use incin::prelude::RowMajor
 pub use incin::prelude::SGD
 pub use incin::prelude::STATE_FORMAT_VERSION
 pub use incin::prelude::SameCount

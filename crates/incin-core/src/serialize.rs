@@ -121,9 +121,149 @@ pub(crate) fn serialize_snapshot_safetensors(
 }
 
 #[cfg(feature = "std")]
+/// A `.json` path names a sharded-checkpoint index (`*.safetensors.index.json`
+/// by convention); anything else is a single safetensors file.
+fn looks_like_safetensors_index(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+}
+
+/// Loads a sharded checkpoint through its validated
+/// [`SafetensorsIndex`](crate::nn::safetensors_index::SafetensorsIndex) as one
+/// logical state dictionary.
+///
+/// Shard iteration order is sorted shard name, and the final key order of the
+/// snapshot is deterministic because `StateSnapshot` is order-independent.
+/// Structural honesty checks mirror the index contract: a shard containing a
+/// tensor the index does not map, a tensor mapped to two shards, or an index
+/// claim its shard does not contain are all errors naming the tensor and
+/// shard. Sharded checkpoints are external artifacts by construction, so
+/// entries load under foreign-file semantics (no `incin.format.version`
+/// requirement).
+#[cfg(feature = "std")]
+pub(crate) fn deserialize_snapshot_safetensors_index(
+    path: &std::path::Path,
+) -> anyhow::Result<StateSnapshot> {
+    use crate::nn::safetensors_index::SafetensorsIndex;
+    use alloc::collections::BTreeSet;
+    use alloc::string::String;
+
+    let index = SafetensorsIndex::open(path).map_err(|error| anyhow::anyhow!("{error}"))?;
+
+    if let Some(declared) = index.total_size() {
+        let mut actual = 0u64;
+        for shard in index.shards() {
+            let len = std::fs::metadata(index.shard_path(shard))
+                .map_err(|e| anyhow::anyhow!("statting shard `{shard}` failed: {e}"))?
+                .len();
+            actual = actual.saturating_add(len);
+        }
+        if actual != declared {
+            return Err(anyhow::anyhow!(
+                "index declares total_size {declared} but its shards total {actual} bytes"
+            ));
+        }
+    }
+
+    let mut snapshot = StateSnapshot::new();
+    let mut loaded: BTreeSet<String> = BTreeSet::new();
+    for shard in index.shards() {
+        let bytes = index
+            .read_shard(shard)
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
+        let metadata = header.metadata();
+        let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
+        for (name, view) in tensors.tensors() {
+            match index.shard_of(&name) {
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "shard `{shard}` contains tensor `{name}`, which the index does not map"
+                    ));
+                }
+                Some(owner) if owner != shard => {
+                    return Err(anyhow::anyhow!(
+                        "tensor `{name}` is mapped to shard `{owner}` but also appears in shard `{shard}`"
+                    ));
+                }
+                Some(_) => {}
+            }
+            loaded.insert(String::from(&name));
+            let role = match metadata
+                .as_ref()
+                .and_then(|items| items.get(&alloc::format!("incin.state.role.{name}")))
+            {
+                Some(role_str) => match role_str.as_str() {
+                    "parameter" => StateRole::Parameter,
+                    "buffer" => StateRole::Buffer,
+                    other => anyhow::bail!("unknown state role {other:?} for entry {name}"),
+                },
+                None => StateRole::Parameter,
+            };
+            snapshot.insert(
+                StatePath::new(name)?,
+                StateValue::new(
+                    ShapeBuf::from_slice(view.shape()),
+                    dtype_from_safetensors(view.dtype())?,
+                    view.data().to_vec(),
+                    role,
+                )?,
+            )?;
+        }
+    }
+
+    for (name, shard) in index.tensors() {
+        if !loaded.contains(name) {
+            return Err(anyhow::anyhow!(
+                "the index maps tensor `{name}` to shard `{shard}`, which does not contain it"
+            ));
+        }
+    }
+
+    // Duplicate ownership also hides outside the map: a sibling shard the
+    // index never references can carry a copy of a mapped tensor, and
+    // whichever file a later consumer happens to open would silently win.
+    let mapped: std::collections::BTreeSet<&str> = index.shards().into_iter().collect();
+    let entries = std::fs::read_dir(index.root())
+        .map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?;
+    for entry in entries {
+        let path = entry
+            .map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?
+            .path();
+        let is_shard_file = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("safetensors"));
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(alloc::string::ToString::to_string);
+        let Some(file_name) = file_name else { continue };
+        if !is_shard_file || mapped.contains(file_name.as_str()) {
+            continue;
+        }
+        let bytes = std::fs::read(&path)
+            .map_err(|e| anyhow::anyhow!("reading unreferenced shard `{file_name}` failed: {e}"))?;
+        let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
+        for (name, _) in tensors.tensors() {
+            if let Some(owner) = index.shard_of(&name) {
+                return Err(anyhow::anyhow!(
+                    "tensor `{name}` is mapped to shard `{owner}` but also appears in unreferenced shard `{file_name}`"
+                ));
+            }
+        }
+    }
+    Ok(snapshot)
+}
+
+#[cfg(feature = "std")]
 pub(crate) fn deserialize_snapshot_safetensors(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
+    if looks_like_safetensors_index(path) {
+        return deserialize_snapshot_safetensors_index(path);
+    }
     let bytes = std::fs::read(path)?;
     let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
     let metadata = header.metadata().as_ref();

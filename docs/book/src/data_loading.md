@@ -113,3 +113,44 @@ model-ready image and integer-label tensors with `NoGrad` markers.
 `incin_data::transforms` has the common image-augmentation set:
 `CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, and `Scale`,
 implementing a shared `Transform` trait, composable with `Compose`.
+
+## Data-parallel sampling
+
+`DistributedSampler` splits one epoch across ranks without communication:
+every rank derives the same permutation from `(seed, epoch)` and reads only
+its own stride-`world_size` slice of it. Rank and world size come from your
+distributed context, not from ambient process state.
+
+```rust,ignore
+let mut loader = DataLoader::builder(dataset)
+    .batch_size(32)
+    .shuffle(true)
+    .seed(42)
+    .sampler(DistributedSampler {
+        world_size,
+        rank,
+        remainder: RemainderPolicy::Drop,
+    })
+    .build()?;
+
+for epoch in 0..epochs {
+    loader.set_epoch(epoch); // fresh partition per epoch, consistent across ranks
+    for batch in &loader { /* ... */ }
+}
+```
+
+The remainder policy is explicit because the two choices are not
+interchangeable:
+
+- **`RemainderPolicy::Drop`** truncates the shared permutation so every rank
+  sees only unique samples; at most `world_size - 1` trailing samples go
+  unseen that epoch. Pair it with `.drop_last(true)` when equal step counts
+  matter.
+- **`RemainderPolicy::Pad`** repeats samples from the start of the permutation
+  until the length divides evenly. Every rank runs exactly the same number of
+  steps, which synchronized collectives require &mdash; but samples are
+  double-counted, so a validation metric computed under `Pad` is wrong by a
+  small, silent amount. Train with whichever fits; evaluate with `Drop`.
+
+A sampler with `world_size: 1` is behaviorally identical to no sampler at
+all, and `rank >= world_size` is a construction error rather than a panic.

@@ -95,7 +95,15 @@ jobs:
               exit 1
             fi
             cuda=false
-            echo "::warning::CUDA hardware job skipped: HARDWARE_CUDA_RUNNER is unset, so no NVIDIA runner is registered"
+            # The collective jobs inherit the CUDA runner: without one they
+            # would schedule onto the GPU-less ubuntu-latest fallback and run
+            # NCCL with no device and no second rank. Skip them too, loudly,
+            # so a skipped run can never masquerade as a passing one.
+            if [ "$dist2_network" = "true" ] || [ "$multinode" = "true" ]; then
+              echo "::warning::CUDA collective jobs skipped alongside the CUDA hardware job: HARDWARE_CUDA_RUNNER is unset, so there is no GPU and no second rank to run them on"
+            fi
+            dist2_network=false
+            multinode=false
           fi
           if [ -z "${WGPU_RUNNER:-}" ]; then
             wgpu_native=false
@@ -169,14 +177,14 @@ jobs:
             -- --ignored 2>&1 | tee hardware.log
           # A run with no device present reports "0 passed" and exits zero, which
           # is indistinguishable from a pass by exit code alone. EXE-004,
-          # EXE-005, and EXE-008 were discharged by 63 ignored tests; require
-          # that the suite still executes rather than evaporates.
-          passed=$(awk '/^test result: ok\./ { gsub(/\./, "", $4); total += $4 } END { print total + 0 }' hardware.log)
-          echo "ignored CUDA tests executed: $passed"
-          if [ "$passed" -lt 60 ]; then
-            echo "::error::only $passed ignored CUDA tests ran; expected at least 60. The device or driver is probably missing."
-            exit 1
-          fi
+          # EXE-005, and EXE-008 were discharged by this suite, so require that
+          # it still executes rather than evaporates.
+          #
+          # The expected count is derived from the `#[ignore]` reasons in the
+          # tree rather than written here: a literal floor does not track the
+          # suite, and the previous one (60, against 65 actual) had room for a
+          # whole suite to disappear inside it.
+          cargo run -q -p xtask -- hardware-tests hardware.log
 
       - name: Storage metadata against real device pointers
         run: cargo test -p incin-backends --features cuda --test tensor_meta -- --ignored

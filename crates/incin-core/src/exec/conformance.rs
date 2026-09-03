@@ -150,6 +150,16 @@ pub static SEMANTIC_CONFORMANCE_VECTORS: &[ConformanceVector] = &[
         expected_shape: SHAPE_SCALAR,
         disposition: ExpectedDisposition::TypedError,
     },
+    ConformanceVector {
+        name: "log-softmax-axis-equals-rank",
+        operation: OperationKind::LogSoftmax,
+        class: ConformanceClass::InvalidAxis,
+        inputs: &[A],
+        input_shapes: &[SHAPE_2X2],
+        expected: EMPTY,
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::TypedError,
+    },
     // Dtype casts follow Rust's `as` semantics: fractional values truncate
     // toward zero deterministically. Exact-conversion policy boundaries
     // (scalar readback, embedding indices) are separate checked paths and
@@ -306,6 +316,25 @@ pub static SEMANTIC_CONFORMANCE_VECTORS: &[ConformanceVector] = &[
         expected_shape: SHAPE_SCALAR,
         disposition: ExpectedDisposition::Succeeds,
     },
+    // A pair two thousand apart along the reduced axis. The smaller entry
+    // contributes `e^-2000`, which is zero in f32 and would be zero in f64 too,
+    // so the answer is the larger entry exactly, and the row can be read without
+    // knowing the accumulation order.
+    //
+    // The same pair rules out the naive spelling. `log(sum(exp(x)))` reaches
+    // `exp(1000)` first, which is infinity in f32, and the logarithm of infinity
+    // is infinity rather than 1000. Shifting by the axis maximum is what this
+    // row exists to require.
+    ConformanceVector {
+        name: "logsumexp-is-the-maximum-when-the-rest-underflows",
+        operation: OperationKind::LogSumExpDim,
+        class: ConformanceClass::Normal,
+        inputs: &[&[1000.0, -1000.0]],
+        input_shapes: &[&[2]],
+        expected: &[1000.0],
+        expected_shape: SHAPE_SCALAR,
+        disposition: ExpectedDisposition::Succeeds,
+    },
     ConformanceVector {
         name: "max-all-elements",
         operation: OperationKind::MaxAll,
@@ -355,6 +384,27 @@ pub static SEMANTIC_CONFORMANCE_VECTORS: &[ConformanceVector] = &[
         inputs: &[&[0.0, 0.0]],
         input_shapes: &[&[2]],
         expected: &[0.5, 0.5],
+        expected_shape: SHAPE_1,
+        disposition: ExpectedDisposition::Succeeds,
+    },
+    // A pair a thousand apart, chosen so the answer is exact and so that the
+    // composition cannot produce it. The larger logit takes essentially all the
+    // mass, so its log-probability is zero and the other's is the gap itself,
+    // and both are representable without rounding. The operation is still
+    // transcendental and consumers still grant it that tolerance; the point of
+    // choosing these inputs is that the row does not need the allowance, so a
+    // backend cannot hide a wrong answer inside it.
+    //
+    // The same row rules out answering `log_softmax` with `log(softmax(x))`.
+    // That path exponentiates the gap, which underflows to zero in f32, and the
+    // logarithm of zero is negative infinity rather than `-1000`.
+    ConformanceVector {
+        name: "log-softmax-keeps-a-logit-a-thousand-below-the-maximum",
+        operation: OperationKind::LogSoftmax,
+        class: ConformanceClass::Normal,
+        inputs: &[&[0.0, -1000.0]],
+        input_shapes: &[&[2]],
+        expected: &[0.0, -1000.0],
         expected_shape: SHAPE_1,
         disposition: ExpectedDisposition::Succeeds,
     },

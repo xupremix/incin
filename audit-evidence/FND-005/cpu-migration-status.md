@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<O>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**158 of 158 backend-executable operations migrated**, out of 174 catalog operations in total.
+**163 of 163 backend-executable operations migrated**, out of 179 catalog operations in total.
 
 ## Backend-executable operations
 
@@ -38,6 +38,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `sigmoid` | `Kernel` | yes | `::sigmoid` |
 | `swish` | `Kernel` | yes | `::swish` |
 | `softmax` | `Kernel` | yes | `::softmax` |
+| `log_softmax` | `Kernel` | yes | `::log_softmax` |
 | `add_scalar` | `Kernel` | yes | `::add_scalar_float` |
 | `mul_scalar` | `Kernel` | yes | `::mul_scalar_float` |
 | `powf` | `Kernel` | yes | `::powf` |
@@ -87,6 +88,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `logical_not` | `Kernel` | yes | `::logical_not` |
 | `reshape` | `Kernel` | yes | `::reshape` |
 | `transpose` | `Kernel` | yes | `::transpose` |
+| `transpose_view` | `Kernel` | yes | `::transpose_view` |
 | `matmul` | `Kernel` | yes | `::matmul` |
 | `dot` | `Kernel` | yes | `Tensor::dot` |
 | `outer` | `Kernel` | yes | `Tensor::outer` |
@@ -100,6 +102,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `where_cond` | `Kernel` | yes | `::where_cond` |
 | `gather` | `Kernel` | yes | `::gather` |
 | `scatter` | `Kernel` | yes | `::scatter` |
+| `scatter_add` | `Kernel` | yes | `::scatter_add` |
 | `index_select` | `Kernel` | yes | `::index_select` |
 | `masked_fill` | `Kernel` | yes | `::masked_fill` |
 | `unsqueeze` | `Kernel` | yes | `::unsqueeze` |
@@ -137,6 +140,8 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `min_keepdim` | `Kernel` | yes | `::min_keepdim` |
 | `argmax` | `Kernel` | yes | `::argmax` |
 | `argmin` | `Kernel` | yes | `::argmin` |
+| `logsumexp_dim` | `Kernel` | yes | `::logsumexp_dim` |
+| `logsumexp_keepdim` | `Kernel` | yes | `::logsumexp_keepdim` |
 | `prod_all` | `Kernel` | yes | `::prod_all` |
 | `prod_dim` | `Kernel` | yes | `::prod_dim` |
 | `cumsum` | `Kernel` | yes | `::cumsum` |

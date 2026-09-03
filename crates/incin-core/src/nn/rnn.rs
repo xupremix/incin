@@ -392,7 +392,14 @@ where
     G: GradJoin<Train::TensorGrad>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<D2<Batch, S::Out>, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = Tensor<
+        D2<Batch, S::Out>,
+        B,
+        K,
+        JoinedGrad<G, Train::TensorGrad>,
+        crate::dist::Local,
+        crate::shapes::RowMajor<D2<Batch, S::Out>>,
+    >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -553,7 +560,14 @@ where
                 Tensor<D2<Batch, S::In>, B, K, G>,
                 Tensor<D2<Batch, S::Out>, B, K, G>,
             ),
-            Output = Tensor<D2<Batch, S::Out>, B, K, G>,
+            Output = Tensor<
+                D2<Batch, S::Out>,
+                B,
+                K,
+                G,
+                crate::dist::Local,
+                crate::shapes::RowMajor<D2<Batch, S::Out>>,
+            >,
             Error = Error,
         >,
 {
@@ -580,7 +594,12 @@ where
         for i in 0..seq_len {
             let x_step = x.clone().try_narrow(1isize, i, 1)?.try_squeeze(1isize)?;
             let x_step_static: Tensor<D2<Batch, S::In>, B, K, G> = x_step.into_shape()?;
-            h = self.cell.forward((x_step_static, h))?;
+            // `h` is carried across iterations and its initial value is the
+            // caller's, which proves nothing. The cell's result is dense, but
+            // the loop variable can only hold what every assignment to it
+            // satisfies, so the proof is dropped rather than forced on the
+            // seed.
+            h = self.cell.forward((x_step_static, h))?.forget_layout();
             outputs.push(h.clone().into_shape::<Dyn>()?);
         }
 

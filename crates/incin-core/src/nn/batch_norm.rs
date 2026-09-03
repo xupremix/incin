@@ -6,6 +6,7 @@ use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Buffer, Module, Param};
+use crate::shapes::Layout;
 use crate::shapes::{Dim, Dyn, DynShape, HasChannels2D, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
@@ -276,18 +277,27 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::BatchNorm>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InS, B, K>> for BatchNorm2d<S, B, K, Train>
+    L: Layout,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for BatchNorm2d<S, B, K, Train>
 where
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<InS, B, K>;
+    ///
+    /// `Dense`, not the operand's layout. Every call dispatches and writes a
+    /// fresh buffer -- there is no identity path here the way there is in
+    /// [`Dropout`](crate::nn::Dropout) -- so carrying the operand's claim would
+    /// describe a buffer the operand never touched.
+    type Output = crate::shapes::Dense<InS, B, K, crate::tensor::grad::NoGrad, Local>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Self::Error> {
+    fn forward(
+        &self,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>,
+    ) -> core::result::Result<Self::Output, Self::Error> {
         let weight = self.weight.as_tensor()?.into_dyn();
         let bias = self.bias.as_tensor()?.into_dyn();
         let running_mean = self.running_mean.as_tensor()?.into_dyn();

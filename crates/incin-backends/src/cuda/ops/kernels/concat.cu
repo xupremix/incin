@@ -1,10 +1,14 @@
-// NVRTC has no default header search path, so <stdint.h> isn't resolvable
-// without an explicit --include-path; define the one typedef we need instead.
-typedef unsigned int uint32_t;
+// Multi-width concatenation kernel for CUDA.
 
-extern "C" __global__ void concat_f32(
-    const float* __restrict__ input,
-    float* __restrict__ output,
+typedef unsigned int uint32_t;
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned long long uint64_t;
+
+template <typename T>
+__device__ void concat_impl(
+    const T* __restrict__ input,
+    T* __restrict__ output,
     uint32_t outer_size,
     uint32_t in_dim_size,
     uint32_t out_dim_size,
@@ -25,4 +29,64 @@ extern "C" __global__ void concat_f32(
                        inner_idx;
                        
     output[out_idx] = input[idx];
+}
+
+extern "C" __global__ void concat_f32(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    uint32_t outer_size,
+    uint32_t in_dim_size,
+    uint32_t out_dim_size,
+    uint32_t inner_size,
+    uint32_t offset
+) {
+    concat_impl<float>(input, output, outer_size, in_dim_size, out_dim_size, inner_size, offset);
+}
+
+extern "C" __global__ void concat_8bit(
+    const uint8_t* __restrict__ input,
+    uint8_t* __restrict__ output,
+    uint32_t outer_size,
+    uint32_t in_dim_size,
+    uint32_t out_dim_size,
+    uint32_t inner_size,
+    uint32_t offset
+) {
+    concat_impl<uint8_t>(input, output, outer_size, in_dim_size, out_dim_size, inner_size, offset);
+}
+
+extern "C" __global__ void concat_16bit(
+    const uint16_t* __restrict__ input,
+    uint16_t* __restrict__ output,
+    uint32_t outer_size,
+    uint32_t in_dim_size,
+    uint32_t out_dim_size,
+    uint32_t inner_size,
+    uint32_t offset
+) {
+    concat_impl<uint16_t>(input, output, outer_size, in_dim_size, out_dim_size, inner_size, offset);
+}
+
+extern "C" __global__ void concat_32bit(
+    const uint32_t* __restrict__ input,
+    uint32_t* __restrict__ output,
+    uint32_t outer_size,
+    uint32_t in_dim_size,
+    uint32_t out_dim_size,
+    uint32_t inner_size,
+    uint32_t offset
+) {
+    concat_impl<uint32_t>(input, output, outer_size, in_dim_size, out_dim_size, inner_size, offset);
+}
+
+extern "C" __global__ void concat_64bit(
+    const uint64_t* __restrict__ input,
+    uint64_t* __restrict__ output,
+    uint32_t outer_size,
+    uint32_t in_dim_size,
+    uint32_t out_dim_size,
+    uint32_t inner_size,
+    uint32_t offset
+) {
+    concat_impl<uint64_t>(input, output, outer_size, in_dim_size, out_dim_size, inner_size, offset);
 }

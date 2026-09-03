@@ -57,6 +57,135 @@ enum Node {
     Dir(BTreeMap<String, Node>),
 }
 
+/// Reads a sharded checkpoint's `weight_map` with duplicate-key rejection and
+/// bare-file-name validation, mirroring the runtime reader's contract.
+///
+/// Returns the resolved absolute shard paths in sorted order plus every
+/// mapped tensor's shape, keyed by tensor name.
+/// Resolved shard paths plus each mapped tensor's shape.
+type IndexShapes = (Vec<PathBuf>, BTreeMap<String, Vec<usize>>);
+
+fn resolve_index_shapes(index_path: &std::path::Path) -> Result<IndexShapes> {
+    fn malformed(message: impl std::fmt::Display) -> syn::Error {
+        syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!("safetensors index: {message}"),
+        )
+    }
+
+    struct WeightMapVisitor;
+    impl<'de> serde::de::Visitor<'de> for WeightMapVisitor {
+        type Value = Vec<(String, String)>;
+        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("a JSON object mapping tensor names to shard file names")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(
+            self,
+            mut map: A,
+        ) -> std::result::Result<Self::Value, A::Error> {
+            let mut pairs = Vec::new();
+            while let Some(name) = map.next_key::<String>()? {
+                let shard: String = map.next_value()?;
+                if pairs.iter().any(|(seen, _)| seen == &name) {
+                    return Err(serde::de::Error::custom(format!(
+                        "duplicate entry for tensor `{name}`"
+                    )));
+                }
+                pairs.push((name, shard));
+            }
+            Ok(pairs)
+        }
+    }
+
+    #[derive(serde::Deserialize)]
+    struct RawIndex {
+        #[serde(default)]
+        #[serde(deserialize_with = "reject_duplicates")]
+        weight_map: Vec<(String, String)>,
+    }
+    fn reject_duplicates<'de, D>(de: D) -> std::result::Result<Vec<(String, String)>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        de.deserialize_map(WeightMapVisitor)
+    }
+
+    let raw = fs::read_to_string(index_path)
+        .map_err(|e| malformed(format!("reading {:?} failed: {e}", index_path.display())))?;
+    let parsed: RawIndex =
+        serde_json::from_str(&raw).map_err(|e| malformed(format!("invalid index JSON: {e}")))?;
+
+    let root = index_path.parent().ok_or_else(|| {
+        malformed(format!(
+            "{:?} has no parent directory",
+            index_path.display()
+        ))
+    })?;
+
+    let mut shard_set = std::collections::BTreeSet::new();
+    for (tensor, shard) in &parsed.weight_map {
+        if shard.is_empty()
+            || std::path::Path::new(shard).is_absolute()
+            || !std::path::Path::new(shard)
+                .components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)))
+        {
+            return Err(malformed(format!(
+                "tensor `{tensor}` maps to `{shard}`, which is not a bare file name under the checkpoint root"
+            )));
+        }
+        shard_set.insert(shard.clone());
+    }
+
+    let mut shard_paths = Vec::new();
+    for shard in &shard_set {
+        let path = root.join(shard);
+        if !path.is_file() {
+            return Err(malformed(format!(
+                "shard `{shard}` referenced by the index is missing at {}",
+                path.display()
+            )));
+        }
+        shard_paths.push(path);
+    }
+
+    let mut shapes = BTreeMap::new();
+    for shard_path in &shard_paths {
+        let buffer = fs::read(shard_path)
+            .map_err(|e| malformed(format!("reading {shard_path:?} failed: {e}")))?;
+        let st = SafeTensors::deserialize(&buffer)
+            .map_err(|e| malformed(format!("parsing {shard_path:?} failed: {e:?}")))?;
+        for (tname, tensor) in st.tensors() {
+            if shapes
+                .insert(tname.clone(), tensor.shape().to_vec())
+                .is_some()
+            {
+                return Err(malformed(format!(
+                    "tensor `{tname}` appears in more than one shard"
+                )));
+            }
+        }
+    }
+    Ok((shard_paths, shapes))
+}
+
+/// Newest modification time across the index and its shards, used for
+/// metadata-cache validity so a re-sharded checkpoint invalidates the cache.
+fn newest_input_mtime(
+    index_path: &std::path::Path,
+    shard_paths: &[PathBuf],
+) -> Option<std::time::SystemTime> {
+    let mut newest = fs::metadata(index_path).ok()?.modified().ok()?;
+    for path in shard_paths {
+        if let Ok(time) = fs::metadata(path).ok()?.modified()
+            && time > newest
+        {
+            newest = time;
+        }
+    }
+    Some(newest)
+}
+
 impl Node {
     /// Insert.
     fn insert(&mut self, path: &[&str], shape: Vec<usize>) {
@@ -164,13 +293,28 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
             "TorchScript parsing is scheduled for a future update! Use .onnx or .safetensors."
                 .to_string();
         return quote! { compile_error!(#msg); }.into();
-    } else if !rel_path.ends_with(".safetensors") {
+    } else if !rel_path.ends_with(".safetensors") && !rel_path.ends_with(".json") {
         let msg = format!("Unsupported model file format: {}", rel_path);
         return quote! { compile_error!(#msg); }.into();
     }
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let full_path = PathBuf::from(manifest_dir).join(&rel_path);
+
+    // A `.json` path names a sharded checkpoint index: resolve every shard
+    // offline, right here, from explicitly named local files only.
+    let shard_paths = if rel_path.ends_with(".json") {
+        match resolve_index_shapes(&full_path) {
+            Ok((paths, _shapes)) => paths,
+            Err(error) => {
+                let message = error.to_string();
+                return quote! { compile_error!(#message); }.into();
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
     let Some(extension) = full_path
         .extension()
         .and_then(|extension| extension.to_str())
@@ -182,15 +326,20 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
 
     let mut root = Node::Dir(BTreeMap::new());
 
+    let newest_input = if shard_paths.is_empty() {
+        fs::metadata(&full_path)
+            .ok()
+            .and_then(|m| m.modified().ok())
+    } else {
+        newest_input_mtime(&full_path, &shard_paths)
+    };
+
     let use_cache = if std::env::var("INCIN_DISABLE_META_CACHE").unwrap_or_default() == "1" {
         false
-    } else if let (Ok(orig_meta), Ok(cache_meta)) =
-        (fs::metadata(&full_path), fs::metadata(&meta_path))
-    {
-        if let (Ok(orig_time), Ok(cache_time)) = (orig_meta.modified(), cache_meta.modified()) {
-            cache_time >= orig_time
-        } else {
-            false
+    } else if let (Some(orig_time), Ok(cache_meta)) = (newest_input, fs::metadata(&meta_path)) {
+        match cache_meta.modified() {
+            Ok(cache_time) => cache_time >= orig_time,
+            Err(_) => false,
         }
     } else {
         false
@@ -209,29 +358,38 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
     if let Node::Dir(ref map) = root
         && map.is_empty()
     {
-        // Need to parse from original file
-        let buffer = match fs::read(&full_path) {
-            Ok(b) => b,
-            Err(e) => {
-                let msg = format!("Failed to read safetensors file {:?}: {}", full_path, e);
-                return quote! { compile_error!(#msg); }.into();
-            }
-        };
-
-        let st = match SafeTensors::deserialize(&buffer) {
-            Ok(st) => st,
-            Err(e) => {
-                let msg = format!("Failed to parse safetensors file {:?}: {:?}", full_path, e);
-                return quote! { compile_error!(#msg); }.into();
-            }
-        };
-
+        // Parse from the original input(s): one safetensors file, or every
+        // shard of an index in sorted order.
         let mut meta_map = BTreeMap::new();
-        for (tname, tensor) in st.tensors() {
-            let shape = tensor.shape().to_vec();
-            let parts: Vec<&str> = tname.split('.').collect();
-            root.insert(&parts, shape.clone());
-            meta_map.insert(tname.clone(), shape);
+        let mut record_shard =
+            |buffer: &[u8], source: &PathBuf| -> std::result::Result<(), String> {
+                let st = SafeTensors::deserialize(buffer)
+                    .map_err(|e| format!("Failed to parse safetensors file {source:?}: {e:?}"))?;
+                for (tname, tensor) in st.tensors() {
+                    let shape = tensor.shape().to_vec();
+                    let parts: Vec<&str> = tname.split('.').collect();
+                    root.insert(&parts, shape.clone());
+                    if meta_map.insert(tname.clone(), shape).is_some() {
+                        return Err(format!("tensor `{tname}` appears in more than one shard"));
+                    }
+                }
+                Ok(())
+            };
+
+        let outcome: std::result::Result<(), String> = if shard_paths.is_empty() {
+            fs::read(&full_path)
+                .map_err(|e| format!("Failed to read safetensors file {:?}: {}", full_path, e))
+                .and_then(|buffer| record_shard(&buffer, &full_path))
+        } else {
+            shard_paths.iter().try_for_each(|shard_path| {
+                fs::read(shard_path)
+                    .map_err(|e| format!("Failed to read shard {shard_path:?}: {e}"))
+                    .and_then(|buffer| record_shard(&buffer, shard_path))
+            })
+        };
+
+        if let Err(message) = outcome {
+            return quote! { compile_error!(#message); }.into();
         }
 
         // Save cache
@@ -272,6 +430,100 @@ pub(crate) fn import_model(_attr: TokenStream, item: TokenStream) -> TokenStream
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Writes one shard file and returns its byte length.
+    fn write_shard(dir: &std::path::Path, file: &str, tensors: &[(&str, Vec<f32>)]) -> u64 {
+        let raw: Vec<Vec<u8>> = tensors
+            .iter()
+            .map(|(_, values)| values.iter().flat_map(|v| v.to_le_bytes()).collect())
+            .collect();
+        let mut views = BTreeMap::new();
+        for ((name, values), bytes) in tensors.iter().zip(&raw) {
+            let view = safetensors::tensor::TensorView::new(
+                safetensors::tensor::Dtype::F32,
+                vec![values.len()],
+                bytes,
+            )
+            .unwrap();
+            views.insert((*name).to_string(), view);
+        }
+        let path = dir.join(file);
+        safetensors::tensor::serialize_to_file(&views, None, &path).unwrap();
+        std::fs::metadata(&path).unwrap().len()
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("incin-macro-index-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn an_index_resolves_all_shards_into_one_sorted_shape_map() {
+        let dir = scratch("resolve");
+        write_shard(&dir, "b.safetensors", &[("head.bias", vec![2.0, 3.0])]);
+        write_shard(&dir, "a.safetensors", &[("layer.w", vec![1.0])]);
+        let index_path = write_index_fixture(
+            &dir,
+            r#"{"weight_map": {"head.bias": "b.safetensors", "layer.w": "a.safetensors"}}"#,
+        );
+
+        let (paths, shapes) = resolve_index_shapes(&index_path).unwrap();
+        // Shards are visited in sorted order regardless of map order.
+        assert!(paths[0].ends_with("a.safetensors"));
+        assert!(paths[1].ends_with("b.safetensors"));
+        assert_eq!(shapes.len(), 2);
+        assert_eq!(shapes["head.bias"], vec![2]);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn duplicate_weight_map_keys_are_rejected() {
+        let dir = scratch("dup");
+        write_shard(&dir, "a.safetensors", &[("x", vec![1.0])]);
+        let index_path = write_index_fixture(
+            &dir,
+            r#"{"weight_map": {"x": "a.safetensors", "x": "a.safetensors"}}"#,
+        );
+        let message = resolve_index_shapes(&index_path)
+            .err()
+            .map(|e| e.to_string())
+            .expect("duplicate keys must be rejected");
+        assert!(message.contains("`x`"), "{message}");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn traversal_in_a_shard_reference_is_rejected() {
+        let dir = scratch("traversal");
+        let index_path =
+            write_index_fixture(&dir, r#"{"weight_map": {"x": "../outside.safetensors"}}"#);
+        let message = resolve_index_shapes(&index_path)
+            .err()
+            .map(|e| e.to_string())
+            .expect("traversal must be rejected");
+        assert!(message.contains("bare file name"), "{message}");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_missing_shard_is_rejected_by_name() {
+        let dir = scratch("missing");
+        let index_path = write_index_fixture(&dir, r#"{"weight_map": {"x": "gone.safetensors"}}"#);
+        let message = resolve_index_shapes(&index_path)
+            .err()
+            .map(|e| e.to_string())
+            .expect("a missing shard must be rejected");
+        assert!(message.contains("gone.safetensors"), "{message}");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn write_index_fixture(dir: &std::path::Path, body: &str) -> PathBuf {
+        let path = dir.join("model.safetensors.index.json");
+        std::fs::write(&path, body).unwrap();
+        path
+    }
 
     #[test]
     fn malformed_tensor_path_segments_are_diagnostics_not_panics() {

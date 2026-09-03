@@ -1,0 +1,5 @@
+error: invalid autotune policy: expected disabled, heuristic, warmup, or profile
+ --> tests/compile_fail/autotune_rejects_invalid_policy.rs:6:14
+  |
+6 |     policy = invalid_policy_name
+  |              ^^^^^^^^^^^^^^^^^^^

@@ -1,4 +1,5 @@
 pub mod incin_macros
+pub proc macro incin_macros::#[autotune]
 pub proc macro incin_macros::#[module]
 pub proc macro incin_macros::axis!()
 pub proc macro incin_macros::i!()

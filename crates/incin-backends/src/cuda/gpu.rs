@@ -29,7 +29,10 @@ pub(crate) mod cuda {
             src: &str,
             module_name: &str,
         ) -> Result<()> {
-            let ptx = compile_ptx_with_cuda_includes(src).map_err(|e| {
+            // Compile for the device this dispatcher owns, not for NVRTC's
+            // default target. See `compile_ptx_for_arch`.
+            let capability = self.ctx.compute_capability().ok();
+            let ptx = compile_ptx_for_arch(src, capability).map_err(|e| {
                 incin_core::error::Error::Msg(format!("PTX compile failed: {:?}", e))
             })?;
             let module = self
@@ -87,16 +90,69 @@ pub(crate) mod cuda {
         alloc::vec::Vec::new()
     }
 
-    /// Compiles a CUDA C/C++ source string to PTX, wiring up `--include-path`
-    /// so kernels that need `cuda_fp16.h`/`cuda_bf16.h` for half/bfloat16
-    /// support can find them.
+    /// Compiles CUDA C to PTX for device 0's architecture.
+    ///
+    /// The convenience form for callers that have no dispatcher to hand --
+    /// notably the template-compilation smoke tests, which check that a rendered
+    /// kernel is valid CUDA C. Those must target the same architecture the real
+    /// path does, or they would certify sources that cannot build on the device
+    /// that will actually run them.
+    // Reached only from `kernel::tests`, so a non-test build sees it unused.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn compile_ptx_with_cuda_includes(
         src: &str,
+    ) -> core::result::Result<cudarc::nvrtc::Ptx, cudarc::nvrtc::CompileError> {
+        let capability = cudarc::driver::CudaContext::new(0)
+            .ok()
+            .and_then(|ctx| ctx.compute_capability().ok());
+        compile_ptx_for_arch(src, capability)
+    }
+
+    /// The virtual architectures a compute capability may be compiled against.
+    ///
+    /// Kept as a fixed table because `CompileOptions::arch` is a `&'static str`.
+    /// A capability newer than anything listed compiles against the newest entry,
+    /// which is forward-compatible: PTX for an older virtual architecture is
+    /// JIT-compiled by the driver for the actual device.
+    const KNOWN_ARCHES: &[((i32, i32), &str)] = &[
+        ((9, 0), "compute_90"),
+        ((8, 9), "compute_89"),
+        ((8, 6), "compute_86"),
+        ((8, 0), "compute_80"),
+        ((7, 5), "compute_75"),
+        ((7, 0), "compute_70"),
+        ((6, 1), "compute_61"),
+        ((6, 0), "compute_60"),
+    ];
+
+    /// Picks the newest virtual architecture the device supports.
+    fn arch_for(capability: (i32, i32)) -> Option<&'static str> {
+        KNOWN_ARCHES
+            .iter()
+            .find(|((major, minor), _)| {
+                capability.0 > *major || (capability.0 == *major && capability.1 >= *minor)
+            })
+            .map(|(_, arch)| *arch)
+    }
+
+    /// Compiles CUDA C to PTX for a specific device's compute capability.
+    ///
+    /// Naming the architecture is not an optimisation. NVRTC's default target
+    /// predates several intrinsics the kernels here rely on -- notably
+    /// `atomicAdd(double*, double)`, which arrived with sm_60 -- so a kernel
+    /// using one does not merely run slower without this, it fails to compile,
+    /// and the whole module with it. The embedding module failed exactly that
+    /// way, which took its forward lookup down alongside the backward pass that
+    /// needed the intrinsic.
+    pub(crate) fn compile_ptx_for_arch(
+        src: &str,
+        capability: Option<(i32, i32)>,
     ) -> core::result::Result<cudarc::nvrtc::Ptx, cudarc::nvrtc::CompileError> {
         cudarc::nvrtc::compile_ptx_with_opts(
             src,
             cudarc::nvrtc::CompileOptions {
                 include_paths: cuda_include_paths(),
+                arch: capability.and_then(arch_for),
                 ..Default::default()
             },
         )

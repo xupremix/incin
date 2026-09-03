@@ -84,7 +84,7 @@ where
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<f32>>,
 {
     /// Runs the network: conv → bn → pool → conv chain, flatten, then linear head.
-    pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Tensor<Dyn, B, f32, Grad>> {
+    pub fn forward(&self, x: Tensor<Dyn, B>) -> Result<Dense<Dyn, B, f32, Grad>> {
         let x = self.conv1.forward(x)?;
         let x = self.bn1.forward(x)?;
         let x = x.relu()?;

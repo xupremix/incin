@@ -31,6 +31,9 @@ pub fn humanize_diagnostic(text: &str) -> Translated {
         }
     }
     let text = collapse_dimcons_chains(&text);
+    // Before any shortening: the default layout says nothing, so it is noise in
+    // every rendering, including the ones that deliberately keep the backend.
+    let text = elide_default_layout(&text);
     Translated { text, hints }
 }
 
@@ -125,8 +128,37 @@ pub fn expand_and_substitute_type_files(text: &str) -> (String, Vec<(String, Str
     (text, hints)
 }
 
-/// Replaces backticked spans in `text` that contain `...` or `UInt<` with the corresponding
-/// full humanized type strings read from a rustc long-type file.
+/// The part of a type expression before its first generic argument.
+///
+/// `MatMulShape<DimCons<..>>` gives `MatMulShape`, and so does the humanized
+/// `MatMulShape<[4, 5]>`. That shared head is what lets a truncated span in the
+/// diagnostic be matched against a full type read from rustc's long-type file,
+/// even though one is still spelled in typenum and the other is already
+/// decimal.
+fn head_identifier(expression: &str) -> &str {
+    let head = expression.split('<').next().unwrap_or(expression).trim();
+    // A trait bound arrives as `Trait<Args>` but an associated path can arrive
+    // qualified; the last segment is the name in both spellings.
+    head.rsplit("::").next().unwrap_or(head)
+}
+
+/// Replaces backticked spans that rustc *truncated* with the full humanized
+/// type read from its long-type file.
+///
+/// Only truncated spans. A span that spells a complete typenum expression is
+/// not truncated, however long it looks: `translate_typenum_text` renders it as
+/// a decimal a moment later, and substituting a long-type line for it discards
+/// the very number the reader needs. That is what produced `Cannot contract
+/// dimension `MatMulShape<[4, 5]>` with `MatMulShape<[4, 5]>`` for a `[2, 3]`
+/// against `[4, 5]` product: two different dimensions, three and four, both
+/// overwritten with one unrelated type.
+///
+/// And only when the match is certain. Spans are matched on their head
+/// identifier, and a span whose head matches no line, or matches more than one,
+/// is left exactly as it came in. A wrong substitution reads as authoritative
+/// and sends the reader after a type that was never in the error; showing what
+/// plain cargo shows is the worse-looking answer and the honest one. The
+/// `[Expanded Full Type]` block below carries the full types either way.
 pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
     if file_lines.is_empty() {
         return text.to_string();
@@ -134,7 +166,6 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
 
     let mut result = String::with_capacity(text.len());
     let mut last_end = 0;
-    let mut line_idx = 0;
 
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -150,24 +181,18 @@ pub fn replace_truncated_spans(text: &str, file_lines: &[String]) -> String {
                 let end = i + 1;
                 let span = &text[start + 1..end - 1];
 
-                if span.contains("...") || span.contains("...") || span.contains("UInt<") {
-                    let matched_line = file_lines
+                // Both spellings rustc uses for an elided type argument.
+                if span.contains("...") || span.contains('\u{2026}') {
+                    let head = head_identifier(span);
+                    let mut matches = file_lines
                         .iter()
-                        .find(|l| {
-                            let prefix = span.split("...").next().unwrap_or("").trim();
-                            let prefix_clean = prefix.trim_end_matches(|c: char| {
-                                c == ',' || c == '<' || c.is_whitespace()
-                            });
-                            !prefix_clean.is_empty() && l.starts_with(prefix_clean)
-                        })
-                        .or_else(|| file_lines.get(line_idx));
+                        .filter(|line| !head.is_empty() && head_identifier(line) == head);
 
-                    if let Some(replacement) = matched_line {
+                    if let (Some(replacement), None) = (matches.next(), matches.next()) {
                         result.push_str(&text[last_end..start + 1]);
                         result.push_str(replacement);
                         result.push('`');
                         last_end = end;
-                        line_idx = (line_idx + 1) % file_lines.len();
                     }
                 }
                 i += 1;
@@ -223,6 +248,9 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
     // Treat both spellings as the same display shape. `collapse_*` fails
     // closed for partial/truncated chains, preserving incomplete labels.
     let text = collapse_dimcons_chains(&text);
+    // Before any shortening: the default layout says nothing, so it is noise in
+    // every rendering, including the ones that deliberately keep the backend.
+    let text = elide_default_layout(&text);
     let text = if shorten_backend {
         shorten_collapsed_tensor_tail(&text).unwrap_or(text)
     } else {
@@ -230,6 +258,110 @@ pub fn humanize_type_signature(label: &str, shorten_backend: bool) -> Translated
     };
     Translated { text, hints }
 }
+
+/// Removes a defaulted `Dyn` layout argument from every `Tensor<..>` in a type
+/// label.
+///
+/// The layout parameter defaults to `Dyn`, which by definition asserts nothing
+/// about the tensor. Printing it costs a reader attention and returns no
+/// information, and it does so in the *full* rendering -- hover and the
+/// `expected .. found ..` notes -- where `shorten_collapsed_tensor_tail` does
+/// not apply because those callers want the backend and dtype kept.
+///
+/// # Why this keys on position, not on the name
+///
+/// `Dyn` is the marker for *every* runtime-selected slot, so the same spelling
+/// appears in the shape position, where it carries a great deal of information
+/// and must never be hidden:
+///
+/// ```text
+/// Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Dyn>
+/// //     ^ a dynamic shape: keep      the layout: elide ^
+/// ```
+///
+/// The two are told apart by which argument they are. `Tensor` has exactly six
+/// parameters and the layout is the sixth, so a trailing `Dyn` is a layout only
+/// in a fully spelled-out argument list. Anything else -- a shorter list, a
+/// list rustc has abbreviated with `...`, a nested type that happens to end in
+/// `Dyn` -- fails the count and is left untouched.
+///
+/// This is stricter than the name test it replaces, which fired on any trailing
+/// argument called `Unknown` regardless of arity.
+///
+/// A layout that is anything other than `Dyn` is left alone: it is a claim the
+/// tensor actually carries, and hiding it would misrepresent the type.
+fn elide_default_layout(label: &str) -> String {
+    let mut result = String::with_capacity(label.len());
+    let mut last_end = 0;
+    let mut search_idx = 0;
+
+    while let Some(rel_start) = label[search_idx..].find("Tensor<") {
+        let tensor_start = search_idx + rel_start;
+        let generic_open = tensor_start + "Tensor".len();
+        let Some(generic_close_rel) = matching_bracket(&label[generic_open..], '<', '>') else {
+            search_idx = generic_open + 1;
+            continue;
+        };
+        let generic_close = generic_open + generic_close_rel;
+        let args = &label[generic_open + 1..generic_close];
+
+        let Some(trimmed) = strip_default_layout(args) else {
+            search_idx = generic_close + 1;
+            continue;
+        };
+        result.push_str(&label[last_end..=generic_open]);
+        result.push_str(trimmed);
+        result.push('>');
+        last_end = generic_close + 1;
+        search_idx = last_end;
+    }
+    result.push_str(&label[last_end..]);
+    result
+}
+
+/// Returns `args` without its final argument when that argument is the
+/// defaulted `Dyn` layout.
+///
+/// Splits on top-level commas only, so a nested `DimCons<.., Dyn>` is never
+/// mistaken for the outer list's tail, and requires the list to hold exactly
+/// [`TENSOR_PARAM_COUNT`] arguments so that a `Dyn` in any other position --
+/// most importantly the shape -- cannot be reached.
+fn strip_default_layout(args: &str) -> Option<&str> {
+    let mut depth = 0i32;
+    let mut commas = 0usize;
+    let mut last_comma = None;
+    for (index, ch) in args.char_indices() {
+        match ch {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                commas += 1;
+                last_comma = Some(index);
+            }
+            _ => {}
+        }
+    }
+    // Six parameters means five separators. A different count is either a
+    // partially elided rendering or not a tensor's parameter list at all;
+    // either way the last argument is not known to be the layout.
+    if commas != TENSOR_PARAM_COUNT - 1 {
+        return None;
+    }
+    let comma = last_comma?;
+    let tail = args[comma + 1..].trim();
+    let is_default = tail == "Dyn" || tail.rsplit("::").next() == Some("Dyn");
+    if is_default {
+        Some(args[..comma].trim_end())
+    } else {
+        None
+    }
+}
+
+/// Type parameters on `Tensor`: shape, backend, dtype, grad, placement, layout.
+///
+/// The layout is the last of them, which is what makes a trailing `Dyn`
+/// identifiable as one.
+const TENSOR_PARAM_COUNT: usize = 6;
 
 fn convert_tensor_tuples_to_brackets(label: &str, hints: &mut Vec<(String, String)>) -> String {
     let mut result = String::with_capacity(label.len());

@@ -86,6 +86,11 @@ impl ExecuteOutput for alloc::vec::Vec<u8> {}
 impl ExecuteOutput for alloc::vec::Vec<usize> {}
 impl<T: ExecuteOutput> ExecuteOutput for alloc::vec::Vec<T> {}
 impl<L: ExecuteOutput, R: ExecuteOutput> ExecuteOutput for (L, R) {}
+impl<A: ExecuteOutput, B: ExecuteOutput, C: ExecuteOutput> ExecuteOutput for (A, B, C) {}
+impl<A: ExecuteOutput, B: ExecuteOutput, C: ExecuteOutput, D: ExecuteOutput> ExecuteOutput
+    for (A, B, C, D)
+{
+}
 
 /// Executes one descriptor type. Absence of an implementation is a compile-time fact.
 pub trait Execute<O>: StorageBackend + Sized

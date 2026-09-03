@@ -216,7 +216,9 @@ fn test_canonical_only_backend_add_and_eq_compile() -> Result<()> {
     )?;
 
     let _c = a.try_add(&b)?;
-    let _mask: Tensor<Dyn, CanonicalOnlyBackend, bool, NoGrad> = a.eq(&b)?;
+    // `eq` allocates a fresh bool buffer, so its result is `Dense`, not a
+    // layout-less `Tensor`.
+    let _mask: Dense<Dyn, CanonicalOnlyBackend, bool, NoGrad> = a.eq(&b)?;
 
     Ok(())
 }

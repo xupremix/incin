@@ -5,6 +5,8 @@
 //! already exist as real device code, so the round trip stays entirely on
 //! the GPU.
 
+#![allow(dead_code)]
+
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
@@ -117,6 +119,7 @@ pub(crate) fn launch_max_pool2d_forward(
 ) -> Result<(CudaStorage, CudaStorage)> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "max_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "max_pool2d_forward")?;
@@ -199,6 +202,7 @@ pub(crate) fn launch_scatter_pool_grad_2d(
 ) -> Result<CudaStorage> {
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(go_buf.dtype, "max_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "scatter_pool_grad_2d")?;
@@ -251,6 +255,7 @@ pub(crate) fn launch_avg_pool2d_forward(
 ) -> Result<CudaStorage> {
     let t_buf = &*t.buffer;
     let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "avg_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "avg_pool2d_forward")?;
@@ -314,6 +319,7 @@ pub(crate) fn launch_avg_pool2d_backward(
 ) -> Result<CudaStorage> {
     let go_buf = &*grad_out.buffer;
     let device_id = go_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(go_buf.dtype, "avg_pool2d")?;
     ensure_pool_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
     let f = dispatcher.get_function("pool", "avg_pool2d_backward")?;
@@ -362,6 +368,119 @@ pub(crate) fn launch_avg_pool2d_backward(
             .launch(cfg)
             .map_err(|e| {
                 incin_core::error::Error::Msg(format!("avg_pool2d_backward launch failed: {e:?}"))
+            })?;
+    }
+
+    let strides = crate::layout::contiguous_strides(input_shape)
+        .strides()
+        .to_vec();
+    CudaStorage::try_from_parts(Arc::new(grad_in_b), input_shape.to_vec(), strides, 0)
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_adaptive_avg_pool2d(
+    t: &CudaStorage,
+    out_size: (usize, usize),
+) -> Result<CudaStorage> {
+    let t_buf = &*t.buffer;
+    let device_id = t_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(t_buf.dtype, "adaptive_avg_pool2d")?;
+    ensure_pool_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_forward")?;
+    let stream = t_buf.device.default_stream();
+
+    let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let (oh, ow) = out_size;
+    let out_shape = alloc::vec![n, c, oh, ow];
+    let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
+
+    let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
+    let cfg = launch_cfg(out_total)?;
+
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
+    unsafe {
+        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+        let out_u8: &mut cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut out_b.data).expect("out_b freshly allocated, uniquely owned");
+        let mut out_f32 = out_u8.transmute_mut::<f32>(out_total).unwrap();
+
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&f)
+            .arg(&in_f32)
+            .arg(&mut out_f32)
+            .arg(&n)
+            .arg(&c)
+            .arg(&h)
+            .arg(&w)
+            .arg(&oh)
+            .arg(&ow)
+            .launch(cfg)
+            .map_err(|e| {
+                incin_core::error::Error::Msg(format!(
+                    "adaptive_avg_pool2d_forward launch failed: {e:?}"
+                ))
+            })?;
+    }
+
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0)
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_adaptive_avg_pool2d_backward(
+    grad_out: &CudaStorage,
+    input_shape: &[usize],
+) -> Result<CudaStorage> {
+    let go_buf = &*grad_out.buffer;
+    let device_id = go_buf.device_id;
+    crate::cuda::capability::validate_cuda_f32_kernel(go_buf.dtype, "adaptive_avg_pool2d")?;
+    ensure_pool_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_backward")?;
+    let stream = go_buf.device.default_stream();
+
+    let (n, c, h, w) = (
+        input_shape[0],
+        input_shape[1],
+        input_shape[2],
+        input_shape[3],
+    );
+    let (oh, ow) = (grad_out.shape[2], grad_out.shape[3]);
+    let in_total = ShapeBuf::from_slice(&[n, c, h, w]).checked_numel(OperationKind::Pool2d)?;
+    let out_total = ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
+
+    let mut grad_in_b = alloc_zeroed(&stream, &go_buf.device, device_id, go_buf.dtype, in_total)?;
+    let cfg = launch_cfg(out_total)?;
+
+    // SAFETY: shape validation fixes the element counts, allocation sizes,
+    // dtypes, and launch dimensions before these device-buffer reinterprets.
+    unsafe {
+        let go_f32 = go_buf.data.transmute::<f32>(go_buf.len).unwrap();
+        let gi_u8: &mut cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut grad_in_b.data).expect("grad_in_b freshly allocated, uniquely owned");
+        let mut gi_f32 = gi_u8.transmute_mut::<f32>(in_total).unwrap();
+
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&f)
+            .arg(&go_f32)
+            .arg(&mut gi_f32)
+            .arg(&n)
+            .arg(&c)
+            .arg(&h)
+            .arg(&w)
+            .arg(&oh)
+            .arg(&ow)
+            .launch(cfg)
+            .map_err(|e| {
+                incin_core::error::Error::Msg(format!(
+                    "adaptive_avg_pool2d_backward launch failed: {e:?}"
+                ))
             })?;
     }
 

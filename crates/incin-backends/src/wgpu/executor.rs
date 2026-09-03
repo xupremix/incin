@@ -41,6 +41,8 @@ impl<D: Device> Capabilities for WgpuBackendImpl<D> {
 
 impl_creation_executors!(WgpuBackendImpl<D>, WgpuStorage);
 impl_data_creation_executors!(WgpuBackendImpl<D>, WgpuStorage);
+impl_variable_creation_executors!(WgpuBackendImpl<D>, crate::wgpu::WgpuVar);
+impl_readback_executors!(WgpuBackendImpl<D>, WgpuStorage);
 
 /// Whether an operand's physical shape is the one the descriptor promised.
 ///
@@ -69,7 +71,20 @@ macro_rules! impl_wgpu_canonical {
     )*};
 }
 
-impl_wgpu_canonical![(Add, add), (Sub, sub), (Mul, mul), (Div, div),];
+impl_wgpu_canonical![
+    (Add, add),
+    (Sub, sub),
+    (Mul, mul),
+    (Div, div),
+    // `shaders/binary.wgsl` has carried modes 15 and 16 since it was written;
+    // `abs_diff` composes from two operations WGPU already advertises. All
+    // three are `native_tensor` on the CPU reference, so they arrive with that
+    // group's `training = true`, which is why each has a gradient path rather
+    // than a bare forward.
+    (Maximum, maximum),
+    (Minimum, minimum),
+    (AbsDiff, abs_diff),
+];
 
 impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
@@ -277,6 +292,78 @@ impl<D: Device> Execute<op::AvgPool2d> for WgpuBackendImpl<D> {
     }
 }
 
+/// `transpose` and `flatten` read attribute *pairs* rather than a single
+/// `axis`, so neither fits the axis macro above.
+///
+/// `transpose` has had a working WGPU kernel, tape entry included, since
+/// `shape_ops.rs` was written; it was simply never registered, so dispatch
+/// refused an operation the backend could already do.
+impl<D: Device> Execute<op::TransposeExact> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TransposeExact, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::TransposeExact;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "transpose expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::transpose::<f32>(input, attributes.first, attributes.second)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+/// Two operands and an `epsilon`, so this fits neither the axis macro nor the
+/// canonical binary one. Composed from primitives WGPU already advertises, in
+/// the same order as CPU's and CUDA's, so all three agree numerically.
+impl<D: Device> Execute<op::RmsNorm> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RmsNorm, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::RmsNorm;
+        let [input, weight] = request.inputs else {
+            return Err(invalid(operation, "rms norm expects an input and a weight"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let weight = weight
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not WGPU storage"))?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        WgpuBackendImpl::<D>::rms_norm::<f32>(input, weight, epsilon)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::FlattenExact> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::FlattenExact, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::FlattenExact;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "flatten expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::flatten::<f32>(input, attributes.start_axis, attributes.end_axis)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
 macro_rules! impl_wgpu_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
@@ -295,6 +382,12 @@ macro_rules! impl_wgpu_reduction_all {
     )*};
 }
 
+/// Executors for the single-input operations that read an `axis` attribute.
+///
+/// Reductions are most of them, but not all: `softmax` has the same request
+/// shape -- one operand plus an axis -- and composing it here rather than
+/// hand-writing a fourth near-identical `Execute` impl keeps the arity and
+/// downcast checks in one place.
 macro_rules! impl_wgpu_reduction_dim {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
@@ -304,7 +397,7 @@ macro_rules! impl_wgpu_reduction_dim {
                 request: ExecutionRequest<'_, op::$op, Self>,
             ) -> Result<WgpuStorage, BackendError> {
                 let [input] = request.inputs else {
-                    return Err(invalid(OperationKind::$op, "reduction expects 1 input"));
+                    return Err(invalid(OperationKind::$op, "expects exactly 1 input"));
                 };
                 let input = input.downcast_ref::<WgpuStorage>().ok_or_else(|| invalid(OperationKind::$op, "input is not WGPU storage"))?;
                 let axis = request.operation.descriptor().attributes().axis;
@@ -323,6 +416,19 @@ impl_wgpu_reduction_all![
 ];
 
 impl_wgpu_reduction_dim![
+    // Not a reduction: `softmax` maps an axis rather than collapsing it. It
+    // rides this macro because its request shape is identical.
+    (Softmax, |input, axis| {
+        WgpuBackendImpl::<D>::softmax::<f32>(input, axis)
+    }),
+    // Also not reductions: both are views that add or drop a unit axis, and
+    // both read the same `axis` attribute the reductions do.
+    (SqueezeExact, |input, axis| {
+        WgpuBackendImpl::<D>::squeeze::<f32>(input, axis)
+    }),
+    (UnsqueezeExact, |input, axis| {
+        WgpuBackendImpl::<D>::unsqueeze::<f32>(input, axis)
+    }),
     (SumDim, WgpuBackendImpl::<D>::sum_dim::<f32>),
     (SumKeepDim, |input, axis| {
         WgpuBackendImpl::<D>::sum_keepdim::<f32>(input, axis)

@@ -1,4 +1,5 @@
 use crate::backend_authoring::SupportsDType;
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::op;
 use crate::nn::{Module, Param};
@@ -187,7 +188,8 @@ impl<
         + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InS, B, K>> for RMSNorm<S, B, K, Train>
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
     <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
@@ -197,11 +199,16 @@ where
     <B as Execute<op::Sqrt>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B, K, Train::TensorGrad>;
+    /// `Dense`: the chain ends in `broadcast_mul`, which allocates, and
+    /// `into_shape` re-describes that buffer without moving it.
+    type Output = crate::shapes::Dense<InS, B, K, Train::TensorGrad, Local>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<InS, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();
 

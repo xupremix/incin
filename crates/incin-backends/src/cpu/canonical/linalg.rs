@@ -12,7 +12,9 @@ use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
-use crate::cpu::ops::shape_ops::{addmm_storage, transpose_storage, unsqueeze_storage};
+use crate::cpu::ops::shape_ops::{
+    addmm_storage, reshape_storage, transpose_storage, unsqueeze_storage,
+};
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
 
@@ -111,15 +113,39 @@ impl<D: Device> Execute<op::Linear> for CpuBackendImpl<D> {
         admitted(self, operation, weight, training)?;
         let wrap = |error| kernel_error(CPU_NAME, operation, error);
 
+        // A rank-one input is a single unbatched row. `inference.rs` infers an
+        // output of `[out]` for it and the capability row advertises rank one,
+        // but the matmul this rewrites into accepts rank two upwards, so the
+        // row is added here and taken back off the result. Both steps go
+        // through the taped reshape rather than the raw one, which is what
+        // keeps the gradient reaching the operand the caller passed in.
+        let unbatched = input.shape.len() == 1;
+        let promoted;
+        let rows = if unbatched {
+            promoted = reshape_storage(input, &[1, input.shape[0]]).map_err(wrap)?;
+            &promoted
+        } else {
+            input
+        };
+
         let transposed = transpose_storage(weight, 0, 1).map_err(wrap)?;
         let product =
-            crate::cpu::ops::shape_ops::matmul_storage(input, &transposed).map_err(wrap)?;
-        match bias {
-            None => Ok(product),
+            crate::cpu::ops::shape_ops::matmul_storage(rows, &transposed).map_err(wrap)?;
+        let projected = match bias {
+            None => product,
             Some(bias) => {
                 admitted(self, operation, bias, training)?;
-                crate::cpu::ops::elementwise::add_storage(&product, bias).map_err(wrap)
+                // `[1, out]` against `[out]` right-aligns to `[1, out]`, so the
+                // promoted row survives the bias unchanged.
+                crate::cpu::ops::elementwise::add_storage(&product, bias).map_err(wrap)?
             }
+        };
+
+        if unbatched {
+            let flat = projected.shape[1..].to_vec();
+            reshape_storage(&projected, &flat).map_err(wrap)
+        } else {
+            Ok(projected)
         }
     }
 }

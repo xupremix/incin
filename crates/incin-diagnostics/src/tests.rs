@@ -504,3 +504,178 @@ fn test_humanize_diagnostic_collapses_dimcons_after_typenum_translation() {
         translated.text
     );
 }
+
+// --- truncated-span substitution ---
+//
+// `replace_truncated_spans` had no coverage at all, which is how it shipped
+// overwriting complete typenum expressions with an unrelated long type. The
+// three below pin the rule it now follows: substitute a truncated span when
+// exactly one candidate matches, and otherwise leave the span alone.
+
+/// A complete typenum expression is not truncated and must survive untouched,
+/// so the translator downstream can render it as the decimal it is.
+///
+/// This is the matmul regression. A `[2, 3]` against `[4, 5]` product reported
+/// `Cannot contract dimension `MatMulShape<[4, 5]>` with `MatMulShape<[4, 5]>``
+/// -- two different dimensions, three and four, both replaced by one unrelated
+/// type, which then read as "X is not implemented for X".
+#[test]
+fn a_complete_typenum_span_is_not_treated_as_truncated() {
+    let text = "Cannot contract dimension `UInt<UInt<UTerm, B1>, B1>` \
+                with `UInt<UInt<UInt<UTerm, B1>, B0>, B0>`";
+    let lines = alloc::vec![String::from("MatMulShape<[4, 5]>")];
+
+    assert_eq!(replace_truncated_spans(text, &lines), text);
+}
+
+/// A span rustc actually truncated is substituted when its head names exactly
+/// one of the full types read back from the long-type file.
+#[test]
+fn a_truncated_span_takes_the_one_full_type_that_shares_its_head() {
+    let text = "required for `Foo` to implement `MatMulShape<DimCons<UInt<UTerm, B1>, ...>>`";
+    let lines = alloc::vec![String::from("MatMulShape<[4, 5]>")];
+
+    assert_eq!(
+        replace_truncated_spans(text, &lines),
+        "required for `Foo` to implement `MatMulShape<[4, 5]>`"
+    );
+}
+
+/// Two candidates sharing a head is an ambiguous match, and an ambiguous match
+/// is left alone. Picking one would read as authoritative while being a coin
+/// flip, which is the failure the rotating fallback used to produce.
+#[test]
+fn an_ambiguous_truncated_span_is_left_exactly_as_it_came_in() {
+    let text = "required for `Foo` to implement `MatMulShape<DimCons<UInt<UTerm, B1>, ...>>`";
+    let lines = alloc::vec![
+        String::from("MatMulShape<[4, 5]>"),
+        String::from("MatMulShape<[2, 3]>"),
+    ];
+
+    assert_eq!(replace_truncated_spans(text, &lines), text);
+}
+
+/// A truncated span whose head names no full type at all is also left alone,
+/// rather than borrowing whichever line happened to be next.
+#[test]
+fn an_unmatched_truncated_span_is_left_exactly_as_it_came_in() {
+    let text = "required for `Foo` to implement `ConcatShape<DimCons<UInt<UTerm, B1>, ...>>`";
+    let lines = alloc::vec![String::from("MatMulShape<[4, 5]>")];
+
+    assert_eq!(replace_truncated_spans(text, &lines), text);
+}
+
+// --- the contraction message ---
+
+/// `matmul` carries two `on_unimplemented` messages and rustc reports the
+/// innermost failing bound, so it is `ContractsWith`'s that reaches a reader.
+/// Keying the explanation only on `MatMulShape`'s is why `--explain` printed a
+/// rule sentence and no diagram for every real matmul mismatch.
+#[test]
+fn the_contraction_message_yields_the_two_axes_that_disagree() {
+    let text = "error[E0277]: Cannot contract dimension `3` with `4`\n  --> src/main.rs:6:22";
+
+    let mismatch = parse_contraction_mismatch(text).expect("the message parses");
+    assert_eq!(mismatch.lhs_inner, "3");
+    assert_eq!(mismatch.rhs_inner, "4");
+
+    let rendered = mismatch.render();
+    assert!(rendered.contains("last axis of the left operand"));
+    assert!(rendered.contains("second-to-last axis of the right operand"));
+    assert!(rendered.contains("transpose"));
+}
+
+/// Equal axes mean the contraction was not what failed -- a rank disagreement
+/// reaches the same bound -- so explaining one would misdirect.
+#[test]
+fn equal_axes_are_not_reported_as_a_contraction_mismatch() {
+    let text = "Cannot contract dimension `3` with `3`";
+    assert!(parse_contraction_mismatch(text).is_none());
+}
+
+// -- layout parameter elision --------------------------------------------
+
+/// The default layout says nothing and should not be shown.
+///
+/// `Tensor` gained a sixth parameter that defaults to `Dyn`, meaning the
+/// compiler settled nothing about where the elements live. Printing it costs a
+/// reader attention and returns no information.
+#[test]
+fn a_default_layout_is_elided_from_a_tensor_type() {
+    let translated = humanize_type_signature(
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, incin_core::shapes::Dyn>",
+        false,
+    );
+    assert_eq!(
+        translated.text,
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local>"
+    );
+}
+
+/// A layout that is not the default is a real claim and must survive.
+///
+/// Eliding it would misrepresent the type: `RowMajor` is the difference between
+/// a tensor that can call `reshape_view` and one that cannot.
+#[test]
+fn a_proven_layout_is_never_elided() {
+    let label = "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, RowMajor<Dyn>>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// A `Dyn` shape must survive, even though the layout slot spells its default
+/// the same way.
+///
+/// This is the property that the layout marker sharing `Dyn` puts at risk: an
+/// unproven *layout* is noise, a dynamic *shape* is information. They are told
+/// apart by position, so both `Dyn`s here are handled correctly in one pass --
+/// the sixth is dropped, the first is kept.
+#[test]
+fn a_dynamic_shape_is_not_confused_with_a_default_layout() {
+    let translated = humanize_type_signature(
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, Dyn>",
+        false,
+    );
+    assert_eq!(
+        translated.text,
+        "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local>"
+    );
+}
+
+/// Only the outermost argument list is considered.
+///
+/// A nested type that happens to end in `Dyn` is not a layout and must be left
+/// alone, whatever its depth.
+#[test]
+fn a_nested_dyn_is_not_mistaken_for_the_layout_slot() {
+    let label = "Tensor<DimCons<A, Dyn>, CpuBackendImpl, f32, NoGrad, Local, RowMajor<S>>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// A tensor written without the layout argument is unchanged.
+#[test]
+fn a_tensor_without_a_layout_argument_is_untouched() {
+    let label = "Tensor<Dyn, CpuBackendImpl>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// A trailing `Dyn` in a list too short to reach the layout slot is kept.
+///
+/// This is the case the old name-based test could not express, because the
+/// marker used to be a spelling no other slot could produce. With one shared
+/// marker the arity is the only thing separating a layout from a placement, so
+/// a five-argument list must fail closed rather than drop its last argument.
+#[test]
+fn a_trailing_dyn_outside_the_layout_slot_is_kept() {
+    let label = "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Dyn>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}
+
+/// An argument list rustc has abbreviated is left alone.
+///
+/// `...` collapses an unknown number of arguments, so the position of the
+/// trailing one is no longer knowable and eliding it could hide a shape.
+#[test]
+fn an_abbreviated_argument_list_is_not_elided() {
+    let label = "Tensor<Dyn, ..., Dyn>";
+    assert_eq!(humanize_type_signature(label, false).text, label);
+}

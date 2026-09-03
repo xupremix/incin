@@ -17,6 +17,8 @@
 //!
 //! [`Error::UnsupportedBackendOperation`]: incin_core::error::Error
 
+#![allow(unused_macros, unused_imports, dead_code)]
+
 /// Declares float operations a backend does not implement, grouped by
 /// signature: `unary` takes one tensor, `exponent` a tensor and an exponent,
 /// `bounds` a tensor and a min/max pair, and `binary` two tensors.

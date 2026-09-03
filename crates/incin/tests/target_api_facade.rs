@@ -41,6 +41,18 @@ fn the_whole_surface_is_reachable_from_the_facade_prelude() {
 /// asserts nothing.
 #[test]
 fn target_api_compile_fail_diagnostics() {
+    // Snapshots here are recorded under CI's invocation:
+    //
+    //   cargo test --all-targets --no-default-features \
+    //     --features incin-backends/cpu,incin/cpu
+    //
+    // `numeric_where_mask` prints the impl's self type in a "the method was
+    // found for" note, and that type now includes `Local`, because naming the
+    // layout parameter forces the placement before it to be named too. rustc
+    // renders that path as `incin::prelude::Local` under the feature set above
+    // and as `incin_core::dist::placement::Local` under workspace defaults, and
+    // only one spelling can be stored. Running this under a different feature
+    // set will report a mismatch that is purely the path spelling.
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/target_api_compile_fail/*.rs");
     // A second directory rather than a `cfg` inside a fixture: trybuild

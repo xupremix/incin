@@ -13,6 +13,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
@@ -73,8 +74,8 @@ where
     .map(Into::into)?)
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
     /// Returns a dynamically shaped tensor (`Dyn`).
@@ -242,8 +243,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: Layout,
+> Tensor<S, B, K, G, P, L>
 {
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
@@ -365,7 +372,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = G::grad_mode(&self._grad)
             .restrict(|| narrow_storage_exact::<B, K>(&self.inner, input_shape, dim, start, len))?;
         shape[dim] = len;
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Output>(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Output, _>(
             inner,
             ShapeBuf::from_slice(&shape),
             self._dtype,
@@ -376,23 +383,29 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     /// Fills elements where `mask` is true with `value`.
-    pub fn masked_fill<S2: Shape, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
+    pub fn masked_fill<
+        S2: Shape,
+        G2: RequiresGrad,
+        L2: Layout,
+        Sc: Into<crate::tensor::backend::ScalarValue>,
+    >(
         &self,
-        mask: &Tensor<S2, B, bool, G2>,
+        mask: &Tensor<S2, B, bool, G2, Local, L2>,
         value: Sc,
-    ) -> Result<Self>
+    ) -> Result<Tensor<S, B, K, G, Local, crate::shapes::RowMajor<S>>>
     where
         S: ShapeEq<S2>,
         B: Execute<op::MaskedFill>,
         <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
     {
         let val_f64 = value.into().to_f64();
-        G::grad_mode(&self._grad)
-            .restrict(|| execute_masked_fill_descriptor::<S, S2, B, K, G, G2>(self, mask, val_f64))
+        G::grad_mode(&self._grad).restrict(|| {
+            execute_masked_fill_descriptor::<S, S2, B, K, G, G2, L, L2>(self, mask, val_f64)
+        })
     }
 
     /// Gathers values along `dim` specified by `index`.
@@ -466,6 +479,88 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                     ScatterAttributes {
                         axis: dim,
                         duplicate_indices: DuplicateIndexRule::LastWriteWins,
+                    },
+                    &inputs,
+                    &self._shape,
+                )
+            })?
+            .into();
+        Tensor::from_shape_value(
+            inner,
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Adds `src` values along `dim` into `self` at `index`, accumulating.
+    ///
+    /// Where [`Self::scatter`] resolves two writes to one position by keeping
+    /// the last, this one keeps both by summing them. That is the difference
+    /// between combining the outputs of a top-`k` router and silently throwing
+    /// `k - 1` of them away: a token routed to several experts writes to its
+    /// row once per expert, and only the accumulating form gives each of those
+    /// contributions, and each of their gradients, an effect on the result.
+    ///
+    /// Summation order is row-major over `index`, and the catalog row claims
+    /// determinism on that basis. Floating-point addition is not associative,
+    /// so this is a promise about the answer's low bits rather than a
+    /// description of the loop, and it is why the operation is currently
+    /// declared on CPU alone.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// // Two sources, both aimed at slot 0, as a token routed to two experts.
+    /// let base = Tensor::<s![3], DefaultBackend>::zeros(()).unwrap();
+    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 0], ()).unwrap();
+    /// let src = Tensor::<s![2], DefaultBackend>::from_slice(&[2.0, 3.0], ()).unwrap();
+    /// let summed = base.scatter_add(0, &index, &src).unwrap();
+    /// // Both contributions land. `scatter` would have kept only the 3.0.
+    /// assert_eq!(summed.to_vec1::<f32>().unwrap(), vec![5.0, 0.0, 0.0]);
+    /// ```
+    pub fn scatter_add<
+        A,
+        S2: Shape,
+        S3: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        G3: RequiresGrad,
+    >(
+        &self,
+        axis: A,
+        index: &Tensor<S2, B, KInt, G2>,
+        src: &Tensor<S3, B, K, G3>,
+    ) -> Result<Self>
+    where
+        A: AxisSelectorArg<S>,
+        S2: ShapeEq<S3>,
+        B: Execute<op::ScatterAdd> + Capabilities,
+        <B as Execute<op::ScatterAdd>>::Output: Into<B::Storage<K>>,
+    {
+        <S2 as ShapeEq<S3>>::ASSERT_SHAPES_MATCH;
+        let dim = axis.resolve(self.shape_buf().rank())?;
+        let inputs = [
+            TensorHandle::from_storage::<B, K, Local>(&self.inner),
+            TensorHandle::from_storage::<B, KInt, Local>(&index.inner),
+            TensorHandle::from_storage::<B, K, Local>(&src.inner),
+        ];
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::ScatterAdd, B, S>(
+                    &context,
+                    ScatterAttributes {
+                        axis: dim,
+                        // Fixed rather than a parameter, for the reason the
+                        // issue that asked for this operation gives: an
+                        // `accumulate` flag would make a change of semantics
+                        // look like a setting, and would leave the determinism
+                        // contract conditional on an attribute value.
+                        duplicate_indices: DuplicateIndexRule::Accumulate,
                     },
                     &inputs,
                     &self._shape,
@@ -775,11 +870,13 @@ pub(crate) fn execute_masked_fill_descriptor<
     K: DType,
     G1: RequiresGrad,
     G2: RequiresGrad,
+    L1: Layout,
+    L2: Layout,
 >(
-    input: &Tensor<S, B, K, G1>,
-    mask: &Tensor<S2, B, bool, G2>,
+    input: &Tensor<S, B, K, G1, Local, L1>,
+    mask: &Tensor<S2, B, bool, G2, Local, L2>,
     value: f64,
-) -> Result<Tensor<S, B, K, G1>>
+) -> Result<Tensor<S, B, K, G1, Local, crate::shapes::RowMajor<S>>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::MaskedFill>,
@@ -813,11 +910,16 @@ pub(crate) fn execute_where_cond_descriptor<
     K: DType,
     G1: RequiresGrad,
     G2: RequiresGrad,
+    L1: Layout,
+    L2: Layout,
 >(
-    mask: &Tensor<S, B, bool, G1>,
-    on_true: &Tensor<S2, B, K, G2>,
-    on_false: &Tensor<S2, B, K, G2>,
-) -> Result<Tensor<S2, B, K, G2>>
+    mask: &Tensor<S, B, bool, G1, Local, L1>,
+    on_true: &Tensor<S2, B, K, G2, Local, L2>,
+    on_false: &Tensor<S2, B, K, G2, Local, L2>,
+    // The selected values come from a fresh packed buffer, so the result states
+    // `RowMajor` of its own shape. Carrying a claim through would have to pick
+    // one of three operands' layouts, none of which describes what was written.
+) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor<S2>>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::WhereCond>,
@@ -845,22 +947,22 @@ where
     )
 }
 
-impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad>
-    Tensor<S, B, bool, G>
+impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, L: Layout>
+    Tensor<S, B, bool, G, Local, L>
 {
     /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
-    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad>(
+    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad, L2: Layout>(
         &self,
-        on_true: &Tensor<S2, B, K, G2>,
-        on_false: &Tensor<S2, B, K, G2>,
-    ) -> Result<Tensor<S2, B, K, G2>>
+        on_true: &Tensor<S2, B, K, G2, Local, L2>,
+        on_false: &Tensor<S2, B, K, G2, Local, L2>,
+    ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor<S2>>>
     where
         S: ShapeEq<S2>,
         B: Execute<op::WhereCond>,
         <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {
         G2::grad_mode(&on_true._grad).restrict(|| {
-            execute_where_cond_descriptor::<S, S2, B, K, G, G2>(self, on_true, on_false)
+            execute_where_cond_descriptor::<S, S2, B, K, G, G2, L, L2>(self, on_true, on_false)
         })
     }
 }

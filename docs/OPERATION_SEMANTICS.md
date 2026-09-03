@@ -4,13 +4,13 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 174
-Backend-executable operations: 158
+Canonical operations: 179
+Backend-executable operations: 163
 Non-backend execution sites: 16
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 140 |
+| `Kernel` | 145 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -47,6 +47,7 @@ Non-backend execution sites: 16
 | `sigmoid` | `Descriptor<op::Sigmoid>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `FreshContiguous` | `::sigmoid` |
 | `swish` | `Descriptor<op::Swish>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `FreshContiguous` | `::swish` |
 | `softmax` | `Descriptor<op::Softmax>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 1-18446744073709551615 | `TypedContract` | `Floating` / `Preserve` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::softmax` |
+| `log_softmax` | `Descriptor<op::LogSoftmax>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 1-18446744073709551615 | `TypedContract` | `Floating` / `Preserve` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::log_softmax` |
 | `add_scalar` | `Descriptor<op::AddScalar>` | `ScalarAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `FreshContiguous` | `::add_scalar_float` |
 | `mul_scalar` | `Descriptor<op::MulScalar>` | `ScalarAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `FreshContiguous` | `::mul_scalar_float` |
 | `powf` | `Descriptor<op::Powf>` | `ScalarAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `FreshContiguous` | `::powf` |
@@ -102,6 +103,7 @@ Non-backend execution sites: 16
 | `fill_in_place` | `Descriptor<op::FillInPlace>` | `ScalarAttributes` | `Mutation` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::fill_` |
 | `reshape` | `Descriptor<op::ReshapeExact>` | `ShapeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::reshape` |
 | `transpose` | `Descriptor<op::TransposeExact>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose` |
+| `transpose_view` | `Descriptor<op::TransposeView>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose_view` |
 | `matmul` | `Descriptor<op::MatMulExact>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-18446744073709551615 | `TypedContract` | `Floating` / `MatMul` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::matmul` |
 | `dot` | `Descriptor<op::Dot>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 1-1 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::dot` |
 | `outer` | `Descriptor<op::Outer>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 1-1 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::outer` |
@@ -115,6 +117,7 @@ Non-backend execution sites: 16
 | `where_cond` | `Descriptor<op::WhereCond>` | `NoAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `Numpy` | `TypedContract` / `Broadcast` | `Allowed` / `TypedContract` | `Piecewise` | yes | `FreshContiguous` | `::where_cond` |
 | `gather` | `Descriptor<op::Gather>` | `AxisAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::gather` |
 | `scatter` | `Descriptor<op::Scatter>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Undefined` | no | `FreshContiguous` | `::scatter` |
+| `scatter_add` | `Descriptor<op::ScatterAdd>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::scatter_add` |
 | `index_select` | `Descriptor<op::IndexSelect>` | `AxisAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::index_select` |
 | `masked_fill` | `Descriptor<op::MaskedFill>` | `ScalarAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `TypedContract` / `Preserve` | `Allowed` / `TypedContract` | `Piecewise` | yes | `FreshContiguous` | `::masked_fill` |
 | `unsqueeze` | `Descriptor<op::UnsqueezeExact>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unsqueeze` |
@@ -156,6 +159,8 @@ Non-backend execution sites: 16
 | `min_keepdim` | `Descriptor<op::MinKeepDim>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::min_keepdim` |
 | `argmax` | `Descriptor<op::ArgMax>` | `IndexReductionAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | yes | `FreshContiguous` | `::argmax` |
 | `argmin` | `Descriptor<op::ArgMin>` | `IndexReductionAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | yes | `FreshContiguous` | `::argmin` |
+| `logsumexp_dim` | `Descriptor<op::LogSumExpDim>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::logsumexp_dim` |
+| `logsumexp_keepdim` | `Descriptor<op::LogSumExpKeepDim>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::logsumexp_keepdim` |
 | `prod_all` | `Descriptor<op::ProdAll>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::prod_all` |
 | `prod_dim` | `Descriptor<op::ProdDim>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::prod_dim` |
 | `cumsum` | `Descriptor<op::Cumsum>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Preserve` / `Preserve` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::cumsum` |

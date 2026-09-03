@@ -5,14 +5,18 @@
 //! `StorageBackend`/`Capabilities`/`Execute` contract, so the descriptor path
 //! is not a CPU-only construction.
 
+use alloc::sync::Arc;
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::error::BackendError;
-use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel};
+use incin_core::exec::catalog::LossReduction;
+use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
 use incin_core::shapes::OperationKind;
-use incin_core::tensor::device::{Device, DeviceKind};
+use incin_core::tensor::device::{Device, DeviceId, DeviceKind};
+use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::reduction::Reduction;
 
 use super::backend::CudaBackendImpl;
-use super::storage::CudaStorage;
+use super::storage::{CudaBuffer, CudaStorage};
 use crate::descriptor_bind::{invalid, kernel_error};
 
 impl<D: Device> Capabilities for CudaBackendImpl<D> {
@@ -23,6 +27,8 @@ impl<D: Device> Capabilities for CudaBackendImpl<D> {
 
 impl_creation_executors!(CudaBackendImpl<D>, CudaStorage);
 impl_data_creation_executors!(CudaBackendImpl<D>, CudaStorage);
+impl_variable_creation_executors!(CudaBackendImpl<D>, super::backend::CudaVar);
+impl_readback_executors!(CudaBackendImpl<D>, CudaStorage);
 
 /// Whether an operand's physical shape is the one the descriptor promised.
 ///
@@ -44,7 +50,13 @@ macro_rules! impl_cuda_canonical {
                 };
                 let lhs = lhs.downcast_ref::<CudaStorage>().ok_or_else(|| invalid(operation, "operand is not CUDA storage"))?;
                 let rhs = rhs.downcast_ref::<CudaStorage>().ok_or_else(|| invalid(operation, "operand is not CUDA storage"))?;
-                crate::cuda::backend::$func(lhs, rhs)
+                // The descriptor's proof is about the *output* geometry, which
+                // is what a pointwise kernel iterates, so it applies here even
+                // though the two operands may broadcast from different shapes.
+                let specialization = crate::kernel::KernelSpecialization::from_evidence(
+                    Some(request.operation.shape_evidence()),
+                );
+                crate::cuda::backend::$func(lhs, rhs, specialization)
                     .map_err(|error| kernel_error("Cuda", operation, error))
             }
         }
@@ -56,6 +68,9 @@ impl_cuda_canonical![
     (Sub, cuda_sub_storage),
     (Mul, cuda_mul_storage),
     (Div, cuda_div_storage),
+    (Maximum, cuda_maximum_storage),
+    (Minimum, cuda_minimum_storage),
+    (AbsDiff, cuda_abs_diff_storage),
 ];
 
 macro_rules! impl_cuda_canonical_unary {
@@ -72,7 +87,14 @@ macro_rules! impl_cuda_canonical_unary {
                     return Err(invalid(operation, "operation expects exactly one operand"));
                 };
                 let input = input.downcast_ref::<CudaStorage>().ok_or_else(|| invalid(operation, "operand is not CUDA storage"))?;
-                crate::cuda::backend::$func(input)
+                // The one place a pointwise kernel can learn what the *type*
+                // proved rather than what the buffer happens to measure.
+                // `Validated` carries the frontend's `ShapeEvidence`, and this
+                // is the first consumer of it in any backend.
+                let specialization = crate::kernel::KernelSpecialization::from_evidence(
+                    Some(request.operation.shape_evidence()),
+                );
+                crate::cuda::backend::$func(input, specialization)
                     .map_err(|error| kernel_error("Cuda", operation, error))
             }
         }
@@ -86,6 +108,34 @@ impl_cuda_canonical_unary![
     (Log, cuda_log_storage),
     (Tanh, cuda_tanh_storage),
     (Sigmoid, cuda_sigmoid_storage),
+    (Step, cuda_step_storage),
+    (Mish, cuda_mish_storage),
+    (Elu, cuda_elu_storage),
+    (Gelu, cuda_gelu_storage),
+    (Abs, cuda_abs_storage),
+    (Neg, cuda_neg_storage),
+    (Swish, cuda_swish_storage),
+    (Sign, cuda_sign_storage),
+    (Floor, cuda_floor_storage),
+    (Ceil, cuda_ceil_storage),
+    (Round, cuda_round_storage),
+    (Log2, cuda_log2_storage),
+    (Log10, cuda_log10_storage),
+    (Sin, cuda_sin_storage),
+    (Cos, cuda_cos_storage),
+    (Tan, cuda_tan_storage),
+    (Asin, cuda_asin_storage),
+    (Acos, cuda_acos_storage),
+    (Atan, cuda_atan_storage),
+    (Sinh, cuda_sinh_storage),
+    (Cosh, cuda_cosh_storage),
+    (Asinh, cuda_asinh_storage),
+    (Acosh, cuda_acosh_storage),
+    (Atanh, cuda_atanh_storage),
+    (Erf, cuda_erf_storage),
+    (Rsqrt, cuda_rsqrt_storage),
+    (Trunc, cuda_trunc_storage),
+    (Frac, cuda_frac_storage),
 ];
 
 impl<D: Device> Execute<op::ReshapeExact> for CudaBackendImpl<D> {
@@ -159,11 +209,20 @@ impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
         &self,
         request: ExecutionRequest<'_, op::Conv2dExact, Self>,
     ) -> Result<CudaStorage, BackendError> {
-        let [input, weight] = request.inputs else {
-            return Err(invalid(
-                OperationKind::Conv2dExact,
-                "conv2d expects 2 inputs",
-            ));
+        // Bias is optional, matching the CPU binder in `cpu::canonical::nn` and
+        // the `Option<&Storage>` the kernel below already accepts. Refusing the
+        // three-operand form here made biased conv2d executable on CPU and
+        // unreachable on CUDA, even though `conv2d_with_bias_adds_per_channel_constant`
+        // covers the kernel's biased path directly.
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    OperationKind::Conv2dExact,
+                    "conv2d expects an activation, a weight and an optional bias",
+                ));
+            }
         };
         let input = input
             .downcast_ref::<CudaStorage>()
@@ -171,11 +230,17 @@ impl<D: Device> Execute<op::Conv2dExact> for CudaBackendImpl<D> {
         let weight = weight
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::Conv2dExact, "weight is not CUDA storage"))?;
+        let bias = bias
+            .map(|bias| {
+                bias.downcast_ref::<CudaStorage>()
+                    .ok_or_else(|| invalid(OperationKind::Conv2dExact, "bias is not CUDA storage"))
+            })
+            .transpose()?;
         let attrs = request.operation.descriptor().attributes();
         Self::conv2d::<f32>(
             input,
             weight,
-            None,
+            bias,
             attrs.stride[0],
             attrs.padding[0],
             attrs.dilation[0],
@@ -391,14 +456,13 @@ impl<D: Device> Execute<op::Softmax> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
-        crate::cuda::backend::cuda_softmax::<D>(input, axis)
+        crate::cuda::ops::norm::launch_softmax(input, axis)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
 
-/// `x / sqrt(mean(x^2, axis=-1) + eps) * weight`, composed the same way
-/// CPU's kernel is: every step below already pushes a correct tape entry, so
-/// the composite's backward is the tape replay, not new hand-derived math.
+/// Fused single-pass RMSNorm kernel: `x * rsqrt(mean(x^2) + eps) * weight` computed in
+/// registers/SRAM with zero intermediate VRAM allocations.
 impl<D: Device> Execute<op::RmsNorm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -412,16 +476,8 @@ impl<D: Device> Execute<op::RmsNorm> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let weight = downcast(weight, operation, "weight is not CUDA storage")?;
         let epsilon = request.operation.descriptor().attributes().epsilon;
-        let axis = input.shape.len().saturating_sub(1);
-        (|| {
-            let squared = crate::cuda::backend::cuda_mul_storage(input, input)?;
-            let mean = CudaBackendImpl::<D>::mean_keepdim::<f32>(&squared, axis)?;
-            let guarded = CudaBackendImpl::<D>::add_scalar_float::<f32>(&mean, epsilon)?;
-            let scale = crate::cuda::backend::cuda_sqrt_storage(&guarded)?;
-            let normalized = crate::cuda::backend::cuda_div_storage(input, &scale)?;
-            crate::cuda::backend::cuda_mul_storage(&normalized, weight)
-        })()
-        .map_err(|e| kernel_error("Cuda", operation, e))
+        crate::cuda::ops::norm::launch_rms_norm(input, weight, epsilon as f32)
+            .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
 
@@ -462,6 +518,35 @@ impl<D: Device> Execute<op::TransposeExact> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
         CudaBackendImpl::<D>::transpose::<f32>(input, attrs.first, attrs.second)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+/// A transpose that permutes metadata instead of copying.
+///
+/// `TransposeExact` on this backend runs a permutation kernel into a fresh
+/// contiguous buffer; this shares the buffer and permutes shape and strides, so
+/// it does no device work at all. The result is genuinely non-contiguous and
+/// takes the strided pointwise kernels.
+///
+/// Both exist because neither is universally better, and which wins is a
+/// property of the consumer rather than of the transpose. Measured here for a
+/// transpose plus pointwise consumption: the view is ~45% faster when the
+/// result is read once and ~23% slower when it is read eight times, crossing
+/// over at about four reads. See `ops::view_cost_bench` and issue #113.
+impl<D: Device> Execute<op::TransposeView> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TransposeView, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::TransposeView;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "transpose_view expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        crate::cuda::ops::shape::launch_transpose_view(input, attrs.first, attrs.second)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
@@ -659,7 +744,11 @@ impl<D: Device> Execute<op::Addmm> for CudaBackendImpl<D> {
             let scaled_product =
                 CudaBackendImpl::<D>::mul_scalar_float::<f32>(&product, attrs.alpha)?;
             let scaled_mat = CudaBackendImpl::<D>::mul_scalar_float::<f32>(mat, attrs.beta)?;
-            crate::cuda::backend::cuda_add_storage(&scaled_mat, &scaled_product)
+            crate::cuda::backend::cuda_add_storage(
+                &scaled_mat,
+                &scaled_product,
+                crate::kernel::KernelSpecialization::NONE,
+            )
         })()
         .map_err(|e| kernel_error("Cuda", operation, e))
     }
@@ -681,7 +770,11 @@ impl<D: Device> Execute<op::Dot> for CudaBackendImpl<D> {
         let lhs = downcast(lhs, operation, "lhs is not CUDA storage")?;
         let rhs = downcast(rhs, operation, "rhs is not CUDA storage")?;
         (|| {
-            let product = crate::cuda::backend::cuda_mul_storage(lhs, rhs)?;
+            let product = crate::cuda::backend::cuda_mul_storage(
+                lhs,
+                rhs,
+                crate::kernel::KernelSpecialization::NONE,
+            )?;
             CudaBackendImpl::<D>::sum_all::<f32>(&product)
         })()
         .map_err(|e| kernel_error("Cuda", operation, e))
@@ -706,7 +799,11 @@ impl<D: Device> Execute<op::Outer> for CudaBackendImpl<D> {
         (|| {
             let column = CudaBackendImpl::<D>::unsqueeze::<f32>(lhs, 1)?;
             let row = CudaBackendImpl::<D>::unsqueeze::<f32>(rhs, 0)?;
-            crate::cuda::backend::cuda_mul_storage(&column, &row)
+            crate::cuda::backend::cuda_mul_storage(
+                &column,
+                &row,
+                crate::kernel::KernelSpecialization::NONE,
+            )
         })()
         .map_err(|e| kernel_error("Cuda", operation, e))
     }
@@ -751,12 +848,15 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
             let scale = attrs.scale.unwrap_or_else(|| 1.0 / d_k.sqrt());
             let scaled_scores = CudaBackendImpl::<D>::mul_scalar_float::<f32>(&scores, scale)?;
             let masked_scores = match mask {
-                Some(mask) => crate::cuda::backend::cuda_add_storage(&scaled_scores, mask)?,
+                Some(mask) => crate::cuda::backend::cuda_add_storage(
+                    &scaled_scores,
+                    mask,
+                    crate::kernel::KernelSpecialization::NONE,
+                )?,
                 None => scaled_scores,
             };
             let attention_axis = masked_scores.shape.len().saturating_sub(1);
-            let attention =
-                crate::cuda::backend::cuda_softmax::<D>(&masked_scores, attention_axis)?;
+            let attention = crate::cuda::ops::norm::launch_softmax(&masked_scores, attention_axis)?;
             CudaBackendImpl::<D>::batched_matmul::<f32>(&attention, value)
         })()
         .map_err(|e| kernel_error("Cuda", operation, e))
@@ -785,7 +885,12 @@ macro_rules! impl_cuda_scalar_tensor {
     )*};
 }
 
-impl_cuda_scalar_tensor![(SubScalar, sub_scalar_float), (DivScalar, div_scalar_float),];
+impl_cuda_scalar_tensor![
+    (AddScalar, add_scalar_float),
+    (SubScalar, sub_scalar_float),
+    (MulScalar, mul_scalar_float),
+    (DivScalar, div_scalar_float),
+];
 
 /// Numeric comparisons, each producing fresh `bool` storage.
 ///
@@ -1077,6 +1182,7 @@ impl_cuda_reduction_all![
     (MeanAll, CudaBackendImpl::<D>::mean_all::<f32>),
     (MaxAll, CudaBackendImpl::<D>::max_all::<f32>),
     (MinAll, CudaBackendImpl::<D>::min_all::<f32>),
+    (ProdAll, CudaBackendImpl::<D>::prod_all::<f32>),
 ];
 
 impl_cuda_reduction_dim![
@@ -1098,7 +1204,1302 @@ impl_cuda_reduction_dim![
     (MinKeepDim, |input, axis| {
         CudaBackendImpl::<D>::min_keepdim::<f32>(input, axis)
     }),
+    (ProdDim, CudaBackendImpl::<D>::prod_dim::<f32>),
 ];
+
+impl<D: Device> Execute<op::VarianceAll> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::VarianceAll, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::VarianceAll;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "var_all expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let unbiased = request.operation.descriptor().attributes().unbiased;
+        CudaBackendImpl::<D>::var_all::<f32>(input, unbiased)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::VarianceDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::VarianceDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::VarianceDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "var_dim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::var_dim::<f32>(input, attrs.axis, attrs.unbiased)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::VarianceKeepDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::VarianceKeepDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::VarianceKeepDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "var_keepdim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::var_keepdim::<f32>(input, attrs.axis, attrs.unbiased)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::StdAll> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::StdAll, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::StdAll;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "std_all expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let unbiased = request.operation.descriptor().attributes().unbiased;
+        CudaBackendImpl::<D>::std_all::<f32>(input, unbiased)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::StdDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::StdDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::StdDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "std_dim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::std_dim::<f32>(input, attrs.axis, attrs.unbiased)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::StdKeepDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::StdKeepDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::StdKeepDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "std_keepdim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::std_keepdim::<f32>(input, attrs.axis, attrs.unbiased)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Cumsum> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Cumsum, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Cumsum;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "cumsum expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        CudaBackendImpl::<D>::cumsum::<f32>(input, axis)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::EmbeddingExact> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::EmbeddingExact, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::EmbeddingExact;
+        let [indices, weight] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "embedding expects an index tensor and a weight table",
+            ));
+        };
+        let indices = downcast(indices, operation, "indices is not CUDA storage")?;
+        let weight = downcast(weight, operation, "weight is not CUDA storage")?;
+        CudaBackendImpl::<D>::embedding::<f32, i64>(weight, indices)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Gather> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Gather, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Gather;
+        let [input, index] = request.inputs else {
+            return Err(invalid(operation, "gather expects 2 inputs"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let index = downcast(index, operation, "index is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        CudaBackendImpl::<D>::gather::<f32, i64>(input, axis, index)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Scatter> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Scatter, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Scatter;
+        let [input, index, src] = request.inputs else {
+            return Err(invalid(operation, "scatter expects 3 inputs"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let index = downcast(index, operation, "index is not CUDA storage")?;
+        let src = downcast(src, operation, "src is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        CudaBackendImpl::<D>::scatter::<f32, i64>(input, axis, index, src)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Diag> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Diag, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Diag;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "diag expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let diagonal = request.operation.descriptor().attributes().offset;
+        CudaBackendImpl::<D>::diag::<f32>(input, diagonal)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Pad> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Pad, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Pad;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "pad expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::pad::<f32>(input, &attrs.padding, attrs.value)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Repeat> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Repeat, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Repeat;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "repeat expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let repeats = &request.operation.descriptor().attributes().repeats;
+        CudaBackendImpl::<D>::repeat::<f32>(input, repeats)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Tril> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Tril, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Tril;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "tril expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let diagonal = request.operation.descriptor().attributes().offset;
+        CudaBackendImpl::<D>::tril::<f32>(input, diagonal)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Triu> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Triu, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Triu;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "triu expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let diagonal = request.operation.descriptor().attributes().offset;
+        CudaBackendImpl::<D>::triu::<f32>(input, diagonal)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Powf> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Powf, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Powf;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "powf expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let exp = request.operation.descriptor().attributes().value;
+        CudaBackendImpl::<D>::powf::<f32>(input, exp)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Clamp> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Clamp, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Clamp;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "clamp expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::clamp::<f32>(input, attrs.min, attrs.max)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+macro_rules! impl_cuda_binary_math {
+    ($(($op:ident, $func:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
+            type Output = CudaStorage;
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<CudaStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [lhs, rhs] = request.inputs else {
+                    return Err(invalid(operation, "operation expects 2 operands"));
+                };
+                let lhs = downcast(lhs, operation, "lhs is not CUDA storage")?;
+                let rhs = downcast(rhs, operation, "rhs is not CUDA storage")?;
+                CudaBackendImpl::<D>::$func::<f32>(lhs, rhs)
+                    .map_err(|e| kernel_error("Cuda", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_cuda_binary_math![(Atan2, atan2), (Fmod, fmod), (Remainder, remainder),];
+
+impl<D: Device> Execute<op::Lerp> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Lerp, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Lerp;
+        let [start, end] = request.inputs else {
+            return Err(invalid(operation, "lerp expects 2 inputs"));
+        };
+        let start = downcast(start, operation, "start is not CUDA storage")?;
+        let end = downcast(end, operation, "end is not CUDA storage")?;
+        let weight = request.operation.descriptor().attributes().weight;
+        crate::cuda::backend::cuda_lerp_storage(start, end, weight)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+macro_rules! impl_cuda_index_reduction {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
+            type Output = CudaStorage;
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<CudaStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "operation expects 1 operand"));
+                };
+                let input = downcast(input, operation, "input is not CUDA storage")?;
+                let attrs = request.operation.descriptor().attributes();
+                match attrs.axis {
+                    Some(axis) => CudaBackendImpl::<D>::$method::<i64>(input, Some(axis)),
+                    None => CudaBackendImpl::<D>::$method::<i64>(input, None),
+                }
+                .map_err(|e| kernel_error("Cuda", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_cuda_index_reduction![(ArgMax, argmax), (ArgMin, argmin),];
+
+impl<D: Device> Execute<op::TopK> for CudaBackendImpl<D> {
+    type Output = (CudaStorage, CudaStorage);
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TopK, Self>,
+    ) -> Result<(CudaStorage, CudaStorage), BackendError> {
+        let operation = OperationKind::TopK;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "topk expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::topk::<i64>(input, attrs.k, attrs.axis, attrs.largest)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Quantize> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Quantize, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Quantize;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "quantize expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let dtype = request.operation.descriptor().attributes().dtype;
+        if dtype != DTypeId::Q8_0.descriptor() {
+            return Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType { operation, dtype },
+            ));
+        }
+        crate::cuda::ops::quant::launch_quantize_q8_0(input)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Dequantize> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Dequantize, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Dequantize;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "dequantize expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let dtype = request.operation.descriptor().attributes().dtype;
+        if dtype != DTypeId::F32.descriptor() {
+            return Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType { operation, dtype },
+            ));
+        }
+        crate::cuda::ops::quant::launch_dequantize_q8_0(input)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::QuantizedMatMul> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::QuantizedMatMul, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::QuantizedMatMul;
+        let [lhs, rhs] = request.inputs else {
+            return Err(invalid(operation, "quantized_matmul expects 2 inputs"));
+        };
+        let lhs = downcast(lhs, operation, "lhs is not CUDA storage")?;
+        let rhs = downcast(rhs, operation, "rhs is not CUDA storage")?;
+        crate::cuda::ops::quant::launch_quantized_matmul_q8_0(lhs, rhs)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Linear> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Linear, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Linear;
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "linear expects an input, a weight and an optional bias",
+                ));
+            }
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let weight = downcast(weight, operation, "weight is not CUDA storage")?;
+        let bias = bias
+            .map(|b| downcast(b, operation, "bias is not CUDA storage"))
+            .transpose()?;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let unbatched = input.shape.len() == 1;
+        let promoted;
+        let rows = if unbatched {
+            promoted =
+                crate::cuda::backend::shape_ops::cuda_reshape_storage(input, &[1, input.shape[0]])
+                    .map_err(wrap)?;
+            &promoted
+        } else {
+            input
+        };
+
+        let transposed =
+            crate::cuda::backend::shape_ops::cuda_transpose_storage(weight, 0, 1).map_err(wrap)?;
+        let product = crate::cuda::backend::shape_ops::cuda_matmul_storage(rows, &transposed)
+            .map_err(wrap)?;
+        let projected = match bias {
+            None => product,
+            Some(bias) => crate::cuda::backend::elementwise::cuda_add_storage(
+                &product,
+                bias,
+                crate::kernel::KernelSpecialization::NONE,
+            )
+            .map_err(wrap)?,
+        };
+
+        if unbatched {
+            let out_dim = projected.shape[projected.shape.len() - 1];
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(&projected, &[out_dim])
+                .map_err(wrap)
+        } else {
+            Ok(projected)
+        }
+    }
+}
+
+impl<D: Device> Execute<op::Dropout> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Dropout, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Dropout;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "dropout expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attributes = request.operation.descriptor().attributes();
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        if !attributes.training || attributes.probability <= 0.0 {
+            return Ok(input.clone());
+        }
+        if attributes.probability >= 1.0 {
+            return crate::cuda::backend::elementwise::cuda_mul_scalar_float(input, 0.0)
+                .map_err(wrap);
+        }
+
+        let draw = Self::rand::<f32>(
+            &input.shape,
+            DTypeId::F32.descriptor(),
+            &DeviceId::cuda(input.buffer.device_id),
+        )
+        .map_err(wrap)?;
+        let shifted = crate::cuda::backend::elementwise::cuda_add_scalar_float(
+            &draw,
+            -attributes.probability,
+        )
+        .map_err(wrap)?;
+        let mask = crate::cuda::backend::elementwise::cuda_step_storage(
+            &shifted,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
+        let kept = crate::cuda::backend::elementwise::cuda_mul_storage(
+            input,
+            &mask,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
+        crate::cuda::backend::elementwise::cuda_mul_scalar_float(
+            &kept,
+            1.0 / (1.0 - attributes.probability),
+        )
+        .map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::Conv1dExact> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Conv1dExact, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Conv1dExact;
+        let attributes = request.operation.descriptor().attributes();
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv1d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = downcast(activation, operation, "activation is not CUDA storage")?;
+        let weight = downcast(weight, operation, "weight is not CUDA storage")?;
+        let bias = bias
+            .map(|b| downcast(b, operation, "bias is not CUDA storage"))
+            .transpose()?;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let unbatched = activation.shape.len() == 2;
+        let (b, cin, len) = if unbatched {
+            (1, activation.shape[0], activation.shape[1])
+        } else {
+            (
+                activation.shape[0],
+                activation.shape[1],
+                activation.shape[2],
+            )
+        };
+        let (cout, cin_g, k_len) = (weight.shape[0], weight.shape[1], weight.shape[2]);
+
+        let act_2d =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(activation, &[b, cin, 1, len])
+                .map_err(wrap)?;
+        let weight_2d =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(weight, &[cout, cin_g, 1, k_len])
+                .map_err(wrap)?;
+        let out_2d = CudaBackendImpl::<D>::conv2d::<f32>(
+            &act_2d,
+            &weight_2d,
+            bias,
+            attributes.stride,
+            attributes.padding,
+            attributes.dilation,
+            attributes.groups,
+        )
+        .map_err(wrap)?;
+
+        let out_len = out_2d.shape[3];
+        if unbatched {
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(&out_2d, &[cout, out_len])
+                .map_err(wrap)
+        } else {
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(&out_2d, &[b, cout, out_len])
+                .map_err(wrap)
+        }
+    }
+}
+
+impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ConvTranspose2d, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::ConvTranspose2d;
+        let attributes = request.operation.descriptor().attributes();
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv_transpose2d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = downcast(activation, operation, "activation is not CUDA storage")?;
+        let weight = downcast(weight, operation, "weight is not CUDA storage")?;
+        let bias = bias
+            .map(|b| downcast(b, operation, "bias is not CUDA storage"))
+            .transpose()?;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let [stride_h, _stride_w] = attributes.stride;
+        let [pad_h, _pad_w] = attributes.padding;
+        let [out_pad_h, out_pad_w] = attributes.output_padding;
+        let [dil_h, _dil_w] = attributes.dilation;
+
+        let unbatched = activation.shape.len() == 3;
+        let (b, cin, h, w) = if unbatched {
+            (
+                1,
+                activation.shape[0],
+                activation.shape[1],
+                activation.shape[2],
+            )
+        } else {
+            (
+                activation.shape[0],
+                activation.shape[1],
+                activation.shape[2],
+                activation.shape[3],
+            )
+        };
+        let (_cin_w, cout, kh, kw) = (
+            weight.shape[0],
+            weight.shape[1],
+            weight.shape[2],
+            weight.shape[3],
+        );
+
+        let h_out = (h - 1) * stride_h + dil_h * (kh - 1) + 1 + out_pad_h - 2 * pad_h;
+        let w_out = (w - 1) * stride_h + dil_h * (kw - 1) + 1 + out_pad_w - 2 * pad_h;
+
+        let act_4d = if unbatched {
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(activation, &[1, cin, h, w])
+                .map_err(wrap)?
+        } else {
+            activation.clone()
+        };
+
+        let w_mat =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(weight, &[cin, cout * kh * kw])
+                .map_err(wrap)?;
+        let act_flat =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(&act_4d, &[b, cin, h * w])
+                .map_err(wrap)?;
+
+        let mut batch_cols = Vec::with_capacity(b);
+        let w_mat_t =
+            crate::cuda::backend::shape_ops::cuda_transpose_storage(&w_mat, 0, 1).map_err(wrap)?;
+        for bi in 0..b {
+            let act_b = crate::cuda::backend::shape_ops::cuda_narrow_storage(&act_flat, 0, bi, 1)
+                .map_err(wrap)?;
+            let act_b_sq =
+                crate::cuda::backend::shape_ops::cuda_squeeze_storage(&act_b, 0).map_err(wrap)?;
+            let cols_b = crate::cuda::backend::shape_ops::cuda_matmul_storage(&w_mat_t, &act_b_sq)
+                .map_err(wrap)?;
+            let cols_b_unsq = crate::cuda::backend::shape_ops::cuda_unsqueeze_storage(&cols_b, 0)
+                .map_err(wrap)?;
+            batch_cols.push(cols_b_unsq);
+        }
+        let cols = if b == 1 {
+            batch_cols.into_iter().next().unwrap()
+        } else {
+            let refs: Vec<&CudaStorage> = batch_cols.iter().collect();
+            crate::cuda::backend::shape_ops::cuda_concat_storage(&refs, 0).map_err(wrap)?
+        };
+
+        let spec = crate::cuda::ops::conv::Col2Im2dSpec {
+            h_out,
+            w_out,
+            kh,
+            kw,
+            stride: stride_h,
+            padding: pad_h,
+            dilation: dil_h,
+        };
+        let target_shape = vec![b, cout, h_out, w_out];
+        let out_4d =
+            crate::cuda::ops::conv::launch_col2im_2d(&cols, &target_shape, spec).map_err(wrap)?;
+
+        let with_bias = match bias {
+            Some(b_storage) => {
+                let b_reshaped = crate::cuda::backend::shape_ops::cuda_reshape_storage(
+                    b_storage,
+                    &[1, cout, 1, 1],
+                )
+                .map_err(wrap)?;
+                crate::cuda::backend::elementwise::cuda_add_storage(
+                    &out_4d,
+                    &b_reshaped,
+                    crate::kernel::KernelSpecialization::NONE,
+                )
+                .map_err(wrap)?
+            }
+            None => out_4d,
+        };
+
+        if unbatched {
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(&with_bias, &[cout, h_out, w_out])
+                .map_err(wrap)
+        } else {
+            Ok(with_bias)
+        }
+    }
+}
+
+impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::AdaptiveAvgPool2dExact, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::AdaptiveAvgPool2dExact;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "adaptive_avg_pool2d expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let [out_h, out_w] = request.operation.descriptor().attributes().output;
+        let output_size = (out_h, out_w);
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let unbatched = input.shape.len() == 3;
+        let promoted;
+        let x = if unbatched {
+            promoted = crate::cuda::backend::shape_ops::cuda_reshape_storage(
+                input,
+                &[1, input.shape[0], input.shape[1], input.shape[2]],
+            )
+            .map_err(wrap)?;
+            &promoted
+        } else {
+            input
+        };
+
+        let pooled =
+            crate::cuda::ops::pool::launch_adaptive_avg_pool2d(x, output_size).map_err(wrap)?;
+        if unbatched {
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(
+                &pooled,
+                &[pooled.shape[1], pooled.shape[2], pooled.shape[3]],
+            )
+            .map_err(wrap)
+        } else {
+            Ok(pooled)
+        }
+    }
+}
+
+impl<D: Device> Execute<op::GroupNorm> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupNorm, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::GroupNorm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "group_norm expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attributes = request.operation.descriptor().attributes();
+        cuda_group_norm_storage(input, attributes.groups, attributes.epsilon)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::InstanceNorm> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::InstanceNorm, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::InstanceNorm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "instance_norm expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        cuda_instance_norm_storage(input, epsilon).map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+pub(crate) fn cuda_group_norm_storage(
+    t: &CudaStorage,
+    groups: usize,
+    eps: f64,
+) -> Result<CudaStorage, incin_core::error::Error> {
+    let total = t.shape.iter().product::<usize>();
+    if groups == 0 {
+        return Err(incin_core::error::Error::Msg(
+            "group_norm: groups must be non-zero".into(),
+        ));
+    }
+    let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+    if channels % groups != 0 {
+        return Err(incin_core::error::Error::Msg(
+            "group_norm: channels must be divisible by groups".into(),
+        ));
+    }
+    let (batch, spatial) = if t.shape.len() >= 2 {
+        (t.shape[0], t.shape[2..].iter().product::<usize>())
+    } else {
+        (1, total)
+    };
+    let group_size = channels / groups * spatial;
+    let runs = batch * groups;
+    let flat = crate::cuda::backend::shape_ops::cuda_reshape_storage(t, &[runs, group_size])?;
+    let mean = crate::cuda::backend::reduce::cuda_mean_dim_keepdim(&flat, 1)?;
+    let centered = crate::cuda::backend::elementwise::cuda_sub_storage(
+        &flat,
+        &mean,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let squared = crate::cuda::backend::elementwise::cuda_mul_storage(
+        &centered,
+        &centered,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let variance = crate::cuda::backend::reduce::cuda_mean_dim_keepdim(&squared, 1)?;
+    let guarded = crate::cuda::backend::elementwise::cuda_add_scalar_float(&variance, eps)?;
+    let std = crate::cuda::backend::elementwise::cuda_sqrt_storage(
+        &guarded,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let normalized = crate::cuda::backend::elementwise::cuda_div_storage(
+        &centered,
+        &std,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    crate::cuda::backend::shape_ops::cuda_reshape_storage(&normalized, &t.shape)
+}
+
+pub(crate) fn cuda_instance_norm_storage(
+    t: &CudaStorage,
+    eps: f64,
+) -> Result<CudaStorage, incin_core::error::Error> {
+    let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+    cuda_group_norm_storage(t, channels, eps)
+}
+
+impl<D: Device> Execute<op::IndexSelect> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::IndexSelect, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::IndexSelect;
+        let [input, index] = request.inputs else {
+            return Err(invalid(operation, "index_select expects 2 inputs"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let index = downcast(index, operation, "index is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let mut idx_expanded_shape = vec![1usize; input.shape.len()];
+        idx_expanded_shape[axis] = index.shape.iter().product::<usize>();
+        let mut out_shape = input.shape.to_vec();
+        out_shape[axis] = idx_expanded_shape[axis];
+        let idx_reshaped =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(index, &idx_expanded_shape)
+                .map_err(wrap)?;
+        let idx_broadcasted =
+            crate::cuda::backend::shape_ops::cuda_broadcast_as_storage(&idx_reshaped, &out_shape)
+                .map_err(wrap)?;
+        crate::cuda::ops::shape::launch_gather(input, axis, &idx_broadcasted).map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::PixelShuffle> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::PixelShuffle, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::PixelShuffle;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "pixel_shuffle expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let r = request.operation.descriptor().attributes().upscale_factor;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        if input.shape.len() != 4 {
+            return Err(invalid(
+                operation,
+                "pixel_shuffle expects 4D tensor (N, C, H, W)",
+            ));
+        }
+        let (n, c, h, w) = (
+            input.shape[0],
+            input.shape[1],
+            input.shape[2],
+            input.shape[3],
+        );
+        let r_sq = r * r;
+        if c % r_sq != 0 {
+            return Err(invalid(
+                operation,
+                "pixel_shuffle channels must be divisible by upscale_factor^2",
+            ));
+        }
+        let out_c = c / r_sq;
+        let out_h = h * r;
+        let out_w = w * r;
+
+        let s1 =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(input, &[n, out_c, r, r, h, w])
+                .map_err(wrap)?;
+        let p1 =
+            crate::cuda::backend::shape_ops::cuda_transpose_storage(&s1, 2, 4).map_err(wrap)?;
+        let p2 =
+            crate::cuda::backend::shape_ops::cuda_transpose_storage(&p1, 3, 4).map_err(wrap)?;
+        let p3 =
+            crate::cuda::backend::shape_ops::cuda_transpose_storage(&p2, 4, 5).map_err(wrap)?;
+        crate::cuda::backend::shape_ops::cuda_reshape_storage(&p3, &[n, out_c, out_h, out_w])
+            .map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::Unfold> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Unfold, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Unfold;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "unfold expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attributes = request.operation.descriptor().attributes();
+        let (axis, size, step) = (attributes.axis, attributes.size, attributes.step);
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let dim_len = input.shape[axis];
+        if size > dim_len {
+            return Err(invalid(
+                operation,
+                "unfold size cannot exceed dimension length",
+            ));
+        }
+        let n_windows = (dim_len - size) / step + 1;
+        let mut window_slices = Vec::with_capacity(n_windows);
+        for i in 0..n_windows {
+            let win =
+                crate::cuda::backend::shape_ops::cuda_narrow_storage(input, axis, i * step, size)
+                    .map_err(wrap)?;
+            let win_unsq = crate::cuda::backend::shape_ops::cuda_unsqueeze_storage(&win, axis)
+                .map_err(wrap)?;
+            window_slices.push(win_unsq);
+        }
+        let refs: Vec<&CudaStorage> = window_slices.iter().collect();
+        let joined =
+            crate::cuda::backend::shape_ops::cuda_concat_storage(&refs, axis).map_err(wrap)?;
+        let mut curr = joined;
+        for d in (axis + 1)..(curr.shape.len() - 1) {
+            curr = crate::cuda::backend::shape_ops::cuda_transpose_storage(&curr, d, d + 1)
+                .map_err(wrap)?;
+        }
+        Ok(curr)
+    }
+}
+
+impl<D: Device> Execute<op::ToDType> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ToDType, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::ToDType;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "to_dtype expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let target_dtype = request.operation.descriptor().attributes().dtype;
+        if input.buffer.dtype == target_dtype {
+            return Ok(input.clone());
+        }
+        let total = input.shape.iter().product::<usize>();
+        let byte_len = crate::bytes::byte_len(target_dtype, total, operation)
+            .map_err(|e| kernel_error("Cuda", operation, e))?;
+        let stream = input.buffer.device.default_stream();
+        let out_buffer = CudaBuffer {
+            len: total,
+            dtype: target_dtype,
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                kernel_error(
+                    "Cuda",
+                    operation,
+                    incin_core::error::Error::Msg(format!("{e:?}")),
+                )
+            })?),
+            device: input.buffer.device.clone(),
+            device_id: input.buffer.device_id,
+        };
+        Ok(CudaStorage::new(Arc::new(out_buffer), input.shape.to_vec()))
+    }
+}
+
+fn cuda_loss_reduction(reduction: LossReduction) -> Reduction {
+    match reduction {
+        LossReduction::None => Reduction::None,
+        LossReduction::Mean => Reduction::Mean,
+        LossReduction::Sum => Reduction::Sum,
+    }
+}
+
+fn cuda_reduce_loss(
+    t: CudaStorage,
+    reduction: incin_core::tensor::reduction::Reduction,
+) -> Result<CudaStorage, incin_core::error::Error> {
+    match reduction {
+        incin_core::tensor::reduction::Reduction::Mean => {
+            crate::cuda::backend::reduce::cuda_mean_all_storage(&t)
+        }
+        incin_core::tensor::reduction::Reduction::Sum => {
+            crate::cuda::backend::reduce::cuda_sum_all_storage(&t)
+        }
+        incin_core::tensor::reduction::Reduction::None => Ok(t),
+    }
+}
+
+macro_rules! cuda_loss_executors {
+    ($(($operation:ident, $func:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$operation> for CudaBackendImpl<D> {
+            type Output = CudaStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$operation, Self>,
+            ) -> Result<CudaStorage, BackendError> {
+                let operation = OperationKind::$operation;
+                let [pred, target] = request.inputs else {
+                    return Err(invalid(operation, "loss expects 2 inputs"));
+                };
+                let pred = downcast(pred, operation, "pred is not CUDA storage")?;
+                let target = downcast(target, operation, "target is not CUDA storage")?;
+                let reduction = cuda_loss_reduction(request.operation.descriptor().attributes().reduction);
+                $func(pred, target, reduction)
+                    .map_err(|error| kernel_error("Cuda", operation, error))
+            }
+        }
+    )*};
+}
+
+pub(crate) fn cuda_mse_loss_storage(
+    pred: &CudaStorage,
+    target: &CudaStorage,
+    reduction: incin_core::tensor::reduction::Reduction,
+) -> Result<CudaStorage, incin_core::error::Error> {
+    let diff = crate::cuda::backend::elementwise::cuda_sub_storage(
+        pred,
+        target,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let squared = crate::cuda::backend::elementwise::cuda_mul_storage(
+        &diff,
+        &diff,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    cuda_reduce_loss(squared, reduction)
+}
+
+pub(crate) fn cuda_l1_loss_storage(
+    pred: &CudaStorage,
+    target: &CudaStorage,
+    reduction: incin_core::tensor::reduction::Reduction,
+) -> Result<CudaStorage, incin_core::error::Error> {
+    let diff = crate::cuda::backend::elementwise::cuda_sub_storage(
+        pred,
+        target,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let absolute = crate::cuda::backend::elementwise::cuda_abs_storage(
+        &diff,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    cuda_reduce_loss(absolute, reduction)
+}
+
+pub(crate) fn cuda_bce_with_logits_loss_storage(
+    pred: &CudaStorage,
+    target: &CudaStorage,
+    reduction: incin_core::tensor::reduction::Reduction,
+) -> Result<CudaStorage, incin_core::error::Error> {
+    let max_x_0 = crate::cuda::backend::elementwise::cuda_relu_storage(
+        pred,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let x_times_z = crate::cuda::backend::elementwise::cuda_mul_storage(
+        pred,
+        target,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let term1 = crate::cuda::backend::elementwise::cuda_sub_storage(
+        &max_x_0,
+        &x_times_z,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let abs_x = crate::cuda::backend::elementwise::cuda_abs_storage(
+        pred,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let neg_abs_x = crate::cuda::backend::elementwise::cuda_neg_storage(
+        &abs_x,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let exp_neg_abs_x = crate::cuda::backend::elementwise::cuda_exp_storage(
+        &neg_abs_x,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let one_plus_exp =
+        crate::cuda::backend::elementwise::cuda_add_scalar_float(&exp_neg_abs_x, 1.0)?;
+    let log_term = crate::cuda::backend::elementwise::cuda_log_storage(
+        &one_plus_exp,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    let unreduced = crate::cuda::backend::elementwise::cuda_add_storage(
+        &term1,
+        &log_term,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    cuda_reduce_loss(unreduced, reduction)
+}
+
+cuda_loss_executors![
+    (MseLoss, cuda_mse_loss_storage),
+    (L1Loss, cuda_l1_loss_storage),
+    (BceWithLogitsLoss, cuda_bce_with_logits_loss_storage),
+];
+
+impl<D: Device> Execute<op::CrossEntropyLoss> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::CrossEntropyLoss, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::CrossEntropyLoss;
+        let [logits, target] = request.inputs else {
+            return Err(invalid(operation, "cross_entropy_loss expects 2 inputs"));
+        };
+        let logits = downcast(logits, operation, "logits is not CUDA storage")?;
+        let target = downcast(target, operation, "target is not CUDA storage")?;
+        let reduction = cuda_loss_reduction(request.operation.descriptor().attributes().reduction);
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        let last_dim = logits.shape.len() - 1;
+        let log_probs = crate::cuda::backend::elementwise::cuda_log_softmax::<D>(logits, last_dim)
+            .map_err(wrap)?;
+        let mut target_exp_shape = target.shape.to_vec();
+        target_exp_shape.push(1);
+        let target_exp =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(target, &target_exp_shape)
+                .map_err(wrap)?;
+        let gathered = crate::cuda::ops::shape::launch_gather(&log_probs, last_dim, &target_exp)
+            .map_err(wrap)?;
+        let neg_gathered = crate::cuda::backend::elementwise::cuda_neg_storage(
+            &gathered,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
+        let squeezed_shape = target.shape.to_vec();
+        let nll =
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(&neg_gathered, &squeezed_shape)
+                .map_err(wrap)?;
+        cuda_reduce_loss(nll, reduction).map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::Norm> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Norm, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Norm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "norm expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let order = request.operation.descriptor().attributes().order;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+
+        const NORM_ORDER_TOLERANCE: f64 = 1e-6;
+        if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
+            let magnitude = crate::cuda::backend::elementwise::cuda_abs_storage(
+                input,
+                crate::kernel::KernelSpecialization::NONE,
+            )
+            .map_err(wrap)?;
+            return crate::cuda::backend::reduce::cuda_sum_all_storage(&magnitude).map_err(wrap);
+        }
+        if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
+            let squared = crate::cuda::backend::elementwise::cuda_mul_storage(
+                input,
+                input,
+                crate::kernel::KernelSpecialization::NONE,
+            )
+            .map_err(wrap)?;
+            let summed =
+                crate::cuda::backend::reduce::cuda_sum_all_storage(&squared).map_err(wrap)?;
+            return crate::cuda::backend::elementwise::cuda_sqrt_storage(
+                &summed,
+                crate::kernel::KernelSpecialization::NONE,
+            )
+            .map_err(wrap);
+        }
+        let magnitude = crate::cuda::backend::elementwise::cuda_abs_storage(
+            input,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)?;
+        let raised = crate::cuda::backend::elementwise::cuda_powf_storage(&magnitude, order)
+            .map_err(wrap)?;
+        let summed = crate::cuda::backend::reduce::cuda_sum_all_storage(&raised).map_err(wrap)?;
+        crate::cuda::backend::elementwise::cuda_powf_storage(&summed, 1.0 / order).map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::Argsort> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Argsort, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Argsort;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "argsort expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::argsort::<i64>(input, attrs.axis, attrs.descending)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
 
 macro_rules! assert_every_advertised_cuda_row_executes {
     (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {

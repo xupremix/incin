@@ -8,7 +8,7 @@
 //! tables invoke the ungated internal path instead).
 
 use super::constants::{
-    ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES,
+    ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES, CUDA_LAYOUTS,
     CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_ONLY, FLOAT_DTYPES, INDEX_AND_F32_DTYPES, NON_QUANTIZED,
     PRECISE, Q8_ONLY,
 };
@@ -48,10 +48,18 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = NON_QUANTIZED,
     tensor_layouts = CPU_LAYOUTS,
+    logical_dtypes = BOOL_ONLY,
     legacy = [
+        // Composed, meaning it materializes the strided operand and reshapes
+        // the copy. Materializing walks the logical index space one value at a
+        // time, and a block encoding has no per-value access: thirty-two
+        // logical values share one scale, so `CpuStorage`'s copy refuses `q8_0`
+        // by name. `NON_QUANTIZED` rather than `ALL_DTYPES` for that reason.
+        // The contiguous reshape above keeps every dtype, because it rewrites
+        // metadata and never reads a value.
         CapabilityRule::new(
             OperationKind::ReshapeExact,
-            ALL_DTYPES,
+            NON_QUANTIZED,
             &[LayoutClass::Strided],
             0,
             usize::MAX,
@@ -168,7 +176,12 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     // Same `shape_op` byte-width limit as the `broadcast` row above.
     broadcast_training = F32_ONLY,
     reshape_training = FLOAT_DTYPES,
-    elementwise_layouts = CONTIGUOUS,
+    // The one row widened past `CONTIGUOUS`: the strided elementwise kernel
+    // exists, is benchmarked in `view_cost_bench`, and beats materialising for
+    // a single consumer. It was unreachable through the descriptor path because
+    // this row refused it. The others stay narrow until each has the same
+    // evidence; a row is widened by a test that fails without it.
+    elementwise_layouts = CUDA_LAYOUTS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
     reduction_layouts = CONTIGUOUS,
@@ -178,6 +191,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
+    logical_dtypes = BOOL_ONLY,
     legacy = [
         native(
             OperationKind::Storage,
@@ -389,16 +403,47 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
+    logical_dtypes = BOOL_ONLY,
     legacy = [
         native(OperationKind::Storage, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
         native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
-        // No legacy Normalization row: no WGPU kernel backs it. The typed
-        // `normalization = []` list above already advertises none, honestly;
-        // a coarse row here claimed native LayerNorm/BatchNorm support this
+        // No legacy Normalization row: no WGPU kernel backs the family. The
+        // typed `normalization = []` list above still advertises none, and a
+        // coarse row here would claim native LayerNorm/BatchNorm support this
         // backend has never executed.
+        //
+        // `softmax` is the one member that does run, so it takes a standalone
+        // row rather than joining a family row that would drag the other four
+        // in with it. It is answered by rewriting into `max_keepdim`, `sub`,
+        // `exp`, `sum_keepdim` and `log` rather than by a kernel of its own,
+        // so `Composed`; every one of those steps already pushes its own
+        // correct tape entry, so the composite's backward is the tape replay
+        // over them rather than new hand-derived math, which is what makes
+        // `training = true` a verified claim here instead of a hopeful one.
+        // Same reasoning, and the same row shape, as CUDA's `softmax` above.
+        composed_ranked(
+            OperationKind::Softmax,
+            F32_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Softmax),
+            descriptor_max_rank(OperationKind::Softmax),
+            true,
+        ),
+        // `rms_norm` on the same basis, and for the same reason it is
+        // `Composed` on CUDA: it rewrites into `mul`, `mean_keepdim`,
+        // `add_scalar`, `sqrt` and `div`, each of which pushes its own tape
+        // entry, so the backward is the replay rather than new math.
+        composed_ranked(
+            OperationKind::RmsNorm,
+            F32_ONLY,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::RmsNorm),
+            descriptor_max_rank(OperationKind::RmsNorm),
+            true,
+        ),
         CapabilityRule::new(
             OperationKind::Broadcast,
             F32_ONLY,
@@ -481,6 +526,7 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
+    logical_dtypes = BOOL_ONLY,
     legacy = [
         native(
             OperationKind::Storage,

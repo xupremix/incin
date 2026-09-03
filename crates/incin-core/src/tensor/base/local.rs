@@ -3,11 +3,13 @@ use super::error::validate_gradient_dtype;
 use crate::backend_authoring::Backend;
 use crate::dist::Local;
 use crate::err::{Error, Result};
+use crate::shapes::Layout;
 use crate::shapes::{Shape, ShapeBuf, ShapeValue};
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::{NoGrad, RequiresGrad};
 use alloc::string::ToString;
+use core::marker::PhantomData;
 
 /// Proof that raw storage and tensor metadata may be joined without repeating
 /// their invariant checks inside the constructor.
@@ -20,11 +22,24 @@ enum ConstructionWitness {
     StorageValidated,
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> {
+/// Local-placement constructors.
+///
+/// Generic over the layout parameter so a caller that has proven something
+/// about its buffer keeps that proof through construction. `Self` carries `L`,
+/// so these neither invent nor discard a claim.
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout> Tensor<S, B, K, G, Local, L> {
+    /// Wraps a gradient buffer produced for `source`.
+    ///
+    /// The gradient's layout is deliberately `Dyn` rather than `source`'s.
+    /// A gradient is a fresh allocation the backend made on its own terms, and
+    /// carrying the source's claim across would be asserting something about a
+    /// buffer this function never inspected. The source is still generic over
+    /// `L`, so asking for the gradient of a tensor that has proven something is
+    /// allowed -- the proof just does not transfer.
     pub(crate) fn from_gradient_storage(
-        source: &Tensor<S, B, K, G, Local>,
+        source: &Tensor<S, B, K, G, Local, L>,
         inner: B::Storage<K>,
-    ) -> Result<Tensor<S, B, K, NoGrad, Local>> {
+    ) -> Result<Tensor<S, B, K, NoGrad, Local, crate::shapes::Dyn>> {
         Tensor::from_parts(
             inner,
             source.shape_buf().clone(),
@@ -50,6 +65,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
             _device: device,
             _grad: grad,
             _placement: core::marker::PhantomData,
+            _layout: PhantomData,
         }
     }
 
@@ -86,6 +102,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
             _device: device,
             _grad: grad,
             _placement: core::marker::PhantomData,
+            _layout: PhantomData,
         })
     }
 
@@ -103,6 +120,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad> Tensor<S, B, K, G, Local> 
             _device: device,
             _grad: grad,
             _placement: core::marker::PhantomData,
+            _layout: PhantomData,
         }
     }
 

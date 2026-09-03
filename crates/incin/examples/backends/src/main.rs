@@ -13,10 +13,24 @@ fn main() -> Result<()> {
 
     // Tier 3: Fully compile-time WGPU - both backend family and ordinal (U0 = adapter 0)
     // known at compile time, no runtime argument needed.
-    type WgpuB = IncinBackend<WgpuN<typenum::U0>>;
-    let wgpu_tensor: Tensor<s![3, 3], WgpuB> = Tensor::zeros(())?;
-    let res2 = wgpu_tensor.relu()?;
-    println!("WGPU backend shape: {:?}", res2.dims());
+    #[cfg(feature = "wgpu")]
+    {
+        type WgpuB = IncinBackend<WgpuN<typenum::U0>>;
+        if let Ok(wgpu_tensor) = Tensor::<s![3, 3], WgpuB>::zeros(()) {
+            let res2 = wgpu_tensor.relu()?;
+            println!("WGPU backend shape: {:?}", res2.dims());
+        }
+    }
+
+    // Tier 3: Fully compile-time CUDA - both backend family and ordinal (U0 = device 0)
+    #[cfg(feature = "cuda")]
+    {
+        type CudaB = IncinBackend<CudaN<typenum::U0>>;
+        if let Ok(cuda_tensor) = Tensor::<s![3, 3], CudaB>::zeros(()) {
+            let res3 = cuda_tensor.relu()?;
+            println!("CUDA backend shape: {:?}", res3.dims());
+        }
+    }
 
     Ok(())
 }

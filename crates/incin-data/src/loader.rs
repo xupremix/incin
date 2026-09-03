@@ -72,6 +72,52 @@ pub enum DataError {
 /// A batch result returned by [`DataLoaderIter`].
 pub type BatchResult<T> = core::result::Result<T, DataError>;
 
+/// How a [`DistributedSampler`] handles a dataset whose length is not an
+/// exact multiple of the world size.
+///
+/// The two policies are not interchangeable. `Drop` keeps every sample unique
+/// per epoch but can give ranks unequal batch counts unless paired with
+/// [`DataLoaderBuilder::drop_last`]; `Pad` guarantees equal step counts, which
+/// synchronized collectives require, at the cost of double-counting samples.
+/// Double-counting corrupts evaluation metrics by a small silent amount, so
+/// evaluation should use `Drop`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemainderPolicy {
+    /// Truncate the shared permutation so every rank sees the same number of
+    /// unique samples; at most `world_size - 1` trailing samples go unseen
+    /// for that epoch.
+    Drop,
+    /// Repeat samples from the start of the shared permutation until its
+    /// length divides evenly across ranks. Every rank runs the same number
+    /// of steps; samples are reused within the epoch.
+    Pad,
+}
+
+/// Partitions one deterministic epoch across data-parallel ranks without
+/// inter-rank communication.
+///
+/// Every rank derives the same permutation of the dataset indices from
+/// `(seed, epoch)`, then reads only its own stride-`world_size` slice of it:
+/// rank `r` sees positions `r, r + world_size, r + 2 * world_size, ...`. Two
+/// ranks therefore never see the same sample in one epoch (under
+/// [`RemainderPolicy::Drop`]), and no index list is ever broadcast.
+///
+/// A sampler with `world_size: 1` and `rank: 0` is behaviorally identical to
+/// no sampler at all.
+///
+/// The rank and world size come from the caller's distributed context rather
+/// than from ambient process state, so loader behavior stays visible at the
+/// call site and testable in a single process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DistributedSampler {
+    /// Total number of ranks splitting the dataset.
+    pub world_size: usize,
+    /// This consumer's position in `0..world_size`.
+    pub rank: usize,
+    /// What happens when the length does not divide by `world_size`.
+    pub remainder: RemainderPolicy,
+}
+
 /// Collate.
 pub trait Collate<T>: Send + Sync {
     /// Output.
@@ -200,6 +246,7 @@ where
     seed: u64,
     epoch: u64,
     timeout: Option<Duration>,
+    sampler: Option<DistributedSampler>,
 }
 
 /// Configures a [`DataLoader`] before construction.
@@ -218,6 +265,7 @@ where
     seed: u64,
     epoch: u64,
     timeout: Option<Duration>,
+    sampler: Option<DistributedSampler>,
 }
 
 impl<D, C> DataLoaderBuilder<D, C>
@@ -279,6 +327,16 @@ where
         self
     }
 
+    /// Partitions each epoch across data-parallel ranks.
+    ///
+    /// See [`DistributedSampler`] for the semantics. The `rank >= world_size`
+    /// case is rejected by [`DataLoaderBuilder::build`], not at this call.
+    #[must_use]
+    pub fn sampler(mut self, sampler: DistributedSampler) -> Self {
+        self.sampler = Some(sampler);
+        self
+    }
+
     /// Builds the configured loader.
     #[must_use = "building a loader returns the configured loader or its validation error"]
     pub fn build(self) -> CoreResult<DataLoader<D, C>> {
@@ -292,6 +350,23 @@ where
                 operation: "data_loader_builder",
                 reason: ErrorMessage::new("prefetch capacity must be non-zero"),
             })?;
+        if let Some(sampler) = self.sampler.as_ref() {
+            if sampler.world_size == 0 {
+                return Err(Error::InvalidModuleState {
+                    operation: "data_loader_builder",
+                    reason: ErrorMessage::new("sampler world size must be non-zero"),
+                });
+            }
+            if sampler.rank >= sampler.world_size {
+                return Err(Error::InvalidModuleState {
+                    operation: "data_loader_builder",
+                    reason: ErrorMessage::new(format!(
+                        "sampler rank {} is out of range for world size {}",
+                        sampler.rank, sampler.world_size
+                    )),
+                });
+            }
+        }
         Ok(DataLoader {
             dataset: Arc::new(self.dataset),
             collate_fn: Arc::new(self.collate_fn),
@@ -303,6 +378,7 @@ where
             seed: self.seed,
             epoch: self.epoch,
             timeout: self.timeout,
+            sampler: self.sampler,
         })
     }
 }
@@ -331,6 +407,7 @@ where
             seed: 0,
             epoch: 0,
             timeout: None,
+            sampler: None,
         })
     }
 
@@ -348,7 +425,17 @@ where
             seed: 0,
             epoch: 0,
             timeout: None,
+            sampler: None,
         }
+    }
+
+    /// Sets the epoch used in deterministic seed derivation.
+    ///
+    /// Advancing the epoch between passes changes the shared permutation
+    /// while keeping every rank's view of it consistent, so a distributed
+    /// run sees fresh partitions without any communication.
+    pub fn set_epoch(&mut self, epoch: u64) {
+        self.epoch = epoch;
     }
 
     /// With num workers.
@@ -431,6 +518,7 @@ where
             seed: 0,
             epoch: 0,
             timeout: None,
+            sampler: None,
         }
     }
 }
@@ -548,6 +636,30 @@ where
                 .seed
                 .wrapping_add(self.epoch.wrapping_mul(0x9E37_79B9_7F4A_7C15));
             indices.shuffle(&mut StdRng::seed_from_u64(shuffle_seed));
+        }
+
+        // A distributed sampler narrows the shared permutation to this rank's
+        // stride-`world_size` slice. Every rank derives the same permutation
+        // from `(seed, epoch)` and slices it independently, so ranks stay
+        // disjoint without communicating.
+        if let Some(sampler) = self.sampler.as_ref() {
+            let world = sampler.world_size;
+            match sampler.remainder {
+                RemainderPolicy::Drop => {
+                    let usable = indices.len() - indices.len() % world;
+                    indices.truncate(usable);
+                }
+                RemainderPolicy::Pad => {
+                    let target = indices.len().next_multiple_of(world);
+                    let padding = indices[..target - indices.len()].to_vec();
+                    indices.extend_from_slice(&padding);
+                }
+            }
+            indices = indices
+                .into_iter()
+                .skip(sampler.rank)
+                .step_by(world)
+                .collect();
         }
 
         let num_batches = if self.drop_last {

@@ -33,7 +33,7 @@ def facade_features() -> list[str]:
 
 def workspace_features() -> dict[str, list[str]]:
     features: dict[str, list[str]] = {}
-    for manifest in sorted((ROOT / "crates").rglob("Cargo.toml")):
+    for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml")):
         package = tomllib.loads(manifest.read_text(encoding="utf-8")).get("package", {})
         name = package.get("name")
         if not name:
@@ -118,7 +118,7 @@ def main() -> int:
 
     expected = {
         (package, feature)
-        for manifest in (ROOT / "crates").rglob("Cargo.toml")
+        for manifest in sorted((ROOT / "crates").glob("*/Cargo.toml"))
         for package in [tomllib.loads(manifest.read_text(encoding="utf-8")).get("package", {}).get("name")]
         if package
         for feature in tomllib.loads(manifest.read_text(encoding="utf-8")).get("features", {})

@@ -56,3 +56,52 @@ extern "C" __global__ void dequantize_q8_0(
         out_chunk[i] = (float)block.qs[i] * d;
     }
 }
+
+extern "C" __global__ void quantized_matmul_q8_0(
+    const float* __restrict__ A,
+    const BlockQ8_0* __restrict__ B,
+    float* __restrict__ C,
+    int M,
+    int N,
+    int K
+) {
+    int row = blockIdx.y * 32 + threadIdx.y;
+    int col = blockIdx.x * 32 + threadIdx.x;
+    
+    int num_k_blocks = K / 32;
+    
+    __shared__ float s_a[32][32];
+    __shared__ float s_b[32][32];
+    
+    float acc = 0.0f;
+    
+    for (int kb = 0; kb < num_k_blocks; kb++) {
+        int a_col = kb * 32 + threadIdx.x;
+        if (row < M && a_col < K) {
+            s_a[threadIdx.y][threadIdx.x] = A[row * K + a_col];
+        } else {
+            s_a[threadIdx.y][threadIdx.x] = 0.0f;
+        }
+        
+        if (col < N) {
+            BlockQ8_0 b_block = B[kb * N + col];
+            float d = __half2float(b_block.d);
+            s_b[threadIdx.y][threadIdx.x] = (float)b_block.qs[threadIdx.y] * d;
+        } else {
+            s_b[threadIdx.y][threadIdx.x] = 0.0f;
+        }
+        
+        __syncthreads();
+        
+        #pragma unroll
+        for (int i = 0; i < 32; i++) {
+            acc += s_a[threadIdx.y][i] * s_b[i][threadIdx.x];
+        }
+        
+        __syncthreads();
+    }
+    
+    if (row < M && col < N) {
+        C[row * N + col] = acc;
+    }
+}

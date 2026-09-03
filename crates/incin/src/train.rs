@@ -45,7 +45,7 @@
 
 use incin_core::backend_authoring::Backend;
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin_core::exec::{LossScaleState, LossScaling};
+use incin_core::exec::{LossScaleState, LossScaling, RuntimePrecisionPolicy};
 use incin_core::optim::{Optimizer, ScaledOptimizer};
 use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
@@ -56,7 +56,12 @@ use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceS
 /// The same order `incin_backends::detect::PREFERENCE` uses, restated here
 /// rather than imported so that this module's behaviour does not change when a
 /// backend crate reorders its own detection for an unrelated reason.
-const FASTEST_ORDER: &[DeviceKind] = &[DeviceKind::Cuda, DeviceKind::Wgpu, DeviceKind::Cpu];
+const FASTEST_ORDER: &[DeviceKind] = &[
+    DeviceKind::Cuda,
+    DeviceKind::Metal,
+    DeviceKind::Wgpu,
+    DeviceKind::Cpu,
+];
 
 // ============================================================================
 // The machine
@@ -142,6 +147,7 @@ pub struct Plan {
     devices: DeviceSet,
     epochs: usize,
     loss_scaling: LossScaling,
+    precision: RuntimePrecisionPolicy,
     decisions: Vec<Decision>,
 }
 
@@ -162,6 +168,12 @@ impl Plan {
     #[must_use]
     pub fn loss_scaling(&self) -> LossScaling {
         self.loss_scaling
+    }
+
+    /// The runtime precision policy configured for this plan.
+    #[must_use]
+    pub fn precision(&self) -> RuntimePrecisionPolicy {
+        self.precision
     }
 
     /// Every decision the planner made, in the order it made them.
@@ -323,6 +335,10 @@ fn device_at(kind: DeviceKind, ordinal: usize) -> Option<DeviceId> {
     match kind {
         DeviceKind::Cpu => (ordinal == 0).then(DeviceId::cpu),
         DeviceKind::Cuda => Some(DeviceId::cuda(ordinal)),
+        // Metal resolves ordinal 0 only: the backend family has no
+        // multi-ordinal device spelling yet, so higher ordinals are a
+        // missing device, not a guess.
+        DeviceKind::Metal => (ordinal == 0).then(|| DeviceId::metal(ordinal)),
         DeviceKind::Wgpu => Some(DeviceId::wgpu(ordinal)),
         _ => None,
     }
@@ -333,6 +349,7 @@ const fn feature_for(kind: DeviceKind) -> &'static str {
     match kind {
         DeviceKind::Cpu => "cpu",
         DeviceKind::Cuda => "cuda",
+        DeviceKind::Metal => "metal",
         DeviceKind::Wgpu => "wgpu",
         // `DeviceKind` is `#[non_exhaustive]` outside `incin-core`. A family
         // added later has no feature name here, and naming the crate is more
@@ -355,6 +372,7 @@ pub struct TrainerBuilder {
     preference: DevicePreference,
     epochs: usize,
     loss_scaling: LossScaling,
+    precision: RuntimePrecisionPolicy,
 }
 
 impl Default for TrainerBuilder {
@@ -363,6 +381,7 @@ impl Default for TrainerBuilder {
             preference: DevicePreference::default(),
             epochs: 1,
             loss_scaling: LossScaling::None,
+            precision: RuntimePrecisionPolicy::default(),
         }
     }
 }
@@ -395,6 +414,20 @@ impl TrainerBuilder {
     pub fn loss_scaling(mut self, loss_scaling: LossScaling) -> Self {
         self.loss_scaling = loss_scaling;
         self
+    }
+
+    /// Configures the runtime precision policy (e.g. AMP, mixed-bf16, fp32).
+    #[must_use]
+    pub fn precision(mut self, precision: RuntimePrecisionPolicy) -> Self {
+        self.precision = precision;
+        self.loss_scaling = precision.loss_scaling();
+        self
+    }
+
+    /// Configures the runtime precision policy.
+    #[must_use]
+    pub fn with_precision(self, precision: RuntimePrecisionPolicy) -> Self {
+        self.precision(precision)
     }
 
     /// Validates the request against this machine.
@@ -519,11 +552,16 @@ impl TrainerBuilder {
             "loss-scaling",
             format!("{:?} policy configured", self.loss_scaling),
         ));
+        decisions.push(Decision::new(
+            "precision",
+            format!("{:?} runtime precision policy configured", self.precision),
+        ));
 
         Ok(Plan {
             devices,
             epochs: self.epochs,
             loss_scaling: self.loss_scaling,
+            precision: self.precision,
             decisions,
         })
     }
@@ -692,7 +730,9 @@ impl Trainer {
                     at(
                         epoch,
                         batch,
-                        unscaled_loss_tensor.mul_scalar(current_scale as f64),
+                        unscaled_loss_tensor
+                            .mul_scalar(current_scale as f64)
+                            .map(|scaled| scaled.forget_layout()),
                     )?
                 } else {
                     unscaled_loss_tensor.clone()
@@ -709,5 +749,30 @@ impl Trainer {
             batches,
             final_loss,
         })
+    }
+}
+
+#[cfg(test)]
+mod device_order_tests {
+    use super::*;
+
+    /// The planner's family order must mirror detection's preference order.
+    /// The two constants drifted once: detection ranked Metal ahead of WGPU
+    /// while `Fastest` skipped Metal entirely, so a macOS machine with both
+    /// features enabled planned onto WGPU. This test is the drift alarm.
+    #[test]
+    fn fastest_order_mirrors_detection_preference() {
+        assert_eq!(FASTEST_ORDER, incin_backends::detect::PREFERENCE);
+    }
+
+    #[test]
+    fn metal_resolves_only_ordinal_zero() {
+        assert!(device_at(DeviceKind::Metal, 0).is_some());
+        assert!(device_at(DeviceKind::Metal, 1).is_none());
+    }
+
+    #[test]
+    fn metal_names_its_feature() {
+        assert_eq!(feature_for(DeviceKind::Metal), "metal");
     }
 }

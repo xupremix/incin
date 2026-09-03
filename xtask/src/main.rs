@@ -8,6 +8,7 @@
 
 mod budgets;
 mod docs;
+mod hardware;
 mod ledger;
 mod onnx;
 
@@ -20,6 +21,7 @@ fn main() -> ExitCode {
         Some("ledger") => ledger::check(),
         Some("docs") => docs::run(std::env::args().nth(2).as_deref() == Some("--check")),
         Some("feature-msrv") => docs::run_msrv(),
+        Some("hardware-tests") => hardware::check(std::env::args().nth(2).as_deref()),
         Some("onnx") => onnx::run(std::env::args().nth(2).as_deref() == Some("--check")),
         Some("feature-matrix") => {
             let arguments: Vec<_> = std::env::args().skip(2).collect();
@@ -60,6 +62,8 @@ fn usage() {
     eprintln!("                    manifests; --check fails instead of writing (UX-013)");
     eprintln!("    onnx            Regenerate incin-core's checked-in ONNX protobuf module");
     eprintln!("                    from proto/onnx.proto; --check fails instead of writing");
+    eprintln!("    hardware-tests [LOG]  Print how many ignored CUDA tests the hardware runner");
+    eprintln!("                    should execute; with a cargo-test log, fail if fewer ran");
     eprintln!(
         "    feature-matrix [stable]  Check feature contract rows (stable is the MSRV union)"
     );

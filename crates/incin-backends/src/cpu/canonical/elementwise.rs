@@ -19,7 +19,7 @@ use crate::cpu::ops::elementwise::{
     canonical_gelu, canonical_log, canonical_mish, canonical_mul_scalar, canonical_neg,
     canonical_powf, canonical_relu, canonical_remainder, canonical_rsqrt, canonical_sigmoid,
     canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
-    canonical_tan, canonical_tanh, canonical_trunc, canonical_unary,
+    canonical_tan, canonical_tanh, canonical_trunc, canonical_unary, log_softmax,
 };
 use crate::cpu::ops::shape_ops::{div_scalar_storage, sub_scalar_storage};
 use crate::cpu::storage::CpuStorage;
@@ -486,6 +486,30 @@ impl<D: Device> Execute<op::Softmax> for CpuBackendImpl<D> {
         let axis = request.operation.descriptor().attributes().axis;
         canonical_softmax::<D>(input, axis)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+// The kernel below is the one `canonical_softmax` above calls into and then
+// exponentiates, so this executor is strictly the shorter path: it stops one
+// step earlier rather than doing anything new. Routing it through `Softmax`
+// followed by `Log` would exponentiate and take the logarithm back off, and
+// entries far below the row maximum do not survive that round trip.
+impl<D: Device> Execute<op::LogSoftmax> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSoftmax, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::LogSoftmax;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let axis = request.operation.descriptor().attributes().axis;
+        log_softmax::<D, f32>(input, axis).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 

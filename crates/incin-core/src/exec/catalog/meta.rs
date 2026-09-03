@@ -124,12 +124,25 @@ impl CreationPayload {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 /// Policy for duplicate indices in scatter-style ops.
+///
+/// Non-exhaustive: adding a rule is a routine catalog extension, and it should
+/// not break every downstream `match` the way `Accumulate` would have.
 pub enum DuplicateIndexRule {
     /// Conflicting writes resolve by last writer wins.
     LastWriteWins,
     /// Conflicting writes are rejected as an error.
     Reject,
+    /// Colliding writes sum instead of competing, so none is discarded.
+    ///
+    /// This is the only rule under which repeated indices are not a lossy
+    /// operation, which is why `scatter_add` carries it and `scatter` cannot.
+    /// Addition is associative but floating-point addition is not, so the rule
+    /// alone does not pin the answer's low bits: the operation's own
+    /// `deterministic` flag is what commits a backend to a fixed summation
+    /// order, and an atomics-based kernel cannot honour it.
+    Accumulate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

@@ -12,6 +12,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::request::TensorHandle;
 use crate::exec::{ExecutionDescriptor, GradMode};
+use crate::shapes::Layout;
 use crate::shapes::ShapeBuf;
 use crate::shapes::StaticCursor;
 use crate::shapes::error::OperationKind;
@@ -146,7 +147,9 @@ macro_rules! impl_reduction_op {
         $method:ident, $operation:ident
     ) => {
         $(#[$meta])*
-        pub fn $method(self) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
+        pub fn $method(
+            self,
+        ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>>
         where
             B: Execute<op::$operation> + crate::exec::Capabilities,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
@@ -178,11 +181,21 @@ macro_rules! impl_reduction_op {
     };
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+/// Reductions.
+///
+/// Generic over the operand's layout. Every result here is a freshly allocated
+/// dense buffer, so every signature returns [`Dense`](crate::shapes::Dense) --
+/// the layout is *stated*, never carried. That distinction is what `cumsum`
+/// makes visible: it preserves the shape, so returning `Self` typechecked and
+/// silently handed the operand's claim to a buffer that had nothing to do with
+/// it. Pinned by `a_reduction_result_is_dense_even_from_a_strided_operand`,
+/// which feeds a `transpose_view` result and would have caught the old
+/// signature.
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement, L: Layout>
+    Tensor<S, B, K, G, P, L>
 {
     /// Sums over a static, named, or runtime axis selector.
-    pub fn sum<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
+    pub fn sum<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::SumDim> + crate::exec::Capabilities,
@@ -194,7 +207,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     /// Sums over a compile-time structural axis cursor.
     #[doc(hidden)]
     #[allow(clippy::type_complexity)]
-    pub fn sum_at<C>(&self) -> Result<Tensor<<S as ReduceAt<C>>::Output, B, K, G, P>>
+    pub fn sum_at<C>(&self) -> Result<crate::shapes::Dense<<S as ReduceAt<C>>::Output, B, K, G, P>>
     where
         C: crate::shapes::idx::AxisCursor,
         S: DynShape + ReduceAt<C>,
@@ -239,7 +252,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 )
             })?
             .into();
-        Tensor::<<S as ReduceAt<C>>::Output, B, K, G, P>::from_shape_buf_placed(
+        Tensor::<<S as ReduceAt<C>>::Output, B, K, G, P>::from_shape_buf_placed::<
+            <S as ReduceAt<C>>::Output,
+            crate::shapes::RowMajor<<S as ReduceAt<C>>::Output>,
+        >(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -250,7 +266,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Sums over a static, named, or runtime axis selector while retaining it.
-    pub fn sum_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
+    pub fn sum_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
@@ -260,7 +276,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Computes the mean over a static, named, or runtime axis selector.
-    pub fn mean<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
+    pub fn mean<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::MeanDim> + crate::exec::Capabilities,
@@ -270,7 +286,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Computes the mean over a static, named, or runtime axis selector and retains it.
-    pub fn mean_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
+    pub fn mean_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::MeanKeepDim> + crate::exec::Capabilities,
@@ -280,7 +296,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Computes the maximum over a static, named, or runtime axis selector.
-    pub fn max<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
+    pub fn max<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::MaxDim> + crate::exec::Capabilities,
@@ -290,7 +306,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Computes the maximum over a static, named, or runtime axis selector and retains it.
-    pub fn max_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
+    pub fn max_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::MaxKeepDim> + crate::exec::Capabilities,
@@ -299,8 +315,55 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         self.execute_reduction::<op::MaxKeepDim, A::Keep>(axis.resolve(self.shape_buf().rank())?)
     }
 
+    /// Computes `log(sum(exp(x)))` over an axis without ever forming `exp(x)`.
+    ///
+    /// The naive spelling is unusable at the magnitudes this is wanted for. A
+    /// single entry above roughly 88 sends `exp` to infinity in f32, and a row
+    /// that sits far enough below zero sends the whole sum to zero and the
+    /// logarithm to negative infinity. Both are ordinary sizes for a router
+    /// logit or an unnormalized log-likelihood. Shifting by the axis maximum
+    /// first bounds every exponential to `(0, 1]`, so the sum lies between one
+    /// and the axis length, and adding the maximum back recovers the answer.
+    ///
+    /// This is the normalizer [`Self::log_softmax`] subtracts, exposed on its
+    /// own because an auxiliary loss usually wants the normalizer rather than
+    /// the normalized values.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[300.0, 300.0, 300.0], ()).unwrap();
+    /// let total = t.logsumexp(0).unwrap().to_vec1::<f32>().unwrap()[0];
+    /// // ln(3 * e^300) = 300 + ln(3). Summing the exponentials directly would
+    /// // have overflowed to infinity three times over before the logarithm.
+    /// assert!((total - (300.0 + 3.0f32.ln())).abs() < 1e-2);
+    /// ```
+    pub fn logsumexp<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
+    where
+        A: ReduceSelector<S>,
+        B: Execute<op::LogSumExpDim> + crate::exec::Capabilities,
+        <B as Execute<op::LogSumExpDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.execute_reduction::<op::LogSumExpDim, A::Drop>(axis.resolve(self.shape_buf().rank())?)
+    }
+
+    /// [`Self::logsumexp`] over a static, named, or runtime axis selector,
+    /// retaining the reduced axis as size one.
+    pub fn logsumexp_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
+    where
+        A: ReduceSelector<S>,
+        B: Execute<op::LogSumExpKeepDim> + crate::exec::Capabilities,
+        <B as Execute<op::LogSumExpKeepDim>>::Output: Into<B::Storage<K>>,
+    {
+        self.execute_reduction::<op::LogSumExpKeepDim, A::Keep>(
+            axis.resolve(self.shape_buf().rank())?,
+        )
+    }
+
     /// Computes the minimum over a static, named, or runtime axis selector.
-    pub fn min<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
+    pub fn min<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::MinDim> + crate::exec::Capabilities,
@@ -310,7 +373,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     }
 
     /// Computes the minimum over a static, named, or runtime axis selector and retains it.
-    pub fn min_keepdim<A>(&self, axis: A) -> Result<Tensor<A::Keep, B, K, G, P>>
+    pub fn min_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
         B: Execute<op::MinKeepDim> + crate::exec::Capabilities,
@@ -322,7 +385,9 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     /// Sums over a compile-time structural axis cursor while retaining it.
     #[doc(hidden)]
     #[allow(clippy::type_complexity)]
-    pub fn sum_keepdim_at<C>(&self) -> Result<Tensor<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
+    pub fn sum_keepdim_at<C>(
+        &self,
+    ) -> Result<crate::shapes::Dense<<S as ReduceKeepAt<C>>::Output, B, K, G, P>>
     where
         C: crate::shapes::idx::AxisCursor,
         S: DynShape + ReduceKeepAt<C>,
@@ -372,7 +437,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 )
             })?
             .into();
-        Tensor::<<S as ReduceKeepAt<C>>::Output, B, K, G, P>::from_shape_buf_placed(
+        Tensor::<<S as ReduceKeepAt<C>>::Output, B, K, G, P>::from_shape_buf_placed::<
+            <S as ReduceKeepAt<C>>::Output,
+            crate::shapes::RowMajor<<S as ReduceKeepAt<C>>::Output>,
+        >(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -382,7 +450,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
         )
     }
 
-    fn execute_reduction<O, Out>(&self, axis: usize) -> Result<Tensor<Out, B, K, G, P>>
+    fn execute_reduction<O, Out>(
+        &self,
+        axis: usize,
+    ) -> Result<crate::shapes::Dense<Out, B, K, G, P>>
     where
         Out: crate::shapes::Shape,
         O: crate::exec::catalog::CanonicalOperation
@@ -399,7 +470,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
     fn execute_named_reduction_as<O, Out>(
         &self,
         descriptor: Descriptor<O>,
-    ) -> Result<Tensor<Out, B, K, G, P>>
+    ) -> Result<crate::shapes::Dense<Out, B, K, G, P>>
     where
         Out: crate::shapes::Shape,
         O: crate::exec::catalog::CanonicalOperation
@@ -428,7 +499,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 )
             })?
             .into();
-        Tensor::<Out, B, K, G, P>::from_shape_buf_placed(
+        Tensor::<Out, B, K, G, P>::from_shape_buf_placed::<Out, crate::shapes::RowMajor<Out>>(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -448,7 +519,8 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-> Tensor<S, B, K, G, P>
+    L: Layout,
+> Tensor<S, B, K, G, P, L>
 where
     <S as crate::shapes::RemoveOneRank>::Output: crate::shapes::Shape,
     <S as crate::shapes::PreserveRank>::Output: crate::shapes::Shape,
@@ -460,7 +532,7 @@ where
     pub fn sum_runtime_ranked(
         &self,
         axis: isize,
-    ) -> Result<Tensor<<S as crate::shapes::RemoveOneRank>::Output, B, K, G, P>>
+    ) -> Result<crate::shapes::Dense<<S as crate::shapes::RemoveOneRank>::Output, B, K, G, P>>
     where
         B: Execute<op::SumDim> + crate::exec::Capabilities,
         <B as Execute<op::SumDim>>::Output: Into<B::Storage<K>>,
@@ -479,7 +551,7 @@ where
     pub fn sum_keepdim_runtime_ranked(
         &self,
         axis: isize,
-    ) -> Result<Tensor<<S as crate::shapes::PreserveRank>::Output, B, K, G, P>>
+    ) -> Result<crate::shapes::Dense<<S as crate::shapes::PreserveRank>::Output, B, K, G, P>>
     where
         B: Execute<op::SumKeepDim> + crate::exec::Capabilities,
         <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
@@ -494,8 +566,13 @@ where
     }
 }
 
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G, Local>
+/// Whole-tensor reductions.
+///
+/// Generic over the operand's layout. Each collapses to a scalar, so the
+/// result describes a different geometry; the fresh allocation is dense and
+/// the macro states so rather than carrying anything through.
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     impl_reduction_op!(
         /// Computes the sum of all elements in the tensor, reducing it to a scalar tensor.
@@ -559,7 +636,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
     );
 
     /// Computes a cumulative sum along a static, named, or signed runtime axis.
-    pub fn cumsum<A: ReduceSelector<S>>(&self, axis: A) -> Result<Self>
+    pub fn cumsum<A: ReduceSelector<S>>(
+        &self,
+        axis: A,
+    ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         S: DynShape,
         B: Execute<op::Cumsum> + crate::exec::Capabilities,
@@ -590,7 +670,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
     }
 
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
-    pub fn norm(&self, p: f64) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
+    pub fn norm(&self, p: f64) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>>
     where
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: Execute<op::Mul>
@@ -891,7 +971,10 @@ where
     <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
-    pub fn var_all(&self, unbiased: bool) -> Result<Tensor<crate::shapes::Nil, B, K, G>> {
+    pub fn var_all(
+        &self,
+        unbiased: bool,
+    ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>> {
         let mean = self.clone().mean_all()?;
         let dyn_self = self.clone().into_dyn();
         let dyn_mean = mean.into_dyn();
@@ -910,7 +993,10 @@ where
     }
 
     /// Computes the standard deviation over all elements.
-    pub fn std_all(&self, unbiased: bool) -> Result<Tensor<crate::shapes::Nil, B, K, G>> {
+    pub fn std_all(
+        &self,
+        unbiased: bool,
+    ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>> {
         self.var_all(unbiased)?.sqrt()
     }
 }

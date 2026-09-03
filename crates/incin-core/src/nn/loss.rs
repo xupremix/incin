@@ -51,11 +51,13 @@ impl<R: ReductionMode> MSELoss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::MseLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
+        L1: crate::shapes::Layout,
+        L2: crate::shapes::Layout,
     >(
         &self,
-        pred: &Tensor<S, B, K, G>,
-        target: &Tensor<S, B, K, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, G>>
+        pred: &Tensor<S, B, K, G, Local, L1>,
+        target: &Tensor<S, B, K, NoGrad, Local, L2>,
+    ) -> Result<crate::shapes::Dense<R::Output, B, K, G, Local>>
     where
         R: MseReductionShape<S>,
         <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
@@ -136,11 +138,13 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::CrossEntropyLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
+        L1: crate::shapes::Layout,
+        L2: crate::shapes::Layout,
     >(
         &self,
-        pred: &Tensor<S1, B, K, G>,
-        target: &Tensor<S2, B, u32, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, G>>
+        pred: &Tensor<S1, B, K, G, Local, L1>,
+        target: &Tensor<S2, B, u32, NoGrad, Local, L2>,
+    ) -> Result<crate::shapes::Dense<R::Output, B, K, G, Local>>
     where
         S1: Shape + crate::shapes::DynShape + CrossEntropyShape<S2>,
         R: CrossEntropyReductionShape<S1>,
@@ -214,11 +218,13 @@ impl<R: ReductionMode> L1Loss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::L1Loss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
+        L1: crate::shapes::Layout,
+        L2: crate::shapes::Layout,
     >(
         &self,
-        pred: &Tensor<S, B, K, G>,
-        target: &Tensor<S, B, K, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, G>>
+        pred: &Tensor<S, B, K, G, Local, L1>,
+        target: &Tensor<S, B, K, NoGrad, Local, L2>,
+    ) -> Result<crate::shapes::Dense<R::Output, B, K, G, Local>>
     where
         R: L1ReductionShape<S>,
         <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
@@ -286,11 +292,13 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::BceWithLogitsLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
+        L1: crate::shapes::Layout,
+        L2: crate::shapes::Layout,
     >(
         &self,
-        pred: &Tensor<S, B, K, G>,
-        target: &Tensor<S, B, K, NoGrad>,
-    ) -> Result<Tensor<R::Output, B, K, G>>
+        pred: &Tensor<S, B, K, G, Local, L1>,
+        target: &Tensor<S, B, K, NoGrad, Local, L2>,
+    ) -> Result<crate::shapes::Dense<R::Output, B, K, G, Local>>
     where
         R: BceReductionShape<S>,
         <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,

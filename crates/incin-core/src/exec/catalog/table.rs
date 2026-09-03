@@ -326,6 +326,7 @@ pub(super) const fn entry(
         | OperationKind::AvgPool2d
         | OperationKind::AdaptiveAvgPool2dExact => 3..=4,
         OperationKind::Softmax
+        | OperationKind::LogSoftmax
         | OperationKind::GroupNorm
         | OperationKind::InstanceNorm
         | OperationKind::LayerNorm
@@ -390,6 +391,7 @@ pub(super) const fn entry(
             | OperationKind::Dropout
             | OperationKind::MaskedFill
             | OperationKind::Scatter
+            | OperationKind::ScatterAdd
     ) {
         output = OutputRule::Preserve;
     } else if matches!(
@@ -416,6 +418,16 @@ pub(super) const fn entry(
     }
     if matches!(operation, OperationKind::Scatter) {
         gradient = GradientRule::Undefined;
+    } else if matches!(operation, OperationKind::ScatterAdd) {
+        // The derivative `scatter` cannot define is the one addition makes
+        // obvious. Under last-write-wins a repeated index gives the surviving
+        // write's source the whole cotangent and its rivals none, and which
+        // write survives is traversal order rather than anything about the
+        // values, so there is no derivative to state. Summing has no rivals:
+        // every contribution reaches the output, so every contribution takes
+        // the output's cotangent unchanged and the target passes its own
+        // through untouched.
+        gradient = GradientRule::Defined;
     } else if matches!(
         operation,
         OperationKind::TensorToBytes

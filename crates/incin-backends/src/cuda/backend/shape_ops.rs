@@ -1,7 +1,11 @@
 //! Structural and shape-changing CUDA operations: concat, reshape,
 //! transpose, matmul, and the other movement/layout kernels.
 
+#![allow(dead_code)]
+
 use super::*;
+use crate::cuda::storage::CudaBuffer;
+use incin_core::shapes::OperationKind;
 
 impl<D: Device> CudaBackendImpl<D> {
     /// Join operands along an existing axis. Backward splits the incoming
@@ -485,4 +489,168 @@ impl<D: Device> CudaBackendImpl<D> {
         target_shape.remove(dim);
         Self::reshape::<K>(t, &target_shape)
     }
+
+    pub(crate) fn gather<K: DType, KInt: DType>(
+        t: &CudaStorage,
+        dim: usize,
+        index: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_gather(t, dim, index)?;
+        let t_capture = t.clone();
+        let index_capture = index.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let zero_base = CudaStorage::new(
+                    Arc::new(CudaBuffer {
+                        len: t_capture.buffer.len,
+                        dtype: t_capture.buffer.dtype,
+                        data: Arc::new(
+                            t_capture
+                                .buffer
+                                .device
+                                .default_stream()
+                                .alloc_zeros::<u8>(crate::bytes::byte_len(
+                                    DTypeId::F32,
+                                    t_capture.buffer.len,
+                                    OperationKind::Storage,
+                                )?)
+                                .map_err(|e| Error::Msg(format!("{e:?}")))?,
+                        ),
+                        device: t_capture.buffer.device.clone(),
+                        device_id: t_capture.buffer.device_id,
+                    }),
+                    t_capture.shape.to_vec(),
+                );
+                let grad_input = crate::cuda::ops::shape::launch_scatter(
+                    &zero_base,
+                    dim,
+                    &index_capture,
+                    grad_out,
+                )?;
+                Ok(vec![grad_input])
+            }),
+        });
+        Ok(out)
+    }
+
+    pub(crate) fn scatter<K: DType, KInt: DType>(
+        t: &CudaStorage,
+        dim: usize,
+        index: &CudaStorage,
+        src: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        crate::cuda::ops::shape::launch_scatter(t, dim, index, src)
+    }
+
+    pub(crate) fn diag<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {
+        crate::cuda::ops::shape::launch_diag(t, diagonal as i32)
+    }
+
+    pub(crate) fn pad<K: DType>(
+        t: &CudaStorage,
+        padding: &[(usize, usize)],
+        value: f64,
+    ) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_pad(t, padding, value)?;
+        let t_shape = t.shape.clone();
+        let padding_capture = padding.to_vec();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let mut curr = grad_out.clone();
+            for (axis, &(before, _after)) in padding_capture.iter().enumerate() {
+                let len = t_shape[axis];
+                curr = crate::cuda::ops::shape::launch_narrow(&curr, axis, before, len)?;
+            }
+            Ok(curr)
+        });
+        Ok(out)
+    }
+
+    pub(crate) fn repeat<K: DType>(t: &CudaStorage, repeats: &[usize]) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_repeat(t, repeats)?;
+        let t_shape = t.shape.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            crate::cuda::tape::unbroadcast(grad_out, &t_shape)
+        });
+        Ok(out)
+    }
+
+    pub(crate) fn tril<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_tril(t, diagonal as i32)?;
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            crate::cuda::ops::shape::launch_tril(grad_out, diagonal as i32)
+        });
+        Ok(out)
+    }
+
+    pub(crate) fn triu<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_triu(t, diagonal as i32)?;
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            crate::cuda::ops::shape::launch_triu(grad_out, diagonal as i32)
+        });
+        Ok(out)
+    }
+
+    pub(crate) fn embedding<K: DType, KInt: DType>(
+        weight: &CudaStorage,
+        indices: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_embedding(weight, indices)?;
+        let indices_capture = indices.clone();
+        let (vocab_size, hidden_size) = (weight.shape[0], weight.shape[1]);
+        let (weight_id, out_id) = (weight.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![weight_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grad_weight = crate::cuda::ops::shape::launch_embedding_backward(
+                    grad_out,
+                    &indices_capture,
+                    vocab_size,
+                    hidden_size,
+                )?;
+                Ok(vec![grad_weight])
+            }),
+        });
+        Ok(out)
+    }
+}
+
+pub(crate) fn cuda_reshape_storage(t: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::reshape::<f32>(t, shape)
+}
+
+pub(crate) fn cuda_transpose_storage(t: &CudaStorage, d1: usize, d2: usize) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::transpose::<f32>(t, d1, d2)
+}
+
+pub(crate) fn cuda_matmul_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::matmul::<f32>(lhs, rhs)
+}
+
+pub(crate) fn cuda_broadcast_as_storage(t: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::broadcast_as::<f32>(t, shape)
+}
+
+pub(crate) fn cuda_narrow_storage(
+    t: &CudaStorage,
+    dim: usize,
+    start: usize,
+    len: usize,
+) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::narrow::<f32>(t, dim, start, len)
+}
+
+pub(crate) fn cuda_unsqueeze_storage(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::unsqueeze::<f32>(t, dim)
+}
+
+pub(crate) fn cuda_squeeze_storage(t: &CudaStorage, dim: usize) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::squeeze::<f32>(t, dim)
+}
+
+pub(crate) fn cuda_concat_storage(t: &[&CudaStorage], dim: usize) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::concat::<f32>(t, dim)
 }

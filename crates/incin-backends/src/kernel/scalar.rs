@@ -134,27 +134,74 @@ const CUDA_UNARY_TEMPLATE: &str = r#"
 extern "C" __global__ void {ENTRY_POINT}(
     const {STORAGE_TYPE}* input,
     {STORAGE_TYPE}* output,
-    const int* shape,
-    const int* strides,
+{SHAPE_PARAM}    const int* strides,
     int offset,
-    int numel,
-    int ndim
+    int numel{NDIM_PARAM}
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < numel) {
         int flat_idx = offset;
         int temp = idx;
-        for (int i = ndim - 1; i >= 0; i--) {
-            int dim_idx = temp % shape[i];
-            temp /= shape[i];
-            flat_idx += dim_idx * strides[i];
-        }
+{INDEX_CALC}
         {COMPUTE_TYPE} x = {LOAD_PREFIX}input[flat_idx]{LOAD_SUFFIX};
-        {COMPUTE_TYPE} out_val = {OP};
+{PROLOGUE}        {COMPUTE_TYPE} out_val = {OP};
         output[idx] = {STORE_PREFIX}out_val{STORE_SUFFIX};
     }
 }
 "#;
+
+/// The general runtime index walk: one modulo and one division per axis, both
+/// by values read from device memory.
+///
+/// Integer division is among the most expensive operations on the device, and
+/// a divisor that only exists in a buffer cannot be strength-reduced by the
+/// compiler.
+#[cfg(any(feature = "cuda", test))]
+const DYNAMIC_INDEX_CALC: &str = "\
+        for (int i = ndim - 1; i >= 0; i--) {
+            int dim_idx = temp % shape[i];
+            temp /= shape[i];
+            flat_idx += dim_idx * strides[i];
+        }";
+
+/// The same walk with the extents substituted as literals.
+///
+/// Strides stay dynamic: they describe the *view*, not the shape, so a
+/// transposed or narrowed tensor has strides the type cannot settle. Extents
+/// are what the shape type knows, and they are the divisors -- which is the
+/// half that matters, because nvcc lowers a division by a literal to a
+/// multiply-and-shift while a division by a loaded value stays a division.
+///
+/// The loop is emitted fully unrolled rather than as a counted loop so every
+/// divisor is a distinct constant at its use site.
+#[cfg(any(feature = "cuda", test))]
+fn static_index_calc(extents: &[usize]) -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "        // extents proven by the shape type: {extents:?}"
+    );
+    for axis in (0..extents.len()).rev() {
+        let extent = extents[axis];
+        let _ = writeln!(
+            out,
+            "        flat_idx += (temp % {extent}) * strides[{axis}];"
+        );
+        // The outermost axis consumes what is left, so its division is dead.
+        // Its modulo is kept: dropping it would make correctness depend on
+        // `numel` equalling the product of the extents, and the guard in
+        // `unrollable_extents` deliberately proves agreement with the iterated
+        // shape rather than with the element count.
+        if axis > 0 {
+            let _ = writeln!(out, "        temp /= {extent};");
+        }
+    }
+    // Trim the trailing newline; the slot supplies its own line break.
+    while out.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
 
 #[cfg(any(feature = "cuda", test))]
 const CUDA_BINARY_TEMPLATE: &str = r#"
@@ -184,7 +231,7 @@ extern "C" __global__ void {ENTRY_POINT}(
         }
         {COMPUTE_TYPE} a = {LOAD_PREFIX}lhs[lhs_flat]{LOAD_SUFFIX};
         {COMPUTE_TYPE} b = {LOAD_PREFIX}rhs[rhs_flat]{LOAD_SUFFIX};
-        {COMPUTE_TYPE} out_val = {OP};
+{PROLOGUE}        {COMPUTE_TYPE} out_val = {OP};
         output[idx] = {STORE_PREFIX}out_val{STORE_SUFFIX};
     }
 }
@@ -205,7 +252,7 @@ extern "C" __global__ void {ENTRY_POINT}(
         int idx = base + lane;
         if (idx < numel) {
             {COMPUTE_TYPE} x = {LOAD_PREFIX}input[offset + idx]{LOAD_SUFFIX};
-            {COMPUTE_TYPE} out_val = {OP};
+{PROLOGUE}            {COMPUTE_TYPE} out_val = {OP};
             output[idx] = {STORE_PREFIX}out_val{STORE_SUFFIX};
         }
     }
@@ -230,7 +277,7 @@ extern "C" __global__ void {ENTRY_POINT}(
         if (idx < numel) {
             {COMPUTE_TYPE} a = {LOAD_PREFIX}lhs[{LHS_INDEX}]{LOAD_SUFFIX};
             {COMPUTE_TYPE} b = {LOAD_PREFIX}rhs[{RHS_INDEX}]{LOAD_SUFFIX};
-            {COMPUTE_TYPE} out_val = {OP};
+{PROLOGUE}            {COMPUTE_TYPE} out_val = {OP};
             output[idx] = {STORE_PREFIX}out_val{STORE_SUFFIX};
         }
     }
@@ -238,6 +285,7 @@ extern "C" __global__ void {ENTRY_POINT}(
 "#;
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 fn render_cuda(
     template: &str,
     family: &str,
@@ -246,6 +294,66 @@ fn render_cuda(
     dtype: DTypeId,
     unroll_width: u8,
 ) -> Result<RenderedKernel> {
+    render_cuda_body(
+        template,
+        family,
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        unroll_width,
+        None,
+    )
+}
+
+/// The indentation the `{PROLOGUE}` slot's own line carries.
+///
+/// The slot sits at column zero and the result statement follows it on the same
+/// line, so prologue statements have to supply the indentation the template
+/// would otherwise have provided. Reading it back out of the template keeps the
+/// two in step instead of hard-coding a width per template.
+#[cfg(any(feature = "cuda", test))]
+fn prologue_indent(template: &str) -> String {
+    template
+        .split("{PROLOGUE}")
+        .nth(1)
+        .map(|rest| rest.chars().take_while(|c| *c == ' ').collect())
+        .unwrap_or_default()
+}
+
+/// Renders a pointwise template from a body that may carry its own bindings.
+///
+/// A hand-written expression arrives as a `ScalarFragment` with an empty
+/// prologue and is emitted exactly as before. An expression lowered from the IR
+/// arrives in SSA form, where the fragment's value names a temporary that its
+/// prologue defines; see `crate::codegen::fragment`. Both share every other step
+/// -- identifier validation, precision policy, entry point and cache key -- so
+/// the paths cannot diverge in how a kernel is identified or compiled.
+#[cfg(any(feature = "cuda", test))]
+fn render_cuda_body(
+    template: &str,
+    family: &str,
+    op_name: &str,
+    body: &ScalarFragment,
+    dtype: DTypeId,
+    unroll_width: u8,
+    index_calc: Option<alloc::vec::Vec<usize>>,
+) -> Result<RenderedKernel> {
+    let prologue = body.prologue_block(&prologue_indent(template));
+    let prologue = prologue.as_str();
+    let op_expr = body.value.as_str();
+    // Only the strided templates carry an index walk; the dense ones address
+    // linearly and leave the slot absent.
+    // Baking the extents also retires the `shape` array and `ndim`: nothing in
+    // the unrolled walk reads them, so the parameters come off the signature and
+    // the launcher stops uploading a buffer per launch to feed them.
+    let (index_calc, shape_param, ndim_param) = match &index_calc {
+        Some(extents) => (static_index_calc(extents), "", ""),
+        None => (
+            DYNAMIC_INDEX_CALC.into(),
+            "    const int* shape,\n",
+            ",\n    int ndim",
+        ),
+    };
     if !matches!(unroll_width, 1 | 2 | 4) {
         return Err(Error::Msg(format!(
             "unsupported CUDA pointwise unroll width {unroll_width}"
@@ -289,10 +397,14 @@ fn render_cuda(
         .replace("{STORE_PREFIX}", scalar.store_prefix)
         .replace("{STORE_SUFFIX}", scalar.store_suffix)
         .replace("{UNROLL_WIDTH}", &unroll_width.to_string())
+        .replace("{PROLOGUE}", prologue)
+        .replace("{INDEX_CALC}", &index_calc)
+        .replace("{SHAPE_PARAM}", shape_param)
+        .replace("{NDIM_PARAM}", ndim_param)
         .replace("{OP}", op_expr);
 
     Ok(RenderedKernel {
-        cache_key: key.cache_id(),
+        cache_key: source_scoped_cache_id(&key, &source),
         entry_point,
         source,
         dtype,
@@ -304,6 +416,7 @@ fn render_cuda(
 }
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 pub(crate) fn render_cuda_unary(
     op_name: &str,
     op_expr: &str,
@@ -320,6 +433,7 @@ pub(crate) fn render_cuda_unary(
 }
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 pub(crate) fn render_cuda_unary_for_layout(
     op_name: &str,
     op_expr: &str,
@@ -327,16 +441,50 @@ pub(crate) fn render_cuda_unary_for_layout(
     layout: LayoutClass,
     unroll_width: u8,
 ) -> Result<RenderedKernel> {
+    render_cuda_unary_for_layout_body(
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        layout,
+        unroll_width,
+        None,
+    )
+}
+
+/// The layout-dispatching unary renderer over a body that may carry bindings.
+///
+/// # Errors
+///
+/// Returns an error for a layout the unary templates do not cover, or when the
+/// underlying template rendering fails.
+#[cfg(any(feature = "cuda", test))]
+pub(crate) fn render_cuda_unary_for_layout_body(
+    op_name: &str,
+    body: &ScalarFragment,
+    dtype: DTypeId,
+    layout: LayoutClass,
+    unroll_width: u8,
+    index_extents: Option<alloc::vec::Vec<usize>>,
+) -> Result<RenderedKernel> {
     match layout {
-        LayoutClass::Contiguous => render_cuda(
+        LayoutClass::Contiguous => render_cuda_body(
             CUDA_UNARY_CONTIGUOUS_TEMPLATE,
             "elementwise_unary_contiguous",
             op_name,
-            op_expr,
+            body,
             dtype,
             unroll_width,
+            None,
         ),
-        LayoutClass::Strided if unroll_width == 1 => render_cuda_unary(op_name, op_expr, dtype),
+        LayoutClass::Strided if unroll_width == 1 => render_cuda_body(
+            CUDA_UNARY_TEMPLATE,
+            "elementwise_unary",
+            op_name,
+            body,
+            dtype,
+            1,
+            index_extents,
+        ),
         LayoutClass::Strided => Err(Error::Msg(
             "strided CUDA unary kernels require unroll width 1".into(),
         )),
@@ -348,6 +496,7 @@ pub(crate) fn render_cuda_unary_for_layout(
 }
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 pub(crate) fn render_cuda_binary(
     op_name: &str,
     op_expr: &str,
@@ -364,9 +513,33 @@ pub(crate) fn render_cuda_binary(
 }
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 pub(crate) fn render_cuda_binary_for_layout(
     op_name: &str,
     op_expr: &str,
+    dtype: DTypeId,
+    layout: LayoutClass,
+    unroll_width: u8,
+) -> Result<RenderedKernel> {
+    render_cuda_binary_for_layout_body(
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        layout,
+        unroll_width,
+    )
+}
+
+/// The layout-dispatching binary renderer over a body that may carry bindings.
+///
+/// # Errors
+///
+/// Returns an error for a layout the binary templates do not cover, or when the
+/// underlying template rendering fails.
+#[cfg(any(feature = "cuda", test))]
+pub(crate) fn render_cuda_binary_for_layout_body(
+    op_name: &str,
+    body: &ScalarFragment,
     dtype: DTypeId,
     layout: LayoutClass,
     unroll_width: u8,
@@ -388,7 +561,15 @@ pub(crate) fn render_cuda_binary_for_layout(
             "rhs_offset",
         ),
         LayoutClass::Strided if unroll_width == 1 => {
-            return render_cuda_binary(op_name, op_expr, dtype);
+            return render_cuda_body(
+                CUDA_BINARY_TEMPLATE,
+                "elementwise_binary",
+                op_name,
+                body,
+                dtype,
+                1,
+                None,
+            );
         }
         LayoutClass::Strided => {
             return Err(Error::Msg(
@@ -405,5 +586,47 @@ pub(crate) fn render_cuda_binary_for_layout(
     let template = CUDA_BINARY_DENSE_TEMPLATE
         .replace("{LHS_INDEX}", lhs_index)
         .replace("{RHS_INDEX}", rhs_index);
-    render_cuda(&template, family, op_name, op_expr, dtype, unroll_width)
+    render_cuda_body(&template, family, op_name, body, dtype, unroll_width, None)
+}
+
+/// The compute type an IR fragment for `dtype` must be lowered in.
+///
+/// `CudaScalarSpec` computes half-precision tensors in `float`, so the fragment
+/// has to use single-precision math there; lowering against the storage type
+/// would emit `__half` arithmetic the template never declares.
+#[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
+fn fragment_compute_dtype(dtype: DTypeId) -> DTypeId {
+    match dtype {
+        DTypeId::F16 | DTypeId::BF16 => DTypeId::F32,
+        other => other,
+    }
+}
+
+/// Lowers an IR expression against the unary templates' operand name.
+///
+/// # Errors
+///
+/// Returns an error when the IR cannot be lowered for `dtype`.
+#[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
+pub(crate) fn lower_unary_body(
+    expr: &crate::codegen::ir::IrExpr,
+    dtype: DTypeId,
+) -> Result<ScalarFragment> {
+    crate::codegen::lower_scalar(expr, &["x"], fragment_compute_dtype(dtype))
+}
+
+/// Lowers an IR expression against the binary templates' operand names.
+///
+/// # Errors
+///
+/// Returns an error when the IR cannot be lowered for `dtype`.
+#[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
+pub(crate) fn lower_binary_body(
+    expr: &crate::codegen::ir::IrExpr,
+    dtype: DTypeId,
+) -> Result<ScalarFragment> {
+    crate::codegen::lower_scalar(expr, &["a", "b"], fragment_compute_dtype(dtype))
 }

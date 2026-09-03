@@ -88,13 +88,15 @@ impl CudaPackedSpec {
 fn render_cuda_packed(
     family: &str,
     op_name: &str,
-    op_expr: &str,
+    body: &ScalarFragment,
     dtype: DTypeId,
+    specialization: KernelSpecialization,
     arguments: &str,
     packed_loads: &str,
     lane_bindings: impl Fn(&str) -> String,
     scalar_tail: &str,
 ) -> Result<RenderedKernel> {
+    let op_expr = body.value.as_str();
     validate_identifier(op_name)?;
     let packed = CudaPackedSpec::for_float(dtype)?;
     let (key_family, layout) = match family {
@@ -130,6 +132,9 @@ fn render_cuda_packed(
     for component in packed.components {
         lanes.push_str("        {\n");
         lanes.push_str(&lane_bindings(component));
+        // Each lane is its own `{ }` scope, so an SSA prologue's temporaries are
+        // scoped per lane and cannot collide across the unrolled components.
+        lanes.push_str(&body.prologue_block("            "));
         lanes.push_str(&format!(
             "            {} out_val = {op_expr};\n            packed_output.{component} = out_val;\n",
             packed.scalar.compute_type
@@ -137,18 +142,26 @@ fn render_cuda_packed(
         lanes.push_str("        }\n");
     }
     let packed_store = packed.packed_store_expr("packed_output");
-    let source = format!(
-        r#"
-{preamble}
-extern "C" __global__ void {entry_point}(
-{arguments}
-) {{
-    int packet_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int base = packet_idx * {width};
-    if (base >= numel) {{
-        return;
-    }}
-    if (base + {width} <= numel) {{
+    // With a statically proven element count that divides the vector width, no
+    // packet can ever be partial, so the scalar tail is unreachable. Dropping it
+    // removes a branch the hardware would otherwise have to predicate, and the
+    // dead scalar body with it. See `KernelSpecialization::packed_tail_is_dead`
+    // for why only a *proven* count licenses this.
+    let body = if specialization.packed_tail_is_dead(packed.width) {
+        format!(
+            r#"    // numel is a proven multiple of {width}; the ragged tail cannot occur.
+{packed_loads}
+    {packed_compute_type} packed_output;
+{lanes}
+    reinterpret_cast<{packed_storage_type}*>(output)[packet_idx] = {packed_store};
+"#,
+            width = packed.width,
+            packed_compute_type = packed.compute_type,
+            packed_storage_type = packed.storage_type,
+        )
+    } else {
+        format!(
+            r#"    if (base + {width} <= numel) {{
 {packed_loads}
         {packed_compute_type} packed_output;
 {lanes}
@@ -162,15 +175,30 @@ extern "C" __global__ void {entry_point}(
             }}
         }}
     }}
-}}
+"#,
+            width = packed.width,
+            packed_compute_type = packed.compute_type,
+            packed_storage_type = packed.storage_type,
+        )
+    };
+    let source = format!(
+        r#"
+{preamble}
+extern "C" __global__ void {entry_point}(
+{arguments}
+) {{
+    int packet_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int base = packet_idx * {width};
+    if (base >= numel) {{
+        return;
+    }}
+{body}}}
 "#,
         preamble = packed.scalar.preamble,
         width = packed.width,
-        packed_compute_type = packed.compute_type,
-        packed_storage_type = packed.storage_type,
     );
     Ok(RenderedKernel {
-        cache_key: key.cache_id(),
+        cache_key: source_scoped_cache_id(&key, &source),
         entry_point,
         source,
         dtype,
@@ -182,11 +210,35 @@ extern "C" __global__ void {entry_point}(
 }
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 pub(crate) fn render_cuda_unary_packed(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
     layout: LayoutClass,
+) -> Result<RenderedKernel> {
+    render_cuda_unary_packed_body(
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        layout,
+        KernelSpecialization::NONE,
+    )
+}
+
+/// The packed unary renderer over a body that may carry its own bindings.
+///
+/// # Errors
+///
+/// Returns an error when `layout` is not contiguous, or when the packed
+/// specification rejects `dtype`.
+#[cfg(any(feature = "cuda", test))]
+pub(crate) fn render_cuda_unary_packed_body(
+    op_name: &str,
+    body: &ScalarFragment,
+    dtype: DTypeId,
+    layout: LayoutClass,
+    specialization: KernelSpecialization,
 ) -> Result<RenderedKernel> {
     if layout != LayoutClass::Contiguous {
         return Err(Error::Msg(
@@ -207,18 +259,21 @@ pub(crate) fn render_cuda_unary_packed(
         unpack_suffix = packed.unpack_suffix,
     );
     let scalar_tail = format!(
-        "                {compute} x = {load_prefix}input[offset + idx]{load_suffix};\n                {compute} out_val = {op_expr};\n                output[idx] = {store_prefix}out_val{store_suffix};",
+        "                {compute} x = {load_prefix}input[offset + idx]{load_suffix};\n{prologue}                {compute} out_val = {op_expr};\n                output[idx] = {store_prefix}out_val{store_suffix};",
         compute = scalar.compute_type,
         load_prefix = scalar.load_prefix,
         load_suffix = scalar.load_suffix,
         store_prefix = scalar.store_prefix,
         store_suffix = scalar.store_suffix,
+        prologue = body.prologue_block("                "),
+        op_expr = body.value,
     );
     render_cuda_packed(
         "elementwise_unary_contiguous",
         op_name,
-        op_expr,
+        body,
         dtype,
+        specialization,
         &arguments,
         &packed_loads,
         |component| {
@@ -232,11 +287,35 @@ pub(crate) fn render_cuda_unary_packed(
 }
 
 #[cfg(any(feature = "cuda", test))]
+#[allow(dead_code)]
 pub(crate) fn render_cuda_binary_packed(
     op_name: &str,
     op_expr: &str,
     dtype: DTypeId,
     layout: LayoutClass,
+) -> Result<RenderedKernel> {
+    render_cuda_binary_packed_body(
+        op_name,
+        &ScalarFragment::literal(op_expr),
+        dtype,
+        layout,
+        KernelSpecialization::NONE,
+    )
+}
+
+/// The packed binary renderer over a body that may carry its own bindings.
+///
+/// # Errors
+///
+/// Returns an error when `layout` is strided or otherwise not packable, or when
+/// the packed specification rejects `dtype`.
+#[cfg(any(feature = "cuda", test))]
+pub(crate) fn render_cuda_binary_packed_body(
+    op_name: &str,
+    body: &ScalarFragment,
+    dtype: DTypeId,
+    layout: LayoutClass,
+    specialization: KernelSpecialization,
 ) -> Result<RenderedKernel> {
     let packed = CudaPackedSpec::for_float(dtype)?;
     let scalar = packed.scalar;
@@ -330,18 +409,21 @@ pub(crate) fn render_cuda_binary_packed(
         scalar.storage_type, scalar.storage_type, scalar.storage_type
     );
     let scalar_tail = format!(
-        "                {compute} a = {load_prefix}lhs[{lhs_index}]{load_suffix};\n                {compute} b = {load_prefix}rhs[{rhs_index}]{load_suffix};\n                {compute} out_val = {op_expr};\n                output[idx] = {store_prefix}out_val{store_suffix};",
+        "                {compute} a = {load_prefix}lhs[{lhs_index}]{load_suffix};\n                {compute} b = {load_prefix}rhs[{rhs_index}]{load_suffix};\n{prologue}                {compute} out_val = {op_expr};\n                output[idx] = {store_prefix}out_val{store_suffix};",
         compute = scalar.compute_type,
         load_prefix = scalar.load_prefix,
         load_suffix = scalar.load_suffix,
         store_prefix = scalar.store_prefix,
         store_suffix = scalar.store_suffix,
+        prologue = body.prologue_block("                "),
+        op_expr = body.value,
     );
     render_cuda_packed(
         family,
         op_name,
-        op_expr,
+        body,
         dtype,
+        specialization,
         &arguments,
         &packed_loads,
         lane_bindings,

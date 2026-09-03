@@ -311,6 +311,7 @@ fn every_mutating_and_autograd_operation_is_classified_by_its_profile() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "document formatting is tested by ordinary test suite")]
 fn generated_semantics_document_covers_every_row() {
     let document = operation_semantics_document();
     for row in OPERATION_CATALOG {
@@ -1441,4 +1442,57 @@ fn typed_data_creation_rejects_a_payload_dtype_mismatch() {
 fn data_dependent_output_shapes_are_not_inferred_from_metadata() {
     assert!(OutputRule::DataDependent.is_data_dependent());
     assert!(!OutputRule::Preserve.is_data_dependent());
+}
+
+/// A typed invocation must hand the backend a usable element count, not just a
+/// proof level.
+///
+/// The neighbouring test pins `proof_level()`, which tells a backend how much
+/// was settled. `static_numel()` is the value it can act on: the CUDA pointwise
+/// path uses it to prove a packed kernel's ragged-tail branch unreachable. If
+/// any link between `Shape::PROOF` and `Validated` dropped `S`, every kernel
+/// would quietly take the general path and nothing would fail, so the end of the
+/// chain is worth pinning separately from the middle.
+#[test]
+fn a_typed_invocation_carries_a_static_element_count_to_the_backend() {
+    let created = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    type Static23 = crate::shapes::DimCons<
+        typenum::U2,
+        crate::shapes::DimCons<typenum::U3, crate::shapes::Nil>,
+    >;
+    let sv = crate::shapes::ShapeValue::<Static23>::from_validated(
+        <Static23 as crate::shapes::Shape>::resolve(((), ((), ()))).unwrap(),
+    );
+
+    let proven = ValidatedInvocation::<op::Zeros>::infer_typed(created.clone(), vec![], &sv)
+        .expect("a static creation request is legal");
+    let evidence = proven.validated().shape_evidence();
+    assert_eq!(evidence.proof(), crate::exec::ProofLevel::Static);
+    assert_eq!(
+        evidence.static_numel(),
+        Some(6),
+        "2 x 3 must reach the backend as a count of 6"
+    );
+    assert_eq!(evidence.static_rank(), Some(2));
+    assert_eq!(
+        evidence.static_extents(),
+        &[Some(2), Some(3)][..],
+        "per-axis extents must survive to the descriptor, not just their product"
+    );
+
+    // The same request with nothing known must offer no count to specialize on.
+    let erased = ValidatedInvocation::<op::Zeros>::infer_runtime(created, vec![])
+        .expect("a dynamic creation request is equally legal");
+    let erased_evidence = erased.validated().shape_evidence();
+    assert_eq!(erased_evidence.proof(), crate::exec::ProofLevel::Dynamic);
+    assert_eq!(
+        erased_evidence.static_numel(),
+        None,
+        "an unproven shape must never hand a backend a constant to bake in"
+    );
+    assert_eq!(erased_evidence.static_extents(), &[][..]);
 }

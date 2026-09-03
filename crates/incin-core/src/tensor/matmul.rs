@@ -13,6 +13,7 @@ use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{AddmmAttributes, AttentionAttributes, op};
 use crate::exec::request::TensorHandle;
 use crate::shapes::Dyn;
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::prelude::{
     Axis, BroadcastShape, Dim, DimCons, DimensionConstraint, DynShape, Nil, RankExpectation, Shape,
@@ -314,14 +315,23 @@ impl MatMulShape<Dyn> for Dyn {
 // The matmul method on Tensor
 // ============================================================================
 
-impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Tensor<S1, B, K, G1> {
+/// Matrix products.
+///
+/// Generic over both operands' layouts, which need not agree. The result's
+/// layout is stated rather than carried: a matmul produces a differently shaped
+/// tensor, and a layout is only meaningful against the shape it describes.
+impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TLayout: Layout>
+    Tensor<S1, B, K, G1, Local, TLayout>
+{
     /// Batched matrix multiplication over the trailing two dimensions,
     /// with the output shape checked at compile time via `MatMulShape`.
     #[allow(clippy::type_complexity)]
-    pub fn matmul<S2, G2>(
+    pub fn matmul<S2, G2, L2: Layout>(
         &self,
-        rhs: &Tensor<S2, B, K, G2>,
-    ) -> Result<Tensor<S1::Output, B, K, crate::tensor::grad::JoinedGrad<G1, G2>>>
+        rhs: &Tensor<S2, B, K, G2, Local, L2>,
+    ) -> Result<
+        crate::shapes::Dense<S1::Output, B, K, crate::tensor::grad::JoinedGrad<G1, G2>, Local>,
+    >
     where
         S2: Shape + DynShape,
         G2: RequiresGrad,
@@ -375,10 +385,14 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     }
 
     /// Computes vector dot product of 1D/matching tensors `self` and `rhs`, returning a scalar tensor.
-    pub fn dot<S2: Shape>(
+    pub fn dot<S2: Shape, L2: Layout>(
         &self,
-        rhs: &Tensor<S2, B, K, G1>,
-    ) -> Result<Tensor<crate::shapes::Nil, B, K, JoinedGrad<G1, G1>>>
+        rhs: &Tensor<S2, B, K, G1, Local, L2>,
+        // A dot product collapses to a scalar, so the result describes a
+        // different geometry and cannot carry either operand's layout. It takes
+        // the parameter's default, `Dyn`, which is what leaving the
+        // argument off means.
+    ) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, JoinedGrad<G1, G1>>>
     where
         S1: crate::tensor::ops::ShapeEq<S2>,
         B: Execute<op::Mul> + Execute<op::SumAll> + crate::exec::Capabilities,
@@ -394,7 +408,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     pub fn outer<S2: Shape + DynShape>(
         &self,
         rhs: &Tensor<S2, B, K, G1>,
-    ) -> Result<Tensor<Dyn, B, K, JoinedGrad<G1, G1>>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
         B: Execute<op::Mul> + Execute<op::UnsqueezeExact> + crate::exec::Capabilities,
@@ -407,13 +421,13 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     }
 
     /// Fused add-matmul: `beta * self + alpha * (mat1 x mat2)`.
-    pub fn addmm<S2: Shape, S3: Shape>(
+    pub fn addmm<S2: Shape, S3: Shape, L2: Layout, L3: Layout>(
         &self,
-        mat1: &Tensor<S2, B, K, G1>,
-        mat2: &Tensor<S3, B, K, G1>,
+        mat1: &Tensor<S2, B, K, G1, Local, L2>,
+        mat2: &Tensor<S3, B, K, G1, Local, L3>,
         beta: f64,
         alpha: f64,
-    ) -> Result<Self>
+    ) -> Result<crate::shapes::Dense<S1, B, K, G1, Local>>
     where
         S1: DynShape,
         S2: Shape + DynShape,
@@ -447,11 +461,24 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad> Te
     }
 
     /// Scaled Dot-Product Attention: `softmax(q * k^T / scale) * v`.
-    pub fn scaled_dot_product_attention<S2: Shape, S3: Shape, S4: Shape>(
-        q: &Tensor<S1, B, K, G1>,
-        k: &Tensor<S2, B, K, G1>,
-        v: &Tensor<S3, B, K, G1>,
-        mask: Option<&Tensor<S4, B, K, G1>>,
+    /// `q` is typed with the impl block's own layout parameter rather than a
+    /// fresh one. It has to be: this takes no `self`, so nothing else would
+    /// pin `TLayout`, and `Tensor::scaled_dot_product_attention(..)` written
+    /// through a type alias would not infer. Tying it to `q` also makes the
+    /// operation accept an operand that has proven its layout, which pinning
+    /// the parameter to its default silently forbade.
+    pub fn scaled_dot_product_attention<
+        S2: Shape,
+        S3: Shape,
+        S4: Shape,
+        L2: Layout,
+        L3: Layout,
+        L4: Layout,
+    >(
+        q: &Tensor<S1, B, K, G1, Local, TLayout>,
+        k: &Tensor<S2, B, K, G1, Local, L2>,
+        v: &Tensor<S3, B, K, G1, Local, L3>,
+        mask: Option<&Tensor<S4, B, K, G1, Local, L4>>,
         scale: Option<f64>,
     ) -> Result<Tensor<Dyn, B, K, G1>>
     where

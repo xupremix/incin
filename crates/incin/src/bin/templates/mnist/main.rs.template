@@ -9,7 +9,6 @@
 //! `incin_data::vision::mnist::MnistDataset` from a `./data/mnist`
 //! directory instead of the `Tensor::rand`/`Tensor::from_slice` calls below.
 
-use incin::Flatten;
 use incin::prelude::*;
 use incin_telemetry::emitter::Emitter;
 use incin_telemetry::reporter::Reporter;
@@ -40,8 +39,10 @@ fn main() -> incin::Result<()> {
         let images = Tensor::<Dyn, Backend>::rand(vec![batch_size, 1, 28, 28])?;
         // Synthetic class labels (0..10) -- not learnable signal, just enough
         // to exercise the full forward/backward/optimizer/telemetry loop.
-        let labels_data: Vec<f32> = (0..batch_size).map(|i| ((step + i) % 10) as f32).collect();
-        let labels = Tensor::<Dyn, Backend>::from_slice(&labels_data, vec![batch_size])?;
+        // Integer, because a class index is an index: `cross_entropy_loss`
+        // reads its second operand as one and refuses a float outright.
+        let labels_data: Vec<i64> = (0..batch_size).map(|i| ((step + i) % 10) as i64).collect();
+        let labels = Tensor::<Dyn, Backend, i64>::from_slice(&labels_data, vec![batch_size])?;
 
         let output = model.forward(images)?;
         let loss = output.cross_entropy_loss(&labels)?;

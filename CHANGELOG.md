@@ -6,6 +6,310 @@
 All notable changes to the Incin framework will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- **A pointwise result proves it is dense.** Unary and binary pointwise
+  operations, the scalar forms and the `core::ops` operators now state
+  `RowMajor<S>` instead of carrying the operand's layout, so
+  `t.relu()?.reshape_view::<s![12]>()?` needs no runtime stride scan even when
+  `t` proved nothing. Backed by conformance tests on CPU and CUDA that feed a
+  genuinely strided operand, rather than by what the backends happen to do.
+  Carrying the operand's layout was also latently false: it would have handed a
+  `ChannelsLast` claim to a row-major buffer.
+- **Reductions, comparisons and the rest of the allocating surface prove they
+  are dense too.** `sum`/`mean`/`max`/`min`/`logsumexp` and their `_keepdim`
+  forms, `cumsum`, the six comparison operators, `logical_and`/`or`/`not`,
+  `masked_fill`, `where_cond` and `lerp` now state `RowMajor` of their result
+  shape. `reduce.rs`
+  already *documented* that "the results are freshly allocated dense buffers";
+  nothing checked it against an operand that was not already dense, and two
+  signatures disagreed with the sentence in opposite directions -- the axis
+  reductions claimed nothing, while `cumsum` returned `Self` and so claimed
+  whatever its *operand* claimed. `cumsum` is the one that mattered: it is
+  shape-preserving, so carrying the operand's layout typechecked, and would have
+  been a false claim for any operand that was not already row-major.
+- Impl blocks that pinned `L` to its default and so were unreachable from a
+  tensor carrying a proof: the six comparison operators, `logical_and`/`or`/
+  `not`, the scalar `Mul`/`Add`/`Sub` operators for all four scalar types, and
+  `masked_fill`'s mask parameter. Found by widening the reductions -- once `sum`
+  returned a proof, the next call in the chain stopped compiling.
+  `scaled_dot_product_attention` now ties its `q` operand to the impl block's
+  layout parameter, which both lets it accept a proven operand and keeps
+  `Tensor::scaled_dot_product_attention(..)` inferrable through a type alias
+  (a type alias's parameter defaults do not apply in expression position, so an
+  unconstrained `L` would have made the call ambiguous).
+- The `incin` facade's `Tensor` alias gained the layout parameter, and a
+  matching `Dense` alias that defaults its backend the same way. The alias fixed
+  `L` to the default, so a facade user could not name the type of anything that
+  returned a proof.
+- **`matmul`, `addmm` and `Linear` prove their results are dense.** They were
+  the operations explicitly left claiming nothing, on the grounds that the
+  conformance evidence covered the pointwise surface only. That evidence now
+  exists on both backends, so they claim: `matmul` returns
+  `Dense<S1::Output, ..>`, `addmm` returns `Dense<S1, ..>` (it previously
+  returned `Self`, so like `cumsum` it handed the *bias operand's* layout to a
+  GEMM result), and all four `Linear` `Module` impls return `Dense`. `addmm`'s
+  `mat1`/`mat2` and `matmul`'s operands accept any layout.
+- The CPU test feeds a real strided operand through a GEMM and checks the
+  numbers, not only the strides -- a kernel reading the operand linearly would
+  return a correctly shaped buffer of wrong values. The CUDA test checks the
+  same product, so the backends are compared against one answer rather than
+  each against itself.
+- **`BatchNorm2d` proves its result is dense; `Dropout` earns the right to carry
+  its operand's.** Both were shape-preserving `nn` layers returning the
+  operand's layout. `BatchNorm2d` has no identity path -- every call dispatches
+  and writes a fresh buffer -- so it now returns `Dense`. `Dropout` genuinely
+  does: in eval mode, or at `p == 0`, it hands back the very tensor it was
+  given, strides and all, so carrying is right there. Its bound moved from
+  `Layout` to the sealed `FreshDense<S>`, which is what makes the *other* branch
+  honest: that branch writes a dense buffer, so the layout carried across both
+  has to be one a fresh dense allocation also satisfies. Bounding on `Layout`
+  compiles today only because `Dyn` and `RowMajor` are the only layouts and both
+  are dense.
+- **`RestateFor<S2>`, and a layout proof that survives `into_shape`.** The rule
+  that a layout cannot be carried across a shape change has one exception, and
+  `into_shape`/`into_dyn`/`to_shape` are it: they change no dimension. They
+  re-describe the *same* extents under a different shape type, over the same
+  buffer, with the same strides -- `S2::try_from_dims` is what makes them
+  fallible, and what rules out the case where the two shapes disagree. So
+  `RowMajor<S1>` and `RowMajor<S2>` denote identical strides whenever the
+  conversion succeeds, and dropping to `Dyn` there discarded a fact that was
+  still true. `RestateFor` is the type-level half of that argument; it is not
+  sealed, because unlike `FreshDense` nothing about it can be minted.
+- `RmsNorm` returns `Dense`. Its chain ends in `broadcast_mul`, which allocates;
+  the proof was being lost on the `into_shape` back to a static shape. That was
+  the concrete thing `RestateFor` was written for.
+- The four loss `forward` methods -- `MSELoss`, `L1Loss`, `CrossEntropyLoss`,
+  `BCEWithLogitsLoss` -- accept operands carrying any layout and state `Dense`
+  for the result they allocate. They pinned `L` on *both* arguments, so once
+  `Linear` returned a proof, feeding its output straight into a loss stopped
+  compiling.
+- `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
+  where the promotion is fallible, since claiming less can never claim wrongly.
+  It exists for the case where two branches must meet and only one allocates;
+  using it on a value that stays proven discards exactly what the layout
+  parameter carries.
+- The `incin` facade prelude now re-exports `Dense`, `RowMajor`, `Layout`,
+  `Contiguous` and `FreshDense`. They reached `incin-core`'s prelude when the
+  parameter landed but not the facade, so a user of the `incin` crate could hold
+  a layout-carrying tensor and had no way to name its type.
+- `Debug`, `Display`, `backward`, `backward_with`, the loss family and all four
+  `core::ops` operator impls accept layout-carrying tensors. Each previously
+  bound `L` to its default, so `-t` and `a + b` did not compile for a proven
+  tensor.
+- **Typed layout.** `Tensor` gained a sixth parameter, `L: Layout`, describing
+  where a tensor's elements live: strides, offset, alignment and contiguity.
+  It defaults to `Dyn` -- the same runtime-selected marker the shape, dtype,
+  device and placement slots use -- which claims nothing, so existing code is
+  unchanged
+  and every runtime path stays available. `RowMajor<S>` derives its strides from
+  the shape; `Dense<S, B, ..>` is the ergonomic alias. Facts are traits --
+  `Contiguous` -- and `LayoutOf<S>` states rank congruence. There is
+  deliberately no `AlignedTo<N>`: alignment is a property of the allocation
+  rather than of the shape, so no layout derived from `S` can honestly imply it.
+  See the [Layout chapter](docs/book/src/layout.md). Every tensor module accepts
+  a layout-carrying operand. Shape-preserving operations carry the operand's
+  layout through, so a proof survives a chain; shape-changing ones state theirs
+  as `Dyn`, since a layout describes one geometry and cannot be carried to
+  another.
+- **Constructors yield a layout proof.** `zeros`, `ones`, `randn`, `full` and
+  their siblings are generic over `L`, so `let t: Dense<s![3, 4], B> =
+  Tensor::zeros(())?` produces a real `RowMajor` from the allocation itself,
+  with no runtime promotion. Asking for `Tensor<S, B>` still yields `Dyn`,
+  so nothing that predates the parameter changed. Before this, `reshape_view`
+  was the only API bounded on `Contiguous` and nothing could satisfy it without
+  going through `into_row_major` -- a runtime stride scan -- which left the
+  static layout system behaviourally equal to a runtime check.
+- `FreshDense<S>`, the **sealed** bound that makes the above safe. A constructor
+  generic over `L` is otherwise a minting press: name any layout and receive a
+  tensor claiming it. That is harmless while a fresh allocation genuinely is
+  both `Dyn` and `RowMajor`, and stops being harmless the moment a second
+  real layout such as `ChannelsLast` exists. Only this crate decides what a
+  fresh allocation may claim.
+- `Tensor::into_row_major`, a *checked* promotion from runtime strides to a
+  type-level layout. There is deliberately no unchecked counterpart.
+- `Tensor::reshape_view`, bounded on `L: Contiguous`: reinterprets a buffer
+  under a new shape without copying. Reshaping a non-contiguous tensor is a
+  compile error rather than the runtime failure it is elsewhere.
+- `transpose_view`, a transpose that permutes shape and strides over the same
+  buffer instead of copying, and the `TransposeView` operation behind it. CPU
+  and CUDA implement it; WGPU deliberately does not advertise it, because its
+  pointwise shaders address linearly and would read a view's elements in the
+  wrong order. Which of the two transposes is faster depends on how often the
+  result is read, so the framework offers both rather than choosing (#113).
+  Measured on a GTX 1650: the view is ~45% faster for a single pointwise
+  consumer and ~23% slower by eight, crossing over at about four reads.
+- `AnyTensor` and `TensorOf<T>`, so generic code names one type parameter
+  instead of six. The parameters stay reachable as associated types, so a bound
+  that genuinely needs one still writes `T::Layout: Contiguous`; only the ones a
+  helper does not constrain stop having to be written down.
+- `Shape::STATIC_EXTENTS`, per-axis extents settled by the shape type, carried
+  to backends on `ShapeEvidence` alongside the existing proof level, rank and
+  element count.
+- Proof-directed CUDA kernel specialisation. `ShapeEvidence` had no backend
+  readers; it now has three. A statically proven element count that divides the
+  vector width proves a packed kernel's ragged tail unreachable, so it is not
+  emitted; proven per-axis extents let a strided kernel use literal divisors,
+  which the compiler lowers to multiply-and-shift; and the `shape` array and its
+  per-launch upload are dropped entirely when the extents are baked in.
+- CUDA pointwise kernels are now lowered from `codegen`'s expression IR rather
+  than from hand-written CUDA C literals, via `codegen::fragment::lower_scalar`.
+  Derivatives come from `IrExpr::diff` rather than a second hand-written string,
+  so a forward and its backward can no longer disagree.
+- Fused CUDA unary backward: `grad_out * f'(x)` in one kernel, removing a launch
+  and a full-size intermediate per operation per backward pass.
+- `log_softmax`, `logsumexp` and `scatter_add`, with `DuplicateIndexRule::Accumulate`.
+
+- The Layout chapter is now part of the Cargo-backed doctest aggregation. It was
+  added to `SUMMARY.md` when the parameter landed and never to
+  `crates/incin/src/lib.rs`, so `tools/check-docs.py` -- which only runs in the
+  Pages workflow, off `master` -- had been failing on `develop` unnoticed and
+  the chapter's samples were compiled by nothing.
+
+### Removed
+
+- The pointwise operations' "output carries the operand's layout" contract.
+  **Breaking**: roughly forty methods change return type. A signature written
+  as `Tensor<S, B, K, G>` for a pointwise result becomes `Dense<S, B, K, G>`,
+  or keeps its shape by calling `forget_layout`; which is right depends on
+  whether the caller wants the proof.
+- The "output carries the operand's layout" contract from the reduction,
+  comparison, logical, `masked_fill` and `lerp` surfaces as well. **Breaking**:
+  `sum`, `mean`, `max`, `min`, `logsumexp`, their `_keepdim` forms, `cumsum`,
+  `eq`/`ne`/`lt`/`le`/`gt`/`ge`, `logical_and`/`or`/`not`, `masked_fill` and
+  `lerp` and `where_cond` change return type. An annotation written
+  `Tensor<S, B, K, G>` for one of their results becomes `Dense<S, B, K, G>`, or
+  keeps its shape by calling `forget_layout`.
+- `Unknown`, the layout marker, in favour of the existing `Dyn`. **Breaking**
+  for anyone who named it: `incin_core::shapes::Unknown` and the prelude
+  re-export are gone, and `Tensor`'s sixth parameter now defaults to `Dyn`.
+  Code that never wrote the marker down is unaffected, since the default is
+  what changed name rather than meaning.
+
+  One marker now covers every "decided at runtime" slot instead of two spellings
+  for one idea, so a `where` clause that wants "unproven anything" names a single
+  type. The objection this overrides is that a fully spelled-out tensor can now
+  say `Dyn` twice, once for a dynamic shape and once for an unproven layout; the
+  humanizer resolves that by position rather than by name, which is the more
+  precise test in any case.
+
+  Measured cost: with the default renamed, rustc stopped abbreviating one
+  `compile_fail` rendering, which now spells out `f32, NoGrad, Local, Dyn` where
+  it previously printed neither. The humanizer still strips the layout argument
+  from it. The reason rustc's default-elision changed behaviour was not pinned
+  down -- a reduced standalone case with the same parameter structure, defaults
+  and trait impls still elides correctly.
+
+### Changed (editor integrations)
+
+- Hover and `expected .. found ..` diagnostics no longer print a tensor's
+  layout argument when it is the default `Dyn`, which asserts nothing. A layout
+  that is anything else is a real claim -- the difference between a tensor that
+  can call `reshape_view` and one that cannot -- and is always shown. A `Dyn`
+  *shape* is never elided, even though the layout slot spells its default the
+  same way: the two are told apart by **position**, since the layout is the
+  sixth of six parameters. That test is stricter than the name test it
+  replaced, which fired on any trailing argument regardless of arity.
+
+### Fixed
+
+- **CUDA pointwise refused the only operand that made its strided kernel
+  reachable.** `elementwise_layouts` declared `CONTIGUOUS`, so the descriptor
+  path answered `layout strided is unsupported for neg` for any non-contiguous
+  CUDA tensor -- while the strided elementwise kernel exists, is benchmarked,
+  and beats materialising for a single consumer. The declaration was true when
+  written, since every CUDA operation materialised and no strided CUDA tensor
+  could be built; `transpose_view` ended that and the row was not revisited,
+  which meant this changelog's own "~45% faster for a single pointwise
+  consumer" described a path callers could not take. 54 CUDA elementwise
+  operations now advertise `strided`. The other capability rows stay narrow
+  until each has the same evidence.
+- The `Module` doctest had not compiled since the layout conversion introduced
+  it: it spelled `crate::tensor::grad::NoGrad`, and inside a doctest `crate` is
+  the doctest's own crate. Missed because `cargo test --all-targets`, the CI
+  invocation, is the one form that does not build doctests.
+
+- **Every codegen module rendered CUDA that could not compile.** All 21 emitted
+  `#include <math.h>`, which NVRTC rejects outright -- it compiles a translation
+  unit with no host headers on the include path. That is the shared reason
+  behind the "modules with no consumer" backlog (#111): they could not have had
+  one. The working kernel templates never did this; they include only
+  `cuda_fp16.h`/`cuda_bf16.h` and call `expf`, `sqrtf` and `tanhf` directly,
+  which NVRTC provides as builtins. `codegen_nvrtc_smoke` now compiles all 20
+  CUDA entry points against the real device so this cannot return.
+- **Hardware tests reported `ok` when there was no hardware.** Every CUDA and
+  WGPU suite opened with a predicate and an early `return`, so a missing device
+  produced a green line indistinguishable from a test that ran. `require_cuda`
+  and `require_wgpu` fail instead. Verified in both directions: the suites pass
+  with a device and fail under `CUDA_VISIBLE_DEVICES=""`.
+- **The trybuild suites ran on exactly one machine.** Twenty-three test files
+  guarded their compile-fail cases behind
+  `if std::fs::read("/home/<user>/.cargo/config.toml").is_err() { return; }`, an
+  absolute path into one developer's home directory. Anywhere else -- every CI
+  runner included -- the read fails and the suite returns early reporting `ok`.
+  That silently disabled all 70 compile-fail and compile-pass cases, which are
+  the proof surface this framework exists for. They now run; all 70 pass.
+- **The hardware floor could not see a suite disappear.** The workflow required
+  at least 60 ignored CUDA tests against 66 actually running, leaving room for a
+  whole suite to evaporate inside the guard meant to detect exactly that.
+  `cargo xtask hardware-tests` derives the expectation from the `#[ignore]`
+  reasons in the tree, and fails on an unclassified reason rather than
+  defaulting to either side.
+
+- **The CUDA optimizers did nothing and returned zeros.** `launch_sgd_step`,
+  `launch_adam_step` and `launch_adamw_step` each allocated a zeroed output,
+  compiled the kernel module, discarded their gradient and attributes with
+  `let _ = (grad, attrs)`, and returned the zeros. No optimizer kernel was ever
+  launched -- there was not one `.launch(` call in the file. Any model trained on
+  CUDA had its parameters zeroed on the first optimizer step. The kernels
+  themselves were complete and correct in `kernels/optimizer.cu`; only the launch
+  was missing. This survived because `tests/cuda_optimizer.rs` recomputed Adam,
+  AdamW and SGD in its own body and asserted its own arithmetic, calling no incin
+  code at all.
+- **CUDA kernels were compiled for NVRTC's default architecture, not the
+  device's.** No `--gpu-architecture` was passed, so every kernel targeted a
+  pre-sm_60 virtual architecture. That is not merely a lost optimisation: an
+  intrinsic introduced after the default does not exist, so a kernel using one
+  fails to *compile*, taking its whole module with it. The embedding module did
+  exactly that -- `embedding_backward` needs `atomicAdd(double*, double)` from
+  sm_60 -- which took the forward lookup down alongside it, so CUDA embeddings
+  were entirely non-functional. The dispatcher now queries its device's compute
+  capability and names the newest virtual architecture it supports.
+- **CUDA `argmax`/`argmin` computed only the first output row.** The kernel
+  reads its output position from `blockIdx.x` and uses a whole block to stride
+  the reduction axis, but the launch sized the grid as `out_numel / 256` -- one
+  thread per output rather than one block. For any output up to 256 elements
+  that is a single block: row zero correct, every other row left at its
+  zero-initialised value. Silently wrong, not an error. Found by rewriting
+  `tests/cuda_reduce_ops.rs`, which had asserted that `size_bytes` returns `Ok`
+  for three dtypes. The neighbouring welford, cumsum and topk launches already
+  sized their grids correctly.
+- **The CUDA module cache could serve the wrong kernel.** `KernelKey::cache_id`
+  was built from the operation name and never the source, so callers that format
+  a runtime value into their expression under a fixed name collided with
+  themselves: `powf(2, 3)` returned `4` after `powf(x, 2)` had been compiled.
+  Also reachable through `clamp` and through `mean`'s backward, which renders
+  `x * 1/axis_len` under the constant name `"mul_scalar"`. The cache key now
+  includes a digest of the kernel source.
+- `IrUnaryOp::Gelu`'s symbolic derivative dropped a product-rule term, silently
+  understating the gradient everywhere.
+- A CUDA product reduction over a contiguous last axis reached `unreachable!()`:
+  `prod` was accepted by the renderer and present in its warp-shuffle arm but
+  missing from the load arm.
+- CUDA `conv2d` refused a bias, making biased convolution executable on CPU and
+  unreachable on CUDA, though both the CPU binder and the CUDA kernel already
+  supported it.
+- Compiled fusion offered candidates it could not justify: `find_candidates`
+  paired nodes by position and never counted consumers, so a value with two
+  readers was a candidate. It now proves exclusive consumption from the graph's
+  own edges.
+
+### Changed
+
+- `DuplicateIndexRule` is `#[non_exhaustive]`.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

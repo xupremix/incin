@@ -608,6 +608,91 @@ fn a_linear_layer_transposes_its_weight_and_adds_its_bias() {
     assert_eq!(biased.get(&[0, 1]), 22.0);
 }
 
+/// A rank-one input projects to a rank-one output.
+///
+/// `inference.rs` infers `[out]` for a rank-one input and the capability row
+/// advertises rank one, but the matmul `linear` rewrites into accepts rank two
+/// upwards, so the executor promotes the row and takes it back off. The values
+/// have to match the `[1, in]` form exactly, and the result has to be rank one
+/// rather than the `[1, out]` the promotion works in.
+#[test]
+fn a_rank_one_linear_projects_to_a_rank_one_output() {
+    let context = context();
+    let weight = storage(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0], &[2, 3]);
+    let bias = storage(&[10.0, 20.0], &[2]);
+
+    let batched = dispatch::execute::<op::Linear, _>(
+        &context,
+        LinearAttributes { has_bias: true },
+        &[
+            handle(&storage(&[1.0, 2.0, 3.0], &[1, 3])),
+            handle(&weight),
+            handle(&bias),
+        ],
+    )
+    .expect("a batched linear executes");
+
+    let unbatched = dispatch::execute::<op::Linear, _>(
+        &context,
+        LinearAttributes { has_bias: true },
+        &[
+            handle(&storage(&[1.0, 2.0, 3.0], &[3])),
+            handle(&weight),
+            handle(&bias),
+        ],
+    )
+    .expect("a rank-one linear executes");
+
+    assert_eq!(batched.shape.to_vec(), vec![1, 2]);
+    assert_eq!(unbatched.shape.to_vec(), vec![2]);
+    assert_eq!(unbatched.get(&[0]), batched.get(&[0, 0]));
+    assert_eq!(unbatched.get(&[1]), batched.get(&[0, 1]));
+
+    // Without a bias too, since the promotion has to survive the branch that
+    // returns the product untouched.
+    let plain = dispatch::execute::<op::Linear, _>(
+        &context,
+        LinearAttributes { has_bias: false },
+        &[handle(&storage(&[1.0, 2.0, 3.0], &[3])), handle(&weight)],
+    )
+    .expect("an unbiased rank-one linear executes");
+    assert_eq!(plain.shape.to_vec(), vec![2]);
+    assert_eq!(plain.get(&[0]), 1.0);
+    assert_eq!(plain.get(&[1]), 2.0);
+}
+
+/// The promoted row is added through the taped reshape, so the gradient
+/// reaches the rank-one operand the caller passed in and comes back at its
+/// shape rather than at the `[1, in]` the projection worked in.
+#[test]
+fn a_rank_one_linear_returns_a_rank_one_gradient() {
+    use crate::cpu::tape;
+
+    let context = context();
+    let input = storage(&[1.0, 2.0, 3.0], &[3]);
+    let weight = storage(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0], &[2, 3]);
+
+    let projected = dispatch::execute::<op::Linear, _>(
+        &context,
+        LinearAttributes { has_bias: false },
+        &[handle(&input), handle(&weight)],
+    )
+    .expect("a rank-one linear executes");
+    let loss = dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&projected)])
+        .expect("sum_all executes");
+
+    let gradients = tape::backward(&loss).expect("backward succeeds");
+    let grad_input = gradients
+        .get(input.id)
+        .expect("the input receives a gradient");
+
+    assert_eq!(grad_input.shape.to_vec(), vec![3]);
+    // Summing the projection makes the gradient the column sums of the weight.
+    assert_eq!(grad_input.get(&[0]), 1.0);
+    assert_eq!(grad_input.get(&[1]), 1.0);
+    assert_eq!(grad_input.get(&[2]), 0.0);
+}
+
 #[test]
 fn rms_norm_scales_by_the_root_mean_square_without_centring() {
     let context = context();

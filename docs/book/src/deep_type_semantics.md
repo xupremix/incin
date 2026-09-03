@@ -1,15 +1,21 @@
 # Type semantics
 
-Every `Tensor` in Incin carries four type parameters:
+Every `Tensor` in Incin carries six type parameters:
 
 ```rust,ignore
-Tensor<S, B, K, G>
-//     |  |  |  |
+Tensor<S, B, K, G, P, L>
+//     |  |  |  |  |  |
+//     |  |  |  |  |  layout: what is known about where the elements sit
+//     |  |  |  |  placement: Local, or sharded across a mesh
 //     |  |  |  gradient state: Grad, NoGrad, or Dyn
 //     |  |  dtype: f32, i64, Q8_0, your own...
 //     |  backend: which executor runs the kernels
 //     shape: what the compiler knows about the axes
 ```
+
+The last four default, and each default is the one that claims the least:
+`f32`, `NoGrad`, `Local`, `Dyn`. That is the same rule `ProofLevel` follows
+-- silence is never credited -- applied to the type parameters themselves.
 
 [Shapes](./shapes.md) and [Advanced shapes](./advanced_shapes.md) cover
 day-to-day use. This chapter is about what those parameters *mean* to the

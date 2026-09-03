@@ -2,14 +2,14 @@ error[E0308]: mismatched types
  --> tests/target_api_compile_fail/numeric_masked_fill_mask.rs:6:27
   |
 6 |     let _ = x.masked_fill(&mask, 0.0)?;
-  |               ----------- ^^^^^ expected `&Tensor<DimCons<..., ...>, ..., bool, _>`, found `&Tensor<DimCons<..., ...>, ..., u8>`
+  |               ----------- ^^^^^ expected `&Tensor<..., ..., bool, _, ..., _>`, found `&Tensor<DimCons<..., ...>, ..., u8>`
   |               |
   |               arguments to this method are incorrect
   |
-  = note: expected reference `&incin_core::tensor::base::types::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl, bool, _>`
-             found reference `&incin_core::tensor::base::types::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl, u8, NoGrad>`
+  = note: expected reference `&incin_core::tensor::base::types::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl, bool, _, incin::prelude::Local, _>`
+             found reference `&incin_core::tensor::base::types::Tensor<DimCons<ConstDim<2>, Nil>, incin_backends::cpu::CpuBackendImpl, u8, NoGrad, incin::prelude::Local, Dyn>`
 note: method defined here
  --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation/indexing.rs
   |
-  |     pub fn masked_fill<S2: Shape, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
+  |     pub fn masked_fill<
   |            ^^^^^^^^^^^

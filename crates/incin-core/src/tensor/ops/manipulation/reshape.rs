@@ -12,6 +12,7 @@ use crate::exec::catalog::{
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::{Dyn, DynShape, FlattenAt, Shape, ShapeBuf, ShapeSpec, ShapeValue};
 use crate::tensor::base::Tensor;
@@ -80,8 +81,14 @@ where
     .map(Into::into)?)
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement>
-    Tensor<S, B, K, G, P>
+impl<
+    S: Shape + DynShape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: Layout,
+> Tensor<S, B, K, G, P, L>
 {
     /// Reshape this tensor using a [`ShapeSpec`].
     ///
@@ -327,7 +334,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         let inner = G::grad_mode(&self._grad)
             .restrict(|| squeeze_storage_exact::<B, K>(&self.inner, input_shape, dim))?;
         shape.remove(dim);
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Drop>(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Drop, _>(
             inner,
             ShapeBuf::from_slice(&shape),
             self._dtype,
@@ -464,8 +471,8 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-    Tensor<S, B, K, G>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+    Tensor<S, B, K, G, Local, L>
 {
     /// Flattens a statically selected inclusive axis range.
     /// Flattens an axis interval selected by compile-time axis selectors.

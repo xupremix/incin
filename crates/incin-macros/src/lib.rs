@@ -19,6 +19,7 @@ use proc_macro::TokenStream;
 
 /// Internal helper module for generating ArgInto implementations.
 mod arg_into;
+mod autotune;
 mod axis;
 
 /// Internal helper module for tensor index and slicing macro.
@@ -491,4 +492,22 @@ pub fn parallel(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn distributed_main(attr: TokenStream, item: TokenStream) -> TokenStream {
     distributed_main::distributed_main(attr, item)
+}
+
+/// Attributes a compute function with runtime hardware autotuning parameters.
+///
+/// ## Examples
+/// ```text
+/// #[autotune(
+///     key = "matmul_f32_tile",
+///     params = [(32, 32), (64, 64), (128, 64)],
+///     policy = heuristic
+/// )]
+/// fn matmul_tiled(m: usize, k: usize, n: usize) {
+///     // Execution body
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn autotune(attr: TokenStream, item: TokenStream) -> TokenStream {
+    autotune::expand_autotune(attr.into(), item.into()).into()
 }

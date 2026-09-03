@@ -22,6 +22,8 @@ NC='\033[0m'
 step() { echo -e "\n${BOLD}${YELLOW}=== [SOUNDNESS] $1 ===${NC}"; }
 success() { echo -e "${GREEN}OK: $1${NC}"; }
 fail() { echo -e "${RED}FAILED: $1${NC}"; exit 1; }
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 
 WHICH="${1:-all}"
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"

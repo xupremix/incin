@@ -1,10 +1,12 @@
 use crate::backend_authoring::TensorBackend;
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::op;
 use crate::nn::module::Module;
 use crate::nn::module::ShapeInfo;
 use crate::nn::param::{Frozen, Param, TrainState, Trainable};
 use crate::nn::stats::{ComputeStats, LayerStats};
+use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
 use crate::shapes::{
@@ -438,7 +440,8 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::True, K, Train>
+    L: Layout,
+> Module<Tensor<Dyn, B, K, G, Local, L>> for Linear<Dyn, B, crate::nn::optional::True, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
     JoinedGrad<G, Train::TensorGrad>: GradJoin<Train::TensorGrad>,
@@ -446,14 +449,17 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = crate::shapes::Dense<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<Dyn, B, K, G, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         let out = x.matmul(&weight_t)?;
         let bias_t = self.bias.as_ref().unwrap().as_tensor()?;
-        let out_final = out.broadcast_add::<Dyn, Train::TensorGrad>(&bias_t)?;
+        let out_final = out.broadcast_add::<Dyn, Train::TensorGrad, _>(&bias_t)?;
         Tensor::from_shape_value(
             out_final.inner,
             out_final._shape,
@@ -472,16 +478,20 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<Dyn, B, K, G>> for Linear<Dyn, B, crate::nn::optional::False, K, Train>
+    L: Layout,
+> Module<Tensor<Dyn, B, K, G, Local, L>> for Linear<Dyn, B, crate::nn::optional::False, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output = crate::shapes::Dense<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<Dyn, B, K, G, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         x.matmul(&weight_t)
     }
@@ -495,16 +505,20 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<Dyn, B, K>> for Linear<Dyn, B, Dyn, K, Train>
+    L: Layout,
+> Module<Tensor<Dyn, B, K, crate::tensor::grad::NoGrad, Local, L>> for Linear<Dyn, B, Dyn, K, Train>
 where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<Dyn, B, K>;
+    type Output = crate::shapes::Dense<Dyn, B, K, crate::tensor::grad::NoGrad, Local>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<Dyn, B, K>) -> core::result::Result<Tensor<Dyn, B, K>, Error> {
+    fn forward(
+        &self,
+        x: Tensor<Dyn, B, K, crate::tensor::grad::NoGrad, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let weight_t = self.weight.as_tensor()?.transpose(0isize, 1isize)?;
         let out = x.matmul(&weight_t)?;
         if let Some(b) = &self.bias {
@@ -541,7 +555,8 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<InShape, B, K, G>>
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+> Module<Tensor<InShape, B, K, G, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
     InShape::Output: DynShape,
@@ -551,10 +566,14 @@ where
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output =
+        Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InShape, B, K, G, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -576,7 +595,7 @@ where
             .unwrap()
             .as_tensor()?
             .into_shape::<Dyn>()?;
-        let out_final = out_dyn.broadcast_add::<Dyn, Train::TensorGrad>(&bias_dyn)?;
+        let out_final = out_dyn.broadcast_add::<Dyn, Train::TensorGrad, _>(&bias_dyn)?;
 
         let grad = out_dyn._grad.clone();
         Tensor::from_parts(out_final.into_inner(), shape, dtype, device, grad)
@@ -594,7 +613,8 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-> Module<Tensor<InShape, B, K, G>>
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+> Module<Tensor<InShape, B, K, G, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
     InShape::Output: DynShape,
@@ -602,10 +622,14 @@ where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>>;
+    type Output =
+        Tensor<InShape::Output, B, K, JoinedGrad<G, Train::TensorGrad>, Local, crate::shapes::Dyn>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K, G>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InShape, B, K, G, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -637,17 +661,22 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-> Module<Tensor<InShape, B, K>> for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
+    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+> Module<Tensor<InShape, B, K, crate::tensor::grad::NoGrad, Local, L>>
+    for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
 where
     InShape::Output: DynShape,
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InShape::Output, B, K>;
+    type Output = crate::shapes::Dense<InShape::Output, B, K, crate::tensor::grad::NoGrad, Local>;
     type Error = Error;
 
-    fn forward(&self, x: Tensor<InShape, B, K>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<InShape, B, K, crate::tensor::grad::NoGrad, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         let dtype = x._dtype.clone();
         let device = x._device.clone();
 
@@ -663,6 +692,11 @@ where
         let x_dyn = x.into_shape::<Dyn>()?;
         let out_dyn = x_dyn.matmul(&weight_t)?;
 
+        // The two arms used to disagree about layout -- the bias path allocated
+        // through a pointwise add and was `RowMajor`, while the bias-free path
+        // handed back `matmul`'s result, which claimed nothing -- so the proof
+        // was dropped to whatever was true of both. Now that `matmul` states
+        // its own result is dense, both arms agree and the weakening is gone.
         let out_final = if let Some(b) = &self.bias {
             let bias_dyn = b.as_tensor()?.into_shape::<Dyn>()?;
             out_dyn.broadcast_add(&bias_dyn)?

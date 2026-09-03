@@ -8,6 +8,8 @@ pub(crate) mod gpu;
 pub(crate) mod ops;
 pub(crate) mod storage;
 pub(crate) mod tape;
+#[doc(hidden)]
+pub mod testing;
 
 pub use backend::{CudaBackendImpl, CudaGrads, CudaVar};
 /// Number of entries currently on this backend's autograd tape.

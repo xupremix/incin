@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 
 use crate::compiled::capture::CapturedGraph;
 use crate::err::Result;
+use crate::graph::ValueId;
 use crate::shapes::error::OperationKind;
 
 fn builtin_operation(identity: &crate::exec::OperationIdentity) -> Option<OperationKind> {
@@ -80,46 +81,81 @@ impl FusionPass {
         is_pointwise(producer) && is_pointwise(consumer)
     }
 
-    /// Identifies adjacent pointwise heuristic candidates in a captured graph.
+    /// Every node index that reads `value` as an input.
     ///
-    /// This does not prove that an intermediate value has no other consumers;
-    /// no executable fusion lowering is currently available.
+    /// A node that reads the same value twice (`x + x`) counts once: the
+    /// question fusion asks is how many *nodes* still need the value to exist,
+    /// not how many times one node mentions it. A fused body can refer to its
+    /// operand as often as it likes.
+    fn consumer_nodes(graph: &CapturedGraph, value: ValueId) -> Vec<usize> {
+        graph
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.inputs.contains(&value))
+            .map(|(index, _)| index)
+            .collect()
+    }
+
+    /// Identifies pointwise pairs where fusing provably cannot lose a value.
+    ///
+    /// Fusing a producer into its consumer makes the intermediate disappear, so
+    /// it is only legal when nothing else needs that intermediate. Three things
+    /// have to hold, and the previous heuristic checked only the last:
+    ///
+    /// 1. The producer has exactly one output. A multi-output node has no
+    ///    single intermediate to eliminate.
+    /// 2. That output has exactly one consuming node. This is the proof the
+    ///    module's doc comment said was missing -- the old scan paired node `i`
+    ///    with node `i + 1` by position and never counted readers, so a value
+    ///    feeding both node `i + 1` and node `i + 5` was fused anyway and the
+    ///    second reader was left referring to something that no longer existed.
+    /// 3. The output does not escape as a graph output, since a caller outside
+    ///    the graph is a consumer the edges do not show.
+    ///
+    /// Adjacency is no longer assumed either. The consumer is found by
+    /// following the edge, so a producer whose consumer sits further down the
+    /// topological order is still a candidate, and two unrelated neighbours no
+    /// longer look like one.
     pub fn find_candidates(&self, graph: &CapturedGraph) -> Vec<FusionCandidate> {
         let mut candidates = Vec::new();
 
-        for (i, node) in graph.nodes.iter().enumerate() {
-            if i + 1 >= graph.nodes.len() {
-                break;
-            }
-            let next = &graph.nodes[i + 1];
-
-            // Check only that an adjacent node consumes a producer output. This
-            // is a heuristic candidate, not an exclusive-consumer proof.
-            let producer_outputs = &node.outputs;
-            let consumer_inputs = &next.inputs;
-
-            // Output is used as input to the next and not a graph output
-            let is_chained = producer_outputs
-                .iter()
-                .any(|out_id| consumer_inputs.contains(out_id));
-            let output_is_graph_output = producer_outputs
-                .iter()
-                .any(|out_id| graph.outputs.contains(out_id));
-
+        for (producer_idx, node) in graph.nodes.iter().enumerate() {
             let Some(producer) = builtin_operation(&node.operation) else {
                 continue;
             };
-            let Some(consumer) = builtin_operation(&next.operation) else {
+            // One output, or there is no single intermediate to remove.
+            let [produced] = node.outputs[..] else {
                 continue;
             };
-            if is_chained && !output_is_graph_output && Self::can_fuse(producer, consumer) {
-                candidates.push(FusionCandidate {
-                    producer_idx: i,
-                    consumer_idx: i + 1,
-                    producer_op: producer,
-                    consumer_op: consumer,
-                });
+            // Escapes the graph: an external consumer the edges cannot show.
+            if graph.outputs.contains(&produced) {
+                continue;
             }
+            // Exactly one node still needs it.
+            let consumers = Self::consumer_nodes(graph, produced);
+            let [consumer_idx] = consumers[..] else {
+                continue;
+            };
+            let Some(consumer) = builtin_operation(&graph.nodes[consumer_idx].operation) else {
+                continue;
+            };
+            if !Self::can_fuse(producer, consumer) {
+                continue;
+            }
+            // Nodes are in topological order, so a consumer must follow its
+            // producer. A violation means the graph is malformed rather than
+            // that this pair is unfusable, and silently fusing it would reorder
+            // execution.
+            if consumer_idx <= producer_idx {
+                continue;
+            }
+            candidates.push(FusionCandidate {
+                producer_idx,
+                consumer_idx,
+                producer_op: producer,
+                consumer_op: consumer,
+            });
         }
 
         candidates

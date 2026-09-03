@@ -110,17 +110,40 @@ impl<
     B: crate::tensor::backend::VariableBackend,
     K: BuiltinDType,
     G: RequiresGrad,
-> Module<Tensor<S, B, K, G>> for Dropout
+    L: crate::shapes::FreshDense<S>,
+> Module<Tensor<S, B, K, G, Local, L>> for Dropout
 where
     B: SupportsDType<K> + Capabilities + Execute<op::Dropout>,
     B::Device: ConstDevice,
     <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<S, B, K, G>;
+    /// The operand's own layout, which is the one place in the crate where
+    /// carrying it is right rather than merely typechecking.
+    ///
+    /// Every other shape-preserving operation writes a fresh buffer on every
+    /// call, so returning the operand's claim describes memory the operand
+    /// never touched. Dropout has a real identity path -- eval mode, or
+    /// `p == 0` -- which hands back the very tensor it was given, strides and
+    /// all, so for that branch the operand's layout is exactly right.
+    ///
+    /// The training branch is what constrains the bound. It writes a dense
+    /// buffer, so the layout carried across both branches has to be one a fresh
+    /// dense allocation also satisfies -- which is precisely
+    /// [`FreshDense<S>`](crate::shapes::FreshDense), the sealed bound the
+    /// constructors use, rather than [`Layout`](crate::shapes::Layout). Bounding
+    /// on `Layout` would compile today, because `Dyn` and `RowMajor` are the
+    /// only layouts and both are dense; it would start lying the day a
+    /// `ChannelsLast` exists, and the compiler would not ask.
+    ///
+    /// Pinned by `dropout_carries_its_operand_layout_and_both_branches_earn_it`.
+    type Output = Tensor<S, B, K, G, Local, L>;
     type Error = Error;
 
     #[inline]
-    fn forward(&self, x: Tensor<S, B, K, G>) -> core::result::Result<Tensor<S, B, K, G>, Error> {
+    fn forward(
+        &self,
+        x: Tensor<S, B, K, G, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         if !self.is_training || self.p <= 0.0 {
             return Ok(x);
         }

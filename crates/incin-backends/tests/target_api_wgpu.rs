@@ -17,9 +17,28 @@ use incin_backends::prelude::*;
 use incin_core::backend_authoring::SupportsDType;
 use incin_core::prelude::*;
 
+/// Aborts unless a WGPU adapter is present.
+///
+/// Replaces `if gpu.zeros(..).is_err() { return; }`, which reported `ok` for a
+/// test that allocated nothing. This file is `#![cfg(feature = "wgpu")]`, so
+/// compiling it is an explicit request for the backend, and its own module
+/// documentation states the environment has a software adapter -- a missing one
+/// is a broken environment, not a reason to pass.
+///
+/// # Panics
+///
+/// If the adapter cannot allocate.
+fn require_wgpu(gpu: &Wgpu) {
+    gpu.zeros(shape![1]).expect(
+        "no WGPU adapter, but the `wgpu` feature is enabled -- that is an explicit request \
+         for this backend. Skipping here would report `ok` for a test that ran nothing.",
+    );
+}
+
 #[test]
 fn a_tier_two_device_value_is_a_target_with_no_extra_ceremony() {
     let gpu = Wgpu::new(0);
+    require_wgpu(&gpu);
     assert_eq!(gpu.device_id().unwrap(), DeviceId::wgpu(0));
 
     let x = gpu.zeros(shape![2, 3]).unwrap();
@@ -31,6 +50,7 @@ fn a_tier_two_device_value_is_a_target_with_no_extra_ceremony() {
 #[test]
 fn typed_data_reaches_the_accelerator_with_its_own_dtype() {
     let gpu = Wgpu::new(0);
+    require_wgpu(&gpu);
     let x = gpu.tensor([[1.0_f32, 2.0], [3.0, 4.0]]).unwrap();
     assert_eq!(x.dims(), [2, 2]);
     assert_eq!(x.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
@@ -39,6 +59,7 @@ fn typed_data_reaches_the_accelerator_with_its_own_dtype() {
 #[test]
 fn a_partial_shape_survives_onto_the_accelerator() {
     let gpu = Wgpu::new(0);
+    require_wgpu(&gpu);
     let batch = 3usize;
     let x = gpu.zeros(shape![batch, 4]).unwrap();
     assert_eq!(x.dims(), [3, 4]);

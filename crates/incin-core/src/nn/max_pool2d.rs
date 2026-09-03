@@ -1,7 +1,9 @@
 use crate::backend_authoring::Execute;
+use crate::dist::Local;
 use crate::err::{Error, Result};
 use crate::exec::Capabilities;
 use crate::nn::{Module, TrainMode};
+use crate::shapes::Layout;
 use crate::shapes::{DynShape, Shape};
 use crate::tensor::base::Tensor;
 
@@ -47,19 +49,23 @@ impl<
     P: Unsigned,
     D: Unsigned,
     B: crate::tensor::backend::VariableBackend + Execute<crate::exec::catalog::op::MaxPool2d>,
-> Module<Tensor<I, B>> for MaxPool2d<K, S, P, D>
+    L: Layout,
+> Module<Tensor<I, B, f32, crate::tensor::grad::NoGrad, Local, L>> for MaxPool2d<K, S, P, D>
 where
     B: Capabilities,
     <B as Execute<crate::exec::catalog::op::MaxPool2d>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B>;
+    type Output = Tensor<I::Output, B, f32, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
     #[inline]
     /// Runs the forward pass of this module on the given input.
-    fn forward(&self, x: Tensor<I, B>) -> core::result::Result<Self::Output, Error> {
+    fn forward(
+        &self,
+        x: Tensor<I, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+    ) -> core::result::Result<Self::Output, Error> {
         x.max_pool2d::<K, S, P, D>()
     }
 }

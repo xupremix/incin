@@ -309,49 +309,61 @@ where
 
 fn render_unary_strategy(
     op_name: &'static str,
-    op_expr: &str,
+    body: &crate::codegen::ScalarFragment,
     dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
+    specialization: crate::kernel::KernelSpecialization,
+    index_extents: Option<&alloc::vec::Vec<usize>>,
 ) -> Result<crate::kernel::RenderedKernel> {
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
         PointwiseStrategy::Scalar { unroll_width, .. } => {
-            crate::kernel::render_cuda_unary_for_layout(
+            crate::kernel::render_cuda_unary_for_layout_body(
                 op_name,
-                op_expr,
+                body,
                 builtin_id,
                 layout,
                 unroll_width,
+                index_extents.cloned(),
             )
         }
-        PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_unary_packed(op_name, op_expr, builtin_id, layout)
-        }
+        PointwiseStrategy::Packed { .. } => crate::kernel::render_cuda_unary_packed_body(
+            op_name,
+            body,
+            builtin_id,
+            layout,
+            specialization,
+        ),
     }
 }
 
 fn render_binary_strategy(
     op_name: &'static str,
-    op_expr: &str,
+    body: &crate::codegen::ScalarFragment,
     dtype: DTypeDescriptor,
     layout: LayoutClass,
     strategy: PointwiseStrategy,
+    specialization: crate::kernel::KernelSpecialization,
 ) -> Result<crate::kernel::RenderedKernel> {
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(dtype, op_name)?;
     match strategy {
         PointwiseStrategy::Scalar { unroll_width, .. } => {
-            crate::kernel::render_cuda_binary_for_layout(
+            crate::kernel::render_cuda_binary_for_layout_body(
                 op_name,
-                op_expr,
+                body,
                 builtin_id,
                 layout,
                 unroll_width,
             )
         }
-        PointwiseStrategy::Packed { .. } => {
-            crate::kernel::render_cuda_binary_packed(op_name, op_expr, builtin_id, layout)
-        }
+        PointwiseStrategy::Packed { .. } => crate::kernel::render_cuda_binary_packed_body(
+            op_name,
+            body,
+            builtin_id,
+            layout,
+            specialization,
+        ),
     }
 }
 
@@ -431,6 +443,28 @@ pub(crate) fn launch_unary_op(
     op_expr: &str,
     t: &CudaStorage,
 ) -> Result<CudaStorage> {
+    launch_unary_body(
+        op_name,
+        &crate::codegen::ScalarFragment::literal(op_expr),
+        t,
+        crate::kernel::KernelSpecialization::NONE,
+    )
+}
+
+/// Launches a unary pointwise kernel whose body is an already-lowered fragment.
+///
+/// This is the shared implementation behind both the hand-written literal path
+/// and the IR path: strategy selection, occupancy pruning, autotuning, the
+/// strided/dense argument split and the launch itself are identical, and the
+/// fragment is the only thing that varies. Routing an operation through the IR
+/// therefore cannot change how it is scheduled, only what arithmetic it does.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_unary_body(
+    op_name: &'static str,
+    body: &crate::codegen::ScalarFragment,
+    t: &CudaStorage,
+    specialization: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
     let b = &*t.buffer;
     validate_elementwise_dtype(b.dtype, "elementwise_unary")?;
     let plan = UnaryIterationPlan::new(OperandLayout {
@@ -450,7 +484,26 @@ pub(crate) fn launch_unary_op(
     let layout = plan.layout_class();
     let numel = plan.numel;
     let strategy = select_unary_strategy(b.dtype, layout, numel, plan.operand.offset)?;
-    let kernel = render_unary_strategy(op_name, op_expr, b.dtype, layout, strategy)?;
+    // Resolved once, here, because this is the only layer holding both the
+    // frontend's proof and the shape the kernel will actually walk -- and
+    // because the same answer decides two things that must not disagree: what
+    // the renderer emits, and which arguments the launch supplies. Deriving it
+    // twice would let those drift into a signature mismatch, which CUDA reports
+    // as corrupt output rather than as an error.
+    let index_extents = if layout == LayoutClass::Strided {
+        specialization.unrollable_extents(&plan.output_shape)
+    } else {
+        None
+    };
+    let kernel = render_unary_strategy(
+        op_name,
+        body,
+        b.dtype,
+        layout,
+        strategy,
+        specialization,
+        index_extents.as_ref(),
+    )?;
     let packed_width = crate::tuning::preferred_pointwise_width(b.dtype);
     let dense = layout == LayoutClass::Contiguous;
     let selection = pointwise_launch_selection(
@@ -463,7 +516,15 @@ pub(crate) fn launch_unary_op(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, b.dtype, |strategy| {
-        render_unary_strategy(op_name, op_expr, b.dtype, layout, strategy)
+        render_unary_strategy(
+            op_name,
+            body,
+            b.dtype,
+            layout,
+            strategy,
+            specialization,
+            index_extents.as_ref(),
+        )
     })?;
     let dtype = prepared
         .first()
@@ -527,32 +588,59 @@ pub(crate) fn launch_unary_op(
                 execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
             }
             Some((shape_i32, strides_i32, ndim_i32)) => {
-                let shape_dev = stream
-                    .clone_htod(&shape_i32)
-                    .map_err(|error| Error::Msg(format!("CUDA shape upload failed: {error:?}")))?;
                 let strides_dev = stream
                     .clone_htod(&strides_i32)
                     .map_err(|error| Error::Msg(format!("CUDA stride upload failed: {error:?}")))?;
-                let mut launch = |candidate: &PreparedPointwiseKernel| -> Result<()> {
-                    let config = launch_config(
-                        numel,
-                        candidate.kernel.elements_per_thread(),
-                        candidate.candidate.block_size,
-                    )?;
-                    stream
-                        .launch_builder(&candidate.function)
-                        .arg(&*b.data)
-                        .arg(&mut *out_slice_u8)
-                        .arg(&shape_dev)
-                        .arg(&strides_dev)
-                        .arg(&offset_i32)
-                        .arg(&numel_i32)
-                        .arg(&ndim_i32)
-                        .launch(config)
-                        .map(|_| ())
-                        .map_err(|error| Error::Msg(format!("Kernel launch failed: {error:?}")))
-                };
-                execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
+                if index_extents.is_some() {
+                    // The extents are literals in the source, so the kernel has
+                    // no `shape` or `ndim` parameter and the upload that fed
+                    // them is skipped entirely -- one fewer host-to-device copy
+                    // per launch. The argument list must match the signature
+                    // `render_cuda_unary_for_layout_body` emitted for the very
+                    // same `index_extents`, which is why both read one value.
+                    let mut launch = |candidate: &PreparedPointwiseKernel| -> Result<()> {
+                        let config = launch_config(
+                            numel,
+                            candidate.kernel.elements_per_thread(),
+                            candidate.candidate.block_size,
+                        )?;
+                        stream
+                            .launch_builder(&candidate.function)
+                            .arg(&*b.data)
+                            .arg(&mut *out_slice_u8)
+                            .arg(&strides_dev)
+                            .arg(&offset_i32)
+                            .arg(&numel_i32)
+                            .launch(config)
+                            .map(|_| ())
+                            .map_err(|error| Error::Msg(format!("Kernel launch failed: {error:?}")))
+                    };
+                    execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
+                } else {
+                    let shape_dev = stream.clone_htod(&shape_i32).map_err(|error| {
+                        Error::Msg(format!("CUDA shape upload failed: {error:?}"))
+                    })?;
+                    let mut launch = |candidate: &PreparedPointwiseKernel| -> Result<()> {
+                        let config = launch_config(
+                            numel,
+                            candidate.kernel.elements_per_thread(),
+                            candidate.candidate.block_size,
+                        )?;
+                        stream
+                            .launch_builder(&candidate.function)
+                            .arg(&*b.data)
+                            .arg(&mut *out_slice_u8)
+                            .arg(&shape_dev)
+                            .arg(&strides_dev)
+                            .arg(&offset_i32)
+                            .arg(&numel_i32)
+                            .arg(&ndim_i32)
+                            .launch(config)
+                            .map(|_| ())
+                            .map_err(|error| Error::Msg(format!("Kernel launch failed: {error:?}")))
+                    };
+                    execute_pointwise_selection(&stream, selection, &prepared, &mut launch)
+                }
             }
         }?;
     }
@@ -571,6 +659,29 @@ pub(crate) fn launch_binary_op(
     lhs: &CudaStorage,
     rhs: &CudaStorage,
     out_shape: &[usize],
+) -> Result<CudaStorage> {
+    launch_binary_body(
+        op_name,
+        &crate::codegen::ScalarFragment::literal(op_expr),
+        lhs,
+        rhs,
+        out_shape,
+        crate::kernel::KernelSpecialization::NONE,
+    )
+}
+
+/// Launches a binary pointwise kernel whose body is an already-lowered fragment.
+///
+/// The binary counterpart of [`launch_unary_body`]: everything except the body
+/// expression is shared with the literal path.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_binary_body(
+    op_name: &'static str,
+    body: &crate::codegen::ScalarFragment,
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    out_shape: &[usize],
+    specialization: crate::kernel::KernelSpecialization,
 ) -> Result<CudaStorage> {
     let (lhs_b, rhs_b) = (&*lhs.buffer, &*rhs.buffer);
     if lhs_b.dtype != rhs_b.dtype {
@@ -618,7 +729,8 @@ pub(crate) fn launch_binary_op(
     let rhs_plan = &plan.operands[1];
     let strategy =
         select_binary_strategy(lhs_b.dtype, layout, numel, lhs_plan.offset, rhs_plan.offset)?;
-    let kernel = render_binary_strategy(op_name, op_expr, lhs_b.dtype, layout, strategy)?;
+    let kernel =
+        render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy, specialization)?;
     let packed_width = crate::tuning::preferred_pointwise_width(lhs_b.dtype);
     let packed_aligned = match layout {
         LayoutClass::Contiguous => {
@@ -645,7 +757,7 @@ pub(crate) fn launch_binary_op(
         strategy,
     )?;
     let prepared = prepare_pointwise_kernels(device_id, &selection, lhs_b.dtype, |strategy| {
-        render_binary_strategy(op_name, op_expr, lhs_b.dtype, layout, strategy)
+        render_binary_strategy(op_name, body, lhs_b.dtype, layout, strategy, specialization)
     })?;
     let dtype = prepared
         .first()

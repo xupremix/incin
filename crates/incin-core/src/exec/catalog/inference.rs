@@ -604,6 +604,7 @@ fn inferred_shape<A: AttributeContract>(
                         | OperationKind::MinKeepDim
                         | OperationKind::VarianceKeepDim
                         | OperationKind::StdKeepDim
+                        | OperationKind::LogSumExpKeepDim
                 );
                 let mut output = shape.to_vec();
                 if keep {
@@ -810,7 +811,10 @@ pub(super) fn verify_outputs<A: AttributeContract>(
     }
 
     let index_input = match operation {
-        OperationKind::Gather | OperationKind::Scatter | OperationKind::IndexSelect => Some(1),
+        OperationKind::Gather
+        | OperationKind::Scatter
+        | OperationKind::ScatterAdd
+        | OperationKind::IndexSelect => Some(1),
         OperationKind::EmbeddingExact => Some(0),
         OperationKind::CrossEntropyLoss => Some(1),
         _ => None,
@@ -857,7 +861,11 @@ pub(super) fn verify_outputs<A: AttributeContract>(
     }
     let same_dtype_pair = match operation {
         OperationKind::WhereCond => Some((1, 2)),
-        OperationKind::Scatter => Some((0, 2)),
+        // The target and the source must agree for the same reason under both
+        // rules: the values meet in the output buffer. Overwriting demands it
+        // so the survivor is storable; summing demands it so the addition is
+        // between two of the same thing.
+        OperationKind::Scatter | OperationKind::ScatterAdd => Some((0, 2)),
         _ => None,
     };
     if let Some((left, right)) = same_dtype_pair {

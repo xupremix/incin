@@ -87,6 +87,9 @@ pub mod param;
 pub mod rms_norm;
 /// Elman recurrent layer family.
 pub mod rnn;
+/// Sharded Safetensors checkpoint indexes (`model.safetensors.index.json`).
+#[cfg(feature = "std")]
+pub mod safetensors_index;
 #[cfg(feature = "std")]
 /// `save`.
 pub mod save;
@@ -125,6 +128,8 @@ pub use optional::{False, OptionalField, True};
 pub use param::{Buffer, Frozen, Param, TrainState, Trainable};
 pub use rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm};
 pub use rnn::{RNN, RNNBuilder, RNNCell, RNNCellBuilder, RnnShape, rnn, rnn_cell};
+#[cfg(feature = "std")]
+pub use safetensors_index::SafetensorsIndex;
 #[cfg(feature = "std")]
 pub use save::{
     CheckpointDType, GlobalCheckpointManifest, TensorCheckpointMeta, load_resharded_checkpoint,

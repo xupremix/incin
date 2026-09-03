@@ -2,13 +2,13 @@
 
 This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative.
 
-- Canonical operations: 174
-- Backend-executable operations: 158
+- Canonical operations: 179
+- Backend-executable operations: 163
 - Non-backend execution sites: 16
 
 | Execution site | Operations |
 |---|---:|
-| `Kernel` | 140 |
+| `Kernel` | 145 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |

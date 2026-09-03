@@ -42,6 +42,7 @@ pub struct ShapeEvidence {
     pub(crate) proof: ProofLevel,
     pub(crate) static_rank: Option<usize>,
     pub(crate) static_numel: Option<usize>,
+    pub(crate) static_extents: &'static [Option<usize>],
 }
 
 impl ShapeEvidence {
@@ -50,6 +51,7 @@ impl ShapeEvidence {
             proof: ProofLevel::Dynamic,
             static_rank: None,
             static_numel: None,
+            static_extents: &[],
         }
     }
 
@@ -58,6 +60,7 @@ impl ShapeEvidence {
             proof: S::PROOF,
             static_rank: S::RANK,
             static_numel: S::STATIC_NUMEL,
+            static_extents: S::STATIC_EXTENTS,
         }
     }
 
@@ -75,6 +78,21 @@ impl ShapeEvidence {
     /// Static element count, when derivable.
     pub const fn static_numel(self) -> Option<usize> {
         self.static_numel
+    }
+
+    /// Per-axis extents the shape type settled, outermost first.
+    ///
+    /// Empty when the rank itself was not known. Otherwise rank-long, with a
+    /// `None` for each axis whose extent is only a runtime fact -- so a shape
+    /// that is `Mixed` rather than `Static` still reports the axes it does
+    /// know, and a backend can fold those without waiting for the rest.
+    ///
+    /// This is `'static` data in read-only memory rather than an owned buffer:
+    /// it comes from `Shape::STATIC_EXTENTS`, which is a const promoted out of
+    /// the type. Copying a `ShapeEvidence` copies a two-word slice.
+    #[must_use]
+    pub const fn static_extents(self) -> &'static [Option<usize>] {
+        self.static_extents
     }
 }
 

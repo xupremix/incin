@@ -3,8 +3,10 @@
 | PyTorch | Incin | Note |
 |---|---|---|
 | `torch.zeros(2, 3)` | `Cpu.zeros(shape![2, 3])?` | Concrete code uses the target-first constructor. Generic code can use `Tensor::<s![2, 3], B>::zeros(())?`. |
-| `torch.zeros(2, 3, dtype=torch.float64)` | `Tensor::<s![2, 3], B, f64>::zeros(())?` | dtype is the third type parameter, `K`. |
-| `torch.tensor([1, 2, 3])` | `tensor![1, 2, 3]?` | Both default to `i64` for bare integer literals. |
+| `torch.device("cuda" if ... else "cpu")` | `let target = Target::new(Native, detect_device().unwrap_or_else(DeviceId::cpu), ());` | Hardware discovery via `detect_device()` wrapped in a `Target<Native, Dyn>`. |
+| `torch.zeros(2, 3, dtype=torch.float64)` | `Cpu.dtype::<f64>()?.zeros(shape![2, 3])?` / `Tensor::<s![2, 3], B, f64>::zeros(())?` | Target-first rebinding via `.dtype::<K>()` or explicit `K` type parameter. |
+| `torch.zeros(2, 3, dtype=dyn_dtype, device=dev)` | `target.dtype_dynamic(dyn_dtype)?.zeros([2, 3])?` | Runtime-chosen device and dynamic dtype rebinding. |
+| `torch.tensor([1, 2, 3])` | `tensor![1, 2, 3]?` / `target.tensor([1_i64, 2, 3])?` | Both default to `i64` for integer literals without silent casting. |
 | `a + b` | `&a + &b` | Operator syntax returns a tensor and panics on failure; use `a.try_add(&b)?` when failure is recoverable. |
 | `a @ b` | `a.matmul(&b)?` | |
 | `x.requires_grad_()` | `x.require_grad()` | Changes the type (`G` becomes `Grad`), not just a runtime flag. |

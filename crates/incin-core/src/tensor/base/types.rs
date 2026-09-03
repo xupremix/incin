@@ -1,9 +1,11 @@
 use crate::backend_authoring::{Backend, HostInterop};
 use crate::dist::{Local, Placement};
+use crate::shapes::{Dyn, Layout};
 use crate::shapes::{Shape, ShapeValue};
 use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{ConstDType, DType};
 use crate::tensor::grad::{NoGrad, RequiresGrad};
+use core::marker::PhantomData;
 
 /// The core `Tensor` type representing an n-dimensional array.
 ///
@@ -51,8 +53,13 @@ pub struct Tensor<
     K: DType = f32,
     G: RequiresGrad = NoGrad,
     P: Placement = Local,
+    // What the type settles about *where* the elements live: strides, offset,
+    // alignment, contiguity. Defaulted to `Dyn`, which claims nothing, so
+    // every signature written before this parameter existed keeps its meaning.
+    L: Layout = Dyn,
 > {
     pub(crate) inner: B::Storage<K>,
+    pub(crate) _layout: PhantomData<fn() -> L>,
     /// Global logical shape. Backend storage carries this rank's local shape.
     pub(crate) _shape: ShapeValue<S>,
     pub(crate) _dtype: K::Field,
@@ -61,8 +68,8 @@ pub struct Tensor<
     pub(crate) _placement: P::Field,
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Clone
-    for Tensor<S, B, K, G, P>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout> Clone
+    for Tensor<S, B, K, G, P, L>
 {
     fn clone(&self) -> Self {
         Self {
@@ -72,6 +79,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Clone
             _device: self._device.clone(),
             _grad: self._grad.clone(),
             _placement: self._placement.clone(),
+            _layout: PhantomData,
         }
     }
 }
@@ -82,7 +90,8 @@ impl<
     K: DType,
     G: RequiresGrad,
     P: Placement,
-> core::fmt::Display for Tensor<S, B, K, G, P>
+    L: Layout,
+> core::fmt::Display for Tensor<S, B, K, G, P, L>
 {
     /// Renders values the way PyTorch's `print(tensor)` does: the backend's
     /// bracketed, right-aligned value grid (`HostInterop::host_format_display`)
@@ -131,7 +140,8 @@ impl<
     K: DType,
     G: RequiresGrad,
     P: Placement,
-> core::fmt::Debug for Tensor<S, B, K, G, P>
+    L: Layout,
+> core::fmt::Debug for Tensor<S, B, K, G, P, L>
 {
     /// Prints the backend type name, runtime shape, and the backend's own
     /// debug rendering of its storage.
