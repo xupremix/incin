@@ -263,3 +263,25 @@ pub fn adamw_step(
 ) -> Result<(CudaStorage, CudaStorage, CudaStorage)> {
     crate::cuda::ops::optimizer::launch_adamw_step(params, grad, first_moment, second_moment, attrs)
 }
+
+/// Compiles CUDA C exactly as the production dispatcher does.
+///
+/// Deliberately delegates to `compile_ptx_for_arch` rather than calling NVRTC
+/// directly. A smoke test that builds its own compile options is testing its
+/// own options: the first version of `codegen_nvrtc_smoke` did that and passed
+/// `--gpu-architecture=--gpu-architecture=compute_75`, failing every module for
+/// a reason that had nothing to do with the modules. Sharing the production
+/// path means a source certified here is certified under the settings that will
+/// actually build it.
+///
+/// # Errors
+///
+/// Returns the NVRTC compile error, whose log names the offending line.
+pub fn compile_for_device(
+    source: &str,
+) -> core::result::Result<cudarc::nvrtc::Ptx, cudarc::nvrtc::CompileError> {
+    let capability = cudarc::driver::CudaContext::new(0)
+        .ok()
+        .and_then(|ctx| ctx.compute_capability().ok());
+    crate::cuda::gpu::compile_ptx_for_arch(source, capability)
+}
