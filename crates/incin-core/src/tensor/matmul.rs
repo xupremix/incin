@@ -468,11 +468,24 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     }
 
     /// Scaled Dot-Product Attention: `softmax(q * k^T / scale) * v`.
-    pub fn scaled_dot_product_attention<S2: Shape, S3: Shape, S4: Shape>(
-        q: &Tensor<S1, B, K, G1>,
-        k: &Tensor<S2, B, K, G1>,
-        v: &Tensor<S3, B, K, G1>,
-        mask: Option<&Tensor<S4, B, K, G1>>,
+    /// `q` is typed with the impl block's own layout parameter rather than a
+    /// fresh one. It has to be: this takes no `self`, so nothing else would
+    /// pin `TLayout`, and `Tensor::scaled_dot_product_attention(..)` written
+    /// through a type alias would not infer. Tying it to `q` also makes the
+    /// operation accept an operand that has proven its layout, which pinning
+    /// the parameter to its default silently forbade.
+    pub fn scaled_dot_product_attention<
+        S2: Shape,
+        S3: Shape,
+        S4: Shape,
+        L2: Layout,
+        L3: Layout,
+        L4: Layout,
+    >(
+        q: &Tensor<S1, B, K, G1, Local, TLayout>,
+        k: &Tensor<S2, B, K, G1, Local, L2>,
+        v: &Tensor<S3, B, K, G1, Local, L3>,
+        mask: Option<&Tensor<S4, B, K, G1, Local, L4>>,
         scale: Option<f64>,
     ) -> Result<Tensor<Dyn, B, K, G1>>
     where

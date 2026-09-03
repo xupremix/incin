@@ -48,10 +48,10 @@ fn named_selector_reaches_the_canonical_reduction_descriptor() {
     type S = s![Batch, Channels];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize)).unwrap();
 
-    let reduced: Tensor<Ranked<typenum::U1>, B> = tensor.sum(axis!(Channels)).unwrap();
+    let reduced: Dense<Ranked<typenum::U1>, B> = tensor.sum(axis!(Channels)).unwrap();
     assert_eq!(reduced.shape_buf().as_ref(), &[2]);
 
-    let kept: Tensor<Ranked<typenum::U2>, B> = tensor.sum_keepdim(axis!(Channels)).unwrap();
+    let kept: Dense<Ranked<typenum::U2>, B> = tensor.sum_keepdim(axis!(Channels)).unwrap();
     assert_eq!(kept.shape_buf().as_ref(), &[2, 1]);
 }
 
@@ -76,8 +76,8 @@ fn selector_reductions_preserve_static_drop_and_keep_shapes() {
     type Kept = s![Batch, Channels, Height = 1];
     let tensor: Tensor<S, B> = Tensor::ones((2usize, 3usize, 4usize)).unwrap();
 
-    let _: Tensor<Dropped, B> = tensor.sum(axis!(1)).unwrap();
-    let _: Tensor<Kept, B> = tensor.sum_keepdim(axis!(-1)).unwrap();
+    let _: Dense<Dropped, B> = tensor.sum(axis!(1)).unwrap();
+    let _: Dense<Kept, B> = tensor.sum_keepdim(axis!(-1)).unwrap();
 }
 
 #[test]

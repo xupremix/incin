@@ -15,7 +15,7 @@ dim!(Batch, Seq, Feature);
 /// A function that only accepts a `(Batch, Feature)`-shaped tensor, for example
 /// the output of some per-token feature projection, ready to feed into a
 /// classifier head.
-fn classify(x: &Tensor<s![Batch, Feature]>) -> Tensor<s![Batch]> {
+fn classify(x: &Tensor<s![Batch, Feature]>) -> Dense<s![Batch]> {
     x.sum(axis!(1)).unwrap()
 }
 

@@ -578,23 +578,59 @@ pub type DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::devic
 
 #[cfg(feature = "cpu")]
 /// Tensor.
+///
+/// The trailing `L` is the layout parameter. It defaults to `Dyn`, which claims
+/// nothing, so `Tensor<s![3, 4]>` means what it always did. Naming it lets a
+/// facade user hold a tensor that has proven its memory order -- without it the
+/// alias could only ever describe unproven tensors, and the operations that
+/// return a proof would have no writable return type on this side of the crate
+/// boundary. [`Dense`] is the shorthand for the row-major case.
 pub type Tensor<
     S,
     B = DefaultBackend,
     K = f32,
     G = incin_core::tensor::grad::NoGrad,
     P = incin_core::dist::Local,
-> = incin_core::tensor::base::Tensor<S, B, K, G, P>;
+    L = incin_core::shapes::Dyn,
+> = incin_core::tensor::base::Tensor<S, B, K, G, P, L>;
 
 #[cfg(not(feature = "cpu"))]
 /// Tensor.
+///
+/// See the `cpu`-enabled definition for what the trailing `L` is for.
 pub type Tensor<
     S,
     B, // User must specify backend if Cpu is disabled
     K = f32,
     G = incin_core::tensor::grad::NoGrad,
     P = incin_core::dist::Local,
-> = incin_core::tensor::base::Tensor<S, B, K, G, P>;
+    L = incin_core::shapes::Dyn,
+> = incin_core::tensor::base::Tensor<S, B, K, G, P, L>;
+
+#[cfg(feature = "cpu")]
+/// A tensor that has proven it is dense row-major.
+///
+/// The facade counterpart to [`incin_core::shapes::Dense`], defaulting its
+/// backend the same way [`Tensor`] does. This is the return type of every
+/// operation that allocates a fresh packed buffer -- pointwise arithmetic,
+/// comparisons, reductions -- so it is the type to write when annotating one.
+pub type Dense<
+    S,
+    B = DefaultBackend,
+    K = f32,
+    G = incin_core::tensor::grad::NoGrad,
+    P = incin_core::dist::Local,
+> = incin_core::tensor::base::Tensor<S, B, K, G, P, incin_core::shapes::RowMajor<S>>;
+
+#[cfg(not(feature = "cpu"))]
+/// A tensor that has proven it is dense row-major.
+pub type Dense<
+    S,
+    B, // User must specify backend if Cpu is disabled
+    K = f32,
+    G = incin_core::tensor::grad::NoGrad,
+    P = incin_core::dist::Local,
+> = incin_core::tensor::base::Tensor<S, B, K, G, P, incin_core::shapes::RowMajor<S>>;
 
 // Neural Network Layer Aliases
 //
@@ -688,7 +724,7 @@ pub mod macros {
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
 pub mod prelude {
-    pub use super::Tensor;
+    pub use super::{Dense, Tensor};
     pub use incin_core::SeqTy;
     pub use incin_core::error::{
         BackendError, BackwardError, ConversionFailure, Error, ErrorMessage, FloatToIntPolicy,
@@ -703,8 +739,9 @@ pub mod prelude {
     // The layout vocabulary. It reached `incin-core`'s prelude when the
     // parameter landed but not this facade, so a user of the `incin` crate
     // could hold a layout-carrying tensor and had no way to name its type.
-    // `Dense` is the spelling nearly all of them want.
-    pub use incin_core::shapes::{Contiguous, Dense, FreshDense, Layout, RowMajor};
+    // `Dense` is the spelling nearly all of them want, and comes from `super`
+    // above rather than from here so it defaults its backend like `Tensor`.
+    pub use incin_core::shapes::{Contiguous, FreshDense, Layout, RowMajor};
     pub use incin_core::tensor::device::{
         ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
     };

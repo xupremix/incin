@@ -9,6 +9,37 @@ use incin_macros::s;
 
 incin_core::dim!(Batch);
 
+/// Asserts a tensor's buffer is dense row-major: suffix-product strides from a
+/// zero offset.
+///
+/// Shared by every test that asks "did this operation allocate?", because the
+/// question is always the same one and a per-test copy drifts.
+#[track_caller]
+fn assert_dense<S: Shape, B, K, G, P, L>(
+    label: &str,
+    t: &incin_core::prelude::Tensor<S, B, K, G, P, L>,
+) where
+    B: incin_core::backend_authoring::Backend,
+    K: incin_core::prelude::DType,
+    G: incin_core::tensor::grad::RequiresGrad,
+    P: incin_core::dist::Placement,
+    L: Layout,
+{
+    let meta = <B as incin_core::backend_authoring::StorageBackend>::metadata::<K>(t.inner());
+    let dims = meta.shape().as_ref();
+    let strides = meta.strides().as_ref();
+    let mut expected = 1usize;
+    for axis in (0..dims.len()).rev() {
+        assert_eq!(
+            strides[axis], expected,
+            "{label}: axis {axis} of {dims:?} has stride {} but a dense buffer needs {expected}",
+            strides[axis]
+        );
+        expected *= dims[axis];
+    }
+    assert_eq!(meta.offset_elements(), 0, "{label}: must start at zero");
+}
+
 /// A tensor carrying a real layout must keep the API a plain one has.
 ///
 /// This is the check the parameter's default would otherwise hide. An
@@ -243,35 +274,12 @@ fn a_proven_tensor_reaches_every_converted_module() {
 fn shape_changing_operations_produce_dense_results() {
     use incin_core::shapes::idx::{ForwardAxis, Here};
 
-    fn assert_dense<S: Shape, B, K, G, P, L>(t: &incin_core::prelude::Tensor<S, B, K, G, P, L>)
-    where
-        B: incin_core::backend_authoring::Backend,
-        K: incin_core::prelude::DType,
-        G: incin_core::tensor::grad::RequiresGrad,
-        P: incin_core::dist::Placement,
-        L: incin_core::shapes::Layout,
-    {
-        let meta = <B as incin_core::backend_authoring::StorageBackend>::metadata::<K>(t.inner());
-        let dims = meta.shape().as_ref();
-        let strides = meta.strides().as_ref();
-        let mut expected = 1usize;
-        for axis in (0..dims.len()).rev() {
-            assert_eq!(
-                strides[axis], expected,
-                "axis {axis} of {dims:?} has stride {} but a dense buffer needs {expected}",
-                strides[axis]
-            );
-            expected *= dims[axis];
-        }
-        assert_eq!(meta.offset_elements(), 0, "a fresh buffer starts at zero");
-    }
-
     let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
 
     // Reductions and pointwise operations allocate.
-    assert_dense(&t.sum(ForwardAxis::<Here>::default()).unwrap());
-    assert_dense(&t.mean(ForwardAxis::<Here>::default()).unwrap());
-    assert_dense(&t.neg().unwrap());
+    assert_dense("sum", &t.sum(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense("mean", &t.mean(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense("neg", &t.neg().unwrap());
 
     // `transpose` does *not*, on this backend. It returns a view: shape
     // [4, 3] over strides [1, 4], sharing the original buffer. Asserted rather
@@ -413,32 +421,6 @@ fn a_pointwise_result_is_dense_even_from_a_strided_operand() {
     use incin_core::backend_authoring::StorageBackend;
     use incin_core::shapes::idx::{Here, Next};
 
-    /// Asserts row-major suffix-product strides and a zero offset.
-    fn assert_dense<S: Shape, B, K, G, P, L>(
-        label: &str,
-        t: &incin_core::prelude::Tensor<S, B, K, G, P, L>,
-    ) where
-        B: incin_core::backend_authoring::Backend,
-        K: incin_core::prelude::DType,
-        G: incin_core::tensor::grad::RequiresGrad,
-        P: incin_core::dist::Placement,
-        L: Layout,
-    {
-        let meta = <B as StorageBackend>::metadata::<K>(t.inner());
-        let dims = meta.shape().as_ref();
-        let strides = meta.strides().as_ref();
-        let mut expected = 1usize;
-        for axis in (0..dims.len()).rev() {
-            assert_eq!(
-                strides[axis], expected,
-                "{label}: axis {axis} of {dims:?} has stride {} but a dense buffer needs {expected}",
-                strides[axis]
-            );
-            expected *= dims[axis];
-        }
-        assert_eq!(meta.offset_elements(), 0, "{label}: must start at zero");
-    }
-
     let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::ones(()).unwrap();
     let strided = base
         .transpose_view::<Here, Next<Here>>()
@@ -467,8 +449,74 @@ fn a_pointwise_result_is_dense_even_from_a_strided_operand() {
         "add(dense, strided)",
         &dense_43.add_exact(&strided).unwrap(),
     );
+    assert_dense("maximum", &strided.maximum(&dense_43).unwrap());
+    assert_dense("lerp", &strided.lerp(&dense_43, 0.5).unwrap());
+
+    // Comparisons and the logical pair allocate a fresh bool buffer, and until
+    // now their signatures pinned `L` to its default -- a proven tensor could
+    // not call `eq` at all.
+    assert_dense("eq", &strided.eq(&dense_43).unwrap());
+    assert_dense("lt", &strided.lt(&dense_43).unwrap());
+    let mask = strided.gt(&dense_43).unwrap();
+    let other_mask = dense_43.le(&strided).unwrap();
+    assert_dense("logical_and", &mask.logical_and(&other_mask).unwrap());
+    assert_dense("logical_or", &mask.logical_or(&other_mask).unwrap());
+    assert_dense(
+        "masked_fill",
+        &strided.masked_fill(&mask, 0.0).unwrap(),
+    );
+    assert_dense(
+        "where_cond",
+        &mask.where_cond(&strided, &dense_43).unwrap(),
+    );
     assert_dense(
         "mul(strided, dense)",
         &strided.mul_exact(&dense_43).unwrap(),
     );
+}
+
+/// A reduction's result is dense whatever its operand's strides were.
+///
+/// The counterpart to [`a_pointwise_result_is_dense_even_from_a_strided_operand`]
+/// for the reduction surface. `reduce.rs` already documents that "the results
+/// are freshly allocated dense buffers", but nothing checked it against an
+/// operand that was not already dense, and two signatures disagreed with the
+/// sentence in opposite directions: the axis reductions claimed nothing, while
+/// `cumsum` returned `Self` and so claimed whatever the *operand* claimed.
+///
+/// `cumsum` is the one that matters. It is shape-preserving, so carrying the
+/// operand's layout typechecks -- and would be a false claim the moment the
+/// operand is strided, which is exactly the case this test constructs.
+#[test]
+fn a_reduction_result_is_dense_even_from_a_strided_operand() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{ForwardAxis, Here, Next};
+
+    let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::ones(()).unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+
+    // The premise, asserted rather than trusted: without it the test is vacuous.
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(strided.inner());
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "the operand must actually be non-contiguous for this test to mean anything"
+    );
+
+    assert_dense("sum", &strided.sum(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense("mean", &strided.mean(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense("max", &strided.max(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense("min", &strided.min(ForwardAxis::<Here>::default()).unwrap());
+    assert_dense(
+        "sum_keepdim",
+        &strided.sum_keepdim(ForwardAxis::<Here>::default()).unwrap(),
+    );
+    assert_dense(
+        "cumsum",
+        &strided.cumsum(ForwardAxis::<Here>::default()).unwrap(),
+    );
+    // Last: `sum_all` consumes the receiver.
+    assert_dense("sum_all", &strided.sum_all().unwrap());
 }

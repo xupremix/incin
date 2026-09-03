@@ -481,9 +481,9 @@ where
     )
 }
 
-pub(crate) fn execute_logical_unary_descriptor<O, S: Shape, B: Backend, G: RequiresGrad>(
-    tensor: &Tensor<S, B, bool, G>,
-) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad>>
+pub(crate) fn execute_logical_unary_descriptor<O, S: Shape, B: Backend, G: RequiresGrad, L: Layout>(
+    tensor: &Tensor<S, B, bool, G, Local, L>,
+) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad, Local, RowMajor<S>>>
 where
     O: CanonicalOperation + crate::exec::catalog::Operation<Attributes = NoAttributes>,
     B: Execute<O>,
@@ -507,21 +507,23 @@ where
     )
 }
 
-impl<S: Shape, B: Backend, G: RequiresGrad> Tensor<S, B, bool, G> {
+impl<S: Shape, B: Backend, G: RequiresGrad, L: Layout> Tensor<S, B, bool, G, Local, L> {
     /// Logical NOT element-wise.
-    pub fn logical_not(&self) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad>>
+    pub fn logical_not(
+        &self,
+    ) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad, Local, RowMajor<S>>>
     where
         B: Execute<op::LogicalNot>,
         <B as Execute<op::LogicalNot>>::Output: Into<B::Storage<bool>>,
     {
-        execute_logical_unary_descriptor::<op::LogicalNot, S, B, G>(self)
+        execute_logical_unary_descriptor::<op::LogicalNot, S, B, G, L>(self)
     }
 }
 
 macro_rules! impl_std_scalar_ops {
     ($t:ty) => {
-        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Mul<$t> for Tensor<S, B, K, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Mul<$t> for Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::MulScalar>,
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
@@ -534,8 +536,8 @@ macro_rules! impl_std_scalar_ops {
                 crate::tensor::ops::operator_or_panic("* (scalar)", self.mul_scalar(rhs))
             }
         }
-        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Mul<$t> for &'a Tensor<S, B, K, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Mul<$t> for &'a Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::MulScalar>,
             <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
@@ -548,8 +550,8 @@ macro_rules! impl_std_scalar_ops {
                 crate::tensor::ops::operator_or_panic("* (scalar)", self.mul_scalar(rhs))
             }
         }
-        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Add<$t> for Tensor<S, B, K, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Add<$t> for Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::AddScalar>,
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
@@ -562,8 +564,8 @@ macro_rules! impl_std_scalar_ops {
                 crate::tensor::ops::operator_or_panic("+ (scalar)", self.add_scalar(rhs))
             }
         }
-        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Add<$t> for &'a Tensor<S, B, K, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Add<$t> for &'a Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::AddScalar>,
             <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
@@ -577,8 +579,8 @@ macro_rules! impl_std_scalar_ops {
             }
         }
 
-        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Sub<$t> for Tensor<S, B, K, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Sub<$t> for Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
@@ -590,8 +592,8 @@ macro_rules! impl_std_scalar_ops {
             }
         }
 
-        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Sub<$t> for &'a Tensor<S, B, K, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Sub<$t> for &'a Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::SubScalar>,
             <B as Execute<op::SubScalar>>::Output: Into<B::Storage<K>>,
@@ -603,8 +605,8 @@ macro_rules! impl_std_scalar_ops {
             }
         }
 
-        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Div<$t> for Tensor<S, B, K, G>
+        impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Div<$t> for Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,
@@ -616,8 +618,8 @@ macro_rules! impl_std_scalar_ops {
             }
         }
 
-        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad>
-            core::ops::Div<$t> for &'a Tensor<S, B, K, G>
+        impl<'a, S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+            core::ops::Div<$t> for &'a Tensor<S, B, K, G, Local, L>
         where
             B: Execute<op::DivScalar>,
             <B as Execute<op::DivScalar>>::Output: Into<B::Storage<K>>,

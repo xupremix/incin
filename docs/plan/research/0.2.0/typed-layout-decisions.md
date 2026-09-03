@@ -273,6 +273,73 @@ not emitted, because the values are in the source instead. The tensor-side
 version, not storing strides a type already determines, is open and becomes
 worthwhile once enough of the API carries a layout.
 
+## Widening the density claim past pointwise
+
+Once pointwise operations stated `RowMajor` instead of carrying `L`, the same
+question applied to everything else that allocates. Asking it turned up more
+than the signatures it was aimed at.
+
+### The bug was the operation that *could* carry a layout
+
+`reduce.rs` already said, in its own module doc, that "the results are freshly
+allocated dense buffers". Two signatures contradicted that sentence in opposite
+directions:
+
+- the axis reductions returned the default marker -- true but weak, they knew
+  something and said nothing;
+- `cumsum` returned `Self` -- and `Self` carries the *operand's* layout.
+
+`cumsum` is the interesting one, and it is interesting for a structural reason:
+it is the only reduction that preserves the shape. Every other reduction *had*
+to state its result's layout, because a layout is congruent with one shape and
+the shape changed. `cumsum` kept the shape, so carrying typechecked, so nobody
+had to think about it. **The operations at risk of a false layout claim are
+exactly the shape-preserving ones**, because those are the only ones where the
+wrong answer compiles. That is worth checking at every future conversion.
+
+### Widening one layer surfaces the next
+
+The interesting part was not the reductions themselves but what fixing them
+exposed. Once `sum` returned a proof, the *next* call in every chain stopped
+compiling -- and each failure was an impl block that had pinned `L` to its
+default and so had been silently unreachable from a proven tensor all along:
+the six comparison operators, `logical_and`/`or`/`not`, `masked_fill`'s mask
+parameter, `where_cond`, and the scalar `Mul`/`Add`/`Sub` operators for all four
+scalar types.
+
+None of these were found by looking. They were found because a value with a
+proof had to flow through them, and `a_proven_tensor_keeps_the_ordinary_api`
+only covers the surface someone remembered to list in it. **Returning a proof is
+a better detector of a pinned parameter than a test enumerating methods**, since
+it forces the whole reachable graph to typecheck rather than a hand-written
+sample of it. Expect the same when the next operation starts returning one.
+
+### The facade had the same gap one level up
+
+`incin::Tensor` is a type alias with five parameters; the core struct has six.
+So the alias fixed `L` to the default and a facade user could not name the type
+of anything that returned a proof -- the mirror of the prelude gap found
+earlier. Adding the parameter had one non-obvious consequence: **a type alias's
+parameter defaults do not apply in expression position**, so
+`Tensor::scaled_dot_product_attention(..)` stopped inferring, because that
+associated function takes no `self` and nothing else constrained `L`. Fixed by
+tying its `q` operand to the impl block's own layout parameter, which was the
+right signature anyway -- it had been refusing proven operands.
+
+### What CUDA contributes, and what it does not
+
+The reduction claim rests on different evidence from the pointwise one, because
+the CUDA capability table answers the strided question differently for the two:
+`elementwise_layouts` advertises `Strided`, `reduction_layouts` does not. So a
+strided CUDA reduction is refused before any kernel runs, and a `RowMajor`
+result cannot be wrong for an operand the backend will not accept.
+
+That is a real argument, but it is contingent on a table row, so the hardware
+test asserts *both* halves -- dense results on a dense operand, and refusal on a
+strided one. If the row is ever widened, the test fails and whoever widens it
+has to show the strided reduction kernel writes a dense result before the claim
+stands again. A claim that rests on a refusal has to pin the refusal.
+
 ## The backends disagree about whether `transpose` copies
 
 Found by writing the conformance test that was supposed to *back* a type claim,
@@ -301,9 +368,15 @@ which is correct.** Consequences:
   CUDA. So shape-changing operations keep `Dyn` outputs until the contract
   is settled, and `into_row_major` remains the way to recover a proof.
 - The earlier finding that "the strided path is unreachable" was correctly
-  scoped to CUDA in the note, but it is not a framework-wide property. The
-  strided kernel path *is* reachable on CPU. The extent-folding work is dead on
-  CUDA specifically because CUDA copies, not because nothing is ever strided.
+  scoped to CUDA in the note, but it was not a framework-wide property, and it
+  has since stopped being true on CUDA either. It was never unreachable
+  *because CUDA copies* -- it was unreachable because `CUDA_CAPABILITIES`
+  declared `elementwise_layouts = CONTIGUOUS`, so the dispatcher refused a
+  strided operand before any kernel was consulted. That row was true by vacuity
+  when written (nothing could yet produce a strided CUDA tensor) and was never
+  revisited once `transpose_view` landed. Widened in `76875c79`; the
+  extent-folding work is reachable on both backends now. See issue #113's
+  comment thread for the corrected premises.
 - It is a portability hazard independent of layouts: user code that transposes
   and then mutates through the original buffer observes different results per
   backend, and code that relies on a transpose being cheap silently pays a copy

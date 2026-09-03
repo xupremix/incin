@@ -18,6 +18,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   genuinely strided operand, rather than by what the backends happen to do.
   Carrying the operand's layout was also latently false: it would have handed a
   `ChannelsLast` claim to a row-major buffer.
+- **Reductions, comparisons and the rest of the allocating surface prove they
+  are dense too.** `sum`/`mean`/`max`/`min`/`logsumexp` and their `_keepdim`
+  forms, `cumsum`, the six comparison operators, `logical_and`/`or`/`not`,
+  `masked_fill`, `where_cond` and `lerp` now state `RowMajor` of their result
+  shape. `reduce.rs`
+  already *documented* that "the results are freshly allocated dense buffers";
+  nothing checked it against an operand that was not already dense, and two
+  signatures disagreed with the sentence in opposite directions -- the axis
+  reductions claimed nothing, while `cumsum` returned `Self` and so claimed
+  whatever its *operand* claimed. `cumsum` is the one that mattered: it is
+  shape-preserving, so carrying the operand's layout typechecked, and would have
+  been a false claim for any operand that was not already row-major.
+- Impl blocks that pinned `L` to its default and so were unreachable from a
+  tensor carrying a proof: the six comparison operators, `logical_and`/`or`/
+  `not`, the scalar `Mul`/`Add`/`Sub` operators for all four scalar types, and
+  `masked_fill`'s mask parameter. Found by widening the reductions -- once `sum`
+  returned a proof, the next call in the chain stopped compiling.
+  `scaled_dot_product_attention` now ties its `q` operand to the impl block's
+  layout parameter, which both lets it accept a proven operand and keeps
+  `Tensor::scaled_dot_product_attention(..)` inferrable through a type alias
+  (a type alias's parameter defaults do not apply in expression position, so an
+  unconstrained `L` would have made the call ambiguous).
+- The `incin` facade's `Tensor` alias gained the layout parameter, and a
+  matching `Dense` alias that defaults its backend the same way. The alias fixed
+  `L` to the default, so a facade user could not name the type of anything that
+  returned a proof.
 - `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
   where the promotion is fallible, since claiming less can never claim wrongly.
   It exists for the case where two branches must meet and only one allocates;
@@ -103,6 +129,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   whether the caller wants the proof. `Linear` and `matmul` are unaffected --
   both still state `Dyn`, because neither has the conformance evidence the
   pointwise claim rests on.
+- The "output carries the operand's layout" contract from the reduction,
+  comparison, logical, `masked_fill` and `lerp` surfaces as well. **Breaking**:
+  `sum`, `mean`, `max`, `min`, `logsumexp`, their `_keepdim` forms, `cumsum`,
+  `eq`/`ne`/`lt`/`le`/`gt`/`ge`, `logical_and`/`or`/`not`, `masked_fill` and
+  `lerp` and `where_cond` change return type. An annotation written
+  `Tensor<S, B, K, G>` for one of their results becomes `Dense<S, B, K, G>`, or
+  keeps its shape by calling `forget_layout`.
 - `Unknown`, the layout marker, in favour of the existing `Dyn`. **Breaking**
   for anyone who named it: `incin_core::shapes::Unknown` and the prelude
   re-export are gone, and `Tensor`'s sixth parameter now defaults to `Dyn`.

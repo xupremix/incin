@@ -372,7 +372,7 @@ impl<
         let inner = G::grad_mode(&self._grad)
             .restrict(|| narrow_storage_exact::<B, K>(&self.inner, input_shape, dim, start, len))?;
         shape[dim] = len;
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Output>(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Output, _>(
             inner,
             ShapeBuf::from_slice(&shape),
             self._dtype,
@@ -387,11 +387,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Fills elements where `mask` is true with `value`.
-    pub fn masked_fill<S2: Shape, G2: RequiresGrad, Sc: Into<crate::tensor::backend::ScalarValue>>(
+    pub fn masked_fill<
+        S2: Shape,
+        G2: RequiresGrad,
+        L2: Layout,
+        Sc: Into<crate::tensor::backend::ScalarValue>,
+    >(
         &self,
-        mask: &Tensor<S2, B, bool, G2>,
+        mask: &Tensor<S2, B, bool, G2, Local, L2>,
         value: Sc,
-    ) -> Result<Self>
+    ) -> Result<Tensor<S, B, K, G, Local, crate::shapes::RowMajor<S>>>
     where
         S: ShapeEq<S2>,
         B: Execute<op::MaskedFill>,
@@ -399,7 +404,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     {
         let val_f64 = value.into().to_f64();
         G::grad_mode(&self._grad).restrict(|| {
-            execute_masked_fill_descriptor::<S, S2, B, K, G, G2, L, _>(self, mask, val_f64)
+            execute_masked_fill_descriptor::<S, S2, B, K, G, G2, L, L2>(self, mask, val_f64)
         })
     }
 
@@ -871,7 +876,7 @@ pub(crate) fn execute_masked_fill_descriptor<
     input: &Tensor<S, B, K, G1, Local, L1>,
     mask: &Tensor<S2, B, bool, G2, Local, L2>,
     value: f64,
-) -> Result<Tensor<S, B, K, G1, Local, L1>>
+) -> Result<Tensor<S, B, K, G1, Local, crate::shapes::RowMajor<S>>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::MaskedFill>,
@@ -911,10 +916,10 @@ pub(crate) fn execute_where_cond_descriptor<
     mask: &Tensor<S, B, bool, G1, Local, L1>,
     on_true: &Tensor<S2, B, K, G2, Local, L2>,
     on_false: &Tensor<S2, B, K, G2, Local, L2>,
-    // The selected values come from a fresh buffer, and the two branches need
-    // not share the mask's layout, so the result states `Dyn` rather than
-    // carrying either operand's claim.
-) -> Result<Tensor<S2, B, K, G2>>
+    // The selected values come from a fresh packed buffer, so the result states
+    // `RowMajor` of its own shape. Carrying a claim through would have to pick
+    // one of three operands' layouts, none of which describes what was written.
+) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor<S2>>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::WhereCond>,
@@ -946,18 +951,18 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, 
     Tensor<S, B, bool, G, Local, L>
 {
     /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
-    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad>(
+    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad, L2: Layout>(
         &self,
-        on_true: &Tensor<S2, B, K, G2>,
-        on_false: &Tensor<S2, B, K, G2>,
-    ) -> Result<Tensor<S2, B, K, G2>>
+        on_true: &Tensor<S2, B, K, G2, Local, L2>,
+        on_false: &Tensor<S2, B, K, G2, Local, L2>,
+    ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor<S2>>>
     where
         S: ShapeEq<S2>,
         B: Execute<op::WhereCond>,
         <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {
         G2::grad_mode(&on_true._grad).restrict(|| {
-            execute_where_cond_descriptor::<S, S2, B, K, G, G2, L, _>(self, on_true, on_false)
+            execute_where_cond_descriptor::<S, S2, B, K, G, G2, L, L2>(self, on_true, on_false)
         })
     }
 }

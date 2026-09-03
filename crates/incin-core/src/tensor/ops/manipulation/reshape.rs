@@ -334,7 +334,7 @@ impl<
         let inner = G::grad_mode(&self._grad)
             .restrict(|| squeeze_storage_exact::<B, K>(&self.inner, input_shape, dim))?;
         shape.remove(dim);
-        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Drop>(
+        Tensor::<S, B, K, G, P>::from_shape_buf_placed_checked::<A::Drop, _>(
             inner,
             ShapeBuf::from_slice(&shape),
             self._dtype,

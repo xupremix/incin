@@ -133,6 +133,7 @@ pub type incin::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
 pub type incin::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
 pub type incin::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
 pub type incin::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::Dense<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
 pub type incin::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
 pub type incin::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
@@ -143,19 +144,20 @@ pub type incin::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
 pub type incin::Sequential<L1, L2> = incin_core::nn::module::Sequential<L1, L2>
 pub type incin::TargetBatch<T>::Images = incin_core::tensor::base::types::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::place::TensorTarget>::Backend>
 pub type incin::TargetBatch<T>::Labels = incin_core::tensor::base::types::Tensor<incin_core::shapes::dynamic::Dyn, <T as incin_backends::target::place::TensorTarget>::Backend, u8>
-pub type incin::Tensor<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P>
+pub type incin::Tensor<S, B, K, G, P, L> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, L>
 pub type incin::prelude::BatchNorm2d<C, B> = incin_core::nn::batch_norm::BatchNorm2d<C, B>
 pub type incin::prelude::Conv1d<S, B> = incin_core::nn::conv1d::Conv1d<S, B>
 pub type incin::prelude::Conv2d<S, B> = incin_core::nn::conv2d::Conv2d<S, B>
 pub type incin::prelude::DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::device::Cpu>
 pub type incin::prelude::DefaultDevice = incin_core::tensor::device::Cpu
+pub type incin::prelude::Dense<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
 pub type incin::prelude::Embedding<S, B> = incin_core::nn::embedding::Embedding<S, B>
 pub type incin::prelude::LayerNorm<C, B> = incin_core::nn::layer_norm::LayerNorm<C, B>
 pub type incin::prelude::Linear<S, B> = incin_core::nn::linear::Linear<S, B>
 pub type incin::prelude::Param<T, B> = incin_core::nn::param::Param<T, B>
 pub type incin::prelude::RNN<S, B> = incin_core::nn::rnn::RNN<S, B>
 pub type incin::prelude::RNNCell<S, B> = incin_core::nn::rnn::RNNCell<S, B>
-pub type incin::prelude::Tensor<S, B, K, G, P> = incin_core::tensor::base::types::Tensor<S, B, K, G, P>
+pub type incin::prelude::Tensor<S, B, K, G, P, L> = incin_core::tensor::base::types::Tensor<S, B, K, G, P, L>
 pub use incin::Adam
 pub use incin::AdamW
 pub use incin::BackendError
@@ -395,7 +397,6 @@ pub use incin::prelude::DTypeDescriptor
 pub use incin::prelude::DTypeId
 pub use incin::prelude::DTypeKey
 pub use incin::prelude::DTypeKind
-pub use incin::prelude::Dense
 pub use incin::prelude::Device
 pub use incin::prelude::DeviceId
 pub use incin::prelude::DeviceKind

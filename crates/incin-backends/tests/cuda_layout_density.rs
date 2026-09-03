@@ -118,3 +118,60 @@ fn a_cuda_pointwise_result_is_dense_even_from_a_strided_operand() {
         &strided.mul_exact(&dense_43).unwrap(),
     );
 }
+
+/// A CUDA reduction result is dense, and a strided operand is refused outright.
+///
+/// The reduction claim needs different evidence from the pointwise one, because
+/// CUDA's capability table answers the strided question differently for the two.
+/// `elementwise_layouts` advertises `Strided`; `reduction_layouts` does not, so
+/// the dispatcher rejects a strided reduction before any kernel runs.
+///
+/// That refusal is what makes the type claim safe here: a `RowMajor` result
+/// cannot be wrong for an operand the backend will not accept. Both halves are
+/// asserted, because either one changing invalidates the reasoning -- if the row
+/// is ever widened, this test fails and whoever widens it has to show that the
+/// strided reduction kernel writes a dense result before the claim stands again.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn a_cuda_reduction_is_dense_and_refuses_a_strided_operand() {
+    use incin_core::shapes::idx::ForwardAxis;
+
+    incin_backends::cuda::testing::require_cuda();
+
+    let base = Tensor::<s![3, 4], Cuda>::from_slice(
+        &[
+            1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ],
+        (),
+    )
+    .unwrap();
+
+    // A dense operand: the result must be dense, and correct.
+    let summed = base.sum(ForwardAxis::<Here>::default()).unwrap();
+    assert_dense("sum", &summed);
+    assert_eq!(
+        summed.to_vec1::<f32>().unwrap(),
+        alloc_vec(&[15.0, 18.0, 21.0, 24.0]),
+        "summing axis 0 of a 3x4 adds the three rows"
+    );
+    assert_dense(
+        "mean",
+        &base.mean(ForwardAxis::<Here>::default()).unwrap(),
+    );
+    assert_dense(
+        "cumsum",
+        &base.cumsum(ForwardAxis::<Here>::default()).unwrap(),
+    );
+
+    // A strided operand: refused, rather than silently reduced wrongly.
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+    let refused = strided.sum(ForwardAxis::<Here>::default());
+    assert!(
+        refused.is_err(),
+        "CUDA advertises only contiguous reduction layouts, so a strided \
+         operand must be refused; if this now succeeds the capability row \
+         changed and the RowMajor claim needs re-earning"
+    );
+}

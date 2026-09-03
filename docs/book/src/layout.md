@@ -199,9 +199,10 @@ a style choice:
 
 - **An operation that is known to allocate a fresh packed buffer states
   `RowMajor` of its own result shape.** Pointwise unary and binary operations
-  (broadcasting ones included) and reductions to a scalar do this, so a proof
-  appears out of the middle of a chain and `reshape_view` is reachable at the
-  end of one. The claim is *stated*, never carried: carrying the operand's
+  (broadcasting ones included), the comparison and logical families,
+  `masked_fill`, `where_cond`, `lerp`, `cumsum` and every reduction do this, so
+  a proof appears out of the middle of a chain and `reshape_view` is reachable
+  at the end of one. The claim is *stated*, never carried: carrying the operand's
   layout would propagate only what the caller already had, and would be false
   the moment a non-row-major layout exists.
 - **An operation whose result's memory order is not settled states `Dyn`.**
