@@ -422,54 +422,54 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `logical_and` | `bool` | `contiguous` | any | yes | native |
 | `logical_or` | `bool` | `contiguous` | any | yes | native |
 | `logical_not` | `bool` | `contiguous` | any | yes | native |
-| `add` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sub` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `mul` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `relu` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `step` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `mish` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `elu` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `gelu` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `abs` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `exp` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `neg` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sqrt` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `log` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `tanh` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sigmoid` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `swish` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sign` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `floor` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `ceil` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `round` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `log2` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `log10` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sin` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `cos` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `tan` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `asin` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `acos` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `atan` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sinh` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `cosh` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `asinh` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `acosh` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `atanh` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `erf` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `rsqrt` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `trunc` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `frac` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `add_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `powf` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `clamp` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `sub_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `div_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `atan2` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `fmod` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `remainder` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `dropout` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `add` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sub` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `mul` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `div` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `relu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `step` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `mish` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `elu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `gelu` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `abs` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `exp` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `neg` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sqrt` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `log` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `tanh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sigmoid` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `swish` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sign` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `floor` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `ceil` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `round` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `log2` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `log10` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sin` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cos` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `tan` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `asin` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `acos` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `atan` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sinh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `cosh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `asinh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `acosh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `atanh` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `erf` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `rsqrt` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `trunc` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `frac` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `add_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `powf` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `clamp` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `sub_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `div_scalar` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `atan2` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `fmod` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `remainder` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
+| `dropout` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | any | yes | native |
 | `broadcast_as` | `f32` | `contiguous` | any | no | native |
 | `reshape` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | any | no | native |
 | `broadcast_as` | `f32` | `contiguous` | any | yes | native |
@@ -514,12 +514,12 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `adaptive_avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
-| `softmax` | `f32` | `contiguous` | 1+ | yes | native |
-| `layer_norm` | `f32` | `contiguous` | 1+ | yes | native |
-| `batch_norm` | `f32` | `contiguous` | 1+ | yes | native |
-| `rms_norm` | `f32` | `contiguous` | 1+ | yes | native |
-| `group_norm` | `f32` | `contiguous` | 2+ | yes | native |
-| `embedding` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
+| `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `layer_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `batch_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `rms_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `group_norm` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
+| `embedding` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `argmax` | `f32` | `contiguous` | any | yes | native |
 | `argmin` | `f32` | `contiguous` | any | yes | native |
 | `argsort` | `f32` | `contiguous` | 1+ | yes | native |

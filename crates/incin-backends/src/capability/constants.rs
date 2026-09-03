@@ -99,4 +99,16 @@ pub(super) const INDEX_AND_F32_DTYPES: &[DTypeDescriptor] = &[
 ];
 pub(super) const CONTIGUOUS: &[LayoutClass] = &[LayoutClass::Contiguous];
 pub(super) const CPU_LAYOUTS: &[LayoutClass] = &[LayoutClass::Contiguous, LayoutClass::Strided];
+/// Layouts the CUDA elementwise path genuinely handles.
+///
+/// `cuda/ops/elementwise.rs` selects a strided strategy from `LayoutClass`, and
+/// the launchers pass a shape array with **per-operand** stride arrays, so a
+/// binary operation with one strided and one dense operand addresses each
+/// correctly rather than applying one stride set to both.
+///
+/// Declared `CONTIGUOUS` until now, which was true by vacuity: every CUDA
+/// operation materialised, so no strided CUDA tensor could be built and the
+/// narrower claim never refused anything reachable. `transpose_view` ended
+/// that, and this row was not revisited with it.
+pub(super) const CUDA_LAYOUTS: &[LayoutClass] = &[LayoutClass::Contiguous, LayoutClass::Strided];
 pub(super) const PRECISE: &[MathMode] = &[MathMode::Precise];

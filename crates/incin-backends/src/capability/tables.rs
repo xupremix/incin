@@ -8,7 +8,7 @@
 //! tables invoke the ungated internal path instead).
 
 use super::constants::{
-    ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES,
+    ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES, CUDA_LAYOUTS,
     CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_ONLY, FLOAT_DTYPES, INDEX_AND_F32_DTYPES, NON_QUANTIZED,
     PRECISE, Q8_ONLY,
 };
@@ -176,7 +176,12 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     // Same `shape_op` byte-width limit as the `broadcast` row above.
     broadcast_training = F32_ONLY,
     reshape_training = FLOAT_DTYPES,
-    elementwise_layouts = CONTIGUOUS,
+    // The one row widened past `CONTIGUOUS`: the strided elementwise kernel
+    // exists, is benchmarked in `view_cost_bench`, and beats materialising for
+    // a single consumer. It was unreachable through the descriptor path because
+    // this row refused it. The others stay narrow until each has the same
+    // evidence; a row is widened by a test that fails without it.
+    elementwise_layouts = CUDA_LAYOUTS,
     broadcast_layouts = CONTIGUOUS,
     reshape_layouts = CONTIGUOUS,
     reduction_layouts = CONTIGUOUS,
