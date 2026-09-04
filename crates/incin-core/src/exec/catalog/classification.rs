@@ -11,8 +11,6 @@ pub enum SemanticProfile {
     Comparison,
     /// Boolean combination of mask inputs.
     Logical,
-    /// In-place update of an existing variable slot.
-    Mutation,
     /// Re-addresses dimensions without touching element values.
     Shape,
     /// Picks a sub-range or sub-set of existing elements.

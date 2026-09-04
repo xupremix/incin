@@ -4,9 +4,9 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 179
+Canonical operations: 173
 Backend-executable operations: 163
-Non-backend execution sites: 16
+Non-backend execution sites: 10
 
 | Execution site | Count |
 |---|---:|
@@ -14,7 +14,7 @@ Non-backend execution sites: 16
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
-| `Mutation` | 9 |
+| `Mutation` | 3 |
 | `DeviceTransfer` | 1 |
 | `GraphState` | 3 |
 
@@ -95,12 +95,6 @@ Non-backend execution sites: 16
 | `logical_and` | `Descriptor<op::LogicalAnd>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `Boolean` / `Broadcast` | `Allowed` / `NotApplicable` | `None` | yes | `FreshContiguous` | `::logical_and` |
 | `logical_or` | `Descriptor<op::LogicalOr>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `Boolean` / `Broadcast` | `Allowed` / `NotApplicable` | `None` | yes | `FreshContiguous` | `::logical_or` |
 | `logical_not` | `Descriptor<op::LogicalNot>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `Numpy` | `Boolean` / `Broadcast` | `Allowed` / `NotApplicable` | `None` | yes | `FreshContiguous` | `::logical_not` |
-| `add_in_place` | `Descriptor<op::AddInPlace>` | `NoAttributes` | `Mutation` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::add_` |
-| `sub_in_place` | `Descriptor<op::SubInPlace>` | `NoAttributes` | `Mutation` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::sub_` |
-| `mul_in_place` | `Descriptor<op::MulInPlace>` | `NoAttributes` | `Mutation` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::mul_` |
-| `div_in_place` | `Descriptor<op::DivInPlace>` | `NoAttributes` | `Mutation` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::div_` |
-| `zero_in_place` | `Descriptor<op::ZeroInPlace>` | `NoAttributes` | `Mutation` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::zero_` |
-| `fill_in_place` | `Descriptor<op::FillInPlace>` | `ScalarAttributes` | `Mutation` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `NumericSame` / `Preserve` | `Allowed` / `IeeePropagate` | `Defined` | yes | `PreserveOrMaterialize` | `Tensor::fill_` |
 | `reshape` | `Descriptor<op::ReshapeExact>` | `ShapeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::reshape` |
 | `transpose` | `Descriptor<op::TransposeExact>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose` |
 | `transpose_view` | `Descriptor<op::TransposeView>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose_view` |

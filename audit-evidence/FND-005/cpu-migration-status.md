@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<O>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**163 of 163 backend-executable operations migrated**, out of 179 catalog operations in total.
+**163 of 163 backend-executable operations migrated**, out of 173 catalog operations in total.
 
 ## Backend-executable operations
 
@@ -188,12 +188,6 @@ These are not pending migrations. Each one needs a change to `Execute`/`Executio
 | Operation | Site | Why | Catalog source mapping |
 |---|---|---|---|
 | `sample` | `Composed` | the frontend composition owns the execution semantics | `Tensor::sample` |
-| `add_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::add_` |
-| `sub_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::sub_` |
-| `mul_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::mul_` |
-| `div_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::div_` |
-| `zero_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::zero_` |
-| `fill_in_place` | `Mutation` | writes through an operand; execution borrows operands shared | `Tensor::fill_` |
 | `to_device` | `DeviceTransfer` | produces storage on another backend, which the executor cannot name | `TransferTo` |
 | `require_grad` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::require_grad` |
 | `detach` | `GraphState` | acts on autograd state, not on an allocation | `Tensor::detach` |

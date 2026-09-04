@@ -794,7 +794,6 @@ pub(super) fn verify_outputs<A: AttributeContract>(
         SemanticProfile::BinaryBroadcast
             | SemanticProfile::Comparison
             | SemanticProfile::Logical
-            | SemanticProfile::Mutation
             | SemanticProfile::MatMul
     ) {
         for input in inputs.iter().skip(1) {

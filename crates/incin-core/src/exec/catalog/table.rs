@@ -54,15 +54,9 @@ pub struct OperationCatalogEntry {
 /// the other way would silently excuse it.
 const fn execution_site(operation: OperationKind) -> ExecutionSite {
     match operation {
-        // Every one of these calls its backend method with `&mut`, either on a
-        // storage handle or on a `Var<K>`, and returns nothing.
-        OperationKind::AddInPlace
-        | OperationKind::SubInPlace
-        | OperationKind::MulInPlace
-        | OperationKind::DivInPlace
-        | OperationKind::ZeroInPlace
-        | OperationKind::FillInPlace
-        | OperationKind::SgdStep
+        // Each of these calls its backend method with `&mut` on a `Var<K>` and
+        // returns nothing.
+        OperationKind::SgdStep
         | OperationKind::AdamStep
         | OperationKind::AdamWStep => ExecutionSite::Mutation,
         OperationKind::ToDevice => ExecutionSite::DeviceTransfer,
@@ -152,15 +146,6 @@ const fn profile_semantics(
             NumericRule::NotApplicable,
             GradientRule::None,
             LayoutRule::FreshContiguous,
-        ),
-        Mutation => (
-            BroadcastingRule::None,
-            DTypeRule::NumericSame,
-            OutputRule::Preserve,
-            EmptyRule::Allowed,
-            NumericRule::IeeePropagate,
-            GradientRule::Defined,
-            LayoutRule::PreserveOrMaterialize,
         ),
         Shape => (
             BroadcastingRule::TypedContract,

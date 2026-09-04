@@ -41,32 +41,6 @@ fn test_trigonometric_and_transcendental_ops() -> Result<()> {
 }
 
 #[test]
-fn test_inplace_operations() -> Result<()> {
-    let mut t1 = Tensor::<s![2, 2], DefaultBackend>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
-    let t2 = Tensor::<s![2, 2], DefaultBackend>::from_slice(&[10.0, 20.0, 30.0, 40.0], ())?;
-
-    t1.add_(&t2)?;
-    assert_eq!(t1.to_vec1::<f32>()?, vec![11.0, 22.0, 33.0, 44.0]);
-
-    t1.sub_(&t2)?;
-    assert_eq!(t1.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 4.0]);
-
-    t1.mul_(&t2)?;
-    assert_eq!(t1.to_vec1::<f32>()?, vec![10.0, 40.0, 90.0, 160.0]);
-
-    t1.div_(&t2)?;
-    assert_eq!(t1.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 4.0]);
-
-    t1.zero_()?;
-    assert_eq!(t1.to_vec1::<f32>()?, vec![0.0, 0.0, 0.0, 0.0]);
-
-    t1.fill_(7.0)?;
-    assert_eq!(t1.to_vec1::<f32>()?, vec![7.0, 7.0, 7.0, 7.0]);
-
-    Ok(())
-}
-
-#[test]
 fn scatter_add_routes_gradient_to_every_colliding_source() -> Result<()> {
     // Slot 0 is written by sources 0, 1 and 2; slot 2 by source 3. This is the
     // collision an overwriting scatter resolves by discarding, and the reason

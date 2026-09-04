@@ -393,100 +393,11 @@ impl_exact_binary_op!(
 impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L: Layout>
     Tensor<S, B, K, G, Local, L>
 {
-    /// In-place addition: mutates `self` by adding `rhs` element-wise.
-    pub fn add_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
-    where
-        S: ShapeEq<S2>,
-        B: Execute<op::Add>,
-        <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
-    {
-        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res =
-            execute_binary_descriptor::<op::Add, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
-                self,
-                rhs,
-                self._grad.clone(),
-            )?;
-        self.inner = res.inner;
-        Ok(())
-    }
 
-    /// In-place subtraction: mutates `self` by subtracting `rhs` element-wise.
-    pub fn sub_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
-    where
-        S: ShapeEq<S2>,
-        B: Execute<op::Sub>,
-        <B as Execute<op::Sub>>::Output: Into<B::Storage<K>>,
-    {
-        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res =
-            execute_binary_descriptor::<op::Sub, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
-                self,
-                rhs,
-                self._grad.clone(),
-            )?;
-        self.inner = res.inner;
-        Ok(())
-    }
 
-    /// In-place multiplication: mutates `self` by multiplying `rhs` element-wise.
-    pub fn mul_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
-    where
-        S: ShapeEq<S2>,
-        B: Execute<op::Mul>,
-        <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
-    {
-        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res =
-            execute_binary_descriptor::<op::Mul, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
-                self,
-                rhs,
-                self._grad.clone(),
-            )?;
-        self.inner = res.inner;
-        Ok(())
-    }
 
-    /// In-place division: mutates `self` by dividing by `rhs` element-wise.
-    pub fn div_<S2: Shape, G2: RequiresGrad>(&mut self, rhs: &Tensor<S2, B, K, G2>) -> Result<()>
-    where
-        S: ShapeEq<S2>,
-        B: Execute<op::Div>,
-        <B as Execute<op::Div>>::Output: Into<B::Storage<K>>,
-    {
-        <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
-        let res =
-            execute_binary_descriptor::<op::Div, S, S2, B, K, K, G, G2, G, L, crate::shapes::Dyn>(
-                self,
-                rhs,
-                self._grad.clone(),
-            )?;
-        self.inner = res.inner;
-        Ok(())
-    }
 
-    /// In-place zero: fills all elements with 0.0.
-    pub fn zero_(&mut self) -> Result<()>
-    where
-        B: Execute<op::MulScalar>,
-        <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
-    {
-        let res = self.mul_scalar(0.0)?;
-        self.inner = res.inner;
-        Ok(())
-    }
 
-    /// In-place fill: fills all elements with scalar `val`.
-    pub fn fill_(&mut self, val: f64) -> Result<()>
-    where
-        B: Execute<op::MulScalar> + Execute<op::AddScalar>,
-        <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
-        <B as Execute<op::AddScalar>>::Output: Into<B::Storage<K>>,
-    {
-        let res = self.mul_scalar(0.0)?.add_scalar(val)?;
-        self.inner = res.inner;
-        Ok(())
-    }
 
     /// Subtracts a scalar: `self - scalar`.
     pub fn sub_scalar(&self, val: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>

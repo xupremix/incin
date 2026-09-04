@@ -255,7 +255,7 @@ fn the_execution_site_agrees_with_the_arity_and_output_rules() {
             ExecutionSite::Mutation => assert!(
                 matches!(
                     row.profile,
-                    SemanticProfile::Mutation | SemanticProfile::Optimizer
+                    SemanticProfile::Optimizer
                 ),
                 "{} is classified as a mutation but its profile is {:?}",
                 row.name,
@@ -294,7 +294,7 @@ fn the_execution_site_agrees_with_the_arity_and_output_rules() {
 fn every_mutating_and_autograd_operation_is_classified_by_its_profile() {
     for row in OPERATION_CATALOG {
         match row.profile {
-            SemanticProfile::Mutation | SemanticProfile::Optimizer => assert_eq!(
+            SemanticProfile::Optimizer => assert_eq!(
                 row.site,
                 ExecutionSite::Mutation,
                 "{} writes through an operand but is classified as {:?}",

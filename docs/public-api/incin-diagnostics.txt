@@ -6,7 +6,6 @@ impl incin_diagnostics::Conv1dMismatch
 impl incin_diagnostics::Conv2dMismatch
 impl incin_diagnostics::FlattenMismatch
 impl incin_diagnostics::GroupNormMismatch
-impl incin_diagnostics::InPlaceShapeMismatch
 impl incin_diagnostics::MatMulMismatch
 impl incin_diagnostics::MathDomainError
 impl incin_diagnostics::ModuleForwardMismatch
@@ -26,7 +25,6 @@ pub fn incin_diagnostics::Conv1dMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::Conv2dMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::FlattenMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::GroupNormMismatch::render(&self) -> alloc::string::String
-pub fn incin_diagnostics::InPlaceShapeMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::MatMulMismatch::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::MathDomainError::render(&self) -> alloc::string::String
 pub fn incin_diagnostics::ModuleForwardMismatch::render(&self) -> alloc::string::String
@@ -51,7 +49,6 @@ pub fn incin_diagnostics::parse_conv1d_mismatch(&str) -> core::option::Option<in
 pub fn incin_diagnostics::parse_conv2d_mismatch(&str) -> core::option::Option<incin_diagnostics::Conv2dMismatch>
 pub fn incin_diagnostics::parse_flatten_mismatch(&str) -> core::option::Option<incin_diagnostics::FlattenMismatch>
 pub fn incin_diagnostics::parse_group_norm_mismatch(&str) -> core::option::Option<incin_diagnostics::GroupNormMismatch>
-pub fn incin_diagnostics::parse_inplace_shape_mismatch(&str) -> core::option::Option<incin_diagnostics::InPlaceShapeMismatch>
 pub fn incin_diagnostics::parse_math_domain_error(&str) -> core::option::Option<incin_diagnostics::MathDomainError>
 pub fn incin_diagnostics::parse_matmul_mismatch(&str) -> core::option::Option<incin_diagnostics::MatMulMismatch>
 pub fn incin_diagnostics::parse_module_forward_mismatch(&str) -> core::option::Option<incin_diagnostics::ModuleForwardMismatch>
@@ -88,7 +85,6 @@ pub incin_diagnostics::FlattenMismatch::rank: usize
 pub incin_diagnostics::FlattenMismatch::shape: alloc::vec::Vec<alloc::string::String>
 pub incin_diagnostics::FlattenMismatch::start_dim: usize
 pub incin_diagnostics::GroupNormMismatch::message: alloc::string::String
-pub incin_diagnostics::InPlaceShapeMismatch::message: alloc::string::String
 pub incin_diagnostics::MatMulMismatch::lhs: alloc::vec::Vec<alloc::string::String>
 pub incin_diagnostics::MatMulMismatch::lhs_inner_index: usize
 pub incin_diagnostics::MatMulMismatch::rhs: alloc::vec::Vec<alloc::string::String>
@@ -124,7 +120,6 @@ pub struct incin_diagnostics::Conv1dMismatch
 pub struct incin_diagnostics::Conv2dMismatch
 pub struct incin_diagnostics::FlattenMismatch
 pub struct incin_diagnostics::GroupNormMismatch
-pub struct incin_diagnostics::InPlaceShapeMismatch
 pub struct incin_diagnostics::MatMulMismatch
 pub struct incin_diagnostics::MathDomainError
 pub struct incin_diagnostics::ModuleForwardMismatch

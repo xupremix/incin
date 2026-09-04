@@ -8,6 +8,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- **The in-place mutation operations.** `add_`, `sub_`, `mul_`, `div_`,
+  `zero_` and `fill_`, their six catalog rows, and the `Mutation` semantic
+  profile are gone. None of them mutated in place: each dispatched the ordinary
+  out-of-place operation and rebound `self.inner`, so `zero_` was
+  `mul_scalar(0.0)` and `fill_(v)` was `mul_scalar(0.0).add_scalar(v)` -- two
+  allocations behind a name promising none. The catalog rows were advertised by
+  no backend at all, and the profile's own documentation said why: *"Not
+  executable: `ExecutionRequest::inputs` is a slice of shared borrows, so an
+  executor cannot reach a mutable operand at all."* One test used them; nothing
+  else in the workspace did. `docs/FROZEN_FOUNDATIONS.md` already listed true
+  in-place mutation as deferred pending a design for ownership, views and
+  autograd versioning, and that is now the whole story rather than half of it.
+- **`InPlaceShapeMismatch` and `parse_inplace_shape_mismatch`**, which
+  humanised a diagnostic no code path can emit any more.
+
+### Added
+
+- **A custom operation with seven operands across three element types**, at
+  `crates/incin-backends/examples/calibration_update.rs`. Per-channel
+  quantization calibration needs the activations (`f32`), the channel each
+  element belongs to (`u32`), and five running statistics (`f64`, because
+  summing squares over a batch in `f32` loses the precision the pass exists to
+  establish). It implements `Operation`, implements `Execute` for the real CPU
+  backend, and runs on real storage.
+
+  It is a worked answer to whether that arrangement is expressible. As a
+  *custom* operation it is: the custom path calls `Operation::infer_outputs`
+  and nothing else, so the per-operand contract there is the whole contract. As
+  a catalog operation it is not: `verify_outputs` requires built-in operands to
+  share a dtype, and the only heterogeneity admitted is one designated integer
+  index operand, named in a hardcoded match over six operations. What a custom
+  operation still cannot do is *advertise* the arrangement, because
+  `CapabilityQuery` carries one dtype with no operand index -- the same split
+  the built-in `cross_entropy_loss` lives with.
+
+  The example asserts its own arithmetic and that its contract refuses swapped,
+  narrowed, short and ragged operand lists, and CI runs it rather than only
+  building it.
+
 ### Fixed
 
 - **A third vacuous suite, and what it found.** `cuda_shape_dtypes.rs` asserted

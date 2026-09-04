@@ -35,7 +35,6 @@ run time.
 | `adamw_step` | — | — | — | — |
 | `adaptive_avg_pool2d` | `f32` | `f32` | — | — |
 | `add` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `add_in_place` | — | — | — | — |
 | `add_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `addmm` | `f32` | `f32` | — | — |
 | `arange` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
@@ -75,7 +74,6 @@ run time.
 | `detach` | — | — | — | — |
 | `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `div_in_place` | — | — | — | — |
 | `div_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `dot` | `f32` | `f32` | — | — |
 | `dropout` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -83,7 +81,6 @@ run time.
 | `embedding` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | — | — |
 | `erf` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `exp` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
-| `fill_in_place` | — | — | — | — |
 | `flatten` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
 | `float_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `float_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
@@ -130,7 +127,6 @@ run time.
 | `mish` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `mse_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `mul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `mul_in_place` | — | — | — | — |
 | `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `neg` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
@@ -175,7 +171,6 @@ run time.
 | `std_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `step` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `sub` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `sub_in_place` | — | — | — | — |
 | `sub_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `sum_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `sum_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -204,7 +199,6 @@ run time.
 | `var_randn` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` | `f32` |
 | `var_zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `where_cond` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32`, `bool` | — | — |
-| `zero_in_place` | — | — | — | — |
 | `zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 
 Every stable semantic operation comes from the canonical catalog. A dash is an explicit unsupported or migration-blocked decision. Layout, rank and training coverage are in the per-backend tables below.

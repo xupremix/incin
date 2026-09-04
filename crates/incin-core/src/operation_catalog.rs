@@ -88,12 +88,6 @@ macro_rules! incin_operation_catalog {
             (LogicalAnd, "logical_and", Pointwise, Logical, NoAttributes, 2, 2, "::logical_and"),
             (LogicalOr, "logical_or", Pointwise, Logical, NoAttributes, 2, 2, "::logical_or"),
             (LogicalNot, "logical_not", Pointwise, Logical, NoAttributes, 1, 1, "::logical_not"),
-            (AddInPlace, "add_in_place", Pointwise, Mutation, NoAttributes, 2, 2, "Tensor::add_"),
-            (SubInPlace, "sub_in_place", Pointwise, Mutation, NoAttributes, 2, 2, "Tensor::sub_"),
-            (MulInPlace, "mul_in_place", Pointwise, Mutation, NoAttributes, 2, 2, "Tensor::mul_"),
-            (DivInPlace, "div_in_place", Pointwise, Mutation, NoAttributes, 2, 2, "Tensor::div_"),
-            (ZeroInPlace, "zero_in_place", Fill, Mutation, NoAttributes, 1, 1, "Tensor::zero_"),
-            (FillInPlace, "fill_in_place", Fill, Mutation, ScalarAttributes, 1, 1, "Tensor::fill_"),
 
             (ReshapeExact, "reshape", Storage, Shape, ShapeAttributes, 1, 1, "::reshape"),
             (TransposeExact, "transpose", Storage, Shape, TransposeAttributes, 1, 1, "::transpose"),

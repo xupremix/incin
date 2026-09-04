@@ -123,6 +123,12 @@ jobs:
     - name: Build Examples
       run: cargo build --examples --no-default-features --features incin-backends/cpu,incin/cpu
 
+    # Building an example only proves it compiles. This one asserts its own
+    # arithmetic and that its per-operand contract refuses the operand lists it
+    # is supposed to refuse, so it is worth running.
+    - name: Run the custom-operation example
+      run: cargo run -p incin-backends --no-default-features --features cpu --example calibration_update
+
     # The workspace run above resolves features across every member, so a
     # backend crate that had come to depend on something another member turns
     # on would still pass it. These two build incin-backends alone, on the

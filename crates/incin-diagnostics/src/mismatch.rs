@@ -1024,33 +1024,3 @@ pub fn parse_math_domain_error(text: &str) -> Option<MathDomainError> {
     }
 }
 
-/// An in-place shape mismatch diagnostic.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InPlaceShapeMismatch {
-    /// The verbatim diagnostic message this explanation annotates.
-    pub message: String,
-}
-
-impl InPlaceShapeMismatch {
-    /// Renders the humanized explanation rustc should append to the diagnostic.
-    pub fn render(&self) -> String {
-        const INDENT: &str = "      ";
-        format!(
-            "{INDENT}in-place shape mismatch \u{2192} {msg}",
-            msg = self.message
-        )
-    }
-}
-
-/// Parses a `inplace_shape` mismatch from diagnostic text; `None` when the text is not this message.
-pub fn parse_inplace_shape_mismatch(text: &str) -> Option<InPlaceShapeMismatch> {
-    if text.contains("in-place operand shape mismatch") || text.contains("cannot mutate in-place") {
-        Some(InPlaceShapeMismatch {
-            message:
-                "target tensor and operand tensor must have identical shapes for in-place mutation"
-                    .to_string(),
-        })
-    } else {
-        None
-    }
-}

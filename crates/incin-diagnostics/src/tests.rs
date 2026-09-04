@@ -403,8 +403,6 @@ fn test_parse_medium_prio_diagnostics() {
     let text_domain = "out of domain error";
     assert!(parse_math_domain_error(text_domain).is_some());
 
-    let text_inplace = "in-place operand shape mismatch";
-    assert!(parse_inplace_shape_mismatch(text_inplace).is_some());
 }
 
 #[test]
