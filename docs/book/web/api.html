@@ -95,23 +95,25 @@
 
       <div class="api-list" id="matrix"><div id="apiRows"></div></div>
 
-      <div class="api-legend" aria-hidden="true">
-        <span><i class="api-fill full"></i> full</span>
-        <span><i class="api-fill broad"></i> broad</span>
-        <span><i class="api-fill partial"></i> partial</span>
-        <span><i class="api-fill minimal"></i> minimal</span>
-        <span><i class="api-fill c-full"></i> composed</span>
-      </div>
       <p class="api-lede" style="margin-top:10px;font-size:14px">
-        Each backend gets a meter. The number is how many element types it accepts; the fill is
-        that count against <em>the widest support any backend offers for the same operation</em>,
-        so a short bar means this backend does less than another already does. Measuring against
-        all nine dtypes in the crate would read every float-only operation as thin, which is why
-        the comparison is per-operation. Below a third of the widest, an operation counts as
-        present but barely — a foothold rather than support. Amber is
-        <strong>composed</strong>, built from other operations rather than a dedicated kernel;
-        both execute, they differ in cost. Select a row for dtypes, layouts, rank, training and
-        the public entry point.
+        Each backend gets a meter reading <code>have/widest</code>: how many element types this
+        backend accepts, over the most any backend offers <em>for that same operation</em>. So
+        <code>1/8</code> means this backend does far less than another already does, and
+        <code>4/4</code> means it does everything the operation has. The comparison is
+        per-operation on purpose &mdash; measuring against all nine dtypes in the crate would
+        read every float-only operation as thin coverage when four is all it has. The bar just
+        draws that ratio.
+      </p>
+      <div class="api-legend">
+        <span><i class="api-fill"></i> native kernel</span>
+        <span><i class="api-fill" style="background:var(--inline-code-fg)"></i>
+          <span style="color:var(--inline-code-fg)">composed</span>, built from other operations</span>
+        <span>&mdash; not advertised</span>
+      </div>
+      <p class="api-lede" style="margin-top:8px;font-size:13.5px;opacity:.75">
+        Implementation is marked on the number and its bar together, and means only that: both
+        native and composed execute, they differ in cost. Select a row for dtypes, layouts, rank,
+        training and the public entry point.
       </p>
 
       <h2>Rule categories</h2>

@@ -116,27 +116,20 @@
     }, 0);
   }
 
-  /* Below MINIMUM an operation counts as present but barely: one element type
-     out of a much wider set is a foothold, not support. */
-  var MINIMUM = 0.34;
-  function band(ratio) {
-    if (ratio >= 1) return "full";
-    if (ratio >= 0.67) return "broad";
-    if (ratio >= MINIMUM) return "partial";
-    return "minimal";
-  }
-
   function meter(b, e, top) {
     if (!e.dtypes.length) {
       return '<div class="api-meter none"><span class="lab">' + b + '<b>&mdash;</b></span>' +
         '<span class="api-track"></span></div>';
     }
-    var ratio = top ? e.dtypes.length / top : 1;
-    var cls = band(ratio);
-    if (e.impl === "composed") cls = "c-" + cls;
-    var pct = Math.max(12, Math.round(ratio * 100));
-    return '<div class="api-meter"><span class="lab">' + b + '<b>' + e.dtypes.length + '</b></span>' +
-      '<span class="api-track"><i class="api-fill ' + cls + '" style="width:' + pct + '%"></i></span></div>';
+    var have = e.dtypes.length;
+    var ratio = top ? have / top : 1;
+    // `4/4` states the ratio outright, so the bar reinforces rather than
+    // encodes it. Amber marks a composed implementation, and marks only that.
+    var cls = e.impl === "composed" ? "api-meter composed" : "api-meter";
+    var pct = Math.max(8, Math.round(ratio * 100));
+    return '<div class="' + cls + '"><span class="lab">' + b +
+      '<b>' + have + '/' + top + '</b></span>' +
+      '<span class="api-track"><i class="api-fill" style="width:' + pct + '%"></i></span></div>';
   }
 
   function describe(op) {

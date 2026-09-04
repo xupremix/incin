@@ -103,33 +103,46 @@
   text-transform: uppercase; opacity: .6; padding: 2px 6px; border-radius: 3px;
   border: 1px solid var(--table-border);
 }
-.api-desc { font-size: 12.5px; opacity: .72; margin-top: 3px; max-width: 72ch; }
+.api-desc {
+  font-size: 12.5px; opacity: .72; margin-top: 3px; max-width: 72ch;
+  /* A structural line is a run of mono identifiers with no spaces to break at
+     -- `AdaptivePool2dAttributes`, `::adaptive_avg_pool2d`. Without this they
+     set the row's minimum width and push the whole page wider than the
+     viewport, which is what the first phone screenshot showed. */
+  overflow-wrap: anywhere;
+}
 .api-desc.structural { font-family: var(--font-mono); font-size: 11.5px; opacity: .5; }
+.api-name { overflow-wrap: anywhere; }
 
 /* Coverage strip: one meter per backend, labelled, so no column headers and
    no minimum width are needed. */
-.api-strip { display: grid; grid-template-columns: repeat(4, 62px); gap: 8px; }
+.api-strip { display: grid; grid-template-columns: repeat(4, 76px); gap: 8px; }
 @media (max-width: 640px) { .api-strip { grid-template-columns: repeat(4, 1fr); } }
 .api-meter { display: flex; flex-direction: column; gap: 4px; }
 .api-meter .lab {
   font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em;
   text-transform: uppercase; opacity: .55; display: flex; justify-content: space-between;
+  gap: 6px;
 }
-.api-meter .lab b { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .95; }
+/* `4/4` rather than `4`: the ratio is the point, and spelling it out means the
+   bar reinforces the number instead of being the only place it is stated. An
+   earlier version encoded the count as a number and the ratio as a fill depth,
+   so two rows both reading `1` could look different for a reason nothing on
+   screen explained. */
+.api-meter .lab b {
+  font-weight: 600; font-variant-numeric: tabular-nums; opacity: .95;
+  letter-spacing: 0; text-transform: none;
+}
 .api-track { height: 6px; border-radius: 3px; background: var(--table-border); overflow: hidden; }
-.api-fill { display: block; height: 100%; border-radius: 3px; }
-/* Bands. Hue says which implementation, depth says how much of the widest
-   support any backend offers for this operation is present here. */
-.api-fill.full     { background: var(--sidebar-active); opacity: 1; }
-.api-fill.broad    { background: var(--sidebar-active); opacity: .74; }
-.api-fill.partial  { background: var(--sidebar-active); opacity: .48; }
-.api-fill.minimal  { background: var(--sidebar-active); opacity: .28; }
-.api-fill.c-full    { background: var(--inline-code-fg); opacity: 1; }
-.api-fill.c-broad   { background: var(--inline-code-fg); opacity: .74; }
-.api-fill.c-partial { background: var(--inline-code-fg); opacity: .48; }
-.api-fill.c-minimal { background: var(--inline-code-fg); opacity: .28; }
-.api-meter.none .lab { opacity: .28; }
-.api-meter.none .api-track { background: var(--table-border); opacity: .4; }
+/* One hue. The bar says how much, and nothing else -- implementation is a
+   separate fact and gets its own mark rather than a second meaning here. */
+.api-fill { display: block; height: 100%; border-radius: 3px; background: var(--sidebar-active); }
+/* Composed is marked on the *number*, not the bar, so the two facts never
+   have to be untangled from one another. */
+.api-meter.composed .lab b { color: var(--inline-code-fg); }
+.api-meter.composed .api-fill { background: var(--inline-code-fg); }
+.api-meter.none .lab { opacity: .3; }
+.api-meter.none .api-track { visibility: hidden; }
 
 .api-detail-in {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));

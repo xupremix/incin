@@ -147,17 +147,30 @@ def attach_docs(catalog: dict[str, dict]) -> int:
                     found.append((path, sentence))
         if not found:
             continue
-        unique = {s for _, s in found}
-        if len(unique) == 1:
-            entry["doc"] = found[0][1]
-            resolved += 1
-            continue
-        if owner:
+
+        # An owner that names a *type* must resolve inside that type's own
+        # file. Without this, `Adam::step`, `AdamW::step` and `SGD::step` all
+        # matched the single `pub fn step` in the activation module and were
+        # captioned "Applies the Step function element-wise" -- three
+        # confidently wrong descriptions, which is the outcome this function
+        # exists to avoid. Uniqueness is not enough: one match can still be the
+        # wrong one when nothing checks whose method it is.
+        if owner and owner != "Tensor":
             snake = re.sub(r"(?<!^)(?=[A-Z])", "_", owner).lower()
             scoped = {s for path, s in found if path.stem == snake}
             if len(scoped) == 1:
                 entry["doc"] = scoped.pop()
                 resolved += 1
+            continue
+
+        # No owner, or the tensor surface itself, where the method name is the
+        # identity. A method resolving to two different sentences is left
+        # undescribed rather than captioned with whichever file was walked
+        # first.
+        unique = {s for _, s in found}
+        if len(unique) == 1:
+            entry["doc"] = found[0][1]
+            resolved += 1
     return resolved
 
 
