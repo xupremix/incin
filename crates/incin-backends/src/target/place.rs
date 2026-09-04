@@ -62,6 +62,15 @@ pub type TargetTensor<T, S, K> = Tensor<S, TargetBackend<T>, K, NoGrad>;
 pub type TargetTensorIn<T, S, K, L> =
     Tensor<S, TargetBackend<T>, K, NoGrad, incin_core::dist::Local, L>;
 
+/// The same for a gradient-tracking parameter.
+///
+/// A parameter is allocated the same way a buffer is and then marked, and
+/// marking carries the layout because it re-tags the autograd identity without
+/// touching the storage. So a parameter is entitled to the same proof its
+/// allocation earned.
+pub type TargetTensorInGrad<T, S, K, L> =
+    Tensor<S, TargetBackend<T>, K, incin_core::tensor::grad::Grad, incin_core::dist::Local, L>;
+
 /// Rebinding the dtype a target generates.
 pub trait DtypeTarget: TensorTarget + Sized + Clone {
     /// Rebinds this target to generate `K` instead of `Self::Dtype`.

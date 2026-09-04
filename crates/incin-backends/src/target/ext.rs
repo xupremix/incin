@@ -718,7 +718,14 @@ pub trait TargetExt: TensorTarget + Sized {
         &self,
         spec: Sp,
         fill: GeneratedFill,
-    ) -> Result<Tensor<Sp::Shape, TargetBackend<Self>, Self::ParameterDtype, NoGrad>>
+    ) -> Result<
+        TargetTensorIn<
+            Self,
+            Sp::Shape,
+            Self::ParameterDtype,
+            incin_core::shapes::RowMajor<Sp::Shape>,
+        >,
+    >
     where
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::ParameterDtype>
@@ -815,13 +822,18 @@ pub trait TargetExt: TensorTarget + Sized {
             incin_core::shapes::error::OperationKind::Storage,
             &dims,
         )?;
-        Tensor::try_from_storage(
+        let built = Tensor::try_from_storage(
             storage,
             shape_buf,
             param_dtype_field,
             <Self::Device as Device>::init(self.device_arg()),
             <NoGrad as RequiresGrad>::init(()),
-        )
+        )?;
+        // Every fill above dispatches a creation kernel, and those write dense.
+        // Routed through `restate_layout` rather than claimed directly, so the
+        // proof is conditional on the metadata rather than on that sentence
+        // still being true of some future kernel.
+        Self::restate_layout::<Sp::Shape, Self::ParameterDtype, _>(built)
     }
 
     /// A gradient-tracking allocation, for layer parameters.
@@ -834,7 +846,14 @@ pub trait TargetExt: TensorTarget + Sized {
         &self,
         spec: Sp,
         fill: GeneratedFill,
-    ) -> Result<Tensor<Sp::Shape, TargetBackend<Self>, Self::ParameterDtype, Grad>>
+    ) -> Result<
+        TargetTensorInGrad<
+            Self,
+            Sp::Shape,
+            Self::ParameterDtype,
+            incin_core::shapes::RowMajor<Sp::Shape>,
+        >,
+    >
     where
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::ParameterDtype>

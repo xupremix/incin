@@ -95,7 +95,7 @@ pub(crate) use incin_core::tensor::device::{Wgpu, WgpuN};
 pub(crate) use incin_core::tensor::dtype::{
     BuiltinDType, ConstDType, DType, DTypeDescriptor, FloatDType, PlainDType,
 };
-pub(crate) use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
+pub(crate) use incin_core::tensor::grad::{NoGrad, RequiresGrad};
 
 mod concrete;
 mod data;
@@ -111,5 +111,5 @@ pub use engine::{EngineBackend, EngineOn, EngineSpec, Native, NativeBackend, Run
 pub use ext::{GeneratedFill, TargetExt};
 pub use place::{
     DtypeTarget, DtypeView, TargetBackend, TargetBackendFor, TargetTensor, TargetTensorIn,
-    TensorTarget,
+    TargetTensorInGrad, TensorTarget,
 };

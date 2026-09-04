@@ -150,6 +150,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `crates/incin-core/tests/target_layout_examples.rs`, seven worked cases from
   the design note kept as tests rather than prose, so the examples in the book
   cannot drift from what compiles.
+- **Parameters and state tensors carry a proof from their allocation.**
+  `TargetExt::state_tensor` dispatches a creation kernel and every one writes
+  dense, so it returns `Dense` -- routed through `restate_layout`, so the claim
+  is checked against the metadata rather than resting on that sentence staying
+  true of some future kernel. `parameter` carries it through to a
+  gradient-tracking tensor via the new `TargetTensorInGrad` alias.
+- `require_grad` and `detach` **carry** the operand's layout rather than
+  restating it. They join `Dropout` as the only operations entitled to: both
+  re-tag the autograd identity and hand back the same storage, so whatever was
+  true of the buffer's strides is still true of them. `require_grad` was found
+  by the proof from `state_tensor` flowing into it and failing to compile.
+- Two `forget_layout` calls in `nn_target.rs` are gone. They existed because
+  one branch allocated and the other did not; once `state_tensor` claimed, both
+  branches agreed and the weakening deleted itself -- the second time the
+  design has removed a weakening rather than needing one added, after `Linear`.
 - **`ChannelsLast` is constructible.** `HostInterop::from_bytes_strided` lets a
   backend accept strides the caller chose; it is defaulted to a capability
   refusal, so the contract stays additive and a backend that has not opted in

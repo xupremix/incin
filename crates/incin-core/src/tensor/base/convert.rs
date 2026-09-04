@@ -160,11 +160,17 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     }
 }
 
-impl<S: Shape, B: Backend, K: FloatDType> Tensor<S, B, K, NoGrad> {
+impl<S: Shape, B: Backend, K: FloatDType, L: Layout> Tensor<S, B, K, NoGrad, Local, L> {
     /// Marks this tensor to require gradient tracking.
     ///
     /// Reverse-mode tracking is available only for floating-point dtypes.
-    pub fn require_grad(self) -> Tensor<S, B, K, Grad> {
+    ///
+    /// The layout is *carried*, not restated. This is one of the few operations
+    /// entitled to: it re-tags the autograd identity and hands back the same
+    /// storage, so whatever was true of the buffer's strides is still true of
+    /// them. The same reasoning as `Dropout`'s identity branch -- the result is
+    /// the operand, so the operand's claim describes it.
+    pub fn require_grad(self) -> Tensor<S, B, K, Grad, Local, L> {
         Tensor::from_shape_value_unchecked(
             B::fresh_autograd_identity(self.inner),
             self._shape,
@@ -175,9 +181,14 @@ impl<S: Shape, B: Backend, K: FloatDType> Tensor<S, B, K, NoGrad> {
     }
 }
 
-impl<S: Shape, B: Backend, K: DType> Tensor<S, B, K, Grad> {
+impl<S: Shape, B: Backend, K: DType, L: Layout> Tensor<S, B, K, Grad, Local, L> {
     /// Detaches this tensor from autodiff tape tracking, returning a NoGrad tensor.
-    pub fn detach(self) -> Tensor<S, B, K, NoGrad> {
+    ///
+    /// Carries the layout for the same reason [`require_grad`] does: the buffer
+    /// and its strides are untouched, only the tape identity changes.
+    ///
+    /// [`require_grad`]: Tensor::require_grad
+    pub fn detach(self) -> Tensor<S, B, K, NoGrad, Local, L> {
         Tensor::from_shape_value_unchecked(
             B::fresh_autograd_identity(self.inner),
             self._shape,
