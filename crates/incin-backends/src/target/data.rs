@@ -23,6 +23,13 @@ pub trait TensorData {
 /// `[[1.0f32, 2.0], [3.0, 4.0]]` arrives as `s![2, 2]` without the caller
 /// writing a shape at all.
 ///
+/// The bridge is the point, and this comment described it before the code did:
+/// the shapes used to be built from `ConstDim<A>`, which is a *different* type
+/// from the `s![..]` spelling and does not implement `ConcreteStaticExtent`.
+/// The consequence was that nothing built by these constructors could reach
+/// `ElementCount`, so `reshape` and `reshape_view` were unavailable on the most
+/// ergonomic way to make a tensor. See issue #116.
+///
 /// Higher ranks follow the same pattern and are left out only because each one
 /// is another impl; nothing here is rank-specific in principle.
 macro_rules! impl_tensor_data {
@@ -30,10 +37,11 @@ macro_rules! impl_tensor_data {
         $(
             impl<const A: usize> TensorData for [$elem; A]
             where
-                ConstDim<A>: Dim,
+                typenum::Const<A>: typenum::ToUInt,
+                typenum::U<A>: Dim,
             {
                 type Elem = $elem;
-                type Shape = DimCons<ConstDim<A>, Nil>;
+                type Shape = DimCons<typenum::U<A>, Nil>;
                 fn into_row_major(self) -> Vec<$elem> {
                     self.to_vec()
                 }
@@ -42,11 +50,13 @@ macro_rules! impl_tensor_data {
 
             impl<const A: usize, const B: usize> TensorData for [[$elem; B]; A]
             where
-                ConstDim<A>: Dim,
-                ConstDim<B>: Dim,
+                typenum::Const<A>: typenum::ToUInt,
+                typenum::Const<B>: typenum::ToUInt,
+                typenum::U<A>: Dim,
+                typenum::U<B>: Dim,
             {
                 type Elem = $elem;
-                type Shape = DimCons<ConstDim<A>, DimCons<ConstDim<B>, Nil>>;
+                type Shape = DimCons<typenum::U<A>, DimCons<typenum::U<B>, Nil>>;
                 fn into_row_major(self) -> Vec<$elem> {
                     // Row-major: the outer array indexes the slowest axis, so
                     // flattening in declaration order is already correct.

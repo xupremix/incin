@@ -274,6 +274,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The array constructors produce the same shape type `s![..]` does.** `TensorData`
+  built its shapes from `ConstDim<N>`, a different type that does not implement
+  `ConcreteStaticExtent` -- so nothing `Cpu.tensor(..)` returned could reach
+  `ElementCount`, and `reshape`/`reshape_view` were unavailable on the most
+  ergonomic constructor in the crate. Routed through `typenum`'s
+  `Const<N>`/`ToUInt` bridge, which the doc comment above the macro had claimed
+  was already in use. Closes #116.
+
+  A side effect worth having: `incin-diagnostics` translates `UInt<..>` chains
+  to plain integers and had no `ConstDim` handling at all, so shapes from these
+  constructors now humanize in editor diagnostics where they previously did not.
+
+  **Breaking** only for code naming `<[[f32; 2]; 2] as TensorData>::Shape`
+  explicitly. Four trybuild snapshots re-blessed for the new spelling.
+
 - `incin-diagnostics` failed to compile under `--no-default-features`: its test
   module used `String` without importing it from `alloc`, which the crate needs
   because it is `no_std` without `std`. Never caught because the Feature

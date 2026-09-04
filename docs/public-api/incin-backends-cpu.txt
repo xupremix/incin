@@ -319,16 +319,16 @@ impl<T, K: incin_core::tensor::dtype::traits::DType> incin_backends::target::Dty
 impl<T: incin_backends::target::TensorTarget + core::marker::Sized + core::clone::Clone> incin_backends::target::DtypeTarget for T
 impl<T: incin_backends::target::TensorTarget + core::marker::Sized> incin_backends::target::TargetExt for T
 impl<T: incin_backends::target::TensorTarget, K: incin_core::tensor::dtype::traits::DType> incin_backends::target::TensorTarget for incin_backends::target::DtypeView<T, K>
-impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[f32; B]; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim, incin_core::shapes::dim::ConstDim<B>: incin_core::shapes::dim::Dim
-impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[f64; B]; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim, incin_core::shapes::dim::ConstDim<B>: incin_core::shapes::dim::Dim
-impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[i64; B]; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim, incin_core::shapes::dim::ConstDim<B>: incin_core::shapes::dim::Dim
-impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[u32; B]; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim, incin_core::shapes::dim::ConstDim<B>: incin_core::shapes::dim::Dim
-impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[u8; B]; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim, incin_core::shapes::dim::ConstDim<B>: incin_core::shapes::dim::Dim
-impl<const A: usize> incin_backends::target::TensorData for [f32; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
-impl<const A: usize> incin_backends::target::TensorData for [f64; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
-impl<const A: usize> incin_backends::target::TensorData for [i64; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
-impl<const A: usize> incin_backends::target::TensorData for [u32; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
-impl<const A: usize> incin_backends::target::TensorData for [u8; A] where incin_core::shapes::dim::ConstDim<A>: incin_core::shapes::dim::Dim
+impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[f32; B]; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::Const<B>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim, typenum::gen::generic_const_mappings::U<B>: incin_core::shapes::dim::Dim
+impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[f64; B]; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::Const<B>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim, typenum::gen::generic_const_mappings::U<B>: incin_core::shapes::dim::Dim
+impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[i64; B]; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::Const<B>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim, typenum::gen::generic_const_mappings::U<B>: incin_core::shapes::dim::Dim
+impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[u32; B]; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::Const<B>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim, typenum::gen::generic_const_mappings::U<B>: incin_core::shapes::dim::Dim
+impl<const A: usize, const B: usize> incin_backends::target::TensorData for [[u8; B]; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::Const<B>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim, typenum::gen::generic_const_mappings::U<B>: incin_core::shapes::dim::Dim
+impl<const A: usize> incin_backends::target::TensorData for [f32; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim
+impl<const A: usize> incin_backends::target::TensorData for [f64; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim
+impl<const A: usize> incin_backends::target::TensorData for [i64; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim
+impl<const A: usize> incin_backends::target::TensorData for [u32; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim
+impl<const A: usize> incin_backends::target::TensorData for [u8; A] where typenum::gen::generic_const_mappings::Const<A>: typenum::gen::generic_const_mappings::ToUInt, typenum::gen::generic_const_mappings::U<A>: incin_core::shapes::dim::Dim
 pub const fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::has_bias(&self) -> bool
 pub const fn incin_backends::codegen::fused_epilogue::FusedEpilogueSpec::has_residual(&self) -> bool
 pub const fn incin_backends::codegen::gemm::GemmSpec::with_static_dims(self, usize, usize, usize) -> Self
@@ -1760,25 +1760,25 @@ pub trait incin_backends::target::TargetExt: incin_backends::target::TensorTarge
 pub trait incin_backends::target::TensorData
 pub trait incin_backends::target::TensorTarget
 pub type [[f32; B]; A]::Elem = f32
-pub type [[f32; B]; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<B>, incin_core::shapes::shape::Nil>>
+pub type [[f32; B]; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<B> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>>
 pub type [[f64; B]; A]::Elem = f64
-pub type [[f64; B]; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<B>, incin_core::shapes::shape::Nil>>
+pub type [[f64; B]; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<B> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>>
 pub type [[i64; B]; A]::Elem = i64
-pub type [[i64; B]; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<B>, incin_core::shapes::shape::Nil>>
+pub type [[i64; B]; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<B> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>>
 pub type [[u32; B]; A]::Elem = u32
-pub type [[u32; B]; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<B>, incin_core::shapes::shape::Nil>>
+pub type [[u32; B]; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<B> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>>
 pub type [[u8; B]; A]::Elem = u8
-pub type [[u8; B]; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<B>, incin_core::shapes::shape::Nil>>
+pub type [[u8; B]; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<B> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>>
 pub type [f32; A]::Elem = f32
-pub type [f32; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
+pub type [f32; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>
 pub type [f64; A]::Elem = f64
-pub type [f64; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
+pub type [f64; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>
 pub type [i64; A]::Elem = i64
-pub type [i64; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
+pub type [i64; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>
 pub type [u32; A]::Elem = u32
-pub type [u32; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
+pub type [u32; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>
 pub type [u8; A]::Elem = u8
-pub type [u8; A]::Shape = incin_core::shapes::shape::DimCons<incin_core::shapes::dim::ConstDim<A>, incin_core::shapes::shape::Nil>
+pub type [u8; A]::Shape = incin_core::shapes::shape::DimCons<<typenum::gen::generic_const_mappings::Const<A> as typenum::gen::generic_const_mappings::ToUInt>::Output, incin_core::shapes::shape::Nil>
 pub type f64::Output = incin_backends::codegen::ir::IrExpr
 pub type incin_backends::EngineBackend<E, D> = incin_backends::target::EngineBackend<E, D>
 pub type incin_backends::IncinBackend<D> = incin_backends::NativeBackend<D>

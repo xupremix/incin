@@ -81,9 +81,7 @@ pub(crate) use incin_core::error::{Error, Result};
 pub use incin_core::exec::precision;
 pub use incin_core::exec::{PrecisionSpec, RuntimePrecisionPolicy};
 pub(crate) use incin_core::shapes::dynamic::Dyn;
-pub(crate) use incin_core::shapes::{
-    ConstDim, Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec,
-};
+pub(crate) use incin_core::shapes::{Dim, DimCons, DynShape, Nil, Shape, ShapeBuf, ShapeSpec};
 pub(crate) use incin_core::tensor::base::Tensor;
 #[cfg(any(feature = "cpu", feature = "external-candle"))]
 pub(crate) use incin_core::tensor::device::Cpu;

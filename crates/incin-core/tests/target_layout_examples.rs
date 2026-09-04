@@ -9,16 +9,13 @@ extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;
 use incin_backends::prelude::*;
-use incin_core::shapes::dim::ConstDim;
-use incin_core::shapes::{
-    ChannelsLast, Dense, DimCons, FreshLayout, Nil, RowMajor, ShapeArgs, dense_strides,
-};
+use incin_core::shapes::{ChannelsLast, Dense, FreshLayout, RowMajor, ShapeArgs, dense_strides};
 use incin_core::tensor::device::Cpu;
 use incin_macros::s;
 
-/// The array constructors infer a `ConstDim`-based shape, which is a different
-/// spelling from the `s![..]` typenum one. Named once here rather than repeated.
-type Arr2x2 = DimCons<ConstDim<2>, DimCons<ConstDim<2>, Nil>>;
+/// The array constructors and `s![..]` now agree, so this is just `s![2, 2]`.
+/// It was a separate `ConstDim` spelling until #116.
+type Arr2x2 = s![2, 2];
 
 /// The static 2x3 tensor cases share this, which also keeps clippy's
 /// `type_complexity` quiet about repeating it.
@@ -132,4 +129,24 @@ fn into_layout_checks_rather_than_assumes() {
         refused.is_err(),
         "into_layout compares strides; a dense buffer is not channels-last"
     );
+}
+
+/// The array constructors produce the same shape type `s![..]` does.
+///
+/// They used to build from `ConstDim<N>`, which is a different type and does
+/// not implement `ConcreteStaticExtent` -- so nothing `Cpu.tensor(..)` returned
+/// could reach `ElementCount`, and `reshape`/`reshape_view` were unavailable on
+/// the most ergonomic constructor in the crate. Issue #116.
+///
+/// Both halves are asserted, because either alone would pass for the wrong
+/// reason: the annotation pins the *type*, and the reshape pins that the type
+/// is one the shape arithmetic can actually use.
+#[test]
+fn an_array_constructor_produces_a_reshapable_shape() {
+    type Plain2x2 = incin_core::prelude::Tensor<s![2, 2], CpuBackendImpl, f32>;
+    let x: Plain2x2 = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+
+    let flat = x.into_row_major().unwrap().reshape_view::<s![4]>().unwrap();
+    assert_eq!(flat.dims().as_ref(), &[4]);
+    assert_eq!(flat.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
 }

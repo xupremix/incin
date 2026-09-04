@@ -71,13 +71,14 @@ pub trait TargetExt: TensorTarget + Sized {
     /// ```
     /// use incin_backends::prelude::*;
     /// use incin_core::error::Error;
-    /// use incin_core::shapes::dim::ConstDim;
     /// use incin_core::shapes::{Dense, DimCons, Nil, RowMajor};
     /// use incin_core::tensor::device::Cpu;
+    /// use incin_core::typenum::U2;
     ///
     /// // `incin-backends` has no `incin-macros` dependency, so the shape is
-    /// // spelled out here; through the `incin` facade this is `s![2, 2]`.
-    /// type S = DimCons<ConstDim<2>, DimCons<ConstDim<2>, Nil>>;
+    /// // spelled out here; through the `incin` facade this is `s![2, 2]`, and
+    /// // since #116 the array constructors build exactly that type.
+    /// type S = DimCons<U2, DimCons<U2, Nil>>;
     ///
     /// // The layout is named in the turbofish, and the result carries it --
     /// // this annotation does not compile if the layout came back as `Dyn`.
