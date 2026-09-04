@@ -1145,12 +1145,7 @@ impl<S0: Shape, S1: Shape, S2: Shape> ExpectedShapes
 
     fn shape_bufs(&self) -> impl ExactSizeIterator<Item = &ShapeBuf> {
         let (first, second, third) = self;
-        [
-            first.shape_buf(),
-            second.shape_buf(),
-            third.shape_buf(),
-        ]
-        .into_iter()
+        [first.shape_buf(), second.shape_buf(), third.shape_buf()].into_iter()
     }
 
     fn combined_proof(&self) -> crate::shapes::ProofLevel {

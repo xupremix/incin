@@ -83,7 +83,10 @@ impl Operation for Triple {
         }
         let dims = expect_f32_vector(&inputs[0])?;
         if dims.iter().product::<usize>() != attributes.count {
-            return Err(invalid("count", "attribute count must match the input size"));
+            return Err(invalid(
+                "count",
+                "attribute count must match the input size",
+            ));
         }
         let output = |dtype: DTypeId| LogicalTensorMeta {
             shape: Some(ShapeBuf::from_slice(&dims)),
@@ -106,12 +109,13 @@ impl Execute<Triple> for CpuBackend {
         &self,
         request: ExecutionRequest<'_, Triple, Self>,
     ) -> core::result::Result<Self::Output, BackendError> {
-        let input = request.inputs[0]
-            .downcast_ref::<CpuStorage>()
-            .ok_or(BackendError::InvalidInput {
-                operation: OperationKind::Pointwise,
-                reason: "triple expects CPU storage",
-            })?;
+        let input =
+            request.inputs[0]
+                .downcast_ref::<CpuStorage>()
+                .ok_or(BackendError::InvalidInput {
+                    operation: OperationKind::Pointwise,
+                    reason: "triple expects CPU storage",
+                })?;
         let dims = input.metadata().shape.dims().to_vec();
         let count = dims.iter().product::<usize>().max(1);
         let mut values = Vec::with_capacity(count);
@@ -202,17 +206,20 @@ fn input_storage() -> CpuStorage {
         .expect("test input construction")
 }
 
-fn input_handle(
-    storage: &CpuStorage,
-) -> incin_core::exec::TensorHandle<'_> {
+fn input_handle(storage: &CpuStorage) -> incin_core::exec::TensorHandle<'_> {
     incin_core::exec::TensorHandle::from_storage::<CpuBackend, f32, _>(storage)
 }
 
-fn expected_triple() -> (
+/// The three caller-held proofs, one per output. A named alias because the
+/// triple spells the same shape type three times and clippy's complexity
+/// lint refuses the inline form.
+type TripleExpected = (
     incin_core::shapes::ShapeValue<s![4]>,
     incin_core::shapes::ShapeValue<s![4]>,
     incin_core::shapes::ShapeValue<s![4]>,
-) {
+);
+
+fn expected_triple() -> TripleExpected {
     use incin_core::shapes::ShapeValue;
     (
         ShapeValue::try_new(ShapeBuf::from_slice(&[N])).unwrap(),
@@ -227,9 +234,13 @@ fn typed_three_outputs_with_per_output_dtypes() {
     let input = input_storage();
     let handles = [input_handle(&input)];
     let expected = expected_triple();
-    let (values, positions, widened) =
-        execute_shaped_n::<Triple, CpuBackend, _>(&backend, TripleAttributes { count: N }, &handles, &expected)
-            .expect("three-output typed dispatch");
+    let (values, positions, widened) = execute_shaped_n::<Triple, CpuBackend, _>(
+        &backend,
+        TripleAttributes { count: N },
+        &handles,
+        &expected,
+    )
+    .expect("three-output typed dispatch");
 
     // Geometry and dtypes, per output: the whole point is that output 1 is
     // u32 and output 2 is f64, not just more f32.
@@ -276,9 +287,10 @@ fn typed_three_outputs_rejects_wrong_count() {
                 &handles,
                 &expected
             ),
-            Err(CanonicalError::Descriptor(
-                DescriptorError::OutputArity { actual: 3, .. }
-            ))
+            Err(CanonicalError::Descriptor(DescriptorError::OutputArity {
+                actual: 3,
+                ..
+            }))
         ),
         "three inferred outputs against two proofs must report the count"
     );

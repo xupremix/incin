@@ -44,11 +44,11 @@ type CpuBackend = CpuBackendImpl;
 use incin_core::backend_authoring::operations::NoAttributes;
 use incin_core::backend_authoring::{
     DescriptorError, Execute, ExecutionContext, ExecutionRequest, LogicalTensorMeta, Operation,
-    OperationKey, ShapeBuf, execute, execute_shaped,
+    OperationKey, ShapeBuf, execute_shaped, execute_shaped_n,
 };
 use incin_core::exec::TapeStorage as _;
 use incin_core::exec::tape::{self, TapeNode};
-use incin_core::prelude::{BackendError, DTypeId, DeviceId, Result, ShapeValue};
+use incin_core::prelude::{BackendError, DTypeId, DeviceId, Result, ShapeValue, s};
 use incin_core::shapes::error::OperationKind;
 
 /// Three points: (r, theta) = (2, 0), (1, pi/2), (2, pi/6). Every forward
@@ -119,11 +119,9 @@ impl Operation for PolarToCartesian {
     /// Two f64 inputs of identical shape; two f64 outputs of that same shape.
     /// The catalog's per-operation rules admit one output shape per row, so a
     /// two-output inference like this one is custom-operation territory even
-    /// before the backward pass enters the picture. It also decides the
-    /// dispatch spelling below: the *typed* custom path
-    /// (`infer_custom_typed`) requires exactly one output, so a two-output op
-    /// runs through the *runtime* path (`execute`), which validates the same
-    /// inference and capability admission without a caller-held shape proof.
+    /// before the backward pass enters the picture. It dispatches through
+    /// `execute_shaped_n` with one `ShapeValue` per output, so the descriptor
+    /// cross-checks both geometries instead of trusting the frontend.
     fn infer_outputs(
         _attributes: &Self::Attributes,
         inputs: &[LogicalTensorMeta],
@@ -340,10 +338,18 @@ fn forward(
         incin_core::exec::TensorHandle::from_storage::<CpuBackend, f64, _>(&radius),
         incin_core::exec::TensorHandle::from_storage::<CpuBackend, f64, _>(&theta),
     ];
-    // Runtime dispatch, not the typed one: two outputs have no single
-    // caller-held shape proof. Inference, capability admission and the kernel
-    // are the same validated production path either way.
-    let (x, y) = execute::<PolarToCartesian, CpuBackend>(context, NoAttributes, &handles)?;
+    // Typed dispatch with one proof per output: the descriptor checks both
+    // inferred geometries against these instead of trusting the frontend.
+    let expected = (
+        ShapeValue::<s![3]>::try_new(ShapeBuf::from_slice(&[N]))?,
+        ShapeValue::<s![3]>::try_new(ShapeBuf::from_slice(&[N]))?,
+    );
+    let (x, y) = execute_shaped_n::<PolarToCartesian, CpuBackend, _>(
+        context,
+        NoAttributes,
+        &handles,
+        &expected,
+    )?;
 
     let loss_handles = [
         incin_core::exec::TensorHandle::from_storage::<CpuBackend, f64, _>(&x),

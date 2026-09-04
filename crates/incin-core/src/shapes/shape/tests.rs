@@ -87,9 +87,7 @@ fn checked_allocation_lengths_cover_scalar_zero_limit_and_overflow_edges() {
 }
 
 use crate::exec::ShapeEvidence;
-use crate::shapes::{
-    DimCons, Dyn, ExpectedShapes, Nil, ProofLevel, ShapeBuf, ShapeValue,
-};
+use crate::shapes::{DimCons, Dyn, ExpectedShapes, Nil, ProofLevel, ShapeBuf, ShapeValue};
 use typenum::{U2, U3, U4};
 
 type Static23 = DimCons<U2, DimCons<U3, Nil>>;

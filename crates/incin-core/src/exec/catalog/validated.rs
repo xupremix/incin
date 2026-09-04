@@ -39,18 +39,20 @@ impl<O: Operation> ValidatedInvocation<O> {
                 actual: outputs.len(),
             });
         }
-        for (index, (output, expected_buf)) in
-            outputs.iter().zip(expected.shape_bufs()).enumerate()
+        for (index, (output, expected_buf)) in outputs.iter().zip(expected.shape_bufs()).enumerate()
         {
             // A custom inference that produced no shape for an output leaves
             // nothing to check the caller against. The canonical path below
             // skips such outputs; the custom path refuses them instead, as
             // before -- a caller-held proof must be met, not waived.
-            let actual = output.shape.as_ref().ok_or(DescriptorError::MetadataMismatch {
-                operation: crate::shapes::error::OperationKind::Storage,
-                output: index,
-                field: "shape",
-            })?;
+            let actual = output
+                .shape
+                .as_ref()
+                .ok_or(DescriptorError::MetadataMismatch {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    output: index,
+                    field: "shape",
+                })?;
             if actual != expected_buf {
                 return Err(DescriptorError::MetadataMismatch {
                     operation: crate::shapes::error::OperationKind::Storage,
@@ -425,8 +427,7 @@ where
                 actual: outputs.len(),
             });
         }
-        for (index, (output, expected_buf)) in
-            outputs.iter().zip(expected.shape_bufs()).enumerate()
+        for (index, (output, expected_buf)) in outputs.iter().zip(expected.shape_bufs()).enumerate()
         {
             if let Some(inferred_shape) = &output.shape {
                 // `ShapeValue::dims` allocates; `shape_buf` borrows. This runs on

@@ -52,9 +52,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **A differentiable custom operation with two inputs, two outputs, and its own
   backward**, at `crates/incin-backends/examples/polar_cartesian.rs`.
   Polar-to-Cartesian takes radius and angle and returns `x` and `y` -- the
-  multi-output inference a single-output catalog row cannot express, which is
-  also why it runs through the runtime dispatch path: the typed custom path
-  requires exactly one output. A squared-error readout closes the graph, and
+  multi-output inference a single-output catalog row cannot express. Its two
+  outputs travel the typed path with one `ShapeValue` each (see the entry
+  below), so the descriptor cross-checks both geometries. A squared-error
+  readout closes the graph, and
   the three backward recipes (one per polar output, one for the loss) are
   assembled into core `TapeNode`s and walked by the same
   `incin_core::exec::tape::backward` the CPU backend calls, so a tensor
@@ -66,6 +67,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   own backward. The one seam it does not cross is the backend's thread-local
   tape push, which stays `pub(crate)` by design; an in-tree backend would move
   the same node construction into its `Execute` impl.
+
+- **Typed dispatch takes N outputs with per-output dtypes.** `execute_shaped`
+  held exactly one `&ShapeValue<S>`, so a multi-output operation -- TopK's
+  values and indices, or any custom op inferring more than one -- could not
+  travel the typed path and re-derived its geometry frontend-side, unchecked.
+  A sealed `ExpectedShapes` trait (one borrowed buffer per output, in order,
+  plus a combined proof and evidence) is implemented for `ShapeValue<S>` and
+  for 2/3/4-tuples; `infer_typed` and `infer_custom_typed` compare
+  element-wise, and new `execute_shaped_n` carries the tuples while
+  `execute_shaped` stays the arity-1 alias, so the 100+ tensor-surface call
+  sites compile unchanged. Combined evidence takes the weakest proof with no
+  statics -- one output's geometry says nothing about another's -- which is
+  byte-identical to the old evidence for arity 1, and the comparison still
+  borrows on both sides, so the hot path allocates nothing new. Rejections
+  name the output: count via `OutputArity`, wrong or missing shape via
+  `MetadataMismatch` with the index. The `polar_cartesian` example now runs
+  its two-output op through the typed path with identical results.
 
 ### Fixed
 
