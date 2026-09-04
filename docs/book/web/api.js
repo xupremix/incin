@@ -82,7 +82,10 @@
       '</div>';
   }).join("");
 
-  function chipRow(host, items, bag) {
+  /* `after` is which list to redraw: the chips are used by both the operation
+     table and the type reference, and calling the operations renderer from the
+     type chips would filter the wrong list. */
+  function chipRow(host, items, bag, after) {
     host.innerHTML = items.map(function (it) {
       return '<button class="api-chip" type="button" aria-pressed="false" data-k="' + it + '">' + it + '</button>';
     }).join("");
@@ -92,7 +95,7 @@
       var on = btn.getAttribute("aria-pressed") === "true";
       btn.setAttribute("aria-pressed", on ? "false" : "true");
       if (on) { bag.delete(btn.dataset.k); } else { bag.add(btn.dataset.k); }
-      render();
+      (after || render)();
     });
   }
   chipRow(document.getElementById("apiBackendChips"), B, state.backends);
@@ -327,4 +330,132 @@
     }).join("");
 
   render();
+
+  /* -- sections ---------------------------------------------------------- */
+  /* The type reference is fetched the first time it is opened rather than
+     inlined: it is several times the weight of everything else on this page,
+     and most readers never open it. */
+  var TABS = document.getElementById("apiTabs");
+  var typesLoaded = false;
+
+  function showSection(id) {
+    [].forEach.call(document.querySelectorAll(".api-sec"), function (sec) {
+      sec.hidden = sec.id !== "sec-" + id;
+    });
+    [].forEach.call(TABS.querySelectorAll(".api-tab"), function (tab) {
+      tab.setAttribute("aria-selected", String(tab.dataset.sec === id));
+    });
+    if (id === "types" && !typesLoaded) { loadTypes(); }
+    if (window.location.hash.slice(1) !== id) {
+      history.replaceState({}, "", "#" + id);
+    }
+  }
+
+  TABS.addEventListener("click", function (e) {
+    var tab = e.target.closest(".api-tab");
+    if (tab) showSection(tab.dataset.sec);
+  });
+
+  /* -- element types ----------------------------------------------------- */
+  document.getElementById("dtypeCards").innerHTML = (DATA.dtypes || []).map(function (d) {
+    return '<div class="api-card"><h3><code>' + d.id + '</code></h3>' +
+      '<p>' + d.doc + '</p>' +
+      '<div class="api-kv"><span class="k">operations</span><span class="v">' +
+        d.operations + ' of ' + DATA.operations.length + '</span></div>' +
+      '<div class="api-kv"><span class="k">backends</span><span class="v">' +
+        (d.backends.length
+          ? d.backends.map(function (b) { return '<span class="api-dt">' + b + '</span>'; }).join("")
+          : "&mdash;") +
+      '</span></div></div>';
+  }).join("");
+
+  /* -- backends ---------------------------------------------------------- */
+  document.getElementById("backendCards").innerHTML = (DATA.backendDetail || []).map(function (b) {
+    var pct = Math.round((b.operations / DATA.operations.length) * 100);
+    return '<div class="api-card"><h3>' + (LABEL[b.id] || b.id) + '</h3>' +
+      '<div class="api-bar"><i class="cov-' + Math.min(9, Math.max(1, Math.round(pct / 11.2))) +
+        '" style="width:' + pct + '%"></i></div>' +
+      '<div class="api-kv"><span class="k">operations</span><span class="v">' +
+        b.operations + ' of ' + DATA.operations.length + '</span></div>' +
+      '<div class="api-kv"><span class="k">own kernel</span><span class="v">' + b.native + '</span></div>' +
+      '<div class="api-kv"><span class="k">composed</span><span class="v">' + b.composed + '</span></div>' +
+      '<div class="api-kv"><span class="k">accepts strided</span><span class="v">' + b.strided + '</span></div>' +
+      '<div class="api-kv"><span class="k">covers training</span><span class="v">' + b.training + '</span></div>' +
+      '<div class="api-kv"><span class="k">element types</span><span class="v">' +
+        b.dtypes.map(function (d) { return '<span class="api-dt">' + d + '</span>'; }).join("") +
+      '</span></div></div>';
+  }).join("");
+
+  /* -- data flow --------------------------------------------------------- */
+  document.getElementById("flowSteps").innerHTML = (DATA.flow || []).map(function (f) {
+    return '<li class="api-step"><h3>' + f.stage + '</h3><p>' + f.detail + '</p>' +
+      (f.error ? '<code class="api-err">' + f.error + '</code>' : "") + '</li>';
+  }).join("");
+
+  /* -- types ------------------------------------------------------------- */
+  var TYPES = null;
+  var tyState = { q: "", kinds: new Set(), crates: new Set() };
+  var TY_CAP = 300;
+
+  function loadTypes() {
+    typesLoaded = true;
+    var host = document.getElementById("tyRows");
+    host.innerHTML = '<p class="api-empty">Loading the type reference&hellip;</p>';
+    fetch("api-types.json").then(function (r) {
+      if (!r.ok) throw new Error("api-types.json responded " + r.status);
+      return r.json();
+    }).then(function (payload) {
+      TYPES = payload.types;
+      chipRow(document.getElementById("tyKindChips"),
+        ["struct", "trait", "enum", "type"], tyState.kinds, renderTypes);
+      chipRow(document.getElementById("tyCrateChips"),
+        uniq(TYPES.map(function (t) { return t.crate; })), tyState.crates, renderTypes);
+      renderTypes();
+    }).catch(function (error) {
+      host.innerHTML = '<p class="api-empty">The type reference could not be loaded: ' +
+        String(error.message || error) + '</p>';
+    });
+  }
+
+  function uniq(list) {
+    var seen = {};
+    return list.filter(function (v) {
+      if (seen[v]) return false;
+      seen[v] = 1;
+      return true;
+    }).sort();
+  }
+
+  function renderTypes() {
+    if (!TYPES) return;
+    var q = tyState.q.trim().toLowerCase();
+    var list = TYPES.filter(function (t) {
+      if (tyState.kinds.size && !tyState.kinds.has(t.kind)) return false;
+      if (tyState.crates.size && !tyState.crates.has(t.crate)) return false;
+      if (!q) return true;
+      return t.name.toLowerCase().indexOf(q) >= 0 || t.module.toLowerCase().indexOf(q) >= 0;
+    });
+    var shown = list.slice(0, TY_CAP);
+    document.getElementById("tyCount").textContent = list.length > shown.length
+      ? shown.length + " of " + list.length + " — refine to see the rest"
+      : list.length + " of " + TYPES.length;
+    document.getElementById("tyRows").innerHTML = shown.length
+      ? shown.map(function (t) {
+          var where = t.module ? t.crate.replace(/-/g, "_") + "::" + t.module : t.crate.replace(/-/g, "_");
+          var name = t.url
+            ? '<a class="api-tyname" href="' + t.url + '" target="_blank" rel="noopener noreferrer">' +
+              t.name + ' ↗</a>'
+            : '<span class="api-tyname plain">' + t.name + '</span>';
+          return '<div class="api-tyrow"><span class="api-tykind ' + t.kind + '">' + t.kind + '</span>' +
+            name + '<code class="api-typath">' + where + '</code></div>';
+        }).join("")
+      : '<p class="api-empty">No type matches those filters.</p>';
+  }
+
+  var tyQ = document.getElementById("tyQ");
+  tyQ.addEventListener("input", function () { tyState.q = tyQ.value; renderTypes(); });
+
+  var initial = window.location.hash.slice(1);
+  showSection(["types", "dtypes", "backends", "flow"].indexOf(initial) >= 0 ? initial : "operations");
+
 })();

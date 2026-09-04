@@ -299,3 +299,80 @@
   color: var(--links); text-decoration: none; overflow-wrap: anywhere;
 }
 .api-docs:hover, .api-docs:focus-visible { text-decoration: underline; }
+
+/* -- section nav -------------------------------------------------------- */
+.api-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px; margin: 22px 0 4px;
+  border-bottom: 1px solid var(--table-border);
+}
+.api-tab {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  font: inherit; font-size: 13.5px; color: inherit; opacity: .6;
+  padding: 9px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.api-tab:hover { opacity: .85; }
+.api-tab[aria-selected="true"] {
+  opacity: 1; font-weight: 600; border-bottom-color: var(--sidebar-active);
+}
+.api-tab:focus-visible { outline: 2px solid var(--links); outline-offset: -2px; }
+
+/* -- cards shared by element types and backends ------------------------- */
+.api-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px; margin-top: 16px;
+}
+.api-card {
+  border: 1px solid var(--table-border); border-radius: var(--radius-lg);
+  padding: 14px 16px; min-width: 0;
+}
+.api-card h3 {
+  margin: 0 0 6px; font-size: 15px; font-weight: 600;
+}
+.api-card h3 code { font-family: var(--font-mono); font-size: 14px; }
+.api-card p { margin: 0 0 10px; font-size: 12.5px; opacity: .75; }
+.api-card .api-kv { margin-top: 5px; }
+.api-card .api-bar { margin: 0 0 10px; }
+
+/* -- data flow ---------------------------------------------------------- */
+.api-flow { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.api-step {
+  border: 1px solid var(--table-border); border-left: 3px solid var(--sidebar-active);
+  border-radius: var(--radius-md); padding: 12px 16px; counter-increment: flow;
+}
+.api-step h3 {
+  margin: 0 0 5px; font-size: 14px; font-weight: 600;
+  font-family: var(--font-mono);
+}
+.api-step h3::before { content: counter(flow) ". "; opacity: .5; }
+.api-flow { counter-reset: flow; }
+.api-step p { margin: 0; font-size: 13px; opacity: .8; }
+.api-err {
+  display: inline-block; margin-top: 8px; font-family: var(--font-mono);
+  font-size: 11.5px; color: var(--inline-code-fg); background: none; padding: 0; border: 0;
+}
+
+/* -- type reference ----------------------------------------------------- */
+.api-tyrow {
+  display: grid; grid-template-columns: 58px minmax(0, auto) minmax(0, 1fr);
+  gap: 10px; align-items: baseline;
+  padding: 7px 4px; border-bottom: 1px solid var(--table-border);
+}
+.api-tyrow:last-child { border-bottom: 0; }
+@media (max-width: 640px) {
+  .api-tyrow { grid-template-columns: 58px minmax(0, 1fr); }
+  .api-tyrow .api-typath { grid-column: 2; }
+}
+.api-tykind {
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; opacity: .55; padding-top: 2px;
+}
+.api-tyname {
+  font-family: var(--font-mono); font-size: 13px; color: var(--links);
+  text-decoration: none; overflow-wrap: anywhere;
+}
+.api-tyname:hover, .api-tyname:focus-visible { text-decoration: underline; }
+.api-tyname.plain { color: inherit; opacity: .8; }
+.api-typath {
+  font-family: var(--font-mono); font-size: 11.5px; opacity: .5;
+  overflow-wrap: anywhere; background: none; padding: 0; border: 0;
+}

@@ -174,6 +174,142 @@ def attach_docs(catalog: dict[str, dict]) -> int:
     return resolved
 
 
+
+# Baselines to read the current public surface from, and the crate each one
+# documents. These are the reviewed `cargo public-api` dumps the repository
+# already gates on, so the type reference is checkable rather than narrated.
+TYPE_BASELINES = {
+    "incin-cpu": "incin",
+    "incin-core-std": "incin_core",
+    "incin-backends-cpu": "incin_backends",
+    "incin-data": "incin_data",
+    "incin-telemetry": "incin_telemetry",
+    "incin-viz": "incin_viz",
+    "incin-viz-plugin-api": "incin_viz_plugin_api",
+    "incin-diagnostics": "incin_diagnostics",
+    "incin-lsp": "incin_lsp",
+    "incin-macros": "incin_macros",
+}
+CRATE_OF_MODULE = {
+    "incin": "incin", "incin_core": "incin-core", "incin_backends": "incin-backends",
+    "incin_data": "incin-data", "incin_telemetry": "incin-telemetry",
+    "incin_viz": "incin-viz", "incin_viz_plugin_api": "incin-viz-plugin-api",
+    "incin_diagnostics": "incin-diagnostics", "incin_lsp": "incin-lsp",
+    "incin_macros": "incin-macros",
+}
+TYPE_DECL = re.compile(r"^pub (struct|trait|enum|type) ([A-Za-z0-9_:]+)")
+
+
+
+# The stages canonical dispatch runs, in order, with the failure class each
+# one owns. Taken from the lowering chapter and exec/dispatch.rs, which keep
+# these apart deliberately: the class says who is at fault.
+DISPATCH_FLOW = [
+    {
+        "stage": "logical metadata",
+        "detail": "Shape, dtype and device are read off the storage that will "
+                  "actually run, so validation cannot be satisfied by metadata "
+                  "describing some other tensor.",
+        "error": None,
+    },
+    {
+        "stage": "output inference and cross-check",
+        "detail": "Outputs are computed from the operation and its inputs, never "
+                  "dictated by the caller; the caller's predicted shape must agree "
+                  "with what was inferred.",
+        "error": "DescriptorError",
+    },
+    {
+        "stage": "payload validation",
+        "detail": "The descriptor's own invariants are checked before anything is "
+                  "asked of a backend.",
+        "error": "DescriptorError",
+    },
+    {
+        "stage": "capability admission",
+        "detail": "The backend's registry is asked whether it accepts this "
+                  "operation over these operands, and the context's fallback "
+                  "policy filters the answer, so no route reaches a kernel with a "
+                  "composed or transfer fallback it was not granted.",
+        "error": "PolicyViolation",
+    },
+    {
+        "stage": "backend launch",
+        "detail": "The kernel runs. A failure here means a legal request failed at "
+                  "or after launch, which is the device's fault rather than the "
+                  "caller's.",
+        "error": "BackendError",
+    },
+]
+
+
+def parse_dtypes(source: str) -> dict:
+    """Read the element types and their doc sentences out of `DTypeId`."""
+    body = source.split("pub enum DTypeId {", 1)[1].split("\n}", 1)[0]
+    out, pending = {}, []
+    for line in body.splitlines():
+        line = line.strip()
+        if line.startswith("///"):
+            pending.append(line[3:].strip())
+        elif line.startswith("#["):
+            continue
+        elif line.endswith(","):
+            name = line[:-1].strip()
+            if name:
+                out[name.lower()] = " ".join(p for p in pending if p).strip()
+            pending = []
+    return out
+
+
+def collect_types(links: dict) -> list:
+    """The public type surface, each entry linked where docs.rs publishes it.
+
+    The canonical path a baseline records is often not the path rustdoc
+    documents an item at, because re-exports move it, so the exact path is
+    tried first and a bare name accepted only where it is unambiguous in that
+    crate. An item with neither match carries no link: the released version
+    predates it, and a link that lands nowhere is worse than none.
+    """
+    out, seen = [], set()
+    for baseline, module in TYPE_BASELINES.items():
+        path = ROOT / "docs/public-api" / f"{baseline}.txt"
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            match = TYPE_DECL.match(line)
+            if not match:
+                continue
+            kind, full = match.group(1), match.group(2)
+            parts = full.split("::")
+            if len(parts) < 2:
+                continue
+            crate = CRATE_OF_MODULE.get(parts[0])
+            if crate is None:
+                continue
+            name, mods = parts[-1], parts[1:-1]
+            key = (crate, kind, tuple(mods), name)
+            if key in seen:
+                continue
+            seen.add(key)
+            entry = links.get("crates", {}).get(crate)
+            url = None
+            if entry:
+                rel = entry["by_path"].get(f"{kind}|{'/'.join(mods)}|{name}")
+                if rel is None:
+                    rel = entry["by_name"].get(f"{kind}|{name}")
+                if rel:
+                    url = entry["base"] + rel
+            out.append({
+                "crate": crate,
+                "kind": kind,
+                "name": name,
+                "module": "::".join(mods),
+                "url": url,
+            })
+    out.sort(key=lambda t: (t["crate"], t["name"].lower(), t["kind"]))
+    return out
+
+
 def main() -> int:
     doc = ROOT / "docs/capabilities.md"
     dtypes, rules = parse_capabilities(doc.read_text(encoding="utf-8"))
@@ -226,11 +362,60 @@ def main() -> int:
     for f in sorted((ROOT / "docs/public-api").glob("*.txt")):
         surface[f.stem] = sum(1 for line in f.read_text().splitlines() if line.strip())
 
+    # The element types, read from the enum that defines them rather than
+    # restated here, so the list cannot drift from the crate.
+    dtype_doc = parse_dtypes(
+        (ROOT / "crates/incin-core/src/tensor/dtype/registry.rs").read_text(encoding="utf-8")
+    )
+    used = {d: set() for d in dtype_doc}
+    for op in operations:
+        for b in BACKENDS:
+            for d in op["backends"][b]["dtypes"]:
+                used.setdefault(d, set()).add(b)
+    dtypes_out = [
+        {
+            "id": key,
+            "doc": doc,
+            "backends": sorted(used.get(key, ())),
+            "operations": sum(
+                1 for op in operations
+                if any(key in op["backends"][b]["dtypes"] for b in BACKENDS)
+            ),
+        }
+        for key, doc in dtype_doc.items()
+    ]
+
+    backends_out = []
+    for b in BACKENDS:
+        advertised = [op for op in operations if op["backends"][b]["dtypes"]]
+        backends_out.append({
+            "id": b,
+            "operations": len(advertised),
+            "native": sum(1 for op in advertised if op["backends"][b]["impl"] == "native"),
+            "composed": sum(1 for op in advertised if op["backends"][b]["impl"] == "composed"),
+            "strided": sum(1 for op in advertised
+                           if "strided" in op["backends"][b]["layouts"]),
+            "training": sum(1 for op in advertised if op["backends"][b]["training"]),
+            "dtypes": sorted({d for op in advertised for d in op["backends"][b]["dtypes"]}),
+        })
+
+    type_links = json.loads(
+        (ROOT / "docs/api-type-links.json").read_text(encoding="utf-8")
+    )
+    types = collect_types(type_links)
+    types_out = ROOT / "docs/api-types.json"
+    types_out.write_text(json.dumps({"types": types}, separators=(",", ":")), encoding="utf-8")
+
     payload = {
         "operations": operations,
         "categories": categories,
         "surface": surface,
         "backends": BACKENDS,
+        "dtypes": dtypes_out,
+        "backendDetail": backends_out,
+        "flow": DISPATCH_FLOW,
+        "typeCount": len(types),
+        "typeLinked": sum(1 for t in types if t["url"]),
     }
     out = ROOT / "docs/api-site-data.json"
     out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")

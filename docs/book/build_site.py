@@ -165,6 +165,10 @@ def write_api_reference() -> None:
     # A closing tag inside the JSON would end the script element early.
     data = payload.read_text(encoding="utf-8").replace("</", "<\\/")
     (SITE / "api.html").write_text(page.replace("__API_DATA__", data), encoding="utf-8")
+    # The type reference is fetched on demand rather than inlined: it is three
+    # times the size of everything else on the page, and most readers never
+    # open it.
+    shutil.copy(ROOT.parent / "api-types.json", SITE / "api-types.json")
 
 
 if __name__ == "__main__":

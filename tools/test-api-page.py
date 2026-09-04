@@ -211,6 +211,63 @@ async function run() {
   check(key.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
     "the key is rendered after the table it explains");
 
+  /* Every section: one visible at a time, the right content in each, and no
+     sideways scroll in any of them. The overflow has been reported twice by a
+     reader, so it is checked per section rather than only on the default. */
+  const tabs = [...doc().querySelectorAll(".api-tab")];
+  check(tabs.length === 5, "expected five section tabs, found " + tabs.length);
+
+  const counts = {
+    dtypes: [".api-card", 9],
+    backends: [".api-card", 4],
+    flow: [".api-step", 5],
+  };
+  for (const tab of tabs) {
+    const id = tab.dataset.sec;
+    tab.click();
+    const section = doc().getElementById("sec-" + id);
+    check(section && !section.hidden, "section " + id + " did not open");
+    const others = [...doc().querySelectorAll(".api-sec")].filter((el) => el !== section);
+    check(others.every((el) => el.hidden), "opening " + id + " left another section visible");
+    check(tab.getAttribute("aria-selected") === "true",
+      "the " + id + " tab is not marked selected while its section is open");
+
+    if (counts[id]) {
+      const [selector, want] = counts[id];
+      const got = section.querySelectorAll(selector).length;
+      check(got === want, id + " renders " + got + " entries, not " + want);
+    }
+
+    const wide = doc().documentElement;
+    check(wide.scrollWidth <= wide.clientWidth + 1,
+      "the " + id + " section scrolls sideways: scrollWidth " + wide.scrollWidth +
+      " exceeds " + wide.clientWidth);
+  }
+
+  /* The type reference is fetched on demand, so it has to actually arrive. */
+  doc().querySelector('.api-tab[data-sec="types"]').click();
+  await until(() => doc().querySelectorAll("#tyRows .api-tyrow").length > 0,
+    "the type reference to load");
+  const tyRows = [...doc().querySelectorAll("#tyRows .api-tyrow")];
+  check(tyRows.length > 0 && tyRows.length <= 300,
+    "the type reference rendered " + tyRows.length + " rows, outside its cap");
+  const linked = [...doc().querySelectorAll("#tyRows a.api-tyname")];
+  check(linked.length > 0, "no type in the reference links to its documentation");
+  for (const link of linked) {
+    check((link.getAttribute("href") || "").indexOf("https://docs.rs/") === 0,
+      "a type link does not point at docs.rs: " + link.getAttribute("href"));
+    check(link.getAttribute("rel") === "noopener noreferrer",
+      "a type link opens a new tab without rel=noopener");
+  }
+  const kindChip = doc().querySelector('#tyKindChips .api-chip[data-k="trait"]');
+  check(kindChip, "the type reference has no kind filter");
+  kindChip.click();
+  await until(() => [...doc().querySelectorAll("#tyRows .api-tykind")]
+    .every((el) => el.textContent.trim() === "trait"), "the kind filter to apply");
+  kindChip.click();
+
+  doc().querySelector('.api-tab[data-sec="operations"]').click();
+
   /* The other repeatedly reported defect: sideways scroll on a phone. */
   const root = doc().documentElement;
   const limit = root.clientWidth;

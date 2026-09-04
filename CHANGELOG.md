@@ -93,6 +93,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **The reference covers the type surface, element types, backends and the
+  dispatch pipeline, not only operations.** Five sections now: operations; every
+  public struct, trait, enum and type alias across the ten shipped crates (3210
+  of them, 1955 linked to docs.rs); the nine element types with the backends and
+  operation counts that accept each; what each backend advertises across the
+  catalog; and the ordered stages a call passes through before a kernel runs,
+  with the failure class each one owns.
+
+  All of it is read from sources the repository already gates on rather than
+  restated by hand: the type surface from the reviewed `cargo public-api`
+  baselines, the element types from the `DTypeId` enum that defines them, the
+  backend and dtype counts from the capability payload, and the pipeline from
+  the lowering chapter and `exec/dispatch.rs`. The type reference is fetched on
+  demand -- it is three times the weight of everything else on the page, and
+  most readers never open it.
 - **Every operation links to its documentation on docs.rs.** 147 of the 179
   resolve to a checked item anchor; the other 32 carry a search of the same
   crate, because the published release either predates them or documents them

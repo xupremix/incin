@@ -84,6 +84,15 @@
 
       <div class="api-metrics" id="apiMetrics"></div>
 
+      <nav class="api-tabs" id="apiTabs" role="tablist" aria-label="Reference sections">
+        <button role="tab" class="api-tab" data-sec="operations" aria-selected="true">Operations</button>
+        <button role="tab" class="api-tab" data-sec="types" aria-selected="false">Types</button>
+        <button role="tab" class="api-tab" data-sec="dtypes" aria-selected="false">Element types</button>
+        <button role="tab" class="api-tab" data-sec="backends" aria-selected="false">Backends</button>
+        <button role="tab" class="api-tab" data-sec="flow" aria-selected="false">Data flow</button>
+      </nav>
+
+      <section id="sec-operations" class="api-sec">
       <div class="api-key">
         <div class="api-key-row">
           <span class="api-key-cap">Element types</span>
@@ -117,6 +126,42 @@
         Select a row for the element types, layouts, rank and training boundary each backend
         advertises, and the public entry point.
       </p>
+      </section>
+
+      <section id="sec-types" class="api-sec" hidden>
+        <p class="api-lede">Every public struct, trait, enum and type alias in the ten
+          shipped crates, read from the reviewed <code>cargo public-api</code> baselines this
+          repository already gates on. Each links to docs.rs where the released version
+          publishes it; items added since carry no link rather than a dead one.</p>
+        <div class="api-controls">
+          <div class="api-search"><input id="tyQ" type="search"
+            placeholder="Filter types — try Tensor, Backend, Layout" aria-label="Filter types by name"></div>
+          <div class="api-chips" id="tyKindChips" role="group" aria-label="Require kind"></div>
+          <div class="api-chips" id="tyCrateChips" role="group" aria-label="Require crate"></div>
+          <span class="api-count" id="tyCount"></span>
+        </div>
+        <div class="api-list"><div id="tyRows"></div></div>
+      </section>
+
+      <section id="sec-dtypes" class="api-sec" hidden>
+        <p class="api-lede">The nine element types, read from the <code>DTypeId</code> enum that
+          defines them, with the backends that accept each and how many operations do.</p>
+        <div class="api-cards" id="dtypeCards"></div>
+      </section>
+
+      <section id="sec-backends" class="api-sec" hidden>
+        <p class="api-lede">What each backend advertises across the catalog: how many
+          operations, how many run a kernel of their own, how many accept a strided operand,
+          and which element types it handles anywhere.</p>
+        <div class="api-cards" id="backendCards"></div>
+      </section>
+
+      <section id="sec-flow" class="api-sec" hidden>
+        <p class="api-lede">Between <code>x.matmul(&amp;w)?</code> and a running kernel sits a short,
+          fixed pipeline. Each stage answers a different question and owns a different class of
+          failure &mdash; the class is what tells you who is at fault.</p>
+        <ol class="api-flow" id="flowSteps"></ol>
+      </section>
 
       <h2>Rule categories</h2>
       <p class="api-lede">Eight rules per backend are registered against a <em>category</em> rather
