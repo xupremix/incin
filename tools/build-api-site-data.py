@@ -208,6 +208,20 @@ def main() -> int:
     for op in operations:
         op["catalog"] = catalog.get(op["name"])
 
+    # Resolved and checked out of band by tools/build-docsrs-links.py, and read
+    # here from the committed file so this generator stays offline and its
+    # output stays reproducible for the drift check CI runs against it.
+    links_file = ROOT / "docs/api-docsrs-links.json"
+    links = json.loads(links_file.read_text(encoding="utf-8"))["links"]
+    missing = [op["name"] for op in operations if op["name"] not in links]
+    if missing:
+        raise SystemExit(
+            "no docs.rs link for: " + ", ".join(missing) +
+            "\nrun: python3 tools/build-docsrs-links.py"
+        )
+    for op in operations:
+        op["docs"] = links[op["name"]]
+
     surface = {}
     for f in sorted((ROOT / "docs/public-api").glob("*.txt")):
         surface[f.stem] = sum(1 for line in f.read_text().splitlines() if line.strip())

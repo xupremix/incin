@@ -93,6 +93,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Every operation links to its documentation on docs.rs.** 147 of the 179
+  resolve to a checked item anchor; the other 32 carry a search of the same
+  crate, because the published release either predates them or documents them
+  under another name. Nothing is guessed: `tools/build-docsrs-links.py`
+  proposes candidates for each operation -- the catalogued entry point, the
+  bare name, and the structural forms (`cmp_eq` through `eq`, the `_dim` and
+  `_keepdim` reductions through their base) -- and keeps only the ones that
+  match an anchor docs.rs actually publishes. Near-misses are deliberately not
+  mapped: `prod_dim` is not `prod_all` and `scatter_add` is not `scatter`, and
+  associating them would repeat the plausible-but-wrong guess that produced a
+  wrong test-coverage metric earlier in this project. The resolver is run by
+  hand and its result committed, so the payload generator CI drift-checks stays
+  offline and reproducible, and it refuses to build if any operation lacks a
+  link.
 - **The capability page test grew with the page.** It now also pins that every
   bar carries the coverage step its number states and is painted that step's
   colour, that the ramp shows nine distinct colours **in each of the five book

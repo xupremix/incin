@@ -175,6 +175,35 @@ async function run() {
     "the composed dot marks " + dotted + " of " + rowEls.length +
     " rows, which cannot be right");
 
+  /* Every operation must reach its documentation. The link lives in the
+     expanded detail, so this opens rows rather than trusting the payload. */
+  const opened = rowEls.slice(0, 12);
+  for (const row of opened) {
+    row.click();
+  }
+  await until(() => doc().querySelectorAll(".api-detail:not([hidden]) .api-docs").length
+    === opened.length, "documentation links in the opened rows");
+  const docLinks = [...doc().querySelectorAll(".api-detail:not([hidden]) .api-docs")];
+  for (const link of docLinks) {
+    const href = link.getAttribute("href") || "";
+    check(href.indexOf("https://docs.rs/") === 0,
+      "a documentation link does not point at docs.rs: " + href);
+    check(link.getAttribute("rel") === "noopener noreferrer",
+      "a documentation link opens a new tab without rel=noopener");
+    const method = href.indexOf("#method.") >= 0;
+    const search = href.indexOf("?search=") >= 0;
+    check(method || search,
+      "a documentation link names neither an item anchor nor a search: " + href);
+    if (method) {
+      const item = href.slice(href.indexOf("#method.") + 8);
+      check(link.textContent.indexOf(item) >= 0,
+        "a documentation link is labelled for a different item than it targets");
+    }
+  }
+  for (const row of opened) {
+    row.click();
+  }
+
   /* The key explains the marks, so it has to come before them. */
   const key = doc().querySelector(".api-key");
   const list = doc().querySelector(".api-list");

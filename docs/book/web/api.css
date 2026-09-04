@@ -292,3 +292,10 @@
 .api-notes { border-left: 3px solid var(--sidebar-active); padding-left: 16px; }
 .api-notes p { max-width: 70ch; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* The docs.rs reference for an operation, in its expanded detail. */
+.api-docs {
+  display: inline-block; font-family: var(--font-mono); font-size: 12px;
+  color: var(--links); text-decoration: none; overflow-wrap: anywhere;
+}
+.api-docs:hover, .api-docs:focus-visible { text-decoration: underline; }

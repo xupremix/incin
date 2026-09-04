@@ -210,6 +210,27 @@
     return true;
   }
 
+  /* The reference link lives here rather than in the row: the row is a button,
+     and an anchor inside a button is invalid and would fight the expander for
+     the click. 147 of the 179 operations resolve to a checked item anchor on
+     docs.rs; the rest carry a search, because the published release predates
+     them or documents them under another name, and a link that lands nowhere
+     is worse than one that admits it is a search. */
+  function docsLink(op) {
+    var d = op.docs;
+    if (!d) return "";
+    var label = d.kind === "method"
+      ? d.item + " on docs.rs"
+      : "search docs.rs for " + d.item;
+    return '<div class="api-dcell"><h4>documentation</h4>' +
+      '<a class="api-docs" href="' + d.url + '" target="_blank" rel="noopener noreferrer">' +
+      label + ' \u2197</a>' +
+      (d.kind === "search"
+        ? '<p class="api-none">not published under this name in the released version</p>'
+        : "") +
+      '</div>';
+  }
+
   function detailFor(op) {
     var c = op.catalog;
     var head = "";
@@ -223,7 +244,7 @@
         (c.api ? '<div class="api-kv"><span class="k">reached via</span><span class="v">' + c.api + '</span></div>' : "") +
         '</div>';
     }
-    return '<div class="api-detail-in">' + head + B.map(function (b) {
+    return '<div class="api-detail-in">' + docsLink(op) + head + B.map(function (b) {
       var e = op.backends[b];
       if (!e.dtypes.length) {
         return '<div class="api-dcell"><h4>' + b + '</h4>' +
