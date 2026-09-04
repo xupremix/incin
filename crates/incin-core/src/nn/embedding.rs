@@ -200,7 +200,13 @@ where
     <B as Execute<op::EmbeddingExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<<InS as AppendDim<S::Embed>>::Output, B, K>;
+    type Output = crate::shapes::Dense<
+        <InS as AppendDim<S::Embed>>::Output,
+        B,
+        K,
+        crate::tensor::grad::NoGrad,
+        Local,
+    >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 

@@ -316,7 +316,7 @@ where
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
+    type Output = crate::shapes::Dense<I::Output, B, K, crate::tensor::grad::NoGrad, Local>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -413,7 +413,7 @@ where
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
+    type Output = crate::shapes::Dense<I::Output, B, K, crate::tensor::grad::NoGrad, Local>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -507,7 +507,7 @@ where
     <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<I::Output, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::Dyn>;
+    type Output = crate::shapes::Dense<I::Output, B, K, crate::tensor::grad::NoGrad, Local>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 

@@ -86,6 +86,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for the result they allocate. They pinned `L` on *both* arguments, so once
   `Linear` returned a proof, feeding its output straight into a loss stopped
   compiling.
+- **The spatial and embedding layers prove their results are dense.** `Conv1d`,
+  `Conv2d`, `AvgPool2d` and `Embedding` were the `nn` layers still stating
+  nothing. Unlike the pointwise surface they have no strided-operand case to
+  construct: CPU advertises `spatial_layouts = CONTIGUOUS`, so a strided input
+  is refused before a kernel runs, and a `RowMajor` result cannot be wrong for
+  an operand the backend will not accept -- the same argument that makes the
+  CUDA reduction claim safe.
 - **The order-statistic family proves its results are dense.** `argmax`,
   `argmin`, `argsort` and `topk` were the reductions left stating nothing; they
   write fresh index buffers -- `topk` and `argsort` write two -- so the same

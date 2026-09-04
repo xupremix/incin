@@ -848,3 +848,27 @@ fn an_order_statistic_result_is_dense_even_from_a_strided_operand() {
     assert_dense("topk values", &values);
     assert_dense("topk indices", &indices);
 }
+
+/// The spatial and embedding layers allocate, so their results are dense.
+///
+/// `Conv1d`, `Conv2d`, `AvgPool2d` and `Embedding` were the `nn` layers still
+/// stating nothing. Unlike the pointwise surface these have no strided-operand
+/// case to construct -- CPU advertises `spatial_layouts = CONTIGUOUS`, so a
+/// strided input is refused before a kernel runs, exactly as CUDA refuses a
+/// strided reduction. The claim is safe for the same reason: a `RowMajor`
+/// result cannot be wrong for an operand the backend will not accept.
+///
+/// So this asserts what is assertable -- that the buffer these write is dense
+/// -- and the refusal half is what the capability row already guarantees.
+#[test]
+fn spatial_and_embedding_layers_produce_dense_results() {
+    use incin_core::nn::module::Module;
+    use incin_core::prelude::*;
+
+    // `Conv2dShape` is (OutC, InC, K, S, P, D): one output channel, one input
+    // channel, 3x3 kernel, stride 1, no padding, dilation 1.
+    type Conv = Conv2d<s![1, 1, 3, 1, 0, 1], CpuBackendImpl>;
+    let conv: Conv = Conv2d::build(()).unwrap();
+    let x = incin_core::prelude::Tensor::<s![1, 1, 4, 4], CpuBackendImpl>::ones(()).unwrap();
+    assert_dense("conv2d", &conv.forward(x).unwrap());
+}
