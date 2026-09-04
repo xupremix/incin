@@ -243,6 +243,78 @@ DISPATCH_FLOW = [
 ]
 
 
+
+DECL = re.compile(
+    r"((?:^[ \t]*///.*\n)+)(?:^[ \t]*#\[[^\]]*\]\n)*^[ \t]*pub (struct|trait|enum) ([A-Za-z0-9_]+)",
+    re.M,
+)
+METHOD = re.compile(
+    r"((?:^[ \t]*///.*\n)+)(?:^[ \t]*#\[[^\]]*\]\n)*^[ \t]*fn ([a-z0-9_]+)",
+    re.M,
+)
+
+
+def first_sentence(doc_block: str) -> str:
+    """The first documented sentence, with rustdoc's markup left alone.
+
+    The reference quotes what the source says rather than paraphrasing it, so
+    a claim on the page and the claim in the crate cannot drift apart.
+    """
+    lines = []
+    for raw in doc_block.splitlines():
+        text = raw.strip()
+        text = text[3:].strip() if text.startswith("///") else text
+        if not text:
+            break
+        lines.append(text)
+    joined = " ".join(lines)
+    cut = joined.find(". ")
+    if cut > 0:
+        joined = joined[: cut + 1]
+    return joined.strip()
+
+
+def declared_items(path: pathlib.Path) -> list:
+    source = path.read_text(encoding="utf-8")
+    return [
+        {"kind": m.group(2), "name": m.group(3), "doc": first_sentence(m.group(1))}
+        for m in DECL.finditer(source)
+    ]
+
+
+def trait_methods(path: pathlib.Path) -> list:
+    source = path.read_text(encoding="utf-8")
+    return [
+        {"name": m.group(2), "doc": first_sentence(m.group(1))}
+        for m in METHOD.finditer(source)
+    ]
+
+
+def parse_encodings(source: str) -> dict:
+    """Each dtype's storage encoding, read from the descriptors that set it."""
+    out = {}
+    pattern = re.compile(
+        r"DTypeId::([A-Za-z0-9_]+) => DTypeDescriptor::builtin\((?:[^()]|\([^()]*\))*?"
+        r"DTypeKind::([A-Za-z]+),\s*(?:// [^\n]*\n\s*)?StorageEncoding::(scalar|block)\(([^)]*)\)",
+        re.S,
+    )
+    for match in pattern.finditer(source):
+        name, kind, form, args = match.groups()
+        nums = [int(a.strip()) for a in args.split(",")]
+        if form == "scalar":
+            per_block, block_bytes, align = 1, nums[0], nums[1]
+        else:
+            per_block, block_bytes, align = nums[0], nums[1], nums[2]
+        out[name.lower()] = {
+            "kind": kind,
+            "elementsPerBlock": per_block,
+            "bytesPerBlock": block_bytes,
+            "alignment": align,
+            "bitsPerElement": round(block_bytes * 8 / per_block, 2),
+        }
+    return out
+
+
 def parse_dtypes(source: str) -> dict:
     """Read the element types and their doc sentences out of `DTypeId`."""
     body = source.split("pub enum DTypeId {", 1)[1].split("\n}", 1)[0]
@@ -372,10 +444,14 @@ def main() -> int:
         for b in BACKENDS:
             for d in op["backends"][b]["dtypes"]:
                 used.setdefault(d, set()).add(b)
+    encodings = parse_encodings(
+        (ROOT / "crates/incin-core/src/tensor/dtype/registry.rs").read_text(encoding="utf-8")
+    )
     dtypes_out = [
         {
             "id": key,
             "doc": doc,
+            "encoding": encodings.get(key),
             "backends": sorted(used.get(key, ())),
             "operations": sum(
                 1 for op in operations
@@ -384,6 +460,35 @@ def main() -> int:
         }
         for key, doc in dtype_doc.items()
     ]
+
+    shapes_dir = ROOT / "crates/incin-core/src/shapes"
+    shape_groups = []
+    for module in sorted(shapes_dir.glob("*.rs")):
+        if module.stem in {"mod", "layout"}:
+            continue
+        items = declared_items(module)
+        if items:
+            shape_groups.append({"module": module.stem, "items": items})
+
+    layout_out = {
+        # `SealedFresh` is public only so a sealed trait can name it; it is not
+        # part of the surface a reader can use, so it is not listed as if it were.
+        "items": [i for i in declared_items(shapes_dir / "layout.rs")
+                  if not i["name"].startswith("Sealed")]
+                 + [i for i in declared_items(shapes_dir / "dynamic.rs") if i["name"] == "Dyn"],
+        "byBackend": [
+            {
+                "id": b,
+                "contiguous": sum(1 for op in operations
+                                  if "contiguous" in op["backends"][b]["layouts"]),
+                "strided": sum(1 for op in operations
+                               if "strided" in op["backends"][b]["layouts"]),
+            }
+            for b in BACKENDS
+        ],
+    }
+
+    target_out = trait_methods(ROOT / "crates/incin-backends/src/target/ext.rs")
 
     backends_out = []
     for b in BACKENDS:
@@ -414,6 +519,9 @@ def main() -> int:
         "dtypes": dtypes_out,
         "backendDetail": backends_out,
         "flow": DISPATCH_FLOW,
+        "shapes": shape_groups,
+        "layouts": layout_out,
+        "targetApi": target_out,
         "typeCount": len(types),
         "typeLinked": sum(1 for t in types if t["url"]),
     }

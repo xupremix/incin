@@ -58,7 +58,19 @@
 .api-metric .l { font-size: 12px; opacity: .75; margin-top: 2px; }
 .api-metric .s { font-size: 11.5px; opacity: .6; margin-top: 6px; font-family: var(--font-mono); }
 .api-bar { height: 4px; border-radius: 2px; background: var(--table-border); margin-top: 9px; overflow: hidden; }
-.api-bar i { display: block; height: 100%; background: var(--sidebar-active); }
+/* The same coverage ramp as the operation meters. This carried a fixed hue
+   while its markup already asked for a step class, so the summary and backend
+   bars read on a different scale from every other bar on the page. */
+.api-bar i { display: block; height: 100%; background: var(--cov-9); }
+.api-bar i.cov-1 { background: var(--cov-1); }
+.api-bar i.cov-2 { background: var(--cov-2); }
+.api-bar i.cov-3 { background: var(--cov-3); }
+.api-bar i.cov-4 { background: var(--cov-4); }
+.api-bar i.cov-5 { background: var(--cov-5); }
+.api-bar i.cov-6 { background: var(--cov-6); }
+.api-bar i.cov-7 { background: var(--cov-7); }
+.api-bar i.cov-8 { background: var(--cov-8); }
+.api-bar i.cov-9 { background: var(--cov-9); }
 
 /* Controls --------------------------------------------------------------- */
 .api-controls {
@@ -376,3 +388,27 @@
   font-family: var(--font-mono); font-size: 11.5px; opacity: .5;
   overflow-wrap: anywhere; background: none; padding: 0; border: 0;
 }
+
+/* -- layouts, shapes, target -------------------------------------------- */
+.api-h { font-size: 14px; font-weight: 600; margin: 22px 0 6px; }
+.api-h code { font-family: var(--font-mono); font-size: 13px; }
+.api-grp { margin-bottom: 14px; }
+.api-lrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 200px);
+  gap: 10px 20px; align-items: center;
+  padding: 10px 4px; border-bottom: 1px solid var(--table-border);
+}
+.api-lrow:last-child { border-bottom: 0; }
+@media (max-width: 640px) { .api-lrow { grid-template-columns: 1fr; } }
+.api-lname { font-weight: 600; font-size: 13.5px; }
+.api-strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.api-card h3 .api-fam { margin-left: 8px; }
+.api-typath.doc {
+  font-family: var(--font-body); font-size: 12.5px; opacity: .7;
+}
+.api-note {
+  border: 1px solid var(--table-border); border-left: 3px solid var(--inline-code-fg);
+  border-radius: var(--radius-md); padding: 12px 16px; margin-top: 14px;
+}
+.api-note p { margin: 0 0 8px; font-size: 13px; opacity: .85; }
+.api-note p:last-child { margin-bottom: 0; }

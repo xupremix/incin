@@ -93,6 +93,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Every proportional bar on the page uses the coverage ramp.** The summary
+  and backend bars kept a fixed hue while their markup already asked for a step
+  class, so they read on a different scale from every other bar on the page.
+  One helper now maps a percentage to the same nine steps everywhere, and the
+  page test checks each bar's colour against its own width in every section.
+- **Element types state the storage they actually occupy**, which answers what
+  a `bool` costs: one byte per element, eight times its information content. A
+  dtype's encoding is a block -- logical values per block, bytes per block,
+  alignment -- so packing is already expressible, and `q8_0` uses it for 32
+  values in 34 bytes. A bit-packed boolean would be 8 values in 1 byte; what
+  stands in the way is not the encoding but that strides are counted in
+  elements and resolved to byte offsets, so a sub-byte element turns every
+  stride computation, view and kernel index into a bit address.
+- **Three further sections: layouts, shapes and the target API.** Layouts lists
+  the markers and traits with what each claims, and what each backend accepts
+  contiguous versus strided -- the gap being a capability question, since a
+  contiguous-only row makes a working strided kernel unreachable. Shapes lists
+  all 99 documented types across the fifteen shape modules. The target API
+  lists every `TargetExt` method, all of which return a `NoGrad` tensor except
+  `parameter`.
 - **The reference covers the type surface, element types, backends and the
   dispatch pipeline, not only operations.** Five sections now: operations; every
   public struct, trait, enum and type alias across the ten shipped crates (3210

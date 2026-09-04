@@ -69,6 +69,12 @@
   var LABEL = { cpu: "CPU", cuda: "CUDA", wgpu: "WGPU", metal: "Metal" };
   var state = { q: "", backends: new Set(), traits: new Set() };
 
+  /* Percentages land on the same nine steps the operation meters use, so a
+     colour means the same proportion wherever it appears on the page. */
+  function step9(pct) {
+    return Math.min(9, Math.max(1, Math.round((pct / 100) * 9)));
+  }
+
   document.getElementById("apiMetrics").innerHTML = B.map(function (b) {
     var sup = DATA.operations.filter(function (o) { return o.backends[b].dtypes.length; });
     var native = sup.filter(function (o) { return o.backends[b].impl === "native"; }).length;
@@ -77,7 +83,7 @@
     return '<div class="api-metric">' +
       '<div class="b">' + sup.length + '<span> / ' + DATA.operations.length + '</span></div>' +
       '<div class="l">' + LABEL[b] + ' operations</div>' +
-      '<div class="api-bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="api-bar"><i class="cov-' + step9(pct) + '" style="width:' + pct + '%"></i></div>' +
       '<div class="s">' + native + ' native &middot; ' + strided + ' strided</div>' +
       '</div>';
   }).join("");
@@ -358,8 +364,18 @@
 
   /* -- element types ----------------------------------------------------- */
   document.getElementById("dtypeCards").innerHTML = (DATA.dtypes || []).map(function (d) {
-    return '<div class="api-card"><h3><code>' + d.id + '</code></h3>' +
+    var e = d.encoding;
+    var store = e
+      ? (e.elementsPerBlock === 1
+          ? e.bytesPerBlock + (e.bytesPerBlock === 1 ? " byte" : " bytes") + " per element"
+          : e.elementsPerBlock + " values packed into " + e.bytesPerBlock + " bytes")
+        + " \u00b7 " + e.bitsPerElement + " bits/element \u00b7 " + e.alignment + "-byte aligned"
+      : "";
+    return '<div class="api-card"><h3><code>' + d.id + '</code>' +
+      (e ? '<span class="api-fam">' + e.kind + '</span>' : "") + '</h3>' +
       '<p>' + d.doc + '</p>' +
+      (e ? '<div class="api-kv"><span class="k">storage</span><span class="v">' + store +
+           '</span></div>' : "") +
       '<div class="api-kv"><span class="k">operations</span><span class="v">' +
         d.operations + ' of ' + DATA.operations.length + '</span></div>' +
       '<div class="api-kv"><span class="k">backends</span><span class="v">' +
@@ -373,7 +389,7 @@
   document.getElementById("backendCards").innerHTML = (DATA.backendDetail || []).map(function (b) {
     var pct = Math.round((b.operations / DATA.operations.length) * 100);
     return '<div class="api-card"><h3>' + (LABEL[b.id] || b.id) + '</h3>' +
-      '<div class="api-bar"><i class="cov-' + Math.min(9, Math.max(1, Math.round(pct / 11.2))) +
+      '<div class="api-bar"><i class="cov-' + step9(pct) +
         '" style="width:' + pct + '%"></i></div>' +
       '<div class="api-kv"><span class="k">operations</span><span class="v">' +
         b.operations + ' of ' + DATA.operations.length + '</span></div>' +
@@ -455,7 +471,62 @@
   var tyQ = document.getElementById("tyQ");
   tyQ.addEventListener("input", function () { tyState.q = tyQ.value; renderTypes(); });
 
+  /* -- layouts ----------------------------------------------------------- */
+  document.getElementById("layoutCards").innerHTML = ((DATA.layouts || {}).items || [])
+    .map(function (i) {
+      return '<div class="api-card"><h3><code>' + i.name + '</code>' +
+        '<span class="api-fam">' + i.kind + '</span></h3><p>' + i.doc + '</p></div>';
+    }).join("");
+
+  document.getElementById("layoutRows").innerHTML = ((DATA.layouts || {}).byBackend || [])
+    .map(function (b) {
+      var total = DATA.operations.length;
+      function bar(label, n) {
+        var pct = Math.round((n / total) * 100);
+        return '<div class="api-meter"><span class="lab">' + label +
+          '<b>' + n + '<em>/' + total + '</em></b></span>' +
+          '<span class="api-track"><i class="api-fill cov-' + step9(pct) +
+          '" style="width:' + pct + '%"></i></span></div>';
+      }
+      return '<div class="api-lrow"><span class="api-lname">' + (LABEL[b.id] || b.id) + '</span>' +
+        '<span class="api-strip two">' + bar("contiguous", b.contiguous) +
+        bar("strided", b.strided) + '</span></div>';
+    }).join("");
+
+  /* -- shapes ------------------------------------------------------------ */
+  function renderShapes() {
+    var q = (document.getElementById("shQ").value || "").trim().toLowerCase();
+    var groups = (DATA.shapes || []).map(function (g) {
+      var items = g.items.filter(function (i) {
+        return !q || i.name.toLowerCase().indexOf(q) >= 0 || i.doc.toLowerCase().indexOf(q) >= 0;
+      });
+      return { module: g.module, items: items };
+    }).filter(function (g) { return g.items.length; });
+    var shown = groups.reduce(function (n, g) { return n + g.items.length; }, 0);
+    var all = (DATA.shapes || []).reduce(function (n, g) { return n + g.items.length; }, 0);
+    document.getElementById("shCount").textContent = shown + " of " + all;
+    document.getElementById("shapeGroups").innerHTML = groups.length
+      ? groups.map(function (g) {
+          return '<section class="api-grp"><h3 class="api-h"><code>shapes::' + g.module +
+            '</code></h3><div class="api-list">' + g.items.map(function (i) {
+              return '<div class="api-tyrow"><span class="api-tykind">' + i.kind + '</span>' +
+                '<span class="api-tyname plain">' + i.name + '</span>' +
+                '<span class="api-typath doc">' + i.doc + '</span></div>';
+            }).join("") + '</div></section>';
+        }).join("")
+      : '<p class="api-empty">No shape type matches that filter.</p>';
+  }
+  document.getElementById("shQ").addEventListener("input", renderShapes);
+  renderShapes();
+
+  /* -- target API -------------------------------------------------------- */
+  document.getElementById("targetRows").innerHTML = (DATA.targetApi || []).map(function (m) {
+    return '<div class="api-tyrow"><span class="api-tykind">fn</span>' +
+      '<span class="api-tyname plain">' + m.name + '</span>' +
+      '<span class="api-typath doc">' + m.doc + '</span></div>';
+  }).join("");
+
   var initial = window.location.hash.slice(1);
-  showSection(["types", "dtypes", "backends", "flow"].indexOf(initial) >= 0 ? initial : "operations");
+  showSection(["types", "dtypes", "backends", "layouts", "shapes", "target", "flow"].indexOf(initial) >= 0 ? initial : "operations");
 
 })();

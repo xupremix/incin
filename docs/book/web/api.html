@@ -89,6 +89,9 @@
         <button role="tab" class="api-tab" data-sec="types" aria-selected="false">Types</button>
         <button role="tab" class="api-tab" data-sec="dtypes" aria-selected="false">Element types</button>
         <button role="tab" class="api-tab" data-sec="backends" aria-selected="false">Backends</button>
+        <button role="tab" class="api-tab" data-sec="layouts" aria-selected="false">Layouts</button>
+        <button role="tab" class="api-tab" data-sec="shapes" aria-selected="false">Shapes</button>
+        <button role="tab" class="api-tab" data-sec="target" aria-selected="false">Target API</button>
         <button role="tab" class="api-tab" data-sec="flow" aria-selected="false">Data flow</button>
       </nav>
 
@@ -145,7 +148,22 @@
 
       <section id="sec-dtypes" class="api-sec" hidden>
         <p class="api-lede">The nine element types, read from the <code>DTypeId</code> enum that
-          defines them, with the backends that accept each and how many operations do.</p>
+          defines them, with the storage each one actually occupies, the backends that accept it,
+          and how many operations do.</p>
+        <div class="api-note">
+          <p><b>Storage is a block encoding, not a scalar width.</b> A dtype declares how many
+            logical values sit in a block, how many bytes that block costs, and its alignment
+            &mdash; so a type is free to pack. <code>q8_0</code> already does: 32 values in 34
+            bytes, 8.5 bits each, because a block carries one <code>f16</code> scale alongside its
+            32 quantized bytes.</p>
+          <p><b><code>bool</code> does not.</b> It is one byte per element, so a boolean mask costs
+            eight times what its information content needs. A bit-packed boolean is expressible in
+            this model today &mdash; it would be a block of 8 values in 1 byte &mdash; and the gap
+            is not the encoding but everything downstream of it: strides are counted in elements
+            and resolved to byte offsets, so a sub-byte element makes every stride computation,
+            every view, and every kernel index a bit address. That is a change to the layout model
+            and to each backend's kernels, not to this table.</p>
+        </div>
         <div class="api-cards" id="dtypeCards"></div>
       </section>
 
@@ -154,6 +172,40 @@
           operations, how many run a kernel of their own, how many accept a strided operand,
           and which element types it handles anywhere.</p>
         <div class="api-cards" id="backendCards"></div>
+      </section>
+
+      <section id="sec-layouts" class="api-sec" hidden>
+        <p class="api-lede">A layout is what a tensor's type claims about the memory behind it.
+          An operation that allocates states what it allocated, so a result can be reshaped as a
+          view without a runtime stride scan. The claim is checked where it is made, which is why
+          <code>ChannelsLast</code> is deliberately not <code>Contiguous</code>.</p>
+        <div class="api-cards" id="layoutCards"></div>
+        <h3 class="api-h">What each backend accepts</h3>
+        <p class="api-lede">A contiguous-only row makes a working strided kernel unreachable
+          through the public API, so the gap between these two numbers is a capability question,
+          not a performance one.</p>
+        <div class="api-list"><div id="layoutRows"></div></div>
+      </section>
+
+      <section id="sec-shapes" class="api-sec" hidden>
+        <p class="api-lede">The shape system, by module. Every rule here is discharged at compile
+          time where the extents are known and falls back to a checked runtime rule where they are
+          not, so a shape error is a type error rather than a panic.</p>
+        <div class="api-controls">
+          <div class="api-search"><input id="shQ" type="search"
+            placeholder="Filter shape types — try Broadcast, Dim, Axis" aria-label="Filter shape types"></div>
+          <span class="api-count" id="shCount"></span>
+        </div>
+        <div id="shapeGroups"></div>
+      </section>
+
+      <section id="sec-target" class="api-sec" hidden>
+        <p class="api-lede">A target is a device and a dtype taken together. <code>TargetExt</code>
+          is how tensors are allocated on one: every method here returns a
+          <code>NoGrad</code> tensor except <code>parameter</code>, because making every tensor
+          track gradients is the one default that silently costs memory on every tensor a program
+          builds.</p>
+        <div class="api-list"><div id="targetRows"></div></div>
       </section>
 
       <section id="sec-flow" class="api-sec" hidden>

@@ -58,16 +58,27 @@ async function run() {
   const doc = () => frame.contentDocument;
   await until(() => doc().querySelectorAll(".api-row").length > 0, "operation rows");
 
-  /* One whole for the entire page. This is the invariant that was violated. */
-  const denoms = new Set([...doc().querySelectorAll(".api-meter .lab b em")]
+  /* One whole per section. The defect this was written for was a denominator
+     that changed from row to row inside one table, so bars in the same table
+     could not be compared; a different section measuring a different quantity
+     -- element types out of nine, operations out of 179 -- is fine, as long as
+     it is constant and stated wherever it is drawn. */
+  for (const section of doc().querySelectorAll(".api-sec")) {
+    const wholes = new Set([...section.querySelectorAll(".api-meter .lab b em")]
+      .map((e) => e.textContent.trim()));
+    check(wholes.size <= 1,
+      "the " + section.id + " section draws meters against " + wholes.size +
+      " different wholes: " + [...wholes].join(" "));
+  }
+  const denoms = new Set([...doc().querySelectorAll("#sec-operations .api-meter .lab b em")]
     .map((e) => e.textContent.trim()));
   check(denoms.size === 1,
-    "meters are drawn against " + denoms.size + " different wholes: " + [...denoms].join(" "));
+    "the operation table is drawn against " + denoms.size + " wholes: " + [...denoms].join(" "));
   const denom = Number([...denoms][0].replace("/", ""));
   check(denom > 0, "the meter denominator did not parse as a number");
 
   /* Each bar draws its own stated number against that whole. */
-  const meters = [...doc().querySelectorAll(".api-meter:not(.none)")];
+  const meters = [...doc().querySelectorAll("#sec-operations .api-meter:not(.none)")];
   check(meters.length > 0, "no meters rendered");
   for (const meter of meters) {
     const have = haveOf(meter);
@@ -80,7 +91,7 @@ async function run() {
 
   /* The per-row best is a tick, and only where it says something the fill
      does not: that some other backend reaches further on this operation. */
-  for (const strip of doc().querySelectorAll(".api-strip")) {
+  for (const strip of doc().querySelectorAll("#sec-operations .api-strip")) {
     const row = [...strip.querySelectorAll(".api-meter:not(.none)")];
     if (!row.length) continue;
     const best = Math.max(...row.map(haveOf));
@@ -215,12 +226,17 @@ async function run() {
      sideways scroll in any of them. The overflow has been reported twice by a
      reader, so it is checked per section rather than only on the default. */
   const tabs = [...doc().querySelectorAll(".api-tab")];
-  check(tabs.length === 5, "expected five section tabs, found " + tabs.length);
+  check(tabs.length === 8, "expected eight section tabs, found " + tabs.length);
 
+  /* Counts that come from a source the crate owns, so a section quietly
+     rendering nothing -- an extractor that stopped matching, a payload key
+     that moved -- fails here rather than shipping an empty tab. */
   const counts = {
     dtypes: [".api-card", 9],
     backends: [".api-card", 4],
     flow: [".api-step", 5],
+    layouts: [".api-card", 9],
+    target: [".api-tyrow", 21],
   };
   for (const tab of tabs) {
     const id = tab.dataset.sec;
@@ -265,6 +281,31 @@ async function run() {
   await until(() => [...doc().querySelectorAll("#tyRows .api-tykind")]
     .every((el) => el.textContent.trim() === "trait"), "the kind filter to apply");
   kindChip.click();
+
+  /* Every proportional bar on the page, not only the operation meters, is
+     painted on the nine-step ramp. The summary and backend bars carried a
+     fixed hue while their markup already asked for a step, so they read on a
+     different scale from everything else. */
+  for (const tab of tabs) {
+    tab.click();
+    const bars = [...doc().querySelectorAll(".api-sec:not([hidden]) .api-bar i")];
+    for (const bar of bars) {
+      const stepClass = [...bar.classList].find((c) => c.indexOf("cov-") === 0);
+      check(stepClass, "a bar in " + tab.dataset.sec + " carries no coverage step class");
+      const pct = parseFloat(bar.style.width);
+      const want = Math.min(9, Math.max(1, Math.round((pct / 100) * 9)));
+      check(stepClass === "cov-" + want,
+        "a bar at " + pct + "% is painted " + stepClass + ", not cov-" + want);
+      const painted = w.getComputedStyle(bar).backgroundColor;
+      check(painted === swatches[want - 1],
+        "a bar at " + pct + "% is not painted its step's colour");
+    }
+  }
+  doc().querySelector('.api-tab[data-sec="operations"]').click();
+
+  const shapeItems = doc().querySelectorAll("#shapeGroups .api-tyrow").length;
+  check(shapeItems > 50,
+    "the shape reference rendered " + shapeItems + " entries, which cannot be right");
 
   doc().querySelector('.api-tab[data-sec="operations"]').click();
 
