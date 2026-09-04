@@ -34,9 +34,9 @@ fn a_plain_constructor_claims_nothing() {
 /// 2. `tensor_in` names the layout, and the result carries it.
 #[test]
 fn tensor_in_carries_the_layout_it_was_asked_for() {
-    let x: Dense<Arr2x2, CpuBackendImpl> = Cpu
-        .tensor_in::<_, RowMajor<Arr2x2>>([[1.0f32, 2.0], [3.0, 4.0]])
-        .unwrap();
+    // No turbofish: `L` appears only in the return type, so the annotation
+    // that names the proof is what chooses the layout.
+    let x: Dense<Arr2x2, CpuBackendImpl> = Cpu.tensor_in([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
     assert_eq!(x.dims().as_ref(), &[2, 2]);
     assert_eq!(x.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
 }
@@ -49,8 +49,7 @@ fn an_unallocatable_layout_is_refused_at_construction() {
     // rank one and two arrays.
     type Nchw = s![1, 2, 2, 2];
 
-    let refused =
-        Cpu.zeros_in::<ShapeArgs<Nchw>, ChannelsLast<Nchw>>(ShapeArgs::new(Default::default()));
+    let refused = Cpu.zeros_in::<ChannelsLast<Nchw>, _>(ShapeArgs::new(Default::default()));
     assert!(
         refused.is_err(),
         "no backend uploads host bytes in channels-last order yet, so the \
@@ -92,7 +91,7 @@ fn the_refusal_is_decided_by_strides() {
 #[test]
 fn zeros_in_yields_a_usable_proof() {
     let x: Dense2x3 = Cpu
-        .zeros_in::<ShapeArgs<s![2, 3]>, RowMajor<s![2, 3]>>(ShapeArgs::new(Default::default()))
+        .zeros_in::<RowMajor<s![2, 3]>, _>(ShapeArgs::new(Default::default()))
         .unwrap();
 
     // The proof is usable with no runtime stride scan.
@@ -105,7 +104,7 @@ fn zeros_in_yields_a_usable_proof() {
 #[test]
 fn a_target_proof_composes_with_operations() {
     let x: Dense2x3 = Cpu
-        .zeros_in::<ShapeArgs<s![2, 3]>, RowMajor<s![2, 3]>>(ShapeArgs::new(Default::default()))
+        .zeros_in::<RowMajor<s![2, 3]>, _>(ShapeArgs::new(Default::default()))
         .unwrap();
 
     // Pointwise states `RowMajor` of its own result rather than carrying the
@@ -210,7 +209,7 @@ fn a_channels_last_tensor_is_built_with_its_elements_interleaved() {
 
     type Nchw = s![1, 2, 2, 2];
     let x = Cpu
-        .tensor_in::<_, ChannelsLast<Nchw>>([[
+        .tensor_in::<ChannelsLast<Nchw>, _>([[
             [[1.0f32, 2.0], [3.0, 4.0]],
             [[5.0, 6.0], [7.0, 8.0]],
         ]])
@@ -314,4 +313,42 @@ fn scatter_positions_is_a_permutation() {
         scatter_positions(&[2, 2], &[1]).is_none(),
         "rank disagreement"
     );
+}
+
+/// Naming the layout never costs a placeholder; naming the data type never
+/// needs one.
+///
+/// `tensor_in` has two type parameters and Rust's turbofish is all-or-nothing,
+/// so whichever comes second is the one you have to hold a place for. The
+/// order is not arbitrary: the two parameters differ in whether they can be
+/// inferred at all.
+///
+/// `D` is the argument's own type, so it is always fixable *at the argument* --
+/// bind the value, or suffix the literal. `L` appears only in the return type,
+/// so nothing about the call determines it and it is the one that sometimes
+/// has to be said. Putting `L` first means the parameter that occasionally
+/// needs naming is the one you can name alone.
+#[test]
+fn the_layout_comes_first_because_the_data_type_is_always_inferable() {
+    // The layout, from the annotation. No turbofish.
+    let a: Dense<Arr2x2, CpuBackendImpl> = Cpu.tensor_in([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    assert_eq!(a.dims().as_ref(), &[2, 2]);
+
+    // Pinning the data type instead: bind it. This is the "reverse problem"
+    // that reordering might have created, and it does not arise -- the
+    // argument's type is the parameter, so annotating the binding settles it.
+    let data: [[f64; 2]; 2] = [[1.0, 2.0], [3.0, 4.0]];
+    let b: Dense<Arr2x2, CpuBackendImpl, f64> = Cpu.tensor_in(data).unwrap();
+    assert_eq!(b.to_vec1::<f64>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+
+    // Or suffix the literal, which does the same job inline.
+    let c: Dense<Arr2x2, CpuBackendImpl, f64> = Cpu.tensor_in([[1.0f64, 2.0], [3.0, 4.0]]).unwrap();
+    assert_eq!(c.dims().as_ref(), &[2, 2]);
+
+    // The explicit form still works, and this is where the placeholder lands:
+    // trailing, on the parameter that never needed naming.
+    let d = Cpu
+        .tensor_in::<RowMajor<Arr2x2>, _>([[1.0f32, 2.0], [3.0, 4.0]])
+        .unwrap();
+    assert_eq!(d.dims().as_ref(), &[2, 2]);
 }

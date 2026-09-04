@@ -85,11 +85,10 @@ pub trait TargetExt: TensorTarget + Sized {
     /// // since #116 the array constructors build exactly that type.
     /// type S = DimCons<U2, DimCons<U2, Nil>>;
     ///
-    /// // The layout is named in the turbofish, and the result carries it --
-    /// // this annotation does not compile if the layout came back as `Dyn`.
-    /// let x: Dense<S, _> = Cpu.tensor_in::<_, RowMajor<S>>(
-    ///     [[1.0_f32, 2.0], [3.0, 4.0]],
-    /// )?;
+    /// // No turbofish: the layout appears only in the return type, so the
+    /// // annotation naming the proof is what chooses it. This does not compile
+    /// // if the layout comes back as `Dyn`.
+    /// let x: Dense<S, _> = Cpu.tensor_in([[1.0_f32, 2.0], [3.0, 4.0]])?;
     /// assert_eq!(x.dims().as_ref(), &[2, 2]);
     /// # Ok::<(), Error>(())
     /// ```
@@ -99,11 +98,12 @@ pub trait TargetExt: TensorTarget + Sized {
     /// Propagates backend allocation failure, and refuses a layout whose
     /// strides no backend can allocate yet -- see
     /// [`allocate_in`](Self::allocate_in).
-    fn tensor_in<D: TensorData, L: incin_core::shapes::FreshLayout<D::Shape>>(
+    fn tensor_in<L, D: TensorData>(
         &self,
         data: D,
     ) -> Result<TargetTensorIn<Self, D::Shape, D::Elem, L>>
     where
+        L: incin_core::shapes::FreshLayout<D::Shape>,
         TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
     {
         let values = data.into_row_major();
@@ -315,9 +315,8 @@ pub trait TargetExt: TensorTarget + Sized {
     /// // through the `incin` facade this reads `ShapeArgs<s![2, 3]>`, and
     /// // `crates/incin-core/tests/target_layout_examples.rs` has the static
     /// // form together with the `reshape_view` that a proof unlocks.
-    /// let x = Cpu.zeros_in::<ShapeArgs<Dyn>, RowMajor<Dyn>>(
-    ///     ShapeArgs::new(vec![2, 3]),
-    /// )?;
+    /// let x: incin_core::shapes::Dense<Dyn, _, f32, _, _> =
+    ///     Cpu.zeros_in(ShapeArgs::new(vec![2, 3]))?;
     /// assert_eq!(x.dims().as_ref(), &[2, 3]);
     /// # Ok::<(), Error>(())
     /// ```
@@ -326,11 +325,12 @@ pub trait TargetExt: TensorTarget + Sized {
     ///
     /// Propagates shape resolution and backend allocation failure, and refuses
     /// a layout whose strides the creation path cannot produce.
-    fn zeros_in<Sp: ShapeSpec, L: incin_core::shapes::FreshLayout<Sp::Shape>>(
+    fn zeros_in<L, Sp: ShapeSpec>(
         &self,
         spec: Sp,
     ) -> Result<TargetTensorIn<Self, Sp::Shape, Self::Dtype, L>>
     where
+        L: incin_core::shapes::FreshLayout<Sp::Shape>,
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::Dtype>
             + incin_core::backend_authoring::Execute<

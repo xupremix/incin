@@ -135,6 +135,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   against the tensor's actual metadata, and the claim is granted only on a
   match. Fallible for the same reason: strides are a runtime fact and the only
   honest route is to look. Still no unchecked counterpart.
+- `tensor_in` and `zeros_in` take the layout as their **first** type parameter,
+  so the common call needs no turbofish at all -- the annotation that names the
+  proof chooses the layout, `let x: Dense<s![2, 2], _> = Cpu.tensor_in(data)?`.
+  The ordering is deliberate rather than cosmetic: Rust's turbofish is
+  all-or-nothing, and the two parameters differ in whether they can be inferred.
+  The data type is the argument's own, so it is always fixable at the argument
+  by binding the value or suffixing the literal; the layout appears nowhere in
+  the call. Putting it first means the parameter that occasionally needs naming
+  is the one that can be named alone.
 - `TargetExt::zeros_in`, the layout-expressing counterpart to `zeros`, and the
   `restate_layout` hook behind it for the paths where the backend allocates
   rather than the host uploading.

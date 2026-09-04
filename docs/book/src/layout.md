@@ -96,7 +96,25 @@ friends return a tensor that claims nothing; `tensor_in` takes the layout as a
 type argument and returns one that claims it:
 
 ```rust,ignore
-let x: Dense<s![2, 2], _> = Cpu.tensor_in::<_, RowMajor<s![2, 2]>>(data)?;
+let x: Dense<s![2, 2], _> = Cpu.tensor_in(data)?;
+```
+
+No turbofish: the layout appears only in the return type, so the annotation
+that names the proof is what chooses it.
+
+The layout is the *first* type parameter, and that ordering is deliberate.
+Rust's turbofish is all-or-nothing, so whichever parameter comes second is the
+one you must hold a place for — and the two differ in whether they can be
+inferred at all. The data type is the argument's own type, so it is always
+fixable at the argument by binding the value or suffixing the literal; the
+layout appears nowhere in the call and is the one that sometimes has to be
+said. Putting it first means the parameter that occasionally needs naming is
+the one you can name alone:
+
+```rust,ignore
+let x: Dense<s![2, 2], _> = Cpu.tensor_in(data)?;          // usual
+let y = Cpu.tensor_in::<RowMajor<s![2, 2]>, _>(data)?;     // explicit
+let data: [[f64; 2]; 2] = ...;                             // pin the dtype here
 ```
 
 It is a separate method rather than a parameter on the existing one because a
@@ -160,7 +178,7 @@ layout's order before upload:
 
 ```rust,ignore
 let x: Tensor<s![1, 2, 2, 2], B, f32, NoGrad, Local, ChannelsLast<s![1, 2, 2, 2]>> =
-    Cpu.tensor_in::<_, ChannelsLast<_>>(nchw_literal)?;
+    Cpu.tensor_in(nchw_literal)?;
 ```
 
 A backend has to opt in. `HostInterop::from_bytes_strided` is defaulted to a
