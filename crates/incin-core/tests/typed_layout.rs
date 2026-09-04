@@ -801,3 +801,50 @@ fn channels_last_is_not_contiguous() {
     only_contiguous::<RowMajor<s![2, 3, 4, 5]>>();
     // only_contiguous::<ChannelsLast<s![2, 3, 4, 5]>>();  // does not compile
 }
+
+/// The order-statistic family allocates, so its results are dense too.
+///
+/// `argmax`, `argmin`, `argsort` and `topk` were the reductions left stating
+/// nothing. They write fresh index buffers -- `argsort` and `topk` write two --
+/// so the same rule applies, and the same strided operand is what makes the
+/// check non-vacuous.
+#[test]
+fn an_order_statistic_result_is_dense_even_from_a_strided_operand() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{ForwardAxis, Here, Next};
+
+    let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::from_slice(
+        &[
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ],
+        (),
+    )
+    .unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(strided.inner());
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "the operand must actually be non-contiguous for this test to mean anything"
+    );
+
+    assert_dense(
+        "argmax",
+        &strided.argmax(ForwardAxis::<Here>::default()).unwrap(),
+    );
+    assert_dense(
+        "argmin",
+        &strided.argmin(ForwardAxis::<Here>::default()).unwrap(),
+    );
+    assert_dense("argsort", &strided.argsort(0usize, false).unwrap());
+
+    // `topk` returns both values and indices; both are fresh buffers.
+    let (values, indices) = strided
+        .topk(2, ForwardAxis::<Here>::default(), true)
+        .unwrap();
+    assert_dense("topk values", &values);
+    assert_dense("topk indices", &indices);
+}

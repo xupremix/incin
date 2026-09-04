@@ -86,6 +86,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for the result they allocate. They pinned `L` on *both* arguments, so once
   `Linear` returned a proof, feeding its output straight into a loss stopped
   compiling.
+- **The order-statistic family proves its results are dense.** `argmax`,
+  `argmin`, `argsort` and `topk` were the reductions left stating nothing; they
+  write fresh index buffers -- `topk` and `argsort` write two -- so the same
+  rule applies. **Breaking**: their return types change, and `topk` returns a
+  pair of `Dense` rather than a pair of `Tensor`.
 - `Tensor::into_layout::<L>()`, the general form of `into_row_major`. The layout
   names the strides it needs through `FreshLayout::strides`, those are compared
   against the tensor's actual metadata, and the claim is granted only on a

@@ -712,7 +712,7 @@ where
     fn index_reduce<O, Out>(
         &self,
         dim: Option<isize>,
-    ) -> Result<Tensor<Out, B, u32, crate::tensor::grad::NoGrad>>
+    ) -> Result<crate::shapes::Dense<Out, B, u32, crate::tensor::grad::NoGrad, Local>>
     where
         O: CanonicalOperation
             + Operation<Attributes = crate::exec::catalog::IndexReductionAttributes>,
@@ -763,7 +763,10 @@ where
     }
 
     /// Computes argmax along a static, named, or runtime axis selector.
-    pub fn argmax<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, u32, crate::tensor::grad::NoGrad>>
+    pub fn argmax<A>(
+        &self,
+        axis: A,
+    ) -> Result<crate::shapes::Dense<A::Drop, B, u32, crate::tensor::grad::NoGrad, Local>>
     where
         A: ReduceSelector<S>,
         A::Drop: crate::shapes::DynShape,
@@ -778,7 +781,7 @@ where
     pub fn argmax_runtime(
         &self,
         dim: Option<isize>,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
+    ) -> Result<crate::shapes::Dense<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad, Local>>
     where
         B: Execute<op::ArgMax> + crate::exec::Capabilities,
         <B as Execute<op::ArgMax>>::Output: Into<B::Storage<u32>>,
@@ -787,7 +790,10 @@ where
     }
 
     /// Computes argmin along a static, named, or runtime axis selector.
-    pub fn argmin<A>(&self, axis: A) -> Result<Tensor<A::Drop, B, u32, crate::tensor::grad::NoGrad>>
+    pub fn argmin<A>(
+        &self,
+        axis: A,
+    ) -> Result<crate::shapes::Dense<A::Drop, B, u32, crate::tensor::grad::NoGrad, Local>>
     where
         A: ReduceSelector<S>,
         A::Drop: crate::shapes::DynShape,
@@ -802,7 +808,7 @@ where
     pub fn argmin_runtime(
         &self,
         dim: Option<isize>,
-    ) -> Result<Tensor<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad>>
+    ) -> Result<crate::shapes::Dense<crate::shapes::Dyn, B, u32, crate::tensor::grad::NoGrad, Local>>
     where
         B: Execute<op::ArgMin> + crate::exec::Capabilities,
         <B as Execute<op::ArgMin>>::Output: Into<B::Storage<u32>>,
@@ -819,17 +825,19 @@ where
         axis: A,
         largest: bool,
     ) -> Result<(
-        Tensor<
+        crate::shapes::Dense<
             <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
             B,
             K,
             crate::tensor::grad::NoGrad,
+            Local,
         >,
-        Tensor<
+        crate::shapes::Dense<
             <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
             B,
             u32,
             crate::tensor::grad::NoGrad,
+            Local,
         >,
     )>
     where
@@ -876,11 +884,12 @@ where
             })?
             .into();
 
-        let values = Tensor::<
+        let values = crate::shapes::Dense::<
             <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
             B,
             K,
             crate::tensor::grad::NoGrad,
+            Local,
         >::from_parts(
             values_inner,
             out_shape.shape_buf().clone(),
@@ -888,11 +897,12 @@ where
             self._device.clone(),
             crate::tensor::grad::NoGrad::init(()),
         )?;
-        let indices = Tensor::<
+        let indices = crate::shapes::Dense::<
             <A as crate::tensor::ops::manipulation::ReplaceAxisSelector<S>>::Output,
             B,
             u32,
             crate::tensor::grad::NoGrad,
+            Local,
         >::from_parts(
             indices_inner,
             out_shape.shape_buf().clone(),
@@ -908,7 +918,7 @@ where
         &self,
         dim: usize,
         descending: bool,
-    ) -> Result<Tensor<S, B, u32, crate::tensor::grad::NoGrad>>
+    ) -> Result<crate::shapes::Dense<S, B, u32, crate::tensor::grad::NoGrad, Local>>
     where
         B: Execute<op::Argsort> + crate::exec::Capabilities,
         <B as Execute<op::Argsort>>::Output: Into<B::Storage<u32>>,

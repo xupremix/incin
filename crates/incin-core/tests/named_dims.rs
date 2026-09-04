@@ -84,11 +84,12 @@ fn selector_reductions_preserve_static_drop_and_keep_shapes() {
 fn index_reductions_preserve_selector_output_shapes() {
     type B = CpuBackendImpl;
     type S = s![2, 3, 4];
-    type ArgmaxOutput = Tensor<s![2, 4], B, u32, NoGrad>;
+    // `Dense`, not `Tensor`: argmax writes a fresh index buffer and says so.
+    type ArgmaxOutput = Dense<s![2, 4], B, u32, NoGrad>;
     let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
 
     let _: ArgmaxOutput = tensor.argmax(axis!(1)).unwrap();
-    let _: Tensor<Ranked<typenum::U2>, B, u32, NoGrad> = tensor.argmin(1isize).unwrap();
+    let _: Dense<Ranked<typenum::U2>, B, u32, NoGrad> = tensor.argmin(1isize).unwrap();
 }
 
 #[test]

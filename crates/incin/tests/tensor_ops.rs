@@ -679,9 +679,10 @@ fn dimension_selecting_operations_accept_axis_selectors() -> Result<()> {
     assert_eq!(narrowed.dims().as_ref(), &[2, 1]);
     assert_eq!(chunks.len(), 2);
     assert_eq!(splits.len(), 2);
+    // `Dense`, not `Tensor`: topk writes two fresh buffers and states so.
     let _: (
-        Tensor<s![2, usize], CpuBackendImpl, f32, NoGrad>,
-        Tensor<s![2, usize], CpuBackendImpl, u32, NoGrad>,
+        Dense<s![2, usize], CpuBackendImpl, f32, NoGrad>,
+        Dense<s![2, usize], CpuBackendImpl, u32, NoGrad>,
     ) = tensor.topk(1, axis!(1), true)?;
     Ok(())
 }
