@@ -171,6 +171,37 @@ pub fn upload_i64(shape: &[usize], values: &[i64]) -> CudaStorage {
         .expect("uploading an i64 slice to device 0")
 }
 
+/// Uploads raw bytes as `dtype`-typed storage of `shape`.
+///
+/// The movement kernels move element-sized blocks and do no arithmetic, so
+/// checking them for a dtype means checking that the right *bytes* land in the
+/// right places. That is the same check for every dtype, and needs a seam that
+/// does not go through a float or integer conversion on the way.
+///
+/// # Panics
+///
+/// Panics if the allocation or transfer fails.
+#[must_use]
+pub fn upload_bytes(shape: &[usize], dtype: DTypeId, bytes: &[u8]) -> CudaStorage {
+    crate::cuda::backend::cuda_from_bytes(shape, dtype.into(), 0, bytes)
+        .expect("uploading raw bytes to device 0")
+}
+
+/// Reads a storage back as the raw bytes it holds.
+///
+/// # Panics
+///
+/// Panics if the device transfer fails.
+#[must_use]
+pub fn download_bytes(storage: &CudaStorage) -> alloc::vec::Vec<u8> {
+    storage
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*storage.buffer.data)
+        .expect("reading storage back to the host")
+}
+
 /// Gathers embedding rows named by `indices`.
 ///
 /// # Errors
