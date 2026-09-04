@@ -129,6 +129,14 @@ fn custom_typed_proof_requires_one_concrete_output() {
     ));
 }
 
+// These three exercise the serialized descriptor surface, which is
+// `#[cfg(feature = "std")]` -- `CapturedDescriptor` does not exist without it,
+// and `serde_json` is a std-gated dependency. They compile under a no-std
+// feature set today only because this crate's dev-dependency on
+// `incin-backends` asks for `std` and feature unification turns it back on.
+// Resting on that is the same shape of accident as a bound that has never
+// rejected anything, so the gate is stated here instead.
+#[cfg(feature = "std")]
 #[test]
 fn operation_key_round_trips_through_persistence() {
     let key = TestCustomOperation::KEY;
@@ -137,6 +145,7 @@ fn operation_key_round_trips_through_persistence() {
     assert_eq!(decoded, key);
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn operation_key_persistence_accepts_runtime_owned_identity() {
     let key = OperationKey {
@@ -1095,6 +1104,7 @@ fn every_tensor_returning_row_declares_an_inference_source() {
     }
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn attribute_bearing_descriptor_round_trips_without_storage() {
     let input = LogicalTensorMeta {
