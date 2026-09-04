@@ -60,6 +60,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   naive kernel gets wrong while passing the obvious one: broadcasting along a
   trailing rather than a leading axis, and narrowing an inner axis, where the
   window is not one contiguous run. Eight tests, green on a GTX 1650 SUPER.
+- **The capability page kept its examples at arm's length.** Every section ended
+  in a dump of worked book examples, while opening an operation showed only the
+  registry rows and opening an element type showed nothing at all -- so a reader
+  asking "what does using this look like" scrolled past the item to a pile of
+  long-form snippets indexed by chapter rather than by item. Expanding an
+  operation now lists up to three one-line use sites inline (the first line
+  naming it, each linked to the book chapter or test file it came from), and
+  each element-type card has a use-sites disclosure doing the same. The lines
+  come from the same literal-name usage index the type, layout, shape and
+  target rows already open onto, so an item with no snippet says so rather than
+  being given an unrelated one, and the section-end worked examples stay where
+  they are. The browser suite opens `matmul` and `f32` and requires the lines
+  to name what was opened.
 - **`unresolved link to `Grad`` broke two CI jobs.** The `TargetExt` doc
   comment added with the parameter-allocation work linked a marker that is not
   in that scope, which failed the CPU Test Suite and the Documentation Build on

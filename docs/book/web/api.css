@@ -462,6 +462,33 @@
   opacity: .55; font-family: var(--font-mono);
 }
 .api-card .api-usage { border-bottom: 0; padding-bottom: 0; }
+
+/* -- inline use sites ----------------------------------------------------- */
+/* One line plus a source link, not the full snippet: the expander already runs
+   long, and the section-end worked examples carry the long form. Lines wrap
+   rather than scroll, so a long path never pushes the page wide on a phone. */
+.api-linesbtn {
+  appearance: none; width: 100%; margin-top: 10px; padding: 6px 10px;
+  border: 1px solid var(--table-border); border-radius: var(--radius-sm);
+  background: var(--table-alt-bg); color: var(--fg); font: inherit; font-size: 12px;
+  cursor: pointer;
+}
+.api-linesbtn:hover { text-decoration: underline; }
+.api-linesbtn:focus-visible { outline: 2px solid var(--links); outline-offset: 2px; }
+.api-linesbtn[aria-expanded="true"] { font-weight: 600; }
+.api-lines { margin-top: 8px; }
+.api-lines-list { list-style: none; margin: 0; padding: 0; }
+.api-line { margin: 0 0 10px; font-size: 12px; }
+.api-line:last-child { margin-bottom: 2px; }
+.api-line a { color: var(--links); text-decoration: none; overflow-wrap: anywhere; }
+.api-line a:hover { text-decoration: underline; }
+.api-line .api-extag { margin-left: 8px; }
+.api-line code {
+  display: block; margin-top: 3px; padding: 7px 10px;
+  border: 1px solid var(--table-border); border-radius: var(--radius-sm);
+  background: var(--table-alt-bg); font-family: var(--font-mono); font-size: 11.5px;
+  line-height: 1.5; white-space: normal; overflow-wrap: anywhere;
+}
 .api-tylink {
   display: inline-block; font-family: var(--font-mono); font-size: 11px;
   color: var(--links); text-decoration: none; margin: 0 0 6px 68px;

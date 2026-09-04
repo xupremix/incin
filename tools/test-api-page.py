@@ -357,6 +357,54 @@ async function run() {
   rowMajor.click();
   check(rowMajor.nextElementSibling.hidden, "an opened item did not close again");
 
+  /* Opening an operation shows one-line use sites inline, inside the expanded
+     detail -- the section-end worked examples are the long form, and what the
+     row itself was missing is the answer to "what does using this look like". */
+  doc().querySelector('.api-tab[data-sec="operations"]').click();
+  const mq = doc().querySelector("#apiQ");
+  mq.value = "matmul";
+  mq.dispatchEvent(new (doc().defaultView.Event)("input", {bubbles: true}));
+  await until(() => doc().querySelectorAll(".api-row").length >= 1,
+    "the matmul filter to narrow");
+  const matmulRow = [...doc().querySelectorAll(".api-row")]
+    .find((row) => row.querySelector(".api-name").firstChild.textContent.trim() === "matmul");
+  check(matmulRow, "no matmul operation row rendered");
+  matmulRow.click();
+  await until(() => {
+    const box = doc().querySelector(".api-detail:not([hidden]) .api-lines");
+    return box && box.dataset.filled === "1";
+  }, "the operation use sites to load");
+  const opLines = [...doc().querySelectorAll(".api-detail:not([hidden]) .api-line")];
+  check(opLines.length > 0, "opening matmul produced no inline use site");
+  for (const li of opLines) {
+    const text = li.querySelector("code").textContent;
+    check(text.indexOf("matmul") >= 0,
+      "an inline use site for matmul does not mention it: " + text);
+    check(li.querySelector("a") && li.querySelector(".api-extag"),
+      "an inline use site has no source link or provenance tag");
+  }
+  matmulRow.click();
+  mq.value = "";
+  mq.dispatchEvent(new (doc().defaultView.Event)("input", {bubbles: true}));
+
+  /* Element-type cards open their own use sites the same way. */
+  doc().querySelector('.api-tab[data-sec="dtypes"]').click();
+  const f32btn = doc().querySelector('#dtypeCards [data-lines="f32"]');
+  check(f32btn, "the element-type section has no expandable f32 card");
+  f32btn.click();
+  await until(() => {
+    const panel = f32btn.nextElementSibling;
+    return panel && !panel.hidden && panel.dataset.filled === "1";
+  }, "the f32 use sites to load");
+  const dtLines = [...f32btn.nextElementSibling.querySelectorAll(".api-line")];
+  check(dtLines.length > 0, "opening f32 produced no inline use site");
+  for (const li of dtLines) {
+    check(li.querySelector("code").textContent.indexOf("f32") >= 0,
+      "an inline use site for f32 does not mention it");
+  }
+  f32btn.click();
+  check(f32btn.nextElementSibling.hidden, "an opened element-type card did not close again");
+
   /* The section examples must be highlighted too, not only the usage ones. */
   doc().querySelector('.api-tab[data-sec="operations"]').click();
   const anyExample = doc().querySelector(".api-sec:not([hidden]) .api-ex pre code");

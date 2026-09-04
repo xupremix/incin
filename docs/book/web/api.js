@@ -253,6 +253,11 @@
         (c.api ? '<div class="api-kv"><span class="k">reached via</span><span class="v">' + c.api + '</span></div>' : "") +
         '</div>';
     }
+    /* The one-liners are filled when the row opens: the usage payload is
+       fetched on demand, and the detail node does not exist before that. */
+    var used = '<div class="api-dcell"><h4>used in</h4>' +
+      '<div class="api-lines" data-names="' + usageKeysForOp(op).join(" ") + '">' +
+      '<p class="api-none">Loading usage&hellip;</p></div></div>';
     return '<div class="api-detail-in">' + docsLink(op) + head + B.map(function (b) {
       var e = op.backends[b];
       if (!e.dtypes.length) {
@@ -268,7 +273,7 @@
         '<div class="api-kv"><span class="k">training</span><span class="v">' + (e.training ? "yes" : "no") + '</span></div>' +
         '<div class="api-kv"><span class="k">impl</span><span class="v">' + (e.impl || "&mdash;") + '</span></div>' +
         '</div>';
-    }).join("") + '</div>';
+    }).join("") + used + '</div>';
   }
 
   function render() {
@@ -303,7 +308,7 @@
     var open = btn.getAttribute("aria-expanded") === "true";
     btn.setAttribute("aria-expanded", open ? "false" : "true");
     if (open) { det.hidden = true; return; }
-    if (!det.innerHTML) { det.innerHTML = detailFor(rows._list[i]); }
+    if (!det.innerHTML) { det.innerHTML = detailFor(rows._list[i]); fillLines(det); }
     det.hidden = false;
   }
   rows.addEventListener("click", function (e) {
@@ -363,6 +368,10 @@
   });
 
   /* -- element types ----------------------------------------------------- */
+  /* The card itself is not the button: the usage lines load on demand, and a
+     card that fetched on render would pull the payload for readers who never
+     open this tab -- and would print a load error into every card for readers
+     on a file:// checkout, where fetch cannot run at all. */
   document.getElementById("dtypeCards").innerHTML = (DATA.dtypes || []).map(function (d) {
     var e = d.encoding;
     var store = e
@@ -382,7 +391,10 @@
         (d.backends.length
           ? d.backends.map(function (b) { return '<span class="api-dt">' + b + '</span>'; }).join("")
           : "&mdash;") +
-      '</span></div></div>';
+      '</span></div>' +
+      '<button type="button" class="api-linesbtn" data-lines="' + d.id +
+        '" aria-expanded="false">use sites</button>' +
+      '<div class="api-lines" hidden></div></div>';
   }).join("");
 
   /* -- backends ---------------------------------------------------------- */
@@ -572,6 +584,102 @@
         '<pre><code>' + code(sn.code) + '</code></pre></figure>';
     }).join("");
   }
+
+  /* One-line use sites for rows that already open for another reason: the
+     operation detail and the element-type cards. A full snippet per item would
+     triple the length of an already long expander, and the section-end worked
+     examples already carry the long form; what the expander is missing is the
+     answer to "what does using this look like", which is one line plus a link
+     to the file it came from. The line shown is the first one naming the item,
+     so it is the use rather than the surrounding scaffolding. */
+  function escHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function lineFor(text, names) {
+    var lines = text.split("\n");
+    var fallback = "";
+    for (var li = 0; li < lines.length; li++) {
+      var line = lines[li].trim();
+      if (!line) continue;
+      if (!fallback) fallback = line;
+      for (var ni = 0; ni < names.length; ni++) {
+        if (line.indexOf(names[ni]) >= 0) {
+          return line.length > 220 ? line.slice(0, 220) + "…" : line;
+        }
+      }
+    }
+    return fallback.length > 220 ? fallback.slice(0, 220) + "…" : fallback;
+  }
+
+  /* Every name the usage index might know this operation under: the catalog
+     wire name and the public method it is reached through. `broadcast_as` is
+     why both are needed -- no snippet writes the bare word `broadcast`, while
+     several write the method. */
+  function usageKeysForOp(op) {
+    var keys = [op.name];
+    var api = (op.catalog && op.catalog.api) || "";
+    var method = api.indexOf("::") >= 0 ? api.split("::").pop() : "";
+    if (method && keys.indexOf(method) < 0) keys.push(method);
+    return keys;
+  }
+
+  function linesHtmlFor(names) {
+    var seen = {}, ids = [];
+    names.forEach(function (n) {
+      ((USAGE && USAGE.index[n]) || []).forEach(function (i) {
+        if (!seen[i]) { seen[i] = 1; ids.push(i); }
+      });
+    });
+    ids = ids.slice(0, 3);
+    if (!ids.length) {
+      return '<p class="api-none">No compiled snippet in this repository uses ' +
+        names.map(function (n) { return '<code>' + escHtml(n) + '</code>'; }).join(" or ") +
+        ' by name yet.</p>';
+    }
+    return '<ul class="api-lines-list">' + ids.map(function (i) {
+      var sn = USAGE.snippets[i];
+      return '<li class="api-line"><a href="' + escHtml(sn.href) + '"' +
+        (sn.origin === "test" ? ' target="_blank" rel="noopener noreferrer"' : '') +
+        '>' + escHtml(sn.label) + '</a>' +
+        '<span class="api-extag' + (sn.checked ? " ok" : "") + '">' +
+        (sn.origin === "book" ? "book" : "test") + ' · ' +
+        (sn.checked ? "compiled" : "not compiled") + '</span>' +
+        '<code>' + code(lineFor(sn.code, names)) + '</code></li>';
+    }).join("") + '</ul>';
+  }
+
+  function fillLinesBox(box) {
+    if (box.dataset.filled) return;
+    loadUsage().then(function () {
+      box.innerHTML = linesHtmlFor(box.dataset.names.split(" "));
+      box.dataset.filled = "1";
+    }).catch(function (error) {
+      box.innerHTML = '<p class="api-none">Usage could not be loaded: ' +
+        escHtml(String(error.message || error)) + '</p>';
+    });
+  }
+
+  function fillLines(root) {
+    var boxes = root.querySelectorAll
+      ? root.querySelectorAll(".api-lines[data-names]:not([data-filled])")
+      : [];
+    for (var bi = 0; bi < boxes.length; bi++) fillLinesBox(boxes[bi]);
+  }
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-lines]");
+    if (!btn) return;
+    var panel = btn.nextElementSibling;
+    if (!panel || !panel.classList.contains("api-lines")) return;
+    if (!panel.dataset.names) panel.dataset.names = btn.dataset.lines;
+    var open = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", open ? "false" : "true");
+    if (open) { panel.hidden = true; return; }
+    panel.hidden = false;
+    fillLinesBox(panel);
+  });
 
   document.addEventListener("click", function (e) {
     var item = e.target.closest("[data-usage]");
