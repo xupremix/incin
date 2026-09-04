@@ -15,6 +15,12 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BACKENDS = ["cpu", "cuda", "wgpu", "metal"]
 
+# Doc sentences are read only from the user-facing surface. Backend internals
+# define same-named helpers whose docs describe a kernel rather than the API,
+# and letting them compete is how an earlier draft captioned `dropout` with
+# `MSELoss::forward`'s sentence.
+DOC_ROOTS = ("tensor", "nn", "distributions")
+
 
 def parse_capabilities(text: str):
     """Return (dtypes-by-operation, rules-by-backend) from the generated doc."""
@@ -61,6 +67,100 @@ def parse_capabilities(text: str):
     return dtypes, rules
 
 
+def parse_catalog(text: str) -> dict[str, dict]:
+    """Rows of the single operation declaration in `operation_catalog.rs`.
+
+    Each row carries the wire name, the shape-error category, the family, the
+    attribute type, the operand arity and the public API path the operation is
+    reached through -- everything a reference needs except prose.
+    """
+    rows = re.findall(
+        r'\(\s*(\w+)\s*,\s*"([^"]+)"\s*,\s*(\w+)\s*,\s*(\w+)\s*,'
+        r'\s*(\w+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*"([^"]*)"\s*\)',
+        text,
+    )
+    return {
+        wire: {
+            "variant": variant,
+            "kind": kind,
+            "family": family,
+            "attrs": attrs,
+            "arity": [int(lo), int(hi)],
+            "api": api,
+        }
+        for variant, wire, kind, family, attrs, lo, hi, api in rows
+    }
+
+
+def _first_sentence(block: str) -> str | None:
+    lines: list[str] = []
+    for raw in block.splitlines():
+        line = raw.strip().lstrip("/").strip()
+        if not line or line.startswith(("#", "```", "[")):
+            break
+        lines.append(line)
+    if not lines:
+        return None
+    text = re.sub(r"\s+", " ", " ".join(lines))
+    end = re.search(r"\.(\s|$)", text)
+    if end:
+        text = text[: end.start() + 1]
+    # A truncated clause reads worse than no description at all.
+    if text.count("(") != text.count(")"):
+        return None
+    if text.endswith((",", "see", "the", "a", "of", "and")):
+        return None
+    return text if len(text) > 12 else None
+
+
+def attach_docs(catalog: dict[str, dict]) -> int:
+    """Attach the doc sentence above each operation's public entry point.
+
+    A method resolving to two different sentences is left undescribed rather
+    than captioned with whichever file was walked first: a wrong description
+    is worse than none.
+    """
+    blobs = {
+        f: f.read_text(encoding="utf-8", errors="ignore")
+        for root in DOC_ROOTS
+        for f in (ROOT / "crates/incin-core/src" / root).rglob("*.rs")
+    }
+    resolved = 0
+    for entry in catalog.values():
+        entry["doc"] = None
+        api = entry.get("api") or ""
+        if "::" not in api:
+            continue
+        owner, method = api.rsplit("::", 1)
+        owner = owner.strip(":")
+        pattern = re.compile(
+            r"((?:^[ \t]*///.*\n)+)[ \t]*(?:#\[[^\]]*\]\s*\n[ \t]*)*pub fn "
+            + re.escape(method)
+            + r"\b",
+            re.M,
+        )
+        found = []
+        for path, blob in blobs.items():
+            for match in pattern.finditer(blob):
+                sentence = _first_sentence(match.group(1))
+                if sentence:
+                    found.append((path, sentence))
+        if not found:
+            continue
+        unique = {s for _, s in found}
+        if len(unique) == 1:
+            entry["doc"] = found[0][1]
+            resolved += 1
+            continue
+        if owner:
+            snake = re.sub(r"(?<!^)(?=[A-Z])", "_", owner).lower()
+            scoped = {s for path, s in found if path.stem == snake}
+            if len(scoped) == 1:
+                entry["doc"] = scoped.pop()
+                resolved += 1
+    return resolved
+
+
 def main() -> int:
     doc = ROOT / "docs/capabilities.md"
     dtypes, rules = parse_capabilities(doc.read_text(encoding="utf-8"))
@@ -88,6 +188,13 @@ def main() -> int:
         b: [r for r in rules[b] if r["operation"] not in dtypes] for b in BACKENDS
     }
 
+    catalog = parse_catalog(
+        (ROOT / "crates/incin-core/src/operation_catalog.rs").read_text(encoding="utf-8")
+    )
+    described = attach_docs(catalog)
+    for op in operations:
+        op["catalog"] = catalog.get(op["name"])
+
     surface = {}
     for f in sorted((ROOT / "docs/public-api").glob("*.txt")):
         surface[f.stem] = sum(1 for line in f.read_text().splitlines() if line.strip())
@@ -100,9 +207,13 @@ def main() -> int:
     }
     out = ROOT / "docs/api-site-data.json"
     out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    print(f"wrote {out.relative_to(ROOT)}: {len(operations)} operations, "
-          f"{sum(len(v) for v in categories.values())} category rules, "
-          f"{len(surface)} public-API baselines")
+    print(
+        f"wrote {out.relative_to(ROOT)}: {len(operations)} operations, "
+        f"{sum(1 for o in operations if o['catalog'])} with catalog metadata, "
+        f"{described} with a doc sentence, "
+        f"{sum(len(v) for v in categories.values())} category rules, "
+        f"{len(surface)} public-API baselines"
+    )
     return 0
 
 

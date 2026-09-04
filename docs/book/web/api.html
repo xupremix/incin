@@ -93,25 +93,25 @@
         <span class="api-count" id="apiCount"></span>
       </div>
 
-      <div class="api-tablewrap" id="matrix">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Operation</th>
-              <th scope="col" class="b">cpu</th>
-              <th scope="col" class="b">cuda</th>
-              <th scope="col" class="b">wgpu</th>
-              <th scope="col" class="b">metal</th>
-            </tr>
-          </thead>
-          <tbody id="apiRows"></tbody>
-        </table>
+      <div class="api-list" id="matrix"><div id="apiRows"></div></div>
+
+      <div class="api-legend" aria-hidden="true">
+        <span><i class="api-fill full"></i> full</span>
+        <span><i class="api-fill broad"></i> broad</span>
+        <span><i class="api-fill partial"></i> partial</span>
+        <span><i class="api-fill minimal"></i> minimal</span>
+        <span><i class="api-fill c-full"></i> composed</span>
       </div>
       <p class="api-lede" style="margin-top:10px;font-size:14px">
-        A chip shows how many element types that backend accepts, coloured by implementation:
-        <span class="api-sup native"><i></i>native</span> is a dedicated kernel,
-        <span class="api-sup composed"><i></i>composed</span> is built from other operations.
-        Both execute; they differ in cost. Select a row for layouts, rank and training support.
+        Each backend gets a meter. The number is how many element types it accepts; the fill is
+        that count against <em>the widest support any backend offers for the same operation</em>,
+        so a short bar means this backend does less than another already does. Measuring against
+        all nine dtypes in the crate would read every float-only operation as thin, which is why
+        the comparison is per-operation. Below a third of the widest, an operation counts as
+        present but barely — a foothold rather than support. Amber is
+        <strong>composed</strong>, built from other operations rather than a dedicated kernel;
+        both execute, they differ in cost. Select a row for dtypes, layouts, rank, training and
+        the public entry point.
       </p>
 
       <h2>Rule categories</h2>

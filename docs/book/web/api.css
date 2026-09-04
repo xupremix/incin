@@ -77,38 +77,63 @@
   opacity: .7; font-variant-numeric: tabular-nums;
 }
 
-/* Matrix ----------------------------------------------------------------- */
-.api-tablewrap {
-  overflow-x: auto; border: 1px solid var(--table-border);
-  border-radius: var(--radius-lg); margin-top: 16px;
+/* Matrix ----------------------------------------------------------------
+   A two-column list, not a four-column table: a column per backend forced a
+   min-width wider than a phone, so the first screenshot of this page showed
+   one backend and a horizontal scrollbar. The backend strip carries its own
+   labels instead, and wraps. */
+.api-list { border: 1px solid var(--table-border); border-radius: var(--radius-lg); overflow: hidden; margin-top: 16px; }
+.api-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px;
+  align-items: center; padding: 11px 15px; width: 100%; text-align: left;
+  background: transparent; border: 0; border-bottom: 1px solid var(--table-border);
+  color: inherit; font: inherit; cursor: pointer;
 }
-.api-tablewrap table { border-collapse: collapse; width: 100%; min-width: 800px; margin: 0; }
-.api-tablewrap thead th {
-  background: var(--table-header-bg); text-align: left; font-size: 11px; font-weight: 700;
-  letter-spacing: .07em; text-transform: uppercase; opacity: .85;
-  padding: 9px 14px; border-bottom: 1px solid var(--table-border); white-space: nowrap;
+.api-row:last-of-type { border-bottom: 0; }
+.api-row:hover { background: var(--table-alt-bg); }
+.api-row[aria-expanded="true"] { background: var(--sidebar-active-bg); }
+@media (max-width: 640px) { .api-row { grid-template-columns: 1fr; gap: 10px; } }
+.api-id { min-width: 0; }
+.api-name {
+  font-family: var(--font-mono); font-size: 13.5px; color: var(--fg-heading);
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
 }
-.api-tablewrap thead th.b { text-align: center; width: 112px; }
-.api-tablewrap tbody tr { border-bottom: 1px solid var(--table-border); }
-.api-tablewrap tbody tr.op { cursor: pointer; }
-.api-tablewrap tbody tr.op:hover { background: var(--table-alt-bg); }
-.api-tablewrap tbody tr.op[aria-expanded="true"] { background: var(--sidebar-active-bg); }
-.api-tablewrap td { padding: 8px 14px; vertical-align: middle; }
-.api-tablewrap td.name { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; color: var(--fg-heading); }
-.api-sup {
-  display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;
-  border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 11.5px;
-  font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums;
+.api-fam {
+  font-family: var(--font-body); font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; opacity: .6; padding: 2px 6px; border-radius: 3px;
+  border: 1px solid var(--table-border);
 }
-.api-sup i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
-.api-sup.native { color: var(--sidebar-active); background: var(--sidebar-active-bg); }
-.api-sup.composed { color: var(--inline-code-fg); background: var(--inline-code-bg); }
-.api-sup.absent { opacity: .38; }
-.api-sup.absent i { display: none; }
-.api-detail td { background: var(--table-alt-bg); padding: 0; }
+.api-desc { font-size: 12.5px; opacity: .72; margin-top: 3px; max-width: 72ch; }
+.api-desc.structural { font-family: var(--font-mono); font-size: 11.5px; opacity: .5; }
+
+/* Coverage strip: one meter per backend, labelled, so no column headers and
+   no minimum width are needed. */
+.api-strip { display: grid; grid-template-columns: repeat(4, 62px); gap: 8px; }
+@media (max-width: 640px) { .api-strip { grid-template-columns: repeat(4, 1fr); } }
+.api-meter { display: flex; flex-direction: column; gap: 4px; }
+.api-meter .lab {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em;
+  text-transform: uppercase; opacity: .55; display: flex; justify-content: space-between;
+}
+.api-meter .lab b { font-weight: 600; font-variant-numeric: tabular-nums; opacity: .95; }
+.api-track { height: 6px; border-radius: 3px; background: var(--table-border); overflow: hidden; }
+.api-fill { display: block; height: 100%; border-radius: 3px; }
+/* Bands. Hue says which implementation, depth says how much of the widest
+   support any backend offers for this operation is present here. */
+.api-fill.full     { background: var(--sidebar-active); opacity: 1; }
+.api-fill.broad    { background: var(--sidebar-active); opacity: .74; }
+.api-fill.partial  { background: var(--sidebar-active); opacity: .48; }
+.api-fill.minimal  { background: var(--sidebar-active); opacity: .28; }
+.api-fill.c-full    { background: var(--inline-code-fg); opacity: 1; }
+.api-fill.c-broad   { background: var(--inline-code-fg); opacity: .74; }
+.api-fill.c-partial { background: var(--inline-code-fg); opacity: .48; }
+.api-fill.c-minimal { background: var(--inline-code-fg); opacity: .28; }
+.api-meter.none .lab { opacity: .28; }
+.api-meter.none .api-track { background: var(--table-border); opacity: .4; }
+
 .api-detail-in {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
-  gap: 1px; background: var(--table-border);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 1px; background: var(--table-border); border-bottom: 1px solid var(--table-border);
 }
 .api-dcell { background: var(--bg); padding: 12px 15px; }
 .api-dcell h4 {
@@ -117,7 +142,7 @@
 }
 .api-dcell.on h4 { color: var(--links); opacity: 1; }
 .api-kv { display: flex; gap: 8px; font-size: 12.5px; margin-bottom: 5px; align-items: baseline; }
-.api-kv .k { opacity: .55; min-width: 60px; flex: none; font-size: 11.5px; }
+.api-kv .k { opacity: .55; min-width: 58px; flex: none; font-size: 11.5px; }
 .api-kv .v { font-family: var(--font-mono); word-break: break-word; }
 .api-dts { display: flex; flex-wrap: wrap; gap: 4px; }
 .api-dt {
@@ -126,6 +151,22 @@
 }
 .api-none { opacity: .5; font-size: 12.5px; font-style: italic; }
 .api-empty { padding: 34px; text-align: center; opacity: .7; }
+.api-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 12px; font-size: 12.5px; opacity: .8; }
+.api-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.api-legend i { width: 22px; height: 6px; border-radius: 3px; display: block; }
+
+/* Category + surface tables keep a scroll container of their own. */
+.api-tablewrap { overflow-x: auto; border: 1px solid var(--table-border); border-radius: var(--radius-lg); margin-top: 16px; }
+.api-tablewrap table { border-collapse: collapse; width: 100%; min-width: 680px; margin: 0; }
+.api-tablewrap thead th {
+  background: var(--table-header-bg); text-align: left; font-size: 11px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase; opacity: .85;
+  padding: 9px 14px; border-bottom: 1px solid var(--table-border); white-space: nowrap;
+}
+.api-tablewrap tbody tr { border-bottom: 1px solid var(--table-border); }
+.api-tablewrap tbody tr:last-child { border-bottom: 0; }
+.api-tablewrap td { padding: 8px 14px; vertical-align: middle; }
+.api-tablewrap td.name { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; }
 
 /* Surface + notes -------------------------------------------------------- */
 .api-surface {

@@ -106,8 +106,58 @@
   var rows = document.getElementById("apiRows");
   var countEl = document.getElementById("apiCount");
 
+  /* Coverage is measured against the widest support any backend offers for
+     that same operation, not against the nine dtypes in the crate. Many
+     operations are float-only by nature, so 4-of-9 would read as thin
+     coverage when it is in fact everything the operation has. */
+  function widest(op) {
+    return B.reduce(function (n, b) {
+      return Math.max(n, op.backends[b].dtypes.length);
+    }, 0);
+  }
+
+  /* Below MINIMUM an operation counts as present but barely: one element type
+     out of a much wider set is a foothold, not support. */
+  var MINIMUM = 0.34;
+  function band(ratio) {
+    if (ratio >= 1) return "full";
+    if (ratio >= 0.67) return "broad";
+    if (ratio >= MINIMUM) return "partial";
+    return "minimal";
+  }
+
+  function meter(b, e, top) {
+    if (!e.dtypes.length) {
+      return '<div class="api-meter none"><span class="lab">' + b + '<b>&mdash;</b></span>' +
+        '<span class="api-track"></span></div>';
+    }
+    var ratio = top ? e.dtypes.length / top : 1;
+    var cls = band(ratio);
+    if (e.impl === "composed") cls = "c-" + cls;
+    var pct = Math.max(12, Math.round(ratio * 100));
+    return '<div class="api-meter"><span class="lab">' + b + '<b>' + e.dtypes.length + '</b></span>' +
+      '<span class="api-track"><i class="api-fill ' + cls + '" style="width:' + pct + '%"></i></span></div>';
+  }
+
+  function describe(op) {
+    var c = op.catalog;
+    if (c && c.doc) return '<div class="api-desc">' + c.doc + '</div>';
+    if (!c) return "";
+    var operands = c.arity[0] === c.arity[1]
+      ? c.arity[0] + (c.arity[0] === 1 ? " operand" : " operands")
+      : c.arity[0] + "\u2013" + c.arity[1] + " operands";
+    var bits = [c.kind.toLowerCase(), operands];
+    if (c.attrs && c.attrs !== "NoAttributes") bits.push(c.attrs);
+    if (c.api) bits.push(c.api);
+    return '<div class="api-desc structural">' + bits.join(" \u00b7 ") + "</div>";
+  }
+
   function matches(op) {
-    if (state.q && op.name.toLowerCase().indexOf(state.q) < 0) return false;
+    if (state.q) {
+      var hay = op.name + " " + ((op.catalog && op.catalog.doc) || "") +
+                " " + ((op.catalog && op.catalog.family) || "");
+      if (hay.toLowerCase().indexOf(state.q) < 0) return false;
+    }
     var b;
     for (b of state.backends) { if (!op.backends[b].dtypes.length) return false; }
     var scope = state.backends.size ? Array.from(state.backends) : B;
@@ -126,14 +176,20 @@
     return true;
   }
 
-  function chipFor(e) {
-    if (!e.dtypes.length) return '<span class="api-sup absent">&mdash;</span>';
-    var cls = e.impl === "composed" ? "composed" : "native";
-    return '<span class="api-sup ' + cls + '"><i></i>' + e.dtypes.length + '</span>';
-  }
-
   function detailFor(op) {
-    return '<div class="api-detail-in">' + B.map(function (b) {
+    var c = op.catalog;
+    var head = "";
+    if (c) {
+      head = '<div class="api-dcell"><h4>catalog</h4>' +
+        '<div class="api-kv"><span class="k">family</span><span class="v">' + c.family + '</span></div>' +
+        '<div class="api-kv"><span class="k">category</span><span class="v">' + c.kind + '</span></div>' +
+        '<div class="api-kv"><span class="k">operands</span><span class="v">' +
+          (c.arity[0] === c.arity[1] ? c.arity[0] : c.arity[0] + "\u2013" + c.arity[1]) + '</span></div>' +
+        '<div class="api-kv"><span class="k">attributes</span><span class="v">' + c.attrs + '</span></div>' +
+        (c.api ? '<div class="api-kv"><span class="k">reached via</span><span class="v">' + c.api + '</span></div>' : "") +
+        '</div>';
+    }
+    return '<div class="api-detail-in">' + head + B.map(function (b) {
       var e = op.backends[b];
       if (!e.dtypes.length) {
         return '<div class="api-dcell"><h4>' + b + '</h4>' +
@@ -155,37 +211,35 @@
     var list2 = DATA.operations.filter(matches);
     countEl.textContent = list2.length + " of " + DATA.operations.length;
     if (!list2.length) {
-      rows.innerHTML = '<tr><td colspan="5" class="api-empty">No operation matches those filters.</td></tr>';
+      rows.innerHTML = '<p class="api-empty">No operation matches those filters.</p>';
       return;
     }
     rows.innerHTML = list2.map(function (op, i) {
-      return '<tr class="op" tabindex="0" role="button" aria-expanded="false" data-i="' + i + '">' +
-        '<td class="name">' + op.name + '</td>' +
-        B.map(function (b) { return '<td style="text-align:center">' + chipFor(op.backends[b]) + '</td>'; }).join("") +
-        '</tr><tr class="api-detail" data-d="' + i + '" hidden><td colspan="5"></td></tr>';
+      var top = widest(op);
+      return '<button type="button" class="api-row" aria-expanded="false" data-i="' + i + '">' +
+        '<span class="api-id"><span class="api-name">' + op.name +
+          (op.catalog ? '<span class="api-fam">' + op.catalog.family + '</span>' : "") +
+        '</span>' + describe(op) + '</span>' +
+        '<span class="api-strip">' +
+          B.map(function (b) { return meter(b, op.backends[b], top); }).join("") +
+        '</span></button>' +
+        '<div class="api-detail" data-d="' + i + '" hidden></div>';
     }).join("");
     rows._list = list2;
   }
 
-  function toggleRow(tr) {
-    var i = tr.dataset.i;
-    var det = rows.querySelector('tr.api-detail[data-d="' + i + '"]');
-    var open = tr.getAttribute("aria-expanded") === "true";
-    tr.setAttribute("aria-expanded", open ? "false" : "true");
+  function toggleRow(btn) {
+    var i = btn.dataset.i;
+    var det = rows.querySelector('.api-detail[data-d="' + i + '"]');
+    var open = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", open ? "false" : "true");
     if (open) { det.hidden = true; return; }
-    if (!det.firstElementChild.innerHTML) {
-      det.firstElementChild.innerHTML = detailFor(rows._list[i]);
-    }
+    if (!det.innerHTML) { det.innerHTML = detailFor(rows._list[i]); }
     det.hidden = false;
   }
   rows.addEventListener("click", function (e) {
-    var tr = e.target.closest("tr.op");
-    if (tr) toggleRow(tr);
-  });
-  rows.addEventListener("keydown", function (e) {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    var tr = e.target.closest("tr.op");
-    if (tr) { e.preventDefault(); toggleRow(tr); }
+    var btn = e.target.closest(".api-row");
+    if (btn) toggleRow(btn);
   });
 
   var cats = [];
