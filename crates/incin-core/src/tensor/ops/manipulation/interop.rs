@@ -69,7 +69,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Cast the tensor's elements to another dtype.
-    pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(&self) -> Result<Tensor<S, B, T2, G>>
+    pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
+        &self,
+    ) -> Result<crate::shapes::Dense<S, B, T2, G, Local>>
     where
         B: Execute<op::ToDType> + Capabilities,
         <B as Execute<op::ToDType>>::Output: Into<B::Storage<T2>>,

@@ -85,7 +85,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
-    pub fn pixel_shuffle(&self, upscale_factor: usize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn pixel_shuffle(
+        &self,
+        upscale_factor: usize,
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Capabilities + Execute<op::PixelShuffle>,
         <B as Execute<op::PixelShuffle>>::Output: Into<B::Storage<K>>,
@@ -151,7 +154,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Group normalization across `groups`.
-    pub fn group_norm(&self, groups: usize, eps: f64) -> Result<Self>
+    pub fn group_norm(
+        &self,
+        groups: usize,
+        eps: f64,
+    ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::GroupNorm> + Capabilities,
         <B as Execute<op::GroupNorm>>::Output: Into<B::Storage<K>>,
@@ -181,7 +188,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Instance normalization for 4D (N, C, H, W) tensors.
-    pub fn instance_norm(&self, eps: f64) -> Result<Self>
+    pub fn instance_norm(&self, eps: f64) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::InstanceNorm> + Capabilities,
         <B as Execute<op::InstanceNorm>>::Output: Into<B::Storage<K>>,

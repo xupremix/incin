@@ -516,19 +516,19 @@ fn test_indexing_concat() -> Result<()> {
     let t2 = Tensor::<s![2, 2], CpuBackendImpl>::from_slice(&[5.0, 6.0, 7.0, 8.0], ())?;
 
     // concat dim 0
-    let c0: Tensor<s![4, 2], CpuBackendImpl> = t1.clone().concat(&t2, axis!(0))?;
+    let c0: Dense<s![4, 2], CpuBackendImpl> = t1.clone().concat(&t2, axis!(0))?;
     assert_eq!(c0.dims().dims(), &[4, 2]);
     assert_eq!(to_vec(&c0.into_dyn()), vec![1., 2., 3., 4., 5., 6., 7., 8.]);
 
     // concat dim 1
-    let c1: Tensor<s![2, 4], CpuBackendImpl> = t1.concat(&t2, axis!(1))?;
+    let c1: Dense<s![2, 4], CpuBackendImpl> = t1.concat(&t2, axis!(1))?;
     assert_eq!(c1.dims().dims(), &[2, 4]);
     assert_eq!(to_vec(&c1.into_dyn()), vec![1., 2., 5., 6., 3., 4., 7., 8.]);
 
-    let c_runtime: Tensor<Ranked<incin::typenum::U2>, CpuBackendImpl> = t1.concat(&t2, -1isize)?;
+    let c_runtime: Dense<Ranked<incin::typenum::U2>, CpuBackendImpl> = t1.concat(&t2, -1isize)?;
     assert_eq!(c_runtime.dims().as_ref(), &[2, 4]);
 
-    let c_negative: Tensor<s![2, 4], CpuBackendImpl> = t1.concat(&t2, axis!(-1))?;
+    let c_negative: Dense<s![2, 4], CpuBackendImpl> = t1.concat(&t2, axis!(-1))?;
     assert_eq!(c_negative.dims().as_ref(), &[2, 4]);
 
     Ok(())
@@ -666,7 +666,8 @@ fn dimension_selecting_operations_accept_axis_selectors() -> Result<()> {
     let select_indices = Tensor::<s![1], CpuBackendImpl, u32>::zeros(())?;
 
     let _ = tensor.gather(axis!(1), &indices)?;
-    let selected: Tensor<s![2, usize], CpuBackendImpl> =
+    // `Dense`: index_select gathers into a fresh buffer and states so.
+    let selected: Dense<s![2, usize], CpuBackendImpl> =
         tensor.index_select(axis!(1), &select_indices)?;
     let narrowed: Tensor<s![2, usize], CpuBackendImpl> =
         tensor.clone().try_narrow(axis!(1), 0, 1)?;

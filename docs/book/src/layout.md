@@ -254,7 +254,8 @@ a style choice:
   (broadcasting ones included), the comparison and logical families,
   `masked_fill`, `where_cond`, `lerp`, `cumsum`, every reduction, `matmul`,
   `addmm`, `Linear`, `BatchNorm2d`, `RmsNorm`, the loss family and the
-  order-statistic family, the convolutions, `AvgPool2d` and `Embedding` do
+  order-statistic family, the convolutions, `AvgPool2d`, `Embedding` and the
+  manipulation surface — `concat`, `gather`, `pad`, `triu` and the rest — do
   this, so a
   proof appears out of the middle of a chain and `reshape_view` is reachable at
   the end of one. The claim is *stated*, never carried: carrying the operand's

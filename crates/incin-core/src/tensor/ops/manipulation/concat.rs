@@ -24,7 +24,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     pub fn try_concat_slice(
         tensors: &[&Tensor<S, B, K, G, Local, L>],
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
@@ -122,7 +122,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         other: &Tensor<S2, B, K, G>,
         axis: A,
-    ) -> Result<Tensor<<A as ConcatSelector<S, S2>>::Output, B, K, G>>
+    ) -> Result<crate::shapes::Dense<<A as ConcatSelector<S, S2>>::Output, B, K, G, Local>>
     where
         S2: Shape,
         A: ConcatSelector<S, S2>,
@@ -198,7 +198,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         other: &Tensor<S2, B, K, G>,
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         S2: Shape,
         B: Execute<op::ConcatExact> + Capabilities,
@@ -211,7 +211,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         other: &Tensor<S2, B, K, G>,
         dim: usize,
-    ) -> Result<Tensor<Out, B, K, G>>
+    ) -> Result<crate::shapes::Dense<Out, B, K, G, Local>>
     where
         S2: Shape,
         Out: Shape,
@@ -296,7 +296,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         other: &Tensor<S2, B, K, G>,
         axis: isize,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         S2: Shape,
         B: Execute<op::ConcatExact> + Capabilities,
@@ -310,7 +310,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     pub fn try_stack_slice(
         tensors: &[&Tensor<S, B, K, G, Local, L>],
         dim: usize,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Execute<op::StackExact> + Capabilities,
         <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
@@ -414,11 +414,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Stacks `self` with `other` along a static, named, or signed axis selector.
+    #[allow(clippy::type_complexity)]
     pub fn stack<A>(
         &self,
         other: &Tensor<S, B, K, G>,
         axis: A,
-    ) -> Result<Tensor<<A as StackSelector<S>>::Output, B, K, G>>
+    ) -> Result<crate::shapes::Dense<<A as StackSelector<S>>::Output, B, K, G, Local>>
     where
         A: StackSelector<S>,
         <A as StackSelector<S>>::Output: Shape + DynShape,
@@ -504,7 +505,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Repeats tensor data along each dimension according to `repeats`.
-    pub fn repeat(&self, repeats: &[usize]) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn repeat(&self, repeats: &[usize]) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Capabilities + Execute<op::Repeat>,
         <B as Execute<op::Repeat>>::Output: Into<B::Storage<K>>,
@@ -561,7 +562,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         padding: &[(usize, usize)],
         val: Sc,
-    ) -> Result<Tensor<Dyn, B, K, G>>
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Capabilities + Execute<op::Pad>,
         <B as Execute<op::Pad>>::Output: Into<B::Storage<K>>,

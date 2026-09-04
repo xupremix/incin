@@ -58,7 +58,7 @@ fn main() -> incin::Result<()> {
     // an op it never even participates in the arithmetic of:
     let more: Tensor<s![Batch, 4]> = Tensor::zeros((batch, ())).unwrap();
     let half: Tensor<s![Batch, 4]> = Tensor::zeros((batch, ())).unwrap();
-    let joined: Tensor<s![Batch, 8]> = half.concat(&more, axis!(1)).unwrap();
+    let joined: Dense<s![Batch, 8]> = half.concat(&more, axis!(1)).unwrap();
     println!("joined shape: {:?}", joined.dims());
 
     // matmul carries `Batch` straight through too. This is batched matrix

@@ -413,7 +413,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         axis: A,
         index: &Tensor<S2, B, KInt, G2>,
-    ) -> Result<Tensor<S2, B, K, G>>
+    ) -> Result<crate::shapes::Dense<S2, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
         B: Execute<op::Gather> + Capabilities,
@@ -581,7 +581,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         axis: A,
         index: &Tensor<S2, B, KInt, G2>,
-    ) -> Result<Tensor<A::Output, B, K, G>>
+    ) -> Result<crate::shapes::Dense<A::Output, B, K, G, Local>>
     where
         A: ReplaceAxisSelector<S>,
         A::Output: DynShape,
@@ -625,7 +625,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 )
             })?
             .into();
-        Tensor::<A::Output, B, K, G>::from_parts(
+        crate::shapes::Dense::<A::Output, B, K, G, Local>::from_parts(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -635,7 +635,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Returns upper triangular part of matrix.
-    pub fn triu(&self, k: i64) -> Result<Self>
+    pub fn triu(&self, k: i64) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::Triu> + Capabilities,
         <B as Execute<op::Triu>>::Output: Into<B::Storage<K>>,
@@ -662,7 +662,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Returns lower triangular part of matrix.
-    pub fn tril(&self, k: i64) -> Result<Self>
+    pub fn tril(&self, k: i64) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::Tril> + Capabilities,
         <B as Execute<op::Tril>>::Output: Into<B::Storage<K>>,
@@ -689,7 +689,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts or constructs diagonal tensor.
-    pub fn diag(&self, k: i64) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn diag(&self, k: i64) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Execute<op::Diag> + Capabilities,
         <B as Execute<op::Diag>>::Output: Into<B::Storage<K>>,

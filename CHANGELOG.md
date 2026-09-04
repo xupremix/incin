@@ -86,6 +86,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for the result they allocate. They pinned `L` on *both* arguments, so once
   `Linear` returned a proof, feeding its output straight into a loss stopped
   compiling.
+- **The manipulation surface proves its results are dense.** `concat`, `stack`,
+  `gather`, `index_select`, `repeat`, `pad`, `diag`, `pixel_shuffle`,
+  `to_dtype`, `triu`, `tril`, `group_norm` and `instance_norm` all allocate and
+  now say so.
+
+  Four of them -- `triu`, `tril`, `group_norm`, `instance_norm` -- returned
+  `Self`, which is the fifth appearance of the same pattern and again in the
+  shape-preserving members of the group. Everything else here changes the shape
+  and so was forced to state *something*, which is exactly why it stated `Dyn`
+  and nobody had to look again.
+
+  **Breaking**: an annotation written `Tensor<S, B, K, G>` for one of these
+  results becomes `Dense<S, B, K, G>`. Five in the workspace's own tests and
+  examples needed it.
 - **The spatial and embedding layers prove their results are dense.** `Conv1d`,
   `Conv2d`, `AvgPool2d` and `Embedding` were the `nn` layers still stating
   nothing. Unlike the pointwise surface they have no strided-operand case to

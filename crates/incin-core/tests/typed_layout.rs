@@ -872,3 +872,55 @@ fn spatial_and_embedding_layers_produce_dense_results() {
     let x = incin_core::prelude::Tensor::<s![1, 1, 4, 4], CpuBackendImpl>::ones(()).unwrap();
     assert_dense("conv2d", &conv.forward(x).unwrap());
 }
+
+/// The manipulation surface allocates, so its results are dense.
+///
+/// Four of these returned `Self` -- `triu`, `tril`, `group_norm` and
+/// `instance_norm` -- which is the fifth appearance of the same pattern, and
+/// again in the shape-preserving members of the group. Every other operation
+/// here changes the shape and so was forced to state something, which is
+/// exactly why it stated `Dyn` and nobody had to think about it.
+#[test]
+fn manipulation_results_are_dense_even_from_a_strided_operand() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{Here, Next};
+
+    let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::from_slice(
+        &[
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ],
+        (),
+    )
+    .unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(strided.inner());
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[1, 4],
+        "the operand must actually be non-contiguous for this test to mean anything"
+    );
+
+    // Shape-preserving: the ones where returning `Self` typechecked.
+    assert_dense("triu", &strided.triu(0).unwrap());
+    assert_dense("tril", &strided.tril(0).unwrap());
+    assert_dense("to_dtype", &strided.to_dtype::<f64>().unwrap());
+
+    // Shape-changing: weak rather than wrong, but still worth stating.
+    assert_dense("repeat", &strided.repeat(&[2, 1]).unwrap());
+    assert_dense("pad", &strided.pad(&[(1, 1), (0, 0)], 0.0).unwrap());
+    assert_dense("diag", &strided.diag(0).unwrap());
+
+    // Two-operand: concat and stack read both and write a third buffer, so the
+    // strided operand is passed in each position.
+    let dense_43 = incin_core::prelude::Tensor::<s![4, 3], CpuBackendImpl>::ones(()).unwrap();
+    assert_dense(
+        "concat(strided, dense)",
+        &strided.try_concat(&dense_43, 0).unwrap(),
+    );
+    assert_dense(
+        "concat(dense, strided)",
+        &dense_43.try_concat(&strided, 0).unwrap(),
+    );
+}
