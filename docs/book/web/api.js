@@ -462,8 +462,12 @@
             ? '<a class="api-tyname" href="' + t.url + '" target="_blank" rel="noopener noreferrer">' +
               t.name + ' ↗</a>'
             : '<span class="api-tyname plain">' + t.name + '</span>';
-          return '<div class="api-tyrow"><span class="api-tykind ' + t.kind + '">' + t.kind + '</span>' +
-            name + '<code class="api-typath">' + where + '</code></div>';
+          return expandable(t.name,
+            '<span class="api-tykind ' + t.kind + '">' + t.kind + '</span>' +
+            '<span class="api-tyname plain">' + t.name + '</span>' +
+            '<code class="api-typath">' + where + '</code>', "api-tyrow open") +
+            (t.url ? '<a class="api-tylink" href="' + t.url +
+              '" target="_blank" rel="noopener noreferrer">docs.rs \u2197</a>' : "");
         }).join("")
       : '<p class="api-empty">No type matches those filters.</p>';
   }
@@ -474,8 +478,9 @@
   /* -- layouts ----------------------------------------------------------- */
   document.getElementById("layoutCards").innerHTML = ((DATA.layouts || {}).items || [])
     .map(function (i) {
-      return '<div class="api-card"><h3><code>' + i.name + '</code>' +
-        '<span class="api-fam">' + i.kind + '</span></h3><p>' + i.doc + '</p></div>';
+      return '<div class="api-card">' + expandable(i.name,
+        '<h3><code>' + i.name + '</code><span class="api-fam">' + i.kind + '</span></h3>' +
+        '<p>' + i.doc + '</p>', "api-cardbtn") + '</div>';
     }).join("");
 
   document.getElementById("layoutRows").innerHTML = ((DATA.layouts || {}).byBackend || [])
@@ -509,9 +514,10 @@
       ? groups.map(function (g) {
           return '<section class="api-grp"><h3 class="api-h"><code>shapes::' + g.module +
             '</code></h3><div class="api-list">' + g.items.map(function (i) {
-              return '<div class="api-tyrow"><span class="api-tykind">' + i.kind + '</span>' +
+              return expandable(i.name,
+                '<span class="api-tykind">' + i.kind + '</span>' +
                 '<span class="api-tyname plain">' + i.name + '</span>' +
-                '<span class="api-typath doc">' + i.doc + '</span></div>';
+                '<span class="api-typath doc">' + i.doc + '</span>', "api-tyrow open");
             }).join("") + '</div></section>';
         }).join("")
       : '<p class="api-empty">No shape type matches that filter.</p>';
@@ -521,17 +527,90 @@
 
   /* -- target API -------------------------------------------------------- */
   document.getElementById("targetRows").innerHTML = (DATA.targetApi || []).map(function (m) {
-    return '<div class="api-tyrow"><span class="api-tykind">fn</span>' +
+    return expandable(m.name,
+      '<span class="api-tykind">fn</span>' +
       '<span class="api-tyname plain">' + m.name + '</span>' +
-      '<span class="api-typath doc">' + m.doc + '</span></div>';
+      '<span class="api-typath doc">' + m.doc + '</span>', "api-tyrow open");
   }).join("");
+
+
+  /* -- usage snippets ---------------------------------------------------- */
+  /* Fetched on demand and shared by every section: an item is clickable, and
+     opening it shows real compiled code that uses it. A literal word match is
+     a fact about the snippet -- if the name appears in the code, the code uses
+     it -- so the heading says "used in", never "the example for", because a
+     name can appear incidentally. */
+  var USAGE = null;
+  var usagePending = null;
+
+  function loadUsage() {
+    if (USAGE) return Promise.resolve(USAGE);
+    if (!usagePending) {
+      usagePending = fetch("api-usage.json").then(function (r) {
+        if (!r.ok) throw new Error("api-usage.json responded " + r.status);
+        return r.json();
+      }).then(function (payload) { USAGE = payload; return USAGE; });
+    }
+    return usagePending;
+  }
+
+  function usageHtml(name) {
+    var hits = (USAGE && USAGE.index[name]) || [];
+    if (!hits.length) {
+      return '<p class="api-none">No compiled snippet in this repository uses <code>' +
+        name + '</code> by name yet.</p>';
+    }
+    return hits.map(function (i) {
+      var sn = USAGE.snippets[i];
+      return '<figure class="api-ex"><figcaption>' +
+        '<a href="' + sn.href + '"' +
+        (sn.origin === "test" ? ' target="_blank" rel="noopener noreferrer"' : '') +
+        '>' + sn.label + '</a>' +
+        '<span class="api-extag' + (sn.checked ? " ok" : "") + '">' +
+        (sn.origin === "book" ? "book · " : "test · ") +
+        (sn.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
+        '<pre><code>' + code(sn.code) + '</code></pre></figure>';
+    }).join("");
+  }
+
+  document.addEventListener("click", function (e) {
+    var item = e.target.closest("[data-usage]");
+    if (!item) return;
+    var name = item.dataset.usage;
+    var panel = item.nextElementSibling;
+    if (!panel || !panel.classList.contains("api-usage")) return;
+    var open = item.getAttribute("aria-expanded") === "true";
+    item.setAttribute("aria-expanded", open ? "false" : "true");
+    if (open) { panel.hidden = true; return; }
+    panel.hidden = false;
+    if (!panel.dataset.filled) {
+      panel.innerHTML = '<p class="api-none">Loading usage&hellip;</p>';
+      loadUsage().then(function () {
+        panel.innerHTML = '<h4>Used in</h4>' + usageHtml(name);
+        panel.dataset.filled = "1";
+      }).catch(function (error) {
+        panel.innerHTML = '<p class="api-none">Usage could not be loaded: ' +
+          String(error.message || error) + '</p>';
+      });
+    }
+  });
+
+  function expandable(name, inner, cls) {
+    return '<button type="button" class="' + (cls || "api-item") + '" data-usage="' + name +
+      '" aria-expanded="false">' + inner + '</button>' +
+      '<div class="api-usage" hidden></div>';
+  }
 
   /* -- worked examples --------------------------------------------------- */
   /* The book chapters are include_str!'d into a doctest-only module in the
      facade, so a `no_run` or `compile_fail` block is compiled by CI. An
      `ignore` block is not, and says so rather than passing for checked. */
-  function escapeCode(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  /* The book and this page share one highlighter, so a snippet reads the same
+     in both places. It escapes as it tokenises, so the raw text goes in. */
+  function code(text) {
+    return window.incinHighlightRust
+      ? window.incinHighlightRust(text)
+      : text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function examplesFor(section) {
@@ -546,7 +625,7 @@
           '<figcaption><a href="./#/' + e.chapter + '">' + e.heading + '</a>' +
           '<span class="api-extag' + (e.checked ? " ok" : "") + '">' +
           (e.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
-          '<pre><code>' + escapeCode(e.code) + '</code></pre></figure>';
+          '<pre><code>' + code(e.code) + '</code></pre></figure>';
       }).join("");
   }
 

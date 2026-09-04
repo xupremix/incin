@@ -93,6 +93,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Code on the reference page is syntax highlighted**, by the same
+  highlighter the book uses. It lived inside `book.js`, which this page does
+  not load; it is now one shared file both pages load, rather than a second
+  copy to keep in step.
+- **Every item opens to real usage.** Types, layouts, shape types, target
+  methods and element types are clickable like operations, and opening one
+  shows compiled code that uses it: 530 names are covered by 602 snippets drawn
+  from the book chapters and from the repository's own test functions, all of
+  which the compiler checks. The heading says *used in*, never *the example
+  for*, because the match is a literal occurrence of the name in the code -- a
+  fact about the snippet, not a claim about its meaning. An item with no
+  snippet says so instead of showing an unrelated one.
 - **Every proportional bar on the page uses the coverage ramp.** The summary
   and backend bars kept a fixed hue while their markup already asked for a step
   class, so they read on a different scale from every other bar on the page.

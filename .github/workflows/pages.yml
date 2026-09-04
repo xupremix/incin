@@ -9,6 +9,7 @@ on:
       - "docs/book/**"
       - "docs/api-site-data.json"
       - "docs/api-types.json"
+      - "docs/api-usage.json"
       - "docs/api-type-links.json"
       - "docs/public-api/**"
       - "tools/build-api-site-data.py"
@@ -48,12 +49,13 @@ jobs:
           # is itself generated. Regenerate and fail on drift, so a capability
           # change that skipped the payload cannot ship a stale API reference.
           python3 tools/build-api-site-data.py
-          git diff --exit-code -- docs/api-site-data.json docs/api-types.json
+          git diff --exit-code -- docs/api-site-data.json docs/api-types.json docs/api-usage.json
           python3 docs/book/build_site.py
           python3 tools/check-book-site.py
           python3 tools/test-book-site.py
           python3 tools/test-api-page.py
           node --check docs/book/site/book.js
+          node --check docs/book/site/highlight.js
           node --check docs/book/site/api.js
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

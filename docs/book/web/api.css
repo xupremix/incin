@@ -437,3 +437,33 @@
   font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
 }
 .api-ex code { background: none; padding: 0; border: 0; font: inherit; white-space: pre; }
+
+/* -- expandable items --------------------------------------------------- */
+.api-cardbtn, .api-tyrow.open {
+  appearance: none; background: none; border: 0; font: inherit; color: inherit;
+  text-align: left; width: 100%; cursor: pointer; padding: 0;
+}
+.api-tyrow.open {
+  display: grid; grid-template-columns: 58px minmax(0, auto) minmax(0, 1fr);
+  gap: 10px; align-items: baseline; padding: 7px 4px;
+  border-bottom: 1px solid var(--table-border);
+}
+@media (max-width: 640px) { .api-tyrow.open { grid-template-columns: 58px minmax(0, 1fr); } }
+.api-cardbtn:hover .api-tyname, .api-tyrow.open:hover .api-tyname { text-decoration: underline; }
+.api-cardbtn:focus-visible, .api-tyrow.open:focus-visible {
+  outline: 2px solid var(--links); outline-offset: 2px; border-radius: var(--radius-sm);
+}
+.api-tyrow.open[aria-expanded="true"] { font-weight: 600; }
+.api-usage {
+  padding: 10px 0 14px; border-bottom: 1px solid var(--table-border);
+}
+.api-usage h4 {
+  margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  opacity: .55; font-family: var(--font-mono);
+}
+.api-card .api-usage { border-bottom: 0; padding-bottom: 0; }
+.api-tylink {
+  display: inline-block; font-family: var(--font-mono); font-size: 11px;
+  color: var(--links); text-decoration: none; margin: 0 0 6px 68px;
+}
+.api-tylink:hover { text-decoration: underline; }

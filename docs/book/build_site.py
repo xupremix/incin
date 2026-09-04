@@ -136,6 +136,7 @@ def main() -> None:
     (SITE / "search-index.json").write_text(json.dumps(search, ensure_ascii=False) + "\n", encoding="utf-8")
     shutil.copy(ROOT / "web" / "book.css", SITE / "book.css")
     shutil.copy(ROOT / "web" / "book.js", SITE / "book.js")
+    shutil.copy(ROOT / "web" / "highlight.js", SITE / "highlight.js")
     index = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     index = index.replace("__SIDEBAR__", render_sidebar(sections))
     (SITE / "index.html").write_text(index, encoding="utf-8")
@@ -169,6 +170,7 @@ def write_api_reference() -> None:
     # times the size of everything else on the page, and most readers never
     # open it.
     shutil.copy(ROOT.parent / "api-types.json", SITE / "api-types.json")
+    shutil.copy(ROOT.parent / "api-usage.json", SITE / "api-usage.json")
 
 
 if __name__ == "__main__":

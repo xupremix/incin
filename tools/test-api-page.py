@@ -267,7 +267,9 @@ async function run() {
   const tyRows = [...doc().querySelectorAll("#tyRows .api-tyrow")];
   check(tyRows.length > 0 && tyRows.length <= 300,
     "the type reference rendered " + tyRows.length + " rows, outside its cap");
-  const linked = [...doc().querySelectorAll("#tyRows a.api-tyname")];
+  /* The name is a button now -- it opens the item's usage -- so the docs.rs
+     link is its own anchor beside it. */
+  const linked = [...doc().querySelectorAll("#tyRows a.api-tylink")];
   check(linked.length > 0, "no type in the reference links to its documentation");
   for (const link of linked) {
     check((link.getAttribute("href") || "").indexOf("https://docs.rs/") === 0,
@@ -324,6 +326,42 @@ async function run() {
     }
   }
   doc().querySelector('.api-tab[data-sec="operations"]').click();
+
+  /* Opening an item must actually produce compiled code that names it. The
+     snippets are fetched on demand, so this exercises the fetch too. */
+  doc().querySelector('.api-tab[data-sec="layouts"]').click();
+  const rowMajor = [...doc().querySelectorAll("#layoutCards [data-usage]")]
+    .find((el) => el.dataset.usage === "RowMajor");
+  check(rowMajor, "the layouts section has no expandable RowMajor entry");
+  rowMajor.click();
+  await until(() => {
+    const panel = rowMajor.nextElementSibling;
+    return panel && !panel.hidden && panel.dataset.filled === "1";
+  }, "the usage snippets to load");
+  const shown = rowMajor.nextElementSibling;
+  const figures = [...shown.querySelectorAll(".api-ex")];
+  check(figures.length > 0, "opening RowMajor produced no usage snippet");
+  for (const figure of figures) {
+    const text = figure.querySelector("pre code").textContent;
+    /* A substring test, not a regex: HARNESS is a non-raw Python string, so a
+       `\\b` written here reaches the browser as a backspace character rather
+       than a word boundary -- the same escaping mistake that produced a bogus
+       test-coverage metric earlier in this project. */
+    check(text.indexOf("RowMajor") >= 0,
+      "a snippet offered for RowMajor does not mention it");
+    check(figure.querySelector(".api-extag"),
+      "a usage snippet does not say where it came from");
+  }
+  check(shown.querySelector("pre code .hl-kw"),
+    "usage snippets are not syntax highlighted");
+  rowMajor.click();
+  check(rowMajor.nextElementSibling.hidden, "an opened item did not close again");
+
+  /* The section examples must be highlighted too, not only the usage ones. */
+  doc().querySelector('.api-tab[data-sec="operations"]').click();
+  const anyExample = doc().querySelector(".api-sec:not([hidden]) .api-ex pre code");
+  check(anyExample && anyExample.querySelector(".hl-kw"),
+    "the worked examples are not syntax highlighted");
 
   const shapeItems = doc().querySelectorAll("#shapeGroups .api-tyrow").length;
   check(shapeItems > 50,

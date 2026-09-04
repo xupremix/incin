@@ -262,6 +262,125 @@ EXAMPLE_CHAPTERS = {
 FENCE = re.compile(r"^```(rust[\w,]*)$")
 
 
+
+REPO_BLOB = "https://github.com/xupremix/incin/blob/master/"
+FN_START = re.compile(r"^(?:pub\s+)?(?:async\s+)?fn\s+([a-z0-9_]+)", re.M)
+
+
+def _fn_body(text: str, start: int):
+    """The whole function beginning at `start`, brace-matched.
+
+    A test function is short and self-contained, which makes it a better
+    snippet than either the whole file or an arbitrary window around a match.
+    """
+    brace = text.find("{", start)
+    if brace < 0:
+        return None
+    depth, index = 0, brace
+    while index < len(text):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        index += 1
+    if index >= len(text):
+        return None
+    body = text[start:index + 1]
+    lines = body.count("\n")
+    return body if 2 <= lines <= 45 else None
+
+
+def collect_snippets() -> list:
+    """A pool of real, compiled usages: book examples, then test functions.
+
+    Book blocks come first because they were written to be read. Test
+    functions fill in what the book does not reach -- they are compiled and
+    run, so they cannot describe an API that no longer exists.
+    """
+    pool = []
+    for path in sorted((ROOT / "docs/book/src").glob("*.md")):
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        heading, index = None, 0
+        while index < len(lines):
+            if lines[index].startswith("#"):
+                heading = lines[index].lstrip("#").strip()
+            match = FENCE.match(lines[index].strip())
+            if match:
+                end = index + 1
+                while end < len(lines) and lines[end].strip() != "```":
+                    end += 1
+                body = "\n".join(
+                    l for l in lines[index + 1:end]
+                    if not l.lstrip().startswith("# ") and l.strip() != "#"
+                ).strip()
+                if body:
+                    pool.append({
+                        "origin": "book",
+                        "label": heading or path.stem,
+                        "where": path.stem,
+                        "href": "./#/" + path.stem,
+                        "checked": "ignore" not in match.group(1),
+                        "code": body,
+                    })
+                index = end
+            index += 1
+
+    for pattern in ("crates/*/tests/*.rs", "crates/incin/examples/*/*.rs"):
+        for path in sorted(ROOT.glob(pattern)):
+            rel = path.relative_to(ROOT).as_posix()
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for match in FN_START.finditer(text):
+                body = _fn_body(text, match.start())
+                if body is None:
+                    continue
+                name = match.group(1)
+                pool.append({
+                    "origin": "test",
+                    "label": name,
+                    "where": rel,
+                    "href": REPO_BLOB + rel,
+                    "checked": True,
+                    "code": body.strip(),
+                })
+    # Identical bodies appear in more than one place; keep the first.
+    seen, unique = set(), []
+    for snippet in pool:
+        key = snippet["code"]
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(snippet)
+    return unique
+
+
+def index_usage(pool: list, names: list, limit: int = 3) -> dict:
+    """Which snippets literally use each name.
+
+    A literal word match is a fact about the snippet, not a guess about its
+    meaning: if `RowMajor` appears in the code, that code uses `RowMajor`. The
+    page says "used in", never "the example for", because a name can appear
+    incidentally. Book snippets are offered first.
+    """
+    order = sorted(range(len(pool)), key=lambda i: (pool[i]["origin"] != "book", len(pool[i]["code"])))
+    out = {}
+    for name in names:
+        if len(name) < 3:
+            continue
+        pattern = re.compile(r"\b" + re.escape(name) + r"\b")
+        hits = []
+        for i in order:
+            if pattern.search(pool[i]["code"]):
+                hits.append(i)
+                if len(hits) == limit:
+                    break
+        if hits:
+            out[name] = hits
+    return out
+
+
 def collect_examples() -> list:
     """Every worked example in the book, with whether the compiler checks it.
 
@@ -581,6 +700,31 @@ def main() -> int:
     types_out = ROOT / "docs/api-types.json"
     types_out.write_text(json.dumps({"types": types}, separators=(",", ":")), encoding="utf-8")
 
+    # Real usage for as much of the surface as the compiled sources reach.
+    # Only the snippets the index actually points at are shipped.
+    pool = collect_snippets()
+    names = set()
+    for op in operations:
+        names.add(op["name"])
+        api = (op.get("catalog") or {}).get("api") or ""
+        if api.startswith("::"):
+            names.add(api[2:])
+        elif "::" in api:
+            names.add(api.split("::", 1)[1])
+    names.update(i["name"] for i in layout_out["items"])
+    names.update(i["name"] for group in shape_groups for i in group["items"])
+    names.update(m["name"] for m in target_out)
+    names.update(t["name"] for t in types)
+    names.update(d["id"] for d in dtypes_out)
+    usage = index_usage(pool, sorted(n for n in names if n))
+    kept = sorted({i for hits in usage.values() for i in hits})
+    remap = {old_index: new_index for new_index, old_index in enumerate(kept)}
+    usage_out = ROOT / "docs/api-usage.json"
+    usage_out.write_text(json.dumps({
+        "snippets": [pool[i] for i in kept],
+        "index": {name: [remap[i] for i in hits] for name, hits in usage.items()},
+    }, separators=(",", ":")), encoding="utf-8")
+
     payload = {
         "operations": operations,
         "categories": categories,
@@ -595,6 +739,7 @@ def main() -> int:
         "examples": collect_examples(),
         "typeCount": len(types),
         "typeLinked": sum(1 for t in types if t["url"]),
+        "usageNames": len(usage),
     }
     out = ROOT / "docs/api-site-data.json"
     out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
