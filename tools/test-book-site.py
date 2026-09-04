@@ -9,8 +9,10 @@ keyboard navigation, search, and theme persistence across navigation.
 
 from __future__ import annotations
 
+import html
 import http.server
 import importlib.util
+import re
 import shutil
 import subprocess
 import tempfile
@@ -41,6 +43,15 @@ async function until(predicate, label) {
 }
 function check(condition, message) {
   if (!condition) throw new Error(message);
+}
+/* The application records sidebar state on <body>, and which class carries it
+   depends on the viewport: the wide layout marks "hidden", the narrow layout
+   marks "open". This previously asserted `#sidebar.open`, a class the
+   application has never set, so it could only ever have failed. */
+function sidebarOpen(doc, win) {
+  return win.innerWidth <= 900
+    ? doc.body.classList.contains("sidebar-open")
+    : !doc.body.classList.contains("sidebar-hidden");
 }
 async function run() {
   frame.src = "/project/index.html#/introduction";
@@ -93,9 +104,26 @@ async function run() {
     .find((link) => link.dataset.slug === "transformer");
   check(transformer, "transformer sidebar link is missing");
   transformer.click();
-  await until(() => win().location.hash === "#/transformer", "transformer route");
+  /* The hash updates on click; the chapter body arrives a fetch later, and the
+     loading indicator clears the old h1 in between -- so an h1 means the new
+     chapter has actually landed. Waiting on the hash alone raced, and every
+     assertion below ran against the previous chapter. */
+  await until(() => win().location.hash === "#/transformer" && doc().querySelector("#chapter h1"),
+    "transformer route");
   const sourceLink = doc().querySelector('a[href^="https://github.com/xupremix/incin/blob/"]');
   check(sourceLink, "repository source link was not mapped to GitHub");
+  check(!doc().querySelector("#chapter pre > pre"), "nested pre wrapper remains");
+
+  /* The transformer chapter carries the repository source link but has neither
+     a runnable block nor a hidden doctest line, so asserting those here was
+     asserting features that page never had. They belong on a chapter that has
+     both -- 17 chapters render a playground and 12 render hidden lines. */
+  const autograd = [...doc().querySelectorAll("a[data-slug]")]
+    .find((link) => link.dataset.slug === "autograd");
+  check(autograd, "autograd sidebar link is missing");
+  autograd.click();
+  await until(() => win().location.hash === "#/autograd" && doc().querySelector("#chapter h1"),
+    "autograd route");
   check(!doc().querySelector("#chapter pre > pre"), "nested pre wrapper remains");
   check(doc().querySelector("#chapter .playground"), "playground styling hook is missing");
   const boring = doc().querySelector("#chapter .boring");
@@ -108,22 +136,46 @@ async function run() {
 
   const toggle = doc().getElementById("sidebar-toggle");
   toggle.click();
-  check(toggle.getAttribute("aria-expanded") === "true" && doc().getElementById("sidebar").classList.contains("open"), "sidebar open state disagrees with aria-expanded");
-  doc().getElementById("quickstart").click();
-  await until(() => win().location.hash === "#/quickstart", "sidebar close after navigation");
-  check(toggle.getAttribute("aria-expanded") === "false" && !doc().getElementById("sidebar").classList.contains("open"), "sidebar close state disagrees with aria-expanded");
+  check(toggle.getAttribute("aria-expanded") === "true" && sidebarOpen(doc(), win()),
+    "sidebar open state disagrees with aria-expanded");
+  /* Sidebar entries are addressed by data-slug; there is no element with this
+     id, so this step threw before it could check anything. */
+  [...doc().querySelectorAll("a[data-slug]")]
+    .find((link) => link.dataset.slug === "quickstart").click();
+  await until(() => win().location.hash === "#/quickstart" && doc().querySelector("#chapter h1"),
+    "sidebar close after navigation");
+  check(toggle.getAttribute("aria-expanded") === "false" && !sidebarOpen(doc(), win()),
+    "sidebar close state disagrees with aria-expanded");
 
   win().location.hash = "#/does-not-exist";
-  await until(() => win().location.hash === "#/introduction", "unknown route normalization");
+  await until(() => win().location.hash === "#/introduction" && doc().querySelector("#chapter h1"),
+    "unknown route normalization");
   check(doc().title.startsWith("Introduction"), "unknown route retained fallback/content disagreement");
 
-  result.textContent = "BOOK_TEST=PASS";
+  result.textContent = "BOOK_TEST=" + "PASS";
 }
 run().catch((error) => {
   result.textContent = "BOOK_TEST=FAIL\n" + error.stack;
 });
 </script>
 """
+
+
+def harness_verdict(dumped: str, sentinel: str) -> tuple[bool, str]:
+    """Read the verdict from the result element, not from the whole dump.
+
+    `--dump-dom` emits the harness's own <script> source along with the DOM,
+    and that source contains the success sentinel as a literal. Substring
+    matching the dump therefore reports success unconditionally: this suite
+    passed with `check(false)` as the first statement of `run()`, so none of
+    its assertions had ever been evaluated. The sentinel is also assembled
+    from two pieces below so that the literal cannot reappear in the source.
+    """
+    match = re.search(r'<pre id="result">(.*?)</pre>', dumped, re.DOTALL)
+    if match is None:
+        return False, "the harness result element was missing from the dumped DOM"
+    verdict = html.unescape(match.group(1)).strip()
+    return verdict == sentinel, verdict
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -188,8 +240,10 @@ def main() -> int:
             thread.join(timeout=5)
 
     output = result.stdout + result.stderr
-    if result.returncode != 0 or "BOOK_TEST=PASS" not in output:
+    passed, verdict = harness_verdict(output, "BOOK_TEST=" + "PASS")
+    if result.returncode != 0 or not passed:
         print(output)
+        print("harness verdict: " + verdict)
         return 1
     print("book browser checks passed: routing, history, theme, search, keyboard, DOM, base path")
     return 0

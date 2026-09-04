@@ -322,17 +322,53 @@
      Chapter Loader & Renderer
      ========================================================================== */
 
+  /* The chapter currently mounted, so a route into it is not refetched. */
+  let loadedSlug = null;
+  /* Identifies the newest navigation, so a slower earlier one cannot land. */
+  let loadToken = 0;
+
+  function focusHeading(heading) {
+    requestAnimationFrame(() => {
+      const target = heading && document.getElementById(heading);
+      if (target) target.scrollIntoView();
+      else window.scrollTo(0, 0);
+      chapter.focus({ preventScroll: true });
+    });
+  }
+
   async function load(slug, heading) {
     if (!manifest) return;
     const item = manifest.chapters.find((entry) => entry.slug === slug) || manifest.chapters[0];
     if (item.slug !== slug) history.replaceState({}, "", "#/" + item.slug);
 
+    /* A permalink into the chapter already on screen is a scroll, not a
+       reload. This path used to refetch and replace the chapter body, so the
+       heading the reader had just clicked was torn out of the document while
+       the request was in flight, the reader lost their place, and every
+       in-page anchor cost a network round trip. */
+    if (loadedSlug === item.slug) {
+      /* Still a navigation from the reader's point of view: on a phone the
+         sidebar they tapped the link in has to get out of the way. */
+      if (window.innerWidth <= 900) setSidebarOpen(false);
+      focusHeading(heading);
+      return;
+    }
+
     chapter.innerHTML = '<div class="loading-indicator">Loading ' + escapeHtml(item.title) + '...</div>';
 
+    const token = ++loadToken;
     const response = await fetch(basePath() + "chapters/" + item.slug + ".html");
     if (!response.ok) throw new Error("Chapter failed to load (" + response.status + ")");
+    const body = await response.text();
 
-    chapter.innerHTML = await response.text();
+    /* A reader who navigates again before this request lands has already
+       moved on. Without this guard the slower response wins whichever way it
+       is ordered, so a quick second navigation could leave the previous
+       chapter on screen under the new chapter's URL. */
+    if (token !== loadToken) return;
+
+    chapter.innerHTML = body;
+    loadedSlug = item.slug;
     document.title = item.title + " - The Incin Book";
 
     // Update active sidebar entry
@@ -355,12 +391,7 @@
       setSidebarOpen(false);
     }
 
-    requestAnimationFrame(() => {
-      const target = heading && document.getElementById(heading);
-      if (target) target.scrollIntoView();
-      else window.scrollTo(0, 0);
-      chapter.focus({ preventScroll: true });
-    });
+    focusHeading(heading);
   }
 
   async function loadRoute() {
@@ -368,6 +399,7 @@
     try {
       await load(target.slug, target.heading);
     } catch (error) {
+      loadedSlug = null;
       chapter.innerHTML = "<h1>Chapter unavailable</h1><p>" + escapeHtml(String(error)) + "</p>";
     }
   }
@@ -513,7 +545,12 @@
 
   // Global Keybindings
   document.addEventListener("keydown", (event) => {
-    if (event.target.matches("input, textarea, select, button")) return;
+    /* `matches` exists on Element, not on Document -- a keydown delivered to
+       the document itself (rather than to a focused control) threw here, and
+       the throw took the rest of this handler with it, so chapter navigation
+       by arrow key never ran. */
+    const from = event.target;
+    if (from instanceof Element && from.matches("input, textarea, select, button")) return;
 
     if (event.key === "/" || event.key === "s") {
       event.preventDefault();
