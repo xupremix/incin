@@ -120,3 +120,19 @@ entry.
 Custom autodiff registration is not part of the current extension contract.
 Unless a custom operation is composed from existing differentiable tensor
 operations, document it as forward-only.
+
+The one seam an external crate cannot touch is the backend's thread-local tape
+push, which is `pub(crate)` by design: an in-tree backend moves its backward
+recipes into its `Execute` impl and pushes them there, so custom and built-in
+nodes share one graph. Everything else a differentiable custom operation needs
+is public, and `crates/incin-backends/examples/polar_cartesian.rs` shows it
+end to end, run by CI rather than only built. Polar-to-Cartesian takes two
+inputs and returns two outputs -- the multi-output inference a single-output
+catalog row cannot express, run through the runtime dispatch path because the
+typed one requires exactly one output -- with a backward recipe per output
+assembled into core `TapeNode`s and walked by the same
+`incin_core::exec::tape::backward` the CPU backend calls. The example checks
+the forward values and the hand-derived gradients against textbook answers,
+sweeps every input element against central finite differences, asserts the
+contract refusals, and then fits `(r, theta)` to a target point by gradient
+descent through nothing but its own backward.

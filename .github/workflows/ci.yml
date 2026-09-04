@@ -129,6 +129,13 @@ jobs:
     - name: Run the custom-operation example
       run: cargo run -p incin-backends --no-default-features --features cpu --example calibration_update
 
+    # The differentiable custom-operation example below asserts its forward
+    # values, its hand-derived gradients, finite-difference agreement, its
+    # contract refusals, and SGD convergence through its own backward -- all of
+    # which a compile-only build would miss.
+    - name: Run the differentiable custom-operation example
+      run: cargo run -p incin-backends --no-default-features --features cpu --example polar_cartesian
+
     # The workspace run above resolves features across every member, so a
     # backend crate that had come to depend on something another member turns
     # on would still pass it. These two build incin-backends alone, on the

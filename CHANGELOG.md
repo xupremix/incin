@@ -49,6 +49,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   narrowed, short and ragged operand lists, and CI runs it rather than only
   building it.
 
+- **A differentiable custom operation with two inputs, two outputs, and its own
+  backward**, at `crates/incin-backends/examples/polar_cartesian.rs`.
+  Polar-to-Cartesian takes radius and angle and returns `x` and `y` -- the
+  multi-output inference a single-output catalog row cannot express, which is
+  also why it runs through the runtime dispatch path: the typed custom path
+  requires exactly one output. A squared-error readout closes the graph, and
+  the three backward recipes (one per polar output, one for the loss) are
+  assembled into core `TapeNode`s and walked by the same
+  `incin_core::exec::tape::backward` the CPU backend calls, so a tensor
+  consumed by both outputs receives the sum of both contributions. The example
+  checks the forward values and hand-derived gradients against textbook
+  answers, sweeps every input element against central finite differences
+  (worst relative error `1e-11`), asserts the contract refusals, and fits
+  `(r, theta)` to a target point by gradient descent through nothing but its
+  own backward. The one seam it does not cross is the backend's thread-local
+  tape push, which stays `pub(crate)` by design; an in-tree backend would move
+  the same node construction into its `Execute` impl.
+
 ### Fixed
 
 - **A third vacuous suite, and what it found.** `cuda_shape_dtypes.rs` asserted
