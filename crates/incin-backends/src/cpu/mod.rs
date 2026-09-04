@@ -332,6 +332,23 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
         };
         Ok(storage::CpuStorage::from_contiguous(buffer, shape))
     }
+
+    /// `from_bytes_strided`.
+    ///
+    /// Decoding is identical, so it is reused wholesale; the only difference is
+    /// that the metadata carries the caller's strides instead of the dense
+    /// ones. The bytes arrive already permuted for those strides -- the caller
+    /// owns that, because it is the side that knows the source order.
+    fn from_bytes_strided<K: DType>(
+        bytes: &[u8],
+        shape: &[usize],
+        strides: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        let dense = Self::from_bytes::<K>(bytes, shape, dtype, device)?;
+        storage::CpuStorage::try_from_parts(dense.buffer.clone(), shape, strides, 0)
+    }
 }
 
 impl<D: Device> incin_core::backend_authoring::AutogradBackend for CpuBackendImpl<D> {

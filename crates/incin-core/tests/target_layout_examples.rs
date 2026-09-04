@@ -12,6 +12,7 @@ use incin_backends::prelude::*;
 use incin_core::shapes::{ChannelsLast, Dense, FreshLayout, RowMajor, ShapeArgs, dense_strides};
 use incin_core::tensor::device::Cpu;
 use incin_macros::s;
+use std::vec::Vec;
 
 /// The array constructors and `s![..]` now agree, so this is just `s![2, 2]`.
 /// It was a separate `ConstDim` spelling until #116.
@@ -149,4 +150,168 @@ fn an_array_constructor_produces_a_reshapable_shape() {
     let flat = x.into_row_major().unwrap().reshape_view::<s![4]>().unwrap();
     assert_eq!(flat.dims().as_ref(), &[4]);
     assert_eq!(flat.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+}
+
+/// Rank-three and rank-four literals reach the target API, in the right order.
+///
+/// `TensorData` stopped at rank two, so an NCHW literal could not be written
+/// at all -- the earlier version of this file had to build its rank-four case
+/// through `zeros_in` for that reason. Issue #116.
+///
+/// The assertion that matters is the *order*, not the rank. A flatten that
+/// walked the nesting wrongly would still produce a buffer of the right length
+/// and the right shape, and only the values would be wrong -- the same trap the
+/// strided-GEMM test was written to avoid.
+#[test]
+fn rank_three_and_four_literals_flatten_row_major() {
+    // Distinct values, so a wrong walk produces wrong numbers rather than a
+    // plausible buffer.
+    let three = Cpu
+        .tensor([[[1.0f32, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+        .unwrap();
+    assert_eq!(three.dims().as_ref(), &[2, 2, 2]);
+    assert_eq!(
+        three.to_vec1::<f32>().unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        "the outer array indexes the slowest axis, so declaration order is row-major"
+    );
+
+    // NCHW: one image, two channels, 2x2 spatial. Channel 0 is 1..4, channel 1
+    // is 5..8, which is what makes a channels-last permutation visible.
+    let nchw = Cpu
+        .tensor([[[[1.0f32, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]])
+        .unwrap();
+    assert_eq!(nchw.dims().as_ref(), &[1, 2, 2, 2]);
+    assert_eq!(
+        nchw.to_vec1::<f32>().unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+    );
+
+    // And the shape is the `s![..]` spelling, so it composes with the shape
+    // arithmetic rather than being a second, dead-end vocabulary.
+    type PlainNchw = incin_core::prelude::Tensor<s![1, 2, 2, 2], CpuBackendImpl, f32>;
+    let _: PlainNchw = nchw;
+}
+
+/// A channels-last tensor can now be built, and holds the right numbers.
+///
+/// This is the case the design note flagged as most likely to be got wrong.
+/// Host data arrives in NCHW order and the buffer has to be in NHWC order, so
+/// a permutation that walks the nesting wrongly produces a buffer of exactly
+/// the right length, the right shape and the right strides -- holding the
+/// wrong values. Nothing structural catches it, so this asserts the values.
+///
+/// The input is one image, two channels, 2x2 spatial. Channel 0 is 1..4 and
+/// channel 1 is 5..8, chosen so an NHWC interleave is unmistakable: read
+/// physically, the buffer must alternate channels rather than run 1,2,3,4.
+#[test]
+fn a_channels_last_tensor_is_built_with_its_elements_interleaved() {
+    use incin_core::backend_authoring::StorageBackend;
+
+    type Nchw = s![1, 2, 2, 2];
+    let x = Cpu
+        .tensor_in::<_, ChannelsLast<Nchw>>([[
+            [[1.0f32, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
+        ]])
+        .unwrap();
+
+    // The type claims channels-last, and the metadata agrees: stride[C] == 1.
+    let meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(x.inner());
+    assert_eq!(meta.shape().as_ref(), &[1, 2, 2, 2]);
+    assert_eq!(
+        meta.strides().as_ref(),
+        &[8, 1, 4, 2],
+        "N=C*H*W, C=1, H=C*W, W=C -- channels varies fastest"
+    );
+
+    // Reading it back recovers the input exactly, and that is the whole proof.
+    //
+    // Both accessors read *by the strides*, so neither exposes raw memory --
+    // `to_bytes` is canonical on purpose, or a saved tensor could not be
+    // reloaded. The round-trip is still discriminating, because the strides
+    // and the permutation have to agree for it to hold: a row-major walk of
+    // [1, 2, 2, 2] visits offsets 0, 2, 4, 6, 1, 3, 5, 7 under strides
+    // [8, 1, 4, 2], so a buffer that was *not* permuted would read back as
+    // [1, 3, 5, 7, 2, 4, 6, 8]. Getting the input back is only possible if the
+    // upload scattered the values to exactly the offsets the layout names.
+    assert_eq!(
+        x.to_vec1::<f32>().unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        "the layout changed and the values did not"
+    );
+
+    // The negative control, so the assertion above is not merely plausible.
+    // Same numbers, same strides, no permutation -- which is what a broken
+    // upload would produce, and it reads back differently.
+    let unpermuted =
+        <CpuBackendImpl as incin_core::backend_authoring::HostInterop>::from_bytes_strided::<f32>(
+            bytemuck::cast_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+            &[1, 2, 2, 2],
+            &[8, 1, 4, 2],
+            <f32 as incin_core::tensor::dtype::BuiltinDType>::DTYPE.descriptor(),
+            &incin_core::tensor::device::DeviceId::cpu(),
+        )
+        .unwrap();
+    let wrong =
+        <CpuBackendImpl as incin_core::backend_authoring::HostReadback>::float_to_vec1::<f32>(
+            &unpermuted,
+        )
+        .unwrap();
+    assert_eq!(
+        wrong,
+        vec![1.0f64, 3.0, 5.0, 7.0, 2.0, 4.0, 6.0, 8.0],
+        "an unpermuted upload under channels-last strides reads back scrambled, \
+         which is exactly what the assertion above rules out"
+    );
+
+    // And the proof is not forgeable in the other direction: the same numbers
+    // uploaded densely are not channels-last, and saying so is refused.
+    let dense = Cpu
+        .tensor([[[[1.0f32, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]])
+        .unwrap();
+    assert!(
+        dense.into_layout::<ChannelsLast<Nchw>>().is_err(),
+        "into_layout compares strides; a dense buffer is not channels-last"
+    );
+}
+
+/// The scatter map is a permutation, and the dense case is the identity.
+#[test]
+fn scatter_positions_is_a_permutation() {
+    use incin_core::shapes::{dense_strides, scatter_positions};
+
+    let dims = [1usize, 2, 2, 2];
+    let dense = scatter_positions(&dims, dense_strides(&dims).as_ref()).unwrap();
+    assert_eq!(
+        dense,
+        (0..8).collect::<Vec<_>>(),
+        "dense order is the identity"
+    );
+
+    let cl = scatter_positions(&dims, &[8, 1, 4, 2]).unwrap();
+    assert_eq!(cl, vec![0, 2, 4, 6, 1, 3, 5, 7]);
+    let mut sorted = cl.clone();
+    sorted.sort_unstable();
+    assert_eq!(
+        sorted,
+        (0..8).collect::<Vec<_>>(),
+        "every slot filled exactly once"
+    );
+
+    // A stride of zero on an extent-1 axis is *not* overlapping: that index is
+    // always zero, so the offsets are unchanged. Worth pinning, because it is
+    // the case a naive "no zero strides" check would reject wrongly.
+    assert_eq!(scatter_positions(&dims, &[0, 1, 4, 2]).unwrap(), cl);
+
+    // Genuinely overlapping strides cannot be filled from a dense source, and
+    // refusing beats writing part of the buffer.
+    assert!(
+        scatter_positions(&[2, 2], &[1, 1]).is_none(),
+        "offsets 0,1,1,2 collide and overrun"
+    );
+    assert!(
+        scatter_positions(&[2, 2], &[1]).is_none(),
+        "rank disagreement"
+    );
 }

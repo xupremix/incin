@@ -4744,6 +4744,7 @@ pub fn incin_core::backend_authoring::Execute::supports_custom(&self, &incin_cor
 pub fn incin_core::backend_authoring::Execute::supports_custom_operation(&self, &incin_core::exec::capability::OperationIdentity, bool, incin_core::exec::policy::MathMode) -> incin_core::exec::capability::SupportLevel
 pub fn incin_core::backend_authoring::ExecutionDescriptor::output_shape(&self) -> core::option::Option<&incin_core::shapes::ShapeBuf>
 pub fn incin_core::backend_authoring::HostInterop::from_bytes<K: incin_core::prelude::DType>(&[u8], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
+pub fn incin_core::backend_authoring::HostInterop::from_bytes_strided<K: incin_core::prelude::DType>(&[u8], &[usize], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
 pub fn incin_core::backend_authoring::HostInterop::host_format_debug<K: incin_core::prelude::DType>(&Self::Storage) -> alloc::string::String
 pub fn incin_core::backend_authoring::HostInterop::host_format_display<K: incin_core::prelude::DType>(&Self::Storage) -> alloc::string::String
 pub fn incin_core::backend_authoring::HostInterop::host_shape<K: incin_core::prelude::DType>(&Self::Storage) -> incin_core::shapes::ShapeBuf
@@ -7536,6 +7537,7 @@ pub fn incin_core::shapes::layout::ChannelsLast<S>::strides(&[usize]) -> incin_c
 pub fn incin_core::shapes::layout::FreshLayout::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::layout::RowMajor<S>::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::layout::dense_strides(&[usize]) -> incin_core::shapes::StrideBuf
+pub fn incin_core::shapes::layout::scatter_positions(&[usize], &[usize]) -> core::option::Option<alloc::vec::Vec<usize>>
 pub fn incin_core::shapes::prelude::AdaptiveAvgPool2dShape::compute_output_shape(&incin_core::shapes::ShapeBuf) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::prelude::AxisTag::key() -> incin_core::shapes::AxisKey
 pub fn incin_core::shapes::prelude::AxisTag::selector() -> incin_core::shapes::NamedAxisSelector<Self> where Self: core::marker::Sized
@@ -7562,6 +7564,7 @@ pub fn incin_core::shapes::prelude::broadcast_dim_slices(&[usize], &[usize]) -> 
 pub fn incin_core::shapes::prelude::checked_numel_from_dims(&[usize], &incin_core::resource::ResourceLimits) -> core::result::Result<incin_core::shapes::CheckedNumel, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::prelude::shape_buf_from_dims<S: incin_core::shapes::Shape>(incin_core::shapes::OperationKind, &[usize]) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::prelude::spatial_out_size(incin_core::shapes::OperationKind, incin_core::shapes::Axis, usize, usize, usize, usize, usize) -> core::result::Result<usize, incin_core::shapes::ShapeError>
+pub fn incin_core::shapes::scatter_positions(&[usize], &[usize]) -> core::option::Option<alloc::vec::Vec<usize>>
 pub fn incin_core::shapes::shape::DynShape::checked_numel(&incin_core::shapes::ShapeBuf, incin_core::shapes::OperationKind) -> core::result::Result<usize, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::shape::DynShape::numel(&incin_core::shapes::ShapeBuf) -> usize
 pub fn incin_core::shapes::shape::DynShape::rank(&incin_core::shapes::ShapeBuf) -> usize
@@ -7676,6 +7679,7 @@ pub fn incin_core::tensor::prelude::Device::init(Self::Arg) -> Self::Field
 pub fn incin_core::tensor::prelude::Device::to_incin(&Self::Field) -> incin_core::error::Result<incin_core::tensor::device::DeviceId>
 pub fn incin_core::tensor::prelude::GradJoin::join_field(&<Self as incin_core::tensor::grad::RequiresGrad>::Field, &<Rhs as incin_core::tensor::grad::RequiresGrad>::Field) -> <<Self as incin_core::tensor::grad::GradJoin<Rhs>>::Output as incin_core::tensor::grad::RequiresGrad>::Field where Self: incin_core::tensor::grad::RequiresGrad
 pub fn incin_core::tensor::prelude::HostInterop::from_bytes<K: incin_core::prelude::DType>(&[u8], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
+pub fn incin_core::tensor::prelude::HostInterop::from_bytes_strided<K: incin_core::prelude::DType>(&[u8], &[usize], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
 pub fn incin_core::tensor::prelude::HostInterop::host_format_debug<K: incin_core::prelude::DType>(&Self::Storage) -> alloc::string::String
 pub fn incin_core::tensor::prelude::HostInterop::host_format_display<K: incin_core::prelude::DType>(&Self::Storage) -> alloc::string::String
 pub fn incin_core::tensor::prelude::HostInterop::host_shape<K: incin_core::prelude::DType>(&Self::Storage) -> incin_core::shapes::ShapeBuf
@@ -7717,6 +7721,7 @@ pub fn incin_core::tensor::tracing::TracingBackend<B>::execute(&self, incin_core
 pub fn incin_core::tensor::tracing::TracingBackend<B>::float_to_vec1<K: incin_core::prelude::DType>(&<Self as incin_core::backend_authoring::StorageBackend>::Storage) -> incin_core::error::Result<alloc::vec::Vec<f64>>
 pub fn incin_core::tensor::tracing::TracingBackend<B>::fresh_autograd_identity<K: incin_core::prelude::DType>(Self::Storage) -> Self::Storage
 pub fn incin_core::tensor::tracing::TracingBackend<B>::from_bytes<K: incin_core::prelude::DType>(&[u8], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<<Self as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::tensor::tracing::TracingBackend<B>::from_bytes_strided<K: incin_core::prelude::DType>(&[u8], &[usize], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
 pub fn incin_core::tensor::tracing::TracingBackend<B>::get_grad<K: incin_core::prelude::DType>(&<Self as incin_core::backend_authoring::StorageBackend>::Storage, &Self::Grads) -> incin_core::error::Result<core::option::Option<<Self as incin_core::backend_authoring::StorageBackend>::Storage>>
 pub fn incin_core::tensor::tracing::TracingBackend<B>::host_format_debug<K: incin_core::prelude::DType>(&Self::Storage) -> alloc::string::String
 pub fn incin_core::tensor::tracing::TracingBackend<B>::host_format_display<K: incin_core::prelude::DType>(&Self::Storage) -> alloc::string::String

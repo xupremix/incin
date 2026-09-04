@@ -30,8 +30,10 @@ pub trait TensorData {
 /// `ElementCount`, so `reshape` and `reshape_view` were unavailable on the most
 /// ergonomic way to make a tensor. See issue #116.
 ///
-/// Higher ranks follow the same pattern and are left out only because each one
-/// is another impl; nothing here is rank-specific in principle.
+/// Ranks one through four. Four is where it stops because that is where the
+/// shapes are: NCHW for the convolutions and the pooling layers, and the
+/// rank a channels-last layout is defined against. A rank-five literal is
+/// another impl of the same shape if one is ever wanted.
 macro_rules! impl_tensor_data {
     ($($elem:ty),* $(,)?) => {
         $(
@@ -63,6 +65,54 @@ macro_rules! impl_tensor_data {
                     self.iter().flat_map(|row| row.iter().copied()).collect()
                 }
                 fn dims() -> Vec<usize> { alloc::vec![A, B] }
+            }
+
+            impl<const A: usize, const B: usize, const C: usize> TensorData
+                for [[[$elem; C]; B]; A]
+            where
+                typenum::Const<A>: typenum::ToUInt,
+                typenum::Const<B>: typenum::ToUInt,
+                typenum::Const<C>: typenum::ToUInt,
+                typenum::U<A>: Dim,
+                typenum::U<B>: Dim,
+                typenum::U<C>: Dim,
+            {
+                type Elem = $elem;
+                type Shape =
+                    DimCons<typenum::U<A>, DimCons<typenum::U<B>, DimCons<typenum::U<C>, Nil>>>;
+                fn into_row_major(self) -> Vec<$elem> {
+                    self.iter()
+                        .flat_map(|plane| plane.iter().flat_map(|row| row.iter().copied()))
+                        .collect()
+                }
+                fn dims() -> Vec<usize> { alloc::vec![A, B, C] }
+            }
+
+            impl<const A: usize, const B: usize, const C: usize, const D: usize> TensorData
+                for [[[[$elem; D]; C]; B]; A]
+            where
+                typenum::Const<A>: typenum::ToUInt,
+                typenum::Const<B>: typenum::ToUInt,
+                typenum::Const<C>: typenum::ToUInt,
+                typenum::Const<D>: typenum::ToUInt,
+                typenum::U<A>: Dim,
+                typenum::U<B>: Dim,
+                typenum::U<C>: Dim,
+                typenum::U<D>: Dim,
+            {
+                type Elem = $elem;
+                type Shape = DimCons<
+                    typenum::U<A>,
+                    DimCons<typenum::U<B>, DimCons<typenum::U<C>, DimCons<typenum::U<D>, Nil>>>,
+                >;
+                fn into_row_major(self) -> Vec<$elem> {
+                    self.iter()
+                        .flat_map(|n| {
+                            n.iter().flat_map(|c| c.iter().flat_map(|h| h.iter().copied()))
+                        })
+                        .collect()
+                }
+                fn dims() -> Vec<usize> { alloc::vec![A, B, C, D] }
             }
         )*
     };

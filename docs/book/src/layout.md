@@ -155,11 +155,22 @@ inhabited world and had never rejected anything. A second layout is what turns
 that requirement from decoration into a check, and it is why there is now a
 compile-fail case pinning it.
 
-It is not yet constructible: `zeros` is bounded on the sealed `FreshDense`, and
-the target API refuses a layout whose strides no backend can allocate. That is
-the honest state rather than an oversight — a layout you can name but not build
-is still doing useful work, because the bounds it fails are the bounds nothing
-else was failing.
+It is constructible through `tensor_in`, which permutes host data into the
+layout's order before upload:
+
+```rust,ignore
+let x: Tensor<s![1, 2, 2, 2], B, f32, NoGrad, Local, ChannelsLast<s![1, 2, 2, 2]>> =
+    Cpu.tensor_in::<_, ChannelsLast<_>>(nchw_literal)?;
+```
+
+A backend has to opt in. `HostInterop::from_bytes_strided` is defaulted to a
+capability refusal, so one that cannot attach chosen strides is asked and says
+no, rather than returning a dense buffer under a type claiming otherwise. CPU
+opts in; the others do not yet.
+
+`zeros_in` still refuses it, because a creation kernel writes dense and nothing
+permutes afterwards. That asymmetry is honest rather than an oversight: the
+upload path has host data to reorder and the creation path does not.
 
 ## Facts are traits, not parameters
 

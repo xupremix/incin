@@ -207,6 +207,56 @@ pub fn dense_strides(dims: &[usize]) -> crate::shapes::StrideBuf {
     crate::shapes::StrideBuf::from_slice(&strides)
 }
 
+/// Where each row-major element lands in a buffer laid out to `strides`.
+///
+/// `positions[i]` is the offset the `i`-th element of a row-major walk of
+/// `dims` must be written to. Host data arrives in shape order and a
+/// non-dense layout wants it in another, so this is the map between them.
+///
+/// The subtle part is that this is the case where a length check passes while
+/// the order is wrong: permuting incorrectly yields a buffer of exactly the
+/// right size, the right shape and the right strides, holding the wrong
+/// numbers. Nothing structural catches that, which is why the conformance test
+/// for it asserts values.
+///
+/// Returns `None` when `dims` and `strides` disagree in length, or when the
+/// offsets are not a permutation of `0..numel` -- an overlapping or gapped
+/// stride set cannot be filled from a dense source, and silently writing part
+/// of it would be worse than refusing.
+#[must_use]
+pub fn scatter_positions(dims: &[usize], strides: &[usize]) -> Option<alloc::vec::Vec<usize>> {
+    if dims.len() != strides.len() {
+        return None;
+    }
+    let mut numel = 1usize;
+    for &d in dims {
+        numel = numel.checked_mul(d)?;
+    }
+    let mut positions = alloc::vec![0usize; numel];
+    let mut seen = alloc::vec![false; numel];
+    let mut index = alloc::vec![0usize; dims.len()];
+    for slot in positions.iter_mut() {
+        let mut offset = 0usize;
+        for (axis, &i) in index.iter().enumerate() {
+            offset = offset.checked_add(i.checked_mul(strides[axis])?)?;
+        }
+        if offset >= numel || seen[offset] {
+            return None;
+        }
+        seen[offset] = true;
+        *slot = offset;
+        // Odometer over the row-major walk, innermost axis fastest.
+        for axis in (0..dims.len()).rev() {
+            index[axis] += 1;
+            if index[axis] < dims[axis] {
+                break;
+            }
+            index[axis] = 0;
+        }
+    }
+    Some(positions)
+}
+
 /// `Self` is a truthful description of a freshly allocated dense buffer of `S`.
 ///
 /// Constructors like [`Tensor::zeros`](crate::tensor::base::Tensor::zeros) allocate a

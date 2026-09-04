@@ -109,6 +109,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `crates/incin-core/tests/target_layout_examples.rs`, seven worked cases from
   the design note kept as tests rather than prose, so the examples in the book
   cannot drift from what compiles.
+- **`ChannelsLast` is constructible.** `HostInterop::from_bytes_strided` lets a
+  backend accept strides the caller chose; it is defaulted to a capability
+  refusal, so the contract stays additive and a backend that has not opted in
+  simply cannot be asked for a non-dense allocation. CPU opts in. `tensor_in`
+  permutes host data into the layout's order before upload rather than
+  refusing, using the new `shapes::scatter_positions`.
+
+  This is the case the design note flagged as most likely to be got wrong: a
+  permutation that walks the nesting incorrectly produces a buffer of exactly
+  the right length, shape and strides, holding the wrong values. Its test
+  asserts the round-trip *and* carries a negative control showing what an
+  unpermuted upload reads back as, so the assertion is discriminating rather
+  than merely plausible.
+- `TensorData` covers rank three and four, so an NCHW literal can be written.
+  Four is where it stops because that is where the shapes are -- the
+  convolutions, the pooling layers, and the rank channels-last is defined
+  against. Closes the remaining half of #116.
 - **`ChannelsLast<S>`, the second layout -- which is what makes the first one's
   bounds mean anything.** NHWC memory under an NCHW shape: `dims()` still
   reports `[N, C, H, W]` and only the strides move, so channels is the

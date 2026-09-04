@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// Reinterprets a slice of plain elements as the bytes a backend upload wants.
+fn bytes_of<K: bytemuck::Pod>(values: &[K]) -> &[u8] {
+    bytemuck::cast_slice(values)
+}
+
 /// Allocation and construction on a [`TensorTarget`].
 ///
 /// Blanket-implemented, so implementing [`TensorTarget`] is enough to get all
@@ -216,24 +221,39 @@ pub trait TargetExt: TensorTarget + Sized {
         }
         let wanted = <L as incin_core::shapes::FreshLayout<S>>::strides(&dims);
         let dense = incin_core::shapes::dense_strides(&dims);
-        if wanted.as_ref() != dense.as_ref() {
-            return Err(incin_core::error::BackendError::unsupported(
-                <TargetBackend<Self> as StorageBackend>::BACKEND_NAME,
-                incin_core::exec::UnsupportedReason::Layout {
-                    operation: incin_core::shapes::error::OperationKind::Storage,
-                    layout: incin_core::exec::LayoutClass::Strided,
-                },
-            )
-            .into());
-        }
         let device = self.device_id()?;
-        let bytes = bytemuck::cast_slice(values);
-        let storage = <TargetBackend<Self> as HostInterop>::from_bytes::<K>(
-            bytes,
-            &dims,
-            K::DTYPE.descriptor(),
-            &device,
-        )?;
+        let storage = if wanted.as_ref() == dense.as_ref() {
+            <TargetBackend<Self> as HostInterop>::from_bytes::<K>(
+                bytes_of(values),
+                &dims,
+                K::DTYPE.descriptor(),
+                &device,
+            )?
+        } else {
+            // `values` are in shape order; the buffer has to be in `L`'s. The
+            // permutation is done here rather than in the backend because this
+            // is the side that knows the source order, and it is the step where
+            // a length check passes while the order is wrong -- so the
+            // conformance test for it asserts values, not strides.
+            let positions = incin_core::shapes::scatter_positions(&dims, wanted.as_ref())
+                .ok_or_else(|| {
+                    Error::Msg(alloc::format!(
+                        "strides {:?} are not a permutation of a dense buffer of {dims:?}",
+                        wanted.as_ref()
+                    ))
+                })?;
+            let mut permuted = alloc::vec![values[0]; values.len()];
+            for (source, &target) in values.iter().zip(positions.iter()) {
+                permuted[target] = *source;
+            }
+            <TargetBackend<Self> as HostInterop>::from_bytes_strided::<K>(
+                bytes_of(&permuted),
+                &dims,
+                wanted.as_ref(),
+                K::DTYPE.descriptor(),
+                &device,
+            )?
+        };
         Tensor::try_from_storage(
             storage,
             field,

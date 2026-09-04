@@ -70,6 +70,41 @@ pub trait HostInterop: StorageBackend + HostReadback {
         dtype: DTypeDescriptor,
         device: &DeviceId,
     ) -> Result<Self::Storage<K>>;
+
+    /// The same, with strides the caller chose rather than the dense ones.
+    ///
+    /// `bytes` are already ordered for `strides`: the caller permutes, because
+    /// it is the side that knows the source order. This method's job is only to
+    /// attach the metadata, which is the part a backend cannot express through
+    /// [`from_bytes`](Self::from_bytes).
+    ///
+    /// Defaulted to a refusal so the contract stays additive: a backend that has
+    /// not opted in keeps working and simply cannot be asked for a non-dense
+    /// allocation. That refusal is the honest answer -- the alternative is
+    /// returning a dense buffer under a type claiming otherwise, which is the
+    /// forged proof the layout parameter exists to prevent.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capability refusal unless the backend overrides this.
+    fn from_bytes_strided<K: DType>(
+        bytes: &[u8],
+        shape: &[usize],
+        strides: &[usize],
+        dtype: DTypeDescriptor,
+        device: &DeviceId,
+    ) -> Result<Self::Storage<K>> {
+        let _ = (bytes, shape, strides, dtype, device);
+        Err(crate::err::Error::Backend(
+            crate::err::BackendError::unsupported(
+                <Self as crate::tensor::backend::StorageBackend>::BACKEND_NAME,
+                crate::exec::UnsupportedReason::Layout {
+                    operation: crate::shapes::error::OperationKind::Storage,
+                    layout: crate::exec::LayoutClass::Strided,
+                },
+            ),
+        ))
+    }
 }
 
 /// Explicit capability marker for backends that can move tensor storage to

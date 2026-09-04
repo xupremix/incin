@@ -53,7 +53,7 @@ pub use error::*;
 pub use idx::*;
 pub use layout::{
     ChannelsLast, Contiguous, Dense, FreshDense, FreshLayout, Layout, LayoutOf, RestateFor,
-    RowMajor, dense_strides,
+    RowMajor, dense_strides, scatter_positions,
 };
 pub use named::*;
 pub use proof::ProofLevel;
