@@ -340,9 +340,9 @@ where
 /// [`execute`], told the shape value the typed frontend was holding.
 ///
 /// The arity-1 spelling of [`execute_shaped_n`]: the expectation carries one
-/// proof, and the comparison below degrades to exactly the loop it always
-/// ran. The 100+ call sites across the tensor surface keep passing `S`, the
-/// shape type, rather than spelling `ShapeValue<S>` at every one of them.
+/// proof, and the comparison runs exactly the loop it always ran. The 100+
+/// call sites across the tensor surface keep passing `S`, the shape type,
+/// rather than spelling `ShapeValue<S>` at every one of them.
 pub fn execute_shaped<O, B, S>(
     context: &ExecutionContext<B>,
     attributes: O::Attributes,

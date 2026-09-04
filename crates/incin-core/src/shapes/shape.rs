@@ -1060,8 +1060,8 @@ impl<S: Shape> ShapeValue<S> {
 /// `execute_shaped` used to take exactly one `&ShapeValue<S>`; an operation
 /// with two outputs (TopK's values and indices, or any custom operation
 /// inferring more than one) could not travel that path. This trait states
-/// what the typed comparison needs of the expectation — one borrowed buffer
-/// per output, in output order — so a single value and a tuple of values are
+/// what the typed comparison needs of the expectation: one borrowed buffer
+/// per output, in output order. A single value and a tuple of values are
 /// interchangeable callers. Sealed: every implementor lives here, and the
 /// compare loop trusts `ARITY` to bound the iteration.
 pub trait ExpectedShapes: sealed::ExpectedShapes {
@@ -1085,10 +1085,10 @@ pub trait ExpectedShapes: sealed::ExpectedShapes {
     /// The evidence lowered with the descriptor.
     ///
     /// Exactly `ShapeEvidence::of::<S>()` for arity 1. Over several outputs
-    /// the static geometry is per-shape knowledge — one shape's rank and
-    /// extents say nothing about another's — so the combined value carries
-    /// the weakest proof with no statics, the same posture as `Dynamic`. A
-    /// backend reading statics off a multi-output descriptor would otherwise
+    /// the static geometry is per-shape knowledge: one shape's rank and
+    /// extents say nothing about another's. So the combined value carries
+    /// the weakest proof with no statics, as `Dynamic` does. A backend
+    /// reading statics off a multi-output descriptor would otherwise
     /// attribute one output's constants to all of them.
     fn combined_evidence(&self) -> crate::exec::ShapeEvidence;
 }

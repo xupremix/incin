@@ -60,9 +60,9 @@ impl ShapeEvidence {
     /// The typed path lowers one combined value per descriptor, not one per
     /// output (see `ExpectedShapes`): several outputs can only promise what
     /// every one of them proves, and no single output's static geometry may
-    /// stand for the rest, so the statics stay empty. That is the same
-    /// posture as `Dynamic`, and backends already handle that case, because a
-    /// fully dynamic shape lowers identically.
+    /// stand for the rest, so the statics stay empty, as they do for
+    /// `Dynamic`. Backends already handle that case, because a fully dynamic
+    /// shape lowers identically.
     pub(crate) const fn weakened(proof: ProofLevel) -> Self {
         Self {
             proof,

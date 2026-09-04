@@ -242,8 +242,8 @@ fn typed_three_outputs_with_per_output_dtypes() {
     )
     .expect("three-output typed dispatch");
 
-    // Geometry and dtypes, per output: the whole point is that output 1 is
-    // u32 and output 2 is f64, not just more f32.
+    // Geometry and dtypes per output: output 1 is u32 and output 2 is f64,
+    // not more f32.
     assert_eq!(values.metadata().shape.dims(), [N]);
     assert_eq!(positions.metadata().shape.dims(), [N]);
     assert_eq!(widened.metadata().shape.dims(), [N]);

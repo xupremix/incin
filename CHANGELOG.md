@@ -55,9 +55,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   multi-output inference a single-output catalog row cannot express. Its two
   outputs travel the typed path with one `ShapeValue` each (see the entry
   below), so the descriptor cross-checks both geometries. A squared-error
-  readout closes the graph, and
-  the three backward recipes (one per polar output, one for the loss) are
-  assembled into core `TapeNode`s and walked by the same
+  readout closes the graph, and the three backward recipes (one per polar
+  output, one for the loss) are assembled into core `TapeNode`s and walked by the same
   `incin_core::exec::tape::backward` the CPU backend calls, so a tensor
   consumed by both outputs receives the sum of both contributions. The example
   checks the forward values and hand-derived gradients against textbook
