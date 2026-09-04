@@ -109,6 +109,79 @@ async function run() {
       "a card reading " + stated + " is drawn at " + got + "%, not " + want + "%");
   }
 
+  const w = doc().defaultView;
+
+  /* Colour encodes the same quantity as length, in whole steps. A mistyped
+     custom property renders as no background at all, which is invisible on a
+     dark ground and silently removes the encoding. */
+  const ramp = [...doc().querySelectorAll(".api-ramp i")];
+  check(ramp.length === 9, "the key ramp shows " + ramp.length + " steps, not 9");
+  const swatches = ramp.map((el) => w.getComputedStyle(el).backgroundColor);
+  swatches.forEach((colour, i) => {
+    check(colour && colour !== "rgba(0, 0, 0, 0)" && colour !== "transparent",
+      "ramp step " + (i + 1) + " has no colour: a coverage token is missing");
+  });
+  check(new Set(swatches).size === 9,
+    "the ramp repeats a colour, so two coverage steps are indistinguishable");
+
+  /* Every theme, not just the default. The book has five, two of them light,
+     and an earlier version of this ramp defined its light palette behind a
+     `data-theme="dark"` that no theme here ever sets -- so the two light
+     themes would have rendered the dark ramp and nothing would have said so. */
+  const themed = doc().documentElement;
+  const themeBefore = themed.className;
+  for (const theme of ["navy", "coal", "ayu", "light", "rust"]) {
+    themed.className = theme;
+    const shades = ramp.map((el) => w.getComputedStyle(el).backgroundColor);
+    shades.forEach((colour, i) => {
+      check(colour && colour !== "rgba(0, 0, 0, 0)" && colour !== "transparent",
+        "ramp step " + (i + 1) + " has no colour in the " + theme + " theme");
+    });
+    check(new Set(shades).size === 9,
+      "the ramp repeats a colour in the " + theme + " theme");
+    if (theme === "light" || theme === "rust") {
+      check(shades.join("|") !== swatches.join("|"),
+        "the " + theme + " theme renders the dark ramp unchanged");
+    }
+  }
+  themed.className = themeBefore;
+
+  for (const meter of meters) {
+    const have = haveOf(meter);
+    const fill = meter.querySelector(".api-fill");
+    const stepClass = [...fill.classList].find((c) => c.indexOf("cov-") === 0);
+    check(stepClass, "a bar carries no coverage step class");
+    check(stepClass === "cov-" + have,
+      "a bar reading " + have + "/" + denom + " is painted " + stepClass);
+    const painted = w.getComputedStyle(fill).backgroundColor;
+    check(painted === swatches[have - 1],
+      "a bar reading " + have + " is not painted its own step's colour");
+  }
+
+  /* Implementation is marked once, beside the operation, and only where it
+     applies. It used to tint the bar, which put two variables on one mark. */
+  const rowEls = [...doc().querySelectorAll(".api-row")];
+  check(rowEls.length > 0, "no operation rows rendered");
+  let dotted = 0;
+  for (const row of rowEls) {
+    const dot = row.querySelector(".api-name .api-dot");
+    const labels = [...row.querySelectorAll(".api-meter:not(.none) .lab")];
+    if (dot) dotted += 1;
+    check(!row.querySelector(".api-fill.composed"),
+      "implementation is being drawn on the bar again");
+    void labels;
+  }
+  check(dotted > 0 && dotted < rowEls.length,
+    "the composed dot marks " + dotted + " of " + rowEls.length +
+    " rows, which cannot be right");
+
+  /* The key explains the marks, so it has to come before them. */
+  const key = doc().querySelector(".api-key");
+  const list = doc().querySelector(".api-list");
+  check(key && list, "the key or the operation list is missing");
+  check(key.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+    "the key is rendered after the table it explains");
+
   /* The other repeatedly reported defect: sideways scroll on a phone. */
   const root = doc().documentElement;
   const limit = root.clientWidth;

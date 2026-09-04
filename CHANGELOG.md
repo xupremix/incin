@@ -59,6 +59,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **The capability meters read as a compatibility scale.** Colour now encodes
+  coverage rather than implementation: a stepped red-to-green ramp, one step per
+  element type, drawn against the same nine on every row. Length and colour say
+  the same thing, so the colour reinforces the reading instead of smuggling in a
+  second variable -- which is what made the first version of this page
+  unreadable, with hue meaning implementation and fill depth meaning coverage.
+  The ramp is stepped rather than smooth because the quantity is a count of
+  whole element types.
+- **`composed` is explained where it is used, and marked once.** It means the
+  backend runs the operation by combining other operations it supports rather
+  than with a kernel written for it: it executes and is correct, and it costs
+  more. It is now a dot beside the operation name -- 29 of 179 operations are
+  composed on some backend -- instead of tinting the number and bar it shares
+  with coverage.
+- **The key moved above the table it explains**, so the encoding is met before
+  the marks rather than after 179 rows of them, and each operation now carries
+  its public entry point as a signature line (`Tensor::abs`) above its
+  description, in the shape a reader will type it.
+
 - **CUDA advertises less than its movement kernels deliver.** The capability
   registry lists `f32` alone for transpose, broadcast and narrow. Writing the
   boundary test above to assert that an unadvertised element type is refused
@@ -74,6 +93,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **The capability page test grew with the page.** It now also pins that every
+  bar carries the coverage step its number states and is painted that step's
+  colour, that the ramp shows nine distinct colours **in each of the five book
+  themes**, that the composed dot appears only where an operation is composed,
+  and that the key precedes the table. The theme check earned its place
+  immediately: the ramp's light palette was first written behind a
+  `data-theme="dark"` that no theme in this book sets, and then behind
+  `html:not(.js)`, which matches every theme here because the shell overwrites
+  `html.className` with the theme name -- so all five themes rendered the light
+  ramp and nothing said so.
 - **`tools/test-api-page.py`**, which holds the capability page to the contract
   its meters imply: one denominator for the whole page, every bar drawn at the
   ratio it states, a reference tick exactly where another backend reaches

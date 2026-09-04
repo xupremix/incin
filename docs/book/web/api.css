@@ -155,13 +155,58 @@
   position: absolute; top: -3px; height: 12px; width: 2px; margin-left: -1px;
   border-radius: 1px; background: var(--fg); opacity: .45;
 }
-/* One hue. The bar says how much, and nothing else -- implementation is a
-   separate fact and gets its own mark rather than a second meaning here. */
-.api-fill { display: block; height: 100%; border-radius: 3px; background: var(--sidebar-active); }
-/* Composed is marked on the *number*, not the bar, so the two facts never
-   have to be untangled from one another. */
-.api-meter.composed .lab b { color: var(--inline-code-fg); }
-.api-meter.composed .api-fill { background: var(--inline-code-fg); }
+/* The bar says how much, and nothing else. Length and colour encode the same
+   one quantity -- coverage -- so the colour reinforces the reading instead of
+   smuggling in a second variable, which is what made an earlier version of
+   this page unreadable. Implementation is a separate fact and gets its own
+   mark beside the operation name.
+
+   The ramp is stepped, not smooth: the quantity is a count of element types,
+   so every stop is a whole type and a continuous gradient would imply
+   precision the data does not carry. Lightness rises along with hue, so the
+   steps stay distinguishable without relying on red/green discrimination. */
+.api-fill { display: block; height: 100%; border-radius: 3px; background: var(--cov-9); }
+/* The book stamps one of five themes as a class on <html>: navy, coal and ayu
+   are dark, light and rust are light, and navy is the default. So the ramp
+   defaults to its dark form and the two light themes override it -- not
+   `prefers-color-scheme`, which this page never consults, and not a
+   `data-theme="dark"` that no theme here ever sets. */
+:root {
+  --cov-1: #e2594a; --cov-2: #e8734a; --cov-3: #ee8f45;
+  --cov-4: #f0ad48; --cov-5: #e8c94c; --cov-6: #cfd451;
+  --cov-7: #a8cc58; --cov-8: #79bd62; --cov-9: #4dad6b;
+}
+/* Not `html:not(.js)`: this shell overwrites html.className with the theme
+   name, so the `js` class is never present and that selector matches every
+   theme, which handed the light ramp to all five. */
+.light, .rust {
+  --cov-1: #c8483b; --cov-2: #d2603a; --cov-3: #d97b38;
+  --cov-4: #dc9a3c; --cov-5: #c9a93a; --cov-6: #a8ad3c;
+  --cov-7: #83a041; --cov-8: #5c9048; --cov-9: #37804c;
+}
+.api-fill.cov-1 { background: var(--cov-1); }
+.api-fill.cov-2 { background: var(--cov-2); }
+.api-fill.cov-3 { background: var(--cov-3); }
+.api-fill.cov-4 { background: var(--cov-4); }
+.api-fill.cov-5 { background: var(--cov-5); }
+.api-fill.cov-6 { background: var(--cov-6); }
+.api-fill.cov-7 { background: var(--cov-7); }
+.api-fill.cov-8 { background: var(--cov-8); }
+.api-fill.cov-9 { background: var(--cov-9); }
+
+/* Composed, marked once beside the operation it describes. */
+.api-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--inline-code-fg); margin-left: 7px; vertical-align: middle;
+  flex: none;
+}
+
+/* The public entry point, in the shape the reader will type. */
+.api-sig {
+  display: block; font-family: var(--font-mono); font-size: 12px;
+  opacity: .62; margin-top: 3px; overflow-wrap: anywhere; background: none;
+  padding: 0; border: 0;
+}
 .api-meter.none .lab { opacity: .3; }
 .api-meter.none .api-track { visibility: hidden; }
 
@@ -185,11 +230,41 @@
 }
 .api-none { opacity: .5; font-size: 12.5px; font-style: italic; }
 .api-empty { padding: 34px; text-align: center; opacity: .7; }
-.api-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 12px; font-size: 12.5px; opacity: .8; }
+/* The key sits above the table it explains: a reader meets the encoding before
+   the marks, rather than scrolling past 179 rows to find out what they meant. */
+.api-key {
+  border: 1px solid var(--table-border); border-radius: var(--radius-lg);
+  padding: 14px 16px; margin: 18px 0 4px; display: flex; flex-direction: column; gap: 12px;
+}
+.api-key-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.api-key-cap {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .07em;
+  text-transform: uppercase; opacity: .6; flex: none;
+}
+.api-ramp { display: flex; gap: 2px; flex: none; }
+.api-ramp i { display: block; width: 17px; height: 9px; border-radius: 2px; }
+.api-ramp i.cov-1 { background: var(--cov-1); }
+.api-ramp i.cov-2 { background: var(--cov-2); }
+.api-ramp i.cov-3 { background: var(--cov-3); }
+.api-ramp i.cov-4 { background: var(--cov-4); }
+.api-ramp i.cov-5 { background: var(--cov-5); }
+.api-ramp i.cov-6 { background: var(--cov-6); }
+.api-ramp i.cov-7 { background: var(--cov-7); }
+.api-ramp i.cov-8 { background: var(--cov-8); }
+.api-ramp i.cov-9 { background: var(--cov-9); }
+.api-key-note { font-size: 12.5px; opacity: .75; flex: 1 1 260px; min-width: 0; }
+.api-key-note b { font-weight: 600; opacity: .95; }
+.api-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-start; font-size: 12.5px; opacity: .8; }
+.api-legend > span { flex: 1 1 240px; min-width: 0; display: flex; gap: 7px; align-items: baseline; }
+.api-dot-key {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--inline-code-fg);
+  display: block; flex: none; position: relative; top: 3px;
+}
 .api-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.api-legend i { width: 22px; height: 6px; border-radius: 3px; display: block; }
+.api-legend i { flex: none; display: block; }
 .api-legend i.api-ref-key {
   width: 2px; height: 12px; border-radius: 1px; background: var(--fg); opacity: .45;
+  position: relative; top: 3px;
 }
 
 /* Category + surface tables keep a scroll container of their own. */

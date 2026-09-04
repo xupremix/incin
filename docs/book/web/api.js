@@ -129,24 +129,49 @@
     }, 0);
   }
 
+  /* The step a coverage figure falls on, 1..STEPS. The scale is deliberately
+     stepped rather than continuous: the underlying quantity is a count of
+     element types, so a reader comparing two bars is comparing whole types,
+     and a smooth ramp would invent precision the data does not have. */
+  var STEPS = 9;
+  function step(have) {
+    var n = Math.round((have / DTYPES) * STEPS);
+    return Math.min(STEPS, Math.max(1, n));
+  }
+
   function meter(b, e, best) {
     if (!e.dtypes.length) {
       return '<div class="api-meter none"><span class="lab">' + b + '<b>&mdash;</b></span>' +
         '<span class="api-track"></span></div>';
     }
     var have = e.dtypes.length;
-    // Amber marks a composed implementation, and marks only that.
-    var cls = e.impl === "composed" ? "api-meter composed" : "api-meter";
     var pct = (have / DTYPES) * 100;
     // The tick earns its place only where it says something the fill does not:
     // that another backend reaches further on this same operation.
     var tick = best > have
       ? '<u class="api-ref" style="left:' + ((best / DTYPES) * 100).toFixed(2) + '%"></u>'
       : "";
-    return '<div class="' + cls + '"><span class="lab">' + b +
+    return '<div class="api-meter"><span class="lab">' + b +
       '<b>' + have + '<em>/' + DTYPES + '</em></b></span>' +
-      '<span class="api-track"><i class="api-fill" style="width:' + pct.toFixed(2) + '%"></i>' +
-      tick + '</span></div>';
+      '<span class="api-track"><i class="api-fill cov-' + step(have) +
+      '" style="width:' + pct.toFixed(2) + '%"></i>' + tick + '</span></div>';
+  }
+
+  /* Which backends run this operation by composing others rather than with a
+     kernel of their own. 29 of the 179 operations are composed somewhere, so
+     marking them beside the name reads as a signal rather than as noise. */
+  function composedOn(op) {
+    return B.filter(function (b) { return op.backends[b].impl === "composed"; });
+  }
+
+  /* The public entry point, written the way the reader will type it. `::abs`
+     is a method on a tensor, so it is shown as `Tensor::abs`; `Adam::step`
+     already names its owner. */
+  function entry(op) {
+    var c = op.catalog;
+    if (!c || !c.api) return "";
+    var api = c.api.indexOf("::") === 0 ? "Tensor" + c.api : c.api;
+    return '<code class="api-sig">' + api + '</code>';
   }
 
   function describe(op) {
@@ -158,7 +183,6 @@
       : c.arity[0] + "\u2013" + c.arity[1] + " operands";
     var bits = [c.kind.toLowerCase(), operands];
     if (c.attrs && c.attrs !== "NoAttributes") bits.push(c.attrs);
-    if (c.api) bits.push(c.api);
     return '<div class="api-desc structural">' + bits.join(" \u00b7 ") + "</div>";
   }
 
@@ -226,10 +250,15 @@
     }
     rows.innerHTML = list2.map(function (op, i) {
       var best = widest(op);
+      var comp = composedOn(op);
+      var dot = comp.length
+        ? '<span class="api-dot" title="composed on ' + comp.join(", ") +
+          ' \u2014 built from other operations rather than a kernel of its own"></span>'
+        : "";
       return '<button type="button" class="api-row" aria-expanded="false" data-i="' + i + '">' +
-        '<span class="api-id"><span class="api-name">' + op.name +
+        '<span class="api-id"><span class="api-name">' + op.name + dot +
           (op.catalog ? '<span class="api-fam">' + op.catalog.family + '</span>' : "") +
-        '</span>' + describe(op) + '</span>' +
+        '</span>' + entry(op) + describe(op) + '</span>' +
         '<span class="api-strip">' +
           B.map(function (b) { return meter(b, op.backends[b], best); }).join("") +
         '</span></button>' +
