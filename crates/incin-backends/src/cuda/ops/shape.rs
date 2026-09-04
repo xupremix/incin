@@ -155,21 +155,37 @@ fn launch_shape_op(
 
     // SAFETY: checked reshape metadata fixes the source and 21-u32 parameter
     // views, output length, and launch dimensions; out_b is uniquely owned.
+    //
+    // The views are `u8`, not `f32`: the kernel entry point above was already
+    // selected by element width (`shape_op_8bit`/`16bit`/`32bit`/`64bit`), so
+    // the device pointer is reinterpreted by the kernel itself. Reinterpreting
+    // here as `f32` with an element count would ask for `len * 4` bytes, which
+    // panics for 1- and 2-byte dtypes whose allocation is smaller, and only
+    // passed for 8-byte dtypes because `transmute` checks `<=` rather than
+    // `==`. Passing the byte buffers through unchanged keeps the launch
+    // width-correct for every dtype the kernel selection admits.
     unsafe {
-        let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+        let in_bytes = crate::bytes::byte_len(t_buf.dtype, t_buf.len, OperationKind::Reshape)?;
+        let in_u8 = t_buf
+            .data
+            .transmute::<u8>(in_bytes)
+            .expect("CUDA shape-op input allocation covers its element count by construction");
         let params_f32 = params_dev.transmute::<u32>(21).unwrap();
         // out_b.data was allocated once immediately above and never cloned,
         // so it stays uniquely owned (refcount 1) here - Arc::get_mut
         // succeeds without cloning first.
         let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .expect("out_b.data is freshly allocated and uniquely owned here");
-        let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();
+        let out_bytes = crate::bytes::byte_len(t_buf.dtype, n_elements, OperationKind::Reshape)?;
+        let mut out_view = out_u8
+            .transmute_mut::<u8>(out_bytes)
+            .expect("CUDA shape-op output allocation covers its element count by construction");
 
         use cudarc::driver::PushKernelArg;
         stream
             .launch_builder(&f)
-            .arg(&in_f32)
-            .arg(&mut out_f32)
+            .arg(&in_u8)
+            .arg(&mut out_view)
             .arg(&params_f32)
             .launch(cfg)
             .map_err(|e| incin_core::error::Error::Msg(format!("shape_op launch failed: {e:?}")))?;
@@ -388,21 +404,31 @@ pub(crate) fn launch_concat(tensors: &[&CudaStorage], dim: usize) -> Result<Cuda
         };
 
         // SAFETY: each checked slice range stays within the validated source;
-        // out_b remains uniquely owned across launches and lengths match f32.
+        // out_b remains uniquely owned across launches. The views are `u8`
+        // for the same width reason as `launch_shape_op` above: the kernel
+        // entry point was already selected by element width, so reinterpreting
+        // as `f32` with an element count panics for 1- and 2-byte dtypes.
         unsafe {
-            let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();
+            let in_bytes = crate::bytes::byte_len(t_buf.dtype, t_buf.len, OperationKind::Concat)?;
+            let in_u8 = t_buf
+                .data
+                .transmute::<u8>(in_bytes)
+                .expect("CUDA concat input allocation covers its element count by construction");
             // out_b.data was allocated once before this loop and never cloned, so it
             // stays uniquely owned (refcount 1) across every iteration and
             // Arc::get_mut succeeds without cloning first.
             let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
                 .expect("out_b.data is uniquely owned for the lifetime of this loop");
-            let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();
+            let out_bytes = crate::bytes::byte_len(first_buf.dtype, total, OperationKind::Concat)?;
+            let mut out_view = out_u8
+                .transmute_mut::<u8>(out_bytes)
+                .expect("CUDA concat output allocation covers its element count by construction");
 
             use cudarc::driver::PushKernelArg;
             stream
                 .launch_builder(&f)
-                .arg(&in_f32)
-                .arg(&mut out_f32)
+                .arg(&in_u8)
+                .arg(&mut out_view)
                 .arg(&outer_size_u32)
                 .arg(&in_dim_size_u32)
                 .arg(&out_dim_total_u32)
