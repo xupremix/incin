@@ -412,3 +412,28 @@
 }
 .api-note p { margin: 0 0 8px; font-size: 13px; opacity: .85; }
 .api-note p:last-child { margin-bottom: 0; }
+
+/* -- worked examples ---------------------------------------------------- */
+.api-exwrap { margin-top: 26px; }
+.api-ex {
+  margin: 0 0 12px; border: 1px solid var(--table-border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.api-ex figcaption {
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline;
+  justify-content: space-between;
+  padding: 9px 14px; border-bottom: 1px solid var(--table-border);
+  background: var(--table-header-bg); font-size: 12.5px;
+}
+.api-ex figcaption a { color: var(--links); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
+.api-ex figcaption a:hover { text-decoration: underline; }
+.api-extag {
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; opacity: .6; flex: none; color: var(--inline-code-fg);
+}
+.api-extag.ok { color: var(--cov-9); opacity: .85; }
+.api-ex pre {
+  margin: 0; padding: 12px 14px; overflow-x: auto; background: none;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+}
+.api-ex code { background: none; padding: 0; border: 0; font: inherit; white-space: pre; }

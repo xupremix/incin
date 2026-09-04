@@ -303,6 +303,28 @@ async function run() {
   }
   doc().querySelector('.api-tab[data-sec="operations"]').click();
 
+  /* Examples are the reason to trust the page, so they must actually be
+     there, must not be silently truncated, and must say whether the compiler
+     checks them -- 20 of the 82 are `ignore` blocks that it does not. */
+  for (const tab of tabs) {
+    tab.click();
+    const id = tab.dataset.sec;
+    const figures = [...doc().querySelectorAll(".api-sec:not([hidden]) .api-ex")];
+    check(figures.length > 0, "the " + id + " section shows no worked example");
+    for (const figure of figures) {
+      const code = figure.querySelector("pre code");
+      check(code && code.textContent.trim().length > 0,
+        "an example in " + id + " renders no code");
+      const link = figure.querySelector("figcaption a");
+      check(link && (link.getAttribute("href") || "").indexOf("./#/") === 0,
+        "an example in " + id + " does not link to its chapter");
+      const tag = figure.querySelector(".api-extag");
+      check(tag && /^(compiled|not compiled)$/.test(tag.textContent.trim()),
+        "an example in " + id + " does not state whether it is compiled");
+    }
+  }
+  doc().querySelector('.api-tab[data-sec="operations"]').click();
+
   const shapeItems = doc().querySelectorAll("#shapeGroups .api-tyrow").length;
   check(shapeItems > 50,
     "the shape reference rendered " + shapeItems + " entries, which cannot be right");

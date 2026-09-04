@@ -526,6 +526,43 @@
       '<span class="api-typath doc">' + m.doc + '</span></div>';
   }).join("");
 
+  /* -- worked examples --------------------------------------------------- */
+  /* The book chapters are include_str!'d into a doctest-only module in the
+     facade, so a `no_run` or `compile_fail` block is compiled by CI. An
+     `ignore` block is not, and says so rather than passing for checked. */
+  function escapeCode(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function examplesFor(section) {
+    var list = (DATA.examples || []).filter(function (e) { return e.section === section; });
+    if (!list.length) return "";
+    return '<h3 class="api-h">Examples</h3>' +
+      '<p class="api-lede">' + list.length + ' from the book' +
+      ', ' + list.filter(function (e) { return e.checked; }).length +
+      ' of them compiled by CI. Each links to the chapter it is taken from.</p>' +
+      list.map(function (e) {
+        return '<figure class="api-ex">' +
+          '<figcaption><a href="./#/' + e.chapter + '">' + e.heading + '</a>' +
+          '<span class="api-extag' + (e.checked ? " ok" : "") + '">' +
+          (e.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
+          '<pre><code>' + escapeCode(e.code) + '</code></pre></figure>';
+      }).join("");
+  }
+
+  ["operations", "types", "dtypes", "backends", "layouts", "shapes", "target", "flow"]
+    .forEach(function (id) {
+      var host = document.getElementById("sec-" + id);
+      if (!host) return;
+      var html = examplesFor(id);
+      if (html) {
+        var wrap = document.createElement("div");
+        wrap.className = "api-exwrap";
+        wrap.innerHTML = html;
+        host.appendChild(wrap);
+      }
+    });
+
   var initial = window.location.hash.slice(1);
   showSection(["types", "dtypes", "backends", "layouts", "shapes", "target", "flow"].indexOf(initial) >= 0 ? initial : "operations");
 

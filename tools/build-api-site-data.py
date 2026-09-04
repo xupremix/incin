@@ -244,6 +244,76 @@ DISPATCH_FLOW = [
 
 
 
+
+# Which chapters carry the worked examples for each reference section. The
+# mapping is stated rather than guessed from the prose: an example is shown
+# under a section because that chapter is about that subject, not because a
+# keyword matched.
+EXAMPLE_CHAPTERS = {
+    "operations": ["tensors", "quickstart", "building_models", "pytorch_cheatsheet"],
+    "dtypes": ["quantization", "tensors"],
+    "layouts": ["layout"],
+    "shapes": ["shapes", "advanced_shapes", "macros"],
+    "target": ["target_api", "backend_authoring"],
+    "flow": ["deep_lowering", "proofs_to_execution", "custom_operations"],
+    "backends": ["backends", "backend_conformance"],
+    "types": ["deep_type_semantics", "invariants"],
+}
+FENCE = re.compile(r"^```(rust[\w,]*)$")
+
+
+def collect_examples() -> list:
+    """Every worked example in the book, with whether the compiler checks it.
+
+    The chapters are `include_str!`d into a doctest-only module in the facade,
+    so a `no_run` or `compile_fail` block is compiled by CI. An `ignore` block
+    is not, and is labelled that way here rather than presented as if it were
+    checked -- 25 of the 96 are in that state.
+    """
+    # A chapter can serve more than one section: `tensors` carries both the
+    # operation examples and the element-type ones.
+    sections_of = {}
+    for section, chapters in EXAMPLE_CHAPTERS.items():
+        for chapter in chapters:
+            sections_of.setdefault(chapter, []).append(section)
+
+    out = []
+    for path in sorted((ROOT / "docs/book/src").glob("*.md")):
+        chapter = path.stem
+        if chapter not in sections_of:
+            continue
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        heading, index = None, 0
+        while index < len(lines):
+            line = lines[index]
+            if line.startswith("#"):
+                heading = line.lstrip("#").strip()
+            match = FENCE.match(line.strip())
+            if match:
+                end = index + 1
+                while end < len(lines) and lines[end].strip() != "```":
+                    end += 1
+                body = "\n".join(lines[index + 1:end])
+                # Hidden doctest scaffolding is not part of the example.
+                shown = "\n".join(
+                    l for l in body.splitlines()
+                    if not l.lstrip().startswith("# ") and l.strip() != "#"
+                ).strip()
+                tags = match.group(1)
+                for section in sections_of[chapter] if shown else []:
+                    out.append({
+                        "section": section,
+                        "chapter": chapter,
+                        "heading": heading or chapter,
+                        "checked": "ignore" not in tags,
+                        "tags": tags,
+                        "code": shown,
+                    })
+                index = end
+            index += 1
+    return out
+
+
 DECL = re.compile(
     r"((?:^[ \t]*///.*\n)+)(?:^[ \t]*#\[[^\]]*\]\n)*^[ \t]*pub (struct|trait|enum) ([A-Za-z0-9_]+)",
     re.M,
@@ -522,6 +592,7 @@ def main() -> int:
         "shapes": shape_groups,
         "layouts": layout_out,
         "targetApi": target_out,
+        "examples": collect_examples(),
         "typeCount": len(types),
         "typeLinked": sum(1 for t in types if t["url"]),
     }
