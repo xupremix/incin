@@ -457,7 +457,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         axis: A,
         index: &Tensor<S2, B, KInt, G2>,
         src: &Tensor<S3, B, K, G3>,
-    ) -> Result<Self>
+    ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
         S2: ShapeEq<S3>,
@@ -534,7 +534,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         axis: A,
         index: &Tensor<S2, B, KInt, G2>,
         src: &Tensor<S3, B, K, G3>,
-    ) -> Result<Self>
+    ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
         S2: ShapeEq<S3>,
@@ -815,7 +815,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts sliding window slices along `dim`.
-    pub fn unfold(&self, dim: usize, size: usize, step: usize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn unfold(
+        &self,
+        dim: usize,
+        size: usize,
+        step: usize,
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Capabilities + Execute<op::Unfold>,
         <B as Execute<op::Unfold>>::Output: Into<B::Storage<K>>,

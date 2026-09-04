@@ -924,3 +924,91 @@ fn manipulation_results_are_dense_even_from_a_strided_operand() {
         &dense_43.try_concat(&strided, 0).unwrap(),
     );
 }
+
+/// Which shape operations are views and which materialise, measured.
+///
+/// This group is the one where the answer could not be guessed from the
+/// signature. `unsqueeze` and `try_squeeze` read like pure metadata edits, and
+/// they are -- until the operand is strided, at which point they route through
+/// a reshape that materialises. `try_narrow` and `broadcast_to` really are
+/// views and stay strided. `chunk` is a view *with an offset*, which is the
+/// case a dense check alone would miss.
+///
+/// Both halves are asserted. Claiming the views are dense would be false, and
+/// leaving the materialising ones at `Dyn` is the weakness this whole thread
+/// has been removing -- so the test has to distinguish them rather than lump
+/// them together.
+#[test]
+fn shape_operations_split_into_views_and_materialisations() {
+    use incin_core::backend_authoring::StorageBackend;
+    use incin_core::shapes::idx::{Here, Next};
+
+    fn assert_view<S: Shape, K, G, P, L>(
+        label: &str,
+        t: &incin_core::prelude::Tensor<S, CpuBackendImpl, K, G, P, L>,
+        strides: &[usize],
+    ) where
+        K: incin_core::prelude::DType,
+        G: incin_core::tensor::grad::RequiresGrad,
+        P: incin_core::dist::Placement,
+        L: Layout,
+    {
+        let meta = <CpuBackendImpl as StorageBackend>::metadata::<K>(t.inner());
+        assert_eq!(
+            meta.strides().as_ref(),
+            strides,
+            "{label}: this operation is a view, and a change here means it started copying"
+        );
+    }
+
+    let base = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::from_slice(
+        &[
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ],
+        (),
+    )
+    .unwrap();
+    let strided = base
+        .transpose_view::<Here, Next<Here>>()
+        .expect("a 3x4 tensor transposes to 4x3");
+
+    // Materialising: a strided operand comes back dense.
+    assert_dense("unsqueeze", &strided.unsqueeze(0isize).unwrap());
+    assert_dense("unfold", &strided.unfold(0, 2, 1).unwrap());
+    assert_dense("flatten", &strided.flatten(0isize, 1isize).unwrap());
+
+    let indices = incin_core::prelude::Tensor::<s![4, 3], CpuBackendImpl, u32>::zeros(()).unwrap();
+    assert_dense(
+        "scatter",
+        &strided.scatter(0isize, &indices, &strided).unwrap(),
+    );
+    assert_dense(
+        "scatter_add",
+        &strided.scatter_add(0isize, &indices, &strided).unwrap(),
+    );
+
+    // Views: the strides are carried through, so claiming dense would be false.
+    assert_view(
+        "try_narrow",
+        &strided.clone().try_narrow(0isize, 0, 2).unwrap(),
+        &[1, 4],
+    );
+    assert_view(
+        "broadcast_to",
+        &strided
+            .broadcast_to::<s![4, 3]>(Default::default())
+            .unwrap(),
+        &[1, 4],
+    );
+
+    // `chunk` is a view that also moves the offset, which is why a stride-only
+    // check is not enough to call something a view.
+    let chunks = strided.chunk(2, 0isize).unwrap();
+    let second = <CpuBackendImpl as StorageBackend>::metadata::<f32>(chunks[1].inner());
+    assert_eq!(second.strides().as_ref(), &[1, 4]);
+    assert_eq!(
+        second.offset_elements(),
+        2,
+        "the second chunk starts partway in"
+    );
+}

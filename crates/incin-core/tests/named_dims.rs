@@ -97,15 +97,18 @@ fn insertion_and_removal_selectors_preserve_shape_proofs() {
     type B = CpuBackendImpl;
     type S = s![2, 3];
     type Expanded = Tensor<s![2, 1, 3], B>;
-    type Squeezed = Tensor<s![2, 3], B>;
+    // `Dense`: both operations route through a reshape, which materialises
+    // rather than re-describing when the operand is not already contiguous.
+    type ExpandedDense = Dense<s![2, 1, 3], B>;
+    type SqueezedDense = Dense<s![2, 3], B>;
     let tensor: Tensor<S, B> = Tensor::ones(()).unwrap();
 
-    let _: Expanded = tensor.unsqueeze(axis!(1)).unwrap();
-    let _: Tensor<Ranked<typenum::U3>, B> = tensor.unsqueeze(1isize).unwrap();
+    let _: ExpandedDense = tensor.unsqueeze(axis!(1)).unwrap();
+    let _: Dense<Ranked<typenum::U3>, B> = tensor.unsqueeze(1isize).unwrap();
 
     let singleton: Expanded = Tensor::ones(()).unwrap();
-    let _: Squeezed = singleton.clone().try_squeeze(axis!(1)).unwrap();
-    let _: Tensor<Ranked<typenum::U2>, B> = singleton.try_squeeze(1isize).unwrap();
+    let _: SqueezedDense = singleton.clone().try_squeeze(axis!(1)).unwrap();
+    let _: Dense<Ranked<typenum::U2>, B> = singleton.try_squeeze(1isize).unwrap();
 }
 
 #[test]

@@ -304,7 +304,7 @@ impl<
     /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
     /// let sq = t.try_squeeze(0isize).unwrap(); // shape [5]
     /// ```
-    pub fn try_squeeze<A>(self, axis: A) -> Result<Tensor<A::Drop, B, K, G, P>>
+    pub fn try_squeeze<A>(self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: crate::tensor::ops::reduce::ReduceSelector<S>,
         A::Drop: DynShape,
@@ -485,7 +485,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         &self,
         start: A,
         end: BSel,
-    ) -> Result<Tensor<<() as FlattenSelector<S, A, BSel>>::Output, B, K, G>>
+    ) -> Result<crate::shapes::Dense<<() as FlattenSelector<S, A, BSel>>::Output, B, K, G, Local>>
     where
         (): FlattenSelector<S, A, BSel>,
         <() as FlattenSelector<S, A, BSel>>::Output: Shape + DynShape,
@@ -552,7 +552,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     #[allow(clippy::type_complexity)]
     pub fn flatten_structural<Start, End>(
         &self,
-    ) -> Result<Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>>
+    ) -> Result<crate::shapes::Dense<<S as FlattenAt<Start, End>>::Output, B, K, G, Local>>
     where
         S: FlattenAt<Start, End>,
         <S as FlattenAt<Start, End>>::Output: Shape + DynShape,
@@ -606,7 +606,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 &output_shape,
             )
         })?;
-        Tensor::<<S as FlattenAt<Start, End>>::Output, B, K, G>::from_shape_value(
+        crate::shapes::Dense::<<S as FlattenAt<Start, End>>::Output, B, K, G, Local>::from_shape_value(
             inner,
             output_shape,
             self._dtype.clone(),
@@ -617,7 +617,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Runtime flatten range with checked normalization and a dynamic output.
     #[doc(hidden)]
-    pub fn flatten_runtime(&self, start: isize, end: isize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn flatten_runtime(
+        &self,
+        start: isize,
+        end: isize,
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Execute<
                 op::FlattenExact,
@@ -676,7 +680,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Flattens an inclusive signed axis range and returns a dynamic shape.
     #[doc(hidden)]
-    pub fn flatten_range(&self, start: isize, end: isize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn flatten_range(
+        &self,
+        start: isize,
+        end: isize,
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Execute<
                 op::FlattenExact,
@@ -687,7 +695,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Inserts a 1-sized dimension at the selected axis.
-    pub fn unsqueeze<A>(&self, axis: A) -> Result<Tensor<A::Output, B, K, G>>
+    pub fn unsqueeze<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Output, B, K, G, Local>>
     where
         A: UnsqueezeSelector<S>,
         A::Output: DynShape,
@@ -719,7 +727,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 )
             })?
             .into();
-        Tensor::<A::Output, B, K, G>::from_parts(
+        crate::shapes::Dense::<A::Output, B, K, G, Local>::from_parts(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),

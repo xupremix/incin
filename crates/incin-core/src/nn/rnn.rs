@@ -593,7 +593,10 @@ where
 
         for i in 0..seq_len {
             let x_step = x.clone().try_narrow(1isize, i, 1)?.try_squeeze(1isize)?;
-            let x_step_static: Tensor<D2<Batch, S::In>, B, K, G> = x_step.into_shape()?;
+            // The cell binds its input layout to the default, so the proof
+            // `try_squeeze` produced is dropped here rather than forced on it.
+            let x_step_static: Tensor<D2<Batch, S::In>, B, K, G> =
+                x_step.into_shape::<D2<Batch, S::In>>()?.forget_layout();
             // `h` is carried across iterations and its initial value is the
             // caller's, which proves nothing. The cell's result is dense, but
             // the loop variable can only hold what every assignment to it

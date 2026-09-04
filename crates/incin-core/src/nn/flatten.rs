@@ -83,7 +83,7 @@ where
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 {
-    type Output = Tensor<Dyn, B, K, G>;
+    type Output = crate::shapes::Dense<Dyn, B, K, G, Local>;
     type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<S, B, K, G, Local, L>) -> Result<Self::Output> {
@@ -105,7 +105,8 @@ where
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 {
-    type Output = Tensor<<() as FlattenSelector<S, Start, End>>::Output, B, K, G>;
+    type Output =
+        crate::shapes::Dense<<() as FlattenSelector<S, Start, End>>::Output, B, K, G, Local>;
     type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<S, B, K, G, Local, L>) -> Result<Self::Output> {
@@ -128,7 +129,7 @@ where
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
 {
-    type Output = Tensor<<S as FlattenAt<Start, End>>::Output, B, K, G>;
+    type Output = crate::shapes::Dense<<S as FlattenAt<Start, End>>::Output, B, K, G, Local>;
     type Error = crate::err::Error;
 
     fn forward(&self, x: Tensor<S, B, K, G, Local, L>) -> Result<Self::Output> {

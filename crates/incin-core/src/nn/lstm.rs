@@ -769,7 +769,12 @@ where
 
         for i in 0..seq_len {
             let x_step = x.clone().try_narrow(1isize, i, 1)?.try_squeeze(1isize)?;
-            let x_step_static: Tensor<D2<Batch, In>, B, K> = x_step.into_shape()?;
+            // `try_squeeze` materialises, and `into_shape` carries that proof
+            // through -- but the cell's `Module` impl still binds its input
+            // layout to the default, so the proof is dropped at that boundary
+            // rather than forced on the cell. Same reason as `h` below.
+            let x_step_static: Tensor<D2<Batch, In>, B, K> =
+                x_step.into_shape::<D2<Batch, In>>()?.forget_layout();
             let (h_next, c_next) = self.cell.forward((x_step_static, (h, c)))?;
             h = h_next;
             c = c_next;

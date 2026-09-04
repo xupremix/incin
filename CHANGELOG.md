@@ -86,6 +86,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for the result they allocate. They pinned `L` on *both* arguments, so once
   `Linear` returned a proof, feeding its output straight into a loss stopped
   compiling.
+- **The shape operations are sorted into views and materialisations, by
+  measurement rather than by signature.** `unsqueeze`, `try_squeeze`, the three
+  `flatten` forms, `unfold`, `scatter` and `scatter_add` materialise and now
+  state `Dense`. `try_narrow`, `broadcast_to`, `expand` and `chunk` are genuine
+  views and keep claiming nothing.
+
+  This group is the one where the answer could not be read off the signature.
+  `unsqueeze` and `try_squeeze` look like pure metadata edits, and they are --
+  until the operand is strided, at which point they route through a reshape
+  that materialises. `scatter` and `scatter_add` returned `Self`, which is the
+  sixth appearance of the shape-preserving pattern. The split was established
+  by feeding each one a `transpose_view` result and reading the strides back,
+  and both halves are asserted: claiming the views are dense would be as wrong
+  as leaving the rest at `Dyn`.
+
+  `chunk` is why a stride check alone is not enough to call something a view --
+  its second piece shares the strides and moves the *offset*, so the test pins
+  that too.
 - **The manipulation surface proves its results are dense.** `concat`, `stack`,
   `gather`, `index_select`, `repeat`, `pad`, `diag`, `pixel_shuffle`,
   `to_dtype`, `triu`, `tril`, `group_norm` and `instance_norm` all allocate and
