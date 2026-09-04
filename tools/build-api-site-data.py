@@ -328,7 +328,15 @@ def collect_snippets() -> list:
                 index = end
             index += 1
 
-    for pattern in ("crates/*/tests/*.rs", "crates/incin/examples/*/*.rs"):
+    # The runnable custom-operation examples live beside the backend, not in
+    # crates/incin/examples/, so the second pattern misses them: without the
+    # third, opening CpuStorage or f64 shows test snippets but never the
+    # calibration/polar programs that use them end to end.
+    for pattern in (
+        "crates/*/tests/*.rs",
+        "crates/incin/examples/*/*.rs",
+        "crates/incin-backends/examples/*.rs",
+    ):
         for path in sorted(ROOT.glob(pattern)):
             rel = path.relative_to(ROOT).as_posix()
             text = path.read_text(encoding="utf-8", errors="replace")
