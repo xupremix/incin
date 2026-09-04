@@ -139,7 +139,32 @@ def main() -> None:
     index = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     index = index.replace("__SIDEBAR__", render_sidebar(sections))
     (SITE / "index.html").write_text(index, encoding="utf-8")
+
+    write_api_reference()
     print(f"wrote {len(chapters_global)} chapters to {SITE}")
+
+
+def write_api_reference() -> None:
+    """Emit the capability reference beside the book.
+
+    The payload is inlined into a JSON script tag rather than fetched, so the
+    page has no load-failure path and works from a `file://` checkout. It is a
+    separate document rather than a chapter because it is a table to operate,
+    not prose to read in order -- SUMMARY.md stays the book's contents, and
+    `check-docs.py` keeps every chapter there matched to a doctest include,
+    which a generated page has nothing to offer.
+    """
+    payload = ROOT.parent / "api-site-data.json"
+    if not payload.exists():
+        raise SystemExit(
+            "docs/api-site-data.json is missing; run tools/build-api-site-data.py"
+        )
+    shutil.copy(ROOT / "web" / "api.css", SITE / "api.css")
+    shutil.copy(ROOT / "web" / "api.js", SITE / "api.js")
+    page = (ROOT / "web" / "api.html").read_text(encoding="utf-8")
+    # A closing tag inside the JSON would end the script element early.
+    data = payload.read_text(encoding="utf-8").replace("</", "<\\/")
+    (SITE / "api.html").write_text(page.replace("__API_DATA__", data), encoding="utf-8")
 
 
 if __name__ == "__main__":

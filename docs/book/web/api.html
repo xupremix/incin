@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en" class="navy" data-theme="navy">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Incin capability reference: every operation against every backend, with element types, memory layouts, ranks and training support, generated from the capability registry.">
+  <title>Capability reference &middot; Incin</title>
+  <link rel="stylesheet" href="book.css">
+  <link rel="stylesheet" href="api.css">
+  <script>
+    // Applied before first paint so the page never flashes the wrong theme.
+    // Same storage keys book.js writes, so a theme chosen in the book carries.
+    (function () {
+      try {
+        var t = localStorage.getItem("incin-book-theme") || localStorage.getItem("mdbook-theme") || "navy";
+        if (["navy", "rust", "light", "coal", "ayu"].indexOf(t) < 0) t = "navy";
+        document.documentElement.className = t;
+        document.documentElement.dataset.theme = t;
+      } catch (e) { /* private mode: the navy default in the markup stands */ }
+    })();
+  </script>
+</head>
+<body class="sidebar-hidden">
+  <a class="skip-link" href="#matrix">Skip to the capability matrix</a>
+
+  <div id="page-wrapper" class="page-wrapper">
+    <header class="menu-bar sticky" id="menu-bar">
+      <div class="left-buttons">
+        <div class="theme-wrapper">
+          <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch theme" aria-haspopup="true" aria-expanded="false" title="Switch theme">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.64 10.59 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/><circle cx="7.5" cy="11.5" r="1.5"/><circle cx="10.5" cy="7.5" r="1.5"/><circle cx="14.5" cy="7.5" r="1.5"/><circle cx="16.5" cy="11.5" r="1.5"/></svg>
+          </button>
+          <ul id="theme-list" class="theme-popup" role="menu" hidden>
+            <li role="none"><button role="menuitem" class="theme-option" data-theme="light">Light</button></li>
+            <li role="none"><button role="menuitem" class="theme-option" data-theme="rust">Rust</button></li>
+            <li role="none"><button role="menuitem" class="theme-option" data-theme="coal">Coal</button></li>
+            <li role="none"><button role="menuitem" class="theme-option active" data-theme="navy">Navy</button></li>
+            <li role="none"><button role="menuitem" class="theme-option" data-theme="ayu">Ayu</button></li>
+          </ul>
+        </div>
+        <a class="icon-button" href="index.html" aria-label="The Incin Book" title="The Incin Book" style="width:auto;padding:0 10px;font-size:13px">&larr;&nbsp;The&nbsp;Book</a>
+      </div>
+
+      <h1 class="menu-title">Capability reference</h1>
+
+      <div class="right-buttons">
+        <a class="icon-button" href="https://github.com/xupremix/incin" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="Git repository">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="api-page">
+      <h1 style="margin-top:28px">Capability reference</h1>
+      <p class="api-lede">Every operation in the catalog, against every backend: which element
+        types it accepts, which memory layouts, which ranks, and whether it runs a dedicated
+        kernel or is composed from others.</p>
+
+      <section class="api-band">
+        <div>
+          <p class="api-eyebrow">What a row here does and does not mean</p>
+          <p>A row is a <strong>capability declaration</strong>, not a test result. It says what
+            this build of Incin would run if the device were present &mdash; the registry is
+            queried from the same declaration that generates this page, and every advertised
+            operation must also satisfy the compile-time <code>Execute&lt;O&gt;</code> contract.</p>
+          <p>It is not evidence that the kernel is correct. The runtime suites exercise
+            representative and boundary behaviour; <strong>they do not execute every dtype,
+            layout, rank and training boundary shown below</strong>. Closing that gap is tracked
+            as open work rather than claimed as done &mdash; see
+            <a href="https://github.com/xupremix/incin/issues/83">issue&nbsp;#83</a>, a CPU-oracle
+            conformance harness for advertised capabilities.</p>
+          <p>The distinction is why this page exists. A support matrix that cannot tell you which
+            half you are reading is the kind of claim nobody checks.</p>
+        </div>
+        <div class="api-ledger" aria-label="Verification status">
+          <div><span class="k">Declared operations</span><span class="v">179</span></div>
+          <div><span class="k">CPU suite</span><span class="v ok">1725 passed &middot; 0 failed</span></div>
+          <div><span class="k">CUDA hardware suite</span><span class="v ok">66 passed</span></div>
+          <div><span class="k">Device tested</span><span class="v">GTX 1650 SUPER &middot; sm_75</span></div>
+          <div><span class="k">Feature powerset</span><span class="v ok">800 combos clean</span></div>
+          <div><span class="k">Per-operation conformance</span><span class="v open">open &middot; #83</span></div>
+        </div>
+      </section>
+
+      <div class="api-metrics" id="apiMetrics"></div>
+
+      <div class="api-controls">
+        <div class="api-search">
+          <input id="apiQ" type="search" placeholder="Filter operations — try conv, matmul, softmax" aria-label="Filter operations by name">
+        </div>
+        <div class="api-chips" id="apiBackendChips" role="group" aria-label="Require backend support"></div>
+        <div class="api-chips" id="apiTraitChips" role="group" aria-label="Require property"></div>
+        <span class="api-count" id="apiCount"></span>
+      </div>
+
+      <div class="api-tablewrap" id="matrix">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Operation</th>
+              <th scope="col" class="b">cpu</th>
+              <th scope="col" class="b">cuda</th>
+              <th scope="col" class="b">wgpu</th>
+              <th scope="col" class="b">metal</th>
+            </tr>
+          </thead>
+          <tbody id="apiRows"></tbody>
+        </table>
+      </div>
+      <p class="api-lede" style="margin-top:10px;font-size:14px">
+        A chip shows how many element types that backend accepts, coloured by implementation:
+        <span class="api-sup native"><i></i>native</span> is a dedicated kernel,
+        <span class="api-sup composed"><i></i>composed</span> is built from other operations.
+        Both execute; they differ in cost. Select a row for layouts, rank and training support.
+      </p>
+
+      <h2>Rule categories</h2>
+      <p class="api-lede">Eight rules per backend are registered against a <em>category</em> rather
+        than a named operation. They are listed separately because mapping them onto member
+        operations would invent a claim the generated document does not make.</p>
+      <div class="api-tablewrap">
+        <table>
+          <thead><tr>
+            <th scope="col">Backend</th><th scope="col">Category</th><th scope="col">Element types</th>
+            <th scope="col">Layouts</th><th scope="col">Rank</th><th scope="col">Training</th><th scope="col">Impl</th>
+          </tr></thead>
+          <tbody id="apiCatRows"></tbody>
+        </table>
+      </div>
+
+      <h2>Reviewed public surface</h2>
+      <p class="api-lede">Every public item, per crate, from the checked-in baselines in
+        <code>docs/public-api/</code>. CI diffs these on a pinned nightly, so an unintended
+        addition fails the build rather than shipping.</p>
+      <div class="api-surface" id="apiSurface"></div>
+
+      <h2>Reading a row</h2>
+      <div class="api-notes">
+        <p><strong>Element types</strong> are the dtypes the rule covers. A dtype absent from every
+          rule for an operation is refused by the registry &mdash; which is what lets a planner ask
+          before it allocates, rather than discovering it from a trait method that errors at run
+          time.</p>
+        <p><strong>Layouts</strong> are <code>LayoutClass</code> values. <code>contiguous</code> is
+          dense row-major; <code>strided</code> means the kernel handles a non-dense view without a
+          copy. The gap between CPU and CUDA here is real, and a kernel that exists while its row
+          says <code>contiguous</code> is unreachable through the public API.</p>
+        <p><strong>Rank</strong> is the tensor rank the rule accepts; <code>any</code> is an
+          unbounded rule. <strong>Training</strong> says whether the rule also covers the backward
+          pass &mdash; a rule marked no still runs under inference.</p>
+        <p style="opacity:.7;font-size:13.5px">Generated by <code>tools/build-api-site-data.py</code>
+          from <code>docs/capabilities.md</code>, which is itself generated from the registrations
+          in <code>crates/incin-backends/src/capability/tables.rs</code>. Nothing on this page is
+          maintained by hand.</p>
+      </div>
+    </main>
+  </div>
+
+  <script id="api-data" type="application/json">__API_DATA__</script>
+  <script src="api.js"></script>
+</body>
+</html>
