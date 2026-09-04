@@ -11,6 +11,7 @@ on:
       - "tools/build-api-site-data.py"
       - "tools/check-docs.py"
       - "tools/check-book-site.py"
+      - "tools/test-api-page.py"
       - "tools/check-markdown-links.py"
       - ".github/workflows/pages.yml"
 
@@ -48,6 +49,7 @@ jobs:
           python3 docs/book/build_site.py
           python3 tools/check-book-site.py
           python3 tools/test-book-site.py
+          python3 tools/test-api-page.py
           node --check docs/book/site/book.js
           node --check docs/book/site/api.js
       - name: Upload Pages artifact

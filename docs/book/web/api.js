@@ -106,30 +106,47 @@
   var rows = document.getElementById("apiRows");
   var countEl = document.getElementById("apiCount");
 
-  /* Coverage is measured against the widest support any backend offers for
-     that same operation, not against the nine dtypes in the crate. Many
-     operations are float-only by nature, so 4-of-9 would read as thin
-     coverage when it is in fact everything the operation has. */
+  /* Every bar on this page is drawn against the same fixed whole, so a bar
+     means one thing everywhere. An earlier version scaled each row against the
+     best backend on that row; because that denominator was 1 on 26 rows, 4 on
+     81 and 8 on 54, a completely full bar meant four different amounts of
+     support, and no two rows could be compared. The per-row best is still
+     worth knowing -- it says whether an operation could do more at all -- so
+     it is drawn as a tick on the track instead of as the scale. */
+  var DTYPES = (function () {
+    var seen = {};
+    DATA.operations.forEach(function (o) {
+      B.forEach(function (b) {
+        o.backends[b].dtypes.forEach(function (d) { seen[d] = 1; });
+      });
+    });
+    return Object.keys(seen).length;
+  })();
+
   function widest(op) {
     return B.reduce(function (n, b) {
       return Math.max(n, op.backends[b].dtypes.length);
     }, 0);
   }
 
-  function meter(b, e, top) {
+  function meter(b, e, best) {
     if (!e.dtypes.length) {
       return '<div class="api-meter none"><span class="lab">' + b + '<b>&mdash;</b></span>' +
         '<span class="api-track"></span></div>';
     }
     var have = e.dtypes.length;
-    var ratio = top ? have / top : 1;
-    // `4/4` states the ratio outright, so the bar reinforces rather than
-    // encodes it. Amber marks a composed implementation, and marks only that.
+    // Amber marks a composed implementation, and marks only that.
     var cls = e.impl === "composed" ? "api-meter composed" : "api-meter";
-    var pct = Math.max(8, Math.round(ratio * 100));
+    var pct = (have / DTYPES) * 100;
+    // The tick earns its place only where it says something the fill does not:
+    // that another backend reaches further on this same operation.
+    var tick = best > have
+      ? '<u class="api-ref" style="left:' + ((best / DTYPES) * 100).toFixed(2) + '%"></u>'
+      : "";
     return '<div class="' + cls + '"><span class="lab">' + b +
-      '<b>' + have + '/' + top + '</b></span>' +
-      '<span class="api-track"><i class="api-fill" style="width:' + pct + '%"></i></span></div>';
+      '<b>' + have + '<em>/' + DTYPES + '</em></b></span>' +
+      '<span class="api-track"><i class="api-fill" style="width:' + pct.toFixed(2) + '%"></i>' +
+      tick + '</span></div>';
   }
 
   function describe(op) {
@@ -208,13 +225,13 @@
       return;
     }
     rows.innerHTML = list2.map(function (op, i) {
-      var top = widest(op);
+      var best = widest(op);
       return '<button type="button" class="api-row" aria-expanded="false" data-i="' + i + '">' +
         '<span class="api-id"><span class="api-name">' + op.name +
           (op.catalog ? '<span class="api-fam">' + op.catalog.family + '</span>' : "") +
         '</span>' + describe(op) + '</span>' +
         '<span class="api-strip">' +
-          B.map(function (b) { return meter(b, op.backends[b], top); }).join("") +
+          B.map(function (b) { return meter(b, op.backends[b], best); }).join("") +
         '</span></button>' +
         '<div class="api-detail" data-d="' + i + '" hidden></div>';
     }).join("");

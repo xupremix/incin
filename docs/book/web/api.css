@@ -1,7 +1,17 @@
 /* API reference. Layers on book.css and takes every colour from its theme
    tokens, so the five book themes drive this page with no palette of its own. */
 
-.api-page { max-width: 1180px; margin: 0 auto; padding: 0 28px 64px; }
+/* `width: 100%` is load-bearing, not decoration. The shell lays this out as a
+   column flex item, which resolved its cross size to max-content -- and the
+   category table carries `min-width: 680px`, so max-content was 769px however
+   narrow the viewport got. The table's own scroll container bounds the
+   *overflow* but still feeds max-content, so the whole page was dragged wide
+   and every child stretched with it. A definite width stops that at the top
+   and lets the table scroll inside itself, which is what it is there for. */
+.api-page {
+  width: 100%; box-sizing: border-box;
+  max-width: 1180px; margin: 0 auto; padding: 0 28px 64px;
+}
 .api-lede { color: var(--fg); opacity: .82; max-width: 68ch; }
 
 /* Verification band ------------------------------------------------------ */
@@ -133,7 +143,18 @@
   font-weight: 600; font-variant-numeric: tabular-nums; opacity: .95;
   letter-spacing: 0; text-transform: none;
 }
-.api-track { height: 6px; border-radius: 3px; background: var(--table-border); overflow: hidden; }
+/* The denominator is the same on every row, so it is stated but not shouted. */
+.api-meter .lab b em { font-style: normal; font-weight: 400; opacity: .45; }
+/* No `overflow: hidden`: the reference tick deliberately stands proud of the
+   track so it reads as a mark on a scale rather than as part of the fill. */
+.api-track { position: relative; height: 6px; border-radius: 3px; background: var(--table-border); }
+/* The best any backend reaches on this same operation. Present only when some
+   backend reaches further than this one, so a tick always means "there is more
+   to have here". */
+.api-ref {
+  position: absolute; top: -3px; height: 12px; width: 2px; margin-left: -1px;
+  border-radius: 1px; background: var(--fg); opacity: .45;
+}
 /* One hue. The bar says how much, and nothing else -- implementation is a
    separate fact and gets its own mark rather than a second meaning here. */
 .api-fill { display: block; height: 100%; border-radius: 3px; background: var(--sidebar-active); }
@@ -167,6 +188,9 @@
 .api-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 12px; font-size: 12.5px; opacity: .8; }
 .api-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .api-legend i { width: 22px; height: 6px; border-radius: 3px; display: block; }
+.api-legend i.api-ref-key {
+  width: 2px; height: 12px; border-radius: 1px; background: var(--fg); opacity: .45;
+}
 
 /* Category + surface tables keep a scroll container of their own. */
 .api-tablewrap { overflow-x: auto; border: 1px solid var(--table-border); border-radius: var(--radius-lg); margin-top: 16px; }

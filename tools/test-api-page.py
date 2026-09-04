@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Exercise the capability reference page in a real headless browser.
+
+The book test covers the book application. This test covers the one contract
+the capability page adds: its meters are a *scale*, and a scale is only
+readable if the same length means the same thing everywhere on the page.
+
+That contract was broken twice without anything noticing, because nothing here
+ran. The page first encoded two variables on one mark (hue for implementation,
+fill for coverage), and then, after that was fixed, still scaled every row
+against the best backend on that row -- a denominator that was 1 on 26 rows, 4
+on 81 and 8 on 54, so a full bar meant four different amounts of support and no
+two rows could be compared. Both were reported by a reader looking at the
+rendered page, which is the wrong place to find them.
+"""
+
+from __future__ import annotations
+
+import html
+import http.server
+import importlib.util
+import re
+import shutil
+import subprocess
+import tempfile
+import threading
+from pathlib import Path
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parent.parent
+SITE: Path | None = None
+
+HARNESS = """<!doctype html>
+<meta charset="utf-8">
+<title>capability page harness</title>
+<body>
+<pre id="result">API_TEST=PENDING</pre>
+<iframe id="frame" style="width:390px;height:900px;border:0"></iframe>
+<script>
+const frame = document.getElementById("frame");
+const result = document.getElementById("result");
+async function until(predicate, label) {
+  for (let i = 0; i < 200; i += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for " + label);
+}
+function check(condition, message) {
+  if (!condition) throw new Error(message);
+}
+function haveOf(meter) {
+  return Number(meter.querySelector(".lab b").firstChild.textContent.trim());
+}
+async function run() {
+  frame.src = "/project/api.html";
+  await new Promise((resolve) => frame.addEventListener("load", resolve, {once: true}));
+  const doc = () => frame.contentDocument;
+  await until(() => doc().querySelectorAll(".api-row").length > 0, "operation rows");
+
+  /* One whole for the entire page. This is the invariant that was violated. */
+  const denoms = new Set([...doc().querySelectorAll(".api-meter .lab b em")]
+    .map((e) => e.textContent.trim()));
+  check(denoms.size === 1,
+    "meters are drawn against " + denoms.size + " different wholes: " + [...denoms].join(" "));
+  const denom = Number([...denoms][0].replace("/", ""));
+  check(denom > 0, "the meter denominator did not parse as a number");
+
+  /* Each bar draws its own stated number against that whole. */
+  const meters = [...doc().querySelectorAll(".api-meter:not(.none)")];
+  check(meters.length > 0, "no meters rendered");
+  for (const meter of meters) {
+    const have = haveOf(meter);
+    const got = parseFloat(meter.querySelector(".api-fill").style.width);
+    const want = (have / denom) * 100;
+    check(Math.abs(got - want) < 0.05,
+      "a bar reading " + have + "/" + denom + " is drawn at " + got + "%, not " + want + "%");
+    check(got <= 100.0001, "a bar overflows its track at " + got + "%");
+  }
+
+  /* The per-row best is a tick, and only where it says something the fill
+     does not: that some other backend reaches further on this operation. */
+  for (const strip of doc().querySelectorAll(".api-strip")) {
+    const row = [...strip.querySelectorAll(".api-meter:not(.none)")];
+    if (!row.length) continue;
+    const best = Math.max(...row.map(haveOf));
+    for (const meter of row) {
+      const tick = meter.querySelector(".api-ref");
+      if (haveOf(meter) < best) {
+        check(tick, "no reference tick where another backend reaches " + best + "/" + denom);
+        const at = parseFloat(tick.style.left);
+        check(Math.abs(at - (best / denom) * 100) < 0.05,
+          "reference tick at " + at + "% should stand at " + (best / denom) * 100 + "%");
+      } else {
+        check(!tick, "a reference tick is drawn on the row's own best, where it says nothing");
+      }
+    }
+  }
+
+  /* The summary cards are the same kind of mark and must also be absolute. */
+  const cards = [...doc().querySelectorAll(".api-metric")];
+  check(cards.length === 4, "expected four summary cards, found " + cards.length);
+  for (const card of cards) {
+    const stated = card.querySelector(".b").textContent.replace(/\\s/g, "");
+    const parts = stated.split("/").map(Number);
+    const got = parseFloat(card.querySelector(".api-bar i").style.width);
+    const want = (parts[0] / parts[1]) * 100;
+    check(Math.abs(got - want) < 1.01,
+      "a card reading " + stated + " is drawn at " + got + "%, not " + want + "%");
+  }
+
+  /* The other repeatedly reported defect: sideways scroll on a phone. */
+  const root = doc().documentElement;
+  const limit = root.clientWidth;
+  const wide = [...doc().querySelectorAll("*")]
+    .filter((el) => el.getBoundingClientRect().right > limit + 1)
+    .map((el) => el.tagName.toLowerCase() +
+      (el.className ? "." + String(el.className).trim().split(/\\s+/).join(".") : "") +
+      " right=" + Math.round(el.getBoundingClientRect().right));
+  check(root.scrollWidth <= limit + 1,
+    "the page scrolls sideways at 390px: scrollWidth " + root.scrollWidth +
+    " exceeds clientWidth " + limit + " -- offenders: " + wide.slice(0, 8).join(" | "));
+
+  result.textContent = "API_TEST=" + "PASS";
+}
+run().catch((error) => {
+  result.textContent = "API_TEST=FAIL\\n" + error.stack;
+});
+</script>
+"""
+
+
+def harness_verdict(dumped: str, sentinel: str) -> tuple[bool, str]:
+    """Read the verdict from the result element, not from the whole dump.
+
+    `--dump-dom` emits the harness's own <script> source along with the DOM,
+    and that source contains the success sentinel as a literal. Substring
+    matching the dump therefore reports success unconditionally: this suite
+    passed with `check(false)` as the first statement of `run()`, so none of
+    its assertions had ever been evaluated. The sentinel is also assembled
+    from two pieces below so that the literal cannot reappear in the source.
+    """
+    match = re.search(r'<pre id="result">(.*?)</pre>', dumped, re.DOTALL)
+    if match is None:
+        return False, "the harness result element was missing from the dumped DOM"
+    verdict = html.unescape(match.group(1)).strip()
+    return verdict == sentinel, verdict
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(SITE), **kwargs)
+
+    def do_GET(self) -> None:  # noqa: N802 - stdlib handler protocol
+        path = urlsplit(self.path).path
+        if path == "/api-test.html":
+            payload = HARNESS.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if path.startswith("/project/"):
+            self.path = path.removeprefix("/project")
+        else:
+            self.send_error(404)
+            return
+        super().do_GET()
+
+    def log_message(self, *_args) -> None:
+        return
+
+
+def main() -> int:
+    global SITE
+    browser = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
+    if browser is None:
+        raise SystemExit("a Chromium-compatible browser is required for the capability page test")
+    builder_spec = importlib.util.spec_from_file_location("incin_book_builder", ROOT / "docs/book/build_site.py")
+    if builder_spec is None or builder_spec.loader is None:
+        raise SystemExit("unable to load book site builder")
+    builder = importlib.util.module_from_spec(builder_spec)
+    builder_spec.loader.exec_module(builder)
+
+    with tempfile.TemporaryDirectory(prefix="incin-api-site-") as output:
+        builder.SITE = Path(output)
+        builder.main()
+        SITE = Path(output)
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory(prefix="incin-api-browser-") as profile:
+                command = [
+                    browser,
+                    "--headless=new",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--user-data-dir=" + profile,
+                    "--virtual-time-budget=12000",
+                    "--dump-dom",
+                    f"http://127.0.0.1:{server.server_port}/api-test.html",
+                ]
+                result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+    output_text = result.stdout + result.stderr
+    passed, verdict = harness_verdict(output_text, "API_TEST=" + "PASS")
+    if result.returncode != 0 or not passed:
+        print(output_text)
+        print("harness verdict: " + verdict)
+        return 1
+    print("capability page checks passed: one scale, bars match their numbers, ticks, no sideways scroll")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

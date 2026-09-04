@@ -595,6 +595,7 @@ jobs:
         python3 docs/book/build_site.py
         python3 tools/check-book-site.py
         python3 tools/test-book-site.py
+        python3 tools/test-api-page.py
         node --check docs/book/site/book.js
 
     # Rust examples need Cargo's dependency metadata; mdbook test invokes

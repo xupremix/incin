@@ -82,6 +82,7 @@ jobs:
           python3 docs/book/build_site.py
           python3 tools/check-book-site.py
           python3 tools/test-book-site.py
+          python3 tools/test-api-page.py
           python3 -m venv /tmp/incin-book-venv
           /tmp/incin-book-venv/bin/pip install --requirement docs/book/requirements.txt
           /tmp/incin-book-venv/bin/python docs/book/make_single_page.py

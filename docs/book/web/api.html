@@ -96,18 +96,21 @@
       <div class="api-list" id="matrix"><div id="apiRows"></div></div>
 
       <p class="api-lede" style="margin-top:10px;font-size:14px">
-        Each backend gets a meter reading <code>have/widest</code>: how many element types this
-        backend accepts, over the most any backend offers <em>for that same operation</em>. So
-        <code>1/8</code> means this backend does far less than another already does, and
-        <code>4/4</code> means it does everything the operation has. The comparison is
-        per-operation on purpose &mdash; measuring against all nine dtypes in the crate would
-        read every float-only operation as thin coverage when four is all it has. The bar just
-        draws that ratio.
+        Each backend gets a meter reading <code>have/9</code>: how many of the nine element
+        types in the crate this backend accepts for this operation. The whole is the same on
+        every row, so bars are comparable down the page &mdash; a longer bar is always more
+        support, and a full bar always means all nine.
+        <br><br>
+        Many operations are float-only by nature and can never fill the track, which is why the
+        best any backend reaches on that same operation is marked as a tick. A bar short of the
+        tick means another backend already does more here; a bar level with it means this is
+        everything the operation currently offers anywhere, and no tick is drawn.
       </p>
       <div class="api-legend">
         <span><i class="api-fill"></i> native kernel</span>
         <span><i class="api-fill" style="background:var(--inline-code-fg)"></i>
           <span style="color:var(--inline-code-fg)">composed</span>, built from other operations</span>
+        <span><i class="api-ref-key"></i> best any backend reaches here</span>
         <span>&mdash; not advertised</span>
       </div>
       <p class="api-lede" style="margin-top:8px;font-size:13.5px;opacity:.75">

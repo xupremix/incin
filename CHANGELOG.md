@@ -8,8 +8,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The browser test suites never ran an assertion.** `tools/test-book-site.py`
+  drove a real headless browser through ~20 assertions and then decided the
+  outcome with `"BOOK_TEST=PASS" not in output`, where `output` is
+  `--dump-dom`. The dump includes the harness's own `<script>` source, and that
+  source contains the sentinel as a literal, so the substring was always
+  present: the suite reported success with `check(false)` as the first
+  statement of `run()`. Both suites now read the verdict out of the result
+  element, and assemble the sentinel from two pieces so the literal cannot
+  reappear in the source. Turning the assertions on exposed the four defects
+  below, all of them previously green.
+- **A permalink reloaded the chapter it pointed into.** Clicking a heading
+  anchor in the chapter already on screen refetched that chapter and replaced
+  its body, so the heading just clicked was removed from the document while the
+  request was in flight, the reader lost their place, and every in-page anchor
+  cost a network round trip. A route into the mounted chapter is now a scroll.
+  A stale response from a superseded navigation is also discarded rather than
+  landing over the newer chapter.
+- **Arrow-key chapter navigation never worked.** The global `keydown` handler
+  opened with `event.target.matches(...)`; `matches` is defined on `Element`
+  and not on `Document`, so a keydown delivered to the document threw, and the
+  throw took the arrow-key branches below it with it.
+- **The capability page scrolled sideways on a phone, and its meters were not a
+  scale.** The page is a column flex item and resolved its cross size to
+  max-content; the category table carries `min-width: 680px`, so max-content
+  stayed 769px however narrow the viewport got, and every child stretched with
+  it. The page now takes a definite width and the table scrolls inside its own
+  container. Separately, each row's bar was drawn against the widest backend
+  *on that row* -- a denominator of 1 on 26 rows, 4 on 81 and 8 on 54 -- so a
+  full bar meant four different amounts of support and no two rows could be
+  compared. Every bar is now drawn against all nine dtypes, and the best any
+  backend reaches on that operation is marked as a tick instead of as the
+  scale.
+
 ### Added
 
+- **`tools/test-api-page.py`**, which holds the capability page to the contract
+  its meters imply: one denominator for the whole page, every bar drawn at the
+  ratio it states, a reference tick exactly where another backend reaches
+  further, summary cards on the same absolute footing, and no horizontal
+  overflow at 390px. Both defects above were reported by a reader looking at
+  the rendered page, which is the wrong place to find them. Wired into CI, the
+  Pages deploy and the release workflow.
 - **A pointwise result proves it is dense.** Unary and binary pointwise
   operations, the scalar forms and the `core::ops` operators now state
   `RowMajor<S>` instead of carrying the operand's layout, so
