@@ -393,12 +393,6 @@ impl_exact_binary_op!(
 impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L: Layout>
     Tensor<S, B, K, G, Local, L>
 {
-
-
-
-
-
-
     /// Subtracts a scalar: `self - scalar`.
     pub fn sub_scalar(&self, val: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor<S>>>
     where

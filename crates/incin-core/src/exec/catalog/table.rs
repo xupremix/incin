@@ -56,9 +56,9 @@ const fn execution_site(operation: OperationKind) -> ExecutionSite {
     match operation {
         // Each of these calls its backend method with `&mut` on a `Var<K>` and
         // returns nothing.
-        OperationKind::SgdStep
-        | OperationKind::AdamStep
-        | OperationKind::AdamWStep => ExecutionSite::Mutation,
+        OperationKind::SgdStep | OperationKind::AdamStep | OperationKind::AdamWStep => {
+            ExecutionSite::Mutation
+        }
         OperationKind::ToDevice => ExecutionSite::DeviceTransfer,
         OperationKind::RequireGrad | OperationKind::Detach | OperationKind::Backward => {
             ExecutionSite::GraphState

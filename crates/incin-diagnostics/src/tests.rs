@@ -402,7 +402,6 @@ fn test_parse_medium_prio_diagnostics() {
 
     let text_domain = "out of domain error";
     assert!(parse_math_domain_error(text_domain).is_some());
-
 }
 
 #[test]

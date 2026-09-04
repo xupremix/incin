@@ -1023,4 +1023,3 @@ pub fn parse_math_domain_error(text: &str) -> Option<MathDomainError> {
         None
     }
 }
-

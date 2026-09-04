@@ -253,10 +253,7 @@ fn the_execution_site_agrees_with_the_arity_and_output_rules() {
                 row.name,
             ),
             ExecutionSite::Mutation => assert!(
-                matches!(
-                    row.profile,
-                    SemanticProfile::Optimizer
-                ),
+                matches!(row.profile, SemanticProfile::Optimizer),
                 "{} is classified as a mutation but its profile is {:?}",
                 row.name,
                 row.profile,
