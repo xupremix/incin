@@ -16,7 +16,8 @@ fn bytes_of<K: bytemuck::Pod>(values: &[K]) -> &[u8] {
 /// Every method here returns a [`NoGrad`] tensor. Data, labels, masks and
 /// scratch buffers are not parameters, and making them track gradients by
 /// default is the one decision that silently costs memory on every tensor a
-/// program builds. Parameters get [`Grad`] from the layer that owns them -
+/// program builds. Parameters get [`Grad`](incin_core::tensor::grad::Grad) from
+/// the layer that owns them -
 /// see [`TargetExt::parameter`].
 pub trait TargetExt: TensorTarget + Sized {
     /// The logical device this target allocates on.

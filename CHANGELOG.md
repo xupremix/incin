@@ -10,6 +10,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A third vacuous suite, and what it found.** `cuda_shape_dtypes.rs` asserted
+  that `DTypeDescriptor::size_bytes` returns 1, 2, 4 or 8 for eight dtypes. It
+  launched nothing, opened no device, and would have passed unchanged with the
+  whole CUDA backend deleted -- while standing in as coverage for the movement
+  operations it is named for. It now launches transpose, broadcast and narrow
+  and checks that elements land where they belong, including the two cases a
+  naive kernel gets wrong while passing the obvious one: broadcasting along a
+  trailing rather than a leading axis, and narrowing an inner axis, where the
+  window is not one contiguous run. Eight tests, green on a GTX 1650 SUPER.
+- **`unresolved link to `Grad`` broke two CI jobs.** The `TargetExt` doc
+  comment added with the parameter-allocation work linked a marker that is not
+  in that scope, which failed the CPU Test Suite and the Documentation Build on
+  the same root cause.
+
 - **The browser test suites never ran an assertion.** `tools/test-book-site.py`
   drove a real headless browser through ~20 assertions and then decided the
   outcome with `"BOOK_TEST=PASS" not in output`, where `output` is
@@ -42,6 +56,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   compared. Every bar is now drawn against all nine dtypes, and the best any
   backend reaches on that operation is marked as a tick instead of as the
   scale.
+
+### Changed
+
+- **CUDA advertises less than its movement kernels deliver.** The capability
+  registry lists `f32` alone for transpose, broadcast and narrow. Writing the
+  boundary test above to assert that an unadvertised element type is refused
+  turned the expectation around: all three kernels accept `i64` and move it to
+  exactly the right places. They move bytes by element width and do no
+  arithmetic, so nothing in them is specific to `f32`. This is the same shape
+  as the elementwise rows that declared contiguous-only while a complete
+  strided kernel sat behind them: a declaration that makes a working kernel
+  unreachable through the public API. The measurement is recorded as a test;
+  widening the rows is left as open work, because a declaration should be
+  widened against evidence for every dtype it would then claim, not the one
+  that happened to be measured.
 
 ### Added
 
