@@ -51,7 +51,10 @@ pub use dim::*;
 pub use dynamic::*;
 pub use error::*;
 pub use idx::*;
-pub use layout::{Contiguous, Dense, FreshDense, Layout, LayoutOf, RestateFor, RowMajor};
+pub use layout::{
+    Contiguous, Dense, FreshDense, FreshLayout, Layout, LayoutOf, RestateFor, RowMajor,
+    dense_strides,
+};
 pub use named::*;
 pub use proof::ProofLevel;
 pub use rank::*;

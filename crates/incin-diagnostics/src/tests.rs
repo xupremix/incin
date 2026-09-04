@@ -1,6 +1,7 @@
 // The crate is `no_std` without the `std` feature, so `vec!` is not in the
 // prelude for either configuration of this module. Importing it from
 // `alloc` is what makes the tests compile under both.
+use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;

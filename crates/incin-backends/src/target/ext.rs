@@ -58,6 +58,53 @@ pub trait TargetExt: TensorTarget + Sized {
         )
     }
 
+    /// A tensor holding `data`, in a layout named by the caller.
+    ///
+    /// The layout-expressing counterpart to [`tensor`](Self::tensor). Nothing
+    /// else differs: the same data, the same shape inference, the same dtype
+    /// rule. What changes is that the result *claims* something about its
+    /// memory order, and the claim is made by the value that chose the
+    /// allocation rather than asserted next to it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use incin_backends::prelude::*;
+    /// use incin_core::error::Error;
+    /// use incin_core::shapes::dim::ConstDim;
+    /// use incin_core::shapes::{Dense, DimCons, Nil, RowMajor};
+    /// use incin_core::tensor::device::Cpu;
+    ///
+    /// // `incin-backends` has no `incin-macros` dependency, so the shape is
+    /// // spelled out here; through the `incin` facade this is `s![2, 2]`.
+    /// type S = DimCons<ConstDim<2>, DimCons<ConstDim<2>, Nil>>;
+    ///
+    /// // The layout is named in the turbofish, and the result carries it --
+    /// // this annotation does not compile if the layout came back as `Dyn`.
+    /// let x: Dense<S, _> = Cpu.tensor_in::<_, RowMajor<S>>(
+    ///     [[1.0_f32, 2.0], [3.0, 4.0]],
+    /// )?;
+    /// assert_eq!(x.dims().as_ref(), &[2, 2]);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Propagates backend allocation failure, and refuses a layout whose
+    /// strides no backend can allocate yet -- see
+    /// [`allocate_in`](Self::allocate_in).
+    fn tensor_in<D: TensorData, L: incin_core::shapes::FreshLayout<D::Shape>>(
+        &self,
+        data: D,
+    ) -> Result<TargetTensorIn<Self, D::Shape, D::Elem, L>>
+    where
+        TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
+    {
+        let values = data.into_row_major();
+        let dims = D::dims();
+        self.allocate_in::<D::Shape, D::Elem, L>(&values, dims, ShapeBuf::from_slice(&D::dims()))
+    }
+
     /// A tensor of `values` laid out row-major into `spec`'s shape.
     ///
     /// The counterpart to [`tensor`](Self::tensor) for data whose length is
@@ -116,6 +163,46 @@ pub trait TargetExt: TensorTarget + Sized {
     where
         TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
     {
+        self.allocate_in::<S, K, incin_core::shapes::Dyn>(values, dims, field)
+    }
+
+    /// The same, in a named layout.
+    ///
+    /// The layout-expressing seam under every `*_in` constructor. `L` picks the
+    /// strides through [`FreshLayout::strides`], and the result is typed `L` --
+    /// so the claim is made by the same value that chose the allocation rather
+    /// than asserted alongside it.
+    ///
+    /// Today every backend uploads host bytes densely, so a layout whose
+    /// strides are not the dense ones is **refused** rather than quietly
+    /// satisfied with a dense buffer wearing the wrong type. That refusal is
+    /// the load-bearing part of the design: a creation API that cannot say no
+    /// is a way to mint a proof, which is exactly what
+    /// [`FreshDense`](incin_core::shapes::FreshDense) is sealed to prevent.
+    ///
+    /// The check is on the strides rather than on a list of known layouts, so
+    /// a layout added later is handled without touching this function: if it
+    /// asks for dense strides it works, and if it does not it is refused until
+    /// a backend can honour it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::ShapeMismatch`] on a length disagreement, and a
+    /// capability error when `L` asks for strides no backend can allocate yet.
+    #[doc(hidden)]
+    fn allocate_in<
+        S: Shape + DynShape,
+        K: PlainDType<Elem = K> + BuiltinDType + bytemuck::Pod,
+        L: incin_core::shapes::FreshLayout<S>,
+    >(
+        &self,
+        values: &[K],
+        dims: Vec<usize>,
+        field: ShapeBuf,
+    ) -> Result<TargetTensorIn<Self, S, K, L>>
+    where
+        TargetBackend<Self>: Backend<Device = Self::Device> + HostInterop,
+    {
         let expected = incin_core::shapes::ShapeBuf::from_slice(&dims)
             .checked_numel(incin_core::shapes::error::OperationKind::Storage)?;
         if expected != values.len() {
@@ -125,6 +212,18 @@ pub trait TargetExt: TensorTarget + Sized {
                 got: alloc::vec![values.len()],
                 msg: alloc::string::String::new(),
             });
+        }
+        let wanted = <L as incin_core::shapes::FreshLayout<S>>::strides(&dims);
+        let dense = incin_core::shapes::dense_strides(&dims);
+        if wanted.as_ref() != dense.as_ref() {
+            return Err(incin_core::error::BackendError::unsupported(
+                <TargetBackend<Self> as StorageBackend>::BACKEND_NAME,
+                incin_core::exec::UnsupportedReason::Layout {
+                    operation: incin_core::shapes::error::OperationKind::Storage,
+                    layout: incin_core::exec::LayoutClass::Strided,
+                },
+            )
+            .into());
         }
         let device = self.device_id()?;
         let bytes = bytemuck::cast_slice(values);

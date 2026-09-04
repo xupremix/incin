@@ -1466,6 +1466,8 @@ impl<S: incin_core::shapes::Shape> incin_core::shapes::ShapeValue<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Contiguous for incin_core::shapes::layout::RowMajor<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshDense<S> for incin_core::shapes::Dyn
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshDense<S> for incin_core::shapes::layout::RowMajor<S>
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::Dyn
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::layout::RowMajor<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout for incin_core::shapes::layout::RowMajor<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::Dyn
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::layout::RowMajor<S>
@@ -7374,6 +7376,7 @@ pub fn incin_core::shapes::Dyn::rank(&incin_core::shapes::ShapeBuf) -> usize
 pub fn incin_core::shapes::Dyn::requires_grad(&Self::Field) -> bool
 pub fn incin_core::shapes::Dyn::resolve(Self::Arg) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::Dyn::runtime_policy(&Self::Field) -> incin_core::exec::precision::RuntimePrecisionPolicy
+pub fn incin_core::shapes::Dyn::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::Dyn::to_incin(&Self::Field) -> incin_core::dist::placement::PlacementKind
 pub fn incin_core::shapes::Dyn::to_incin(&Self::Field) -> incin_core::error::Result<incin_core::tensor::device::DeviceId>
 pub fn incin_core::shapes::Dyn::try_from_dims(&[usize]) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
@@ -7391,6 +7394,7 @@ pub fn incin_core::shapes::ExactDivDim<A, B>::validate_size(usize) -> bool
 pub fn incin_core::shapes::ForwardAxis<C>::resolve(&self, usize) -> incin_core::error::Result<usize>
 pub fn incin_core::shapes::ForwardAxis<I>::normalize(&self, usize) -> incin_core::error::Result<alloc::vec::Vec<usize>>
 pub fn incin_core::shapes::ForwardAxis<I>::to_axis_index(&self) -> isize
+pub fn incin_core::shapes::FreshLayout::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::FromEnd<I>::normalize(&self, usize) -> incin_core::error::Result<alloc::vec::Vec<usize>>
 pub fn incin_core::shapes::FromEnd<I>::to_axis_index(&self) -> isize
 pub fn incin_core::shapes::Here::normalize(&self, usize) -> incin_core::error::Result<alloc::vec::Vec<usize>>
@@ -7506,6 +7510,7 @@ pub fn incin_core::shapes::ToAxisIndex::to_axis_index(&self) -> isize
 pub fn incin_core::shapes::broadcast::BroadcastShape::output_shape(&incin_core::shapes::ShapeBuf, &incin_core::shapes::ShapeBuf) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::broadcast::broadcast_dim_slices(&[usize], &[usize]) -> core::result::Result<alloc::vec::Vec<usize>, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::checked_numel_from_dims(&[usize], &incin_core::resource::ResourceLimits) -> core::result::Result<incin_core::shapes::CheckedNumel, incin_core::shapes::ShapeError>
+pub fn incin_core::shapes::dense_strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::dim::AxisTag::key() -> incin_core::shapes::AxisKey
 pub fn incin_core::shapes::dim::AxisTag::selector() -> incin_core::shapes::NamedAxisSelector<Self> where Self: core::marker::Sized
 pub fn incin_core::shapes::dim::Dim::matches_tag<Tag: incin_core::shapes::AxisTag>() -> bool
@@ -7520,6 +7525,9 @@ pub fn incin_core::shapes::idx::ReshapeTarget::calculate_shape(&[usize]) -> core
 pub fn incin_core::shapes::idx::SliceIdx::bounds(usize) -> (usize, usize)
 pub fn incin_core::shapes::idx::SliceTarget::calculate_bounds(&[usize]) -> alloc::vec::Vec<(usize, usize)>
 pub fn incin_core::shapes::idx::ToAxisIndex::to_axis_index(&self) -> isize
+pub fn incin_core::shapes::layout::FreshLayout::strides(&[usize]) -> incin_core::shapes::StrideBuf
+pub fn incin_core::shapes::layout::RowMajor<S>::strides(&[usize]) -> incin_core::shapes::StrideBuf
+pub fn incin_core::shapes::layout::dense_strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::prelude::AdaptiveAvgPool2dShape::compute_output_shape(&incin_core::shapes::ShapeBuf) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
 pub fn incin_core::shapes::prelude::AxisTag::key() -> incin_core::shapes::AxisKey
 pub fn incin_core::shapes::prelude::AxisTag::selector() -> incin_core::shapes::NamedAxisSelector<Self> where Self: core::marker::Sized
@@ -12777,6 +12785,7 @@ pub trait incin_core::shapes::EndsWith<D: incin_core::shapes::Dim>: incin_core::
 pub trait incin_core::shapes::FlattenAt<Start, End>: incin_core::shapes::Shape
 pub trait incin_core::shapes::FlattenFromEndAt<Start, End>: incin_core::shapes::Shape
 pub trait incin_core::shapes::FreshDense<S: incin_core::shapes::Shape>: incin_core::shapes::layout::LayoutOf<S> + incin_core::shapes::layout::sealed::SealedFresh
+pub trait incin_core::shapes::FreshLayout<S: incin_core::shapes::Shape>: incin_core::shapes::layout::LayoutOf<S>
 pub trait incin_core::shapes::HasChannels1D<D: incin_core::shapes::Dim>: incin_core::shapes::Shape
 pub trait incin_core::shapes::HasChannels2D<D: incin_core::shapes::Dim>: incin_core::shapes::Shape
 pub trait incin_core::shapes::InsertAt<Cursor, NewDim: incin_core::shapes::Dim>: incin_core::shapes::Shape
@@ -12840,6 +12849,7 @@ pub trait incin_core::shapes::idx::StaticCursor: 'static + core::marker::Copy + 
 pub trait incin_core::shapes::idx::ToAxisIndex
 pub trait incin_core::shapes::layout::Contiguous: incin_core::shapes::layout::Layout
 pub trait incin_core::shapes::layout::FreshDense<S: incin_core::shapes::Shape>: incin_core::shapes::layout::LayoutOf<S> + incin_core::shapes::layout::sealed::SealedFresh
+pub trait incin_core::shapes::layout::FreshLayout<S: incin_core::shapes::Shape>: incin_core::shapes::layout::LayoutOf<S>
 pub trait incin_core::shapes::layout::Layout: 'static + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
 pub trait incin_core::shapes::layout::LayoutOf<S: incin_core::shapes::Shape>: incin_core::shapes::layout::Layout
 pub trait incin_core::shapes::layout::RestateFor<S2: incin_core::shapes::Shape>: incin_core::shapes::layout::Layout

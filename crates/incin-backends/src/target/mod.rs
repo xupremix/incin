@@ -112,5 +112,6 @@ pub use engine::Candle;
 pub use engine::{EngineBackend, EngineOn, EngineSpec, Native, NativeBackend, RuntimeEngine};
 pub use ext::{GeneratedFill, TargetExt};
 pub use place::{
-    DtypeTarget, DtypeView, TargetBackend, TargetBackendFor, TargetTensor, TensorTarget,
+    DtypeTarget, DtypeView, TargetBackend, TargetBackendFor, TargetTensor, TargetTensorIn,
+    TensorTarget,
 };

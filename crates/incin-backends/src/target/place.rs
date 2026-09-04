@@ -41,7 +41,26 @@ pub type TargetBackendFor<T> = <T as TensorTarget>::Backend;
 pub type TargetBackend<T> = <T as TensorTarget>::Backend;
 
 /// A tensor allocated on target `T` from data of element type `K`.
+///
+/// The layout slot takes its default, so this names a tensor that claims
+/// nothing about its memory order -- which is what the plain constructors
+/// return. [`TargetTensorIn`] is the spelling for one that claims something.
 pub type TargetTensor<T, S, K> = Tensor<S, TargetBackend<T>, K, NoGrad>;
+
+/// A tensor allocated on target `T` in a named layout.
+///
+/// The counterpart to [`TargetTensor`] for the `*_in` constructors, which
+/// allocate with the strides `L` asks for and so are entitled to return a
+/// tensor typed `L`.
+///
+/// It is a separate alias rather than a defaulted parameter on `TargetTensor`
+/// because the constructors have to stay inferrable. A generic parameter on a
+/// function cannot have a default, so widening `zeros` to be generic over `L`
+/// would make `target.zeros(..)` ambiguous at every existing call site -- the
+/// same reason `scaled_dot_product_attention` had to tie its `q` operand to
+/// the impl block's layout parameter.
+pub type TargetTensorIn<T, S, K, L> =
+    Tensor<S, TargetBackend<T>, K, NoGrad, incin_core::dist::Local, L>;
 
 /// Rebinding the dtype a target generates.
 pub trait DtypeTarget: TensorTarget + Sized + Clone {

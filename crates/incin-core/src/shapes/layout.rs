@@ -147,6 +147,66 @@ impl<S1: Shape, S2: Shape> RestateFor<S2> for RowMajor<S1> {
     type Restated = RowMajor<S2>;
 }
 
+/// `Self` is a layout an allocation can be *made* to satisfy.
+///
+/// The counterpart to [`FreshDense`], and the difference is which way the
+/// implication runs. `FreshDense` says "a dense buffer already satisfies me",
+/// which is why it is sealed: only this module gets to decide what a fresh
+/// allocation is allowed to claim. `FreshLayout` says "allocate with *these*
+/// strides and I will describe the result", which needs no seal at all --
+/// the claim cannot outrun the allocation because the claim chose it.
+///
+/// That is the property worth stating plainly: a constructor bounded on this
+/// trait calls [`strides`](FreshLayout::strides), hands the answer to the
+/// backend, and returns a tensor typed `Self`. The value that produced the
+/// strides is the one named in the type, so there is no gap between what was
+/// asked for and what was allocated -- no `unsafe`, no runtime check, and
+/// nothing for a downstream layout to forge that it could not equally forge
+/// through [`Layout::STATIC_STRIDES`].
+///
+/// # Obligation
+///
+/// `strides(dims)` must return the strides that make `Self` a truthful
+/// description of a buffer of `dims`. This is stated rather than enforced, on
+/// the same footing as `STATIC_STRIDES`: an implementor describing their own
+/// type incorrectly is the one case the type system cannot catch.
+///
+/// See `docs/plan/research/0.2.0/layout-at-construction.md`.
+pub trait FreshLayout<S: Shape>: LayoutOf<S> {
+    /// The strides an allocation must use for `Self` to describe it.
+    fn strides(dims: &[usize]) -> crate::shapes::StrideBuf;
+}
+
+/// Claiming nothing about a buffer is compatible with any strides, so the
+/// canonical dense answer is a choice rather than a claim.
+impl<S: Shape> FreshLayout<S> for Dyn {
+    fn strides(dims: &[usize]) -> crate::shapes::StrideBuf {
+        dense_strides(dims)
+    }
+}
+
+/// Row-major strides are the suffix products of the extents.
+impl<S: Shape> FreshLayout<S> for RowMajor<S> {
+    fn strides(dims: &[usize]) -> crate::shapes::StrideBuf {
+        dense_strides(dims)
+    }
+}
+
+/// Suffix-product strides for `dims`, outermost first.
+///
+/// A rank-0 shape has no axes and so no strides; a zero extent leaves the
+/// running product at zero, which is the right answer for an empty buffer.
+#[must_use]
+pub fn dense_strides(dims: &[usize]) -> crate::shapes::StrideBuf {
+    let mut strides = alloc::vec![0usize; dims.len()];
+    let mut running = 1usize;
+    for axis in (0..dims.len()).rev() {
+        strides[axis] = running;
+        running = running.saturating_mul(dims[axis]);
+    }
+    crate::shapes::StrideBuf::from_slice(&strides)
+}
+
 /// `Self` is a truthful description of a freshly allocated dense buffer of `S`.
 ///
 /// Constructors like [`Tensor::zeros`](crate::tensor::base::Tensor::zeros) allocate a

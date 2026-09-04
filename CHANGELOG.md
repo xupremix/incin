@@ -86,6 +86,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for the result they allocate. They pinned `L` on *both* arguments, so once
   `Linear` returned a proof, feeding its output straight into a loss stopped
   compiling.
+- **`FreshLayout<S>`, and a target API that can express a layout.** The trait
+  carries `fn strides(dims) -> StrideBuf`: the strides an allocation must use
+  for the layout to describe it. A constructor bounded on it asks the layout,
+  allocates with the answer, and only then names it in the type -- so the claim
+  is honest by construction, the value that produced the strides being the one
+  in the type. That is why it is unsealed where `FreshDense` had to be sealed:
+  the hazard the seal closed was a constructor stamping a layout onto an
+  allocation that had nothing to do with it, which cannot happen once the
+  layout chose the allocation.
+- `TargetExt::tensor_in` and the `allocate_in` hook beneath it, plus the
+  `TargetTensorIn<T, S, K, L>` alias. `TargetTensor` names five of six
+  parameters, so nothing the target API returned could carry a proof. The new
+  methods are additive rather than a widening of the old ones because a generic
+  parameter on a function cannot have a default -- widening `tensor` itself
+  would make every existing call site ambiguous, the same trap
+  `scaled_dot_product_attention` hit.
+- A layout whose strides no backend can allocate is **refused** at construction,
+  through the existing capability vocabulary, rather than satisfied with a dense
+  buffer wearing the wrong type. Nothing can trigger it yet, because both
+  layouts ask for dense strides; it is there because a creation API that cannot
+  say no is a way to mint a proof.
+- `incin_core::shapes::dense_strides`, the suffix-product helper both
+  implementors share.
 - `Tensor::forget_layout`, the weakening counterpart to `into_row_major`. Total
   where the promotion is fallible, since claiming less can never claim wrongly.
   It exists for the case where two branches must meet and only one allocates;
@@ -214,6 +237,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   replaced, which fired on any trailing argument regardless of arity.
 
 ### Fixed
+
+- `incin-diagnostics` failed to compile under `--no-default-features`: its test
+  module used `String` without importing it from `alloc`, which the crate needs
+  because it is `no_std` without `std`. Never caught because the Feature
+  Powerset job runs only on the nightly schedule, not on push.
 
 - **CUDA pointwise refused the only operand that made its strided kernel
   reachable.** `elementwise_layouts` declared `CONTIGUOUS`, so the descriptor

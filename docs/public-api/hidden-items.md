@@ -76,6 +76,7 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-backends/src/dispatch.rs::DispatchGrads::Unavailable` | C | The unavailable gradient variant keeps dispatch types total across feature sets. |
 | `crates/incin-backends/src/lib.rs::test_utils` | C | Test utilities are compiled only for deterministic backend failure tests. |
 | `crates/incin-backends/src/target/ext.rs::allocate_row_major` | B | Backend implementors use the hidden allocation hook behind the public target contract. |
+| `crates/incin-backends/src/target/ext.rs::allocate_in` | B | The layout-expressing allocation hook behind the `*_in` constructors; it asks the layout for its strides and refuses one no backend can allocate. |
 | `crates/incin-backends/src/target/ext.rs::finish` | B | Backend implementors use the hidden storage-finalization hook behind constructors. |
 | `crates/incin-backends/src/target/ext.rs::generated_canonical` | B | Backend implementors use canonical zero-operand dispatch for generated operations. |
 | `crates/incin-backends/src/target/ext.rs::canonical_creation` | B | Backend implementors use canonical creation dispatch for generated operations. |

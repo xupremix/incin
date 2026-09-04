@@ -709,3 +709,40 @@ fn a_loss_result_is_dense() {
         &loss.forward(&proven, &plain).unwrap(),
     );
 }
+
+/// A layout is a *request* at construction, and the request can be refused.
+///
+/// `FreshLayout::strides` is what the creation path allocates with, so a
+/// constructor bounded on it cannot claim more than it allocated: the value
+/// that produced the strides is the one named in the type. That is what makes
+/// the trait safe to leave unsealed where `FreshDense` had to be sealed.
+///
+/// Both implementors ask for dense strides today, so this checks the property
+/// the creation path relies on rather than the refusal itself -- the refusal
+/// has no way to fire until a layout exists that wants something else, which is
+/// exactly what `docs/plan/research/0.2.0/layout-at-construction.md` says has to
+/// land alongside it.
+#[test]
+fn a_fresh_layout_reports_the_strides_it_would_be_allocated_with() {
+    use incin_core::shapes::{Dyn as DynLayout, FreshLayout, RowMajor, dense_strides};
+
+    // Suffix products, outermost first.
+    assert_eq!(dense_strides(&[3, 4]).as_ref(), &[4, 1]);
+    assert_eq!(dense_strides(&[2, 3, 4]).as_ref(), &[12, 4, 1]);
+    assert_eq!(dense_strides(&[]).as_ref(), &[] as &[usize]);
+
+    // A proof-carrying layout asks for exactly what a dense allocation gives,
+    // which is why claiming it over one is honest.
+    assert_eq!(
+        <RowMajor<s![3, 4]> as FreshLayout<s![3, 4]>>::strides(&[3, 4]).as_ref(),
+        dense_strides(&[3, 4]).as_ref(),
+        "RowMajor over a dense buffer must be a true claim, not a coincidence"
+    );
+
+    // The marker that claims nothing is compatible with any allocation, so the
+    // dense answer is a choice rather than an assertion.
+    assert_eq!(
+        <DynLayout as FreshLayout<s![3, 4]>>::strides(&[3, 4]).as_ref(),
+        dense_strides(&[3, 4]).as_ref()
+    );
+}

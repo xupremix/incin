@@ -43,7 +43,7 @@ by name.
 
 ## Earning a proof
 
-There are three ways, and the cheapest is usually the right one.
+There are four ways, and the cheapest is usually the right one.
 
 ### Let a pointwise operation give you one
 
@@ -88,6 +88,26 @@ stops the same mechanism from being a way to *forge* a proof: an unbounded
 constructor would hand you a tensor claiming whatever layout you named. A fresh
 allocation genuinely is `Dyn` and genuinely is `RowMajor`, so those two
 implement it and nothing else can — not even a layout defined downstream.
+
+### Ask the target API for one
+
+The `TargetExt` constructors have a layout-expressing counterpart. `tensor` and
+friends return a tensor that claims nothing; `tensor_in` takes the layout as a
+type argument and returns one that claims it:
+
+```rust,ignore
+let x: Dense<s![2, 2], _> = Cpu.tensor_in::<_, RowMajor<s![2, 2]>>(data)?;
+```
+
+It is a separate method rather than a parameter on the existing one because a
+generic parameter on a function cannot have a default, so widening `tensor`
+itself would make every existing call site ambiguous.
+
+What makes the claim honest is that the layout *chooses the allocation*: the
+constructor asks `L` for the strides it needs, allocates with those, and only
+then names `L` in the type. A layout whose strides no backend can produce yet is
+refused rather than quietly satisfied with a dense buffer wearing the wrong
+type — a creation API that cannot say no is a way to mint a proof.
 
 ### Check the strides of one you already have
 
