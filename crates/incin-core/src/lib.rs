@@ -102,7 +102,8 @@ pub mod experimental {
 /// Extension traits and operation descriptor contracts for backend authors.
 pub mod backend_authoring {
     pub use crate::exec::dispatch::{
-        execute, execute_shaped, execute_shaped_with_payload, execute_with_payload,
+        execute, execute_shaped, execute_shaped_n, execute_shaped_n_with_payload,
+        execute_shaped_with_payload, execute_with_payload,
     };
     pub use crate::exec::{
         Alignment, AttributeContract, CanonicalOperation, Capabilities, CapabilityQuery,

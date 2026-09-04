@@ -26,36 +26,38 @@ impl<O: Operation> ValidatedInvocation<O> {
         })
     }
 
-    pub(crate) fn infer_custom_typed<S: crate::shapes::Shape>(
+    pub(crate) fn infer_custom_typed<E: crate::shapes::ExpectedShapes>(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
-        expected: &crate::shapes::ShapeValue<S>,
+        expected: &E,
     ) -> Result<Self, DescriptorError> {
         let outputs = O::infer_outputs(&attributes, &inputs)?;
-        let actual = match outputs.as_slice() {
-            [output] => output
-                .shape
-                .as_ref()
-                .ok_or(DescriptorError::InvalidAttribute {
+        if outputs.len() != E::ARITY {
+            return Err(DescriptorError::OutputArity {
+                operation: crate::shapes::error::OperationKind::Storage,
+                expected: E::ARITY..=E::ARITY,
+                actual: outputs.len(),
+            });
+        }
+        for (index, (output, expected_buf)) in
+            outputs.iter().zip(expected.shape_bufs()).enumerate()
+        {
+            // A custom inference that produced no shape for an output leaves
+            // nothing to check the caller against. The canonical path below
+            // skips such outputs; the custom path refuses them instead, as
+            // before -- a caller-held proof must be met, not waived.
+            let actual = output.shape.as_ref().ok_or(DescriptorError::MetadataMismatch {
+                operation: crate::shapes::error::OperationKind::Storage,
+                output: index,
+                field: "shape",
+            })?;
+            if actual != expected_buf {
+                return Err(DescriptorError::MetadataMismatch {
                     operation: crate::shapes::error::OperationKind::Storage,
-                    attribute: "outputs",
-                    reason: "typed custom execution requires concrete output shape metadata",
-                })?,
-            _ => {
-                return Err(DescriptorError::InvalidAttribute {
-                    operation: crate::shapes::error::OperationKind::Storage,
-                    attribute: "outputs",
-                    reason: "typed custom execution requires exactly one output",
+                    output: index,
+                    field: "shape",
                 });
             }
-        };
-        if actual != expected.shape_buf() {
-            return Err(DescriptorError::Shape(
-                crate::shapes::ShapeError::TargetShapeRejected {
-                    operation: crate::shapes::error::OperationKind::Storage,
-                    rank: actual.len(),
-                },
-            ));
         }
         Ok(Self {
             validated: crate::exec::Validated::new_with_evidence(
@@ -66,7 +68,7 @@ impl<O: Operation> ValidatedInvocation<O> {
                     identity: crate::exec::OperationIdentity::Custom(O::KEY),
                     marker: PhantomData,
                 },
-                crate::exec::ShapeEvidence::of::<S>(),
+                expected.combined_evidence(),
             ),
         })
     }
@@ -403,36 +405,41 @@ where
         )
     }
 
-    /// Typed inference path: infers output metadata, validates against the expected `ShapeValue<S>`,
-    /// and only attaches `S`-derived proof after geometry equality is proven.
-    pub(crate) fn infer_typed<S: crate::shapes::Shape>(
+    /// Typed inference path: infers output metadata, validates against the
+    /// caller-held shape proofs, and only attaches derived proof after
+    /// geometry equality is proven element-wise.
+    pub(crate) fn infer_typed<E: crate::shapes::ExpectedShapes>(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
-        expected: &crate::shapes::ShapeValue<S>,
+        expected: &E,
     ) -> Result<Self, DescriptorError> {
         let row = catalog_entry(O::ID)
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
         attributes.validate(O::ID, &inputs)?;
         let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
 
-        if outputs.len() != 1 {
-            return Err(DescriptorError::InvalidAttribute {
+        if outputs.len() != E::ARITY {
+            return Err(DescriptorError::OutputArity {
                 operation: O::ID,
-                attribute: "shape",
-                reason: "infer_typed with a single ShapeValue requires an operation with exactly one output",
+                expected: E::ARITY..=E::ARITY,
+                actual: outputs.len(),
             });
         }
-        let first_output = &outputs[0];
-        if let Some(inferred_shape) = &first_output.shape {
-            // `ShapeValue::dims` allocates; `shape_buf` borrows. This runs on
-            // every typed operation, which is every operation the stable tensor
-            // surface performs.
-            if inferred_shape.as_ref() != expected.shape_buf().as_ref() {
-                return Err(DescriptorError::InvalidAttribute {
-                    operation: O::ID,
-                    attribute: "shape",
-                    reason: "inferred output shape does not match expected typed shape",
-                });
+        for (index, (output, expected_buf)) in
+            outputs.iter().zip(expected.shape_bufs()).enumerate()
+        {
+            if let Some(inferred_shape) = &output.shape {
+                // `ShapeValue::dims` allocates; `shape_buf` borrows. This runs on
+                // every typed operation, which is every operation the stable tensor
+                // surface performs -- hence the borrow on both sides, and the
+                // `ExpectedShapes` bound instead of a `Vec` of buffers.
+                if inferred_shape.as_ref() != expected_buf.as_ref() {
+                    return Err(DescriptorError::MetadataMismatch {
+                        operation: O::ID,
+                        output: index,
+                        field: "shape",
+                    });
+                }
             }
         }
 
@@ -440,14 +447,14 @@ where
             attributes,
             inputs,
             outputs,
-            expected.proof_level(),
+            expected.combined_proof(),
             OutputProvenance::Derived,
         )?;
         let descriptor = validated.validated.into_descriptor();
         Ok(Self {
             validated: crate::exec::Validated::new_with_evidence(
                 descriptor,
-                crate::exec::ShapeEvidence::of::<S>(),
+                expected.combined_evidence(),
             ),
         })
     }

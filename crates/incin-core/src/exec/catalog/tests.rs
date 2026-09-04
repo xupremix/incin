@@ -98,34 +98,44 @@ custom_shape_case!(
 );
 
 #[test]
-fn custom_typed_proof_requires_one_concrete_output() {
+fn custom_typed_proof_names_the_offending_output() {
     let expected =
         crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[2, 3]))
             .unwrap();
 
+    // One output with no shape metadata: the caller-held proof has nothing to
+    // meet. The error names output 0 and the field, not just the failure.
     assert!(matches!(
         ValidatedInvocation::<NoShapeCustomOperation>::infer_custom_typed(
             NoAttributes,
             Vec::new(),
             &expected,
         ),
-        Err(DescriptorError::InvalidAttribute { .. })
+        Err(DescriptorError::MetadataMismatch {
+            output: 0,
+            field: "shape",
+            ..
+        })
     ));
+    // Zero inferred outputs against one expected proof.
     assert!(matches!(
         ValidatedInvocation::<ZeroOutputCustomOperation>::infer_custom_typed(
             NoAttributes,
             Vec::new(),
             &expected,
         ),
-        Err(DescriptorError::InvalidAttribute { .. })
+        Err(DescriptorError::OutputArity { actual: 0, .. })
     ));
+    // Two inferred outputs against one expected proof. The arity-1 `expected`
+    // is a `ShapeValue`, so this is the old single-output call shape meeting
+    // a multi-output inference.
     assert!(matches!(
         ValidatedInvocation::<MultiOutputCustomOperation>::infer_custom_typed(
             NoAttributes,
             Vec::new(),
             &expected,
         ),
-        Err(DescriptorError::InvalidAttribute { .. })
+        Err(DescriptorError::OutputArity { actual: 2, .. })
     ));
 }
 

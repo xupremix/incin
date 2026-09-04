@@ -31,10 +31,13 @@ pub trait Operation: Clone + fmt::Debug + 'static {
     }
 
     /// Shape-specialized form of [`Self::infer_invocation`].
-    fn infer_invocation_typed<S: crate::shapes::Shape>(
+    ///
+    /// Generic over the caller-held expectation, not over one shape: a single
+    /// `ShapeValue<S>` and a tuple of them travel the same comparison.
+    fn infer_invocation_typed<E: crate::shapes::ExpectedShapes>(
         attributes: Self::Attributes,
         inputs: Vec<LogicalTensorMeta>,
-        expected: &crate::shapes::ShapeValue<S>,
+        expected: &E,
     ) -> Result<ValidatedInvocation<Self>, DescriptorError>
     where
         Self: Sized,

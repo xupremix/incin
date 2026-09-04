@@ -50,6 +50,7 @@ impl<I: ForwardCursor> ForwardCursor for Next<I> {}
 
 mod sealed {
     pub trait Shape {}
+    pub trait ExpectedShapes {}
 }
 
 /// The fundamental trait for all tensor shape types.
@@ -1051,6 +1052,153 @@ impl<S: Shape> ShapeValue<S> {
         limits: &crate::resource::ResourceLimits,
     ) -> Result<CheckedNumel, crate::shapes::error::ShapeError> {
         CheckedNumel::from_dims(op, &self.dims(), limits)
+    }
+}
+
+/// The caller-held shape proofs for a typed dispatch's outputs.
+///
+/// `execute_shaped` used to take exactly one `&ShapeValue<S>`; an operation
+/// with two outputs (TopK's values and indices, or any custom operation
+/// inferring more than one) could not travel that path. This trait states
+/// what the typed comparison needs of the expectation — one borrowed buffer
+/// per output, in output order — so a single value and a tuple of values are
+/// interchangeable callers. Sealed: every implementor lives here, and the
+/// compare loop trusts `ARITY` to bound the iteration.
+pub trait ExpectedShapes: sealed::ExpectedShapes {
+    /// How many outputs the caller holds proofs for. Compared against the
+    /// inference's output count before any geometry is touched.
+    const ARITY: usize;
+
+    /// Borrow each expected buffer in output order, without allocating.
+    ///
+    /// Exactly `ARITY` items. An array `IntoIter` keeps this allocation-free
+    /// the same way `shape_buf` is: the buffers are borrowed, never copied.
+    fn shape_bufs(&self) -> impl ExactSizeIterator<Item = &ShapeBuf>;
+
+    /// The weakest proof across the outputs.
+    ///
+    /// Exactly `S::PROOF` for arity 1, so the single-output path observes the
+    /// same level it always did. Over several outputs the descriptor can only
+    /// promise what every output proves, hence the meet.
+    fn combined_proof(&self) -> crate::shapes::ProofLevel;
+
+    /// The evidence lowered with the descriptor.
+    ///
+    /// Exactly `ShapeEvidence::of::<S>()` for arity 1. Over several outputs
+    /// the static geometry is per-shape knowledge — one shape's rank and
+    /// extents say nothing about another's — so the combined value carries
+    /// the weakest proof with no statics, the same posture as `Dynamic`. A
+    /// backend reading statics off a multi-output descriptor would otherwise
+    /// attribute one output's constants to all of them.
+    fn combined_evidence(&self) -> crate::exec::ShapeEvidence;
+}
+
+impl<S: Shape> sealed::ExpectedShapes for ShapeValue<S> {}
+
+impl<S: Shape> ExpectedShapes for ShapeValue<S> {
+    const ARITY: usize = 1;
+
+    fn shape_bufs(&self) -> impl ExactSizeIterator<Item = &ShapeBuf> {
+        [self.shape_buf()].into_iter()
+    }
+
+    fn combined_proof(&self) -> crate::shapes::ProofLevel {
+        S::PROOF
+    }
+
+    fn combined_evidence(&self) -> crate::exec::ShapeEvidence {
+        crate::exec::ShapeEvidence::of::<S>()
+    }
+}
+
+// Tuples mirror the arities `ExecuteOutput` admits: pairs through quadruples.
+// Each member keeps its own shape type, so a values/indices pair like TopK's
+// can hold two different proofs side by side.
+impl<S0: Shape, S1: Shape> sealed::ExpectedShapes for (ShapeValue<S0>, ShapeValue<S1>) {}
+
+impl<S0: Shape, S1: Shape> ExpectedShapes for (ShapeValue<S0>, ShapeValue<S1>) {
+    const ARITY: usize = 2;
+
+    fn shape_bufs(&self) -> impl ExactSizeIterator<Item = &ShapeBuf> {
+        let (first, second) = self;
+        [first.shape_buf(), second.shape_buf()].into_iter()
+    }
+
+    fn combined_proof(&self) -> crate::shapes::ProofLevel {
+        S0::PROOF.meet(S1::PROOF)
+    }
+
+    fn combined_evidence(&self) -> crate::exec::ShapeEvidence {
+        crate::exec::ShapeEvidence::weakened(self.combined_proof())
+    }
+}
+
+impl<S0: Shape, S1: Shape, S2: Shape> sealed::ExpectedShapes
+    for (ShapeValue<S0>, ShapeValue<S1>, ShapeValue<S2>)
+{
+}
+
+impl<S0: Shape, S1: Shape, S2: Shape> ExpectedShapes
+    for (ShapeValue<S0>, ShapeValue<S1>, ShapeValue<S2>)
+{
+    const ARITY: usize = 3;
+
+    fn shape_bufs(&self) -> impl ExactSizeIterator<Item = &ShapeBuf> {
+        let (first, second, third) = self;
+        [
+            first.shape_buf(),
+            second.shape_buf(),
+            third.shape_buf(),
+        ]
+        .into_iter()
+    }
+
+    fn combined_proof(&self) -> crate::shapes::ProofLevel {
+        S0::PROOF.meet(S1::PROOF).meet(S2::PROOF)
+    }
+
+    fn combined_evidence(&self) -> crate::exec::ShapeEvidence {
+        crate::exec::ShapeEvidence::weakened(self.combined_proof())
+    }
+}
+
+impl<S0: Shape, S1: Shape, S2: Shape, S3: Shape> sealed::ExpectedShapes
+    for (
+        ShapeValue<S0>,
+        ShapeValue<S1>,
+        ShapeValue<S2>,
+        ShapeValue<S3>,
+    )
+{
+}
+
+impl<S0: Shape, S1: Shape, S2: Shape, S3: Shape> ExpectedShapes
+    for (
+        ShapeValue<S0>,
+        ShapeValue<S1>,
+        ShapeValue<S2>,
+        ShapeValue<S3>,
+    )
+{
+    const ARITY: usize = 4;
+
+    fn shape_bufs(&self) -> impl ExactSizeIterator<Item = &ShapeBuf> {
+        let (first, second, third, fourth) = self;
+        [
+            first.shape_buf(),
+            second.shape_buf(),
+            third.shape_buf(),
+            fourth.shape_buf(),
+        ]
+        .into_iter()
+    }
+
+    fn combined_proof(&self) -> crate::shapes::ProofLevel {
+        S0::PROOF.meet(S1::PROOF).meet(S2::PROOF).meet(S3::PROOF)
+    }
+
+    fn combined_evidence(&self) -> crate::exec::ShapeEvidence {
+        crate::exec::ShapeEvidence::weakened(self.combined_proof())
     }
 }
 

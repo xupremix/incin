@@ -535,10 +535,10 @@ macro_rules! define_catalog {
                     ValidatedInvocation::<Self>::infer_runtime(attributes, inputs)
                 }
 
-                fn infer_invocation_typed<S: crate::shapes::Shape>(
+                fn infer_invocation_typed<E: crate::shapes::ExpectedShapes>(
                     attributes: Self::Attributes,
                     inputs: Vec<LogicalTensorMeta>,
-                    expected: &crate::shapes::ShapeValue<S>,
+                    expected: &E,
                 ) -> Result<ValidatedInvocation<Self>, DescriptorError> {
                     ValidatedInvocation::<Self>::infer_typed(attributes, inputs, expected)
                 }

@@ -338,6 +338,11 @@ where
 }
 
 /// [`execute`], told the shape value the typed frontend was holding.
+///
+/// The arity-1 spelling of [`execute_shaped_n`]: the expectation carries one
+/// proof, and the comparison below degrades to exactly the loop it always
+/// ran. The 100+ call sites across the tensor surface keep passing `S`, the
+/// shape type, rather than spelling `ShapeValue<S>` at every one of them.
 pub fn execute_shaped<O, B, S>(
     context: &ExecutionContext<B>,
     attributes: O::Attributes,
@@ -349,7 +354,27 @@ where
     B: Execute<O> + Capabilities,
     S: crate::shapes::Shape,
 {
-    execute_shaped_with_payload(context, attributes, inputs, expected, None)
+    execute_shaped_n(context, attributes, inputs, expected)
+}
+
+/// [`execute_shaped`], told the shape proofs the typed frontend was holding.
+///
+/// Generic over the expectation, not over one shape: a single `ShapeValue<S>`
+/// and a tuple of them compare element-wise against the inferred outputs, so
+/// a multi-output operation finally travels the typed path instead of
+/// re-deriving its geometry frontend-side.
+pub fn execute_shaped_n<O, B, E>(
+    context: &ExecutionContext<B>,
+    attributes: O::Attributes,
+    inputs: &[TensorHandle<'_>],
+    expected: &E,
+) -> Result<<B as Execute<O>>::Output, CanonicalError>
+where
+    O: Operation,
+    B: Execute<O> + Capabilities,
+    E: crate::shapes::ExpectedShapes,
+{
+    execute_shaped_n_with_payload(context, attributes, inputs, expected, None)
 }
 
 /// [`execute_shaped`], with an optional borrowed execution payload.
@@ -364,6 +389,22 @@ where
     O: Operation,
     B: Execute<O> + Capabilities,
     S: crate::shapes::Shape,
+{
+    execute_shaped_n_with_payload(context, attributes, inputs, expected, payload)
+}
+
+/// [`execute_shaped_n`], with an optional borrowed execution payload.
+pub fn execute_shaped_n_with_payload<O, B, E>(
+    context: &ExecutionContext<B>,
+    attributes: O::Attributes,
+    inputs: &[TensorHandle<'_>],
+    expected: &E,
+    payload: Option<&[u8]>,
+) -> Result<<B as Execute<O>>::Output, CanonicalError>
+where
+    O: Operation,
+    B: Execute<O> + Capabilities,
+    E: crate::shapes::ExpectedShapes,
 {
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
