@@ -454,6 +454,41 @@ you compile. The lesson to carry: **the per-feature test command is not the
 widest net the repo has**, and a parameter conversion should be checked against
 `--workspace --all-targets --locked` before it is called finished.
 
+### A second layout is what made the first one's bounds real
+
+`ChannelsLast<S>` landed for a reason that has nothing to do with convolution.
+
+While `Dyn` and `RowMajor` were the only layouts, *both* implemented
+[`Contiguous`]. So `reshape_view`'s bound was satisfied by the entire inhabited
+world and had never rejected anything -- it was decoration that happened to
+compile, and no test could have told the difference between a working bound and
+an absent one. The same was true of the creation path's refusal, which could not
+fire because both layouts asked for dense strides.
+
+`ChannelsLast` fixes that by being the first layout that fails a bound.
+`tests/compile_fail/reshape_view_needs_contiguous.rs` is the payoff, and it is
+worth noting what it took to write: the case had to be phrased against a
+function *parameter* rather than a constructed value, because a channels-last
+tensor cannot be built. `zeros` is bounded on the sealed `FreshDense`, and
+`allocate_in` refuses strides no backend can produce. Constructing one would
+have failed for a second, unrelated reason, and the case would have stopped
+pinning one thing.
+
+**A layout you can name but not build is still doing work.** That is the
+non-obvious part. Its value is entirely in the bounds it *fails*, and those are
+exactly the bounds nothing else was failing. Making it inhabitable is a separate
+piece of work -- backend allocation with explicit strides, and a host upload
+that permutes rather than memcpies -- and it is the one place a length check
+passes while the order is wrong, so its conformance test has to assert values
+rather than strides.
+
+Rank four only, deliberately. Channels-last is defined against NCHW; a layout
+that accepted any rank would be claiming a geometry it had not checked, and the
+static stride table reports nothing rather than a prefix for any other rank --
+the same choice `RowMajor` makes for an over-deep shape, and for the same
+reason: a truncated stride list is a wrong geometry, an empty one is only a
+missed specialisation.
+
 ### What CUDA contributes, and what it does not
 
 The reduction claim rests on different evidence from the pointwise one, because

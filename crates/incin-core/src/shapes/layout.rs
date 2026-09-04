@@ -383,6 +383,102 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
     out
 }
 
+/// The NHWC memory order for a tensor whose *shape* is NCHW.
+///
+/// The shape is unchanged -- axis 1 is still channels -- and only the strides
+/// move, so `dims()` reports `[N, C, H, W]` while the buffer walks `W` fastest,
+/// then `C`, then `H`, then `N`. This is PyTorch's `channels_last`
+/// memory format, and it is worth being explicit that **incin's `Layout` is
+/// PyTorch's `memory_format`, not PyTorch's `layout`** -- the latter is the
+/// storage scheme (`strided` versus `sparse_coo`), a different axis entirely.
+///
+/// # Why this type exists
+///
+/// Not because convolution wants it, though it does. It exists because
+/// [`Contiguous`] had never had to *exclude* anything: `Dyn` and `RowMajor`
+/// were the only layouts, both satisfied every bound that mentioned them, and
+/// so `reshape_view`'s requirement was vacuously true for the whole inhabited
+/// world. A second layout is what turns that bound from decoration into a
+/// check, and what makes the creation path's refusal reachable.
+///
+/// Deliberately **not** [`Contiguous`]: the elements of a channels-last buffer
+/// do not form one unbroken run in shape order, so reinterpreting them under a
+/// new shape without copying would read them in the wrong order.
+///
+/// Rank four only. Channels-last is defined against NCHW, and a rank-three or
+/// rank-five shape means something different; a layout that silently accepted
+/// any rank would be claiming a geometry it had not checked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct ChannelsLast<S>(PhantomData<fn() -> S>);
+
+impl<S: Shape> Layout for ChannelsLast<S> {
+    const STRIDE_BUF: [Option<usize>; MAX_STATIC_RANK] = channels_last_strides(S::STATIC_EXTENTS);
+
+    const STATIC_STRIDES: &'static [Option<usize>] = match S::RANK {
+        // Rank four exactly. Anything else reports nothing rather than a
+        // geometry it cannot justify.
+        Some(4) => Self::STRIDE_BUF.split_at(4).0,
+        _ => &[],
+    };
+
+    const STATIC_OFFSET: Option<usize> = Some(0);
+
+    // Every stride is a product of extents, exactly as for `RowMajor`: an
+    // unproven extent is the only thing that can make a stride unproven.
+    const PROOF: ProofLevel = S::PROOF;
+}
+
+impl<S: Shape> LayoutOf<S> for ChannelsLast<S> {}
+
+impl<S: Shape> FreshLayout<S> for ChannelsLast<S> {
+    fn strides(dims: &[usize]) -> crate::shapes::StrideBuf {
+        channels_last_stride_values(dims)
+    }
+}
+
+/// Static channels-last strides for a rank-four `[N, C, H, W]`.
+///
+/// `stride[N] = C*H*W`, `stride[C] = 1`, `stride[H] = C*W`, `stride[W] = C`.
+/// Channels is the fastest-varying axis, which is the whole point.
+#[doc(hidden)]
+#[must_use]
+pub const fn channels_last_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX_STATIC_RANK] {
+    let mut out = [None; MAX_STATIC_RANK];
+    if extents.len() != 4 || MAX_STATIC_RANK < 4 {
+        return out;
+    }
+    let (c, h, w) = (extents[1], extents[2], extents[3]);
+    // `const fn` cannot use `?`, so each product is matched out longhand.
+    let cw = match (c, w) {
+        (Some(c), Some(w)) => c.checked_mul(w),
+        _ => None,
+    };
+    let chw = match (cw, h) {
+        (Some(cw), Some(h)) => cw.checked_mul(h),
+        _ => None,
+    };
+    out[0] = chw;
+    out[1] = Some(1);
+    out[2] = cw;
+    out[3] = c;
+    out
+}
+
+/// The runtime counterpart to [`channels_last_strides`].
+///
+/// Returns the dense row-major strides for any rank other than four, so a
+/// misuse allocates something coherent rather than something arbitrary -- the
+/// rank is rejected by the shape bound long before this runs.
+#[must_use]
+fn channels_last_stride_values(dims: &[usize]) -> crate::shapes::StrideBuf {
+    if dims.len() != 4 {
+        return dense_strides(dims);
+    }
+    let (c, h, w) = (dims[1], dims[2], dims[3]);
+    let cw = c.saturating_mul(w);
+    crate::shapes::StrideBuf::from_slice(&[cw.saturating_mul(h), 1, cw, c])
+}
+
 /// A tensor whose buffer is proven dense and row-major.
 ///
 /// The layout parameter is precise but verbose to write out, and the dense case

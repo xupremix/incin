@@ -141,6 +141,26 @@ Element-count equality is settled statically too, from the shape types rather
 than their runtime dimensions, so a reshape to an incompatible size is also a
 compile error rather than an `Err`.
 
+## What a second layout is for
+
+`ChannelsLast<S>` describes NHWC memory under an NCHW shape: `dims()` still
+reports `[N, C, H, W]`, and only the strides move so that channels varies
+fastest. It deliberately does not implement `Contiguous`, because its elements
+do not form one unbroken run in shape order.
+
+Its real job right now is to make the other bounds mean something. While `Dyn`
+and `RowMajor` were the only layouts, both satisfied every bound that mentioned
+them — `reshape_view`'s `Contiguous` requirement was true of the entire
+inhabited world and had never rejected anything. A second layout is what turns
+that requirement from decoration into a check, and it is why there is now a
+compile-fail case pinning it.
+
+It is not yet constructible: `zeros` is bounded on the sealed `FreshDense`, and
+the target API refuses a layout whose strides no backend can allocate. That is
+the honest state rather than an oversight — a layout you can name but not build
+is still doing useful work, because the bounds it fails are the bounds nothing
+else was failing.
+
 ## Facts are traits, not parameters
 
 Strides, offset, alignment and contiguity are four facts but one parameter.

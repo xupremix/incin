@@ -102,6 +102,86 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
             _layout: PhantomData,
         })
     }
+
+    /// Promotes to any layout, by checking the strides it asks for.
+    ///
+    /// The general form of [`into_row_major`](Tensor::into_row_major), which is
+    /// this with `L2` fixed. The layout names the strides it needs through
+    /// [`FreshLayout::strides`](crate::shapes::FreshLayout::strides), those are
+    /// compared against the tensor's actual metadata, and the claim is granted
+    /// only on a match.
+    ///
+    /// Fallible for the same reason the row-major version is: the strides are a
+    /// runtime fact and the only honest route is to look. There is deliberately
+    /// no unchecked counterpart -- an unchecked promotion would make every
+    /// downstream bound meaningless, and the check it saves is a comparison
+    /// over the rank.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate incin_core as incin;
+    /// # type B = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// use incin_core::shapes::{ChannelsLast, RowMajor};
+    /// use incin_macros::s;
+    ///
+    /// let t: Tensor<s![1, 2, 2, 2], B> = Tensor::zeros(())?;
+    ///
+    /// // A fresh allocation is dense, so the row-major claim is granted.
+    /// let dense = t.clone().into_layout::<RowMajor<s![1, 2, 2, 2]>>()?;
+    /// assert_eq!(dense.dims().as_ref(), &[1, 2, 2, 2]);
+    ///
+    /// // The same buffer is not channels-last, and saying so is refused.
+    /// assert!(t.into_layout::<ChannelsLast<s![1, 2, 2, 2]>>().is_err());
+    /// # Ok::<(), incin_core::error::Result<()>>(()).ok();
+    /// # Ok::<(), incin_core::error::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the tensor does not start at the beginning of its
+    /// buffer, when its metadata is not congruent, or when any stride differs
+    /// from what `L2` requires.
+    pub fn into_layout<L2: crate::shapes::FreshLayout<S>>(
+        self,
+    ) -> Result<Tensor<S, B, K, G, P, L2>> {
+        let meta = B::metadata::<K>(&self.inner);
+        let dims = meta.shape().as_ref().to_vec();
+        let strides = meta.strides().as_ref();
+
+        if meta.offset_elements() != 0 {
+            return Err(Error::Msg(alloc::format!(
+                "a layout proof describes a buffer from its start, but this tensor's first element is at offset {}",
+                meta.offset_elements()
+            )));
+        }
+        if dims.len() != strides.len() {
+            return Err(Error::Msg(alloc::format!(
+                "layout metadata is not congruent: {} extents against {} strides",
+                dims.len(),
+                strides.len()
+            )));
+        }
+
+        let wanted = <L2 as crate::shapes::FreshLayout<S>>::strides(&dims);
+        if wanted.as_ref() != strides {
+            return Err(Error::Msg(alloc::format!(
+                "strides {strides:?} do not match the {:?} this layout requires for {dims:?}",
+                wanted.as_ref()
+            )));
+        }
+
+        Ok(Tensor {
+            inner: self.inner,
+            _shape: self._shape,
+            _dtype: self._dtype,
+            _device: self._device,
+            _grad: self._grad,
+            _placement: self._placement,
+            _layout: PhantomData,
+        })
+    }
 }
 
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>

@@ -77,6 +77,7 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-backends/src/lib.rs::test_utils` | C | Test utilities are compiled only for deterministic backend failure tests. |
 | `crates/incin-backends/src/target/ext.rs::allocate_row_major` | B | Backend implementors use the hidden allocation hook behind the public target contract. |
 | `crates/incin-backends/src/target/ext.rs::allocate_in` | B | The layout-expressing allocation hook behind the `*_in` constructors; it asks the layout for its strides and refuses one no backend can allocate. |
+| `crates/incin-backends/src/target/ext.rs::restate_layout` | B | The same check for the paths where the backend allocates rather than the host uploading; it re-types a created tensor only after `into_layout` has compared the strides. |
 | `crates/incin-backends/src/target/ext.rs::finish` | B | Backend implementors use the hidden storage-finalization hook behind constructors. |
 | `crates/incin-backends/src/target/ext.rs::generated_canonical` | B | Backend implementors use canonical zero-operand dispatch for generated operations. |
 | `crates/incin-backends/src/target/ext.rs::canonical_creation` | B | Backend implementors use canonical creation dispatch for generated operations. |
@@ -127,5 +128,6 @@ expansion, backend implementation, compatibility path, or type-level proof.
 | `crates/incin-backends/src/cuda/mod.rs::testing` | C | The CUDA test seam exposes upload, download, and optimizer entry points so the integration suites, which are separate crates, can reach `pub(crate)` launch functions without the kernels becoming API. |
 | `crates/incin-core/src/shapes/layout.rs::STRIDE_BUF` | B | Layout implementors provide the stride construction buffer; a stride list sized by an associated constant would need `generic_const_exprs`. |
 | `crates/incin-core/src/shapes/layout.rs::row_major_strides` | B | The const stride derivation is public so `RowMajor`'s associated constant can be evaluated in a const context. |
+| `crates/incin-core/src/shapes/layout.rs::channels_last_strides` | B | The const NHWC stride derivation, public for the same reason as `row_major_strides`: `ChannelsLast`'s associated constant is evaluated in a const context. |
 | `crates/incin-core/src/shapes/shape.rs::EXTENT_BUF` | B | Shape implementors provide the extent construction buffer, for the same const-generics reason as `STRIDE_BUF`. |
 | `crates/incin-core/src/shapes/shape.rs::prepend_extent` | B | The const extent prepend is public so shape associated constants can be built in a const context. |

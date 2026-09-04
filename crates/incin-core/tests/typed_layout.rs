@@ -746,3 +746,58 @@ fn a_fresh_layout_reports_the_strides_it_would_be_allocated_with() {
         dense_strides(&[3, 4]).as_ref()
     );
 }
+
+/// `ChannelsLast` describes NHWC memory under an NCHW shape.
+///
+/// The strides are the whole content of the type, so they are asserted
+/// directly: channels is the fastest-varying axis, which is what makes the
+/// buffer *not* contiguous in shape order.
+#[test]
+fn channels_last_puts_channels_fastest() {
+    use incin_core::shapes::{ChannelsLast, FreshLayout, dense_strides};
+
+    // [N=2, C=3, H=4, W=5]:
+    //   stride[N] = C*H*W = 60, stride[C] = 1, stride[H] = C*W = 15, stride[W] = C = 3
+    let dims = [2usize, 3, 4, 5];
+    assert_eq!(
+        <ChannelsLast<s![2, 3, 4, 5]> as FreshLayout<s![2, 3, 4, 5]>>::strides(&dims).as_ref(),
+        &[60, 1, 15, 3]
+    );
+
+    // And it is genuinely different from dense, which is the premise every
+    // other assertion about this layout depends on.
+    assert_ne!(
+        <ChannelsLast<s![2, 3, 4, 5]> as FreshLayout<s![2, 3, 4, 5]>>::strides(&dims).as_ref(),
+        dense_strides(&dims).as_ref(),
+        "if these ever agree, `ChannelsLast` has stopped being a second layout \
+         and every test that uses it to exercise a refusal is vacuous"
+    );
+
+    // The static form agrees with the runtime one.
+    let statics = <ChannelsLast<s![2, 3, 4, 5]> as incin_core::shapes::Layout>::STATIC_STRIDES;
+    assert_eq!(
+        statics,
+        &[Some(60), Some(1), Some(15), Some(3)],
+        "the const strides must match what an allocation would be given"
+    );
+}
+
+/// A second layout is what makes `Contiguous` mean something.
+///
+/// Until `ChannelsLast` existed, every layout in the crate implemented
+/// `Contiguous`, so `reshape_view`'s bound was satisfied by the entire
+/// inhabited world and had never rejected anything. This asserts the negative
+/// half directly: the trait is *not* implemented for a layout whose elements
+/// do not form one unbroken run in shape order.
+///
+/// The compile-time half -- that `reshape_view` itself stops resolving -- is in
+/// `tests/compile_fail/reshape_view_needs_contiguous.rs`, because a test that
+/// something does not compile has to live where a compiler failure is the pass
+/// condition.
+#[test]
+fn channels_last_is_not_contiguous() {
+    fn only_contiguous<L: incin_core::shapes::Contiguous>() {}
+
+    only_contiguous::<RowMajor<s![2, 3, 4, 5]>>();
+    // only_contiguous::<ChannelsLast<s![2, 3, 4, 5]>>();  // does not compile
+}

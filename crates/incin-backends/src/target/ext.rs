@@ -272,6 +272,94 @@ pub trait TargetExt: TensorTarget + Sized {
         self.generated_canonical::<incin_core::backend_authoring::op::Zeros, Sp>(spec)
     }
 
+    /// A zero-filled tensor of the target's dtype, in a layout named by the
+    /// caller.
+    ///
+    /// The layout-expressing counterpart to [`zeros`](Self::zeros). Unlike the
+    /// data constructors it does not upload anything, so the only question is
+    /// whether the backend's creation kernel writes the strides `L` wants --
+    /// today every one writes dense, so a layout asking for anything else is
+    /// refused rather than quietly satisfied.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use incin_backends::prelude::*;
+    /// use incin_core::error::Error;
+    /// use incin_core::shapes::{Dyn, RowMajor, ShapeArgs};
+    /// use incin_core::tensor::device::Cpu;
+    ///
+    /// // `ShapeArgs` is what carries a shape through `ShapeSpec`. Spelled with
+    /// // `Dyn` here because `incin-backends` has no `incin-macros` dependency;
+    /// // through the `incin` facade this reads `ShapeArgs<s![2, 3]>`, and
+    /// // `crates/incin-core/tests/target_layout_examples.rs` has the static
+    /// // form together with the `reshape_view` that a proof unlocks.
+    /// let x = Cpu.zeros_in::<ShapeArgs<Dyn>, RowMajor<Dyn>>(
+    ///     ShapeArgs::new(vec![2, 3]),
+    /// )?;
+    /// assert_eq!(x.dims().as_ref(), &[2, 3]);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Propagates shape resolution and backend allocation failure, and refuses
+    /// a layout whose strides the creation path cannot produce.
+    fn zeros_in<Sp: ShapeSpec, L: incin_core::shapes::FreshLayout<Sp::Shape>>(
+        &self,
+        spec: Sp,
+    ) -> Result<TargetTensorIn<Self, Sp::Shape, Self::Dtype, L>>
+    where
+        TargetBackend<Self>: Backend<Device = Self::Device>
+            + incin_core::backend_authoring::SupportsDType<Self::Dtype>
+            + incin_core::backend_authoring::Execute<
+                incin_core::backend_authoring::op::Zeros,
+                Output = <TargetBackend<Self> as StorageBackend>::Storage<Self::Dtype>,
+            > + incin_core::exec::Capabilities
+            + Default,
+    {
+        let built =
+            self.generated_canonical::<incin_core::backend_authoring::op::Zeros, Sp>(spec)?;
+        Self::restate_layout::<Sp::Shape, Self::Dtype, L>(built)
+    }
+
+    /// Re-types a freshly created tensor in `L`, after checking that `L` asks
+    /// for the strides a dense creation kernel actually wrote.
+    ///
+    /// The counterpart to [`allocate_in`](Self::allocate_in) for the paths that
+    /// let the backend allocate rather than uploading bytes. Same rule, same
+    /// reason: the type may only claim what the allocation did.
+    ///
+    /// # Errors
+    ///
+    /// Refuses a layout whose strides differ from the dense ones.
+    #[doc(hidden)]
+    fn restate_layout<S: Shape, K: DType, L: incin_core::shapes::FreshLayout<S>>(
+        built: Tensor<S, TargetBackend<Self>, K, NoGrad>,
+    ) -> Result<TargetTensorIn<Self, S, K, L>>
+    where
+        TargetBackend<Self>: Backend<Device = Self::Device>,
+    {
+        let dims = built.shape_buf().as_ref().to_vec();
+        let wanted = <L as incin_core::shapes::FreshLayout<S>>::strides(&dims);
+        if wanted.as_ref() != incin_core::shapes::dense_strides(&dims).as_ref() {
+            return Err(incin_core::error::BackendError::unsupported(
+                <TargetBackend<Self> as StorageBackend>::BACKEND_NAME,
+                incin_core::exec::UnsupportedReason::Layout {
+                    operation: incin_core::shapes::error::OperationKind::Storage,
+                    layout: incin_core::exec::LayoutClass::Strided,
+                },
+            )
+            .into());
+        }
+        // The refusal above is the *capability* answer -- whether the creation
+        // path can produce these strides at all -- and this is the check that
+        // it did. Both are wanted: the first gives a backend-shaped error for
+        // an unsupported request, the second makes the claim conditional on the
+        // metadata rather than on the argument above having been right.
+        built.into_layout::<L>()
+    }
+
     /// A one-filled tensor of the target's dtype.
     ///
     /// # Examples

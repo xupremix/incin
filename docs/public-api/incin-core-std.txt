@@ -1467,9 +1467,12 @@ impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Contiguous for in
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshDense<S> for incin_core::shapes::Dyn
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshDense<S> for incin_core::shapes::layout::RowMajor<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::Dyn
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::layout::ChannelsLast<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::layout::RowMajor<S>
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout for incin_core::shapes::layout::ChannelsLast<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout for incin_core::shapes::layout::RowMajor<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::Dyn
+impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::layout::ChannelsLast<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::LayoutOf<S> for incin_core::shapes::layout::RowMajor<S>
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::Mean
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::NoneReduction
@@ -3314,6 +3317,9 @@ pub const incin_core::shapes::dim::Dim::STATIC_VALID: ()
 pub const incin_core::shapes::dim::DimCompatible::STATIC_ASSERT: ()
 pub const incin_core::shapes::idx::AxisCursor::INDEX: isize
 pub const incin_core::shapes::idx::StaticCursor::INDEX: isize
+pub const incin_core::shapes::layout::ChannelsLast<S>::PROOF: incin_core::exec::ProofLevel
+pub const incin_core::shapes::layout::ChannelsLast<S>::STATIC_OFFSET: core::option::Option<usize>
+pub const incin_core::shapes::layout::ChannelsLast<S>::STATIC_STRIDES: &'static [core::option::Option<usize>]
 pub const incin_core::shapes::layout::Layout::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::shapes::layout::Layout::STATIC_OFFSET: core::option::Option<usize>
 pub const incin_core::shapes::layout::Layout::STATIC_STRIDES: &'static [core::option::Option<usize>]
@@ -7043,6 +7049,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::sum_keepdim<A>(&self, A) -
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::try_narrow<A>(self, A, usize, usize) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output, B, K, G, P>> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::try_reshape<S2>(&self, <S2 as incin_core::shapes::Shape>::Arg) -> incin_core::error::Result<incin_core::prelude::Tensor<S2, B, K, G, P>> where S2: incin_core::shapes::Shape + incin_core::shapes::DynShape, S: incin_core::shapes::TryReshape<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, L>::try_squeeze<A>(self, A) -> incin_core::error::Result<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop, B, K, G, P>> where A: incin_core::tensor::ops::reduce::ReduceSelector<S>, <A as incin_core::tensor::ops::reduce::ReduceSelector>::Drop: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::Dyn>::into_layout<L2: incin_core::shapes::layout::FreshLayout<S>>(self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, P, L2>>
 pub fn incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::Dyn>::into_row_major(self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L1>::eq<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor<S>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpEq>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpEq>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L1>::ge<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, bool, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor<S>>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpGe>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::CmpGe>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7525,6 +7532,7 @@ pub fn incin_core::shapes::idx::ReshapeTarget::calculate_shape(&[usize]) -> core
 pub fn incin_core::shapes::idx::SliceIdx::bounds(usize) -> (usize, usize)
 pub fn incin_core::shapes::idx::SliceTarget::calculate_bounds(&[usize]) -> alloc::vec::Vec<(usize, usize)>
 pub fn incin_core::shapes::idx::ToAxisIndex::to_axis_index(&self) -> isize
+pub fn incin_core::shapes::layout::ChannelsLast<S>::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::layout::FreshLayout::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::layout::RowMajor<S>::strides(&[usize]) -> incin_core::shapes::StrideBuf
 pub fn incin_core::shapes::layout::dense_strides(&[usize]) -> incin_core::shapes::StrideBuf
@@ -12431,6 +12439,7 @@ pub struct incin_core::shapes::AxisKey
 pub struct incin_core::shapes::AxisSchema<Root>(_)
 pub struct incin_core::shapes::AxisSelector
 pub struct incin_core::shapes::BroadcastExtent<L, R>(pub core::marker::PhantomData<(L, R)>)
+pub struct incin_core::shapes::ChannelsLast<S>(_)
 pub struct incin_core::shapes::CheckedNumel(_)
 pub struct incin_core::shapes::CheckedSubDim<A, B>(pub core::marker::PhantomData<(A, B)>)
 pub struct incin_core::shapes::ConstDim<const N: usize>
@@ -12478,6 +12487,7 @@ pub struct incin_core::shapes::idx::Next<I>(pub core::marker::PhantomData<I>)
 pub struct incin_core::shapes::idx::ReverseAxis<I: incin_core::shapes::StaticCursor>(_)
 pub struct incin_core::shapes::idx::Slice<Start, End, Diff>
 pub struct incin_core::shapes::idx::StaticAxis<I: incin_core::shapes::StaticCursor>(_)
+pub struct incin_core::shapes::layout::ChannelsLast<S>(_)
 pub struct incin_core::shapes::layout::RowMajor<S>(_)
 pub struct incin_core::shapes::named::Anon
 pub struct incin_core::shapes::prelude::AddDim<A, B>(pub core::marker::PhantomData<(A, B)>)

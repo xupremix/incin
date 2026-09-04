@@ -86,6 +86,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   for the result they allocate. They pinned `L` on *both* arguments, so once
   `Linear` returned a proof, feeding its output straight into a loss stopped
   compiling.
+- `Tensor::into_layout::<L>()`, the general form of `into_row_major`. The layout
+  names the strides it needs through `FreshLayout::strides`, those are compared
+  against the tensor's actual metadata, and the claim is granted only on a
+  match. Fallible for the same reason: strides are a runtime fact and the only
+  honest route is to look. Still no unchecked counterpart.
+- `TargetExt::zeros_in`, the layout-expressing counterpart to `zeros`, and the
+  `restate_layout` hook behind it for the paths where the backend allocates
+  rather than the host uploading.
+- `crates/incin-core/tests/target_layout_examples.rs`, seven worked cases from
+  the design note kept as tests rather than prose, so the examples in the book
+  cannot drift from what compiles.
+- **`ChannelsLast<S>`, the second layout -- which is what makes the first one's
+  bounds mean anything.** NHWC memory under an NCHW shape: `dims()` still
+  reports `[N, C, H, W]` and only the strides move, so channels is the
+  fastest-varying axis. It deliberately does **not** implement `Contiguous`.
+
+  The point is not convolution, though that is the eventual use. Until this
+  existed, `Dyn` and `RowMajor` were the only layouts and *both* satisfied every
+  bound that mentioned them, so `reshape_view`'s `Contiguous` requirement was
+  vacuously true for the entire inhabited world and had never rejected
+  anything. `tests/compile_fail/reshape_view_needs_contiguous.rs` is that bound
+  becoming a check.
+
+  Rank four only: channels-last is defined against NCHW, and a layout that
+  silently accepted any rank would be claiming a geometry it had not checked.
+
+  Not yet constructible through any public path -- `zeros` is bounded on the
+  sealed `FreshDense`, and the target API refuses a layout whose strides no
+  backend can allocate. Making it inhabitable needs backend allocation support
+  and is the next step; see
+  `docs/plan/research/0.2.0/layout-at-construction.md`.
 - **`FreshLayout<S>`, and a target API that can express a layout.** The trait
   carries `fn strides(dims) -> StrideBuf`: the strides an allocation must use
   for the layout to describe it. A constructor bounded on it asks the layout,
