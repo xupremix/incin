@@ -8622,44 +8622,44 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:159",
-    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:172",
+    "code": ".expect(\"CUDA shape-op input allocation covers its element count by construction\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:160",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:173",
     "code": "let params_f32 = params_dev.transmute::<u32>(21).unwrap();",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:165",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:178",
     "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:166",
-    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(n_elements).unwrap();",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:182",
+    "code": ".expect(\"CUDA shape-op output allocation covers its element count by construction\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:393",
-    "code": "let in_f32 = t_buf.data.transmute::<f32>(t_buf.len).unwrap();",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:416",
+    "code": ".expect(\"CUDA concat input allocation covers its element count by construction\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:398",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:421",
     "code": ".expect(\"out_b.data is uniquely owned for the lifetime of this loop\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:399",
-    "code": "let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:425",
+    "code": ".expect(\"CUDA concat output allocation covers its element count by construction\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
@@ -8726,6 +8726,18 @@
   {
     "site": "crates/incin-backends/src/cuda/testing.rs:171",
     "code": ".expect(\"uploading an i64 slice to device 0\")",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/testing.rs:187",
+    "code": ".expect(\"uploading raw bytes to device 0\")",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/testing.rs:202",
+    "code": ".expect(\"reading storage back to the host\")",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
@@ -8820,7 +8832,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/exec/proof.rs:261",
+    "site": "crates/incin-core/src/exec/proof.rs:278",
     "code": "panic!(\"paranoid-validation: descriptor failed its own invariants: {error:?}\");",
     "disposition": "opt-in invariant assertion",
     "evidence": "exec proof tests"
@@ -8904,7 +8916,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/shapes/shape.rs:976",
+    "site": "crates/incin-core/src/shapes/shape.rs:977",
     "code": ".expect(\"validated tensor shape must have a representable element count\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
