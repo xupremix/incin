@@ -37,6 +37,9 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         // A downstream layout cannot be minted by a constructor: `FreshDense` is sealed.
         ("layout_proof_cannot_be_forged", "E0277"),
         ("reshape_view_needs_contiguous", "E0277"),
+        // Matched on the trait rather than the code: the point is that the
+        // *restate* bound is what refuses, not that some method was missing.
+        ("into_shape_rejects_channels_last", "RestateFor"),
         ("named_broadcast_identity_mismatch", "E0277"),
         ("concat_static_mismatch", "E0277"),
         ("checked_byte_len_is_private", "E0423"),
