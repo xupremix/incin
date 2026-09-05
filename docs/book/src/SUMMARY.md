@@ -64,3 +64,4 @@ authoring and custom operations chapters above.
 - [Lowering: from descriptor to kernel](./deep_lowering.md)
 - [Proofs: how claims are checked](./deep_proofs.md)
 - [What the macros guarantee](./deep_macros_internals.md)
+- [Deep autograd: tapes, recipes, and custom training ops](./deep_autograd.md)

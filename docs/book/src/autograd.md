@@ -95,4 +95,5 @@ discriminator and generator steps) sharing one loss must each run their own
 forward pass first; reusing a spent `Gradients` matches nothing, and a step
 that matches nothing is refused rather than silently committing. To train
 through your own operations under these rules, see [Custom and fused
-operations](./custom_operations.md).
+operations](./custom_operations.md) for the contract and [Deep
+autograd](./deep_autograd.md) for the tape model underneath it.

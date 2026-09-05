@@ -114,6 +114,7 @@
     include_str!("../../../docs/book/src/deep_lowering.md"),
     include_str!("../../../docs/book/src/deep_proofs.md"),
     include_str!("../../../docs/book/src/deep_macros_internals.md"),
+    include_str!("../../../docs/book/src/deep_autograd.md"),
 )]
 mod book_docs {}
 
