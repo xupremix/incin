@@ -332,9 +332,10 @@ fn downcast<'a>(
 }
 
 /// Fused Welford kernel, normalizing over the trailing axes the weight's own
-/// shape names. Forward only: no backward has been written for it yet, so the
-/// capability row this answers to keeps `training` at `false` rather than
-/// promise a gradient that would never arrive.
+/// shape names. The forward saves its per-row statistics when the ambient
+/// grad mode records, and the recipe replays exactly those statistics, so
+/// this answers the training-capable LayerNorm row rather than the
+/// inference-only one the doc comment below used to describe.
 impl<D: Device> Execute<op::LayerNorm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -361,7 +362,7 @@ impl<D: Device> Execute<op::LayerNorm> for CudaBackendImpl<D> {
             operation,
             request.operation.descriptor().attributes().epsilon,
         )?;
-        crate::cuda::ops::norm::launch_layer_norm(input, weight, bias, epsilon)
+        CudaBackendImpl::<D>::layer_norm::<f32>(input, weight, bias, epsilon)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }

@@ -7,8 +7,9 @@
 //! structural/layout operations; `elementwise` is tape-tracked binary,
 //! unary, and scalar arithmetic; `creation` is zero-operand and generator
 //! operations; `reduce` is reductions; `nn` is pooling and convolution;
-//! `contract` is the `StorageBackend`/`Backend`/`HostInterop` trait
-//! implementations; `autograd` is `AutogradBackend`/`VariableBackend`.
+//! `norm` is tape-tracked layer normalization; `contract` is the
+//! `StorageBackend`/`Backend`/`HostInterop` trait implementations;
+//! `autograd` is `AutogradBackend`/`VariableBackend`.
 
 pub(crate) use crate::bytes::checked_numel;
 pub(crate) use crate::cuda::storage::CudaStorage;
@@ -28,6 +29,7 @@ pub(crate) mod contract;
 pub(crate) mod creation;
 pub(crate) mod elementwise;
 pub(crate) mod nn;
+pub(crate) mod norm;
 pub(crate) mod reduce;
 pub(crate) mod shape_ops;
 #[cfg(test)]

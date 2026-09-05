@@ -109,7 +109,10 @@ extern "C" __global__ void {entry_point}(
     int batch_size,
     int input_offset,
     int gamma_offset,
-    int beta_offset)
+    int beta_offset,
+    {compute_type}* __restrict__ mean_out,
+    {compute_type}* __restrict__ rstd_out,
+    int save_stats)
 {{
     int row = blockIdx.x;
     if (row >= batch_size) return;
@@ -166,6 +169,15 @@ extern "C" __global__ void {entry_point}(
     {compute_type} mean = shared_mean[0];
     {compute_type} variance = shared_m2[0];
     {compute_type} inverse_std = {inverse_std};
+    // Saved for backward: the recipe must replay these exact statistics,
+    // not recompute them, so `save_stats` distinguishes a training forward
+    // from an inference one. The pointers are always valid -- the launcher
+    // substitutes scratch when it has nowhere to keep the values -- and the
+    // flag decides whether anything is written.
+    if (save_stats && tid == 0) {{
+        mean_out[row] = mean;
+        rstd_out[row] = inverse_std;
+    }}
     for (int i = tid; i < norm_size; i += blockDim.x) {{
         {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
         {compute_type} scale = {load_prefix}gamma[gamma_offset + i]{load_suffix};
@@ -174,6 +186,113 @@ extern "C" __global__ void {entry_point}(
             : ({compute_type})0.0;
         {compute_type} normalized = (value - mean) * inverse_std;
         output[row * norm_size + i] = {store_prefix}(normalized * scale + shift){store_suffix};
+    }}
+}}
+
+// Fused layer-norm backward: one row per block, like the forward above.
+//
+// Given the upstream gradient `grad_output` and the forward's saved
+// per-row statistics (`mean`, `rstd`), this produces the input gradient
+// plus the weight and bias gradients in a single launch. With
+// `y = (x - mean) * rstd` and `gw = grad_output * gamma` written per
+// element, the weight must enter *before* the means are taken:
+//
+//   bias_grad[j]   = sum over rows of grad_output
+//   weight_grad[j] = sum over rows of grad_output * y
+//   input_grad     = rstd * (gw - mean(gw) - y * mean(gw * y))
+//
+// Averaging `grad_output` first and multiplying by `gamma` after is the
+// same only for uniform weight; everywhere else it is wrong, and wrong in
+// a way that still passes a uniform-gradient smoke test, so the parity
+// tests below pin the non-uniform case.
+//
+// The per-row sums need one block-wide reduction; the per-column weight and
+// bias sums accumulate across rows with `atomicAdd`, which is how the
+// reference implementations do it. That makes the column sums order-dependent
+// at the last ulp across runs -- compared against the CPU reference with a
+// tolerance, never bit-exact. The bias accumulation is skipped unless the
+// forward ran with one; its buffer is always a valid allocation regardless,
+// so no launch ever passes a null device pointer.
+extern "C" __global__ void {entry_point}_backward(
+    const {storage_type}* __restrict__ grad_output,
+    const {storage_type}* __restrict__ input,
+    const {storage_type}* __restrict__ gamma,
+    const {compute_type}* __restrict__ mean,
+    const {compute_type}* __restrict__ rstd,
+    {storage_type}* __restrict__ grad_input,
+    {compute_type}* __restrict__ grad_gamma,
+    {compute_type}* __restrict__ grad_beta,
+    int norm_size,
+    int batch_size,
+    int has_bias,
+    int grad_output_offset,
+    int input_offset,
+    int gamma_offset)
+{{
+    int row = blockIdx.x;
+    if (row >= batch_size) return;
+    int tid = threadIdx.x;
+    int lane = tid & 31;
+    int warp = tid >> 5;
+    int goff = grad_output_offset + row * norm_size;
+    int row_start = input_offset + row * norm_size;
+    {compute_type} m = mean[row];
+    {compute_type} s = rstd[row];
+    {compute_type} sum_gw = ({compute_type})0.0;
+    {compute_type} sum_gwy = ({compute_type})0.0;
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} g = {load_prefix}grad_output[goff + i]{load_suffix};
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        {compute_type} y = (value - m) * s;
+        {compute_type} w = {load_prefix}gamma[gamma_offset + i]{load_suffix};
+        {compute_type} gw = g * w;
+        sum_gw += gw;
+        sum_gwy += gw * y;
+    }}
+    unsigned int active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        sum_gw += __shfl_down_sync(active, sum_gw, delta);
+        sum_gwy += __shfl_down_sync(active, sum_gwy, delta);
+    }}
+    extern __shared__ unsigned char shared_raw[];
+    int warp_count = (blockDim.x + 31) >> 5;
+    {compute_type}* shared_sums = reinterpret_cast<{compute_type}*>(shared_raw);
+    if (lane == 0) {{
+        shared_sums[warp * 2] = sum_gw;
+        shared_sums[warp * 2 + 1] = sum_gwy;
+    }}
+    __syncthreads();
+    if (warp == 0) {{
+        sum_gw = ({compute_type})0.0;
+        sum_gwy = ({compute_type})0.0;
+        for (int w = lane; w < warp_count; w += 32) {{
+            sum_gw += shared_sums[w * 2];
+            sum_gwy += shared_sums[w * 2 + 1];
+        }}
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            sum_gw += __shfl_down_sync(active, sum_gw, delta);
+            sum_gwy += __shfl_down_sync(active, sum_gwy, delta);
+        }}
+        if (lane == 0) {{
+            shared_sums[0] = sum_gw;
+            shared_sums[1] = sum_gwy;
+        }}
+    }}
+    __syncthreads();
+    {compute_type} mean_gw = shared_sums[0] / ({compute_type})norm_size;
+    {compute_type} mean_gwy = shared_sums[1] / ({compute_type})norm_size;
+    for (int i = tid; i < norm_size; i += blockDim.x) {{
+        {compute_type} g = {load_prefix}grad_output[goff + i]{load_suffix};
+        {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
+        {compute_type} y = (value - m) * s;
+        {compute_type} w = {load_prefix}gamma[gamma_offset + i]{load_suffix};
+        {compute_type} dx = s * (g * w - mean_gw - y * mean_gwy);
+        grad_input[row * norm_size + i] = {store_prefix}dx{store_suffix};
+        if (has_bias) {{
+            atomicAdd(&grad_beta[i], g);
+        }}
+        atomicAdd(&grad_gamma[i], g * y);
     }}
 }}
 "#,

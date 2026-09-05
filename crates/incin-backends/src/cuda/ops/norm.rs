@@ -151,13 +151,26 @@ where
     Ok(selection.candidate)
 }
 
+/// Per-row statistics a layer-norm backward replays.
+///
+/// The forward kernel writes these when asked; the recipe below reads them
+/// back rather than recomputing mean and variance, which would silently run
+/// under different numerical conditions than the Welford pass that produced
+/// the output. Both buffers hold one compute-precision value per batch row.
+#[cfg(feature = "cuda")]
+pub(crate) struct LayerNormStats {
+    pub(crate) mean: CudaStorage,
+    pub(crate) rstd: CudaStorage,
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_layer_norm(
     input: &CudaStorage,
     weight: &CudaStorage,
     bias: Option<&CudaStorage>,
     eps: f32,
-) -> Result<CudaStorage> {
+    save_stats: bool,
+) -> Result<(CudaStorage, Option<LayerNormStats>)> {
     let buffer = &*input.buffer;
     let input_numel = validate_contiguous(input, "input")?;
     let norm_size = *input
@@ -217,8 +230,37 @@ pub(crate) fn launch_layer_norm(
         device_id: buffer.device_id,
     };
     if input_numel == 0 {
-        return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
+        // No rows produced statistics and none ever will: the recipe replays
+        // an empty stat list by returning zero gradients without launching.
+        return Ok((
+            CudaStorage::new(Arc::new(output), input.shape.to_vec()),
+            None,
+        ));
     }
+
+    // Per-row statistics live in compute precision, not storage precision: a
+    // half-precision mean would round the very values backward replays.
+    // Without a recording caller there is nowhere to keep them, so a
+    // single-element scratch stands in behind the `save_stats` flag rather
+    // than a null pointer, which the launch builder cannot spell.
+    let compute_dtype = policy.compute;
+    let stats_len = if save_stats { batch_size } else { 1 };
+    let alloc_stat = |tag: &'static str| -> Result<CudaBuffer> {
+        let bytes = crate::bytes::byte_len(compute_dtype, stats_len, OperationKind::Normalization)?;
+        Ok(CudaBuffer {
+            len: stats_len,
+            dtype: compute_dtype,
+            data: Arc::new(stream.alloc_zeros::<u8>(bytes).map_err(|error| {
+                Error::Msg(format!(
+                    "CUDA layer norm {tag} allocation failed: {error:?}"
+                ))
+            })?),
+            device: buffer.device.clone(),
+            device_id: buffer.device_id,
+        })
+    };
+    let mut mean_buf = alloc_stat("mean")?;
+    let mut rstd_buf = alloc_stat("rstd")?;
 
     let selection =
         normalization_launch_selection(&buffer.device, &kernel, batch_size, norm_size, true)?;
@@ -227,13 +269,24 @@ pub(crate) fn launch_layer_norm(
     let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
     let bias_storage = bias.unwrap_or(weight);
     let has_bias = i32::from(bias.is_some());
+    let save_stats_flag = i32::from(save_stats);
 
     // SAFETY: the selected kernel's checked launch candidate and validated
-    // tensor metadata bound all views; output is a fresh unique allocation.
+    // tensor metadata bound all views; output and both stat buffers are fresh
+    // unique allocations. The stat views stay `u8`: the kernel reinterprets
+    // them as its compute type, which is what `byte_len` sized them for.
     unsafe {
         let output_u8 = Arc::get_mut(&mut output.data).ok_or_else(|| {
             Error::Msg("fresh CUDA layer norm output was unexpectedly shared".into())
         })?;
+        let mean_u8: &cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut mean_buf.data).ok_or_else(|| {
+                Error::Msg("fresh CUDA layer norm mean buffer was unexpectedly shared".into())
+            })?;
+        let rstd_u8: &cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut rstd_buf.data).ok_or_else(|| {
+                Error::Msg("fresh CUDA layer norm rstd buffer was unexpectedly shared".into())
+            })?;
         use cudarc::driver::PushKernelArg;
         let mut launch = |candidate: crate::tuning::LaunchCandidate| -> Result<()> {
             let block_size = u32::from(candidate.block_size);
@@ -270,6 +323,9 @@ pub(crate) fn launch_layer_norm(
                 .arg(&checked_i32(input.offset_elements, "input offset")?)
                 .arg(&checked_i32(weight.offset_elements, "weight offset")?)
                 .arg(&checked_i32(bias_storage.offset_elements, "bias offset")?)
+                .arg(mean_u8)
+                .arg(rstd_u8)
+                .arg(&save_stats_flag)
                 .launch(config)
                 .map(|_| ())
                 .map_err(|error| Error::Msg(format!("CUDA layer norm launch failed: {error:?}")))
@@ -279,7 +335,201 @@ pub(crate) fn launch_layer_norm(
         launch(candidate)?;
     }
 
-    Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))
+    let out = CudaStorage::new(Arc::new(output), input.shape.to_vec());
+    let stats = save_stats.then(|| LayerNormStats {
+        mean: CudaStorage::new(Arc::new(mean_buf), alloc::vec![batch_size]),
+        rstd: CudaStorage::new(Arc::new(rstd_buf), alloc::vec![batch_size]),
+    });
+    Ok((out, stats))
+}
+
+/// Gradients of a layer-norm forward: input, weight, and bias when present.
+///
+/// `mean`/`rstd` are the forward's own per-row statistics, never recomputed
+/// here. All three gradients derive from them plus the upstream gradient, in
+/// one row-per-block launch.
+#[cfg(feature = "cuda")]
+pub(crate) struct LayerNormGrads {
+    pub(crate) input: CudaStorage,
+    pub(crate) weight: CudaStorage,
+    pub(crate) bias: Option<CudaStorage>,
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_layer_norm_backward(
+    grad_output: &CudaStorage,
+    input: &CudaStorage,
+    weight: &CudaStorage,
+    mean: &CudaStorage,
+    rstd: &CudaStorage,
+    has_bias: bool,
+) -> Result<LayerNormGrads> {
+    let buffer = &*input.buffer;
+    let input_numel = validate_contiguous(input, "input")?;
+    validate_contiguous(grad_output, "grad_output")?;
+    let norm_size = *input
+        .shape
+        .last()
+        .ok_or_else(|| Error::Msg("CUDA layer norm backward requires rank >= 1".into()))?;
+    if norm_size == 0 {
+        return Err(Error::Msg(
+            "CUDA layer norm backward is undefined for an empty normalized axis".into(),
+        ));
+    }
+    if grad_output.shape != input.shape {
+        return Err(Error::ShapeMismatch {
+            op: "layer_norm_backward",
+            expected: input.shape.to_vec(),
+            got: grad_output.shape.to_vec(),
+            msg: "the upstream gradient must match the forward input shape element-wise".into(),
+        });
+    }
+    if grad_output.buffer.dtype != buffer.dtype {
+        return Err(Error::DTypeStorageMismatch {
+            expected: buffer.dtype,
+            got: grad_output.buffer.dtype,
+        });
+    }
+    validate_parameter(input, weight, norm_size, "weight")?;
+    let batch_size = input_numel / norm_size;
+    let req = PrecisionRequest::new(
+        incin_core::shapes::error::OperationKind::Normalization,
+        buffer.dtype,
+        buffer.dtype,
+        incin_core::exec::LayoutClass::Contiguous,
+        1,
+        false,
+        incin_core::exec::MathMode::Fast,
+    );
+    let policy = crate::cuda::backend::native_precision(&req)?;
+    // The statistics must be what the forward wrote: compute-precision, one
+    // value per batch row. Anything else is a crossed-wires caller, and the
+    // kernel would read past it or misinterpret the bytes.
+    for (stats, name) in [(mean, "mean"), (rstd, "rstd")] {
+        if stats.buffer.dtype != policy.compute {
+            return Err(Error::DTypeStorageMismatch {
+                expected: policy.compute,
+                got: stats.buffer.dtype,
+            });
+        }
+        if stats.shape != [batch_size] {
+            return Err(Error::ShapeMismatch {
+                op: "layer_norm_backward",
+                expected: alloc::vec![batch_size],
+                got: stats.shape.to_vec(),
+                msg: alloc::format!("saved layer norm {name} must hold one value per batch row"),
+            });
+        }
+    }
+    let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(buffer.dtype, "layer_norm")?;
+    let kernel = crate::kernel::render_cuda_normalization("layer_norm", builtin_id)?;
+    let stream = buffer.device.default_stream();
+    let alloc = |dtype: incin_core::tensor::dtype::DTypeDescriptor,
+                 len: usize,
+                 tag: &'static str|
+     -> Result<CudaBuffer> {
+        let bytes = crate::bytes::byte_len(dtype, len, OperationKind::Normalization)?;
+        Ok(CudaBuffer {
+            len,
+            dtype,
+            data: Arc::new(stream.alloc_zeros::<u8>(bytes).map_err(|error| {
+                Error::Msg(format!(
+                    "CUDA layer norm backward {tag} allocation failed: {error:?}"
+                ))
+            })?),
+            device: buffer.device.clone(),
+            device_id: buffer.device_id,
+        })
+    };
+    let mut dx_buf = alloc(buffer.dtype, input_numel, "input gradient")?;
+    let mut dw_buf = alloc(policy.compute, norm_size, "weight gradient")?;
+    let mut db_buf = alloc(policy.compute, norm_size, "bias gradient")?;
+    if input_numel == 0 {
+        // No rows ran forward, so no kernel runs backward: zero gradients of
+        // the right shapes, matching what a launch over zero rows would add
+        // into (nothing).
+        let shape_of = |storage: &CudaStorage| storage.shape.to_vec();
+        return Ok(LayerNormGrads {
+            input: CudaStorage::new(Arc::new(dx_buf), shape_of(input)),
+            weight: CudaStorage::new(Arc::new(dw_buf), shape_of(weight)),
+            bias: has_bias.then(|| CudaStorage::new(Arc::new(db_buf), alloc::vec![norm_size])),
+        });
+    }
+
+    ensure_normalization_loaded(buffer.device_id, &kernel)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
+    let backward_entry = alloc::format!("{}_backward", kernel.entry_point);
+    let function = dispatcher.get_function(&kernel.cache_key, &backward_entry)?;
+    let has_bias_flag = i32::from(has_bias);
+    let compute_bytes = policy
+        .compute
+        .encoding()
+        .scalar_bytes()
+        .ok_or_else(|| Error::Msg("CUDA layer norm invalid compute encoding".into()))?;
+    let block_size: u32 = 256;
+    let warp_count = (block_size as usize) / 32;
+    let shared_bytes = (2 * warp_count)
+        .checked_mul(compute_bytes)
+        .and_then(|bytes| u32::try_from(bytes).ok())
+        .ok_or_else(|| Error::Msg("CUDA layer norm backward shared-memory size overflow".into()))?;
+    let grid = u32::try_from(batch_size)
+        .map_err(|_| Error::Msg("CUDA layer norm batch count exceeds u32 grid ABI".into()))?;
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: shared_bytes,
+    };
+
+    // SAFETY: validated metadata bounds every view; all three outputs are
+    // fresh unique allocations, zeroed before the atomic accumulation. Every
+    // buffer travels as its bytes: the kernel reinterprets them as the dtypes
+    // `byte_len` sized them for.
+    unsafe {
+        use cudarc::driver::PushKernelArg;
+        let dx_u8: &mut cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut dx_buf.data).ok_or_else(|| {
+                Error::Msg("fresh CUDA layer norm input gradient was unexpectedly shared".into())
+            })?;
+        let dw_u8: &mut cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut dw_buf.data).ok_or_else(|| {
+                Error::Msg("fresh CUDA layer norm weight gradient was unexpectedly shared".into())
+            })?;
+        let db_u8: &mut cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut db_buf.data).ok_or_else(|| {
+                Error::Msg("fresh CUDA layer norm bias gradient was unexpectedly shared".into())
+            })?;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_output.buffer.data)
+            .arg(&*buffer.data)
+            .arg(&*weight.buffer.data)
+            .arg(&*mean.buffer.data)
+            .arg(&*rstd.buffer.data)
+            .arg(&mut *dx_u8)
+            .arg(&mut *dw_u8)
+            .arg(&mut *db_u8)
+            .arg(&checked_i32(norm_size, "normalized axis length")?)
+            .arg(&checked_i32(batch_size, "batch count")?)
+            .arg(&has_bias_flag)
+            .arg(&checked_i32(
+                grad_output.offset_elements,
+                "grad_output offset",
+            )?)
+            .arg(&checked_i32(input.offset_elements, "input offset")?)
+            .arg(&checked_i32(weight.offset_elements, "weight offset")?)
+            .launch(config)
+            .map(|_| ())
+            .map_err(|error| {
+                Error::Msg(format!("CUDA layer norm backward launch failed: {error:?}"))
+            })?;
+    }
+
+    let weight_shape = weight.shape.to_vec();
+    Ok(LayerNormGrads {
+        input: CudaStorage::new(Arc::new(dx_buf), input.shape.to_vec()),
+        weight: CudaStorage::new(Arc::new(dw_buf), weight_shape),
+        bias: has_bias.then(|| CudaStorage::new(Arc::new(db_buf), alloc::vec![norm_size])),
+    })
 }
 
 #[cfg(feature = "cuda")]
