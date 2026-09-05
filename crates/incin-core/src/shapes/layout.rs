@@ -546,3 +546,28 @@ fn channels_last_stride_values(dims: &[usize]) -> crate::shapes::StrideBuf {
 /// removes. That congruence is exactly what [`LayoutOf`] states.
 pub type Dense<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = Local> =
     crate::tensor::base::Tensor<S, B, K, G, P, RowMajor<S>>;
+
+/// A tensor whose buffer is proven channels-last, under an NCHW shape.
+///
+/// The same ergonomic spelling [`Dense`] gives the row-major case. Without it
+/// the shape is written twice, once as the tensor's own and once inside the
+/// layout:
+///
+/// ```text
+/// // instead of
+/// let x: Tensor<s![1, 2, 2, 2], B, f32, NoGrad, Local, ChannelsLast<s![1, 2, 2, 2]>>
+///     = Cpu.tensor_in(nchw)?;
+/// // write
+/// let x: Nhwc<s![1, 2, 2, 2], B> = Cpu.tensor_in(nchw)?;
+/// ```
+///
+/// The layout still carries the shape, and deliberately so: it is what stops a
+/// channels-last claim riding through a shape change onto extents whose strides
+/// are different. [`RestateFor`] is the way to move a claim across a shape type
+/// that covers the same runtime dims. The alias removes the repetition at the
+/// call site without removing that check.
+///
+/// Named for the memory order rather than the shape order, because that is the
+/// thing being claimed: the shape stays NCHW, the buffer is NHWC.
+pub type Nhwc<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = Local> =
+    crate::tensor::base::Tensor<S, B, K, G, P, ChannelsLast<S>>;

@@ -12359,6 +12359,7 @@ pub struct incin_core::prelude::BatchNorm2dBuilder<S: incin_core::nn::batch_norm
 pub struct incin_core::prelude::Bernoulli<K>
 pub struct incin_core::prelude::BroadcastExtent<L, R>(pub core::marker::PhantomData<(L, R)>)
 pub struct incin_core::prelude::Buffer<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType>
+pub struct incin_core::prelude::ChannelsLast<S>(_)
 pub struct incin_core::prelude::CheckedByteLen(_)
 pub struct incin_core::prelude::CheckedNumel(_)
 pub struct incin_core::prelude::ConfusionMatrix
@@ -13674,6 +13675,7 @@ pub type incin_core::prelude::LstmShape::Out: incin_core::shapes::Dim
 pub type incin_core::prelude::MatMulShape::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub type incin_core::prelude::Module::Error
 pub type incin_core::prelude::Module::Output
+pub type incin_core::prelude::Nhwc<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::ChannelsLast<S>>
 pub type incin_core::prelude::OptionalField::Arg
 pub type incin_core::prelude::Placement::Field: core::clone::Clone + core::fmt::Debug + core::default::Default + core::marker::Send + core::marker::Sync
 pub type incin_core::prelude::PlainDType::Elem: incin_core::prelude::TensorElement
@@ -13894,6 +13896,7 @@ pub type incin_core::shapes::NamedDim<Tag, L>::Output = incin_core::shapes::Name
 pub type incin_core::shapes::NamedDim<Tag, usize>::Output = incin_core::shapes::NamedDim<Tag, <<R as typenum::type_operators::IsEqual<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>>>::Output as BroadcastChoice<usize, R>>::Output>
 pub type incin_core::shapes::NamedDim<Tag, usize>::Output = incin_core::shapes::NamedDim<Tag, incin_core::shapes::BroadcastExtent<usize, usize>>
 pub type incin_core::shapes::NamedDim<Tag, usize>::Resolved = incin_core::shapes::NamedDim<Tag, usize>
+pub type incin_core::shapes::Nhwc<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::ChannelsLast<S>>
 pub type incin_core::shapes::Nil::Arg = ()
 pub type incin_core::shapes::Nil::Count = typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>
 pub type incin_core::shapes::Nil::Drop = incin_core::shapes::Ranked<typenum::uint::UTerm>
@@ -13978,6 +13981,7 @@ pub type incin_core::shapes::idx::ReshapeTarget::Output: incin_core::shapes::Sha
 pub type incin_core::shapes::idx::SliceIdx::Resolved: incin_core::shapes::Dim
 pub type incin_core::shapes::idx::SliceTarget::Output: incin_core::shapes::Shape
 pub type incin_core::shapes::layout::Dense<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::RowMajor<S>>
+pub type incin_core::shapes::layout::Nhwc<S, B, K, G, P> = incin_core::prelude::Tensor<S, B, K, G, P, incin_core::shapes::layout::ChannelsLast<S>>
 pub type incin_core::shapes::layout::RestateFor::Restated: incin_core::shapes::layout::LayoutOf<S2>
 pub type incin_core::shapes::layout::RowMajor<S1>::Restated = incin_core::shapes::layout::RowMajor<S2>
 pub type incin_core::shapes::named::NamedAxis<Name, Extent> = incin_core::shapes::NamedDim<Name, Extent>

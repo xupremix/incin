@@ -179,7 +179,7 @@ pub mod prelude {
     // The layout vocabulary. `Dense` is the ergonomic spelling for the common
     // case; `Contiguous` is the bound operations like `reshape_view` require.
     pub use crate::distributions::{Bernoulli, Distribution, Exponential, Gumbel, Normal, Uniform};
-    pub use crate::shapes::{Contiguous, Dense, FreshDense, Layout, RowMajor};
+    pub use crate::shapes::{ChannelsLast, Contiguous, Dense, FreshDense, Layout, Nhwc, RowMajor};
     // Lets generic code take one type parameter instead of six.
     pub use crate::tensor::base::{AnyTensor, TensorOf};
 

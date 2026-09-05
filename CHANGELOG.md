@@ -8,6 +8,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**
+  `Dense<S, B>` has always existed for the row-major case, and its own
+  documentation names the reason: the layout is congruent with the shape it
+  describes, so repeating it is noise. Channels-last had no such alias, which
+  left the long form as the only way to say it:
+
+  ```text
+  // was
+  let x: Tensor<s![1, 2, 2, 2], B, f32, NoGrad, Local, ChannelsLast<s![1, 2, 2, 2]>>
+      = Cpu.tensor_in(nchw)?;
+  // now
+  let x: Nhwc<s![1, 2, 2, 2], B> = Cpu.tensor_in(nchw)?;
+  ```
+
+  The layout still carries the shape. That parameter is load-bearing rather
+  than incidental: `Layout::STATIC_STRIDES` and `Layout::PROOF` are computed
+  from `S::STATIC_EXTENTS` and `S::RANK`, and it is what stops a channels-last
+  claim riding through a shape change onto extents whose strides differ --
+  `RestateFor` is the deliberate way across. The alias removes the repetition
+  at the call site without removing the check, and a test pins that it names
+  the same type as the long form.
+
 ### Fixed
 
 - **CUDA launch parameters no longer truncate silently.** The grid dimensions

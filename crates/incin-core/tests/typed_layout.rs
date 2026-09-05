@@ -1012,3 +1012,33 @@ fn shape_operations_split_into_views_and_materialisations() {
         "the second chunk starts partway in"
     );
 }
+
+/// `Nhwc<S, B>` is the same type as spelling the layout out.
+///
+/// The alias exists to stop the shape being written twice. If it ever named a
+/// different type than the long form, code would compile against one spelling
+/// and not the other for no visible reason, which is worse than the verbosity
+/// it removes.
+#[test]
+fn nhwc_alias_is_the_long_form() {
+    use incin_core::prelude::{ChannelsLast, Nhwc, Tensor};
+
+    type S = s![1, 2, 2, 2];
+    type B = CpuBackendImpl;
+
+    // Returning the long form where the alias is expected only compiles if
+    // they are the same type.
+    fn same(
+        long: Tensor<
+            S,
+            B,
+            f32,
+            incin_core::prelude::NoGrad,
+            incin_core::prelude::Local,
+            ChannelsLast<S>,
+        >,
+    ) -> Nhwc<S, B> {
+        long
+    }
+    let _ = same;
+}
