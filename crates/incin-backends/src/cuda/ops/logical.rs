@@ -9,8 +9,10 @@
 //!
 //! Broadcasting the two binary operands to one shape is the caller's job
 //! (the executor), the same precondition `compare`/`select` state; the
-//! caller must broadcast through `cuda::ops::select::launch_broadcast_bool_mask`
-//! rather than `shape::launch_broadcast`, for the same byte-width reason.
+//! caller broadcasts through
+//! `cuda::ops::select::launch_broadcast_bool_mask` today, which may collapse
+//! into the generic broadcast now that it moves bytes at any width -- see
+//! #122.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;

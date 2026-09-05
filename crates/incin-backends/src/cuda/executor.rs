@@ -1001,12 +1001,9 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
         let mask_b = if mask.shape == out_shape {
             mask.clone()
         } else {
-            // Not `shape::launch_broadcast`: that launches `shape.cu`'s
-            // `shape_op`, whose data pointers are a hardcoded `float*` -
-            // exactly the byte-width assumption this session already
-            // narrowed the `BroadcastAs` capability row over, and a `bool`
-            // mask hits it just the same through a direct call. See
-            // `cuda::ops::select::launch_broadcast_bool_mask`'s own doc.
+            // The dedicated bool-mask broadcast, not the generic one: see
+            // `cuda::ops::select::launch_broadcast_bool_mask`'s doc and #122
+            // for whether that separation still earns its keep.
             crate::cuda::ops::select::launch_broadcast_bool_mask(mask, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };

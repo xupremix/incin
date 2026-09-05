@@ -141,17 +141,20 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
 pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = FLOAT_DTYPES,
-    // `broadcast_as` launches `kernels/shape.cu`'s `shape_op`, whose kernel
-    // signature is `const float*`/`float*` unconditionally - there is no
-    // dtype-width parameter anywhere in the launch, so every element is read
-    // and written at a 4-byte stride regardless of the storage's declared
-    // dtype. For a 2-byte dtype (`f16`/`bf16`) that reads and writes past
-    // the buffer `crate::bytes::byte_len` actually allocated; for an 8-byte
-    // one (`f64`/`i64`) it silently touches only every other 4-byte half.
-    // `f32` is the only dtype in `CUDA_STORAGE_DTYPES` this kernel is
-    // byte-compatible with, so it is the only one the row may honestly
-    // claim - narrowed here rather than in `shape.cu` itself, since fixing
-    // the kernel to be dtype-parametric is separate, larger work.
+    // `broadcast_as` launches `kernels/shape.cu`'s `shape_op`, which has
+    // been width-parametric for a while now (`shape_op_8bit`/`16bit`/
+    // `32bit`/`64bit`, selected by element width at launch): the old comment
+    // here describing an unconditional `float*` kernel survived the kernel
+    // it described. The launch shim caught up too, passing byte buffers
+    // through instead of reinterpreting them as `f32`, which used to panic
+    // for 1- and 2-byte dtypes. Measured on hardware: transpose, broadcast
+    // and narrow move `bool`, `f16` and `i64` to exactly the right places,
+    // and `q8_0` is refused cleanly because a block encoding has no element
+    // width to move by.
+    // The row nevertheless stays `F32_ONLY` for now: a declaration is
+    // widened against evidence for every dtype it would then claim, not the
+    // three measured so far, and that widening belongs with #90's row audit
+    // rather than in a comment fix.
     // `reshape` does not share this: it never launches `shape_op` at all,
     // only rewraps the same buffer under a new shape, so it stays byte-exact
     // for every dtype `CUDA_STORAGE_DTYPES` names.
@@ -173,7 +176,8 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
-    // Same `shape_op` byte-width limit as the `broadcast` row above.
+    // Same conservative posture as the `broadcast` row above, for the reason
+    // stated there.
     broadcast_training = F32_ONLY,
     reshape_training = FLOAT_DTYPES,
     // The one row widened past `CONTIGUOUS`: the strided elementwise kernel

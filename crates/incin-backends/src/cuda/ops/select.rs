@@ -58,20 +58,15 @@ fn require_same_device(a: &CudaStorage, b: &CudaStorage) -> Result<()> {
 
 /// Broadcasts a `bool` mask to `target_shape`.
 ///
-/// Not `crate::cuda::ops::shape::launch_broadcast`: that launches
-/// `shape.cu`'s `shape_op`, whose data pointers are a hardcoded
-/// `float*`/`float*` - the same byte-width assumption this session already
-/// narrowed CUDA's `broadcast`/`broadcast_training` capability rows to
-/// `F32_ONLY` over. Narrowing the row stops `BroadcastAs` from reaching it
-/// on a non-`f32` dtype; it does nothing about a direct internal call like
-/// `where_cond`'s own mask broadcast, which is exactly why this function
-/// exists instead of reusing that one. It reuses
+/// Not `crate::cuda::ops::shape::launch_broadcast`: at the time this was
+/// written, that launched a `float*`-only `shape_op` which panicked on a
+/// 1-byte allocation, so the mask needed its own `unsigned char` kernel.
+/// `shape_op` has since grown width-parametric entry points that move `bool`
+/// correctly (measured on hardware), which may make this dedicated path
+/// redundant -- see #122. Until that is settled, this stays: it reuses
 /// `crate::cuda::ops::shape::prepare_shape_params` for the index arithmetic
 /// (identical to `shape_op`'s `op_mode == 3`) and launches `select.cu`'s
-/// `broadcast_bool_op`, the `unsigned char` port of that case, against the
-/// mask's own raw byte buffer directly - a `bool` element is already one
-/// byte, so unlike `shape_op`'s `f32` path there is no `transmute` involved
-/// on either data pointer, only on the uploaded `params` buffer.
+/// `broadcast_bool_op` against the mask's own raw byte buffer directly.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_broadcast_bool_mask(
     mask: &CudaStorage,
