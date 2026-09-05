@@ -818,3 +818,189 @@ fn cross_entropy_loss_trains_through_gather_on_cuda() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Training rows that recorded nothing: softmax, rms_norm, transpose_view,
+// and the attention chain through softmax.
+// ---------------------------------------------------------------------------
+
+use crate::cpu::CpuBackendImpl as HostBackend;
+
+/// CPU forward of a canonical op plus backward under an explicit seed, on
+/// the same values the CUDA side runs. Untyped dispatch: shapes still
+/// validate, only the caller-held proof is absent, which value parity does
+/// not need. Returns the output followed by one gradient per input.
+fn cpu_forward_and_grads<O>(
+    attributes: O::Attributes,
+    inputs: &[HostStorage],
+    seed_values: &[f32],
+) -> (HostStorage, alloc::vec::Vec<HostStorage>)
+where
+    O: incin_core::backend_authoring::Operation,
+    HostBackend: incin_core::backend_authoring::Execute<O, Output = HostStorage>,
+{
+    use incin_core::backend_authoring::ExecutionContext;
+    use incin_core::exec::{TensorHandle, dispatch};
+    let context = ExecutionContext::new(HostBackend::new());
+    let handles: Vec<TensorHandle> = inputs
+        .iter()
+        .map(TensorHandle::from_storage::<HostBackend, f32, _>)
+        .collect();
+    let out = dispatch::execute::<O, HostBackend>(&context, attributes, &handles)
+        .expect("CPU reference executes");
+    let seed = HostStorage::from_contiguous(HostBuffer::F32(seed_values.to_vec()), &out.shape);
+    let grads = crate::cpu::tape::backward_with(&out, &seed).unwrap();
+    let input_grads = inputs
+        .iter()
+        .map(|storage| {
+            grads
+                .get(storage.id)
+                .unwrap_or_else(|| panic!("CPU reference is missing a gradient"))
+                .clone()
+        })
+        .collect();
+    (out, input_grads)
+}
+
+fn sm_values() -> (Vec<usize>, Vec<f32>) {
+    (vec![2, 3], vec![1.0, 2.0, 3.0, 0.5, -0.5, 0.0])
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn softmax_trains_on_cuda() {
+    use incin_core::exec::catalog::AxisAttributes;
+    let (dims, values) = sm_values();
+    let input = cuda_f32(&dims, values.clone());
+    let input_id = input.id;
+    let out = B::softmax::<f32>(&input, 1).unwrap();
+    assert_eq!(out.shape, dims);
+    // Forward parity against the CPU reference first: the composition
+    // replaced a fused kernel, so its values need their own check.
+    let host_in = host_f32(&dims, values.clone());
+    let seed_values = [1.0, 0.0, -1.0, 0.5, 0.5, -2.0];
+    let (host_out, host_grads) = cpu_forward_and_grads::<incin_core::exec::op::Softmax>(
+        AxisAttributes { axis: 1 },
+        &[host_in],
+        &seed_values,
+    );
+    let got: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| *v as f64)
+        .collect();
+    assert_close(&got, &host_values(&host_out), 1e-5, "softmax forward");
+    // Then the gradients, under a non-uniform seed (a uniform seed gives a
+    // zero gradient by definition and would prove nothing).
+    let seed = cuda_f32(&dims, seed_values.to_vec());
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    let dx = download_f32_host(grads.get(input_id).unwrap()).unwrap();
+    assert_close(
+        &dx.iter().map(|v| *v as f64).collect::<Vec<_>>(),
+        &host_values(&host_grads[0]),
+        1e-4,
+        "softmax dx",
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn rms_norm_trains_on_cuda() {
+    use incin_core::exec::catalog::EpsilonAttributes;
+    let (dims, values) = sm_values();
+    let input = cuda_f32(&dims, values.clone());
+    let weight = cuda_f32(&[3], vec![1.0, 0.5, 2.0]);
+    let (input_id, weight_id) = (input.id, weight.id);
+    let out = B::rms_norm::<f32>(&input, &weight, 1e-5).unwrap();
+    assert_eq!(out.shape, dims);
+    let seed = cuda_f32(&dims, vec![1.0, 0.0, -1.0, 0.5, 0.5, -2.0]);
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    let read = |id: incin_core::exec::TensorId| {
+        download_f32_host(grads.get(id).unwrap())
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    let host_in = host_f32(&dims, values);
+    let host_w = host_f32(&[3], vec![1.0, 0.5, 2.0]);
+    let seed_values = [1.0, 0.0, -1.0, 0.5, 0.5, -2.0];
+    let (_, host_grads) = cpu_forward_and_grads::<incin_core::exec::op::RmsNorm>(
+        EpsilonAttributes { epsilon: 1e-5 },
+        &[host_in, host_w],
+        &seed_values,
+    );
+    assert_close(
+        &read(input_id),
+        &host_values(&host_grads[0]),
+        1e-4,
+        "rms dx",
+    );
+    assert_close(
+        &read(weight_id),
+        &host_values(&host_grads[1]),
+        1e-4,
+        "rms dw",
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn transpose_view_trains_on_cuda() {
+    let input = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let input_id = input.id;
+    let out = B::transpose_view::<f32>(&input, 0, 1).unwrap();
+    assert_eq!(out.shape, vec![3, 2]);
+    // A permutation's backward is the same permutation: exact, no tolerance.
+    let seed = cuda_f32(&[3, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    assert_eq!(
+        download_f32_host(grads.get(input_id).unwrap()).unwrap(),
+        vec![1.0, 3.0, 5.0, 2.0, 4.0, 6.0]
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn attention_trains_end_to_end_on_cuda() {
+    use incin_core::exec::catalog::AttentionAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+    let context = ExecutionContext::new(B::new());
+    let q = cuda_f32(&[1, 2, 2], vec![0.5, 1.0, -0.5, 0.25]);
+    let k = cuda_f32(&[1, 2, 2], vec![0.5, -1.0, 0.0, 0.75]);
+    let v = cuda_f32(&[1, 2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+    let (qid, kid, vid) = (q.id, k.id, v.id);
+    let handles = [
+        TensorHandle::from_storage::<B, f32, _>(&q),
+        TensorHandle::from_storage::<B, f32, _>(&k),
+        TensorHandle::from_storage::<B, f32, _>(&v),
+    ];
+    let out = dispatch::execute::<op::ScaledDotProductAttention, _>(
+        &context,
+        AttentionAttributes {
+            scale: None,
+            has_mask: false,
+        },
+        &handles,
+    )
+    .expect("attention executes on CUDA");
+    assert_eq!(out.shape, vec![1, 2, 2]);
+    // The defect this proves absent: the softmax link recorded nothing, so
+    // no gradient reached any of the three inputs.
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    for (id, name) in [(qid, "query"), (kid, "key"), (vid, "value")] {
+        let grad = grads
+            .get(id)
+            .unwrap_or_else(|| panic!("{name} has no gradient"));
+        assert_eq!(grad.shape, vec![1, 2, 2], "{name} gradient shape");
+        let values = download_f32_host(grad).unwrap();
+        assert!(
+            values.iter().all(|v| v.is_finite()),
+            "{name} gradient is not finite: {values:?}"
+        );
+        assert!(
+            values.iter().any(|v| *v != 0.0),
+            "{name} gradient is all zeros"
+        );
+    }
+}

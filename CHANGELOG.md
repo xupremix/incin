@@ -121,6 +121,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   red-then-green (stash round-trips for the first two). What remains of the
   GPU-training gap is `dropout`, `group_norm` and `instance_norm`.
 
+- **Three more training-capable CUDA rows that recorded nothing: `softmax`,
+  `rms_norm`, `transpose_view` -- plus attention end to end.** Each
+  advertised training while its backward silently dropped, the same defect
+  class as cross-entropy's gather link. `softmax` now composes from tracked
+  primitives (`log_softmax` plus `exp`), which also makes its docstring true;
+  `rms_norm` saves one norm factor per row and replays a hand recipe built
+  only from tracked primitives; `transpose_view`'s recipe materializes
+  rather than viewing again, because a strided gradient would read back
+  flat. Scaled dot-product attention trains through all of them. Four
+  hardware tests prove it against CPU references and hand definitions, each
+  inverted red-then-green. Writing the rms test caught a real formula slip
+  first: the weight gradient summed `g*w*z` instead of `g*z`, understating
+  every lane by its own weight -- CPU parity does not negotiate.
+
 - **The reference page taught testing instead of usage.** Every section ended
   in a dump of worked examples while the items themselves showed either
   nothing or one-line occurrence matches, and the pool behind both included
