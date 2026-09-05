@@ -6942,19 +6942,19 @@ pub fn incin_core::onnx::OnnxImporter<'a>::new(&'a std::path::Path) -> Self
 pub fn incin_core::onnx::export_to_onnx(&incin_core::graph::Graph, &std::path::Path) -> anyhow::Result<()>
 pub fn incin_core::optim::Adam<B, K>::from_group(incin_core::optim::ParameterGroup<B, K>, f64) -> Self where K: incin_core::prelude::ConstDType
 pub fn incin_core::optim::Adam<B, K>::from_module<M>(&M, f64) -> incin_core::error::Result<Self> where M: incin_core::nn::module::VisitParameters<B>, K: incin_core::prelude::ConstDType
-pub fn incin_core::optim::Adam<B, K>::load_state_dict(&mut self, &str, &alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()>
+pub fn incin_core::optim::Adam<B, K>::load_state_dict(&mut self, &str, &alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::HostReadback
 pub fn incin_core::optim::Adam<B, K>::new(alloc::collections::btree::map::BTreeMap<alloc::string::String, <B as incin_core::backend_authoring::VariableBackend>::Var>, f64) -> Self
 pub fn incin_core::optim::Adam<B, K>::set_step_count(&mut self, usize)
-pub fn incin_core::optim::Adam<B, K>::state_dict(&self, &str, &mut alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()>
+pub fn incin_core::optim::Adam<B, K>::state_dict(&self, &str, &mut alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::optim::Adam<B, K>::step(&mut self, &incin_core::autograd::Gradients<B>) -> incin_core::error::Result<()>
 pub fn incin_core::optim::Adam<B, K>::step_count(&self) -> usize
 pub fn incin_core::optim::Adam<B, K>::step_scaled(&mut self, &mut incin_core::autograd::Gradients<B>, &mut incin_core::exec::precision::LossScaleState) -> incin_core::error::Result<bool>
 pub fn incin_core::optim::AdamW<B, K>::from_group(incin_core::optim::ParameterGroup<B, K>, f64) -> Self where K: incin_core::prelude::ConstDType
 pub fn incin_core::optim::AdamW<B, K>::from_module<M>(&M, f64) -> incin_core::error::Result<Self> where M: incin_core::nn::module::VisitParameters<B>, K: incin_core::prelude::ConstDType
-pub fn incin_core::optim::AdamW<B, K>::load_state_dict(&mut self, &str, &alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()>
+pub fn incin_core::optim::AdamW<B, K>::load_state_dict(&mut self, &str, &alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::HostReadback
 pub fn incin_core::optim::AdamW<B, K>::new(alloc::collections::btree::map::BTreeMap<alloc::string::String, <B as incin_core::backend_authoring::VariableBackend>::Var>, f64) -> Self
 pub fn incin_core::optim::AdamW<B, K>::set_step_count(&mut self, usize)
-pub fn incin_core::optim::AdamW<B, K>::state_dict(&self, &str, &mut alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()>
+pub fn incin_core::optim::AdamW<B, K>::state_dict(&self, &str, &mut alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K>>) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::optim::AdamW<B, K>::step(&mut self, &incin_core::autograd::Gradients<B>) -> incin_core::error::Result<()>
 pub fn incin_core::optim::AdamW<B, K>::step_count(&self) -> usize
 pub fn incin_core::optim::AdamW<B, K>::step_scaled(&mut self, &mut incin_core::autograd::Gradients<B>, &mut incin_core::exec::precision::LossScaleState) -> incin_core::error::Result<bool>

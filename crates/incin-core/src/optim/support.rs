@@ -8,10 +8,15 @@
 
 use super::group::PreparedUpdate;
 use super::traits::OptimizerBackend;
+use crate::backend_authoring::{Capabilities, Execute};
 use crate::err::{Error, ErrorMessage, Result};
-use crate::shapes::Dyn;
-use crate::tensor::backend::VariableBackend;
+use crate::exec::catalog::{FullAttributes, op};
+use crate::exec::dispatch;
+use crate::exec::{ExecutionContext, GradMode};
+use crate::shapes::{Dyn, ShapeBuf, ShapeValue};
+use crate::tensor::backend::{HostReadback, VariableBackend};
 use crate::tensor::base::Tensor;
+use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
 use alloc::string::{String, ToString};
 
@@ -135,6 +140,109 @@ type AdamState<S> = (
     alloc::collections::BTreeMap<String, S>,
     alloc::collections::BTreeMap<String, S>,
 );
+
+/// Suffix of the scalar entry carrying the Adam-family step counter.
+const ADAM_STEP_SUFFIX: &str = "step";
+
+/// Persist the Adam-family step counter alongside the moment buffers.
+///
+/// Bias correction divides by `1 - beta^t`, so a resumed run that restores
+/// `m`/`v` but not `t` silently mis-corrects every update until the counter
+/// coincidentally realigns. The counter travels as a scalar tensor under
+/// `{prefix.}step`, so it survives the same serialization formats the moments
+/// do. `f64` holds every realistic step count exactly; the value is produced
+/// by the `Full` creation op, which every backend implements.
+pub(super) fn save_adam_step<B, K>(
+    prefix: &str,
+    step: usize,
+    dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+) -> Result<()>
+where
+    B: VariableBackend + Capabilities + Execute<op::Full>,
+    K: DType,
+    <B as Execute<op::Full>>::Output: Into<B::Storage<K>>,
+{
+    let dtype_field: K::Field = Default::default();
+    let device_field: <B::Device as Device>::Field = Default::default();
+    let dtype = K::descriptor(&dtype_field);
+    let device = B::Device::to_incin(&device_field)?;
+    let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
+    let expected = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&[])).map_err(Error::Shape)?;
+    let inner = dispatch::execute_shaped::<op::Full, B, Dyn>(
+        &context,
+        FullAttributes {
+            shape: alloc::vec![],
+            dtype,
+            device,
+            value: step as f64,
+        },
+        &[],
+        &expected,
+    )
+    .map(Into::into)
+    .map_err(Error::from)?;
+    let tensor = Tensor::<Dyn, B, K>::from_parts(
+        inner,
+        ShapeBuf::from_slice(&[]),
+        dtype_field,
+        device_field,
+        core::marker::PhantomData,
+    )?;
+    let key = if prefix.is_empty() {
+        String::from("step")
+    } else {
+        alloc::format!("{prefix}.{ADAM_STEP_SUFFIX}")
+    };
+    dict.insert(key, tensor);
+    Ok(())
+}
+
+/// Restore the Adam-family step counter saved by [`save_adam_step`].
+///
+/// Returns `Ok(None)` when the dictionary predates the counter entry: those
+/// checkpoints restore moments only, exactly as before, and the caller keeps
+/// whatever counter it holds (set one explicitly with `set_step_count`). A
+/// present-but-malformed entry is a typed error, never a silent default.
+pub(super) fn load_adam_step<B, K>(
+    operation: &'static str,
+    prefix: &str,
+    dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
+) -> Result<Option<usize>>
+where
+    B: VariableBackend + HostReadback,
+    K: DType,
+{
+    let key = if prefix.is_empty() {
+        String::from("step")
+    } else {
+        alloc::format!("{prefix}.{ADAM_STEP_SUFFIX}")
+    };
+    let Some(tensor) = dict.get(&key) else {
+        return Ok(None);
+    };
+    let storage = tensor.inner();
+    if !B::shape(storage).is_empty() {
+        return Err(invalid_optimizer_config(
+            operation,
+            "optimizer step entry must be a scalar tensor",
+        ));
+    }
+    let values = B::float_to_vec1::<K>(storage)?;
+    if values.len() != 1 {
+        return Err(invalid_optimizer_config(
+            operation,
+            "optimizer step entry must hold exactly one value",
+        ));
+    }
+    let value = values[0];
+    if !value.is_finite() || value < 0.0 {
+        return Err(invalid_optimizer_config(
+            operation,
+            "optimizer step counter must be a finite non-negative number",
+        ));
+    }
+    Ok(Some(value.round() as usize))
+}
 
 pub(super) fn load_adam_state<B: VariableBackend, K: DType>(
     operation: &'static str,

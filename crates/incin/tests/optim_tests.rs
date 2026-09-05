@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use incin::backend_authoring::{HostInterop, VariableBackend};
 use incin::optim::ParameterGroup;
 use incin::prelude::*;
+use incin::state::{collect_state, load_state};
 use incin::{Adam, AdamW, SGD};
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
@@ -109,58 +110,99 @@ fn test_adamw() -> Result<()> {
     Ok(())
 }
 
+/// A twin of `src` with bitwise-identical initial parameters, via the public
+/// model-state round trip. Lets a resumed run be compared against an
+/// uninterrupted one update-for-update.
+fn twin_linear(
+    src: &Linear<s![10, 5], CpuBackendImpl>,
+) -> Result<Linear<s![10, 5], CpuBackendImpl>> {
+    let mut twin = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let snapshot = collect_state::<CpuBackendImpl, _>(src)?;
+    load_state::<CpuBackendImpl, _>(&mut twin, &snapshot)?;
+    Ok(twin)
+}
+
 #[test]
 fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
-    let (linear, grads) = get_linear_and_grads()?;
-    let mut optim1 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    let linear_a = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let linear_b = twin_linear(&linear_a)?;
+    let mut optim_a = Adam::<CpuBackendImpl>::from_module(&linear_a, 0.01)?;
+    let mut optim_b = Adam::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
 
-    // Step 1
-    optim1.step(&grads)?;
-    assert_eq!(optim1.step_count(), 1);
+    // Step 1 on both runs; identical inits and inputs give identical states.
+    optim_a.step(&grads_for(&linear_a)?)?;
+    optim_b.step(&grads_for(&linear_b)?)?;
+    assert_eq!(optim_a.step_count(), 1);
 
-    // Save optimizer state
+    // Save run A; the counter travels as a scalar `step` entry next to `m.*`
+    // and `v.*`, so no manual `set_step_count` is needed on resume.
     let mut state = BTreeMap::new();
-    optim1.state_dict("", &mut state)?;
-    assert!(!state.is_empty());
+    optim_a.state_dict("", &mut state)?;
+    assert!(state.contains_key("step"));
 
-    // Create a new optimizer instance and load state
-    let mut optim2 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
-    optim2.load_state_dict("", &state)?;
-    optim2.set_step_count(optim1.step_count());
+    // Resume run B from run A's state and step both a second time.
+    let mut resumed = Adam::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
+    resumed.load_state_dict("", &state)?;
+    assert_eq!(resumed.step_count(), 1);
+    optim_a.step(&grads_for(&linear_a)?)?;
+    resumed.step(&grads_for(&linear_b)?)?;
 
-    assert_eq!(optim2.step_count(), 1);
-    // Step again with restored momentum state, against gradients recorded after
-    // the first step replaced the parameter storage.
-    let grads = grads_for(&linear)?;
-    optim2.step(&grads)?;
-    assert_eq!(optim2.step_count(), 2);
+    // Same moments, same counter, same gradients: bitwise-identical updates.
+    // A counter restored wrong would mis-correct here and diverge.
+    assert_eq!(optim_a.step_count(), 2);
+    assert_eq!(resumed.step_count(), 2);
+    assert_eq!(parameter_bytes(&linear_a)?, parameter_bytes(&linear_b)?);
 
     Ok(())
 }
 
 #[test]
 fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
-    let (linear, grads) = get_linear_and_grads()?;
-    let mut optim1 = AdamW::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    let linear_a = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let linear_b = twin_linear(&linear_a)?;
+    let mut optim_a = AdamW::<CpuBackendImpl>::from_module(&linear_a, 0.01)?;
+    let mut optim_b = AdamW::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
 
-    optim1.step(&grads)?;
-    assert_eq!(optim1.step_count(), 1);
+    optim_a.step(&grads_for(&linear_a)?)?;
+    optim_b.step(&grads_for(&linear_b)?)?;
 
     let mut state = BTreeMap::new();
+    optim_a.state_dict("", &mut state)?;
+    assert!(state.contains_key("step"));
+
+    let mut resumed = AdamW::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
+    resumed.load_state_dict("", &state)?;
+    assert_eq!(resumed.step_count(), 1);
+    optim_a.step(&grads_for(&linear_a)?)?;
+    resumed.step(&grads_for(&linear_b)?)?;
+
+    assert_eq!(optim_a.step_count(), 2);
+    assert_eq!(resumed.step_count(), 2);
+    assert_eq!(parameter_bytes(&linear_a)?, parameter_bytes(&linear_b)?);
+
+    Ok(())
+}
+
+#[test]
+fn adam_state_without_step_entry_loads_moments_and_keeps_counter() -> Result<()> {
+    // Dictionaries predating the counter entry restore moments only and keep
+    // whatever counter the loader holds.
+    let (linear, grads) = get_linear_and_grads()?;
+    let mut optim1 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    optim1.step(&grads)?;
+    let mut state = BTreeMap::new();
     optim1.state_dict("", &mut state)?;
-    assert!(!state.is_empty());
+    state.remove("step");
 
-    let mut optim2 = AdamW::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    let mut optim2 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    optim2.set_step_count(7);
     optim2.load_state_dict("", &state)?;
-    optim2.set_step_count(optim1.step_count());
+    assert_eq!(optim2.step_count(), 7);
 
-    assert_eq!(optim2.step_count(), 1);
-    // As above: fresh gradients, because the first step replaced the storage
-    // the previous ones were recorded against.
-    let grads = grads_for(&linear)?;
-    optim2.step(&grads)?;
-    assert_eq!(optim2.step_count(), 2);
-
+    // ...and the moments did restore: a step moves the parameters.
+    let before = parameter_bytes(&linear)?;
+    optim2.step(&grads_for(&linear)?)?;
+    assert_ne!(parameter_bytes(&linear)?, before);
     Ok(())
 }
 
@@ -214,7 +256,9 @@ fn adam_step_overflow_preserves_parameters_and_state() -> Result<()> {
     assert_eq!(optim.step_count(), usize::MAX);
     let mut state = BTreeMap::new();
     optim.state_dict("", &mut state)?;
-    assert!(state.is_empty());
+    // Moments were never produced, but the counter is still state: the only
+    // entry is the persisted step.
+    assert_eq!(state.keys().collect::<Vec<_>>(), ["step"]);
     Ok(())
 }
 

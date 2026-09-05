@@ -10,16 +10,18 @@
 
 use super::group::{ParameterGroup, PreparedUpdate};
 use super::support::{
-    commit_parameter_updates, load_adam_state, prepare_adam_update,
-    require_gradients_reached_the_group, validate_adam_config, validate_learning_rate,
-    validate_storage_pair,
+    commit_parameter_updates, load_adam_state, load_adam_step, prepare_adam_update,
+    require_gradients_reached_the_group, save_adam_step, validate_adam_config,
+    validate_learning_rate, validate_storage_pair,
 };
 use super::traits::{Optimizer, OptimizerBackend, ScaledOptimizer};
 use crate::autograd::Gradients;
+use crate::backend_authoring::{Capabilities, Execute};
 use crate::err::{Error, Result};
+use crate::exec::catalog::op;
 use crate::nn::VisitParameters;
 use crate::shapes::{Dyn, ShapeBuf};
-use crate::tensor::backend::{AutogradBackend, VariableBackend};
+use crate::tensor::backend::{AutogradBackend, HostReadback, VariableBackend};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::{ConstDType, DType};
 use alloc::string::String;
@@ -230,12 +232,18 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
         self.step = step;
     }
 
-    /// Exports optimizer state tensors (`m` and `v` momentum buffers).
+    /// Exports optimizer state tensors (`m` and `v` momentum buffers) plus a
+    /// scalar `step` counter entry, so a resumed run bias-corrects with the
+    /// same `t` the moments were accumulated under.
     pub fn state_dict(
         &self,
         prefix: &str,
         dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        B: Execute<op::Full> + Capabilities,
+        <B as Execute<op::Full>>::Output: Into<B::Storage<K>>,
+    {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -263,19 +271,30 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
             )?;
             dict.insert(alloc::format!("{}v.{}", p, name), tensor);
         }
+        save_adam_step(prefix, self.step, dict)?;
         Ok(())
     }
 
     /// Loads optimizer state tensors from a dictionary.
+    ///
+    /// Restores the `step` counter saved by [`state_dict`](Self::state_dict);
+    /// dictionaries predating the counter entry restore moments only and keep
+    /// the current counter (set one explicitly with `set_step_count`).
     pub fn load_state_dict(
         &mut self,
         prefix: &str,
         dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        B: HostReadback,
+    {
         let (next_m, next_v) =
             load_adam_state::<B, K>("adamw_load_state_dict", prefix, &self.params, dict)?;
         self.m = next_m;
         self.v = next_v;
+        if let Some(step) = load_adam_step::<B, K>("adamw_load_state_dict", prefix, dict)? {
+            self.step = step;
+        }
         Ok(())
     }
 }
@@ -452,12 +471,18 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
         self.step = step;
     }
 
-    /// Exports optimizer state tensors (`m` and `v` momentum buffers).
+    /// Exports optimizer state tensors (`m` and `v` momentum buffers) plus a
+    /// scalar `step` counter entry, so a resumed run bias-corrects with the
+    /// same `t` the moments were accumulated under.
     pub fn state_dict(
         &self,
         prefix: &str,
         dict: &mut alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        B: Execute<op::Full> + Capabilities,
+        <B as Execute<op::Full>>::Output: Into<B::Storage<K>>,
+    {
         let p = if prefix.is_empty() {
             alloc::string::String::new()
         } else {
@@ -485,19 +510,30 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
             )?;
             dict.insert(alloc::format!("{}v.{}", p, name), tensor);
         }
+        save_adam_step(prefix, self.step, dict)?;
         Ok(())
     }
 
     /// Loads optimizer state tensors from a dictionary.
+    ///
+    /// Restores the `step` counter saved by [`state_dict`](Self::state_dict);
+    /// dictionaries predating the counter entry restore moments only and keep
+    /// the current counter (set one explicitly with `set_step_count`).
     pub fn load_state_dict(
         &mut self,
         prefix: &str,
         dict: &alloc::collections::BTreeMap<String, Tensor<Dyn, B, K>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        B: HostReadback,
+    {
         let (next_m, next_v) =
             load_adam_state::<B, K>("adam_load_state_dict", prefix, &self.params, dict)?;
         self.m = next_m;
         self.v = next_v;
+        if let Some(step) = load_adam_step::<B, K>("adam_load_state_dict", prefix, dict)? {
+            self.step = step;
+        }
         Ok(())
     }
 }
