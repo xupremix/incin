@@ -87,7 +87,7 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-    L: Layout,
+    L: Layout<S>,
 > Tensor<S, B, K, G, P, L>
 {
     /// Reshape this tensor using a [`ShapeSpec`].
@@ -471,7 +471,7 @@ impl<
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     /// Flattens a statically selected inclusive axis range.

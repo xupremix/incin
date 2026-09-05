@@ -6,7 +6,7 @@
 //! `ChannelsLast` does not implement it, so this is refused. That refusal is
 //! conservative rather than proven: because the dims are preserved, and because
 //! channels-last strides are a function of the dims alone, restating
-//! `ChannelsLast<S1>` as `ChannelsLast<S2>` over identical dims would in fact
+//! `ChannelsLast` as `ChannelsLast` over identical dims would in fact
 //! be sound. The impl is missing, not impossible.
 //!
 //! The real guard against reinterpreting a channels-last buffer under different
@@ -31,8 +31,8 @@ type Nchw = s![1, 2, 2, 2];
 type Permuted = s![2, 1, 2, 2];
 
 fn restate(
-    t: Tensor<Nchw, CpuBackendImpl, f32, NoGrad, Local, ChannelsLast<Nchw>>,
-) -> Tensor<Permuted, CpuBackendImpl, f32, NoGrad, Local, ChannelsLast<Permuted>> {
+    t: Tensor<Nchw, CpuBackendImpl, f32, NoGrad, Local, ChannelsLast>,
+) -> Tensor<Permuted, CpuBackendImpl, f32, NoGrad, Local, ChannelsLast> {
     t.into_shape::<Permuted>().unwrap()
 }
 

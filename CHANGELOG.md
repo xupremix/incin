@@ -8,6 +8,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the layout parameter moved from the marker onto the trait.**
+  `Layout` is now `Layout<S>`, and `RowMajor` and `ChannelsLast` are unit
+  structs. The shape is written once:
+
+  ```text
+  // was
+  let x: Tensor<s![1,2,2,2], B, f32, NoGrad, Local, ChannelsLast<s![1,2,2,2]>> = ..;
+  // now
+  let x: Tensor<s![1,2,2,2], B, f32, NoGrad, Local, ChannelsLast> = ..;
+  ```
+
+  This is not only ergonomics. `LayoutOf<S>` was the trait that stated a layout
+  describes a tensor of shape `S`, and nothing in the crate bounded anything on
+  it -- it appeared in two tests and no production code, while `Tensor` bounded
+  its layout on the shape-free `Layout`. So
+  `Tensor<s![2, 3], B, f32, NoGrad, Local, RowMajor<s![9, 9, 9]>>` -- a rank-two
+  tensor carrying a rank-three row-major claim -- was a well-formed type that
+  compiled. `Layout<S>` closes that by construction: the marker has no shape of
+  its own to disagree with. `tests/compile_fail/layout_must_match_its_shape.rs`
+  pins it.
+
+  `LayoutOf<S>` is gone, folded into `Layout<S>`. `RestateFor<S2>` is now
+  `Restatable`: with no shape on the marker there is no `Restated` type to
+  project, so what remains is the permission itself, and the congruence with
+  the destination shape becomes an ordinary bound the compiler checks --
+  `into_shape` now reads `L: Restatable + Layout<S2>`.
+
+  Two consequences worth knowing. A layout parameter shared by tensors of
+  different shapes must now describe each of them, which `LSTM`'s input and
+  hidden states made explicit for the first time. And rejections read far
+  better: `ChannelsLast: Restatable is not satisfied` in place of a line of
+  typenum.
+
+  What this does *not* fix: `ChannelsLast` is rank-four but still implements
+  `Layout<S>` for every `S`, its rank guard living in its constants rather than
+  its impl, so a channels-last claim on a rank-two tensor is still accepted.
+  Bounding that away needs a rank predicate the shape system does not expose.
+
 ### Added
 
 - **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**

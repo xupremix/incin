@@ -228,7 +228,7 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::LayerNorm>,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    L: Layout<InS>,
 > Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for LayerNorm<S, B, K, Train>
 where
     <B as Execute<op::LayerNorm>>::Output: Into<B::Storage<K>>,

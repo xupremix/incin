@@ -110,7 +110,7 @@ pub enum PlacedTensorError {
     },
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>>
     Tensor<S, B, K, G, P, L>
 {
     /// Join one rank's storage to a sealed distributed lowering proof.

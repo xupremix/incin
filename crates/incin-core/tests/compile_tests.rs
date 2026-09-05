@@ -39,7 +39,9 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("reshape_view_needs_contiguous", "E0277"),
         // Matched on the trait rather than the code: the point is that the
         // *restate* bound is what refuses, not that some method was missing.
-        ("into_shape_rejects_channels_last", "RestateFor"),
+        ("into_shape_rejects_channels_last", "Restatable"),
+        // The mismatch is unspellable now: the marker takes no shape.
+        ("layout_must_match_its_shape", "E0107"),
         ("named_broadcast_identity_mismatch", "E0277"),
         ("concat_static_mismatch", "E0277"),
         ("checked_byte_len_is_private", "E0423"),

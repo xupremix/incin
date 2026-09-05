@@ -10,7 +10,7 @@ type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
 
 /// Generic over the layout: `into_dyn` erases the *shape* proof and keeps the
 /// layout one, so callers reach here holding either.
-fn to_vec<L: Layout>(t: &Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, L>) -> Vec<f32> {
+fn to_vec<L: Layout<Dyn>>(t: &Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, L>) -> Vec<f32> {
     t.to_vec1::<f32>().unwrap()
 }
 

@@ -1,13 +1,22 @@
-error[E0599]: the method `into_shape` exists for struct `incin::prelude::Tensor<DimCons<UInt<UTerm, B1>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>>>>, CpuBackendImpl, f32, incin::prelude::NoGrad, incin::dist::Local, ChannelsLast<DimCons<UInt<UTerm, B1>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>>>>>>`, but its trait bounds were not satisfied
+error[E0277]: the trait bound `ChannelsLast: Restatable` is not satisfied
   --> tests/compile_fail/into_shape_rejects_channels_last.rs:36:7
    |
 36 |     t.into_shape::<Permuted>().unwrap()
-   |       ^^^^^^^^^^
+   |       ^^^^^^^^^^ the trait `Restatable` is not implemented for `ChannelsLast`
    |
-  ::: src/shapes/layout.rs
+help: the following other types implement trait `Restatable`
+  --> src/shapes/layout.rs
    |
-   | pub struct ChannelsLast<S>(PhantomData<fn() -> S>);
-   | -------------------------- doesn't satisfy `_: RestateFor<_>`
+   | impl Restatable for Dyn {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^ `Dyn`
+...
+   | impl Restatable for RowMajor {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `RowMajor`
+note: required by a bound in `base::convert::<impl incin::prelude::Tensor<S1, B, K, G, incin::dist::Local, L>>::into_shape`
+  --> src/tensor/base/convert.rs
    |
-   = note: the following trait bounds were not satisfied:
-           `ChannelsLast<DimCons<UInt<UTerm, B1>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>>>>>: RestateFor<_>`
+   |     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G, Local, L>>
+   |            ---------- required by a bound in this associated function
+...
+   |         L: crate::shapes::Restatable + crate::shapes::Layout<S2>,
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `base::convert::<impl Tensor<S1, B, K, G, Local, L>>::into_shape`

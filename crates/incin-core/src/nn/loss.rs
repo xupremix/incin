@@ -51,8 +51,8 @@ impl<R: ReductionMode> MSELoss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::MseLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
-        L1: crate::shapes::Layout,
-        L2: crate::shapes::Layout,
+        L1: crate::shapes::Layout<S>,
+        L2: crate::shapes::Layout<S>,
     >(
         &self,
         pred: &Tensor<S, B, K, G, Local, L1>,
@@ -138,8 +138,8 @@ impl<R: ReductionMode> CrossEntropyLoss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::CrossEntropyLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
-        L1: crate::shapes::Layout,
-        L2: crate::shapes::Layout,
+        L1: crate::shapes::Layout<S1>,
+        L2: crate::shapes::Layout<S2>,
     >(
         &self,
         pred: &Tensor<S1, B, K, G, Local, L1>,
@@ -218,8 +218,8 @@ impl<R: ReductionMode> L1Loss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::L1Loss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
-        L1: crate::shapes::Layout,
-        L2: crate::shapes::Layout,
+        L1: crate::shapes::Layout<S>,
+        L2: crate::shapes::Layout<S>,
     >(
         &self,
         pred: &Tensor<S, B, K, G, Local, L1>,
@@ -292,8 +292,8 @@ impl<R: ReductionMode> BCEWithLogitsLoss<R> {
         B: Backend + crate::exec::Capabilities + Execute<op::BceWithLogitsLoss>,
         K: crate::tensor::dtype::DType,
         G: RequiresGrad,
-        L1: crate::shapes::Layout,
-        L2: crate::shapes::Layout,
+        L1: crate::shapes::Layout<S>,
+        L2: crate::shapes::Layout<S>,
     >(
         &self,
         pred: &Tensor<S, B, K, G, Local, L1>,

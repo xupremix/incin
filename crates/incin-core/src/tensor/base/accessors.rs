@@ -8,7 +8,7 @@ use crate::tensor::device::{Device, DeviceId};
 use crate::tensor::dtype::{DType, DTypeId};
 use crate::tensor::grad::RequiresGrad;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>>
     Tensor<S, B, K, G, P, L>
 {
     #[inline]
@@ -92,7 +92,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>>
     Tensor<S, B, K, G, P, L>
 {
     #[inline]

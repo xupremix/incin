@@ -56,7 +56,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     /// let proven = t.into_row_major()?;
     /// let flat = proven.reshape_flat::<s![12]>()?;
     /// ```
-    pub fn into_row_major(self) -> Result<Tensor<S, B, K, G, P, RowMajor<S>>> {
+    pub fn into_row_major(self) -> Result<Tensor<S, B, K, G, P, RowMajor>> {
         let meta = B::metadata::<K>(&self.inner);
         let dims = meta.shape().as_ref();
         let strides = meta.strides().as_ref();
@@ -129,11 +129,11 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     /// let t: Tensor<s![1, 2, 2, 2], B> = Tensor::zeros(())?;
     ///
     /// // A fresh allocation is dense, so the row-major claim is granted.
-    /// let dense = t.clone().into_layout::<RowMajor<s![1, 2, 2, 2]>>()?;
+    /// let dense = t.clone().into_layout::<RowMajor>()?;
     /// assert_eq!(dense.dims().as_ref(), &[1, 2, 2, 2]);
     ///
     /// // The same buffer is not channels-last, and saying so is refused.
-    /// assert!(t.into_layout::<ChannelsLast<s![1, 2, 2, 2]>>().is_err());
+    /// assert!(t.into_layout::<ChannelsLast>().is_err());
     /// # Ok::<(), incin_core::error::Result<()>>(()).ok();
     /// # Ok::<(), incin_core::error::Error>(())
     /// ```
@@ -184,7 +184,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement> Tensor<S, B,
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>>
     Tensor<S, B, K, G, P, L>
 {
     /// Discards whatever the type settled about layout, returning the same
@@ -244,18 +244,18 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     /// mismatched reshape is also a compile error rather than an
     /// `Err(ShapeMismatch)`.
     ///
-    /// The result carries [`RowMajor<S2>`], since a contiguous run reinterpreted
+    /// The result carries [`RowMajor`], since a contiguous run reinterpreted
     /// under a new shape is dense in that shape by construction.
     ///
     /// [`Contiguous`]: crate::shapes::Contiguous
     /// [`ElementCount`]: crate::shapes::ElementCount
-    /// [`RowMajor<S2>`]: crate::shapes::RowMajor
+    /// [`RowMajor`]: crate::shapes::RowMajor
     ///
     /// # Errors
     ///
     /// Returns an error only if the runtime dimensions cannot be resolved for
     /// `S2`; the shape-compatibility question is already settled statically.
-    pub fn reshape_view<S2>(self) -> Result<Tensor<S2, B, K, G, P, RowMajor<S2>>>
+    pub fn reshape_view<S2>(self) -> Result<Tensor<S2, B, K, G, P, RowMajor>>
     where
         L: crate::shapes::Contiguous,
         S2: Shape,

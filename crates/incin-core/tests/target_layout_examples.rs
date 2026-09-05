@@ -48,8 +48,7 @@ fn an_unallocatable_layout_is_refused_at_construction() {
     // `zeros_in` rather than `tensor_in` only because `TensorData` covers
     // rank one and two arrays.
     type Nchw = s![1, 2, 2, 2];
-
-    let refused = Cpu.zeros_in::<ChannelsLast<Nchw>, _>(ShapeArgs::new(Default::default()));
+    let refused = Cpu.zeros_in::<ChannelsLast, ShapeArgs<Nchw>>(ShapeArgs::new(Default::default()));
     assert!(
         refused.is_err(),
         "no backend uploads host bytes in channels-last order yet, so the \
@@ -75,12 +74,12 @@ fn the_refusal_is_decided_by_strides() {
     type Nchw = s![1, 2, 2, 2];
 
     assert_eq!(
-        <RowMajor<Nchw> as FreshLayout<Nchw>>::strides(&dims).as_ref(),
+        <RowMajor as FreshLayout<Nchw>>::strides(&dims).as_ref(),
         dense_strides(&dims).as_ref(),
         "row-major asks for the dense strides, so it is allocatable"
     );
     assert_ne!(
-        <ChannelsLast<Nchw> as FreshLayout<Nchw>>::strides(&dims).as_ref(),
+        <ChannelsLast as FreshLayout<Nchw>>::strides(&dims).as_ref(),
         dense_strides(&dims).as_ref(),
         "channels-last does not, which is exactly why case 3 fails"
     );
@@ -91,7 +90,7 @@ fn the_refusal_is_decided_by_strides() {
 #[test]
 fn zeros_in_yields_a_usable_proof() {
     let x: Dense2x3 = Cpu
-        .zeros_in::<RowMajor<s![2, 3]>, _>(ShapeArgs::new(Default::default()))
+        .zeros_in::<RowMajor, _>(ShapeArgs::new(Default::default()))
         .unwrap();
 
     // The proof is usable with no runtime stride scan.
@@ -104,7 +103,7 @@ fn zeros_in_yields_a_usable_proof() {
 #[test]
 fn a_target_proof_composes_with_operations() {
     let x: Dense2x3 = Cpu
-        .zeros_in::<RowMajor<s![2, 3]>, _>(ShapeArgs::new(Default::default()))
+        .zeros_in::<RowMajor, _>(ShapeArgs::new(Default::default()))
         .unwrap();
 
     // Pointwise states `RowMajor` of its own result rather than carrying the
@@ -121,10 +120,10 @@ fn into_layout_checks_rather_than_assumes() {
         incin_core::prelude::Tensor::zeros(()).unwrap();
 
     // A fresh allocation really is dense, so the claim is granted.
-    assert!(t.clone().into_layout::<RowMajor<Nchw>>().is_ok());
+    assert!(t.clone().into_layout::<RowMajor>().is_ok());
 
     // The same buffer is not channels-last, and saying so is refused.
-    let refused = t.into_layout::<ChannelsLast<Nchw>>();
+    let refused = t.into_layout::<ChannelsLast>();
     assert!(
         refused.is_err(),
         "into_layout compares strides; a dense buffer is not channels-last"
@@ -207,12 +206,8 @@ fn rank_three_and_four_literals_flatten_row_major() {
 fn a_channels_last_tensor_is_built_with_its_elements_interleaved() {
     use incin_core::backend_authoring::StorageBackend;
 
-    type Nchw = s![1, 2, 2, 2];
     let x = Cpu
-        .tensor_in::<ChannelsLast<Nchw>, _>([[
-            [[1.0f32, 2.0], [3.0, 4.0]],
-            [[5.0, 6.0], [7.0, 8.0]],
-        ]])
+        .tensor_in::<ChannelsLast, _>([[[[1.0f32, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]])
         .unwrap();
 
     // The type claims channels-last, and the metadata agrees: stride[C] == 1.
@@ -270,7 +265,7 @@ fn a_channels_last_tensor_is_built_with_its_elements_interleaved() {
         .tensor([[[[1.0f32, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]])
         .unwrap();
     assert!(
-        dense.into_layout::<ChannelsLast<Nchw>>().is_err(),
+        dense.into_layout::<ChannelsLast>().is_err(),
         "into_layout compares strides; a dense buffer is not channels-last"
     );
 }
@@ -348,7 +343,7 @@ fn the_layout_comes_first_because_the_data_type_is_always_inferable() {
     // The explicit form still works, and this is where the placeholder lands:
     // trailing, on the parameter that never needed naming.
     let d = Cpu
-        .tensor_in::<RowMajor<Arr2x2>, _>([[1.0f32, 2.0], [3.0, 4.0]])
+        .tensor_in::<RowMajor, _>([[1.0f32, 2.0], [3.0, 4.0]])
         .unwrap();
     assert_eq!(d.dims().as_ref(), &[2, 2]);
 }

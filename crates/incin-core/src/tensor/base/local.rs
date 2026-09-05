@@ -27,7 +27,7 @@ enum ConstructionWitness {
 /// Generic over the layout parameter so a caller that has proven something
 /// about its buffer keeps that proof through construction. `Self` carries `L`,
 /// so these neither invent nor discard a claim.
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout> Tensor<S, B, K, G, Local, L> {
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S>> Tensor<S, B, K, G, Local, L> {
     /// Wraps a gradient buffer produced for `source`.
     ///
     /// The gradient's layout is deliberately `Dyn` rather than `source`'s.

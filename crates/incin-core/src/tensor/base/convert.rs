@@ -10,8 +10,13 @@ use crate::tensor::dtype::{DType, FloatDType};
 use crate::tensor::grad::{Grad, NoGrad, RequiresGrad};
 use core::marker::PhantomData;
 
-impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: crate::shapes::Layout>
-    Tensor<S, B, K, Grad, P, L>
+impl<
+    S: Shape,
+    B: Backend + AutogradBackend,
+    K: FloatDType,
+    P: Placement,
+    L: crate::shapes::Layout<S>,
+> Tensor<S, B, K, Grad, P, L>
 {
     /// Computes a vector-Jacobian product using an explicit output cotangent.
     pub fn backward_with(
@@ -34,7 +39,7 @@ impl<S: Shape, B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: cra
     }
 }
 
-impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: crate::shapes::Layout>
+impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: crate::shapes::Layout<Nil>>
     Tensor<Nil, B, K, Grad, P, L>
 {
     /// Computes the backward pass for a scalar tensor.
@@ -96,23 +101,26 @@ impl<S: Shape, B: Backend, K: DType, P: Placement> Tensor<S, B, K, Grad, P> {
 ///
 /// Generic over the operand's layout, and the result *keeps* it -- restated
 /// against the new shape type by
-/// [`RestateFor`](crate::shapes::RestateFor). These are the exception to "a
+/// [`Restatable`](crate::shapes::Restatable). These are the exception to "a
 /// layout describes one geometry and cannot be carried to another", because
 /// they change no geometry: the same buffer keeps the same strides over the
 /// same extents, and only the type describing those extents differs. The
 /// runtime check that makes them fallible is exactly the check that the two
 /// shapes agree.
-impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
+impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S1>>
     Tensor<S1, B, K, G, Local, L>
 {
     /// Converts this tensor to a new static shape S2.
     ///
     /// A layout proof survives: `S2::try_from_dims` fails unless `S2` covers
-    /// the very dims the tensor already has, so a `RowMajor<S>` operand comes
-    /// back as `RowMajor<S2>` over the identical strides.
-    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
+    /// the very dims the tensor already has, so a `RowMajor` operand comes
+    /// back as `RowMajor` over the identical strides.
+    pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G, Local, L>>
     where
-        L: crate::shapes::RestateFor<S2>,
+        // The result is typed `S2`, so the layout has to describe `S2` as well.
+        // That congruence used to be implied by `RestateFor`'s projection; it
+        // is now a bound the compiler checks at the call site.
+        L: crate::shapes::Restatable + crate::shapes::Layout<S2>,
     {
         let dims = self._shape.shape_buf();
         let s2_shape = S2::try_from_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
@@ -123,9 +131,9 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     ///
     /// Erases the *shape* proof, not the layout one. Widening `S` to `Dyn`
     /// leaves the buffer and its strides untouched.
-    pub fn into_dyn(self) -> Tensor<crate::shapes::Dyn, B, K, G, Local, L::Restated>
+    pub fn into_dyn(self) -> Tensor<crate::shapes::Dyn, B, K, G, Local, L>
     where
-        L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+        L: crate::shapes::Restatable + crate::shapes::Layout<crate::shapes::Dyn>,
     {
         let dims = self._shape.shape_buf();
         // `Dyn`'s field *is* the dimension vector, so there is nothing to
@@ -144,9 +152,9 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     }
 
     /// Copies and converts this tensor to a new static shape S2.
-    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G, Local, L::Restated>>
+    pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G, Local, L>>
     where
-        L: crate::shapes::RestateFor<S2>,
+        L: crate::shapes::Restatable + crate::shapes::Layout<S2>,
     {
         let dims = self._shape.shape_buf();
         let s2_shape = S2::try_from_dims(dims.as_ref()).map_err(crate::err::Error::Shape)?;
@@ -160,7 +168,7 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout>
     }
 }
 
-impl<S: Shape, B: Backend, K: FloatDType, L: Layout> Tensor<S, B, K, NoGrad, Local, L> {
+impl<S: Shape, B: Backend, K: FloatDType, L: Layout<S>> Tensor<S, B, K, NoGrad, Local, L> {
     /// Marks this tensor to require gradient tracking.
     ///
     /// Reverse-mode tracking is available only for floating-point dtypes.
@@ -181,7 +189,7 @@ impl<S: Shape, B: Backend, K: FloatDType, L: Layout> Tensor<S, B, K, NoGrad, Loc
     }
 }
 
-impl<S: Shape, B: Backend, K: DType, L: Layout> Tensor<S, B, K, Grad, Local, L> {
+impl<S: Shape, B: Backend, K: DType, L: Layout<S>> Tensor<S, B, K, Grad, Local, L> {
     /// Detaches this tensor from autodiff tape tracking, returning a NoGrad tensor.
     ///
     /// Carries the layout for the same reason [`require_grad`] does: the buffer

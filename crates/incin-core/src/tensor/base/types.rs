@@ -56,7 +56,7 @@ pub struct Tensor<
     // What the type settles about *where* the elements live: strides, offset,
     // alignment, contiguity. Defaulted to `Dyn`, which claims nothing, so
     // every signature written before this parameter existed keeps its meaning.
-    L: Layout = Dyn,
+    L: Layout<S> = Dyn,
 > {
     pub(crate) inner: B::Storage<K>,
     pub(crate) _layout: PhantomData<fn() -> L>,
@@ -68,7 +68,7 @@ pub struct Tensor<
     pub(crate) _placement: P::Field,
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout> Clone
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>> Clone
     for Tensor<S, B, K, G, P, L>
 {
     fn clone(&self) -> Self {
@@ -90,7 +90,7 @@ impl<
     K: DType,
     G: RequiresGrad,
     P: Placement,
-    L: Layout,
+    L: Layout<S>,
 > core::fmt::Display for Tensor<S, B, K, G, P, L>
 {
     /// Renders values the way PyTorch's `print(tensor)` does: the backend's
@@ -140,7 +140,7 @@ impl<
     K: DType,
     G: RequiresGrad,
     P: Placement,
-    L: Layout,
+    L: Layout<S>,
 > core::fmt::Debug for Tensor<S, B, K, G, P, L>
 {
     /// Prints the backend type name, runtime shape, and the backend's own

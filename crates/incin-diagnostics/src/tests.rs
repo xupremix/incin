@@ -616,7 +616,7 @@ fn a_default_layout_is_elided_from_a_tensor_type() {
 /// a tensor that can call `reshape_view` and one that cannot.
 #[test]
 fn a_proven_layout_is_never_elided() {
-    let label = "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, RowMajor<Dyn>>";
+    let label = "Tensor<Dyn, CpuBackendImpl, f32, NoGrad, Local, RowMajor>";
     assert_eq!(humanize_type_signature(label, false).text, label);
 }
 
@@ -645,7 +645,7 @@ fn a_dynamic_shape_is_not_confused_with_a_default_layout() {
 /// alone, whatever its depth.
 #[test]
 fn a_nested_dyn_is_not_mistaken_for_the_layout_slot() {
-    let label = "Tensor<DimCons<A, Dyn>, CpuBackendImpl, f32, NoGrad, Local, RowMajor<S>>";
+    let label = "Tensor<DimCons<A, Dyn>, CpuBackendImpl, f32, NoGrad, Local, RowMajor>";
     assert_eq!(humanize_type_signature(label, false).text, label);
 }
 

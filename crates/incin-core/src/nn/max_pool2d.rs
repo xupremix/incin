@@ -49,7 +49,7 @@ impl<
     P: Unsigned,
     D: Unsigned,
     B: crate::tensor::backend::VariableBackend + Execute<crate::exec::catalog::op::MaxPool2d>,
-    L: Layout,
+    L: Layout<I>,
 > Module<Tensor<I, B, f32, crate::tensor::grad::NoGrad, Local, L>> for MaxPool2d<K, S, P, D>
 where
     B: Capabilities,

@@ -305,7 +305,7 @@ fn mixed_binary_output_is_grad_regardless_of_operand_order() {
     let left = no_grad.clone().try_add(&grad).unwrap();
     let right = grad.try_add(&no_grad).unwrap();
 
-    fn assert_grad<S: Shape, B: Backend, K: DType, L: incin::shapes::Layout>(
+    fn assert_grad<S: Shape, B: Backend, K: DType, L: incin::shapes::Layout<S>>(
         _: &Tensor<S, B, K, Grad, incin::dist::Local, L>,
     ) {
     }

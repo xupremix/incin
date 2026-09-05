@@ -52,8 +52,8 @@ pub use dynamic::*;
 pub use error::*;
 pub use idx::*;
 pub use layout::{
-    ChannelsLast, Contiguous, Dense, FreshDense, FreshLayout, Layout, LayoutOf, Nhwc, RestateFor,
-    RowMajor, dense_strides, scatter_positions,
+    ChannelsLast, Contiguous, Dense, FreshDense, FreshLayout, Layout, Nhwc, Restatable, RowMajor,
+    dense_strides, scatter_positions,
 };
 pub use named::*;
 pub use proof::ProofLevel;

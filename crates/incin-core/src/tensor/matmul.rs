@@ -320,13 +320,13 @@ impl MatMulShape<Dyn> for Dyn {
 /// Generic over both operands' layouts, which need not agree. The result's
 /// layout is stated rather than carried: a matmul produces a differently shaped
 /// tensor, and a layout is only meaningful against the shape it describes.
-impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TLayout: Layout>
+impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TLayout: Layout<S1>>
     Tensor<S1, B, K, G1, Local, TLayout>
 {
     /// Batched matrix multiplication over the trailing two dimensions,
     /// with the output shape checked at compile time via `MatMulShape`.
     #[allow(clippy::type_complexity)]
-    pub fn matmul<S2, G2, L2: Layout>(
+    pub fn matmul<S2, G2, L2: Layout<S2>>(
         &self,
         rhs: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<
@@ -385,7 +385,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     }
 
     /// Computes vector dot product of 1D/matching tensors `self` and `rhs`, returning a scalar tensor.
-    pub fn dot<S2: Shape, L2: Layout>(
+    pub fn dot<S2: Shape, L2: Layout<S2>>(
         &self,
         rhs: &Tensor<S2, B, K, G1, Local, L2>,
         // A dot product collapses to a scalar, so the result describes a
@@ -421,7 +421,7 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     }
 
     /// Fused add-matmul: `beta * self + alpha * (mat1 x mat2)`.
-    pub fn addmm<S2: Shape, S3: Shape, L2: Layout, L3: Layout>(
+    pub fn addmm<S2: Shape, S3: Shape, L2: Layout<S2>, L3: Layout<S3>>(
         &self,
         mat1: &Tensor<S2, B, K, G1, Local, L2>,
         mat2: &Tensor<S3, B, K, G1, Local, L3>,
@@ -471,9 +471,9 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
         S2: Shape,
         S3: Shape,
         S4: Shape,
-        L2: Layout,
-        L3: Layout,
-        L4: Layout,
+        L2: Layout<S2>,
+        L3: Layout<S3>,
+        L4: Layout<S4>,
     >(
         q: &Tensor<S1, B, K, G1, Local, TLayout>,
         k: &Tensor<S2, B, K, G1, Local, L2>,

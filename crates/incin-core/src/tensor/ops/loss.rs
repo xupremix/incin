@@ -30,8 +30,8 @@ fn execute_loss_descriptor<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     G2: RequiresGrad,
-    L: crate::shapes::Layout,
-    L2: crate::shapes::Layout,
+    L: crate::shapes::Layout<S>,
+    L2: crate::shapes::Layout<S2>,
 >(
     prediction: &Tensor<S, B, K, G, Local, L>,
     target: &Tensor<S2, B, K, G2, Local, L2>,
@@ -60,7 +60,7 @@ impl<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    L: crate::shapes::Layout,
+    L: crate::shapes::Layout<S>,
 > Tensor<S, B, K, G, crate::dist::Local, L>
 {
     /// Computes the Cross Entropy loss between predictions and target labels.

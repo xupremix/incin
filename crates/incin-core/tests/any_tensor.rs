@@ -15,7 +15,7 @@ where
     K: DType,
     G: incin_core::tensor::grad::RequiresGrad,
     P: Placement,
-    L: Layout,
+    L: Layout<S>,
 {
     t.numel()
 }

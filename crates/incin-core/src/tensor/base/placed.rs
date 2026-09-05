@@ -10,7 +10,7 @@ use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
 use core::marker::PhantomData;
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>>
     Tensor<S, B, K, G, P, L>
 {
     /// Rebuilds tensor metadata after a checked operation while retaining the
@@ -18,7 +18,7 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout>
     ///
     /// The result's layout is a parameter. A caller with nothing to say passes
     /// `Dyn` and gets what it got before; a caller that *knows* the backend
-    /// allocated a fresh packed buffer passes [`RowMajor<T>`] and gets the proof
+    /// allocated a fresh packed buffer passes [`RowMajor`] and gets the proof
     /// out of the same rebuild. The bound is [`FreshDense<T>`] rather than
     /// [`Layout`] for the reason that trait is sealed: an unbounded parameter
     /// here would let any operation stamp any layout onto its output, which is
