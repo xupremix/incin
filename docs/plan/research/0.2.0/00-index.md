@@ -24,6 +24,28 @@ themselves are left as written rather than edited in place.
   it did not anticipate: a host readback must reject a non-contiguous operand
   rather than copying the whole allocation, or a strided view silently returns
   the wrong window and reports success.
+- **#4 LayerNorm backward** -- closed. Fused backward replaying saved
+  mean/rstd, measured against CPU on hardware; the training cell flipped only
+  after parity.
+- **#103's first slice** -- `scatter_add`, `log_softmax`, `logsumexp_dim`,
+  `logsumexp_keepdim` and now `one_hot` are catalog operations with CPU
+  executors, capability rows and conformance fixtures. Still absent: `sort`,
+  `nonzero`, `repeat_interleave`, `bincount`, `grouped_matmul`. The report's
+  "absent from the 174-operation catalog" is therefore stale for four of the
+  eight; its `DuplicateIndexRule::Accumulate` warning and its determinism
+  contract stand.
+- **#124 topk rewrite** -- closed. `Tensor::topk` travels `execute_shaped_n`
+  with one proof per output instead of untyped dispatch plus unchecked
+  `from_parts`.
+- **#114 optimizers** -- closed. All four optimizers verified against closed
+  forms on hardware.
+- **#84 narrowed by measurement** -- the loss half is done on CUDA (mse, l1,
+  bce-with-logits, cross-entropy, dropout replay, softmax/rms/transpose-view
+  tape entries); what remains is group/instance norms and batch-norm
+  backward (#123).
+- **CUDA movement rows widened** -- transpose, broadcast, narrow and concat
+  claim the dense storage set on CUDA after a byte-exact hardware matrix;
+  catalog 174 operations, 164 backend-executable, oracle floor 163.
 
 **Corrections the later work forced**
 
