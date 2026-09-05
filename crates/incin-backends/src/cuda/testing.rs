@@ -257,6 +257,15 @@ pub fn narrow(t: &CudaStorage, dim: usize, start: usize, len: usize) -> Result<C
     crate::cuda::ops::shape::launch_narrow(t, dim, start, len)
 }
 
+/// Concatenates `tensors` along `dim`, materialising the result.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage> {
+    crate::cuda::ops::shape::launch_concat(tensors, dim)
+}
+
 /// Runs the fused SGD step kernel.
 ///
 /// # Errors

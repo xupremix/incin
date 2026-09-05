@@ -141,24 +141,19 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
 pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = FLOAT_DTYPES,
-    // `broadcast_as` launches `kernels/shape.cu`'s `shape_op`, which has
-    // been width-parametric for a while now (`shape_op_8bit`/`16bit`/
-    // `32bit`/`64bit`, selected by element width at launch): the old comment
-    // here describing an unconditional `float*` kernel survived the kernel
-    // it described. The launch shim caught up too, passing byte buffers
-    // through instead of reinterpreting them as `f32`, which used to panic
-    // for 1- and 2-byte dtypes. Measured on hardware: transpose, broadcast
-    // and narrow move `bool`, `f16` and `i64` to exactly the right places,
-    // and `q8_0` is refused cleanly because a block encoding has no element
-    // width to move by.
-    // The row nevertheless stays `F32_ONLY` for now: a declaration is
-    // widened against evidence for every dtype it would then claim, not the
-    // three measured so far, and that widening belongs with #90's row audit
-    // rather than in a comment fix.
+    // `broadcast_as` launches `kernels/shape.cu`'s `shape_op` through
+    // width-parametric entry points (`shape_op_8bit`/`16bit`/`32bit`/`64bit`,
+    // selected by element width at launch), and the launcher passes byte
+    // buffers through instead of reinterpreting them as `f32`. Measured on
+    // hardware across transpose, broadcast, narrow and concat: `bool`,
+    // `f16`, `bf16`, `f32`, `f64` and `i64` all land byte-exact, so the row
+    // claims the dense storage set. `q8_0` stays out: a block encoding has
+    // no element width to move by, and the kernels refuse it rather than
+    // reinterpret block bytes as scalars (pinned by test).
     // `reshape` does not share this: it never launches `shape_op` at all,
     // only rewraps the same buffer under a new shape, so it stays byte-exact
     // for every dtype `CUDA_STORAGE_DTYPES` names.
-    broadcast = F32_ONLY,
+    broadcast = CUDA_BOOL_SAFE_STORAGE_DTYPES,
     reshape = CUDA_BOOL_SAFE_STORAGE_DTYPES,
     reduction = FLOAT_DTYPES,
     // `zeros`/`ones`/`full`/`arange`/`linspace`/`rand`/`randn` compute in
@@ -176,9 +171,9 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
-    // Same conservative posture as the `broadcast` row above, for the reason
-    // stated there.
-    broadcast_training = F32_ONLY,
+    // Same measured set as the `broadcast` row above, for the reason stated
+    // there: the training path moves the same bytes.
+    broadcast_training = CUDA_BOOL_SAFE_STORAGE_DTYPES,
     reshape_training = FLOAT_DTYPES,
     // The one row widened past `CONTIGUOUS`: the strided elementwise kernel
     // exists, is benchmarked in `view_cost_bench`, and beats materialising for
@@ -282,13 +277,92 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             descriptor_max_rank(OperationKind::RmsNorm),
             true,
         ),
-        // `F32_ONLY`, not `CUDA_STORAGE_DTYPES`/`FLOAT_DTYPES`: see the
-        // `shape_op` byte-width comment on `CUDA_CAPABILITIES`'s own
-        // `broadcast` field above. The coarse row has to match the exact
-        // `BroadcastAs` row it stands beside, or `doctor`'s coarse probe
-        // and a real `broadcast_as` call would disagree about what runs.
-        native(OperationKind::Broadcast, F32_ONLY, CONTIGUOUS, false),
-        native(OperationKind::Broadcast, F32_ONLY, CONTIGUOUS, true),
+        // The dense storage set, matching the exact `BroadcastAs` rows above:
+        // the coarse row has to match the exact row it stands beside, or
+        // `doctor`'s coarse probe and a real `broadcast_as` call would
+        // disagree about what runs.
+        native(
+            OperationKind::Broadcast,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false,
+        ),
+        native(
+            OperationKind::Broadcast,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            true,
+        ),
+        // The movement operations, measured dtype by dtype on hardware across
+        // transpose, broadcast, narrow and concat (see
+        // `tests/cuda_shape_dtypes.rs`): each moves bytes by element width
+        // with no arithmetic, pushes a real tape entry, and refuses block
+        // encodings. One row per training mode, like the coarse `Broadcast`
+        // pair above.
+        native_ranked(
+            OperationKind::TransposeExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::TransposeExact),
+            descriptor_max_rank(OperationKind::TransposeExact),
+            false,
+        ),
+        native_ranked(
+            OperationKind::TransposeExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::TransposeExact),
+            descriptor_max_rank(OperationKind::TransposeExact),
+            true,
+        ),
+        native_ranked(
+            OperationKind::TransposeView,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::TransposeView),
+            descriptor_max_rank(OperationKind::TransposeView),
+            false,
+        ),
+        native_ranked(
+            OperationKind::TransposeView,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::TransposeView),
+            descriptor_max_rank(OperationKind::TransposeView),
+            true,
+        ),
+        native_ranked(
+            OperationKind::Narrow,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Narrow),
+            descriptor_max_rank(OperationKind::Narrow),
+            false,
+        ),
+        native_ranked(
+            OperationKind::Narrow,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Narrow),
+            descriptor_max_rank(OperationKind::Narrow),
+            true,
+        ),
+        native_ranked(
+            OperationKind::ConcatExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::ConcatExact),
+            descriptor_max_rank(OperationKind::ConcatExact),
+            false,
+        ),
+        native_ranked(
+            OperationKind::ConcatExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::ConcatExact),
+            descriptor_max_rank(OperationKind::ConcatExact),
+            true,
+        ),
         native(
             OperationKind::Reshape,
             CUDA_BOOL_SAFE_STORAGE_DTYPES,

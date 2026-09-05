@@ -87,6 +87,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   call with a proof each instead of an untyped dispatch plus unchecked
   `from_parts`, so a tampered second geometry is refused naming output 1.
 
+### Changed
+
+- **CUDA movement rows claim the dense storage set.** Transpose, broadcast,
+  narrow and concat move bytes by element width with no arithmetic, and a
+  byte-exact hardware matrix (`cuda_shape_dtypes.rs`, six dtypes times four
+  kernels times leading/trailing-axis geometries, plus a `q8_0` refusal)
+  proves it -- so `BroadcastAs`, the coarse `Broadcast` pair, and new exact
+  `TransposeExact`/`TransposeView`/`Narrow`/`ConcatExact` rows advertise
+  `i64`, `bf16`, `f16`, `f32`, `f64` and `bool` instead of `f32` alone. A
+  public-dispatch test proves the rows admit what the kernels do (`i64`
+  transpose and broadcast through admission, values checked). The remaining
+  narrow rows (comparisons, creation, selection, scalars) keep their shape
+  for #90's audit.
+
 ### Fixed
 
 - **CUDA `layer_norm` runs its backward.** The fused Welford forward had no
