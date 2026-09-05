@@ -103,6 +103,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   gradient before weighting it, which passes every uniform-weight check and
   fails parity -- the comment in the template names the trap.
 
+- **CUDA losses train: `unbroadcast` completes scalar gradients, and the IR
+  differentiator agrees on `sign(0)`.** Verifying the premise that no CUDA
+  loss trains turned it around: `mse_loss` already trained through composed
+  tape entries, and `l1`, `bce_with_logits_loss` and cross-entropy do too,
+  with two defects fixed along the way. First, `cuda::tape::unbroadcast`
+  reduced leading and size-1 axes but handed anything smaller straight on,
+  so a mean-seeded scalar gradient reached a binary launch that refuses it;
+  it now materializes the broadcast after a compatibility check. Second, the
+  symbolic `diff` answered -1 for `d|x|/dx` at 0 while CPU `Sign`, PyTorch
+  and the hand-written CUDA expression answer 0, so the fused abs path
+  diverged from the unfused one exactly where l1 losses evaluate; the IR
+  nests the select now. Third, the cross-entropy executor called the raw
+  gather launch, which records no tape entry: routing through the tracked
+  gather closes the walk and the logits gradient matches `(softmax -
+  onehot)/batch` by hand. Each fix carries a regression test proven
+  red-then-green (stash round-trips for the first two). What remains of the
+  GPU-training gap is `dropout`, `group_norm` and `instance_norm`.
+
 - **The reference page taught testing instead of usage.** Every section ended
   in a dump of worked examples while the items themselves showed either
   nothing or one-line occurrence matches, and the pool behind both included
