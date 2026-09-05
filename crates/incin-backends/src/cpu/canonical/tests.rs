@@ -1009,3 +1009,60 @@ fn a_non_f32_convolution_operand_is_refused() {
         "the refusal must name the dtype: {message}"
     );
 }
+
+#[test]
+fn topk_typed_path_checks_both_geometries() {
+    use incin_core::exec::catalog::TopKAttributes;
+    use incin_core::shapes::{ShapeBuf, ShapeValue};
+    let context = context();
+    let input = storage(&[3.0, 1.0, 4.0, 1.5], &[4]);
+    let attrs = TopKAttributes {
+        k: 2,
+        axis: 0,
+        largest: true,
+        index_dtype: DTypeId::U32.descriptor(),
+    };
+    let good = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap();
+    let (values, indices) = dispatch::execute_shaped_n::<op::TopK, TestBackend, _>(
+        &context,
+        attrs,
+        &[handle(&input)],
+        &(good.clone(), good.clone()),
+    )
+    .expect("topk travels the typed path");
+    let values: CpuStorage = values;
+    let indices: CpuStorage = indices;
+    assert_eq!(values.shape, vec![2]);
+    // top-2 of [3, 1, 4, 1.5] are 4.0 at 2 and 3.0 at 0.
+    assert_eq!(values.get(&[0]), 4.0);
+    assert_eq!(values.get(&[1]), 3.0);
+    assert_eq!(indices.get(&[0]), 2.0);
+    assert_eq!(indices.get(&[1]), 0.0);
+    // A tampered second proof is refused with its index, not reshaped into.
+    let lying = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[3])).unwrap();
+    let error = dispatch::execute_shaped_n::<op::TopK, TestBackend, _>(
+        &context,
+        TopKAttributes {
+            k: 2,
+            axis: 0,
+            largest: true,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[handle(&input)],
+        &(good, lying),
+    )
+    .expect_err("a wrong second geometry must be refused");
+    assert!(
+        matches!(
+            error,
+            incin_core::exec::dispatch::CanonicalError::Descriptor(
+                incin_core::exec::catalog::DescriptorError::MetadataMismatch {
+                    output: 1,
+                    field: "shape",
+                    ..
+                }
+            )
+        ),
+        "expected an indexed shape refusal, got {error:?}"
+    );
+}

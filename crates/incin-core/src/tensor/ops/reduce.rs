@@ -869,9 +869,14 @@ where
         .map_err(crate::err::Error::Shape)?;
         let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
         let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
+        // Typed dispatch with one proof per output: both geometries travel
+        // the comparison instead of trusting this frontend derivation, which
+        // previously reached the tensors below unchecked through untyped
+        // `execute` plus `from_parts`.
+        let expected = (out_shape.clone(), out_shape.clone());
         let (values_inner, indices_inner) = GradMode::Disabled
             .restrict(|| {
-                crate::exec::dispatch::execute::<op::TopK, B>(
+                crate::exec::dispatch::execute_shaped_n::<op::TopK, B, _>(
                     &context,
                     crate::exec::catalog::TopKAttributes {
                         k,
@@ -880,6 +885,7 @@ where
                         index_dtype: DTypeId::U32.descriptor(),
                     },
                     &[input],
+                    &expected,
                 )
             })?
             .into();

@@ -83,6 +83,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   name the output: count via `OutputArity`, wrong or missing shape via
   `MetadataMismatch` with the index. The `polar_cartesian` example now runs
   its two-output op through the typed path with identical results.
+  `Tensor::topk` follows it: values and indices travel one `execute_shaped_n`
+  call with a proof each instead of an untyped dispatch plus unchecked
+  `from_parts`, so a tampered second geometry is refused naming output 1.
 
 ### Fixed
 
