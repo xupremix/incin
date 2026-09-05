@@ -167,7 +167,7 @@
   }
 
   /* Which backends run this operation by composing others rather than with a
-     kernel of their own. 29 of the 179 operations are composed somewhere, so
+     kernel of their own. 29 of the 173 operations are composed somewhere, so
      marking them beside the name reads as a signal rather than as noise. */
   function composedOn(op) {
     return B.filter(function (b) { return op.backends[b].impl === "composed"; });
@@ -221,7 +221,7 @@
 
   /* The reference link lives here rather than in the row: the row is a button,
      and an anchor inside a button is invalid and would fight the expander for
-     the click. 147 of the 179 operations resolve to a checked item anchor on
+     the click. 141 of the 173 operations resolve to a checked item anchor on
      docs.rs; the rest carry a search, because the published release predates
      them or documents them under another name, and a link that lands nowhere
      is worse than one that admits it is a search. */

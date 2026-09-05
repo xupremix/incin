@@ -726,3 +726,95 @@ fn layer_norm_rejects_integer_storage() {
     let weight = cuda_f32(&[4], vec![1.0; 4]);
     assert!(B::layer_norm::<i64>(&input, &weight, None, 1e-5).is_err());
 }
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn l1_loss_trains_through_scalar_reduction_on_cuda() {
+    // A mean reduction seeds the walk with a scalar gradient that the next
+    // recipe needs at full width. `unbroadcast` used to hand the scalar on
+    // unchanged -- the CPU kernels broadcast implicitly and never noticed,
+    // but the CUDA binary launch refused it in `iteration_plan`. This loss
+    // is the shape that caught it: sub, abs, then mean.
+    //
+    // The expected gradients also pin the fused abs derivative at zero:
+    // pred[0] == targ[0] makes diff[0] exactly 0, where the symbolic
+    // differentiator used to answer -1 against CPU `Sign`, PyTorch, and the
+    // hand-written kernel expression, which all answer 0.
+    use incin_core::exec::catalog::{LossAttributes, LossReduction};
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+    let context = ExecutionContext::new(B::new());
+    let pred = cuda_f32(&[3], vec![1.0, 0.0, -1.0]);
+    let targ = cuda_f32(&[3], vec![1.0, 1.0, 0.0]);
+    let pred_id = pred.id;
+    let pred_handle = TensorHandle::from_storage::<B, f32, _>(&pred);
+    let targ_handle = TensorHandle::from_storage::<B, f32, _>(&targ);
+    let out = dispatch::execute::<op::L1Loss, _>(
+        &context,
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[pred_handle, targ_handle],
+    )
+    .expect("l1 executes on CUDA");
+    assert_eq!(download_f32_host(&out).unwrap(), vec![2.0 / 3.0]);
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad = grads.get(pred_id).expect("pred has a gradient");
+    let values = download_f32_host(grad).unwrap();
+    assert_eq!(values.len(), 3);
+    assert!(
+        (values[0] - 0.0).abs() < 1e-6,
+        "sign(0) must be 0, got {}",
+        values[0]
+    );
+    for (i, value) in values.iter().enumerate().skip(1) {
+        assert!(
+            (value - (-1.0 / 3.0)).abs() < 1e-6,
+            "grad[{i}] should be sign/3, got {value}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cross_entropy_loss_trains_through_gather_on_cuda() {
+    // The executor used to call the raw gather launch, which runs the kernel
+    // but records no tape entry: forward matched, backward reached nothing,
+    // and the logits gradient was silently absent. Routing through the
+    // tape-tracked gather (scatter-based backward) closes the walk.
+    use incin_core::exec::catalog::{LossAttributes, LossReduction};
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+    let context = ExecutionContext::new(B::new());
+    let logits = cuda_f32(&[2, 3], vec![2.0, 1.0, 0.5, 0.5, 1.5, 0.0]);
+    let target_bytes: Vec<u8> = [0i64, 2].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let targets =
+        crate::cuda::backend::cuda_from_bytes(&[2], DTypeId::I64.into(), 0, &target_bytes).unwrap();
+    let logits_id = logits.id;
+    let logits_handle = TensorHandle::from_storage::<B, f32, _>(&logits);
+    let targets_handle = TensorHandle::from_storage::<B, i64, _>(&targets);
+    let out = dispatch::execute::<op::CrossEntropyLoss, _>(
+        &context,
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[logits_handle, targets_handle],
+    )
+    .expect("cross entropy executes on CUDA");
+    let fwd = download_f32_host(&out).unwrap();
+    assert!(
+        (fwd[0] - 1.2144).abs() < 1e-3,
+        "forward should match -(log p0 + log p2)/2, got {}",
+        fwd[0]
+    );
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad = grads.get(logits_id).expect("logits have a gradient");
+    let values = download_f32_host(grad).unwrap();
+    // dL/dlogits = (softmax - onehot) / batch, computed by hand.
+    let expected = [-0.1857, 0.1156, 0.0701, 0.1156, 0.3142, -0.4299];
+    assert_eq!(values.len(), expected.len());
+    for (i, (got, want)) in values.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (f64::from(*got) - want).abs() < 1e-3,
+            "logits grad[{i}]: got {got}, want {want}"
+        );
+    }
+}

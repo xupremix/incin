@@ -2419,8 +2419,12 @@ impl<D: Device> Execute<op::CrossEntropyLoss> for CudaBackendImpl<D> {
         let target_exp =
             crate::cuda::backend::shape_ops::cuda_reshape_storage(target, &target_exp_shape)
                 .map_err(wrap)?;
-        let gathered = crate::cuda::ops::shape::launch_gather(&log_probs, last_dim, &target_exp)
-            .map_err(wrap)?;
+        // The tape-tracked gather, not the raw launch: its scatter-based
+        // backward is what carries the gradient back into the logits. The raw
+        // launch runs the same kernel but records nothing, which used to end
+        // the walk here with logits silently unreached.
+        let gathered = CudaBackendImpl::<D>::gather::<f32, i64>(&log_probs, last_dim, &target_exp)
+            .map_err(|e| kernel_error("Cuda", operation, e))?;
         let neg_gathered = crate::cuda::backend::elementwise::cuda_neg_storage(
             &gathered,
             crate::kernel::KernelSpecialization::NONE,
