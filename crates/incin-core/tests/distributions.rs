@@ -21,7 +21,7 @@ type B = CpuBackendImpl;
 
 /// Every sampler under test produces `f32`, and `HostReadback` is the only
 /// way to see the values a shape-only backend never had.
-fn values<S: Shape + DynShape, L: incin::shapes::Layout>(
+fn values<S: Shape + DynShape, L: incin::shapes::Layout<S>>(
     tensor: &Tensor<S, B, f32, incin::prelude::NoGrad, incin::dist::Local, L>,
 ) -> Vec<f64> {
     tensor
@@ -125,11 +125,11 @@ fn a_downstream_distribution_composes_catalog_operations() {
             distribution: &ConstantAdd,
             shape: ShapeBuf,
             device: &<Self::Device as Device>::Field,
-        ) -> Result<Tensor<S, Self, f32, G, incin::dist::Local, incin::shapes::RowMajor<S>>>
+        ) -> Result<Tensor<S, Self, f32, G, incin::dist::Local, incin::shapes::RowMajor>>
         where
             (S, f32, Self::Device, G): TensorArgs<S, f32, Self::Device, G>,
         {
-            let base: Tensor<S, Self, f32, G, incin::dist::Local, incin::shapes::RowMajor<S>> =
+            let base: Tensor<S, Self, f32, G, incin::dist::Local, incin::shapes::RowMajor> =
                 Uniform::new(0.0, 1.0).sample::<S, Self, G>(shape, device)?;
             base.add_scalar(distribution.0 as f64)
         }
@@ -144,7 +144,7 @@ fn a_downstream_distribution_composes_catalog_operations() {
             &self,
             shape: ShapeBuf,
             device: &<Bk::Device as Device>::Field,
-        ) -> Result<Tensor<S, Bk, f32, G, incin::dist::Local, incin::shapes::RowMajor<S>>>
+        ) -> Result<Tensor<S, Bk, f32, G, incin::dist::Local, incin::shapes::RowMajor>>
         where
             (S, f32, Bk::Device, G): TensorArgs<S, f32, Bk::Device, G>,
         {

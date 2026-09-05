@@ -18,7 +18,7 @@ use core::fmt::Debug;
 fn uniform_tensor<S, B, G>(
     shape: &ShapeBuf,
     device: &<B::Device as Device>::Field,
-) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
 where
     S: Shape + DynShape,
     B: Backend + SupportsDType<f32> + Execute<op::UniformRandom> + Capabilities,
@@ -54,7 +54,7 @@ where
 fn normal_tensor<S, B, G>(
     shape: &ShapeBuf,
     device: &<B::Device as Device>::Field,
-) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
 where
     S: Shape + DynShape,
     B: Backend + SupportsDType<f32> + Execute<op::NormalRandom> + Capabilities,
@@ -101,7 +101,7 @@ pub trait Distribution<K: DType = f32> {
         &self,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, K, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, K, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, K, B::Device, G): TensorArgs<S, K, B::Device, G>;
 }
@@ -117,7 +117,7 @@ pub trait DistributionExecutor<D: ?Sized, K: DType>: Backend + SupportsDType<K> 
         distribution: &D,
         shape: ShapeBuf,
         device: &<Self::Device as Device>::Field,
-    ) -> Result<Tensor<S, Self, K, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, Self, K, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, K, Self::Device, G): TensorArgs<S, K, Self::Device, G>;
 }
@@ -128,7 +128,7 @@ pub trait TensorDistributionExt<S: Shape + DynShape, B: Backend, K: DType, G: Re
     fn sample<D: Distribution<K>, A>(
         distribution: &D,
         args: A,
-    ) -> Result<Tensor<S, B, K, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, K, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         A: crate::tensor::arg_into::ArgInto<
                 <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
@@ -142,7 +142,7 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad> TensorDistribut
     fn sample<D: Distribution<K>, A>(
         distribution: &D,
         args: A,
-    ) -> Result<Tensor<S, B, K, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, K, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         A: crate::tensor::arg_into::ArgInto<
                 <(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args,
@@ -192,7 +192,7 @@ where
         distribution: &Uniform<f32>,
         shape: ShapeBuf,
         device: &<Self::Device as Device>::Field,
-    ) -> Result<Tensor<S, Self, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, Self, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -214,7 +214,7 @@ impl Distribution<f32> for Uniform<f32> {
         &self,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -260,7 +260,7 @@ where
         distribution: &Normal<f32>,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -280,7 +280,7 @@ impl Distribution<f32> for Normal<f32> {
         &self,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -320,7 +320,7 @@ where
         distribution: &Bernoulli<f32>,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -341,7 +341,7 @@ impl Distribution<f32> for Bernoulli<f32> {
         &self,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -383,7 +383,7 @@ where
         distribution: &Exponential<f32>,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -406,7 +406,7 @@ impl Distribution<f32> for Exponential<f32> {
         &self,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -456,7 +456,7 @@ where
         distribution: &Gumbel<f32>,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {
@@ -479,7 +479,7 @@ impl Distribution<f32> for Gumbel<f32> {
         &self,
         shape: ShapeBuf,
         device: &<B::Device as Device>::Field,
-    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, f32, G, crate::dist::Local, crate::shapes::RowMajor>>
     where
         (S, f32, B::Device, G): TensorArgs<S, f32, B::Device, G>,
     {

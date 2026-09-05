@@ -8880,7 +8880,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/nn/linear.rs:595",
+    "site": "crates/incin-core/src/nn/linear.rs:597",
     "code": ".unwrap()",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"

@@ -8,6 +8,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the layout parameter moved from the marker onto the trait.**
+  `Layout` is now `Layout<S>`, and `RowMajor` and `ChannelsLast` are unit
+  structs. The shape is written once:
+
+  ```text
+  // was
+  let x: Tensor<s![1,2,2,2], B, f32, NoGrad, Local, ChannelsLast<s![1,2,2,2]>> = ..;
+  // now
+  let x: Tensor<s![1,2,2,2], B, f32, NoGrad, Local, ChannelsLast> = ..;
+  ```
+
+  This is not only ergonomics. `LayoutOf<S>` was the trait that stated a layout
+  describes a tensor of shape `S`, and nothing in the crate bounded anything on
+  it -- it appeared in two tests and no production code, while `Tensor` bounded
+  its layout on the shape-free `Layout`. So
+  `Tensor<s![2, 3], B, f32, NoGrad, Local, RowMajor<s![9, 9, 9]>>` -- a rank-two
+  tensor carrying a rank-three row-major claim -- was a well-formed type that
+  compiled. `Layout<S>` closes that by construction: the marker has no shape of
+  its own to disagree with. `tests/compile_fail/layout_must_match_its_shape.rs`
+  pins it.
+
+  `LayoutOf<S>` is gone, folded into `Layout<S>`. `RestateFor<S2>` is now
+  `Restatable`: with no shape on the marker there is no `Restated` type to
+  project, so what remains is the permission itself, and the congruence with
+  the destination shape becomes an ordinary bound the compiler checks --
+  `into_shape` now reads `L: Restatable + Layout<S2>`.
+
+  Two consequences worth knowing. A layout parameter shared by tensors of
+  different shapes must now describe each of them, which `LSTM`'s input and
+  hidden states made explicit for the first time. And rejections read far
+  better: `ChannelsLast: Restatable is not satisfied` in place of a line of
+  typenum.
+
+- **`ChannelsLast` is claimable only at rank four.** It previously implemented
+  `Layout<S>` for every `S` and reported an empty stride list when the rank was
+  wrong, so `Tensor<s![2, 3], .., ChannelsLast>` was a nameable type whose
+  layout claimed nothing -- an impossible state the compiler had no reason to
+  reject, because the rank test lived in a constant rather than in a bound.
+  Rank is not directly bindable (`Shape::RANK` is an associated `Option<usize>`,
+  and a constant cannot gate an impl) but it is expressible structurally, which
+  is what the new `Rank4` marker does: four `DimCons` cells terminated by `Nil`,
+  or a `Ranked<U4>`. `Dyn` is excluded deliberately, since a runtime rank cannot
+  prove it is four.
+
 ### Added
 
 - **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**

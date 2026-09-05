@@ -331,7 +331,7 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: Layout>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: Layout<I>>
     Module<Tensor<I, B, K, crate::tensor::grad::NoGrad, Local, L>>
     for Conv1d<S, B, crate::nn::optional::True, K, Train>
 where
@@ -427,7 +427,7 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: Layout>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: Layout<I>>
     Module<Tensor<I, B, K, crate::tensor::grad::NoGrad, Local, L>>
     for Conv1d<S, B, crate::nn::optional::False, K, Train>
 where
@@ -520,7 +520,7 @@ where
     }
 }
 
-impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: Layout>
+impl<I, S, B, COut: Dim, CIn: Dim, K: DType, Train: TrainState, L: Layout<I>>
     Module<Tensor<I, B, K, crate::tensor::grad::NoGrad, Local, L>> for Conv1d<S, B, Dyn, K, Train>
 where
     S: Conv1dShape<OutC = COut, InC = CIn>,

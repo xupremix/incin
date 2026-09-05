@@ -19,7 +19,7 @@ impl<
     B: Backend,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    TLayout: Layout,
+    TLayout: Layout<S>,
 > Tensor<S, B, K, G, Local, TLayout>
 {
     /// Transposes two axis selectors while preserving the strongest available

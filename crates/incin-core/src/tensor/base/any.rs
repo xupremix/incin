@@ -13,7 +13,7 @@
 //!     K: DType,
 //!     G: RequiresGrad,
 //!     P: Placement,
-//!     L: Layout,
+//!     L: Layout<S>,
 //! { t.numel() }
 //! ```
 //!
@@ -75,7 +75,7 @@ pub trait AnyTensor {
     /// Where the tensor lives: local, or sharded across a mesh.
     type Placement: Placement;
     /// What the type settles about where the elements sit.
-    type Layout: Layout;
+    type Layout: Layout<Self::Shape>;
 
     /// Borrows the concrete tensor.
     ///
@@ -84,7 +84,7 @@ pub trait AnyTensor {
     fn as_tensor(&self) -> &TensorOf<Self>;
 }
 
-impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout> AnyTensor
+impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>> AnyTensor
     for Tensor<S, B, K, G, P, L>
 {
     type Shape = S;

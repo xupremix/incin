@@ -57,7 +57,7 @@ impl<
     B: crate::tensor::backend::VariableBackend
         + crate::exec::Capabilities
         + Execute<op::AdaptiveAvgPool2dExact>,
-    L: Layout,
+    L: Layout<I>,
 > Module<Tensor<I, B, f32, crate::tensor::grad::NoGrad, Local, L>> for AdaptiveAvgPool2d<HOut, WOut>
 where
     <B as Execute<op::AdaptiveAvgPool2dExact>>::Output: Into<B::Storage<f32>>,

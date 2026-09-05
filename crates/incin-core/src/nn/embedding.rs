@@ -191,7 +191,7 @@ impl<
     InK: DType,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    L: Layout<InS>,
 > Module<Tensor<InS, B, InK, crate::tensor::grad::NoGrad, Local, L>> for Embedding<S, B, K, Train>
 where
     B: crate::tensor::backend::VariableBackend

@@ -191,8 +191,14 @@ macro_rules! impl_reduction_op {
 /// it. Pinned by `a_reduction_result_is_dense_even_from_a_strided_operand`,
 /// which feeds a `transpose_view` result and would have caught the old
 /// signature.
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: Placement, L: Layout>
-    Tensor<S, B, K, G, P, L>
+impl<
+    S: Shape,
+    B: Backend,
+    K: crate::tensor::dtype::DType,
+    G: RequiresGrad,
+    P: Placement,
+    L: Layout<S>,
+> Tensor<S, B, K, G, P, L>
 {
     /// Sums over a static, named, or runtime axis selector.
     pub fn sum<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
@@ -254,7 +260,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
             .into();
         Tensor::<<S as ReduceAt<C>>::Output, B, K, G, P>::from_shape_buf_placed::<
             <S as ReduceAt<C>>::Output,
-            crate::shapes::RowMajor<<S as ReduceAt<C>>::Output>,
+            crate::shapes::RowMajor,
         >(
             inner,
             output_shape.shape_buf().clone(),
@@ -439,7 +445,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
             .into();
         Tensor::<<S as ReduceKeepAt<C>>::Output, B, K, G, P>::from_shape_buf_placed::<
             <S as ReduceKeepAt<C>>::Output,
-            crate::shapes::RowMajor<<S as ReduceKeepAt<C>>::Output>,
+            crate::shapes::RowMajor,
         >(
             inner,
             output_shape.shape_buf().clone(),
@@ -499,7 +505,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, P: P
                 )
             })?
             .into();
-        Tensor::<Out, B, K, G, P>::from_shape_buf_placed::<Out, crate::shapes::RowMajor<Out>>(
+        Tensor::<Out, B, K, G, P>::from_shape_buf_placed::<Out, crate::shapes::RowMajor>(
             inner,
             output_shape.shape_buf().clone(),
             self._dtype.clone(),
@@ -519,7 +525,7 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-    L: Layout,
+    L: Layout<S>,
 > Tensor<S, B, K, G, P, L>
 where
     <S as crate::shapes::RemoveOneRank>::Output: crate::shapes::Shape,
@@ -571,7 +577,7 @@ where
 /// Generic over the operand's layout. Each collapses to a scalar, so the
 /// result describes a different geometry; the fresh allocation is dense and
 /// the macro states so rather than carrying anything through.
-impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     impl_reduction_op!(

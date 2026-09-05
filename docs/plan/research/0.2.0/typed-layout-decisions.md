@@ -4,6 +4,16 @@ A record of every choice made while implementing the layout parameter, the
 alternatives that were live at the time, and why each was set aside. Written so
 that a later reader can reopen any of them without re-deriving the reasoning.
 
+> **Superseded in part.** Two of the decisions below were reopened and gone the
+> other way, which is what this document was written to make possible. The
+> shape moved off the marker and onto the trait -- `Layout<S>` with `RowMajor`
+> and `ChannelsLast` as unit structs -- because `LayoutOf<S>` turned out to be
+> bounded nowhere, leaving a layout and a shape free to disagree; and
+> `RestateFor<S2>` lost its associated type to become the `Restatable` marker,
+> since a layout carrying no shape has nothing to project. The reasoning below
+> is preserved as it stood; see the `## [Unreleased]` entry in `CHANGELOG.md`
+> for what replaced it.
+
 ## Settled
 
 **One parameter, facts as traits.** Strides, offset, alignment and contiguity

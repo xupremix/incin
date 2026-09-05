@@ -621,7 +621,7 @@ pub type Dense<
     K = f32,
     G = incin_core::tensor::grad::NoGrad,
     P = incin_core::dist::Local,
-> = incin_core::tensor::base::Tensor<S, B, K, G, P, incin_core::shapes::RowMajor<S>>;
+> = incin_core::tensor::base::Tensor<S, B, K, G, P, incin_core::shapes::RowMajor>;
 
 #[cfg(not(feature = "cpu"))]
 /// A tensor that has proven it is dense row-major.
@@ -631,7 +631,7 @@ pub type Dense<
     K = f32,
     G = incin_core::tensor::grad::NoGrad,
     P = incin_core::dist::Local,
-> = incin_core::tensor::base::Tensor<S, B, K, G, P, incin_core::shapes::RowMajor<S>>;
+> = incin_core::tensor::base::Tensor<S, B, K, G, P, incin_core::shapes::RowMajor>;
 
 // Neural Network Layer Aliases
 //

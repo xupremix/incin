@@ -37,7 +37,7 @@ type B = CpuBackendImpl;
 /// derivative did not.
 #[allow(clippy::type_complexity)]
 fn non_finite_chain() -> (
-    Tensor<s![2, 2], B, f32, Grad, incin::dist::Local, incin::shapes::RowMajor<s![2, 2]>>,
+    Tensor<s![2, 2], B, f32, Grad, incin::dist::Local, incin::shapes::RowMajor>,
     TensorId,
 ) {
     let a = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 4.0], ()).unwrap();
@@ -47,7 +47,7 @@ fn non_finite_chain() -> (
 }
 
 #[allow(clippy::type_complexity)]
-fn seeded_backward<L: incin::shapes::Layout>(
+fn seeded_backward<L: incin::shapes::Layout<s![2, 2]>>(
     loss: &Tensor<s![2, 2], B, f32, Grad, incin::dist::Local, L>,
 ) -> Result<incin_core::optim::Gradients<B>> {
     let seed = Tensor::<s![2, 2], B, f32>::ones(()).unwrap();

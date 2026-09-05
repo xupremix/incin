@@ -16,7 +16,7 @@ use crate::tensor::ops::manipulation::selectors::{ConcatSelector, StackSelector}
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     /// Dynamically concatenates a slice of tensors along `dim`.
@@ -617,7 +617,7 @@ pub fn try_stack_tensors<
     B: Backend + Execute<op::StackExact> + Capabilities,
     K: crate::tensor::dtype::DType,
     G: crate::tensor::grad::RequiresGrad,
-    L: Layout,
+    L: Layout<S>,
 >(
     tensors: &[&Tensor<S, B, K, G, Local, L>],
     dim: usize,

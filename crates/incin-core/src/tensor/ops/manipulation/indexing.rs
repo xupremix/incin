@@ -74,7 +74,7 @@ where
     .map(Into::into)?)
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     /// Slices a tensor dynamically based on a slice of `IndexSpec` configurations.
@@ -249,7 +249,7 @@ impl<
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
     P: Placement,
-    L: Layout,
+    L: Layout<S>,
 > Tensor<S, B, K, G, P, L>
 {
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
@@ -383,20 +383,20 @@ impl<
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     /// Fills elements where `mask` is true with `value`.
     pub fn masked_fill<
         S2: Shape,
         G2: RequiresGrad,
-        L2: Layout,
+        L2: Layout<S2>,
         Sc: Into<crate::tensor::backend::ScalarValue>,
     >(
         &self,
         mask: &Tensor<S2, B, bool, G2, Local, L2>,
         value: Sc,
-    ) -> Result<Tensor<S, B, K, G, Local, crate::shapes::RowMajor<S>>>
+    ) -> Result<Tensor<S, B, K, G, Local, crate::shapes::RowMajor>>
     where
         S: ShapeEq<S2>,
         B: Execute<op::MaskedFill>,
@@ -951,13 +951,13 @@ pub(crate) fn execute_masked_fill_descriptor<
     K: DType,
     G1: RequiresGrad,
     G2: RequiresGrad,
-    L1: Layout,
-    L2: Layout,
+    L1: Layout<S>,
+    L2: Layout<S2>,
 >(
     input: &Tensor<S, B, K, G1, Local, L1>,
     mask: &Tensor<S2, B, bool, G2, Local, L2>,
     value: f64,
-) -> Result<Tensor<S, B, K, G1, Local, crate::shapes::RowMajor<S>>>
+) -> Result<Tensor<S, B, K, G1, Local, crate::shapes::RowMajor>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::MaskedFill>,
@@ -991,8 +991,8 @@ pub(crate) fn execute_where_cond_descriptor<
     K: DType,
     G1: RequiresGrad,
     G2: RequiresGrad,
-    L1: Layout,
-    L2: Layout,
+    L1: Layout<S>,
+    L2: Layout<S2>,
 >(
     mask: &Tensor<S, B, bool, G1, Local, L1>,
     on_true: &Tensor<S2, B, K, G2, Local, L2>,
@@ -1000,7 +1000,7 @@ pub(crate) fn execute_where_cond_descriptor<
     // The selected values come from a fresh packed buffer, so the result states
     // `RowMajor` of its own shape. Carrying a claim through would have to pick
     // one of three operands' layouts, none of which describes what was written.
-) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor<S2>>>
+) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor>>
 where
     S: ShapeEq<S2>,
     B: Execute<op::WhereCond>,
@@ -1028,15 +1028,15 @@ where
     )
 }
 
-impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, bool, G, Local, L>
 {
     /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
-    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad, L2: Layout>(
+    pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad, L2: Layout<S2>>(
         &self,
         on_true: &Tensor<S2, B, K, G2, Local, L2>,
         on_false: &Tensor<S2, B, K, G2, Local, L2>,
-    ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor<S2>>>
+    ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor>>
     where
         S: ShapeEq<S2>,
         B: Execute<op::WhereCond>,

@@ -1,7 +1,7 @@
 //! A downstream layout cannot claim to describe a fresh allocation.
 //!
 //! `Tensor::zeros` is generic over the layout parameter so that asking for
-//! `Dense<S, B>` yields a real `RowMajor<S>` from the allocation itself. That
+//! `Dense<S, B>` yields a real `RowMajor` from the allocation itself. That
 //! generality is only safe because its `FreshDense` bound is sealed: a freshly
 //! allocated buffer is genuinely row-major, and genuinely nothing else. Without
 //! the seal a constructor becomes a minting press -- name any layout and get a
@@ -27,15 +27,14 @@
 
 extern crate incin_core as incin;
 
-use incin_core::shapes::{FreshDense, Layout, LayoutOf, Shape};
+use incin_core::shapes::{FreshDense, Layout, Shape};
 use incin_macros::s;
 
 /// A downstream layout: legal to define, illegal to claim for an allocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Sideways;
 
-impl Layout for Sideways {}
-impl<S: Shape> LayoutOf<S> for Sideways {}
+impl<S: Shape> Layout<S> for Sideways {}
 
 /// Stands in for the bound every constructor carries.
 fn only_a_layout_a_fresh_allocation_has<S: Shape, L: FreshDense<S>>() {}

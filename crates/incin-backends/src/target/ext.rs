@@ -719,14 +719,7 @@ pub trait TargetExt: TensorTarget + Sized {
         &self,
         spec: Sp,
         fill: GeneratedFill,
-    ) -> Result<
-        TargetTensorIn<
-            Self,
-            Sp::Shape,
-            Self::ParameterDtype,
-            incin_core::shapes::RowMajor<Sp::Shape>,
-        >,
-    >
+    ) -> Result<TargetTensorIn<Self, Sp::Shape, Self::ParameterDtype, incin_core::shapes::RowMajor>>
     where
         TargetBackend<Self>: Backend<Device = Self::Device>
             + incin_core::backend_authoring::SupportsDType<Self::ParameterDtype>
@@ -848,12 +841,7 @@ pub trait TargetExt: TensorTarget + Sized {
         spec: Sp,
         fill: GeneratedFill,
     ) -> Result<
-        TargetTensorInGrad<
-            Self,
-            Sp::Shape,
-            Self::ParameterDtype,
-            incin_core::shapes::RowMajor<Sp::Shape>,
-        >,
+        TargetTensorInGrad<Self, Sp::Shape, Self::ParameterDtype, incin_core::shapes::RowMajor>,
     >
     where
         TargetBackend<Self>: Backend<Device = Self::Device>

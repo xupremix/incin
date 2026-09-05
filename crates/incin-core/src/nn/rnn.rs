@@ -398,7 +398,7 @@ where
         K,
         JoinedGrad<G, Train::TensorGrad>,
         crate::dist::Local,
-        crate::shapes::RowMajor<D2<Batch, S::Out>>,
+        crate::shapes::RowMajor,
     >;
     /// The error type returned if the forward pass fails.
     type Error = Error;
@@ -566,7 +566,7 @@ where
                 K,
                 G,
                 crate::dist::Local,
-                crate::shapes::RowMajor<D2<Batch, S::Out>>,
+                crate::shapes::RowMajor,
             >,
             Error = Error,
         >,

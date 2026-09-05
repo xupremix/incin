@@ -19,7 +19,7 @@
 //! `L: Contiguous` reads well; a `Tensor<S, B, K, G, P, L, A, Q>` does not.
 //!
 //! Bundling is also what makes congruence expressible. A stride list is only
-//! meaningful against a shape of the same rank, and [`LayoutOf`] states that
+//! meaningful against a shape of the same rank, and [`Layout<S>`](Layout) states that
 //! relationship once rather than leaving two independent parameters to be kept
 //! consistent by hand.
 //!
@@ -58,13 +58,18 @@
 use crate::dist::Local;
 use crate::shapes::{Dyn, MAX_STATIC_RANK, ProofLevel, Shape};
 use core::fmt::Debug;
-use core::marker::PhantomData;
 
 /// The stride pattern and alignment a type settles for a tensor's buffer.
 ///
 /// See the [module documentation](self) for why this is one parameter rather
 /// than several.
-pub trait Layout: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
+/// The shape parameter is what makes this a *congruent* pair rather than two
+/// facts sitting beside each other: `Layout<S>` reads `S`'s extents and rank to
+/// compute its own constants, so a layout and a shape that disagree cannot be
+/// named. It was previously a separate `LayoutOf<S>` trait that nothing in the
+/// crate bounded, which left `Tensor<s![2, 3], .., RowMajor<s![9, 9, 9]>>` a
+/// well-formed type.
+pub trait Layout<S: Shape>: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     /// Per-axis strides in elements, outermost first.
     ///
     /// `None` in a position means that axis's stride is a runtime fact. Empty
@@ -98,54 +103,39 @@ pub trait Layout: 'static + Clone + Debug + Send + Sync + Eq + PartialEq {
     const STRIDE_BUF: [Option<usize>; MAX_STATIC_RANK] = [None; MAX_STATIC_RANK];
 }
 
-/// `Self` describes the memory of a tensor whose shape is `S`.
+/// `Self` may be carried across a re-typing of the same dims.
 ///
-/// Rank congruence: one stride per extent. Stated once here rather than
-/// re-derived at every operation that touches both halves, which is the whole
-/// argument for bundling them.
+/// [`into_shape`] changes no dimension: `S2::try_from_dims` validates the
+/// tensor's existing dims against `S2` and returns those very dims, over the
+/// same buffer with the same strides. So the question a layout has to answer is
+/// only whether its claim is a function of the dims -- if it is, the claim is
+/// as true under `S2` as it was under `S`.
 ///
-/// Borrowed from CuTe, where `Layout` is a `(Shape, Stride)` pair required to
-/// be congruent -- same tuple profile, one stride integer per shape integer.
-pub trait LayoutOf<S: Shape>: Layout {}
-
-/// `Self`, re-described against a shape type covering the same runtime dims.
-///
-/// The general rule is that a layout cannot be carried across a shape change,
-/// because it describes one geometry. [`into_shape`] is the exception, and it is
-/// worth being precise about why: it changes no dimension. It re-describes the
-/// *same* extents under a different shape type, over the same buffer, with the
-/// same strides -- `S2::try_from_dims` is what makes it fallible rather than
-/// free, and what rules out the case where the two shapes disagree.
-///
-/// So `RowMajor<S1>` and `RowMajor<S2>` denote identical strides whenever that
-/// conversion succeeds, and dropping to [`Dyn`] there discarded a fact that was
-/// still true. This trait is the type-level half of that argument: it maps a
-/// layout to the way the same layout is spelled against another shape.
+/// Previously `RestateFor<S2>` with an associated `Restated` type, which had to
+/// map `RowMajor<S1>` to `RowMajor<S2>`. A layout that does not carry a shape
+/// has nothing to map, so what is left is the permission itself.
 ///
 /// # Why it is not sealed
 ///
-/// Unlike [`FreshDense`], nothing here can be minted. A downstream layout
-/// author naming their own `Restated` is describing their own type, which is
-/// the same trust already extended to them by [`Layout::STATIC_STRIDES`]. The
-/// obligation is stated rather than enforced: `Restated` must denote the same
-/// strides `Self` does, for a shape with the same extents.
+/// Nothing here can be minted. A downstream layout author claiming their layout
+/// restates is describing their own type, the same trust already extended by
+/// [`Layout::STATIC_STRIDES`].
 ///
 /// [`into_shape`]: crate::tensor::base::Tensor::into_shape
-pub trait RestateFor<S2: Shape>: Layout {
-    /// The same layout, spelled against `S2`.
-    type Restated: LayoutOf<S2>;
-}
+pub trait Restatable {}
 
 /// Claiming nothing about one shape is claiming nothing about any other.
-impl<S2: Shape> RestateFor<S2> for Dyn {
-    type Restated = Dyn;
-}
+impl Restatable for Dyn {}
 
 /// Row-major strides are a function of the extents, and `into_shape` does not
 /// change the extents.
-impl<S1: Shape, S2: Shape> RestateFor<S2> for RowMajor<S1> {
-    type Restated = RowMajor<S2>;
-}
+impl Restatable for RowMajor {}
+
+// `ChannelsLast` deliberately does not implement this. The refusal is
+// conservative rather than proven -- channels-last strides are equally a
+// function of the dims -- and `tests/compile_fail/into_shape_rejects_channels_last.rs`
+// pins it, so restoring the permission is a deliberate act with a visible
+// failure rather than an accident.
 
 /// `Self` is a layout an allocation can be *made* to satisfy.
 ///
@@ -172,7 +162,7 @@ impl<S1: Shape, S2: Shape> RestateFor<S2> for RowMajor<S1> {
 /// type incorrectly is the one case the type system cannot catch.
 ///
 /// See `docs/plan/research/0.2.0/layout-at-construction.md`.
-pub trait FreshLayout<S: Shape>: LayoutOf<S> {
+pub trait FreshLayout<S: Shape>: Layout<S> {
     /// The strides an allocation must use for `Self` to describe it.
     fn strides(dims: &[usize]) -> crate::shapes::StrideBuf;
 }
@@ -186,7 +176,7 @@ impl<S: Shape> FreshLayout<S> for Dyn {
 }
 
 /// Row-major strides are the suffix products of the extents.
-impl<S: Shape> FreshLayout<S> for RowMajor<S> {
+impl<S: Shape> FreshLayout<S> for RowMajor {
     fn strides(dims: &[usize]) -> crate::shapes::StrideBuf {
         dense_strides(dims)
     }
@@ -285,13 +275,13 @@ pub fn scatter_positions(dims: &[usize], strides: &[usize]) -> Option<alloc::vec
 /// Sealing means only this module decides what a fresh allocation may claim, so
 /// adding `ChannelsLast` cannot silently make it claimable. The compiler asks
 /// the question at the point where the answer is known.
-pub trait FreshDense<S: Shape>: LayoutOf<S> + sealed::SealedFresh {}
+pub trait FreshDense<S: Shape>: Layout<S> + sealed::SealedFresh {}
 
 /// A fresh allocation is free to claim nothing.
 impl<S: Shape> FreshDense<S> for Dyn {}
 
 /// A fresh allocation is packed row-major, which is exactly this claim.
-impl<S: Shape> FreshDense<S> for RowMajor<S> {}
+impl<S: Shape> FreshDense<S> for RowMajor {}
 
 mod sealed {
     /// Prevents [`FreshDense`](super::FreshDense) being implemented downstream.
@@ -300,7 +290,7 @@ mod sealed {
     /// satisfies it and mint the proof from any constructor.
     pub trait SealedFresh {}
     impl SealedFresh for super::Dyn {}
-    impl<S> SealedFresh for super::RowMajor<S> {}
+    impl SealedFresh for super::RowMajor {}
 }
 
 /// The layout visits memory in one unbroken ascending run with no gaps.
@@ -313,7 +303,7 @@ mod sealed {
 /// Deliberately not implemented for [`Dyn`]. A tensor that has proven
 /// nothing cannot satisfy a bound that needs this, and falls back to the
 /// runtime path.
-pub trait Contiguous: Layout {}
+pub trait Contiguous {}
 
 // There is deliberately no `AlignedTo<N>` trait, and no `STATIC_ALIGNMENT`
 // constant, though the design note listed both.
@@ -369,10 +359,8 @@ pub trait Contiguous: Layout {}
 /// sixth of six arguments -- which is what the old spelling was standing in
 /// for. Position is the more precise test anyway: it cannot be fooled by an
 /// unrelated type that happens to share a name.
-impl Layout for Dyn {}
-
 /// `Dyn` describes any shape, because it claims nothing about it.
-impl<S: Shape> LayoutOf<S> for Dyn {}
+impl<S: Shape> Layout<S> for Dyn {}
 
 /// The dense row-major layout implied by a shape.
 ///
@@ -380,13 +368,13 @@ impl<S: Shape> LayoutOf<S> for Dyn {}
 /// pattern is contiguous by construction. This is what every freshly created
 /// tensor has, and what every materialising operation produces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub struct RowMajor<S>(PhantomData<fn() -> S>);
+pub struct RowMajor;
 
-impl<S: Shape> Layout for RowMajor<S> {
+impl<S: Shape> Layout<S> for RowMajor {
     const STRIDE_BUF: [Option<usize>; MAX_STATIC_RANK] = row_major_strides(S::STATIC_EXTENTS);
 
     const STATIC_STRIDES: &'static [Option<usize>] = match S::RANK {
-        Some(rank) if rank <= MAX_STATIC_RANK => Self::STRIDE_BUF.split_at(rank).0,
+        Some(rank) if rank <= MAX_STATIC_RANK => <Self as Layout<S>>::STRIDE_BUF.split_at(rank).0,
         // Unknown rank, or deeper than the buffer: report nothing rather than a
         // prefix. A truncated stride list would be a wrong geometry; an empty
         // one is only a missed specialisation.
@@ -401,10 +389,8 @@ impl<S: Shape> Layout for RowMajor<S> {
     const PROOF: ProofLevel = S::PROOF;
 }
 
-impl<S: Shape> LayoutOf<S> for RowMajor<S> {}
-
 /// Contiguous by construction, whatever the extents turn out to be.
-impl<S: Shape> Contiguous for RowMajor<S> {}
+impl Contiguous for RowMajor {}
 
 /// Suffix products of `extents`, innermost stride first at the deepest index.
 ///
@@ -433,6 +419,42 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
     out
 }
 
+/// A shape the type settles as rank four.
+///
+/// [`Layout::STATIC_STRIDES`] could already tell rank four from anything else,
+/// but only at the value level: `ChannelsLast` implemented `Layout<S>` for
+/// every `S` and reported an empty stride list when the rank was wrong. That
+/// left `Tensor<s![2, 3], .., ChannelsLast>` a nameable type whose layout
+/// claimed nothing -- an impossible state the compiler had no reason to
+/// reject, because the rank test lived in a constant rather than in a bound.
+///
+/// Rank is not expressible as a bound directly: `Shape::RANK` is an associated
+/// `Option<usize>`, and a `const` cannot gate an impl. It is expressible
+/// *structurally*, which is what this does -- a canonical shape is rank four
+/// exactly when it is four `DimCons` cells terminated by [`Nil`](crate::shapes::Nil), and
+/// [`Ranked<U4>`](crate::shapes::Ranked) carries the same fact as a typenum.
+///
+/// [`Dyn`] deliberately does not implement it. A shape whose rank is a runtime
+/// fact cannot prove it is four, and a layout that needs rank four should not
+/// be claimable over it.
+pub trait Rank4: Shape {}
+
+/// Four dimensions and a terminator: rank four, whatever the extents are.
+impl<D0: crate::shapes::Dim, D1: crate::shapes::Dim, D2: crate::shapes::Dim, D3: crate::shapes::Dim>
+    Rank4
+    for crate::shapes::DimCons<
+        D0,
+        crate::shapes::DimCons<
+            D1,
+            crate::shapes::DimCons<D2, crate::shapes::DimCons<D3, crate::shapes::Nil>>,
+        >,
+    >
+{
+}
+
+/// Runtime extents, but the rank is still a type-level four.
+impl Rank4 for crate::shapes::Ranked<typenum::U4> {}
+
 /// The NHWC memory order for a tensor whose *shape* is NCHW.
 ///
 /// The shape is unchanged -- axis 1 is still channels -- and only the strides
@@ -459,15 +481,15 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
 /// rank-five shape means something different; a layout that silently accepted
 /// any rank would be claiming a geometry it had not checked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub struct ChannelsLast<S>(PhantomData<fn() -> S>);
+pub struct ChannelsLast;
 
-impl<S: Shape> Layout for ChannelsLast<S> {
+impl<S: Rank4> Layout<S> for ChannelsLast {
     const STRIDE_BUF: [Option<usize>; MAX_STATIC_RANK] = channels_last_strides(S::STATIC_EXTENTS);
 
     const STATIC_STRIDES: &'static [Option<usize>] = match S::RANK {
         // Rank four exactly. Anything else reports nothing rather than a
         // geometry it cannot justify.
-        Some(4) => Self::STRIDE_BUF.split_at(4).0,
+        Some(4) => <Self as Layout<S>>::STRIDE_BUF.split_at(4).0,
         _ => &[],
     };
 
@@ -478,9 +500,7 @@ impl<S: Shape> Layout for ChannelsLast<S> {
     const PROOF: ProofLevel = S::PROOF;
 }
 
-impl<S: Shape> LayoutOf<S> for ChannelsLast<S> {}
-
-impl<S: Shape> FreshLayout<S> for ChannelsLast<S> {
+impl<S: Rank4> FreshLayout<S> for ChannelsLast {
     fn strides(dims: &[usize]) -> crate::shapes::StrideBuf {
         channels_last_stride_values(dims)
     }
@@ -543,9 +563,9 @@ fn channels_last_stride_values(dims: &[usize]) -> crate::shapes::StrideBuf {
 ///
 /// Note the shape appears once rather than twice: `RowMajor` is always
 /// congruent with the shape it describes, so repeating it is noise the alias
-/// removes. That congruence is exactly what [`LayoutOf`] states.
+/// removes. That congruence is exactly what [`Layout<S>`](Layout) states.
 pub type Dense<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = Local> =
-    crate::tensor::base::Tensor<S, B, K, G, P, RowMajor<S>>;
+    crate::tensor::base::Tensor<S, B, K, G, P, RowMajor>;
 
 /// A tensor whose buffer is proven channels-last, under an NCHW shape.
 ///
@@ -563,11 +583,11 @@ pub type Dense<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = Local> =
 ///
 /// The layout still carries the shape, and deliberately so: it is what stops a
 /// channels-last claim riding through a shape change onto extents whose strides
-/// are different. [`RestateFor`] is the way to move a claim across a shape type
+/// are different. [`Restatable`] is the way to move a claim across a shape type
 /// that covers the same runtime dims. The alias removes the repetition at the
 /// call site without removing that check.
 ///
 /// Named for the memory order rather than the shape order, because that is the
 /// thing being claimed: the shape stays NCHW, the buffer is NHWC.
 pub type Nhwc<S, B, K = f32, G = crate::tensor::grad::NoGrad, P = Local> =
-    crate::tensor::base::Tensor<S, B, K, G, P, ChannelsLast<S>>;
+    crate::tensor::base::Tensor<S, B, K, G, P, ChannelsLast>;

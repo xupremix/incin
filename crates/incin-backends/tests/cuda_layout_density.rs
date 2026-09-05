@@ -34,7 +34,7 @@ where
     K: DType,
     G: incin_core::tensor::grad::RequiresGrad,
     P: incin_core::dist::Placement,
-    L: Layout,
+    L: Layout<S>,
 {
     let meta = <Cuda as StorageBackend>::metadata::<K>(t.inner());
     let dims = meta.shape().as_ref();

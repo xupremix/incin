@@ -518,7 +518,9 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    // One layout parameter serves both the input and the hidden/cell
+    // tensors, which are different shapes, so it has to describe both.
+    L: Layout<D2<Batch, In>> + Layout<D2<Batch, Out>>,
 >
     Module<(
         Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
@@ -536,7 +538,7 @@ where
                 K,
                 crate::tensor::grad::NoGrad,
                 Local,
-                crate::shapes::RowMajor<D2<Batch, Out>>,
+                crate::shapes::RowMajor,
             >,
             Error = Error,
         >,
@@ -548,7 +550,7 @@ where
                 K,
                 crate::tensor::grad::NoGrad,
                 Local,
-                crate::shapes::RowMajor<D2<Batch, Out>>,
+                crate::shapes::RowMajor,
             >,
             Error = Error,
         >,
@@ -559,22 +561,8 @@ where
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = (
-        Tensor<
-            D2<Batch, Out>,
-            B,
-            K,
-            crate::tensor::grad::NoGrad,
-            Local,
-            crate::shapes::RowMajor<D2<Batch, Out>>,
-        >,
-        Tensor<
-            D2<Batch, Out>,
-            B,
-            K,
-            crate::tensor::grad::NoGrad,
-            Local,
-            crate::shapes::RowMajor<D2<Batch, Out>>,
-        >,
+        Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::RowMajor>,
+        Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::RowMajor>,
     );
     /// The error type returned if the forward pass fails.
     type Error = Error;

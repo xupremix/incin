@@ -19,7 +19,7 @@ use crate::tensor::grad::RequiresGrad;
 ///
 /// Generic over the layout parameter rather than fixed to the `Dyn`
 /// default, so a caller who asks for [`Dense<S, B>`](crate::shapes::Dense) gets
-/// a genuine [`RowMajor<S>`](crate::shapes::RowMajor) proof out of the same
+/// a genuine [`RowMajor`](crate::shapes::RowMajor) proof out of the same
 /// allocation, while `Tensor<S, B>` keeps meaning exactly what it did.
 ///
 /// The [`FreshDense<S>`](crate::shapes::FreshDense) bound is what keeps that

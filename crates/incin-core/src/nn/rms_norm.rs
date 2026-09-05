@@ -188,7 +188,9 @@ impl<
         + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
-    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+    L: crate::shapes::Layout<InS>
+        + crate::shapes::Layout<crate::shapes::Dyn>
+        + crate::shapes::Restatable,
 > Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,

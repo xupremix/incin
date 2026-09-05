@@ -1,0 +1,13 @@
+error[E0107]: struct takes 0 generic arguments but 1 generic argument was supplied
+  --> tests/compile_fail/layout_must_match_its_shape.rs:22:72
+   |
+22 | type Mismatched = Tensor<s![2, 3], CpuBackendImpl, f32, NoGrad, Local, RowMajor<s![9, 9, 9]>>;
+   |                                                                        ^^^^^^^^------------- help: remove the unnecessary generics
+   |                                                                        |
+   |                                                                        expected 0 generic arguments
+   |
+note: struct defined here, with 0 generic parameters
+  --> src/shapes/layout.rs
+   |
+   | pub struct RowMajor;
+   |            ^^^^^^^^

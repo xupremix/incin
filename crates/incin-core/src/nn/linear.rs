@@ -440,7 +440,7 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-    L: Layout,
+    L: Layout<Dyn>,
 > Module<Tensor<Dyn, B, K, G, Local, L>> for Linear<Dyn, B, crate::nn::optional::True, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
@@ -478,7 +478,7 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-    L: Layout,
+    L: Layout<Dyn>,
 > Module<Tensor<Dyn, B, K, G, Local, L>> for Linear<Dyn, B, crate::nn::optional::False, K, Train>
 where
     G: GradJoin<Train::TensorGrad>,
@@ -505,7 +505,7 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    L: Layout<Dyn>,
 > Module<Tensor<Dyn, B, K, crate::tensor::grad::NoGrad, Local, L>> for Linear<Dyn, B, Dyn, K, Train>
 where
     <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
@@ -555,7 +555,9 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+    L: crate::shapes::Layout<InShape>
+        + crate::shapes::Layout<crate::shapes::Dyn>
+        + crate::shapes::Restatable,
 > Module<Tensor<InShape, B, K, G, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::True, K, Train>
 where
@@ -613,7 +615,9 @@ impl<
     K: DType,
     Train: TrainState,
     G: RequiresGrad,
-    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+    L: crate::shapes::Layout<InShape>
+        + crate::shapes::Layout<crate::shapes::Dyn>
+        + crate::shapes::Restatable,
 > Module<Tensor<InShape, B, K, G, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, crate::nn::optional::False, K, Train>
 where
@@ -661,7 +665,9 @@ impl<
         + Execute<op::Add>,
     K: DType,
     Train: TrainState,
-    L: crate::shapes::RestateFor<crate::shapes::Dyn>,
+    L: crate::shapes::Layout<InShape>
+        + crate::shapes::Layout<crate::shapes::Dyn>
+        + crate::shapes::Restatable,
 > Module<Tensor<InShape, B, K, crate::tensor::grad::NoGrad, Local, L>>
     for Linear<DimCons<InF, DimCons<OutF, Nil>>, B, Dyn, K, Train>
 where

@@ -20,8 +20,8 @@ use incin_macros::s;
 type Nchw = s![2, 3, 4, 5];
 
 fn flatten(
-    t: Tensor<Nchw, CpuBackendImpl, f32, NoGrad, Local, ChannelsLast<Nchw>>,
-) -> Tensor<s![120], CpuBackendImpl, f32, NoGrad, Local, RowMajor<s![120]>> {
+    t: Tensor<Nchw, CpuBackendImpl, f32, NoGrad, Local, ChannelsLast>,
+) -> Tensor<s![120], CpuBackendImpl, f32, NoGrad, Local, RowMajor> {
     t.reshape_view::<s![120]>().unwrap()
 }
 

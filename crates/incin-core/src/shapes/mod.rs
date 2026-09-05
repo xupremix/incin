@@ -52,7 +52,7 @@ pub use dynamic::*;
 pub use error::*;
 pub use idx::*;
 pub use layout::{
-    ChannelsLast, Contiguous, Dense, FreshDense, FreshLayout, Layout, LayoutOf, Nhwc, RestateFor,
+    ChannelsLast, Contiguous, Dense, FreshDense, FreshLayout, Layout, Nhwc, Rank4, Restatable,
     RowMajor, dense_strides, scatter_positions,
 };
 pub use named::*;

@@ -4,7 +4,7 @@
 extern crate incin_core as incin;
 
 use incin_backends::cpu::CpuBackendImpl;
-use incin_core::shapes::{Contiguous, Dyn, Layout, LayoutOf, RowMajor, Shape};
+use incin_core::shapes::{Contiguous, Dyn, Layout, RowMajor, Shape};
 use incin_macros::s;
 
 incin_core::dim!(Batch);
@@ -23,7 +23,7 @@ fn assert_dense<S: Shape, B, K, G, P, L>(
     K: incin_core::prelude::DType,
     G: incin_core::tensor::grad::RequiresGrad,
     P: incin_core::dist::Placement,
-    L: Layout,
+    L: Layout<S>,
 {
     let meta = <B as incin_core::backend_authoring::StorageBackend>::metadata::<K>(t.inner());
     let dims = meta.shape().as_ref();
@@ -140,7 +140,7 @@ fn a_proof_survives_a_pointwise_chain() {
 
 /// The `Dense` alias names the common case without repeating the shape.
 ///
-/// `Tensor<S, B, K, G, P, RowMajor<S>>` mentions the shape twice, which is
+/// `Tensor<S, B, K, G, P, RowMajor>` mentions the shape twice, which is
 /// noise: `RowMajor` is congruent with the shape it describes by construction.
 #[test]
 fn the_dense_alias_is_the_ergonomic_spelling() {
@@ -164,14 +164,14 @@ fn the_dense_alias_is_the_ergonomic_spelling() {
 #[test]
 fn a_row_major_layout_derives_its_strides_from_the_shape() {
     assert_eq!(
-        <RowMajor<s![3, 4]> as Layout>::STATIC_STRIDES,
+        <RowMajor as Layout<s![3, 4]>>::STATIC_STRIDES,
         &[Some(4), Some(1)][..]
     );
     assert_eq!(
-        <RowMajor<s![2, 3, 4]> as Layout>::STATIC_STRIDES,
+        <RowMajor as Layout<s![2, 3, 4]>>::STATIC_STRIDES,
         &[Some(12), Some(4), Some(1)][..]
     );
-    assert_eq!(<RowMajor<s![3, 4]> as Layout>::STATIC_OFFSET, Some(0));
+    assert_eq!(<RowMajor as Layout<s![3, 4]>>::STATIC_OFFSET, Some(0));
 }
 
 /// Only a proven layout satisfies `Contiguous`.
@@ -183,25 +183,25 @@ fn a_row_major_layout_derives_its_strides_from_the_shape() {
 #[test]
 fn only_a_proven_layout_satisfies_contiguous() {
     fn needs_contiguous<L: Contiguous>() {}
-    needs_contiguous::<RowMajor<s![3, 4]>>();
+    needs_contiguous::<RowMajor>();
     // needs_contiguous::<Dyn>() does not compile.
 
     // The two carry different evidence, so the distinction is real rather than
     // a marker that everything happens to satisfy.
     assert_eq!(
-        <RowMajor<s![3, 4]> as Layout>::STATIC_STRIDES,
+        <RowMajor as Layout<s![3, 4]>>::STATIC_STRIDES,
         &[Some(4), Some(1)][..]
     );
-    assert_eq!(<Dyn as Layout>::STATIC_STRIDES, &[][..]);
-    assert_eq!(<Dyn as Layout>::STATIC_OFFSET, None);
+    assert_eq!(<Dyn as Layout<Dyn>>::STATIC_STRIDES, &[][..]);
+    assert_eq!(<Dyn as Layout<Dyn>>::STATIC_OFFSET, None);
 }
 
 /// Congruence: a layout describes a shape of the same rank.
 #[test]
 fn congruence_relates_a_layout_to_its_shape() {
-    fn describes<S: Shape, L: LayoutOf<S>>() {}
+    fn describes<S: Shape, L: Layout<S>>() {}
 
-    describes::<s![3, 4], RowMajor<s![3, 4]>>();
+    describes::<s![3, 4], RowMajor>();
     // `Dyn` describes anything, because it claims nothing about it.
     describes::<s![3, 4], Dyn>();
 }
@@ -214,11 +214,11 @@ fn congruence_relates_a_layout_to_its_shape() {
 #[test]
 fn a_dynamic_axis_voids_only_the_strides_that_enclose_it() {
     assert_eq!(
-        <RowMajor<s![Batch, 3, 4]> as Layout>::STATIC_STRIDES,
+        <RowMajor as Layout<s![Batch, 3, 4]>>::STATIC_STRIDES,
         &[Some(12), Some(4), Some(1)][..]
     );
     assert_eq!(
-        <RowMajor<s![2, Batch, 4]> as Layout>::STATIC_STRIDES,
+        <RowMajor as Layout<s![2, Batch, 4]>>::STATIC_STRIDES,
         &[None, Some(4), Some(1)][..]
     );
 }
@@ -370,14 +370,14 @@ fn a_constructor_yields_a_layout_proof_without_a_runtime_check() {
 
     assert_eq!(dense.dims().as_ref(), &[3, 4]);
     assert_eq!(
-        <RowMajor<s![3, 4]> as Layout>::STATIC_STRIDES,
+        <RowMajor as Layout<s![3, 4]>>::STATIC_STRIDES,
         &[Some(4), Some(1)],
         "row-major strides are the suffix products of the extents"
     );
 
     // And it satisfies the bound that `Dyn` cannot, so the view path opens.
     fn needs_contiguous<L: Contiguous>() {}
-    needs_contiguous::<RowMajor<s![3, 4]>>();
+    needs_contiguous::<RowMajor>();
 
     let reshaped = dense
         .reshape_view::<s![12]>()
@@ -391,7 +391,7 @@ fn asking_for_nothing_still_yields_unknown() {
     let plain = incin_core::prelude::Tensor::<s![2, 2], CpuBackendImpl>::zeros(()).unwrap();
     assert_eq!(plain.numel(), 4);
     assert_eq!(
-        <Dyn as Layout>::STATIC_STRIDES,
+        <Dyn as Layout<Dyn>>::STATIC_STRIDES,
         &[] as &[Option<usize>],
         "a tensor that proved nothing must report nothing"
     );
@@ -645,7 +645,7 @@ fn dropout_carries_its_operand_layout_and_both_branches_earn_it() {
 /// dims under a different shape type, and `S2::try_from_dims` is what makes it
 /// fallible rather than free. Same buffer, same strides, same extents.
 ///
-/// So `RowMajor<S1>` and `RowMajor<S2>` describe the identical strides here,
+/// So `RowMajor` and `RowMajor` describe the identical strides here,
 /// and dropping to `Dyn` threw away a fact that was still true. The proof that
 /// it is still true is that `reshape_view` -- which needs `Contiguous` and does
 /// no runtime check -- accepts the result.
@@ -676,7 +676,7 @@ fn a_layout_proof_survives_into_shape() {
         .expect("a fresh allocation is row-major")
         .into_dyn();
     assert_dense("into_dyn", &dyn_proven);
-    let _: incin_core::prelude::Tensor<Dyn, CpuBackendImpl, f32, _, _, RowMajor<Dyn>> = dyn_proven;
+    let _: incin_core::prelude::Tensor<Dyn, CpuBackendImpl, f32, _, _, RowMajor> = dyn_proven;
 }
 
 /// A loss allocates its result, so the result is dense.
@@ -734,7 +734,7 @@ fn a_fresh_layout_reports_the_strides_it_would_be_allocated_with() {
     // A proof-carrying layout asks for exactly what a dense allocation gives,
     // which is why claiming it over one is honest.
     assert_eq!(
-        <RowMajor<s![3, 4]> as FreshLayout<s![3, 4]>>::strides(&[3, 4]).as_ref(),
+        <RowMajor as FreshLayout<s![3, 4]>>::strides(&[3, 4]).as_ref(),
         dense_strides(&[3, 4]).as_ref(),
         "RowMajor over a dense buffer must be a true claim, not a coincidence"
     );
@@ -760,21 +760,21 @@ fn channels_last_puts_channels_fastest() {
     //   stride[N] = C*H*W = 60, stride[C] = 1, stride[H] = C*W = 15, stride[W] = C = 3
     let dims = [2usize, 3, 4, 5];
     assert_eq!(
-        <ChannelsLast<s![2, 3, 4, 5]> as FreshLayout<s![2, 3, 4, 5]>>::strides(&dims).as_ref(),
+        <ChannelsLast as FreshLayout<s![2, 3, 4, 5]>>::strides(&dims).as_ref(),
         &[60, 1, 15, 3]
     );
 
     // And it is genuinely different from dense, which is the premise every
     // other assertion about this layout depends on.
     assert_ne!(
-        <ChannelsLast<s![2, 3, 4, 5]> as FreshLayout<s![2, 3, 4, 5]>>::strides(&dims).as_ref(),
+        <ChannelsLast as FreshLayout<s![2, 3, 4, 5]>>::strides(&dims).as_ref(),
         dense_strides(&dims).as_ref(),
         "if these ever agree, `ChannelsLast` has stopped being a second layout \
          and every test that uses it to exercise a refusal is vacuous"
     );
 
     // The static form agrees with the runtime one.
-    let statics = <ChannelsLast<s![2, 3, 4, 5]> as incin_core::shapes::Layout>::STATIC_STRIDES;
+    let statics = <ChannelsLast as incin_core::shapes::Layout<s![2, 3, 4, 5]>>::STATIC_STRIDES;
     assert_eq!(
         statics,
         &[Some(60), Some(1), Some(15), Some(3)],
@@ -798,8 +798,8 @@ fn channels_last_puts_channels_fastest() {
 fn channels_last_is_not_contiguous() {
     fn only_contiguous<L: incin_core::shapes::Contiguous>() {}
 
-    only_contiguous::<RowMajor<s![2, 3, 4, 5]>>();
-    // only_contiguous::<ChannelsLast<s![2, 3, 4, 5]>>();  // does not compile
+    only_contiguous::<RowMajor>();
+    // only_contiguous::<ChannelsLast>();  // does not compile
 }
 
 /// The order-statistic family allocates, so its results are dense too.
@@ -951,7 +951,7 @@ fn shape_operations_split_into_views_and_materialisations() {
         K: incin_core::prelude::DType,
         G: incin_core::tensor::grad::RequiresGrad,
         P: incin_core::dist::Placement,
-        L: Layout,
+        L: Layout<S>,
     {
         let meta = <CpuBackendImpl as StorageBackend>::metadata::<K>(t.inner());
         assert_eq!(
@@ -1035,7 +1035,7 @@ fn nhwc_alias_is_the_long_form() {
             f32,
             incin_core::prelude::NoGrad,
             incin_core::prelude::Local,
-            ChannelsLast<S>,
+            ChannelsLast,
         >,
     ) -> Nhwc<S, B> {
         long

@@ -65,7 +65,7 @@ pub(crate) fn scalar_type_matches_dtype<E: 'static>(
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     /// Cast the tensor's elements to another dtype.

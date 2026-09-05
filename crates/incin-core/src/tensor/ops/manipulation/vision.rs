@@ -21,7 +21,7 @@ impl<
     B: Backend + Execute<op::MaxPool2d>,
     K: crate::tensor::dtype::DType,
     G: RequiresGrad,
-    L: Layout,
+    L: Layout<S>,
 > Tensor<S, B, K, G, Local, L>
 where
     B: Capabilities,
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout>
+impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: Layout<S>>
     Tensor<S, B, K, G, Local, L>
 {
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).

@@ -72,7 +72,7 @@ impl<B: crate::tensor::backend::VariableBackend> crate::nn::VisitParameters<B> f
     }
 }
 
-impl<S, B, K, G, L: Layout> Module<Tensor<S, B, K, G, Local, L>> for FlattenAxes
+impl<S, B, K, G, L: Layout<S>> Module<Tensor<S, B, K, G, Local, L>> for FlattenAxes
 where
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<S, B, K, G, Start: Copy, End: Copy, L: Layout> Module<Tensor<S, B, K, G, Local, L>>
+impl<S, B, K, G, Start: Copy, End: Copy, L: Layout<S>> Module<Tensor<S, B, K, G, Local, L>>
     for Flatten<Start, End>
 where
     S: Shape + DynShape,
@@ -114,7 +114,7 @@ where
     }
 }
 
-impl<S, B, K, G, Start, End, L: Layout> Module<Tensor<S, B, K, G, Local, L>>
+impl<S, B, K, G, Start, End, L: Layout<S>> Module<Tensor<S, B, K, G, Local, L>>
     for StructuralFlatten<Start, End>
 where
     Start: StaticCursor,

@@ -78,7 +78,7 @@ there is nothing to check:
 let dense: Dense<s![3, 4], B> = Tensor::zeros(())?;
 ```
 
-`Dense<S, B>` is the alias for `Tensor<S, B, .., RowMajor<S>>`; it avoids naming
+`Dense<S, B>` is the alias for `Tensor<S, B, .., RowMajor>`; it avoids naming
 the shape twice, since a row-major layout is always congruent with the shape it
 describes.
 
@@ -113,7 +113,7 @@ the one you can name alone:
 
 ```rust,ignore
 let x: Dense<s![2, 2], _> = Cpu.tensor_in(data)?;          // usual
-let y = Cpu.tensor_in::<RowMajor<s![2, 2]>, _>(data)?;     // explicit
+let y = Cpu.tensor_in::<RowMajor, _>(data)?;               // explicit
 let data: [[f64; 2]; 2] = ...;                             // pin the dtype here
 ```
 
@@ -133,7 +133,7 @@ When the tensor came from somewhere else, its strides are a runtime fact and the
 only honest route is to look:
 
 ```rust,ignore
-let proven = t.into_row_major()?;   // Tensor<s![3, 4], B, .., RowMajor<s![3, 4]>>
+let proven = t.into_row_major()?;   // Tensor<s![3, 4], B, .., RowMajor>
 ```
 
 `into_row_major` compares the tensor's actual strides against the dense
@@ -161,7 +161,7 @@ compile error rather than an `Err`.
 
 ## What a second layout is for
 
-`ChannelsLast<S>` describes NHWC memory under an NCHW shape: `dims()` still
+`ChannelsLast` describes NHWC memory under an NCHW shape: `dims()` still
 reports `[N, C, H, W]`, and only the strides move so that channels varies
 fastest. It deliberately does not implement `Contiguous`, because its elements
 do not form one unbroken run in shape order.
@@ -177,7 +177,9 @@ It is constructible through `tensor_in`, which permutes host data into the
 layout's order before upload:
 
 ```rust,ignore
-let x: Tensor<s![1, 2, 2, 2], B, f32, NoGrad, Local, ChannelsLast<s![1, 2, 2, 2]>> =
+let x: Nhwc<s![1, 2, 2, 2], B> = Cpu.tensor_in(nchw_literal)?;
+// or, spelled out, with the shape still written once:
+let y: Tensor<s![1, 2, 2, 2], B, f32, NoGrad, Local, ChannelsLast> =
     Cpu.tensor_in(nchw_literal)?;
 ```
 
@@ -198,7 +200,9 @@ They are exposed as traits you bound where you need them:
 | Trait | Means |
 |---|---|
 | `Contiguous` | the elements form one unbroken ascending run |
-| `LayoutOf<S>` | this layout describes a tensor of shape `S` |
+| `Layout<S>` | this layout describes a tensor of shape `S` |
+| `Rank4` | the shape's rank is four, which `ChannelsLast` requires |
+| `Restatable` | the claim survives re-typing the same dims under another shape |
 
 There is no alignment trait yet. Alignment is a property of the allocation
 rather than of the shape, so no layout derived from a shape can claim it; it
@@ -208,9 +212,19 @@ This is the same pattern [shapes](./advanced_shapes.md) use: a single parameter
 carrying the bundle, with the individual facts as bounds. `L: Contiguous` reads
 well; a separate type parameter per fact would not.
 
-`LayoutOf<S>` is the congruence rule — one stride per extent. Stating it once
-is why layout is a bundle rather than several independent parameters that
-would have to be kept consistent by hand.
+`Layout<S>` is the congruence rule — one stride per extent — and it is the
+trait the tensor's own parameter is bounded on, so a layout and a shape that
+disagree cannot be named. That was not always so: the shape used to live on the
+marker (`RowMajor<S>`), congruence was a separate `LayoutOf<S>` that nothing
+bounded, and `Tensor<s![2, 3], .., RowMajor<s![9, 9, 9]>>` compiled. Moving the
+shape onto the trait made the mismatch unspellable and removed the repetition
+in the same stroke.
+
+`Rank4` is the same move for a narrower fact. `ChannelsLast` is defined against
+NCHW, and its rank check used to live in a constant that reported an empty
+stride list at any other rank — describing the mistake without preventing it.
+It is a bound now, so a channels-last claim at rank two is rejected rather than
+merely vacuous.
 
 ## Writing generic code without naming six parameters
 
@@ -236,7 +250,7 @@ constrains.
 
 For the concrete case there is `Dense<S, B>`, which also avoids naming the
 shape twice — `RowMajor` is congruent with the shape it describes, so
-`Tensor<S, .., RowMajor<S>>` repeats it for nothing.
+`Tensor<S, .., RowMajor>` is the long form.
 
 ## What the backend does with it
 
@@ -288,10 +302,13 @@ a style choice:
 - **A shape *reinterpretation* keeps the proof.** `into_shape`, `into_dyn` and
   `to_shape` look like shape changes and are not: they re-describe the same
   extents under a different shape type, over the same buffer, with the same
-  strides. `RowMajor<S1>` and `RowMajor<S2>` denote identical strides whenever
-  the conversion succeeds, so the layout is restated rather than dropped --
-  that mapping is the `RestateFor<S2>` trait. The runtime check that makes
-  these fallible is exactly the check that the two shapes agree.
+  strides, so the layout travels rather than being dropped -- `Restatable` is
+  the permission, and `Layout<S2>` is the congruence the compiler checks
+  against the destination. The runtime check that makes these fallible is
+  exactly the check that the two shapes agree. `ChannelsLast` deliberately does
+  not implement `Restatable`; the refusal is conservative rather than proven,
+  and `tests/compile_fail/into_shape_rejects_channels_last.rs` records it as
+  such.
 - **`Dropout` is the exception, and it is the shape of exception to look for.**
   It carries the operand's layout, because in eval mode -- or at `p == 0` -- it
   returns the very tensor it was handed, strides and all. That is the only

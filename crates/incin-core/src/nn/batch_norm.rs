@@ -277,7 +277,7 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::BatchNorm>,
     K: DType,
     Train: TrainState,
-    L: Layout,
+    L: Layout<InS>,
 > Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for BatchNorm2d<S, B, K, Train>
 where
     <B as Execute<op::BatchNorm>>::Output: Into<B::Storage<K>>,
