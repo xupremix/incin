@@ -59,6 +59,14 @@ One consequence worth knowing: a committed step reassigns parameter storage,
 so the `Gradients` value that produced it no longer matches anything. Collect
 fresh gradients for each step rather than reusing one across two.
 
+Resuming works the same way, plus one persisted counter. Adam and AdamW
+`state_dict` writes the `m`/`v` moments next to a scalar `step` entry, and
+`load_state_dict` restores all three, so bias correction continues with the
+same `t` the moments were accumulated under. Dictionaries written before the
+counter entry restore moments only and keep the loader's current counter
+(`set_step_count` sets one explicitly); a present-but-malformed counter is a
+typed error, never a silent default.
+
 ## Gradient clipping
 
 `clip_grad_norm` rescales every gradient in a group so their total L2 norm is

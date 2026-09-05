@@ -81,3 +81,18 @@ values; `require_grad` does the reverse. Both change `G` in the type, so a
 detached tensor accidentally used where a `Grad` one is expected is a compile
 error, not a silently-missing gradient discovered during a debugging
 session.
+
+## One backward per graph
+
+The tape is drained into the walk that consumes it: a second `backward()`
+from the same loss finds an empty graph and returns only the seed. There is
+no `retain_graph` or `create_graph`, and no second-order gradients — running
+`backward()` twice, or differentiating through a gradient (gradient
+penalties, meta-learning, Hessian-vector products), is not expressible yet.
+
+In practice this means one forward per backward. Two optimizers (or a GAN's
+discriminator and generator steps) sharing one loss must each run their own
+forward pass first; reusing a spent `Gradients` matches nothing, and a step
+that matches nothing is refused rather than silently committing. To train
+through your own operations under these rules, see [Custom and fused
+operations](./custom_operations.md).

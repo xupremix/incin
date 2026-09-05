@@ -26,6 +26,12 @@ example does not claim causal masking, normalization, dropout, portable GPU
 training, or a complete decoder implementation. Those are separate composition
 and backend contracts rather than features hidden in this example.
 
+One masking limitation to know about before designing around it: shape
+equality is reflexive only, so a `[T, T]` causal mask does not meet `[B, H,
+T, T]` scores at the type level even though the backend would broadcast
+them. Broadcast the mask explicitly (for example with `broadcast_left` to the
+full score shape) before combining it with the scores.
+
 The canonical source is included below so the Book, executable example, and
 integration proof stay together:
 

@@ -100,3 +100,10 @@ It is in `experimental` because the interface may change without a migration
 path, and because the multi-device half of its plan surface does not execute.
 Writing the loop yourself (as [Training](./training.md) shows) is neither
 harder nor less supported.
+
+Precision is stored, not honored: a `RuntimePrecisionPolicy` on the plan is
+retained and inspectable, but `fit` still runs everything at the storage
+dtype and `fit_scaled` only scales the loss scalar — there is no autocast at
+module boundaries and no f32 master-weights contract. Expecting mixed-precision
+memory or throughput wins from the policy alone silently gets plain f32 plus
+loss scaling.
