@@ -24,8 +24,8 @@ backend registrations rather than written by hand:
 
 | Backend | Operations advertised | Tier |
 |---|---:|---|
-| CPU | 158 | complete, and the only one verified by execution |
-| CUDA | 79 | preview |
+| CPU | 164 | complete, and the only one verified by execution |
+| CUDA | 159 | preview |
 | WGPU | 64 | preview |
 | Metal | 34 | preview |
 
@@ -34,13 +34,12 @@ they say what each backend *advertises*, which is not the same as what it has
 been observed to compute. Two caveats belong next to the numbers:
 
 - **Advertised is not trainable.** The per-backend tables carry a `Training`
-  column. CUDA marks 67 of its 93 rows trainable; `batch_norm` is
-  `Training: no`, so it is forward-only and cannot appear in a backward pass.
-  Metal marks 23 of 48 trainable, WGPU 53 of 76.
+  column. CUDA marks 157 of its 192 rows trainable; Metal marks 23 of 48
+  trainable, WGPU 53 of 76.
 - **Metal is the least proven of the three.** Its own feature description
   calls its executors stubs pending MTL-002/003, and every Metal row reports
   `Implementation: native`, so that column does not distinguish a finished
-  kernel from a placeholder. Read Metal's 25 as a registry claim, not a
+  kernel from a placeholder. Read Metal's 34 as a registry claim, not a
   capability.
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
@@ -50,17 +49,19 @@ activations (`relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
 `maximum`/`minimum`/`abs_diff` and the shape views `transpose`, `flatten`,
 `squeeze` and `unsqueeze`. CUDA and WGPU both advertise `softmax` and
 `rms_norm`, trainable and composed from primitives rather than fused; CUDA
-adds the two forward-only normalizations above.
+adds the normalization family through `batch_norm`, all with training rows.
 
-What **no** accelerator backend has: any loss function, `embedding`,
-`dropout`, or `group_norm`.
+What WGPU and Metal still lack: any loss function, `embedding`, `dropout`,
+or group/instance normalization. CUDA advertises all four families — the
+losses composed, the rest native — with training rows.
 
 Concretely: you can allocate tensors, run matrix arithmetic, and apply an
-activation on a GPU today, but you cannot train the models in this book's
-[Building models](./building_models.md) chapter on one. Two independent things
-are missing, not one: every loss function is CPU-only, and where a
-normalization layer does exist on CUDA it has no backward. CPU is where real
-training happens right now.
+activation on a GPU today, and CUDA advertises the full training path
+(losses, normalization with backward, dropout, embedding) where WGPU and
+Metal do not. But advertised is not verified: no GPU execution runs in CI,
+so treat the CUDA training path as declared capability awaiting execution
+evidence (issues #82 and #83), not as something already proven. CPU is where
+verified training happens right now.
 
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with

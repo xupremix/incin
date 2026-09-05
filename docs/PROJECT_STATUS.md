@@ -23,17 +23,18 @@ it is not repeated here as if it were a current API description.
 ## Feature boundaries
 
 - CPU is the verified execution backend in this environment, and the complete
-  one: all 158 backend-executable catalog operations have CPU executors.
-- CUDA, WGPU, and Metal are previews advertising 70, 46, and 25 operations
-  respectively. Each covers arithmetic, reductions, `matmul`, and
-  convolution/pooling; WGPU adds the unary activations and CUDA adds
-  `softmax` and `rms_norm` plus forward-only `layer_norm` and `batch_norm`.
-  None advertises a loss, `embedding`, `dropout`, or `group_norm`. These are
-  advertisement counts rather than verified capability: Metal's executors are
-  described as stubs pending MTL-002/003, and neither CUDA nor Metal has an
-  execution runner in CI. `docs/capabilities.md` is generated from the
-  registrations and is authoritative per operation, including its `Training`
-  column.
+  one: all 164 backend-executable catalog operations have CPU executors.
+- CUDA, WGPU, and Metal are previews advertising 159, 64, and 34 operations
+  respectively (counted from the generated matrix, not maintained here).
+  Each covers arithmetic, reductions, `matmul`, and convolution/pooling;
+  WGPU adds the unary activations and CUDA adds `softmax` and `rms_norm`,
+  the normalization family through `batch_norm`, and — unlike the other two
+  previews — the loss functions, `embedding`, and `dropout`, all with
+  training rows. These are advertisement counts rather than verified
+  capability: Metal's executors are stubs pending MTL-002/003, and neither
+  CUDA nor Metal has an execution runner in CI. `docs/capabilities.md` is
+  generated from the registrations and is authoritative per operation,
+  including its `Training` column.
 - Building the workspace does not require `protoc`. The ONNX protobuf module is
   checked in and regenerated with `cargo xtask onnx`.
 - `incin::test_utils` gates deterministic fault injection only. The shape-only

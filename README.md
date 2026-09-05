@@ -83,7 +83,7 @@ check to the type system, which means:
 
 Under the hood there's an autograd tape, AdamW/SGD, conv/pool/norm/loss layers,
 safetensors checkpoints, ONNX import for supported graphs, and CPU executors for
-all 158 backend-executable catalog operations, checked against generated
+all 164 backend-executable catalog operations, checked against generated
 conformance vectors, with finite-difference gradchecks over the differentiable
 kernels. The full honest status, including what's *not* done, lives in
 [what's not finished](https://xupremix.github.io/incin/#/whats_not_finished).

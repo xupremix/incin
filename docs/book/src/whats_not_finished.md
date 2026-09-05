@@ -9,15 +9,15 @@ of repeating a number that won't.
 
 ## Blocks real usage today
 
-- **GPU training.** See [Backends](./backends.md); the previews cover
-  basic arithmetic, reductions, `matmul`, and `conv2d`/pooling; WGPU adds
-  thirteen unary activations, and CUDA adds `softmax` and `rms_norm` plus
-  `layer_norm` (forward and backward) and forward-only `batch_norm`. None
-  of them has a loss function, `embedding`, `dropout`, or `group_norm`.
-  Training anything in this book's [Building models](./building_models.md)
-  chapter is CPU-only right now for two separate reasons: no accelerator
-  has a loss, and of the normalizations only `layer_norm` (besides the
-  composed `softmax`/`rms_norm`) runs its backward.
+- **GPU training is advertised, not verified.** See [Backends](./backends.md);
+  the previews cover basic arithmetic, reductions, `matmul`, and
+  `conv2d`/pooling; WGPU adds thirteen unary activations, and CUDA adds
+  `softmax` and `rms_norm`, the normalization family through `batch_norm`
+  with training rows, and the loss functions, `embedding`, and `dropout`.
+  WGPU and Metal still lack all of those. But no GPU execution runs in CI,
+  so the CUDA training path is a declared capability awaiting evidence
+  (issues #82 and #83), and verified training anything in this book's
+  [Building models](./building_models.md) chapter is CPU-only right now.
 - **No transformer/attention modules.** The raw
   `scaled_dot_product_attention` operation exists; there is no
   `MultiHeadAttention` or `TransformerEncoderLayer` composed module, and no
