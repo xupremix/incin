@@ -117,15 +117,43 @@ unchecked fields. If the operation is built from existing tensor methods
 instead, document it as a composition rather than as a new fused catalog
 entry.
 
-Custom autodiff registration is not part of the current extension contract.
-Unless a custom operation is composed from existing differentiable tensor
-operations, document it as forward-only.
+A custom operation that only supports certain dtypes enforces that at two
+layers, and both must agree. `supports_custom` answers the capability query
+carrying the invocation's real dtype descriptor: return `Native` for the
+dtypes the kernel holds and `Unsupported` with a `CustomOperation` reason for
+everything else, so planners and dispatch refuse before launch. The kernel
+then re-checks the storage descriptor it actually received instead of
+trusting the advertisement. Compile-time bounds on the typed frontend are the
+third layer where the operation is reached through a generic tensor method.
+There is no silent narrowing anywhere in that chain: an unsupported dtype is
+a typed refusal naming the operation, never a quiet cast or a fallback
+backend.
 
-The one seam an external crate cannot touch is the backend's thread-local tape
-push, which is `pub(crate)` by design: an in-tree backend moves its backward
-recipes into its `Execute` impl and pushes them there, so custom and built-in
-nodes share one graph. Everything else a differentiable custom operation needs
-is public, and `crates/incin-backends/examples/polar_cartesian.rs` shows it
+Custom autodiff on the CPU backend works through the public tape-record
+entry points. Inside `Execute<YourOperation>`, run the forward kernel, then
+call `incin_backends::cpu::tape_record` (or the lazy `tape_record_with`) with
+a core `TapeNode`: the output id, the input ids in recipe order, and a
+`backward` closure mapping one output gradient to one gradient per input,
+capturing its saved values by move. The node joins the same thread-local tape
+the built-in kernels record on, under the same `GradMode` gate, so mixed
+graphs walk as one graph and `AutogradBackend::backward` returns gradients
+for custom inputs alongside built-in ones. The recipe must be validated like
+any other: hand-derived gradients cross-checked against central finite
+differences, `NoGrad` asserting nothing is recorded, and capability refusals
+for dtypes the kernel does not hold. `crates/incin-core/tests/custom_training.rs`
+is the downstream fixture: a custom `square` operation training end to end
+from a user crate's perspective. Unless a custom operation records this way
+or is composed from existing differentiable tensor operations, document it as
+forward-only.
+
+The remaining seam for a fully foreign backend is its own thread-local tape
+push, which stays `pub(crate)` by design: an in-tree backend moves its
+backward recipes into its `Execute` impl and records them there, so custom
+and built-in nodes share one graph. A foreign backend does the same with its
+own thread-local over the public core `Tape` type, walked by the same
+`incin_core::exec::tape::backward` the CPU backend calls. Everything else a
+differentiable custom operation needs is public, and
+`crates/incin-backends/examples/polar_cartesian.rs` shows it
 end to end, run by CI rather than only built. Polar-to-Cartesian takes two
 inputs and returns two outputs -- the multi-output inference a single-output
 catalog row cannot express, run through the runtime dispatch path because the

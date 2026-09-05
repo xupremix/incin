@@ -147,6 +147,36 @@ pub(crate) fn push(entry: TapeEntry) {
     }
 }
 
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// This is the one seam an external crate needs and previously could not
+/// touch: the thread-local push is `pub(crate)` by design, so a downstream
+/// `Execute` implementation could run its forward kernel but never leave a
+/// recipe behind, and `Tensor::backward` (via
+/// [`AutogradBackend::backward`](incin_core::backend_authoring::AutogradBackend))
+/// could never see the custom node. Recording here puts the custom node on
+/// the same tape, in the same order, under the same
+/// [`GradMode`](incin_core::exec::GradMode) gate as every built-in kernel, so
+/// mixed graphs of built-in and custom operations walk as one graph.
+///
+/// The recipe captures its saved values by move: clone what the backward pass
+/// needs out of the forward inputs before returning, and let the closure own
+/// them. A refused push (ambient `NoGrad`) drops the closure on the spot,
+/// releasing the saved values with it.
+pub fn record(entry: TapeNode<CpuStorage>) {
+    push(entry);
+}
+
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of [`record`](self::record): the entry closure runs only
+/// when the effective [`GradMode`](incin_core::exec::GradMode) records, so a
+/// `NoGrad` forward pass pays one thread-local read instead of a saved-shape
+/// vector plus a boxed recipe per custom operation.
+pub fn record_with(entry: impl FnOnce() -> TapeNode<CpuStorage>) {
+    push_with(entry);
+}
+
 /// Number of entries currently on the tape.
 ///
 /// Public rather than `#[cfg(test)]` since `GRD-002`: the row's claim is that

@@ -58,6 +58,19 @@ pub use tape::CpuGrads;
 /// nothing, and its evidence test lives outside this crate. A guarantee
 /// nothing outside can observe is not a guarantee.
 pub use tape::depth as tape_depth;
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The downstream half of the custom-training contract: a foreign
+/// `Execute` implementation runs its forward kernel, then calls this with a
+/// [`TapeNode`](incin_core::exec::TapeNode) whose recipe maps one output
+/// gradient to one gradient per input. The node joins the same tape the
+/// built-in kernels record on, so `backward` walks mixed graphs as one.
+pub use tape::record as tape_record;
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of `tape_record`: the entry closure runs only when the
+/// ambient [`GradMode`](incin_core::exec::GradMode) records.
+pub use tape::record_with as tape_record_with;
 pub use var::CpuVar;
 
 /// The CPU pure-Rust `Backend` implementor.

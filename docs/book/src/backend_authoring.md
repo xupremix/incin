@@ -129,7 +129,10 @@ kernels silently narrowed.
 
 Two executable downstream fixtures show the contract in context:
 `crates/incin-core/tests/custom_operation.rs` implements a custom operation,
-and `crates/incin/tests/consumer-fixtures/backend-authoring-pass/` implements
+`crates/incin-core/tests/custom_training.rs` trains one end to end -- forward
+kernel, recorded backward recipe, standard backward pass, finite-difference
+cross-check, `NoGrad` silence, and an `f16` refusal -- and
+`crates/incin/tests/consumer-fixtures/backend-authoring-pass/` implements
 both a small custom backend and an inference-only backend. They are compiled
 as part of focused integration suites rather than presented as unchecked
 pseudocode.
@@ -141,6 +144,9 @@ and output inference. A backend opts into that identity through
 `Capabilities` and implements `Execute<YourOperation>` with an
 `ExecutionRequest`. The downstream fixture demonstrates descriptor creation,
 attribute validation, capability admission, and execution against the public
-authoring traits. Custom autodiff extension points are not part of this
-contract yet, so a custom operation should be documented as forward-only
-unless it is composed from existing differentiable tensor operations.
+authoring traits. A custom operation trains when its `Execute` impl additionally
+records a backward recipe: on the CPU backend call `cpu::tape_record` with a
+`TapeNode` whose closure maps one output gradient to one gradient per input
+(`crates/incin-core/tests/custom_training.rs` is the worked fixture). A
+custom operation that neither records nor composes from existing
+differentiable tensor operations should be documented as forward-only.

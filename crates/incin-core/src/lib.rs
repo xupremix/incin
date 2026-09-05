@@ -106,11 +106,12 @@ pub mod backend_authoring {
         execute_shaped_with_payload, execute_with_payload,
     };
     pub use crate::exec::{
-        Alignment, AttributeContract, CanonicalOperation, Capabilities, CapabilityQuery,
-        CapabilityRegistry, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
-        LogicalTensorMeta, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
-        OperationIdentity, OperationKey, PrecisionSpec, RuntimePrecisionPolicy, SupportLevel,
-        TensorMeta, UnsupportedReason, Validated, ValidatedInvocation, op,
+        Alignment, AttributeContract, BackwardFn, CanonicalOperation, Capabilities,
+        CapabilityQuery, CapabilityRegistry, Descriptor, DescriptorError, ExecutionContext,
+        ExecutionDescriptor, GradientMap, LogicalTensorMeta, LossScaling, OPERATION_CATALOG,
+        Operation, OperationCatalogEntry, OperationIdentity, OperationKey, PrecisionSpec,
+        RuntimePrecisionPolicy, SupportLevel, Tape, TapeNode, TapeStorage, TensorId, TensorMeta,
+        UnsupportedReason, Validated, ValidatedInvocation, op,
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
