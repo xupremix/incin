@@ -871,6 +871,8 @@ pub fn incin_backends::cpu::CpuStorage::try_from_contiguous(incin_backends::cpu:
 pub fn incin_backends::cpu::CpuStorage::try_from_parts(alloc::sync::Arc<incin_backends::cpu::CpuBuffer>, impl core::convert::AsRef<[usize]>, impl core::convert::AsRef<[usize]>, usize) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::CpuStorage::zeros_like(&incin_backends::cpu::CpuStorage) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::tape_depth() -> usize
+pub fn incin_backends::cpu::tape_record(incin_core::exec::tape::TapeNode<incin_backends::cpu::CpuStorage>)
+pub fn incin_backends::cpu::tape_record_with(impl core::ops::function::FnOnce() -> incin_core::exec::tape::TapeNode<incin_backends::cpu::CpuStorage>)
 pub fn incin_backends::cpu::typed_kernel::TypedKernel::map_binary(&[Self], &[Self], &mut [Self], impl core::ops::function::Fn(Self, Self) -> Self + core::marker::Send + core::marker::Sync)
 pub fn incin_backends::cpu::typed_kernel::TypedKernel::map_unary(&[Self], &mut [Self], impl core::ops::function::Fn(Self) -> Self + core::marker::Send + core::marker::Sync)
 pub fn incin_backends::cpu::typed_kernel::map_binary_typed<T: incin_backends::cpu::typed_kernel::TypedKernel>(&[T], &[T], impl core::ops::function::Fn(T, T) -> T + core::marker::Send + core::marker::Sync) -> alloc::vec::Vec<T>

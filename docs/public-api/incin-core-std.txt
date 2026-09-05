@@ -4768,6 +4768,10 @@ pub fn incin_core::backend_authoring::StorageBackend::storage_device<K: incin_co
 pub fn incin_core::backend_authoring::StorageBackend::storage_dtype<K: incin_core::prelude::DType>(&Self::Storage) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::backend_authoring::StorageTransfer::transfer_storage<K: incin_core::prelude::DType>(&<Self as incin_core::backend_authoring::StorageBackend>::Storage, &<K as incin_core::prelude::DType>::Field, &<NewD as incin_core::tensor::device::Device>::Field) -> incin_core::error::Result<<Self::Output as incin_core::backend_authoring::StorageBackend>::Storage> where Self::Output: incin_core::backend_authoring::SupportsDType<K>
 pub fn incin_core::backend_authoring::SupportsDType::resolve_dtype(&<K as incin_core::prelude::DType>::Field, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<incin_core::prelude::DTypeDescriptor>
+pub fn incin_core::backend_authoring::TapeStorage::accumulate(&self, &Self) -> incin_core::error::Result<Self>
+pub fn incin_core::backend_authoring::TapeStorage::has_non_finite(&self) -> incin_core::error::Result<bool>
+pub fn incin_core::backend_authoring::TapeStorage::id(&self) -> incin_core::exec::tape::TensorId
+pub fn incin_core::backend_authoring::TapeStorage::ones_like(&self) -> incin_core::error::Result<Self>
 pub fn incin_core::backend_authoring::TransferTo::transfer_var<K: incin_core::prelude::DType>(&Self::Var, &<K as incin_core::prelude::DType>::Field, &<NewD as incin_core::tensor::device::Device>::Field) -> incin_core::error::Result<<<Self as incin_core::backend_authoring::StorageTransfer<NewD>>::Output as incin_core::backend_authoring::VariableBackend>::Var> where <Self as incin_core::backend_authoring::StorageTransfer<NewD>>::Output: incin_core::backend_authoring::SupportsDType<K>
 pub fn incin_core::backend_authoring::VariableBackend::assign_var<K: incin_core::prelude::DType>(&mut Self::Var, &Self::Storage) -> incin_core::error::Result<()>
 pub fn incin_core::backend_authoring::VariableBackend::var_as_tensor<K: incin_core::prelude::DType>(&Self::Var) -> incin_core::error::Result<Self::Storage>
@@ -7943,6 +7947,9 @@ pub incin_core::backend_authoring::SupportLevel::Composed
 pub incin_core::backend_authoring::SupportLevel::Fallback
 pub incin_core::backend_authoring::SupportLevel::Native
 pub incin_core::backend_authoring::SupportLevel::Unsupported(incin_core::exec::capability::UnsupportedReason)
+pub incin_core::backend_authoring::TapeNode::backward: incin_core::exec::tape::BackwardFn<S>
+pub incin_core::backend_authoring::TapeNode::input_ids: alloc::vec::Vec<incin_core::exec::tape::TensorId>
+pub incin_core::backend_authoring::TapeNode::output_id: incin_core::exec::tape::TensorId
 pub incin_core::backend_authoring::UnsupportedReason::CustomOperation
 pub incin_core::backend_authoring::UnsupportedReason::CustomOperation::operation: incin_core::exec::catalog::OperationKey
 pub incin_core::backend_authoring::UnsupportedReason::DType
@@ -11269,11 +11276,15 @@ pub struct incin_core::backend_authoring::CapabilityRegistry
 pub struct incin_core::backend_authoring::Descriptor<O: incin_core::exec::catalog::Operation>
 pub struct incin_core::backend_authoring::ExecutionContext<B: incin_core::backend_authoring::StorageBackend>
 pub struct incin_core::backend_authoring::ExecutionRequest<'a, O, B> where O: incin_core::exec::catalog::Operation, B: incin_core::backend_authoring::StorageBackend
+pub struct incin_core::backend_authoring::GradientMap<S>
 pub struct incin_core::backend_authoring::LogicalTensorMeta
 pub struct incin_core::backend_authoring::OperationCatalogEntry
 pub struct incin_core::backend_authoring::OperationKey
 pub struct incin_core::backend_authoring::RuntimePrecisionPolicy
 pub struct incin_core::backend_authoring::ShapeBuf
+pub struct incin_core::backend_authoring::Tape<S>
+pub struct incin_core::backend_authoring::TapeNode<S>
+pub struct incin_core::backend_authoring::TensorId(_)
 pub struct incin_core::backend_authoring::TensorMeta
 pub struct incin_core::backend_authoring::Validated<O>
 pub struct incin_core::backend_authoring::ValidatedInvocation<O: incin_core::exec::catalog::Operation>
@@ -12612,6 +12623,7 @@ pub trait incin_core::backend_authoring::StorageBackend<P: incin_core::dist::pla
 pub trait incin_core::backend_authoring::StorageOutput
 pub trait incin_core::backend_authoring::StorageTransfer<NewD: incin_core::tensor::device::Device>: incin_core::backend_authoring::Backend
 pub trait incin_core::backend_authoring::SupportsDType<K: incin_core::prelude::DType>
+pub trait incin_core::backend_authoring::TapeStorage: core::clone::Clone + 'static
 pub trait incin_core::backend_authoring::TensorBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::Backend + incin_core::backend_authoring::SupportsDType<K>
 pub trait incin_core::backend_authoring::TransferBackend<NewD: incin_core::tensor::device::Device>: incin_core::backend_authoring::StorageTransfer<NewD>
 pub trait incin_core::backend_authoring::TransferTo<NewD: incin_core::tensor::device::Device> where <Self as incin_core::backend_authoring::StorageTransfer<NewD>>::Output: incin_core::backend_authoring::VariableBackend<Device = NewD>: incin_core::backend_authoring::StorageTransfer<NewD> + incin_core::backend_authoring::VariableBackend
@@ -13154,6 +13166,7 @@ pub type incin_core::advanced::SliceTarget::Output: incin_core::shapes::Shape
 pub type incin_core::advanced::SwapAt::Output: incin_core::shapes::Shape
 pub type incin_core::backend_authoring::AutogradBackend::Grads
 pub type incin_core::backend_authoring::Backend::InnerBackend: incin_core::backend_authoring::Backend
+pub type incin_core::backend_authoring::BackwardFn<S> = alloc::boxed::Box<(dyn core::ops::function::Fn(&S) -> incin_core::error::Result<alloc::vec::Vec<S>> + core::marker::Send + core::marker::Sync)>
 pub type incin_core::backend_authoring::Execute::Output: incin_core::backend_authoring::ExecuteOutput
 pub type incin_core::backend_authoring::Operation::Attributes: core::clone::Clone + core::fmt::Debug + core::cmp::PartialEq + core::any::Any + serde_core::ser::Serialize + for<'de> serde_core::de::Deserialize<'de>
 pub type incin_core::backend_authoring::PrecisionSpec::Field: core::clone::Clone + core::marker::Send + core::marker::Sync + 'static + core::fmt::Debug
