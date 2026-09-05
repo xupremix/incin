@@ -1,0 +1,4 @@
+Streaming sharded checkpoint writes (#13 write half, 0.3.0 lane) — M
+Finding: manifest + slice_bytes_for_rank (overflow-checked, dtype-aware) prove the READ contract, but both write paths are whole-checkpoint resident (serialize copies all bytes; save_checkpoint collects all state). incin-data/downloader.rs supplies the house streaming idiom: chunked io::copy, .tmp.{pid} scratch, sync_all, atomic rename.
+Recommendation: two-pass bounded ShardWriter — pass 1 plans header offsets from shapes/dtypes only (reuse slice arithmetic as offset planner, no materialized slices); pass 2 streams per-tensor payloads (host stage <= one block); finish() = fsync + rename. Half-written shards never visible; deterministic partial-failure report per #13.
+Risk: header layout must exactly match safetensors (8-byte prefix, alignment); q8_0 bypasses scalar_bytes in slicing today.

@@ -1,0 +1,4 @@
+#3 CUDA Q8_0 matmul — M | #1 GGUF Q4_0 export — M
+#3: BlockQ8_0{d:f16,qs:[i8;32]} shared in quant.rs; storage sizing exists; quant.cu kernels exist but have NO Rust launch site (dead). Recommend native Execute<op::QuantizedMatMul> via __dp4a integer dots + per-block d_l*d_r scaling, f32 out (works on Turing, the tested GTX 1650); one capability row (contiguous, rank 2+, Q8_ONLY); keep quantize/dequantize unclaimed; defer mma.s8 tensor cores.
+#1: GgufExporter silently emits F32 payload under Q4_0 metadata (can_quantize gates on Q8_0 only). Recommend Q4_0 block dtype block(32,18,2) + CPU Quantize + scheme->dtype mapping like to_bytes::<Q8_0>; documented rule "complete 32-blocks else F32"; byte-exact round-trip fixture; llama.cpp nibble-order compatibility verified by external ingest before claiming.
+Risk (#3): partial blocks, EXE-004-class length bug, NVRTC struct ABI. Risk (#1): nibble/scale convention mismatch.

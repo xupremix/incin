@@ -1,0 +1,4 @@
+#6 ROCm device+storage foundation — M
+Finding: DeviceKind non_exhaustive with Custom(u64); detect.rs fallthroughs already round-trip Custom; CUDA backend is the verbatim template (CudaBuffer/CudaStorage::try_new dtype-vs-bytes check, contract.rs StorageBackend/HostReadback/HostInterop); CI cuda-compile pattern = compile-only on GPU-less runners. Runtime crate: cubecl-hip-sys (active, ROCm 6.x-7.x, per-patch features) over stale hip-runtime-sys; no cudarc-equivalent safe layer exists.
+Recommendation: rocm feature via cubecl-hip-sys (pin one HIP patch feature per release, document tested pair); first-class DeviceKind::Rocm via normal API review (native variants are house style; Custom is for external backends); copy CUDA contract/storage split; exact-empty capability table; rocm-compile CI now, #[ignore]-gated hardware tests later.
+Risk: no AMD hardware in CI (compile guarantees only); HIP version skew across majors.

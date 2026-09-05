@@ -1,0 +1,4 @@
+#101 Attention + transformer modules — M (MHA+RoPE) / L (full stack)
+Finding: no MHA/RoPE anywhere; scaled_dot_product_attention exists but returns Dyn w/ untyped mask; Buffer<S,B,K> (param.rs:851) is the gradient-free state vehicle (RoPE tables); module pattern = shape-marker trait + builder + #[module(internal,no_stats)] + split Dyn/static impls; ValidMesh on_unimplemented = divisibility precedent.
+Recommendation: GQA as const param (MHA/MQA = KV=H/KV=1, prove H%KV==0 via on_unimplemented + compile-fail); RoPE cos/sin Buffers INSIDE MHA (never an Embedding); runtime NormPlacement enum (typestate buys nothing); SwiGLU as FeedForwardKind composing two Linears. Sequence behind #100 option A; keep transformer_block.rs as numeric oracle.
+Risk: mask typing gated on #100 (fallback: causal_mask_for::<S>() option C); CUDA execution blocked by #85/#88.

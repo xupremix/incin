@@ -1,0 +1,4 @@
+#96 Custom dtypes/devices end-to-end — L
+Finding: five subsystems demand closed BuiltinDType: distributed wire tags (data_parallel/pipeline/fsdp/tensor_parallel/planner/collective ~13 sites), exec/precision.rs Exact<K>, nn/dropout, creation.rs, backends target layer. Serialization SPLIT: postcard already ships full DTypeDescriptor; safetensors matches closed builtin_id table. Device half PARTLY LANDED: DeviceKind non_exhaustive + Custom(u64) + DeviceId::custom; mesh fingerprints free-form architecture strings already.
+Recommendation: descriptor-keyed subsystems — widen bounds BuiltinDType->ConstDType, dispatch on DTypeKey, collectives serialize keys, safetensors carries descriptors in metadata. Non-breaking (bounds only widen). Keep BuiltinDType as fast-path marker; record TensorElement seal decision separately.
+Risk: collective wire compat across mixed versions; lost exhaustiveness in kernel tables.
