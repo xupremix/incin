@@ -421,3 +421,308 @@ fn test_linspace() {
         vec![0.0, 2.5, 5.0, 7.5, 10.0]
     );
 }
+
+// ---------------------------------------------------------------------------
+// layer_norm forward parity and backward (issue #4)
+// ---------------------------------------------------------------------------
+
+use crate::cpu::storage::{CpuBuffer as HostBuffer, CpuStorage as HostStorage};
+
+/// The documented fixture: two rows of four, non-trivial weight and bias, so
+/// no symmetry can hide a permuted axis.
+fn ln_input() -> CudaStorage {
+    cuda_f32(&[2, 4], vec![0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0])
+}
+
+fn ln_weight() -> CudaStorage {
+    cuda_f32(&[4], vec![2.0, 1.0, 0.5, 1.5])
+}
+
+fn ln_bias() -> CudaStorage {
+    cuda_f32(&[4], vec![0.1, -0.1, 0.2, -0.2])
+}
+
+fn host_f32(shape: &[usize], values: Vec<f32>) -> HostStorage {
+    HostStorage::from_contiguous(HostBuffer::F32(values), shape)
+}
+
+fn host_values(storage: &HostStorage) -> Vec<f64> {
+    let total: usize = storage.shape.iter().product::<usize>().max(1);
+    let mut out = Vec::with_capacity(total);
+    let mut index = vec![0usize; storage.shape.len().max(1)];
+    for _ in 0..total {
+        out.push(storage.get(&index));
+        for (i, extent) in index.iter_mut().zip(storage.shape.iter()).rev() {
+            *i += 1;
+            if *i < *extent {
+                break;
+            }
+            *i = 0;
+        }
+    }
+    out
+}
+
+/// CPU forward plus its composed backward, on the same values the CUDA side
+/// runs: the reference the parity tests below compare against.
+fn cpu_layer_norm_grads(
+    input: &[f32],
+    weight: &[f32],
+    bias: Option<&[f32]>,
+) -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
+    let t = host_f32(&[2, 4], input.to_vec());
+    let w = host_f32(&[4], weight.to_vec());
+    let b = bias.map(|values| host_f32(&[4], values.to_vec()));
+    let out = crate::cpu::ops::norm::layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+        &t,
+        &w,
+        b.as_ref(),
+        1e-5,
+    )
+    .unwrap();
+    let grads = crate::cpu::tape::backward(&out).unwrap();
+    let read = |storage: &HostStorage| {
+        let grad = grads.get(storage.id).unwrap();
+        host_values(grad)
+    };
+    let db = match &b {
+        Some(bias_storage) => read(bias_storage),
+        None => Vec::new(),
+    };
+    (host_values(&out), read(&t), read(&w), db)
+}
+
+fn assert_close(left: &[f64], right: &[f64], tol: f64, what: &str) {
+    assert_eq!(left.len(), right.len(), "{what}: length mismatch");
+    for (i, (l, r)) in left.iter().zip(right.iter()).enumerate() {
+        let denom = l.abs().max(r.abs()).max(1e-6);
+        assert!(
+            (l - r).abs() / denom <= tol,
+            "{what}[{i}]: cuda={l} cpu={r}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_forward_matches_cpu_reference() {
+    // Regression guard for the stats-saving edit to the fused template: the
+    // two extra stores must not disturb the output values.
+    let (input, weight, bias) = (ln_input(), ln_weight(), ln_bias());
+    let out = B::layer_norm::<f32>(&input, &weight, Some(&bias), 1e-5).unwrap();
+    assert_eq!(out.shape, vec![2, 4]);
+    let (expected, _, _, _) = cpu_layer_norm_grads(
+        &[0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0],
+        &[2.0, 1.0, 0.5, 1.5],
+        Some(&[0.1, -0.1, 0.2, -0.2]),
+    );
+    let got: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| *v as f64)
+        .collect();
+    assert_close(&got, &expected, 1e-5, "forward");
+    // Draining here keeps this forward's entry off the next test's walk.
+    let _ = crate::cuda::tape::backward(&out);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_backward_matches_cpu_reference() {
+    let (input, weight, bias) = (ln_input(), ln_weight(), ln_bias());
+    let (input_id, weight_id, bias_id) = (input.id, weight.id, bias.id);
+    let out = B::layer_norm::<f32>(&input, &weight, Some(&bias), 1e-5).unwrap();
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let read = |id: incin_core::exec::TensorId| {
+        let grad = grads
+            .get(id)
+            .expect("layer norm input should have a gradient");
+        download_f32_host(grad)
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    let (_, expected_dx, expected_dw, expected_db) = cpu_layer_norm_grads(
+        &[0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0],
+        &[2.0, 1.0, 0.5, 1.5],
+        Some(&[0.1, -0.1, 0.2, -0.2]),
+    );
+    // Welford on device against composed primitives on host: agreement to
+    // four digits, not bit-exact.
+    assert_close(&read(input_id), &expected_dx, 1e-4, "dx");
+    assert_close(&read(weight_id), &expected_dw, 1e-4, "dw");
+    assert_close(&read(bias_id), &expected_db, 1e-4, "db");
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_uniform_upstream_gradient_gives_zero_input_gradient() {
+    // Analytic property, no reference needed, but it only holds for uniform
+    // weight: with `gw = gout * weight` uniform too, every input gradient is
+    // exactly rstd*(gw - mean(gw) - y*mean(gw*y)) = 0. Averaging the upstream
+    // gradient first and multiplying by weight after is the same only there,
+    // which is why this test pins the uniform-weight case while the parity
+    // tests above pin a non-uniform one.
+    let input = ln_input();
+    let weight = cuda_f32(&[4], vec![1.0; 4]);
+    let bias = ln_bias();
+    let (input_id, bias_id) = (input.id, bias.id);
+    let out = B::layer_norm::<f32>(&input, &weight, Some(&bias), 1e-5).unwrap();
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let dx = download_f32_host(grads.get(input_id).unwrap()).unwrap();
+    for (i, value) in dx.iter().enumerate() {
+        assert!(
+            value.abs() < 1e-4,
+            "dx[{i}] should vanish under uniform gradients, got {value}"
+        );
+    }
+    // Same seed, dual property: each bias element sees every row once.
+    let db = download_f32_host(grads.get(bias_id).unwrap()).unwrap();
+    assert_eq!(db, vec![2.0, 2.0, 2.0, 2.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_backward_without_bias_returns_two_gradients() {
+    let (input, weight) = (ln_input(), ln_weight());
+    let (input_id, weight_id) = (input.id, weight.id);
+    let out = B::layer_norm::<f32>(&input, &weight, None, 1e-5).unwrap();
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let dx = grads.get(input_id).expect("input should have a gradient");
+    let dw = grads.get(weight_id).expect("weight should have a gradient");
+    assert_eq!(dx.shape, vec![2, 4]);
+    assert_eq!(dw.shape, vec![4]);
+    let (_, expected_dx, expected_dw, _) = cpu_layer_norm_grads(
+        &[0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0],
+        &[2.0, 1.0, 0.5, 1.5],
+        None,
+    );
+    let read = |storage: &CudaStorage| {
+        download_f32_host(storage)
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    assert_close(&read(dx), &expected_dx, 1e-4, "dx without bias");
+    assert_close(&read(dw), &expected_dw, 1e-4, "dw without bias");
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_backward_replays_saved_statistics() {
+    // White-box proof that the kernel reads the passed statistics rather
+    // than recomputing them: the same launch with a perturbed mean must
+    // produce different gradients, and with the true statistics must match
+    // the CPU reference.
+    use crate::cuda::ops::norm::launch_layer_norm_backward;
+    let (input, weight, bias) = (ln_input(), ln_weight(), ln_bias());
+    let (_, stats) =
+        crate::cuda::ops::norm::launch_layer_norm(&input, &weight, Some(&bias), 1e-5, true)
+            .unwrap();
+    let stats = stats.expect("recording forward keeps statistics");
+    let gout = cuda_f32(&[2, 4], vec![1.0, 0.5, -0.5, 2.0, -1.0, 1.0, 0.25, -0.75]);
+    let grads =
+        launch_layer_norm_backward(&gout, &input, &weight, &stats.mean, &stats.rstd, true).unwrap();
+    let read = |storage: &CudaStorage| {
+        download_f32_host(storage)
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    let dx = read(&grads.input);
+    // Perturb the saved mean by 1.0 on both rows: a kernel that recomputed
+    // its statistics internally would be unaffected, so its gradients would
+    // coincide. They must not.
+    let bad_mean = cuda_f32(
+        &[2],
+        vec![
+            download_f32_host(&stats.mean).unwrap()[0] + 1.0,
+            download_f32_host(&stats.mean).unwrap()[1] + 1.0,
+        ],
+    );
+    let bad =
+        launch_layer_norm_backward(&gout, &input, &weight, &bad_mean, &stats.rstd, true).unwrap();
+    let bad_dx = read(&bad.input);
+    let drift: f64 = dx
+        .iter()
+        .zip(bad_dx.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f64::max);
+    assert!(
+        drift > 1e-3,
+        "perturbed statistics left the gradients unchanged: the kernel is not reading them"
+    );
+    // And with the true statistics, the CPU reference agrees. The normalized
+    // values come straight from the definition here: reading them off the
+    // operation's output would include the weight and bias the formula has
+    // already accounted for.
+    let t = host_f32(&[2, 4], vec![0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0]);
+    let w = host_f32(&[4], vec![2.0, 1.0, 0.5, 1.5]);
+    let g = host_f32(&[2, 4], vec![1.0, 0.5, -0.5, 2.0, -1.0, 1.0, 0.25, -0.75]);
+    let xv = host_values(&t);
+    let wv = host_values(&w);
+    let gv = host_values(&g);
+    let mut expected = Vec::with_capacity(8);
+    for row in 0..2 {
+        let mean = xv[row * 4..row * 4 + 4].iter().sum::<f64>() / 4.0;
+        let var = xv[row * 4..row * 4 + 4]
+            .iter()
+            .map(|v| (v - mean) * (v - mean))
+            .sum::<f64>()
+            / 4.0;
+        let rstd = 1.0 / (var + 1e-5).sqrt();
+        let yv: Vec<f64> = xv[row * 4..row * 4 + 4]
+            .iter()
+            .map(|v| (v - mean) * rstd)
+            .collect();
+        let mut sum_gw = 0.0;
+        let mut sum_gwy = 0.0;
+        for col in 0..4 {
+            sum_gw += gv[row * 4 + col] * wv[col];
+            sum_gwy += gv[row * 4 + col] * wv[col] * yv[col];
+        }
+        for col in 0..4 {
+            expected.push(
+                rstd * (gv[row * 4 + col] * wv[col] - sum_gw / 4.0 - yv[col] * sum_gwy / 4.0),
+            );
+        }
+    }
+    assert_close(&dx, &expected, 1e-4, "dx against host definition");
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_rejects_mismatched_upstream_shape() {
+    let (input, weight, bias) = (ln_input(), ln_weight(), ln_bias());
+    let (_, stats) =
+        crate::cuda::ops::norm::launch_layer_norm(&input, &weight, Some(&bias), 1e-5, true)
+            .unwrap();
+    let stats = stats.expect("recording forward keeps statistics");
+    let short = cuda_f32(&[2, 3], vec![0.0; 6]);
+    assert!(
+        crate::cuda::ops::norm::launch_layer_norm_backward(
+            &short,
+            &input,
+            &weight,
+            &stats.mean,
+            &stats.rstd,
+            true,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn layer_norm_rejects_integer_storage() {
+    // i64 passes storage validation (indices live in it) but no float kernel
+    // may read it: the launch must refuse before any transmute.
+    let bytes: Vec<u8> = (0..8).flat_map(|v: i64| v.to_le_bytes()).collect();
+    let input =
+        crate::cuda::backend::cuda_from_bytes(&[2, 4], DTypeId::I64.into(), 0, &bytes).unwrap();
+    let weight = cuda_f32(&[4], vec![1.0; 4]);
+    assert!(B::layer_norm::<i64>(&input, &weight, None, 1e-5).is_err());
+}

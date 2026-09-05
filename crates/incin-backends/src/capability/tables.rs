@@ -231,17 +231,20 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         //
         // `layer_norm` and `batch_norm` are dedicated fused kernels (Welford
         // reduction; precomputed-statistics affine transform), so `Native`.
-        // Neither pushes a tape entry yet, so `training = false`: a caller
-        // inside a gradient-tracked context that reached either would get a
-        // silently missing gradient rather than an error, which is what
-        // `training` on this row exists to prevent.
+        // `layer_norm` pushes a real tape entry replaying the forward's saved
+        // statistics, so `training = true` is a verified claim there, proven
+        // against the CPU reference on hardware. `batch_norm` still pushes
+        // nothing, so its `false` stands: a caller inside a gradient-tracked
+        // context that reached it would get a silently missing gradient
+        // rather than an error, which is what `training` on that row exists
+        // to prevent.
         native_ranked(
             OperationKind::LayerNorm,
             F32_ONLY,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::LayerNorm),
             descriptor_max_rank(OperationKind::LayerNorm),
-            false,
+            true,
         ),
         native_ranked(
             OperationKind::BatchNorm,

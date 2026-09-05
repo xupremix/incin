@@ -86,6 +86,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **CUDA `layer_norm` runs its backward.** The fused Welford forward had no
+  gradient path, so its capability row stayed inference-only. The kernel now
+  also writes per-row mean and inverse-std when the grad mode records (a flag
+  plus scratch stand-ins keep inference launches allocation-free), and a new
+  fused backward kernel replays exactly those statistics: input gradients
+  from `rstd * (gw - mean(gw) - y * mean(gw * y))` with the weight folded in
+  *before* the means, weight/bias gradients by atomic accumulation. The
+  `Execute` impl delegates to a tape-tracked backend method, and the
+  capability row is training-capable. Seven hardware tests prove it: forward
+  parity (guarding the template edit), backward parity against the composed
+  CPU reference, a uniform-gradient analytic identity, the no-bias two-output
+  case, a white-box proof that perturbed statistics move the gradients (so
+  the kernel replays rather than recomputes), and launch refusals. Writing
+  the tests caught a real defect first: the kernel averaged the upstream
+  gradient before weighting it, which passes every uniform-weight check and
+  fails parity -- the comment in the template names the trap.
+
 - **The reference page taught testing instead of usage.** Every section ended
   in a dump of worked examples while the items themselves showed either
   nothing or one-line occurrence matches, and the pool behind both included

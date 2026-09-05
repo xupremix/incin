@@ -34,9 +34,9 @@ they say what each backend *advertises*, which is not the same as what it has
 been observed to compute. Two caveats belong next to the numbers:
 
 - **Advertised is not trainable.** The per-backend tables carry a `Training`
-  column. CUDA marks 66 of its 93 rows trainable; `layer_norm` and
-  `batch_norm` are `Training: no`, so they are forward-only and cannot appear
-  in a backward pass. Metal marks 23 of 48 trainable, WGPU 53 of 76.
+  column. CUDA marks 67 of its 93 rows trainable; `batch_norm` is
+  `Training: no`, so it is forward-only and cannot appear in a backward pass.
+  Metal marks 23 of 48 trainable, WGPU 53 of 76.
 - **Metal is the least proven of the three.** Its own feature description
   calls its executors stubs pending MTL-002/003, and every Metal row reports
   `Implementation: native`, so that column does not distinguish a finished
