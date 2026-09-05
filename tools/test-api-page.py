@@ -454,6 +454,13 @@ async function run() {
   const codeBlock = doc().querySelector('.api-detail[data-d="' + withExample.dataset.i +
     '"] .api-ex pre');
   check(codeBlock.textContent.trim().length > 0, "the example renders no code");
+  /* The example is read on its own, so it must not lean on a helper defined
+     somewhere the reader cannot see. `t23()` was exactly that mistake: valid in
+     the generated test file, meaningless on the page. */
+  check(!/\bt23\(|\bu23\(/.test(codeBlock.textContent),
+    "an example calls a helper that does not exist for the reader");
+  check(codeBlock.textContent.indexOf("Tensor::<") >= 0,
+    "an example does not construct the tensor it operates on");
   check(codeBlock.querySelector(".hl-kw"), "the example is not syntax highlighted");
   check(codeBlock.scrollWidth > 0, "the example block has no content box");
 

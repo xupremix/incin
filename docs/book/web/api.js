@@ -249,7 +249,11 @@
     if (!op.example) return "";
     return '<div class="api-dcell wide"><h4>example</h4>' +
       '<figure class="api-ex bare"><pre><code>' + code(op.example) +
-      '</code></pre></figure></div>';
+      '</code></pre>' +
+      '<figcaption class="api-exnote">Compiled and run by CI. <code>B</code> is the ' +
+      'backend &mdash; <code>type B = incin_backends::cpu::CpuBackendImpl;</code> ' +
+      'here &mdash; and <code>incin::prelude::*</code> is in scope.</figcaption>' +
+      '</figure></div>';
   }
 
   function detailFor(op) {

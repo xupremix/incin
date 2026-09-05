@@ -504,3 +504,10 @@
 @media (max-width: 640px) {
   .api-ex pre { font-size: 11.5px; line-height: 1.5; padding: 9px 10px; }
 }
+/* Says what `B` is once, beside the code, rather than repeating a `use` block
+   in all 59 examples. */
+.api-exnote {
+  border: 0; background: none; padding: 7px 2px 0; font-size: 11.5px; opacity: .6;
+  display: block;
+}
+.api-exnote code { font-family: var(--font-mono); font-size: 11px; }
