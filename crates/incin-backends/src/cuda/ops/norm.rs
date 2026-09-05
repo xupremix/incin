@@ -664,7 +664,8 @@ pub(crate) fn launch_rms_norm(
     input: &CudaStorage,
     weight: &CudaStorage,
     eps: f32,
-) -> Result<CudaStorage> {
+    save_norm: bool,
+) -> Result<(CudaStorage, Option<CudaStorage>)> {
     let buffer = &*input.buffer;
     let input_numel = validate_contiguous(input, "input")?;
     let norm_size = *input
@@ -680,6 +681,16 @@ pub(crate) fn launch_rms_norm(
     crate::cuda::backend::validate_cuda_storage_dtype(buffer.dtype, "rms_norm")?;
     let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(buffer.dtype, "rms_norm")?;
     let kernel = crate::kernel::render_cuda_normalization("rms_norm", builtin_id)?;
+    let req = PrecisionRequest::new(
+        incin_core::shapes::error::OperationKind::Normalization,
+        buffer.dtype,
+        buffer.dtype,
+        incin_core::exec::LayoutClass::Contiguous,
+        1,
+        false,
+        incin_core::exec::MathMode::Fast,
+    );
+    let policy = crate::cuda::backend::native_precision(&req)?;
     let batch_size = input_numel / norm_size;
     let stream = buffer.device.default_stream();
     let mut output = CudaBuffer {
@@ -700,8 +711,35 @@ pub(crate) fn launch_rms_norm(
         device_id: buffer.device_id,
     };
     if input_numel == 0 {
-        return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
+        return Ok((
+            CudaStorage::new(Arc::new(output), input.shape.to_vec()),
+            None,
+        ));
     }
+
+    // One inverse norm factor per batch row, in compute precision, saved for
+    // the backward recipe exactly like layer_norm's statistics. A scratch
+    // stand-in behind the flag keeps inference launches valid.
+    let compute_dtype = policy.compute;
+    let norm_len = if save_norm { batch_size } else { 1 };
+    let mut norm_buf = CudaBuffer {
+        len: norm_len,
+        dtype: compute_dtype,
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(crate::bytes::byte_len(
+                    compute_dtype,
+                    norm_len,
+                    OperationKind::Normalization,
+                )?)
+                .map_err(|error| {
+                    Error::Msg(format!("CUDA RMS norm factor allocation failed: {error:?}"))
+                })?,
+        ),
+        device: buffer.device.clone(),
+        device_id: buffer.device_id,
+    };
+    let save_norm_flag = i32::from(save_norm);
 
     ensure_normalization_loaded(buffer.device_id, &kernel)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
@@ -709,10 +747,15 @@ pub(crate) fn launch_rms_norm(
 
     // SAFETY: Input, weight, and output buffers are validated for contiguous bounds and data types;
     // launch configuration uses checked block and grid dimensions with exclusive output buffer access.
+    // The factor buffer travels as bytes sized for the compute dtype.
     unsafe {
         let output_u8 = Arc::get_mut(&mut output.data).ok_or_else(|| {
             Error::Msg("fresh CUDA RMS norm output was unexpectedly shared".into())
         })?;
+        let norm_u8: &cudarc::driver::CudaSlice<u8> =
+            Arc::get_mut(&mut norm_buf.data).ok_or_else(|| {
+                Error::Msg("fresh CUDA RMS norm factor buffer was unexpectedly shared".into())
+            })?;
         use cudarc::driver::PushKernelArg;
         let block_size = 256u32;
         let warp_count = (block_size as usize).div_ceil(32);
@@ -732,106 +775,15 @@ pub(crate) fn launch_rms_norm(
             .arg(&checked_i32(batch_size, "batch size")?)
             .arg(&checked_i32(input.offset_elements, "input offset")?)
             .arg(&checked_i32(weight.offset_elements, "weight offset")?)
+            .arg(norm_u8)
+            .arg(&save_norm_flag)
             .launch(config)
             .map_err(|error| Error::Msg(format!("CUDA RMS norm launch failed: {error:?}")))?;
     }
 
-    Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))
-}
-
-#[cfg(feature = "cuda")]
-pub(crate) fn launch_softmax(input: &CudaStorage, dim: usize) -> Result<CudaStorage> {
-    let buffer = &*input.buffer;
-    let input_numel = validate_contiguous(input, "input")?;
-    let rank = input.shape.len();
-    if dim >= rank {
-        return Err(Error::Msg(format!(
-            "CUDA softmax dim {dim} is out of bounds for rank {rank}"
-        )));
-    }
-    // If softmax is along the last dimension, run the fast fused warp-reduction kernel
-    if dim == rank - 1 {
-        let norm_size = input.shape[dim];
-        if norm_size == 0 {
-            return Err(Error::Msg(
-                "CUDA softmax is undefined for empty axis".into(),
-            ));
-        }
-        let builtin_id = crate::cuda::backend::require_cuda_builtin_dtype(buffer.dtype, "softmax")?;
-        let kernel = crate::kernel::render_cuda_normalization("softmax", builtin_id)?;
-        let batch_size = input_numel / norm_size;
-        let stream = buffer.device.default_stream();
-        let mut output = CudaBuffer {
-            len: input_numel,
-            dtype: buffer.dtype,
-            data: Arc::new(
-                stream
-                    .alloc_zeros::<u8>(crate::bytes::byte_len(
-                        kernel.dtype,
-                        input_numel,
-                        OperationKind::Normalization,
-                    )?)
-                    .map_err(|error| {
-                        Error::Msg(format!("CUDA softmax allocation failed: {error:?}"))
-                    })?,
-            ),
-            device: buffer.device.clone(),
-            device_id: buffer.device_id,
-        };
-        if input_numel == 0 {
-            return Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()));
-        }
-
-        ensure_normalization_loaded(buffer.device_id, &kernel)?;
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(buffer.device_id)?;
-        let function = dispatcher.get_function(&kernel.cache_key, &kernel.entry_point)?;
-
-        // SAFETY: Input and output buffers are validated for contiguous bounds and data types;
-        // kernel execution is bounded by batch size and norm size dimensions.
-        unsafe {
-            let output_u8 = Arc::get_mut(&mut output.data).ok_or_else(|| {
-                Error::Msg("fresh CUDA softmax output was unexpectedly shared".into())
-            })?;
-            use cudarc::driver::PushKernelArg;
-            let block_size = 256u32;
-            let warp_count = (block_size as usize).div_ceil(32);
-            let shared_bytes = (warp_count * core::mem::size_of::<f32>()) as u32;
-            let config = cudarc::driver::LaunchConfig {
-                grid_dim: (batch_size as u32, 1, 1),
-                block_dim: (block_size, 1, 1),
-                shared_mem_bytes: shared_bytes,
-            };
-            stream
-                .launch_builder(&function)
-                .arg(&*buffer.data)
-                .arg(&mut *output_u8)
-                .arg(&checked_i32(norm_size, "norm size")?)
-                .arg(&checked_i32(batch_size, "batch size")?)
-                .arg(&checked_i32(input.offset_elements, "input offset")?)
-                .launch(config)
-                .map_err(|error| Error::Msg(format!("CUDA softmax launch failed: {error:?}")))?;
-        }
-
-        Ok(CudaStorage::new(Arc::new(output), input.shape.to_vec()))
-    } else {
-        // Fallback for non-last dimension: safe composed path
-        let max = crate::cuda::ops::reduce::launch_reduce_op("max", input, dim, true)?;
-        let diff = crate::cuda::backend::cuda_sub_storage(
-            input,
-            &max,
-            crate::kernel::KernelSpecialization::NONE,
-        )?;
-        let exp = crate::cuda::backend::cuda_exp_storage(
-            &diff,
-            crate::kernel::KernelSpecialization::NONE,
-        )?;
-        let sum = crate::cuda::ops::reduce::launch_reduce_op("sum", &exp, dim, true)?;
-        crate::cuda::backend::cuda_div_storage(
-            &exp,
-            &sum,
-            crate::kernel::KernelSpecialization::NONE,
-        )
-    }
+    let out = CudaStorage::new(Arc::new(output), input.shape.to_vec());
+    let factor = save_norm.then(|| CudaStorage::new(Arc::new(norm_buf), alloc::vec![batch_size]));
+    Ok((out, factor))
 }
 
 #[cfg(test)]

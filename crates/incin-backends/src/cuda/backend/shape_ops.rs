@@ -274,6 +274,32 @@ impl<D: Device> CudaBackendImpl<D> {
         Ok(out)
     }
 
+    /// Metadata-only transpose sharing the input buffer. Its backward is the
+    /// same permutation applied to the upstream gradient, which is its own
+    /// inverse exactly like the materializing transpose above -- except the
+    /// recipe materializes rather than viewing again. A strided gradient
+    /// would read back flat and break accumulation downstream, so correctness
+    /// buys one copy here while the forward keeps its zero-copy win.
+    pub(crate) fn transpose_view<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim1: usize,
+        dim2: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let t: &CudaStorage = t;
+        let out = crate::cuda::ops::shape::launch_transpose_view(t, dim1, dim2)?;
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                Ok(vec![crate::cuda::ops::shape::launch_transpose(
+                    grad_out, dim1, dim2,
+                )?])
+            }),
+        });
+        Ok(out)
+    }
+
     /// Matmul is only wired for unbatched 2D operands so far - falls through to the `Backend`
     /// trait's default `Err(UnsupportedBackendOperation)` for anything else.
     pub(crate) fn matmul<K: DType>(

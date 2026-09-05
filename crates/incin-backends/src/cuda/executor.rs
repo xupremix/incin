@@ -440,11 +440,12 @@ impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
 }
 
 /// `exp(x - max(x)) / sum(exp(x - max(x)))` along the descriptor's axis,
-/// composed entirely from already tape-tracked primitives. `max_keepdim` is
-/// not itself tape-tracked, which is exactly right here: softmax is invariant
-/// to a constant shift, so the true gradient through the stabilizing max is
-/// zero, and an untracked leaf gives that for free instead of needing a
-/// hand-written zero.
+/// composed entirely from already tape-tracked primitives: `log_softmax`
+/// (itself max/sub/exp/sum/log, every step pushing its own entry) followed
+/// by `exp`. `max_keepdim` is not itself tape-tracked, which is exactly
+/// right here: softmax is invariant to a constant shift, so the true
+/// gradient through the stabilizing max is zero, and an untracked leaf gives
+/// that for free instead of needing a hand-written zero.
 impl<D: Device> Execute<op::Softmax> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -457,13 +458,25 @@ impl<D: Device> Execute<op::Softmax> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
-        crate::cuda::ops::norm::launch_softmax(input, axis)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        let wrap = |e| kernel_error("Cuda", operation, e);
+        // Not the fused `launch_softmax`: it runs the same arithmetic but
+        // records no tape entry, so a model reaching it trained nothing
+        // downstream while the capability row promised training. Composing
+        // costs intermediates the fused kernel avoids; correctness first.
+        let log_probs =
+            crate::cuda::backend::elementwise::cuda_log_softmax::<D>(input, axis).map_err(wrap)?;
+        crate::cuda::backend::elementwise::cuda_exp_storage(
+            &log_probs,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+        .map_err(wrap)
     }
 }
 
 /// Fused single-pass RMSNorm kernel: `x * rsqrt(mean(x^2) + eps) * weight` computed in
-/// registers/SRAM with zero intermediate VRAM allocations.
+/// registers/SRAM with zero intermediate VRAM allocations. The forward saves
+/// one norm factor per row when recording; the recipe replays it, so this
+/// answers the training-capable row.
 impl<D: Device> Execute<op::RmsNorm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -476,8 +489,11 @@ impl<D: Device> Execute<op::RmsNorm> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let weight = downcast(weight, operation, "weight is not CUDA storage")?;
-        let epsilon = request.operation.descriptor().attributes().epsilon;
-        crate::cuda::ops::norm::launch_rms_norm(input, weight, epsilon as f32)
+        let epsilon = narrowed_epsilon(
+            operation,
+            request.operation.descriptor().attributes().epsilon,
+        )?;
+        CudaBackendImpl::<D>::rms_norm::<f32>(input, weight, epsilon)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
@@ -547,7 +563,7 @@ impl<D: Device> Execute<op::TransposeView> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
-        crate::cuda::ops::shape::launch_transpose_view(input, attrs.first, attrs.second)
+        CudaBackendImpl::<D>::transpose_view::<f32>(input, attrs.first, attrs.second)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
@@ -857,7 +873,10 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
                 None => scaled_scores,
             };
             let attention_axis = masked_scores.shape.len().saturating_sub(1);
-            let attention = crate::cuda::ops::norm::launch_softmax(&masked_scores, attention_axis)?;
+            // The tracked softmax, not the fused launch: attention trains, so
+            // every link in its chain must record, and the raw launch records
+            // nothing.
+            let attention = CudaBackendImpl::<D>::softmax::<f32>(&masked_scores, attention_axis)?;
             CudaBackendImpl::<D>::batched_matmul::<f32>(&attention, value)
         })()
         .map_err(|e| kernel_error("Cuda", operation, e))

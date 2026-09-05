@@ -368,7 +368,9 @@ extern "C" __global__ void {entry_point}(
     int norm_size,
     int batch_size,
     int input_offset,
-    int weight_offset)
+    int weight_offset,
+    {compute_type}* __restrict__ inv_rms_out,
+    int save_norm)
 {{
     int row = blockIdx.x;
     if (row >= batch_size) return;
@@ -410,6 +412,13 @@ extern "C" __global__ void {entry_point}(
     __syncthreads();
     
     {compute_type} inv_rms = shared_sum[0];
+    // Saved for backward like layer_norm's statistics: the recipe replays
+    // this exact factor rather than recomputing the mean of squares. The
+    // pointers stay valid in every launch (scratch stands in when nothing
+    // records) and the flag decides whether anything is written.
+    if (save_norm && tid == 0) {{
+        inv_rms_out[row] = inv_rms;
+    }}
     for (int i = tid; i < norm_size; i += blockDim.x) {{
         {compute_type} value = {load_prefix}input[row_start + i]{load_suffix};
         {compute_type} gamma = {load_prefix}weight[weight_offset + i]{load_suffix};
