@@ -49,13 +49,14 @@ pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
 
     if num_blocks > 0 {
         let block_size = 256u32;
-        let grid_size = (num_blocks as u32).div_ceil(block_size);
+        let grid_size =
+            crate::cuda::checked_u32(num_blocks, "quantize launch grid")?.div_ceil(block_size);
         let config = cudarc::driver::LaunchConfig {
             grid_dim: (grid_size, 1, 1),
             block_dim: (block_size, 1, 1),
             shared_mem_bytes: 0,
         };
-        let num_blocks_i32 = num_blocks as i32;
+        let num_blocks_i32 = crate::cuda::checked_i32(num_blocks, "quantize block count")?;
 
         // SAFETY: Launches Q8_0 quantize kernel with verified block count and output byte allocation.
         unsafe {
@@ -106,13 +107,14 @@ pub(crate) fn launch_dequantize_q8_0(input: &CudaStorage) -> Result<CudaStorage>
 
     if num_blocks > 0 {
         let block_size = 256u32;
-        let grid_size = (num_blocks as u32).div_ceil(block_size);
+        let grid_size =
+            crate::cuda::checked_u32(num_blocks, "quantize launch grid")?.div_ceil(block_size);
         let config = cudarc::driver::LaunchConfig {
             grid_dim: (grid_size, 1, 1),
             block_dim: (block_size, 1, 1),
             shared_mem_bytes: 0,
         };
-        let num_blocks_i32 = num_blocks as i32;
+        let num_blocks_i32 = crate::cuda::checked_i32(num_blocks, "quantize block count")?;
 
         // SAFETY: Launches Q8_0 dequantize kernel with verified block count and output byte allocation.
         unsafe {
@@ -179,16 +181,16 @@ pub(crate) fn launch_quantized_matmul_q8_0(
         };
 
     if out_numel > 0 {
-        let grid_x = (n as u32).div_ceil(32);
-        let grid_y = (m as u32).div_ceil(32);
+        let grid_x = crate::cuda::checked_u32(n, "quantized matmul grid x")?.div_ceil(32);
+        let grid_y = crate::cuda::checked_u32(m, "quantized matmul grid y")?.div_ceil(32);
         let config = cudarc::driver::LaunchConfig {
             grid_dim: (grid_x, grid_y, 1),
             block_dim: (32, 32, 1),
             shared_mem_bytes: 0,
         };
-        let m_i32 = m as i32;
-        let n_i32 = n as i32;
-        let k_i32 = k as i32;
+        let m_i32 = crate::cuda::checked_i32(m, "quantized matmul m")?;
+        let n_i32 = crate::cuda::checked_i32(n, "quantized matmul n")?;
+        let k_i32 = crate::cuda::checked_i32(k, "quantized matmul k")?;
 
         // SAFETY: Launches Q8_0 quantized matmul kernel with verified matrix dimensions.
         unsafe {

@@ -23,8 +23,8 @@
 #![cfg(feature = "cuda")]
 
 use incin_backends::cuda::testing::{
-    broadcast, concat, download_bytes, download_f32, download_i64, narrow, require_cuda,
-    transpose, upload_bytes, upload_f32_shaped, upload_i64,
+    broadcast, concat, download_bytes, download_f32, download_i64, narrow, require_cuda, transpose,
+    upload_bytes, upload_f32_shaped, upload_i64,
 };
 use incin_core::tensor::dtype::DTypeId;
 
@@ -195,7 +195,10 @@ fn element_bytes(width: usize, index: usize) -> Vec<u8> {
 }
 
 fn elements_bytes(width: usize, indices: &[usize]) -> Vec<u8> {
-    indices.iter().flat_map(|i| element_bytes(width, *i)).collect()
+    indices
+        .iter()
+        .flat_map(|i| element_bytes(width, *i))
+        .collect()
 }
 
 #[test]
@@ -232,7 +235,11 @@ fn movement_kernels_move_every_storage_dtype_byte_exact() {
 
         // Narrow along the leading axis (one contiguous run) and along an
         // inner axis (strided: the window is not one run).
-        let wide = upload_bytes(&[4, 2], dtype, &elements_bytes(width, &[0, 1, 2, 3, 4, 5, 6, 7]));
+        let wide = upload_bytes(
+            &[4, 2],
+            dtype,
+            &elements_bytes(width, &[0, 1, 2, 3, 4, 5, 6, 7]),
+        );
         let leading = narrow(&wide, 0, 1, 2).expect("narrow accepts the dtype");
         assert_eq!(&leading.shape[..], &[2, 2]);
         assert_eq!(
@@ -279,11 +286,11 @@ fn movement_kernels_refuse_block_quantized_storage() {
     // move by, so every movement kernel must refuse rather than reinterpret
     // block bytes as scalars. The refusal is the contract, not the absence
     // of a test for a dtype the rows never claimed.
-    let source = upload_bytes(&[2, 32], DTypeId::Q8_0, &vec![0u8; 68]);
+    let source = upload_bytes(&[2, 32], DTypeId::Q8_0, &[0u8; 68]);
     assert!(transpose(&source, 0, 1).is_err());
     assert!(broadcast(&source, &[2, 32, 1]).is_err());
     assert!(narrow(&source, 0, 0, 1).is_err());
-    let other = upload_bytes(&[2, 32], DTypeId::Q8_0, &vec![0u8; 68]);
+    let other = upload_bytes(&[2, 32], DTypeId::Q8_0, &[0u8; 68]);
     assert!(concat(&[&source, &other], 0).is_err());
 }
 
@@ -310,7 +317,10 @@ fn widened_rows_admit_i64_through_public_dispatch() {
     let handle = TensorHandle::from_storage::<B, i64, _>(&source);
     let moved = dispatch::execute::<op::TransposeExact, _>(
         &context,
-        TransposeAttributes { first: 0, second: 1 },
+        TransposeAttributes {
+            first: 0,
+            second: 1,
+        },
         &[handle],
     )
     .expect("the widened transpose row admits i64");

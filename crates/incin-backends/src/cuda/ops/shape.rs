@@ -1,5 +1,6 @@
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
+use crate::cuda::{checked_i32, checked_i32_vec, checked_u32};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use incin_core::error::{BackendError, Error, Result};
@@ -724,8 +725,14 @@ pub(crate) fn launch_embedding(weight: &CudaStorage, indices: &CudaStorage) -> R
         .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
 
     if num_indices > 0 {
-        let block_size = 256u32.min(hidden_size as u32).max(1);
-        let grid_size = num_indices as u32;
+        // `hidden_size` and `num_indices` are `usize`; the launch grid is
+        // `u32`. A bare `as` would wrap silently past `u32::MAX` and launch an
+        // undersized kernel while the error-flag path assumes full coverage,
+        // so both go through the same fallible conversion the norm kernels
+        // use instead of truncating.
+        let hidden = checked_u32(hidden_size, "embedding width")?;
+        let block_size = 256u32.min(hidden).max(1);
+        let grid_size = checked_u32(num_indices, "embedding index count")?;
         let config = cudarc::driver::LaunchConfig {
             grid_dim: (grid_size, 1, 1),
             block_dim: (block_size, 1, 1),
@@ -786,7 +793,12 @@ pub(crate) fn launch_embedding_backward(
     let function = dispatcher.get_function("embedding", entry_point)?;
     let stream = grad_output.buffer.device.default_stream();
 
-    let out_numel = vocab_size * hidden_size;
+    let out_numel = vocab_size
+        .checked_mul(hidden_size)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::EmbeddingExact,
+            expression: "CUDA embedding output element count",
+        })?;
     let byte_len =
         crate::bytes::byte_len(grad_output.buffer.dtype, out_numel, OperationKind::Storage)?;
     let mut out_buffer =
@@ -805,8 +817,12 @@ pub(crate) fn launch_embedding_backward(
         .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
 
     if num_indices > 0 {
-        let block_size = 256u32.min(hidden_size as u32).max(1);
-        let grid_size = num_indices as u32;
+        // Same fallible grid conversion as the forward kernel above: a bare
+        // `as` would wrap silently past `u32::MAX` and launch an undersized
+        // kernel while the error-flag path assumes full coverage.
+        let hidden = checked_u32(hidden_size, "embedding width")?;
+        let block_size = 256u32.min(hidden).max(1);
+        let grid_size = checked_u32(num_indices, "embedding index count")?;
         let config = cudarc::driver::LaunchConfig {
             grid_dim: (grid_size, 1, 1),
             block_dim: (block_size, 1, 1),
@@ -897,18 +913,16 @@ pub(crate) fn launch_gather(
         .alloc_zeros::<u32>(1)
         .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
 
-    let out_strides = crate::layout::contiguous_strides(&out_shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let in_strides = crate::layout::contiguous_strides(&input.shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
-    let in_shape_i32 = input.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let out_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&out_shape).strides(),
+        "stride",
+    )?;
+    let in_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&input.shape).strides(),
+        "stride",
+    )?;
+    let out_shape_i32 = checked_i32_vec(&out_shape, "shape")?;
+    let in_shape_i32 = checked_i32_vec(&input.shape, "shape")?;
 
     let out_shape_dev = stream
         .clone_htod(&out_shape_i32)
@@ -924,16 +938,19 @@ pub(crate) fn launch_gather(
         .map_err(|e| Error::Msg(format!("{e:?}")))?;
 
     let block_size = 256u32;
-    let grid_size = (out_numel as u32).div_ceil(block_size);
+    // The grid is `u32` while the count is `usize`: converting with `as`
+    // would wrap past `u32::MAX` and launch an undersized kernel over a
+    // buffer the allocation already proved that large.
+    let grid_size = checked_u32(out_numel, "element count")?.div_ceil(block_size);
     let config = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
     };
 
-    let out_numel_i32 = out_numel as i32;
-    let rank_i32 = rank as i32;
-    let dim_i32 = dim as i32;
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let dim_i32 = checked_i32(dim, "axis")?;
 
     // SAFETY: Launches gather kernel with bounds-checked parameters and device error flag.
     unsafe {
@@ -1021,23 +1038,20 @@ pub(crate) fn launch_scatter(
         .alloc_zeros::<u32>(1)
         .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
 
-    let out_strides = crate::layout::contiguous_strides(&out_shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let in_strides = crate::layout::contiguous_strides(&input.shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let idx_strides = crate::layout::contiguous_strides(&index.shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
-    let idx_shape_i32 = index.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let out_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&out_shape).strides(),
+        "stride",
+    )?;
+    let in_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&input.shape).strides(),
+        "stride",
+    )?;
+    let idx_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&index.shape).strides(),
+        "stride",
+    )?;
+    let out_shape_i32 = checked_i32_vec(&out_shape, "shape")?;
+    let idx_shape_i32 = checked_i32_vec(&index.shape, "shape")?;
 
     let out_shape_dev = stream
         .clone_htod(&out_shape_i32)
@@ -1056,17 +1070,17 @@ pub(crate) fn launch_scatter(
         .map_err(|e| Error::Msg(format!("{e:?}")))?;
 
     let block_size = 256u32;
-    let grid_size = (out_numel.max(src_numel) as u32).div_ceil(block_size);
+    let grid_size = checked_u32(out_numel.max(src_numel), "element count")?.div_ceil(block_size);
     let config = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
     };
 
-    let src_numel_i32 = src_numel as i32;
-    let out_numel_i32 = out_numel as i32;
-    let rank_i32 = rank as i32;
-    let dim_i32 = dim as i32;
+    let src_numel_i32 = checked_i32(src_numel, "element count")?;
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let dim_i32 = checked_i32(dim, "axis")?;
 
     // SAFETY: Launches scatter kernel with bounds-checked parameters and device error flag.
     unsafe {
@@ -1157,16 +1171,19 @@ fn launch_triangular(input: &CudaStorage, diagonal: i32, is_upper: bool) -> Resu
     }
 
     let block_size = 256u32;
-    let grid_size = (out_numel as u32).div_ceil(block_size);
+    // The grid is `u32` while the count is `usize`: converting with `as`
+    // would wrap past `u32::MAX` and launch an undersized kernel over a
+    // buffer the allocation already proved that large.
+    let grid_size = checked_u32(out_numel, "element count")?.div_ceil(block_size);
     let config = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
     };
 
-    let numel_i32 = out_numel as i32;
-    let rows_i32 = rows as i32;
-    let cols_i32 = cols as i32;
+    let numel_i32 = checked_i32(out_numel, "element count")?;
+    let rows_i32 = checked_i32(rows, "extent")?;
+    let cols_i32 = checked_i32(cols, "extent")?;
     let is_upper_i32 = if is_upper { 1i32 } else { 0i32 };
 
     // SAFETY: Launches triangular mask kernel with verified output shape and bounds.
@@ -1210,7 +1227,7 @@ pub(crate) fn launch_pad(
     for (d, &(before, after)) in padding.iter().enumerate() {
         let extent = input.shape[d] + before + after;
         out_shape.push(extent);
-        pad_before.push(before as i32);
+        pad_before.push(checked_i32(before, "padding")?);
     }
 
     let device_id = input.buffer.device_id;
@@ -1238,18 +1255,16 @@ pub(crate) fn launch_pad(
         return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
     }
 
-    let out_strides = crate::layout::contiguous_strides(&out_shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let in_strides = crate::layout::contiguous_strides(&input.shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
-    let in_shape_i32 = input.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let out_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&out_shape).strides(),
+        "stride",
+    )?;
+    let in_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&input.shape).strides(),
+        "stride",
+    )?;
+    let out_shape_i32 = checked_i32_vec(&out_shape, "shape")?;
+    let in_shape_i32 = checked_i32_vec(&input.shape, "shape")?;
 
     let out_shape_dev = stream
         .clone_htod(&out_shape_i32)
@@ -1268,15 +1283,18 @@ pub(crate) fn launch_pad(
         .map_err(|e| Error::Msg(format!("{e:?}")))?;
 
     let block_size = 256u32;
-    let grid_size = (out_numel as u32).div_ceil(block_size);
+    // The grid is `u32` while the count is `usize`: converting with `as`
+    // would wrap past `u32::MAX` and launch an undersized kernel over a
+    // buffer the allocation already proved that large.
+    let grid_size = checked_u32(out_numel, "element count")?.div_ceil(block_size);
     let config = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
     };
 
-    let out_numel_i32 = out_numel as i32;
-    let rank_i32 = rank as i32;
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
     let val_f32 = value as f32;
 
     // SAFETY: Launches padding kernel with validated strides and bounds.
@@ -1344,18 +1362,16 @@ pub(crate) fn launch_repeat(input: &CudaStorage, repeats: &[usize]) -> Result<Cu
         return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
     }
 
-    let out_strides = crate::layout::contiguous_strides(&out_shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let in_strides = crate::layout::contiguous_strides(&input.shape)
-        .strides()
-        .iter()
-        .map(|&s| s as i32)
-        .collect::<Vec<_>>();
-    let out_shape_i32 = out_shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
-    let in_shape_i32 = input.shape.iter().map(|&s| s as i32).collect::<Vec<_>>();
+    let out_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&out_shape).strides(),
+        "stride",
+    )?;
+    let in_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&input.shape).strides(),
+        "stride",
+    )?;
+    let out_shape_i32 = checked_i32_vec(&out_shape, "shape")?;
+    let in_shape_i32 = checked_i32_vec(&input.shape, "shape")?;
 
     let out_shape_dev = stream
         .clone_htod(&out_shape_i32)
@@ -1371,15 +1387,18 @@ pub(crate) fn launch_repeat(input: &CudaStorage, repeats: &[usize]) -> Result<Cu
         .map_err(|e| Error::Msg(format!("{e:?}")))?;
 
     let block_size = 256u32;
-    let grid_size = (out_numel as u32).div_ceil(block_size);
+    // The grid is `u32` while the count is `usize`: converting with `as`
+    // would wrap past `u32::MAX` and launch an undersized kernel over a
+    // buffer the allocation already proved that large.
+    let grid_size = checked_u32(out_numel, "element count")?.div_ceil(block_size);
     let config = cudarc::driver::LaunchConfig {
         grid_dim: (grid_size, 1, 1),
         block_dim: (block_size, 1, 1),
         shared_mem_bytes: 0,
     };
 
-    let out_numel_i32 = out_numel as i32;
-    let rank_i32 = rank as i32;
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
 
     // SAFETY: Launches repeat kernel with validated strides and bounds.
     unsafe {
@@ -1414,9 +1433,19 @@ pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
     if rank == 1 {
         let n = input.shape[0];
         let diag_abs = diagonal.unsigned_abs() as usize;
-        let out_dim = n + diag_abs;
+        let out_dim = n
+            .checked_add(diag_abs)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Diag,
+                expression: "CUDA diagonal output dimension",
+            })?;
         let out_shape = vec![out_dim, out_dim];
-        let out_numel = out_dim * out_dim;
+        let out_numel = out_dim
+            .checked_mul(out_dim)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Diag,
+                expression: "CUDA diagonal output element count",
+            })?;
         let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
 
         let mut out_buffer =
@@ -1433,14 +1462,17 @@ pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
         if n > 0 {
             let function = dispatcher.get_function("index_ops", "incin_cuda_diag_1d_to_2d")?;
             let block_size = 256u32;
-            let grid_size = (out_numel as u32).div_ceil(block_size);
+            // The grid is `u32` while the count is `usize`: converting with `as`
+            // would wrap past `u32::MAX` and launch an undersized kernel over a
+            // buffer the allocation already proved that large.
+            let grid_size = checked_u32(out_numel, "element count")?.div_ceil(block_size);
             let config = cudarc::driver::LaunchConfig {
                 grid_dim: (grid_size, 1, 1),
                 block_dim: (block_size, 1, 1),
                 shared_mem_bytes: 0,
             };
-            let n_i32 = n as i32;
-            let out_dim_i32 = out_dim as i32;
+            let n_i32 = checked_i32(n, "extent")?;
+            let out_dim_i32 = checked_i32(out_dim, "extent")?;
 
             // SAFETY: Launches diag 1d to 2d kernel with validated dimensions.
             unsafe {
@@ -1486,15 +1518,15 @@ pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
         if out_len > 0 {
             let function = dispatcher.get_function("index_ops", "incin_cuda_diag_2d_to_1d")?;
             let block_size = 256u32;
-            let grid_size = (out_len as u32).div_ceil(block_size);
+            let grid_size = checked_u32(out_len, "element count")?.div_ceil(block_size);
             let config = cudarc::driver::LaunchConfig {
                 grid_dim: (grid_size, 1, 1),
                 block_dim: (block_size, 1, 1),
                 shared_mem_bytes: 0,
             };
-            let rows_i32 = rows as i32;
-            let cols_i32 = cols as i32;
-            let out_len_i32 = out_len as i32;
+            let rows_i32 = checked_i32(rows, "extent")?;
+            let cols_i32 = checked_i32(cols, "extent")?;
+            let out_len_i32 = checked_i32(out_len, "element count")?;
 
             // SAFETY: Launches diag 2d to 1d kernel with validated dimensions.
             unsafe {

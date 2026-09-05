@@ -230,3 +230,31 @@ fn adam_carries_moment_state_between_steps() {
         );
     }
 }
+
+/// A step count the kernel ABI cannot carry is refused, not saturated: the
+/// old code pinned the bias correction at `i32::MAX`, silently training with
+/// a frozen correction instead of reporting the overflow.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn adam_step_overflow_is_a_typed_error_not_a_saturated_correction() {
+    require_cuda();
+    let attrs = AdamAttributes {
+        learning_rate: 1e-3,
+        beta1: 0.9,
+        beta2: 0.999,
+        epsilon: 1e-8,
+        step: usize::MAX,
+    };
+    let result = incin_backends::cuda::testing::adam_step(
+        &upload_f32(&params()),
+        &upload_f32(&grads()),
+        None,
+        None,
+        &attrs,
+    );
+    let error = format!("{:?}", result.expect_err("step usize::MAX must be refused"));
+    assert!(
+        error.contains("arithmetic overflow"),
+        "expected an overflow error, got: {error}"
+    );
+}

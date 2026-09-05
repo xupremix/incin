@@ -12,8 +12,28 @@ use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::Result;
 use incin_core::shapes::error::OperationKind;
+use incin_core::shapes::error::RankExpectation;
 use incin_core::shapes::{ShapeBuf, ShapeError};
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
+
+/// Split a rank-3 or rank-4 pooling geometry into `(n, c, h, w)`.
+///
+/// Rank three is the unbatched `[C, H, W]` form the CPU kernels accept:
+/// batch one, with the caller reporting the output without the leading axis.
+/// Anything else names the operation on a `ShapeMismatch` instead of
+/// panicking on `shape[3]`.
+fn batch_geometry(op: OperationKind, shape: &[usize]) -> Result<(usize, usize, usize, usize)> {
+    match shape {
+        [c, h, w] => Ok((1, *c, *h, *w)),
+        [n, c, h, w] => Ok((*n, *c, *h, *w)),
+        _ => Err(ShapeError::RankMismatch {
+            operation: op,
+            expected: RankExpectation::Between { min: 3, max: 4 },
+            actual: shape.len(),
+        }
+        .into()),
+    }
+}
 
 /// `[N, C, H, W]`-style output spatial size, matching
 /// Uses checked arithmetic and rejects invalid zero parameters.
@@ -125,14 +145,20 @@ pub(crate) fn launch_max_pool2d_forward(
     let f = dispatcher.get_function("pool", "max_pool2d_forward")?;
     let stream = t_buf.device.default_stream();
 
-    let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let (n, c, h, w) = batch_geometry(OperationKind::MaxPool2d, &t.shape)?;
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
     let (ph, pw) = padding;
     let (dh, dw) = dilation;
     let oh = out_size(h, kh, sh, ph, dh)?;
     let ow = out_size(w, kw, sw, pw, dw)?;
-    let out_shape = alloc::vec![n, c, oh, ow];
+    // The kernel always runs batched; an unbatched input reports the output
+    // without the leading axis, matching the CPU rank-3 handling.
+    let out_shape = if t.shape.len() == 3 {
+        alloc::vec![c, oh, ow]
+    } else {
+        alloc::vec![n, c, oh, ow]
+    };
     let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
@@ -261,13 +287,17 @@ pub(crate) fn launch_avg_pool2d_forward(
     let f = dispatcher.get_function("pool", "avg_pool2d_forward")?;
     let stream = t_buf.device.default_stream();
 
-    let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let (n, c, h, w) = batch_geometry(OperationKind::AvgPool2d, &t.shape)?;
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
     let (ph, pw) = padding;
     let oh = out_size(h, kh, sh, ph, 1)?;
     let ow = out_size(w, kw, sw, pw, 1)?;
-    let out_shape = alloc::vec![n, c, oh, ow];
+    let out_shape = if t.shape.len() == 3 {
+        alloc::vec![c, oh, ow]
+    } else {
+        alloc::vec![n, c, oh, ow]
+    };
     let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
@@ -325,13 +355,21 @@ pub(crate) fn launch_avg_pool2d_backward(
     let f = dispatcher.get_function("pool", "avg_pool2d_backward")?;
     let stream = go_buf.device.default_stream();
 
-    let (n, c, h, w) = (
-        input_shape[0],
-        input_shape[1],
-        input_shape[2],
-        input_shape[3],
-    );
-    let (oh, ow) = (grad_out.shape[2], grad_out.shape[3]);
+    let (n, c, h, w) = batch_geometry(OperationKind::AvgPool2d, input_shape)?;
+    // The gradient mirrors the input rank: rank three is `[C, OH, OW]`.
+    // Anything else names the operation instead of panicking on `shape[3]`.
+    let grad_dims: &[usize] = &grad_out.shape;
+    let (oh, ow) = match (input_shape.len(), grad_dims) {
+        (3, [_, oh, ow]) | (4, [_, _, oh, ow]) => (*oh, *ow),
+        _ => {
+            return Err(ShapeError::RankMismatch {
+                operation: OperationKind::AvgPool2d,
+                expected: RankExpectation::Exactly(input_shape.len()),
+                actual: grad_out.shape.len(),
+            }
+            .into());
+        }
+    };
     let (kh, kw) = kernel_size;
     let (sh, sw) = stride;
     let (ph, pw) = padding;
@@ -390,9 +428,13 @@ pub(crate) fn launch_adaptive_avg_pool2d(
     let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_forward")?;
     let stream = t_buf.device.default_stream();
 
-    let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+    let (n, c, h, w) = batch_geometry(OperationKind::AdaptiveAvgPool2dExact, &t.shape)?;
     let (oh, ow) = out_size;
-    let out_shape = alloc::vec![n, c, oh, ow];
+    let out_shape = if t.shape.len() == 3 {
+        alloc::vec![c, oh, ow]
+    } else {
+        alloc::vec![n, c, oh, ow]
+    };
     let out_total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::Pool2d)?;
 
     let mut out_b = alloc_zeroed(&stream, &t_buf.device, device_id, t_buf.dtype, out_total)?;
@@ -444,13 +486,21 @@ pub(crate) fn launch_adaptive_avg_pool2d_backward(
     let f = dispatcher.get_function("pool", "adaptive_avg_pool2d_backward")?;
     let stream = go_buf.device.default_stream();
 
-    let (n, c, h, w) = (
-        input_shape[0],
-        input_shape[1],
-        input_shape[2],
-        input_shape[3],
-    );
-    let (oh, ow) = (grad_out.shape[2], grad_out.shape[3]);
+    let (n, c, h, w) = batch_geometry(OperationKind::AdaptiveAvgPool2dExact, input_shape)?;
+    // The gradient mirrors the input rank: rank three is `[C, OH, OW]`.
+    // Anything else names the operation instead of panicking on `shape[3]`.
+    let grad_dims: &[usize] = &grad_out.shape;
+    let (oh, ow) = match (input_shape.len(), grad_dims) {
+        (3, [_, oh, ow]) | (4, [_, _, oh, ow]) => (*oh, *ow),
+        _ => {
+            return Err(ShapeError::RankMismatch {
+                operation: OperationKind::AdaptiveAvgPool2dExact,
+                expected: RankExpectation::Exactly(input_shape.len()),
+                actual: grad_out.shape.len(),
+            }
+            .into());
+        }
+    };
     let in_total = ShapeBuf::from_slice(&[n, c, h, w]).checked_numel(OperationKind::Pool2d)?;
     let out_total = ShapeBuf::from_slice(&[n, c, oh, ow]).checked_numel(OperationKind::Pool2d)?;
 

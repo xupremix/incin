@@ -16,14 +16,22 @@ const OPTIMIZER_SRC: &str = include_str!("kernels/optimizer.cu");
 /// The optimizer kernels are pointwise over the parameter buffer and bounded by
 /// memory rather than occupancy, so the block size is not tuned.
 #[cfg(feature = "cuda")]
-fn optimizer_launch_config(numel: usize) -> cudarc::driver::LaunchConfig {
+fn optimizer_launch_config(
+    numel: usize,
+) -> incin_core::error::Result<cudarc::driver::LaunchConfig> {
     const BLOCK: u32 = 256;
-    let blocks = numel.div_ceil(BLOCK as usize).max(1) as u32;
-    cudarc::driver::LaunchConfig {
+    // The grid dimension is `u32`. A bare `as` would wrap a parameter count
+    // past `u32::MAX` down to a small grid and update only part of the tensor,
+    // silently, so the narrowing reports instead of truncating.
+    let blocks = crate::cuda::checked_u32(
+        numel.div_ceil(BLOCK as usize).max(1),
+        "optimizer launch grid",
+    )?;
+    Ok(cudarc::driver::LaunchConfig {
         grid_dim: (blocks, 1, 1),
         block_dim: (BLOCK, 1, 1),
         shared_mem_bytes: 0,
-    }
+    })
 }
 
 #[cfg(feature = "cuda")]
@@ -95,7 +103,7 @@ pub(crate) fn launch_adamw_step(
         ensure_optimizer_loaded(device_id)?;
         let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         let numel = len;
-        let config = optimizer_launch_config(numel);
+        let config = optimizer_launch_config(numel)?;
         // A moment buffer that was not supplied is a null pointer, which the
         // kernel reads as "start from zero" -- that is what makes the first
         // step work without the caller allocating state it does not have yet.
@@ -118,7 +126,10 @@ pub(crate) fn launch_adamw_step(
         // Scalars must be passed at the kernel's own precision: an `f64` handed
         // to a `const float` parameter shifts every argument after it, which
         // fails silently rather than loudly.
-        let step = i32::try_from(attrs.step).unwrap_or(i32::MAX);
+        // The step feeds `beta.powi(step)`: saturating past `i32::MAX` would
+        // pin the bias correction instead of reporting the overflow, so a
+        // step the kernel ABI cannot carry is a typed error, not a clamp.
+        let step = crate::cuda::checked_i32(attrs.step, "optimizer step")?;
         match dtype.builtin_id() {
             Some(DTypeId::F32) => {
                 let function = dispatcher.get_function("optimizer", "adamw_step_f32")?;
@@ -271,7 +282,7 @@ pub(crate) fn launch_adam_step(
         ensure_optimizer_loaded(device_id)?;
         let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
         let numel = len;
-        let config = optimizer_launch_config(numel);
+        let config = optimizer_launch_config(numel)?;
         // A moment buffer that was not supplied is a null pointer, which the
         // kernel reads as "start from zero" -- that is what makes the first
         // step work without the caller allocating state it does not have yet.
@@ -294,7 +305,10 @@ pub(crate) fn launch_adam_step(
         // Scalars must be passed at the kernel's own precision: an `f64` handed
         // to a `const float` parameter shifts every argument after it, which
         // fails silently rather than loudly.
-        let step = i32::try_from(attrs.step).unwrap_or(i32::MAX);
+        // The step feeds `beta.powi(step)`: saturating past `i32::MAX` would
+        // pin the bias correction instead of reporting the overflow, so a
+        // step the kernel ABI cannot carry is a typed error, not a clamp.
+        let step = crate::cuda::checked_i32(attrs.step, "optimizer step")?;
         match dtype.builtin_id() {
             Some(DTypeId::F32) => {
                 let function = dispatcher.get_function("optimizer", "adam_step_f32")?;
@@ -418,7 +432,7 @@ pub(crate) fn launch_sgd_step(
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut p_out_buf.data)
             .ok_or_else(|| Error::Msg("fresh optimizer output was unexpectedly shared".into()))?;
         let numel = len;
-        let config = optimizer_launch_config(numel);
+        let config = optimizer_launch_config(numel)?;
 
         // The scalar arguments must be passed at the kernel's own precision.
         // A `f64` handed to a `const float` parameter does not convert -- it

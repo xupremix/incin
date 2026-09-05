@@ -8,6 +8,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **CUDA launch parameters no longer truncate silently.** The grid dimensions
+  and kernel ABI arguments are `u32`/`i32`; several launch paths narrowed a
+  `usize` with a bare `as`, which wraps past the type's maximum and launches an
+  undersized grid while the caller believes the whole tensor was covered. The
+  optimizer step was worse than truncation: it saturated with
+  `unwrap_or(i32::MAX)`, so a step past the ABI's range pinned Adam's bias
+  correction at a constant and went on training with a frozen correction rather
+  than reporting anything. Every remaining narrowing in the CUDA operation
+  paths -- the optimizer launch grid, the normalization grid, and the nine in
+  the quantization kernels -- now goes through the same `checked_u32` /
+  `checked_i32` conversions the rest of the backend already used, so an
+  out-of-range extent is a typed `ArithmeticOverflow` rather than a quiet
+  miscomputation. The six casts left are provably safe: five re-cast a value
+  `checked_i32` already validated, and one derives from a literal block size.
+- **The large-file inventory covers the two catalog files that crossed the
+  threshold.** `exec/catalog/inference.rs` (1210 lines) and
+  `exec/catalog/attributes.rs` (1204) grew past 1200 as routing primitives were
+  added, and `tools/check-large-files.sh` had been failing on them. Both now
+  carry a named reason and a stated extraction target in `docs/HANDOFF.md`,
+  which is what that gate asks for.
+
 ### Removed
 
 - **The in-place mutation operations.** `add_`, `sub_`, `mul_`, `div_`,

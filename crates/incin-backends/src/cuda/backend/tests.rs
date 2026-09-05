@@ -329,6 +329,82 @@ fn avg_pool2d_computes_correct_output_shape() {
     assert_eq!(out.shape, vec![1, 1, 2, 2]);
 }
 
+/// Rank three is the unbatched `[C, H, W]` form the CPU kernels accept: the
+/// kernel runs with batch one and the output drops the leading axis. Values
+/// are hand-computed, not mirrored from another backend, so agreement is
+/// evidence rather than a tautology.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn pool2d_accepts_unbatched_rank3_with_matching_values() {
+    let values: Vec<f32> = (1..=16).map(|v| v as f32).collect();
+    let t = cuda_f32(&[1, 4, 4], values);
+    let max = B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+    assert_eq!(max.shape, vec![1, 2, 2]);
+    assert_eq!(download_f32_host(&max).unwrap(), vec![6.0, 8.0, 14.0, 16.0]);
+    let avg = B::avg_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0)).unwrap();
+    assert_eq!(avg.shape, vec![1, 2, 2]);
+    assert_eq!(download_f32_host(&avg).unwrap(), vec![3.5, 5.5, 11.5, 13.5]);
+    let adaptive = crate::cuda::ops::pool::launch_adaptive_avg_pool2d(&t, (2, 2)).unwrap();
+    assert_eq!(adaptive.shape, vec![1, 2, 2]);
+    assert_eq!(
+        download_f32_host(&adaptive).unwrap(),
+        vec![3.5, 5.5, 11.5, 13.5]
+    );
+}
+
+/// The rank-3 backward reaches the unbatched input at its own shape: the max
+/// gradient lands only on the winning positions, the average spreads evenly.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn pool2d_rank3_backward_reaches_the_unbatched_input() {
+    let values: Vec<f32> = (1..=16).map(|v| v as f32).collect();
+    let t = cuda_f32(&[1, 4, 4], values);
+    let t_id = t.id;
+    let max = B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1)).unwrap();
+    let grads = crate::cuda::tape::backward(&max).unwrap();
+    let g = grads
+        .get(t_id)
+        .expect("rank-3 max_pool2d input should have a gradient");
+    assert_eq!(g.shape, vec![1, 4, 4]);
+    assert_eq!(
+        download_f32_host(g).unwrap(),
+        vec![
+            0.0, 0.0, 0.0, 0.0, //
+            0.0, 1.0, 0.0, 1.0, //
+            0.0, 0.0, 0.0, 0.0, //
+            0.0, 1.0, 0.0, 1.0,
+        ]
+    );
+
+    let zeros = cuda_f32(&[1, 4, 4], vec![0.0; 16]);
+    let zeros_id = zeros.id;
+    let avg = B::avg_pool2d::<f32>(&zeros, (2, 2), (2, 2), (0, 0)).unwrap();
+    let grads = crate::cuda::tape::backward(&avg).unwrap();
+    let g = grads
+        .get(zeros_id)
+        .expect("rank-3 avg_pool2d input should have a gradient");
+    assert_eq!(g.shape, vec![1, 4, 4]);
+    assert!(
+        download_f32_host(g).unwrap().iter().all(|&v| v == 0.25),
+        "each input feeds exactly one window of four"
+    );
+}
+
+/// Anything outside rank 3-4 names the operation on a `RankMismatch` instead
+/// of panicking indexing `shape[3]`. A panic would fail this test too, but
+/// the assertion pins the typed error rather than merely surviving.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn pool2d_rejects_rank5_with_a_typed_error() {
+    let t = cuda_f32(&[1, 1, 2, 2, 2], vec![0.0; 8]);
+    let result = B::max_pool2d::<f32>(&t, (2, 2), (2, 2), (0, 0), (1, 1));
+    let error = format!("{:?}", result.expect_err("rank-5 pooling must be refused"));
+    assert!(
+        error.contains("rank between 3 and 4"),
+        "expected a rank error, got: {error}"
+    );
+}
+
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn conv2d_computes_correct_output_shape_and_values() {

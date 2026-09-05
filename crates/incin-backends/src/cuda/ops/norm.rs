@@ -761,7 +761,11 @@ pub(crate) fn launch_rms_norm(
         let warp_count = (block_size as usize).div_ceil(32);
         let shared_bytes = (warp_count * core::mem::size_of::<f32>()) as u32;
         let config = cudarc::driver::LaunchConfig {
-            grid_dim: (batch_size as u32, 1, 1),
+            grid_dim: (
+                crate::cuda::checked_u32(batch_size, "norm launch grid")?,
+                1,
+                1,
+            ),
             block_dim: (block_size, 1, 1),
             shared_mem_bytes: shared_bytes,
         };
