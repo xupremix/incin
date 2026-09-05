@@ -1004,3 +1004,46 @@ fn attention_trains_end_to_end_on_cuda() {
         );
     }
 }
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn dropout_trains_through_the_replayed_mask_on_cuda() {
+    // Training dropout is mask, scale, and nothing else: the forward draws
+    // once, and the backward must replay that exact draw rather than a fresh
+    // one. The entries of the composed chain capture the materialized mask,
+    // so this checks both halves elementwise: every output is 0 or scaled
+    // input, and every gradient is 0 or the scale in the same lanes.
+    use incin_core::exec::catalog::DropoutAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+    let context = ExecutionContext::new(B::new());
+    let input = cuda_f32(&[8], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    let input_id = input.id;
+    let handle = TensorHandle::from_storage::<B, f32, _>(&input);
+    let out = dispatch::execute::<op::Dropout, _>(
+        &context,
+        DropoutAttributes {
+            probability: 0.5,
+            training: true,
+        },
+        &[handle],
+    )
+    .expect("dropout executes on CUDA");
+    let kept: Vec<f32> = download_f32_host(&out).unwrap();
+    assert_eq!(kept.len(), 8);
+    for (index, output) in kept.iter().enumerate() {
+        let input_value = (index + 1) as f32;
+        assert!(
+            *output == 0.0 || *output == 2.0 * input_value,
+            "output[{index}] = {output}: neither dropped nor scaled"
+        );
+    }
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad = grads.get(input_id).expect("input has a gradient");
+    for (output, grad) in kept.iter().zip(download_f32_host(grad).unwrap()) {
+        let expected = if *output == 0.0 { 0.0 } else { 2.0 };
+        assert!(
+            (grad - expected).abs() < 1e-5,
+            "gradient {grad} does not replay the forward mask lane (output {output})"
+        );
+    }
+}
