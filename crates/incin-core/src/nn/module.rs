@@ -176,7 +176,9 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
 ///     bias: Param<s![128], B>,
 /// }
 ///
-/// impl<B: VariableBackend, TLayout: Layout> Module<Tensor<s![1, 128], B, f32, NoGrad, Local, TLayout>> for MyLayer<B> {
+/// impl<B: VariableBackend, TLayout: Layout<s![1, 128]>>
+///     Module<Tensor<s![1, 128], B, f32, NoGrad, Local, TLayout>> for MyLayer<B>
+/// {
 ///     type Output = Tensor<s![1, 128], B, f32, NoGrad, Local, TLayout>;
 ///     type Error = Error;
 ///
