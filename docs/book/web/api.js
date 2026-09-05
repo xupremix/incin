@@ -18,6 +18,25 @@
     return;
   }
 
+  /* -- escaping ----------------------------------------------------------
+     Every string below that reaches innerHTML is build-generated JSON, but
+     CodeQL (and any future hand-written row) treats that as an XSS sink.
+     Escape text and validate URLs at the boundary so a `<` in a doc comment
+     or a `javascript:` href can never become markup. */
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function safeUrl(u, fallback) {
+    var s = String(u == null ? "" : u);
+    if (/^(https?:\/\/|\.\/|\.\.\/|#|mailto:)/.test(s)) return s;
+    return fallback || "#";
+  }
+
   /* -- theme, shared with the book -------------------------------------- */
   var THEMES = ["navy", "rust", "light", "coal", "ayu"];
   var html = document.documentElement;
@@ -93,7 +112,7 @@
      type chips would filter the wrong list. */
   function chipRow(host, items, bag, after) {
     host.innerHTML = items.map(function (it) {
-      return '<button class="api-chip" type="button" aria-pressed="false" data-k="' + it + '">' + it + '</button>';
+      return '<button class="api-chip" type="button" aria-pressed="false" data-k="' + esc(it) + '">' + esc(it) + '</button>';
     }).join("");
     host.addEventListener("click", function (e) {
       var btn = e.target.closest(".api-chip");
@@ -150,7 +169,7 @@
 
   function meter(b, e, best) {
     if (!e.dtypes.length) {
-      return '<div class="api-meter none"><span class="lab">' + b + '<b>&mdash;</b></span>' +
+      return '<div class="api-meter none"><span class="lab">' + esc(b) + '<b>&mdash;</b></span>' +
         '<span class="api-track"></span></div>';
     }
     var have = e.dtypes.length;
@@ -160,8 +179,8 @@
     var tick = best > have
       ? '<u class="api-ref" style="left:' + ((best / DTYPES) * 100).toFixed(2) + '%"></u>'
       : "";
-    return '<div class="api-meter"><span class="lab">' + b +
-      '<b>' + have + '<em>/' + DTYPES + '</em></b></span>' +
+    return '<div class="api-meter"><span class="lab">' + esc(b) +
+      '<b>' + esc(have) + '<em>/' + esc(DTYPES) + '</em></b></span>' +
       '<span class="api-track"><i class="api-fill cov-' + step(have) +
       '" style="width:' + pct.toFixed(2) + '%"></i>' + tick + '</span></div>';
   }
@@ -180,19 +199,19 @@
     var c = op.catalog;
     if (!c || !c.api) return "";
     var api = c.api.indexOf("::") === 0 ? "Tensor" + c.api : c.api;
-    return '<code class="api-sig">' + api + '</code>';
+    return '<code class="api-sig">' + esc(api) + '</code>';
   }
 
   function describe(op) {
     var c = op.catalog;
-    if (c && c.doc) return '<div class="api-desc">' + c.doc + '</div>';
+    if (c && c.doc) return '<div class="api-desc">' + esc(c.doc) + '</div>';
     if (!c) return "";
     var operands = c.arity[0] === c.arity[1]
       ? c.arity[0] + (c.arity[0] === 1 ? " operand" : " operands")
       : c.arity[0] + "\u2013" + c.arity[1] + " operands";
     var bits = [c.kind.toLowerCase(), operands];
     if (c.attrs && c.attrs !== "NoAttributes") bits.push(c.attrs);
-    return '<div class="api-desc structural">' + bits.join(" \u00b7 ") + "</div>";
+    return '<div class="api-desc structural">' + esc(bits.join(" \u00b7 ")) + "</div>";
   }
 
   function matches(op) {
@@ -232,8 +251,8 @@
       ? d.item + " on docs.rs"
       : "search docs.rs for " + d.item;
     return '<div class="api-dcell"><h4>documentation</h4>' +
-      '<a class="api-docs" href="' + d.url + '" target="_blank" rel="noopener noreferrer">' +
-      label + ' \u2197</a>' +
+      '<a class="api-docs" href="' + esc(safeUrl(d.url, "#")) + '" target="_blank" rel="noopener noreferrer">' +
+      esc(label) + ' \u2197</a>' +
       (d.kind === "search"
         ? '<p class="api-none">not published under this name in the released version</p>'
         : "") +
@@ -245,33 +264,34 @@
     var head = "";
     if (c) {
       head = '<div class="api-dcell"><h4>catalog</h4>' +
-        '<div class="api-kv"><span class="k">family</span><span class="v">' + c.family + '</span></div>' +
-        '<div class="api-kv"><span class="k">category</span><span class="v">' + c.kind + '</span></div>' +
+        '<div class="api-kv"><span class="k">family</span><span class="v">' + esc(c.family) + '</span></div>' +
+        '<div class="api-kv"><span class="k">category</span><span class="v">' + esc(c.kind) + '</span></div>' +
         '<div class="api-kv"><span class="k">operands</span><span class="v">' +
-          (c.arity[0] === c.arity[1] ? c.arity[0] : c.arity[0] + "\u2013" + c.arity[1]) + '</span></div>' +
-        '<div class="api-kv"><span class="k">attributes</span><span class="v">' + c.attrs + '</span></div>' +
-        (c.api ? '<div class="api-kv"><span class="k">reached via</span><span class="v">' + c.api + '</span></div>' : "") +
+          esc(c.arity[0] === c.arity[1] ? c.arity[0] : c.arity[0] + "\u2013" + c.arity[1]) + '</span></div>' +
+        '<div class="api-kv"><span class="k">attributes</span><span class="v">' + esc(c.attrs) + '</span></div>' +
+        (c.api ? '<div class="api-kv"><span class="k">reached via</span><span class="v">' + esc(c.api) + '</span></div>' : "") +
         '</div>';
     }
     /* The guide fills when the row opens: the usage payload is fetched on
-       demand, and the detail node does not exist before that. */
-    var example = '<div class="api-dcell"><h4>example</h4>' +
-      '<div class="api-usage" data-keys="' + usageKeysForOp(op).join(" ") + '">' +
+       demand, and the detail node does not exist before that. The example
+       cell spans the full row so code never squeezes into a 215px column. */
+    var example = '<div class="api-dcell api-example"><h4>example</h4>' +
+      '<div class="api-usage" data-keys="' + esc(usageKeysForOp(op).join(" ")) + '">' +
       '<p class="api-none">Loading example&hellip;</p></div></div>';
     return '<div class="api-detail-in">' + docsLink(op) + head + B.map(function (b) {
       var e = op.backends[b];
       if (!e.dtypes.length) {
-        return '<div class="api-dcell"><h4>' + b + '</h4>' +
+        return '<div class="api-dcell"><h4>' + esc(b) + '</h4>' +
           '<p class="api-none">not advertised &mdash; refused by the registry</p></div>';
       }
-      return '<div class="api-dcell on"><h4>' + b + '</h4>' +
+      return '<div class="api-dcell on"><h4>' + esc(b) + '</h4>' +
         '<div class="api-kv"><span class="k">dtypes</span><span class="v"><span class="api-dts">' +
-          e.dtypes.map(function (d) { return '<span class="api-dt">' + d + '</span>'; }).join("") +
+          e.dtypes.map(function (d) { return '<span class="api-dt">' + esc(d) + '</span>'; }).join("") +
         '</span></span></div>' +
-        '<div class="api-kv"><span class="k">layouts</span><span class="v">' + (e.layouts.join(", ") || "&mdash;") + '</span></div>' +
-        '<div class="api-kv"><span class="k">rank</span><span class="v">' + (e.rank || "&mdash;") + '</span></div>' +
+        '<div class="api-kv"><span class="k">layouts</span><span class="v">' + esc(e.layouts.join(", ") || "\u2014") + '</span></div>' +
+        '<div class="api-kv"><span class="k">rank</span><span class="v">' + esc(e.rank || "\u2014") + '</span></div>' +
         '<div class="api-kv"><span class="k">training</span><span class="v">' + (e.training ? "yes" : "no") + '</span></div>' +
-        '<div class="api-kv"><span class="k">impl</span><span class="v">' + (e.impl || "&mdash;") + '</span></div>' +
+        '<div class="api-kv"><span class="k">impl</span><span class="v">' + esc(e.impl || "\u2014") + '</span></div>' +
         '</div>';
     }).join("") + example + '</div>';
   }
@@ -287,12 +307,12 @@
       var best = widest(op);
       var comp = composedOn(op);
       var dot = comp.length
-        ? '<span class="api-dot" title="composed on ' + comp.join(", ") +
+        ? '<span class="api-dot" title="composed on ' + esc(comp.join(", ")) +
           ' \u2014 built from other operations rather than a kernel of its own"></span>'
         : "";
       return '<button type="button" class="api-row" aria-expanded="false" data-i="' + i + '">' +
-        '<span class="api-id"><span class="api-name">' + op.name + dot +
-          (op.catalog ? '<span class="api-fam">' + op.catalog.family + '</span>' : "") +
+        '<span class="api-id"><span class="api-name">' + esc(op.name) + dot +
+          (op.catalog ? '<span class="api-fam">' + esc(op.catalog.family) + '</span>' : "") +
         '</span>' + entry(op) + describe(op) + '</span>' +
         '<span class="api-strip">' +
           B.map(function (b) { return meter(b, op.backends[b], best); }).join("") +
@@ -326,22 +346,22 @@
   });
   document.getElementById("apiCatRows").innerHTML = cats.map(function (p) {
     var b = p[0], r = p[1];
-    return '<tr><td class="name">' + b + '</td><td class="name">' + r.operation + '</td>' +
+    return '<tr><td class="name">' + esc(b) + '</td><td class="name">' + esc(r.operation) + '</td>' +
       '<td><span class="api-dts">' +
-        (r.dtypes.map(function (d) { return '<span class="api-dt">' + d + '</span>'; }).join("") ||
+        (r.dtypes.map(function (d) { return '<span class="api-dt">' + esc(d) + '</span>'; }).join("") ||
          '<span class="api-none">&mdash;</span>') +
       '</span></td>' +
-      '<td class="name">' + (r.layouts.join(", ") || "&mdash;") + '</td>' +
-      '<td class="name">' + r.rank + '</td>' +
+      '<td class="name">' + esc(r.layouts.join(", ") || "\u2014") + '</td>' +
+      '<td class="name">' + esc(r.rank) + '</td>' +
       '<td class="name">' + (r.training ? "yes" : "no") + '</td>' +
-      '<td class="name">' + r.impl + '</td></tr>';
+      '<td class="name">' + esc(r.impl) + '</td></tr>';
   }).join("");
 
   document.getElementById("apiSurface").innerHTML = Object.keys(DATA.surface)
     .sort(function (a, b) { return DATA.surface[b] - DATA.surface[a]; })
     .map(function (k) {
-      return '<div class="api-scell"><span class="n">' + k + '</span><span class="c">' +
-        DATA.surface[k].toLocaleString() + '</span></div>';
+      return '<div class="api-scell"><span class="n">' + esc(k) + '</span><span class="c">' +
+        Number(DATA.surface[k]).toLocaleString() + '</span></div>';
     }).join("");
 
   render();
@@ -384,19 +404,19 @@
           : e.elementsPerBlock + " values packed into " + e.bytesPerBlock + " bytes")
         + " \u00b7 " + e.bitsPerElement + " bits/element \u00b7 " + e.alignment + "-byte aligned"
       : "";
-    return '<div class="api-card"><h3><code>' + d.id + '</code>' +
-      (e ? '<span class="api-fam">' + e.kind + '</span>' : "") + '</h3>' +
-      '<p>' + d.doc + '</p>' +
-      (e ? '<div class="api-kv"><span class="k">storage</span><span class="v">' + store +
+    return '<div class="api-card"><h3><code>' + esc(d.id) + '</code>' +
+      (e ? '<span class="api-fam">' + esc(e.kind) + '</span>' : "") + '</h3>' +
+      '<p>' + esc(d.doc) + '</p>' +
+      (e ? '<div class="api-kv"><span class="k">storage</span><span class="v">' + esc(store) +
            '</span></div>' : "") +
       '<div class="api-kv"><span class="k">operations</span><span class="v">' +
-        d.operations + ' of ' + DATA.operations.length + '</span></div>' +
+        esc(d.operations) + ' of ' + esc(DATA.operations.length) + '</span></div>' +
       '<div class="api-kv"><span class="k">backends</span><span class="v">' +
         (d.backends.length
-          ? d.backends.map(function (b) { return '<span class="api-dt">' + b + '</span>'; }).join("")
+          ? d.backends.map(function (b) { return '<span class="api-dt">' + esc(b) + '</span>'; }).join("")
           : "&mdash;") +
       '</span></div>' +
-      '<button type="button" class="api-exbtn" data-usage="' + d.id +
+      '<button type="button" class="api-exbtn" data-usage="' + esc(d.id) +
         '" aria-expanded="false">Example</button>' +
       '<div class="api-usage" hidden></div></div>';
   }).join("");
@@ -404,17 +424,17 @@
   /* -- backends ---------------------------------------------------------- */
   document.getElementById("backendCards").innerHTML = (DATA.backendDetail || []).map(function (b) {
     var pct = Math.round((b.operations / DATA.operations.length) * 100);
-    return '<div class="api-card"><h3>' + (LABEL[b.id] || b.id) + '</h3>' +
+    return '<div class="api-card"><h3>' + esc(LABEL[b.id] || b.id) + '</h3>' +
       '<div class="api-bar"><i class="cov-' + step9(pct) +
         '" style="width:' + pct + '%"></i></div>' +
       '<div class="api-kv"><span class="k">operations</span><span class="v">' +
-        b.operations + ' of ' + DATA.operations.length + '</span></div>' +
-      '<div class="api-kv"><span class="k">own kernel</span><span class="v">' + b.native + '</span></div>' +
-      '<div class="api-kv"><span class="k">composed</span><span class="v">' + b.composed + '</span></div>' +
-      '<div class="api-kv"><span class="k">accepts strided</span><span class="v">' + b.strided + '</span></div>' +
-      '<div class="api-kv"><span class="k">covers training</span><span class="v">' + b.training + '</span></div>' +
+        esc(b.operations) + ' of ' + esc(DATA.operations.length) + '</span></div>' +
+      '<div class="api-kv"><span class="k">own kernel</span><span class="v">' + esc(b.native) + '</span></div>' +
+      '<div class="api-kv"><span class="k">composed</span><span class="v">' + esc(b.composed) + '</span></div>' +
+      '<div class="api-kv"><span class="k">accepts strided</span><span class="v">' + esc(b.strided) + '</span></div>' +
+      '<div class="api-kv"><span class="k">covers training</span><span class="v">' + esc(b.training) + '</span></div>' +
       '<div class="api-kv"><span class="k">element types</span><span class="v">' +
-        b.dtypes.map(function (d) { return '<span class="api-dt">' + d + '</span>'; }).join("") +
+        b.dtypes.map(function (d) { return '<span class="api-dt">' + esc(d) + '</span>'; }).join("") +
       '</span></div></div>';
   }).join("");
 
@@ -442,7 +462,7 @@
       renderTypes();
     }).catch(function (error) {
       host.innerHTML = '<p class="api-empty">The type reference could not be loaded: ' +
-        String(error.message || error) + '</p>';
+        esc(String(error.message || error)) + '</p>';
     });
   }
 
@@ -472,14 +492,14 @@
       ? shown.map(function (t) {
           var where = t.module ? t.crate.replace(/-/g, "_") + "::" + t.module : t.crate.replace(/-/g, "_");
           var name = t.url
-            ? '<a class="api-tyname" href="' + t.url + '" target="_blank" rel="noopener noreferrer">' +
-              t.name + ' ↗</a>'
-            : '<span class="api-tyname plain">' + t.name + '</span>';
+            ? '<a class="api-tyname" href="' + esc(safeUrl(t.url, "#")) + '" target="_blank" rel="noopener noreferrer">' +
+              esc(t.name) + ' ↗</a>'
+            : '<span class="api-tyname plain">' + esc(t.name) + '</span>';
           return expandable(t.name,
-            '<span class="api-tykind ' + t.kind + '">' + t.kind + '</span>' +
-            '<span class="api-tyname plain">' + t.name + '</span>' +
-            '<code class="api-typath">' + where + '</code>', "api-tyrow open") +
-            (t.url ? '<a class="api-tylink" href="' + t.url +
+            '<span class="api-tykind ' + esc(t.kind) + '">' + esc(t.kind) + '</span>' +
+            '<span class="api-tyname plain">' + esc(t.name) + '</span>' +
+            '<code class="api-typath">' + esc(where) + '</code>', "api-tyrow open") +
+            (t.url ? '<a class="api-tylink" href="' + esc(safeUrl(t.url, "#")) +
               '" target="_blank" rel="noopener noreferrer">docs.rs \u2197</a>' : "");
         }).join("")
       : '<p class="api-empty">No type matches those filters.</p>';
@@ -492,8 +512,8 @@
   document.getElementById("layoutCards").innerHTML = ((DATA.layouts || {}).items || [])
     .map(function (i) {
       return '<div class="api-card">' + expandable(i.name,
-        '<h3><code>' + i.name + '</code><span class="api-fam">' + i.kind + '</span></h3>' +
-        '<p>' + i.doc + '</p>', "api-cardbtn") + '</div>';
+        '<h3><code>' + esc(i.name) + '</code><span class="api-fam">' + esc(i.kind) + '</span></h3>' +
+        '<p>' + esc(i.doc) + '</p>', "api-cardbtn") + '</div>';
     }).join("");
 
   document.getElementById("layoutRows").innerHTML = ((DATA.layouts || {}).byBackend || [])
@@ -501,12 +521,12 @@
       var total = DATA.operations.length;
       function bar(label, n) {
         var pct = Math.round((n / total) * 100);
-        return '<div class="api-meter"><span class="lab">' + label +
-          '<b>' + n + '<em>/' + total + '</em></b></span>' +
+        return '<div class="api-meter"><span class="lab">' + esc(label) +
+          '<b>' + esc(n) + '<em>/' + esc(total) + '</em></b></span>' +
           '<span class="api-track"><i class="api-fill cov-' + step9(pct) +
           '" style="width:' + pct + '%"></i></span></div>';
       }
-      return '<div class="api-lrow"><span class="api-lname">' + (LABEL[b.id] || b.id) + '</span>' +
+      return '<div class="api-lrow"><span class="api-lname">' + esc(LABEL[b.id] || b.id) + '</span>' +
         '<span class="api-strip two">' + bar("contiguous", b.contiguous) +
         bar("strided", b.strided) + '</span></div>';
     }).join("");
@@ -525,12 +545,12 @@
     document.getElementById("shCount").textContent = shown + " of " + all;
     document.getElementById("shapeGroups").innerHTML = groups.length
       ? groups.map(function (g) {
-          return '<section class="api-grp"><h3 class="api-h"><code>shapes::' + g.module +
+          return '<section class="api-grp"><h3 class="api-h"><code>shapes::' + esc(g.module) +
             '</code></h3><div class="api-list">' + g.items.map(function (i) {
               return expandable(i.name,
-                '<span class="api-tykind">' + i.kind + '</span>' +
-                '<span class="api-tyname plain">' + i.name + '</span>' +
-                '<span class="api-typath doc">' + i.doc + '</span>', "api-tyrow open");
+                '<span class="api-tykind">' + esc(i.kind) + '</span>' +
+                '<span class="api-tyname plain">' + esc(i.name) + '</span>' +
+                '<span class="api-typath doc">' + esc(i.doc) + '</span>', "api-tyrow open");
             }).join("") + '</div></section>';
         }).join("")
       : '<p class="api-empty">No shape type matches that filter.</p>';
@@ -542,8 +562,8 @@
   document.getElementById("targetRows").innerHTML = (DATA.targetApi || []).map(function (m) {
     return expandable(m.name,
       '<span class="api-tykind">fn</span>' +
-      '<span class="api-tyname plain">' + m.name + '</span>' +
-      '<span class="api-typath doc">' + m.doc + '</span>', "api-tyrow open");
+      '<span class="api-tyname plain">' + esc(m.name) + '</span>' +
+      '<span class="api-typath doc">' + esc(m.doc) + '</span>', "api-tyrow open");
   }).join("");
 
 
@@ -579,6 +599,21 @@
     return keys;
   }
 
+  function fallbackReference(names) {
+    /* Rustdoc-style standalone reference for items with no guide block:
+       a one-liner the reader can copy, not an empty panel. */
+    var primary = names[names.length - 1] || names[0] || "item";
+    var codeText = "use incin::prelude::*;\n\n// `" + primary +
+      "` — full signature via the documentation link above.\n" +
+      "// If you expected a worked example here, it has not been written yet.";
+    return '<figure class="api-ex ref-fallback"><figcaption><a href="./#/">Reference — ' + esc(primary) + '</a>' +
+      '<span class="api-extag">signature</span></figcaption>' +
+      '<pre><code>' + code(codeText) + '</code></pre>' +
+      '<p class="api-none" style="padding:8px 14px">No guide block names ' +
+        names.map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(" or ") +
+        ' yet. <a href="./#/">Start from the book</a>.</p></figure>';
+  }
+
   function usageHtml(names) {
     var seen = {}, ids = [];
     names.forEach(function (n) {
@@ -586,19 +621,30 @@
         if (!seen[i]) { seen[i] = 1; ids.push(i); }
       });
     });
+    /* Generic method names (`add`, `mul`, `sum`) match prose incidentally.
+       Rank snippets that actually call the item (` .add(`, `::add`,
+       `add!`) above ones that merely mention the word, so `.add` shows a
+       tensor example instead of "Writing an executor". */
+    var primary = names[names.length - 1] || names[0] || "";
+    function score(i) {
+      if (!primary) return 1;
+      var src = (USAGE.snippets[i] && USAGE.snippets[i].code) || "";
+      if (src.indexOf("." + primary + "(") >= 0 || src.indexOf("." + primary + "!") >= 0 ||
+          src.indexOf("::" + primary) >= 0 || src.indexOf(primary + "!") >= 0) return 0;
+      return 1;
+    }
+    ids.sort(function (a, b) { return score(a) - score(b); });
     ids = ids.slice(0, 3);
     if (!ids.length) {
-      return '<p class="api-none">No guide block names ' +
-        names.map(function (n) { return '<code>' + n + '</code>'; }).join(" or ") +
-        ' yet. <a href="./#/">Start from the book</a>.</p>';
+      return fallbackReference(names);
     }
-    return '<h4>Example</h4>' + ids.map(function (i) {
+    return ids.map(function (i) {
       var sn = USAGE.snippets[i];
       var external = sn.origin !== "book";
       return '<figure class="api-ex"><figcaption>' +
-        '<a href="' + sn.href + '"' +
+        '<a href="' + esc(safeUrl(sn.href, "#")) + '"' +
         (external ? ' target="_blank" rel="noopener noreferrer"' : '') +
-        '>' + sn.label + '</a>' +
+        '>' + esc(sn.label) + '</a>' +
         '<span class="api-extag' + (sn.checked ? " ok" : "") + '">' +
         (sn.origin === "book" ? "book" : "example") + ' \u00b7 ' +
         (sn.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
@@ -615,7 +661,7 @@
       panel.dataset.filled = "1";
     }).catch(function (error) {
       panel.innerHTML = '<p class="api-none">Example could not be loaded: ' +
-        String(error.message || error) + '</p>';
+        esc(String(error.message || error)) + '</p>';
     });
   }
 
@@ -631,7 +677,7 @@
   });
 
   function expandable(name, inner, cls) {
-    return '<button type="button" class="' + (cls || "api-item") + '" data-usage="' + name +
+    return '<button type="button" class="' + esc(cls || "api-item") + '" data-usage="' + esc(name) +
       '" aria-expanded="false">' + inner + '</button>' +
       '<div class="api-usage" hidden></div>';
   }
@@ -650,7 +696,7 @@
      from the chapter at build time so the two cannot drift apart. */
   document.getElementById("shapeGallery").innerHTML = (DATA.shapeGallery || []).map(function (g) {
     return '<figure class="api-ex">' +
-      '<figcaption><a href="' + g.href + '">' + g.heading + '</a>' +
+      '<figcaption><a href="' + esc(safeUrl(g.href, "#")) + '">' + esc(g.heading) + '</a>' +
       '<span class="api-extag' + (g.checked ? " ok" : "") + '">' +
       (g.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
       '<pre><code>' + code(g.code) + '</code></pre></figure>';
@@ -662,10 +708,10 @@
      Steps resolve from that file at build time; a renamed function fails the
      build instead of silently dropping a step. */
   document.getElementById("flowSteps").innerHTML = (DATA.authoring || []).map(function (a) {
-    return '<li class="api-step"><h3>' + a.title + '</h3>' +
+    return '<li class="api-step"><h3>' + esc(a.title) + '</h3>' +
       '<figure class="api-ex">' +
-      '<figcaption><a href="' + a.href + '" target="_blank" rel="noopener noreferrer">' +
-      a.where + '</a>' +
+      '<figcaption><a href="' + esc(safeUrl(a.href, "#")) + '" target="_blank" rel="noopener noreferrer">' +
+      esc(a.where) + '</a>' +
       '<span class="api-extag' + (a.checked ? " ok" : "") + '">' +
       (a.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
       '<pre><code>' + code(a.code) + '</code></pre></figure></li>';

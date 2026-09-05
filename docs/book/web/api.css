@@ -230,7 +230,11 @@
    the whole track past a phone viewport. The figures keep their own
    horizontal scroll; the page must not scroll. */
 .api-detail-in > *, #flowSteps > .api-step, #shapeGallery > .api-ex { min-width: 0; }
-.api-dcell { background: var(--bg); padding: 12px 15px; }
+.api-dcell { background: var(--bg); padding: 12px 15px; min-width: 0; }
+/* The worked example is a full-width strip, not a seventh narrow column:
+   code squeezed into a 215px auto-fit track is what clipped every readout. */
+.api-dcell.api-example { grid-column: 1 / -1; }
+.api-dcell.api-example .api-usage { border-bottom: 0; padding-bottom: 0; }
 .api-dcell h4 {
   margin: 0 0 8px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
   letter-spacing: .05em; text-transform: uppercase; opacity: .7; border: 0; padding: 0;
@@ -316,10 +320,18 @@
 }
 .api-docs:hover, .api-docs:focus-visible { text-decoration: underline; }
 
-/* -- section nav -------------------------------------------------------- */
+/* -- section nav --------------------------------------------------------
+   Sticky, so the reader never scrolls back up to switch reference sections.
+   Horizontally scrollable on narrow viewports instead of wrapping off-screen. */
 .api-tabs {
   display: flex; flex-wrap: wrap; gap: 4px; margin: 22px 0 4px;
   border-bottom: 1px solid var(--table-border);
+  position: sticky; top: var(--menu-bar-height); z-index: 6;
+  background: var(--bg); padding-top: 6px;
+}
+@media (max-width: 700px) {
+  .api-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .api-tab { flex: none; }
 }
 .api-tab {
   appearance: none; background: none; border: 0; cursor: pointer;
@@ -369,8 +381,8 @@
 
 /* -- type reference ----------------------------------------------------- */
 .api-tyrow {
-  display: grid; grid-template-columns: 58px minmax(0, auto) minmax(0, 1fr);
-  gap: 10px; align-items: baseline;
+  display: grid; grid-template-columns: 58px minmax(0, 200px) minmax(0, 1fr);
+  gap: 10px; align-items: baseline; min-width: 0;
   padding: 7px 4px; border-bottom: 1px solid var(--table-border);
 }
 .api-tyrow:last-child { border-bottom: 0; }
@@ -390,7 +402,8 @@
 .api-tyname.plain { color: inherit; opacity: .8; }
 .api-typath {
   font-family: var(--font-mono); font-size: 11.5px; opacity: .5;
-  overflow-wrap: anywhere; background: none; padding: 0; border: 0;
+  overflow-wrap: anywhere; word-break: break-word; min-width: 0;
+  background: none; padding: 0; border: 0;
 }
 
 /* -- layouts, shapes, target -------------------------------------------- */
@@ -444,11 +457,11 @@
 /* -- expandable items --------------------------------------------------- */
 .api-cardbtn, .api-tyrow.open {
   appearance: none; background: none; border: 0; font: inherit; color: inherit;
-  text-align: left; width: 100%; cursor: pointer; padding: 0;
+  text-align: left; width: 100%; cursor: pointer; padding: 0; min-width: 0;
 }
 .api-tyrow.open {
-  display: grid; grid-template-columns: 58px minmax(0, auto) minmax(0, 1fr);
-  gap: 10px; align-items: baseline; padding: 7px 4px;
+  display: grid; grid-template-columns: 58px minmax(0, 200px) minmax(0, 1fr);
+  gap: 10px; align-items: baseline; padding: 7px 4px; min-width: 0;
   border-bottom: 1px solid var(--table-border);
 }
 @media (max-width: 640px) { .api-tyrow.open { grid-template-columns: 58px minmax(0, 1fr); } }
@@ -459,7 +472,12 @@
 .api-tyrow.open[aria-expanded="true"] { font-weight: 600; }
 .api-usage {
   padding: 10px 0 14px; border-bottom: 1px solid var(--table-border);
+  min-width: 0; max-width: 100%;
 }
+/* One header per example cell: the cell already carries the EXAMPLE label,
+   so figures inside only need captions, not a second heading. */
+.api-usage .api-ex { max-width: 100%; min-width: 0; }
+.api-usage .api-ex pre { max-width: 100%; }
 .api-usage h4 {
   margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
   opacity: .55; font-family: var(--font-mono);
