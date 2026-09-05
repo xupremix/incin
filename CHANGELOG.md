@@ -56,6 +56,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Public custom-backward recording for CPU training ops.**
+  `incin_backends::cpu::tape_record` (and the lazy `tape_record_with`) lets
+  a downstream `Execute` implementation leave a VJP recipe on the same
+  thread-local tape the built-in kernels record on, under the same `GradMode`
+  gate. Previously the push was `pub(crate)`, so a custom operation could run
+  forward but never train. `Tape`, `TapeNode`, `TapeStorage`, `BackwardFn`,
+  `GradientMap`, and `TensorId` are also re-exported from
+  `backend_authoring`, and `crates/incin-core/tests/custom_training.rs`
+  proves the contract from a user crate's perspective: forward, recorded
+  backward through the standard pass, finite-difference cross-check, `NoGrad`
+  silence, and an `f16` typed refusal for an `f32`-only kernel.
 - **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**
   `Dense<S, B>` has always existed for the row-major case, and its own
   documentation names the reason: the layout is congruent with the shape it
@@ -80,6 +91,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Adam/AdamW `state_dict` persists the step counter.** The dictionary gains
+  a scalar `step` entry next to `m.*`/`v.*`, and `load_state_dict` restores
+  it, so a resumed run bias-corrects with the same `t` the moments were
+  accumulated under instead of silently mis-correcting until the counters
+  realigned (previously repaired by hand with `set_step_count`).
+  Dictionaries predating the entry restore moments only and keep the
+  loader's counter; a malformed entry is a typed error. Saving now requires
+  the backend's `Full` creation row for the parameter dtype, and loading the
+  `HostReadback` profile — both hold for every in-tree backend.
+- **WGPU `unbroadcast` materializes scalar seeds (#121).** Reduced leading
+  and size-1 axes as before, then handed anything smaller straight on, so a
+  reduced-all-the-way scalar seed reached recipes needing full width. It now
+  compatibility-checks and materializes through the existing broadcast
+  kernel, mirroring the CUDA tail. The reported sub/abs/`mean_all`
+  composition passes on the software adapter either way (WGPU recipes grow
+  through `broadcast_as`); the tail closes the same latent hole for fused
+  and external recipes, pinned by a new end-to-end regression test.
 - **CUDA launch parameters no longer truncate silently.** The grid dimensions
   and kernel ABI arguments are `u32`/`i32`; several launch paths narrowed a
   `usize` with a bare `as`, which wraps past the type's maximum and launches an

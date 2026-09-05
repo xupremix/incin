@@ -234,7 +234,10 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
 
     /// Exports optimizer state tensors (`m` and `v` momentum buffers) plus a
     /// scalar `step` counter entry, so a resumed run bias-corrects with the
-    /// same `t` the moments were accumulated under.
+    /// same `t` the moments were accumulated under. The counter inherits
+    /// `K`'s precision (`f16`/`bf16` counters are exact to 2048 steps) and
+    /// requires the backend's `Full` creation row for `K`; without it saving
+    /// fails with a typed refusal rather than silently dropping the counter.
     pub fn state_dict(
         &self,
         prefix: &str,
@@ -473,7 +476,10 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
 
     /// Exports optimizer state tensors (`m` and `v` momentum buffers) plus a
     /// scalar `step` counter entry, so a resumed run bias-corrects with the
-    /// same `t` the moments were accumulated under.
+    /// same `t` the moments were accumulated under. The counter inherits
+    /// `K`'s precision (`f16`/`bf16` counters are exact to 2048 steps) and
+    /// requires the backend's `Full` creation row for `K`; without it saving
+    /// fails with a typed refusal rather than silently dropping the counter.
     pub fn state_dict(
         &self,
         prefix: &str,
