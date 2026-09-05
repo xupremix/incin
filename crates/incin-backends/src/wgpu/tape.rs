@@ -183,7 +183,19 @@ pub fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuSto
         }
     }
 
-    Ok(result)
+    if result.shape[..] == target_shape[..] {
+        return Ok(result);
+    }
+
+    // Expand what reduction left smaller: a reduced-all-the-way scalar seed
+    // reaches here with fewer elements than its target, and the kernels
+    // downstream do not broadcast scalars implicitly the way the CPU ones
+    // do, so handing the scalar on produces a shape the next launch refuses.
+    // `broadcast_shape` checks compatibility first, because the materializer
+    // assumes a legal target and would otherwise read out of bounds on a
+    // genuinely incompatible shape. Mirrors the CUDA tail (`cuda/tape.rs`).
+    crate::layout::broadcast_shape(&result.shape, target_shape)?;
+    crate::wgpu::backend::broadcast_storage(&result, target_shape)
 }
 
 fn sum_dim_squeeze(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
