@@ -420,6 +420,10 @@ pub(super) const fn entry(
             | OperationKind::ToHostFloatVec
             | OperationKind::ToHostIntScalar
             | OperationKind::ToHostIntVec
+            // A boolean encoding of an integer index has no derivative to
+            // state: the output is not a function of a value the tape could
+            // perturb, it is a function of which slot the index names.
+            | OperationKind::OneHot
     ) {
         gradient = GradientRule::None;
     } else if matches!(operation, OperationKind::ToDevice) {

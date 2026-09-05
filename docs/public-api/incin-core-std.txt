@@ -195,6 +195,7 @@ impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog:
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::NarrowAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::NoAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::NormAttributes
+impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::OneHotAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::PadAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::PixelShuffleAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::Pool2dAttributes
@@ -312,6 +313,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Neg
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Norm
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::NormalRandom
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::OneHot
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Ones
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Outer
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Pad
@@ -489,6 +491,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Nar
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Neg
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Norm
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::NormalRandom
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::OneHot
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Ones
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Outer
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Pad
@@ -3041,6 +3044,8 @@ pub const incin_core::exec::catalog::op::Norm::ID: incin_core::shapes::Operation
 pub const incin_core::exec::catalog::op::Norm::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::NormalRandom::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::NormalRandom::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::OneHot::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::OneHot::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Ones::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Ones::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Outer::ID: incin_core::shapes::OperationKind
@@ -4724,6 +4729,7 @@ pub fn incin_core::backend_authoring::AttributeContract::axis(&self) -> core::op
 pub fn incin_core::backend_authoring::AttributeContract::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::backend_authoring::AttributeContract::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::backend_authoring::AttributeContract::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::backend_authoring::AttributeContract::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::backend_authoring::AttributeContract::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::backend_authoring::AttributeContract::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::backend_authoring::AttributeContract::optional_bias(&self) -> core::option::Option<bool>
@@ -4818,6 +4824,7 @@ pub fn incin_core::exec::AttributeContract::axis(&self) -> core::option::Option<
 pub fn incin_core::exec::AttributeContract::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::AttributeContract::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::AttributeContract::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::AttributeContract::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::AttributeContract::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::AttributeContract::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::AttributeContract::optional_bias(&self) -> core::option::Option<bool>
@@ -4853,6 +4860,7 @@ pub fn incin_core::exec::catalog::AdamAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::AdamAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AdamAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AdamAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AdamAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdamAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdamAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AdamAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4863,6 +4871,7 @@ pub fn incin_core::exec::catalog::AdamWAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::AdamWAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AdamWAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AdamWAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AdamWAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdamWAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdamWAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AdamWAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4873,6 +4882,7 @@ pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::axis(&self) -> core:
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4883,6 +4893,7 @@ pub fn incin_core::exec::catalog::AddmmAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::AddmmAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AddmmAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AddmmAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AddmmAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AddmmAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AddmmAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AddmmAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4893,6 +4904,7 @@ pub fn incin_core::exec::catalog::ArangeAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::ArangeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ArangeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ArangeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ArangeAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ArangeAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ArangeAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ArangeAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4903,6 +4915,7 @@ pub fn incin_core::exec::catalog::ArgsortAttributes::axis(&self) -> core::option
 pub fn incin_core::exec::catalog::ArgsortAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ArgsortAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ArgsortAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ArgsortAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ArgsortAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ArgsortAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ArgsortAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4913,6 +4926,7 @@ pub fn incin_core::exec::catalog::AttentionAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::AttentionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AttentionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AttentionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AttentionAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AttentionAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AttentionAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AttentionAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4923,6 +4937,7 @@ pub fn incin_core::exec::catalog::AttributeContract::axis(&self) -> core::option
 pub fn incin_core::exec::catalog::AttributeContract::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AttributeContract::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AttributeContract::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AttributeContract::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AttributeContract::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AttributeContract::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AttributeContract::optional_bias(&self) -> core::option::Option<bool>
@@ -4933,6 +4948,7 @@ pub fn incin_core::exec::catalog::AvgPool2dAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AvgPool2dAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4943,6 +4959,7 @@ pub fn incin_core::exec::catalog::AxisAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::AxisAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AxisAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AxisAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AxisAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AxisAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AxisAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AxisAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4953,6 +4970,7 @@ pub fn incin_core::exec::catalog::AxisVarianceAttributes::axis(&self) -> core::o
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::AxisVarianceAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4963,6 +4981,7 @@ pub fn incin_core::exec::catalog::BatchNormAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::BatchNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::BatchNormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::BatchNormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::BatchNormAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::BatchNormAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::BatchNormAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::BatchNormAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4977,6 +4996,7 @@ pub fn incin_core::exec::catalog::ChunkAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::ChunkAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ChunkAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ChunkAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ChunkAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ChunkAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ChunkAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ChunkAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4987,6 +5007,7 @@ pub fn incin_core::exec::catalog::ClampAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::ClampAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ClampAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ClampAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ClampAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ClampAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ClampAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ClampAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -4997,6 +5018,7 @@ pub fn incin_core::exec::catalog::Conv1dAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::Conv1dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::Conv1dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::Conv1dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::Conv1dAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Conv1dAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Conv1dAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::Conv1dAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5007,6 +5029,7 @@ pub fn incin_core::exec::catalog::Conv2dAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::Conv2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::Conv2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::Conv2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::Conv2dAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Conv2dAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Conv2dAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::Conv2dAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5017,6 +5040,7 @@ pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::axis(&self) -> core
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5027,6 +5051,7 @@ pub fn incin_core::exec::catalog::CreationAttributes::axis(&self) -> core::optio
 pub fn incin_core::exec::catalog::CreationAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::CreationAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::CreationAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::CreationAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::CreationAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::CreationAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::CreationAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5037,6 +5062,7 @@ pub fn incin_core::exec::catalog::DTypeAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::DTypeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DTypeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DTypeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::DTypeAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DTypeAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DTypeAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::DTypeAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5047,6 +5073,7 @@ pub fn incin_core::exec::catalog::DataAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::DataAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DataAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DataAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::DataAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DataAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DataAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::DataAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5069,6 +5096,7 @@ pub fn incin_core::exec::catalog::DeviceAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::DeviceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DeviceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DeviceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::DeviceAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DeviceAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DeviceAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::DeviceAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5079,6 +5107,7 @@ pub fn incin_core::exec::catalog::DiagonalAttributes::axis(&self) -> core::optio
 pub fn incin_core::exec::catalog::DiagonalAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DiagonalAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DiagonalAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::DiagonalAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DiagonalAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DiagonalAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::DiagonalAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5089,6 +5118,7 @@ pub fn incin_core::exec::catalog::DistributionAttributes::axis(&self) -> core::o
 pub fn incin_core::exec::catalog::DistributionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DistributionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DistributionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::DistributionAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DistributionAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DistributionAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::DistributionAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5099,6 +5129,7 @@ pub fn incin_core::exec::catalog::DropoutAttributes::axis(&self) -> core::option
 pub fn incin_core::exec::catalog::DropoutAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DropoutAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DropoutAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::DropoutAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DropoutAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DropoutAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::DropoutAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5109,6 +5140,7 @@ pub fn incin_core::exec::catalog::EpsilonAttributes::axis(&self) -> core::option
 pub fn incin_core::exec::catalog::EpsilonAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::EpsilonAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::EpsilonAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::EpsilonAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::EpsilonAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::EpsilonAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::EpsilonAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5119,6 +5151,7 @@ pub fn incin_core::exec::catalog::FlattenAttributes::axis(&self) -> core::option
 pub fn incin_core::exec::catalog::FlattenAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::FlattenAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::FlattenAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::FlattenAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::FlattenAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::FlattenAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::FlattenAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5129,6 +5162,7 @@ pub fn incin_core::exec::catalog::FullAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::FullAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::FullAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::FullAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::FullAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::FullAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::FullAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::FullAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5139,6 +5173,7 @@ pub fn incin_core::exec::catalog::GroupNormAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::GroupNormAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::GroupNormAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::GroupNormAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::GroupNormAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5149,6 +5184,7 @@ pub fn incin_core::exec::catalog::IndexReductionAttributes::axis(&self) -> core:
 pub fn incin_core::exec::catalog::IndexReductionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::IndexReductionAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5159,6 +5195,7 @@ pub fn incin_core::exec::catalog::LayerNormAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::LayerNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LayerNormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LayerNormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::LayerNormAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LayerNormAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LayerNormAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::LayerNormAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5169,6 +5206,7 @@ pub fn incin_core::exec::catalog::LerpAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::LerpAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LerpAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LerpAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::LerpAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LerpAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LerpAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::LerpAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5179,6 +5217,7 @@ pub fn incin_core::exec::catalog::LinearAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::LinearAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LinearAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LinearAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::LinearAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LinearAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LinearAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::LinearAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5189,6 +5228,7 @@ pub fn incin_core::exec::catalog::LinspaceAttributes::axis(&self) -> core::optio
 pub fn incin_core::exec::catalog::LinspaceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LinspaceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LinspaceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::LinspaceAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LinspaceAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LinspaceAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::LinspaceAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5199,6 +5239,7 @@ pub fn incin_core::exec::catalog::LossAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::LossAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LossAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LossAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::LossAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LossAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LossAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::LossAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5209,6 +5250,7 @@ pub fn incin_core::exec::catalog::NarrowAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::NarrowAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::NarrowAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::NarrowAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::NarrowAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NarrowAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NarrowAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::NarrowAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5219,6 +5261,7 @@ pub fn incin_core::exec::catalog::NoAttributes::axis(&self) -> core::option::Opt
 pub fn incin_core::exec::catalog::NoAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::NoAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::NoAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::NoAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NoAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NoAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::NoAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5229,12 +5272,24 @@ pub fn incin_core::exec::catalog::NormAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::NormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::NormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::NormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::NormAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NormAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NormAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::NormAttributes::optional_bias(&self) -> core::option::Option<bool>
 pub fn incin_core::exec::catalog::NormAttributes::shape_transform(&self) -> core::option::Option<ShapeTransform<'_>>
 pub fn incin_core::exec::catalog::NormAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::NormAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::OneHotAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::OneHotAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin_core::exec::catalog::OneHotAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
+pub fn incin_core::exec::catalog::OneHotAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::OneHotAttributes::depth(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::OneHotAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::OneHotAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
+pub fn incin_core::exec::catalog::OneHotAttributes::optional_bias(&self) -> core::option::Option<bool>
+pub fn incin_core::exec::catalog::OneHotAttributes::shape_transform(&self) -> core::option::Option<ShapeTransform<'_>>
+pub fn incin_core::exec::catalog::OneHotAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
+pub fn incin_core::exec::catalog::OneHotAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::Operation::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError> where Self: core::marker::Sized
 pub fn incin_core::exec::catalog::Operation::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError> where Self: core::marker::Sized
 pub fn incin_core::exec::catalog::Operation::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -5242,6 +5297,7 @@ pub fn incin_core::exec::catalog::PadAttributes::axis(&self) -> core::option::Op
 pub fn incin_core::exec::catalog::PadAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::PadAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::PadAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::PadAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::PadAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::PadAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::PadAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5252,6 +5308,7 @@ pub fn incin_core::exec::catalog::PixelShuffleAttributes::axis(&self) -> core::o
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::PixelShuffleAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5262,6 +5319,7 @@ pub fn incin_core::exec::catalog::Pool2dAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::Pool2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::Pool2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::Pool2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::Pool2dAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Pool2dAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Pool2dAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::Pool2dAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5272,6 +5330,7 @@ pub fn incin_core::exec::catalog::QuantizationAttributes::axis(&self) -> core::o
 pub fn incin_core::exec::catalog::QuantizationAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::QuantizationAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::QuantizationAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::QuantizationAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::QuantizationAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::QuantizationAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::QuantizationAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5282,6 +5341,7 @@ pub fn incin_core::exec::catalog::RecurrentAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::RecurrentAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::RecurrentAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::RecurrentAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::RecurrentAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RecurrentAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RecurrentAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::RecurrentAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5292,6 +5352,7 @@ pub fn incin_core::exec::catalog::RepeatAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::RepeatAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::RepeatAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::RepeatAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::RepeatAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RepeatAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RepeatAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::RepeatAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5302,6 +5363,7 @@ pub fn incin_core::exec::catalog::ScalarAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::ScalarAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ScalarAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ScalarAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ScalarAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ScalarAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ScalarAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ScalarAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5312,6 +5374,7 @@ pub fn incin_core::exec::catalog::ScatterAttributes::axis(&self) -> core::option
 pub fn incin_core::exec::catalog::ScatterAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ScatterAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ScatterAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ScatterAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ScatterAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ScatterAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ScatterAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5322,6 +5385,7 @@ pub fn incin_core::exec::catalog::SgdAttributes::axis(&self) -> core::option::Op
 pub fn incin_core::exec::catalog::SgdAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::SgdAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::SgdAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::SgdAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SgdAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SgdAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::SgdAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5332,6 +5396,7 @@ pub fn incin_core::exec::catalog::ShapeAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::ShapeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ShapeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ShapeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::ShapeAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ShapeAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ShapeAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::ShapeAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5342,6 +5407,7 @@ pub fn incin_core::exec::catalog::SliceAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::SliceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::SliceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::SliceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::SliceAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SliceAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SliceAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::SliceAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5352,6 +5418,7 @@ pub fn incin_core::exec::catalog::SplitAttributes::axis(&self) -> core::option::
 pub fn incin_core::exec::catalog::SplitAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::SplitAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::SplitAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::SplitAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SplitAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SplitAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::SplitAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5362,6 +5429,7 @@ pub fn incin_core::exec::catalog::TopKAttributes::axis(&self) -> core::option::O
 pub fn incin_core::exec::catalog::TopKAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::TopKAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::TopKAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::TopKAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::TopKAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::TopKAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::TopKAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5376,6 +5444,7 @@ pub fn incin_core::exec::catalog::TransposeAttributes::axis(&self) -> core::opti
 pub fn incin_core::exec::catalog::TransposeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::TransposeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::TransposeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::TransposeAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::TransposeAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::TransposeAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::TransposeAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5386,6 +5455,7 @@ pub fn incin_core::exec::catalog::UnfoldAttributes::axis(&self) -> core::option:
 pub fn incin_core::exec::catalog::UnfoldAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::UnfoldAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::UnfoldAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::UnfoldAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::UnfoldAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::UnfoldAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::UnfoldAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5397,6 +5467,7 @@ pub fn incin_core::exec::catalog::VarianceAttributes::axis(&self) -> core::optio
 pub fn incin_core::exec::catalog::VarianceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::VarianceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::VarianceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::VarianceAttributes::depth(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::VarianceAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::VarianceAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
 pub fn incin_core::exec::catalog::VarianceAttributes::optional_bias(&self) -> core::option::Option<bool>
@@ -5707,6 +5778,9 @@ pub fn incin_core::exec::catalog::op::Norm::infer_outputs(&Self::Attributes, &[i
 pub fn incin_core::exec::catalog::op::NormalRandom::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::NormalRandom::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::NormalRandom::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::OneHot::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::OneHot::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::OneHot::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Ones::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Ones::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Ones::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -7111,6 +7185,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mul(self, i64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mul_scalar<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, Sc) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor<S>>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::norm(&self, f64) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Nil, B, K, G, incin_core::dist::placement::Local>> where G: incin_core::tensor::grad::GradJoin<G, Output = G>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::one_hot<const N: usize>(&self) -> incin_core::error::Result<incin_core::shapes::layout::Dense<<S as incin_core::shapes::AppendDim<incin_core::shapes::ConstDim<N>>>::Output, B, bool, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>> where S: incin_core::shapes::AppendDim<incin_core::shapes::ConstDim<N>>, <S as incin_core::shapes::AppendDim<incin_core::shapes::ConstDim<N>>>::Output: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::OneHot> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::OneHot>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::ones<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::pad<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, &[(usize, usize)], Sc) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Pad>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Pad>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::pixel_shuffle(&self, usize) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::PixelShuffle>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::PixelShuffle>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -8912,6 +8987,7 @@ pub incin_core::exec::catalog::NumericRule::IeeePropagate
 pub incin_core::exec::catalog::NumericRule::NotApplicable
 pub incin_core::exec::catalog::NumericRule::StableAccumulation
 pub incin_core::exec::catalog::NumericRule::TypedContract
+pub incin_core::exec::catalog::OneHotAttributes::depth: usize
 pub incin_core::exec::catalog::OperationCatalogEntry::accepted_ranks: core::ops::range::RangeInclusive<usize>
 pub incin_core::exec::catalog::OperationCatalogEntry::attributes: &'static str
 pub incin_core::exec::catalog::OperationCatalogEntry::broadcasting: incin_core::exec::catalog::BroadcastingRule
@@ -9938,6 +10014,7 @@ pub incin_core::prelude::OperationKind::Neg
 pub incin_core::prelude::OperationKind::Norm
 pub incin_core::prelude::OperationKind::NormalRandom
 pub incin_core::prelude::OperationKind::Normalization
+pub incin_core::prelude::OperationKind::OneHot
 pub incin_core::prelude::OperationKind::Ones
 pub incin_core::prelude::OperationKind::Outer
 pub incin_core::prelude::OperationKind::Pad
@@ -10299,6 +10376,7 @@ pub incin_core::shapes::OperationKind::Neg
 pub incin_core::shapes::OperationKind::Norm
 pub incin_core::shapes::OperationKind::NormalRandom
 pub incin_core::shapes::OperationKind::Normalization
+pub incin_core::shapes::OperationKind::OneHot
 pub incin_core::shapes::OperationKind::Ones
 pub incin_core::shapes::OperationKind::Outer
 pub incin_core::shapes::OperationKind::Pad
@@ -10561,6 +10639,7 @@ pub incin_core::shapes::error::OperationKind::Neg
 pub incin_core::shapes::error::OperationKind::Norm
 pub incin_core::shapes::error::OperationKind::NormalRandom
 pub incin_core::shapes::error::OperationKind::Normalization
+pub incin_core::shapes::error::OperationKind::OneHot
 pub incin_core::shapes::error::OperationKind::Ones
 pub incin_core::shapes::error::OperationKind::Outer
 pub incin_core::shapes::error::OperationKind::Pad
@@ -10817,6 +10896,7 @@ pub incin_core::shapes::prelude::OperationKind::Neg
 pub incin_core::shapes::prelude::OperationKind::Norm
 pub incin_core::shapes::prelude::OperationKind::NormalRandom
 pub incin_core::shapes::prelude::OperationKind::Normalization
+pub incin_core::shapes::prelude::OperationKind::OneHot
 pub incin_core::shapes::prelude::OperationKind::Ones
 pub incin_core::shapes::prelude::OperationKind::Outer
 pub incin_core::shapes::prelude::OperationKind::Pad
@@ -11299,6 +11379,7 @@ pub struct incin_core::backend_authoring::op::Narrow
 pub struct incin_core::backend_authoring::op::Neg
 pub struct incin_core::backend_authoring::op::Norm
 pub struct incin_core::backend_authoring::op::NormalRandom
+pub struct incin_core::backend_authoring::op::OneHot
 pub struct incin_core::backend_authoring::op::Ones
 pub struct incin_core::backend_authoring::op::Outer
 pub struct incin_core::backend_authoring::op::Pad
@@ -11529,6 +11610,7 @@ pub struct incin_core::backend_authoring::operations::op::Narrow
 pub struct incin_core::backend_authoring::operations::op::Neg
 pub struct incin_core::backend_authoring::operations::op::Norm
 pub struct incin_core::backend_authoring::operations::op::NormalRandom
+pub struct incin_core::backend_authoring::operations::op::OneHot
 pub struct incin_core::backend_authoring::operations::op::Ones
 pub struct incin_core::backend_authoring::operations::op::Outer
 pub struct incin_core::backend_authoring::operations::op::Pad
@@ -11689,6 +11771,7 @@ pub struct incin_core::exec::catalog::LossAttributes
 pub struct incin_core::exec::catalog::NarrowAttributes
 pub struct incin_core::exec::catalog::NoAttributes
 pub struct incin_core::exec::catalog::NormAttributes
+pub struct incin_core::exec::catalog::OneHotAttributes
 pub struct incin_core::exec::catalog::OperationCatalogEntry
 pub struct incin_core::exec::catalog::OperationCoverage
 pub struct incin_core::exec::catalog::OperationKey
@@ -11810,6 +11893,7 @@ pub struct incin_core::exec::catalog::op::Narrow
 pub struct incin_core::exec::catalog::op::Neg
 pub struct incin_core::exec::catalog::op::Norm
 pub struct incin_core::exec::catalog::op::NormalRandom
+pub struct incin_core::exec::catalog::op::OneHot
 pub struct incin_core::exec::catalog::op::Ones
 pub struct incin_core::exec::catalog::op::Outer
 pub struct incin_core::exec::catalog::op::Pad
@@ -11989,6 +12073,7 @@ pub struct incin_core::exec::op::Narrow
 pub struct incin_core::exec::op::Neg
 pub struct incin_core::exec::op::Norm
 pub struct incin_core::exec::op::NormalRandom
+pub struct incin_core::exec::op::OneHot
 pub struct incin_core::exec::op::Ones
 pub struct incin_core::exec::op::Outer
 pub struct incin_core::exec::op::Pad
@@ -13195,6 +13280,7 @@ pub type incin_core::exec::catalog::op::Narrow::Attributes = incin_core::exec::c
 pub type incin_core::exec::catalog::op::Neg::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Norm::Attributes = incin_core::exec::catalog::NormAttributes
 pub type incin_core::exec::catalog::op::NormalRandom::Attributes = incin_core::exec::catalog::CreationAttributes
+pub type incin_core::exec::catalog::op::OneHot::Attributes = incin_core::exec::catalog::OneHotAttributes
 pub type incin_core::exec::catalog::op::Ones::Attributes = incin_core::exec::catalog::CreationAttributes
 pub type incin_core::exec::catalog::op::Outer::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Pad::Attributes = incin_core::exec::catalog::PadAttributes

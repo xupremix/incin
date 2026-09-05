@@ -27,6 +27,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`Tensor::one_hot`, the fourth routing primitive.** `index.one_hot::<E>()`
+  encodes an integer index tensor as boolean rows with one `true` at the named
+  slot, so a `[T]` routing decision over `E` experts becomes the `[T, E]`
+  dispatch matrix the router multiplies by. The depth is a const parameter, so
+  it is both the attribute the descriptor validates and the extent the type
+  appends: the two cannot disagree because they are the same number. Declared
+  on CPU only, with a conformance fixture; out-of-range indices encode as
+  all-`false` rows per ONNX `OneHot` rather than erroring. Catalog grows to
+  174 operations, 164 backend-executable.
+
 - **A custom operation with seven operands across three element types**, at
   `crates/incin-backends/examples/calibration_update.rs`. Per-channel
   quantization calibration needs the activations (`f32`), the channel each

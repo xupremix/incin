@@ -4,13 +4,13 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 173
-Backend-executable operations: 163
+Canonical operations: 174
+Backend-executable operations: 164
 Non-backend execution sites: 10
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 145 |
+| `Kernel` | 146 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -112,6 +112,7 @@ Non-backend execution sites: 10
 | `gather` | `Descriptor<op::Gather>` | `AxisAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::gather` |
 | `scatter` | `Descriptor<op::Scatter>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Undefined` | no | `FreshContiguous` | `::scatter` |
 | `scatter_add` | `Descriptor<op::ScatterAdd>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::scatter_add` |
+| `one_hot` | `Descriptor<op::OneHot>` | `OneHotAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `None` | yes | `FreshContiguous` | `::one_hot` |
 | `index_select` | `Descriptor<op::IndexSelect>` | `AxisAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::index_select` |
 | `masked_fill` | `Descriptor<op::MaskedFill>` | `ScalarAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `TypedContract` / `Preserve` | `Allowed` / `TypedContract` | `Piecewise` | yes | `FreshContiguous` | `::masked_fill` |
 | `unsqueeze` | `Descriptor<op::UnsqueezeExact>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unsqueeze` |

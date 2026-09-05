@@ -106,6 +106,7 @@ macro_rules! incin_operation_catalog {
             (Gather, "gather", Storage, Indexing, AxisAttributes, 2, 2, "::gather"),
             (Scatter, "scatter", Storage, Indexing, ScatterAttributes, 3, 3, "::scatter"),
             (ScatterAdd, "scatter_add", Storage, Indexing, ScatterAttributes, 3, 3, "::scatter_add"),
+            (OneHot, "one_hot", Storage, Indexing, OneHotAttributes, 1, 1, "::one_hot"),
             (IndexSelect, "index_select", Storage, Indexing, AxisAttributes, 2, 2, "::index_select"),
             (MaskedFill, "masked_fill", Pointwise, Selection, ScalarAttributes, 2, 2, "::masked_fill"),
             (UnsqueezeExact, "unsqueeze", Storage, Shape, AxisAttributes, 1, 1, "::unsqueeze"),

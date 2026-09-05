@@ -110,6 +110,7 @@ pub(crate) fn fixture(operation: OperationKind) -> Result<Fixture, &'static str>
         .or_else(|| class_loss(operation))
         .or_else(|| scattering(operation))
         .or_else(|| accumulating(operation))
+        .or_else(|| encoding(operation))
         .ok_or_else(|| unfixtured_reason(operation))
 }
 

@@ -362,6 +362,10 @@ pub trait AttributeContract {
     fn loss_reduction(&self) -> Option<LossReduction> {
         None
     }
+    /// One-hot depth, when this set carries one.
+    fn depth(&self) -> Option<usize> {
+        None
+    }
     /// Shape-transform description, when applicable.
     fn shape_transform(&self) -> Option<ShapeTransform<'_>> {
         None

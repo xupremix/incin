@@ -17,9 +17,10 @@ use incin_core::exec::catalog::{
     AxisVarianceAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes, DiagonalAttributes,
     DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
     GroupNormAttributes, IndexReductionAttributes, LerpAttributes, LinearAttributes,
-    LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes, PadAttributes,
-    QuantizationAttributes, RepeatAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes,
-    SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes, VarianceAttributes,
+    LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
+    OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes, ScalarAttributes,
+    ScatterAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
+    TransposeAttributes, VarianceAttributes,
 };
 use incin_core::exec::{CanonicalError, Capabilities, ExecutionContext, Operation, TensorHandle};
 use incin_core::shapes::error::OperationKind;
@@ -685,6 +686,26 @@ typed_family!(
     &[Role::Tuple, Role::Index, Role::Tuple],
     accumulating_at_zero,
     [ScatterAdd]
+);
+
+// `one_hot` reads one integer operand and appends the depth the attributes
+// name. The `Index` role fills it with zeros, which are in range for any
+// depth of one or more, so the shim's depth only has to be one: it is four
+// instead, off the rank ladder, so that a kernel broadcasting the depth
+// against an operand extent would still fail here rather than pass by
+// coincidence.
+constant_attribute_shim!(
+    encoding_at_zero,
+    OneHotAttributes,
+    OneHotAttributes { depth: 4 }
+);
+
+typed_family!(
+    encoding,
+    Operands::Unary,
+    &[Role::Index],
+    encoding_at_zero,
+    [OneHot]
 );
 
 // The two halves of the block compression. Each names the representation it

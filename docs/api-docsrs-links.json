@@ -41,11 +41,6 @@
    "kind": "method",
    "item": "Tensor::add"
   },
-  "add_in_place": {
-   "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.add_",
-   "kind": "method",
-   "item": "Tensor::add_"
-  },
   "add_scalar": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.add_scalar",
    "kind": "method",
@@ -241,11 +236,6 @@
    "kind": "method",
    "item": "Tensor::div"
   },
-  "div_in_place": {
-   "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.div_",
-   "kind": "method",
-   "item": "Tensor::div_"
-  },
   "div_scalar": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.div_scalar",
    "kind": "method",
@@ -280,11 +270,6 @@
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.exp",
    "kind": "method",
    "item": "Tensor::exp"
-  },
-  "fill_in_place": {
-   "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.fill_",
-   "kind": "method",
-   "item": "Tensor::fill_"
   },
   "flatten": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.flatten",
@@ -516,11 +501,6 @@
    "kind": "method",
    "item": "Tensor::mul"
   },
-  "mul_in_place": {
-   "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.mul_",
-   "kind": "method",
-   "item": "Tensor::mul_"
-  },
   "mul_scalar": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.mul_scalar",
    "kind": "method",
@@ -540,6 +520,11 @@
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.norm",
    "kind": "method",
    "item": "Tensor::norm"
+  },
+  "one_hot": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=one_hot",
+   "kind": "search",
+   "item": "one_hot"
   },
   "ones": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.ones",
@@ -741,11 +726,6 @@
    "kind": "method",
    "item": "Tensor::sub"
   },
-  "sub_in_place": {
-   "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.sub_",
-   "kind": "method",
-   "item": "Tensor::sub_"
-  },
   "sub_scalar": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.sub_scalar",
    "kind": "method",
@@ -885,11 +865,6 @@
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.where_cond",
    "kind": "method",
    "item": "Tensor::where_cond"
-  },
-  "zero_in_place": {
-   "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.zero_",
-   "kind": "method",
-   "item": "Tensor::zero_"
   },
   "zeros": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.zeros",

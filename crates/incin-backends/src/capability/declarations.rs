@@ -146,6 +146,13 @@ macro_rules! cpu_descriptor_operations {
                 // could not honour, so the accelerator groups are deliberately
                 // left to claim it once they have a kernel that can.
                 ScatterAdd,
+                // One integer operand in, one boolean tensor out, and the depth
+                // that separates them is an attribute rather than an operand.
+                // The row states the union the rule shape allows, the way
+                // `embedding`'s does: the descriptor refuses a non-integer
+                // operand before this row is consulted, and the kernel reads
+                // every integer width through the same accessor.
+                OneHot,
                 PixelShuffle,
                 // `to_dtype` reads through the same stride-aware accessor and
                 // writes a fresh contiguous buffer, which is this group's shape

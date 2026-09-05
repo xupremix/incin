@@ -418,6 +418,34 @@ pub(crate) fn scatter_add_storage(
     Ok(out_storage)
 }
 
+/// `one_hot`: encode each integer index as a row of `depth` booleans.
+///
+/// One operator per input element and no backward: the output is a boolean
+/// function of which slot an integer names, so there is no cotangent to route
+/// and no tape entry is pushed. The descriptor already refused a non-integer
+/// operand and a zero depth before this runs, so neither is re-checked here.
+///
+/// An index outside `[0, depth)` encodes as an all-`false` row rather than an
+/// error, matching ONNX `OneHot`: the value names no slot, so no slot is set,
+/// and a router's padding index flows through instead of aborting the batch.
+pub(crate) fn one_hot_storage(t: &CpuStorage, depth: usize) -> Result<CpuStorage> {
+    let mut out_shape = t.shape.clone();
+    out_shape.push(depth);
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut out = vec![0u8; total * depth];
+    let mut idx = vec![0usize; t.shape.len()];
+    for flat in 0..total {
+        let value = t.get(&idx);
+        if value >= 0.0 && value < depth as f64 {
+            out[flat * depth + value as usize] = 1;
+        }
+        if !t.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), out_shape))
+}
+
 /// Flat row-major index of `idx` within `shape`, saturating each coordinate
 /// into range so an out-of-bounds write target cannot panic in backward.
 fn flatten_index_checked(idx: &[usize], shape: &[usize]) -> usize {

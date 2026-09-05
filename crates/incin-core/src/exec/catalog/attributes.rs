@@ -444,6 +444,29 @@ impl AttributeContract for ScatterAttributes {
         Some(self.axis)
     }
 }
+impl AttributeContract for OneHotAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        _inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        // A zero depth would append an empty axis, producing a tensor that
+        // holds no values while claiming a geometry. The descriptor refuses
+        // it for the same reason it refuses an empty reduction domain: there
+        // is no value to be right about.
+        if self.depth == 0 {
+            return Err(invalid(
+                operation,
+                "depth",
+                "one_hot depth must be at least one",
+            ));
+        }
+        Ok(())
+    }
+    fn depth(&self) -> Option<usize> {
+        Some(self.depth)
+    }
+}
 impl AttributeContract for PadAttributes {
     fn validate(
         &self,

@@ -8,7 +8,7 @@ use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
     AxisAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta, NarrowAttributes,
-    NoAttributes, ScatterAttributes, SliceAttributes, UnfoldAttributes, op,
+    NoAttributes, OneHotAttributes, ScatterAttributes, SliceAttributes, UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -16,7 +16,7 @@ use crate::exec::request::TensorHandle;
 use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
+use crate::shapes::{AppendDim, ConstDim, Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
@@ -573,6 +573,82 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),
+        )
+    }
+
+    /// Encodes integer indices as one-hot rows of `N` booleans.
+    ///
+    /// Each index becomes a row with a single `true` at its own position, so
+    /// a `[T]` index tensor over `E` experts becomes the `[T, E]` dispatch
+    /// matrix a router multiplies by. The depth is a const parameter rather
+    /// than a runtime value so the output shape stays static: `N` is both the
+    /// attribute the descriptor validates and the extent the type appends, and
+    /// the two cannot disagree because they are the same number.
+    ///
+    /// An index outside `[0, N)` encodes as an all-`false` row rather than an
+    /// error, matching ONNX `OneHot`: the value names no slot, so no slot is
+    /// set. The result carries no gradient: a boolean encoding of which slot
+    /// an integer names has no derivative to state.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// use incin::prelude::*;
+    /// // Two tokens routed to experts 0 and 2 of 3.
+    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 2], ()).unwrap();
+    /// let dispatch = index.one_hot::<3>().unwrap();
+    /// assert_eq!(
+    ///     dispatch.to_vec1::<bool>().unwrap(),
+    ///     vec![true, false, false, false, false, true]
+    /// );
+    /// ```
+    #[allow(clippy::type_complexity)]
+    pub fn one_hot<const N: usize>(
+        &self,
+    ) -> Result<
+        crate::shapes::Dense<
+            <S as AppendDim<ConstDim<N>>>::Output,
+            B,
+            bool,
+            crate::tensor::grad::NoGrad,
+            Local,
+        >,
+    >
+    where
+        S: AppendDim<ConstDim<N>>,
+        <S as AppendDim<ConstDim<N>>>::Output: DynShape,
+        B: Execute<op::OneHot> + Capabilities,
+        <B as Execute<op::OneHot>>::Output: Into<B::Storage<bool>>,
+    {
+        let mut out_dims = self.shape_buf().as_ref().to_vec();
+        out_dims.push(N);
+        let output_shape = ShapeValue::<<S as AppendDim<ConstDim<N>>>::Output>::try_new(
+            ShapeBuf::from_slice(&out_dims),
+        )
+        .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        // Disabled rather than this tensor's own mode, for the reason
+        // `argsort`'s comment gives: the result is `NoGrad` whatever the
+        // receiver was.
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
+        let inner = crate::exec::GradMode::Disabled
+            .restrict(|| {
+                dispatch::execute_shaped::<op::OneHot, B, <S as AppendDim<ConstDim<N>>>::Output>(
+                    &context,
+                    OneHotAttributes { depth: N },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        crate::shapes::Dense::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::tensor::grad::NoGrad::init(()),
         )
     }
 

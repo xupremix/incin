@@ -620,6 +620,21 @@ fn inferred_shape<A: AttributeContract>(
         OutputRule::DataDependent | OutputRule::HostValue => Some(None),
         OutputRule::Indexing | OutputRule::TypedInference => match operation {
             OperationKind::Gather => Some(inputs.get(1).and_then(|input| input.shape.clone())),
+            // The depth is an attribute rather than an operand, so the output
+            // is the input's geometry with one appended axis. Unknown inputs
+            // still infer nothing: a missing shape with a known depth is a
+            // descriptor that cannot name its result, not a partial one.
+            OperationKind::OneHot => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                attributes.depth(),
+            ) {
+                (Some(shape), Some(depth)) => {
+                    let mut output = shape.to_vec();
+                    output.push(depth);
+                    Some(Some(ShapeBuf::from_slice(&output)))
+                }
+                _ => Some(None),
+            },
             OperationKind::IndexSelect => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
@@ -814,7 +829,9 @@ pub(super) fn verify_outputs<A: AttributeContract>(
         | OperationKind::Scatter
         | OperationKind::ScatterAdd
         | OperationKind::IndexSelect => Some(1),
-        OperationKind::EmbeddingExact => Some(0),
+        // The index is the only operand, so it is operand zero rather than
+        // operand one the way the scatter family's is.
+        OperationKind::EmbeddingExact | OperationKind::OneHot => Some(0),
         OperationKind::CrossEntropyLoss => Some(1),
         _ => None,
     };
@@ -1092,7 +1109,8 @@ fn expected_output<A: AttributeContract>(
         | OperationKind::CmpGe
         | OperationKind::LogicalAnd
         | OperationKind::LogicalOr
-        | OperationKind::LogicalNot => Some(DTypeId::Bool.descriptor()),
+        | OperationKind::LogicalNot
+        | OperationKind::OneHot => Some(DTypeId::Bool.descriptor()),
         _ => attributes.declared_dtype().or(first_dtype),
     };
     Ok(ExpectedOutput {

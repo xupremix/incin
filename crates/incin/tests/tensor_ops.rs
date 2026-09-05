@@ -208,6 +208,38 @@ fn scatter_add_keeps_every_contribution_where_scatter_keeps_one() -> Result<()> 
 }
 
 #[test]
+fn one_hot_encodes_each_index_as_its_own_row() -> Result<()> {
+    // Three tokens routed to experts 0, 2 and 1 of 3: the dispatch matrix the
+    // router multiplies by, with one `true` per row at the named slot.
+    let index = Tensor::<s![3], CpuBackendImpl, u32>::from_slice(&[0, 2, 1], ())?;
+    let dispatch = index.one_hot::<3>()?;
+    assert_eq!(
+        dispatch.to_vec1::<bool>()?,
+        vec![
+            true, false, false, //
+            false, false, true, //
+            false, true, false,
+        ]
+    );
+
+    // An index that names no slot encodes as an all-`false` row rather than an
+    // error, so a padding index flows through instead of aborting the batch.
+    let padded = Tensor::<s![2], CpuBackendImpl, u32>::from_slice(&[1, 7], ())?;
+    assert_eq!(
+        padded.one_hot::<3>()?.to_vec1::<bool>()?,
+        vec![false, true, false, false, false, false]
+    );
+
+    // A float operand is refused by the descriptor's per-operand contract, not
+    // by the kernel: the row the capability table advertises is a union, and
+    // the index check runs before the row is consulted.
+    let floats = Tensor::<s![2], CpuBackendImpl>::from_slice(&[0.0, 1.0], ())?;
+    assert!(floats.one_hot::<3>().is_err());
+
+    Ok(())
+}
+
+#[test]
 fn signed_axis_selectors_cover_runtime_and_axis_macro_paths() -> Result<()> {
     let tensor =
         Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;

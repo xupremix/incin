@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 
-/// Operations the harness reaches today, out of the 162 the CPU backend has an
+/// Operations the harness reaches today, out of the 164 the CPU backend has an
 /// executor for.
 ///
 /// Exact rather than slack, because the point of a ratchet is that it cannot
@@ -38,7 +38,7 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// to a whole block, which is the shape a block encoding can hold, and the
 /// block size is the dtype registry's rather than a number this harness
 /// invented.
-const COVERED_OPERATION_FLOOR: usize = 161;
+const COVERED_OPERATION_FLOOR: usize = 163;
 
 #[test]
 fn the_cpu_backend_executes_every_advertised_tuple_it_is_asked_about() {
