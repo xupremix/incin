@@ -391,12 +391,21 @@ impl IrExpr {
                 match op {
                     IrUnaryOp::Neg => du.neg(),
                     IrUnaryOp::Abs => {
-                        // d/dx |u| = sign(u) * du = (u > 0 ? 1 : -1) * du
+                        // d/dx |u| = sign(u) * du with sign(0) = 0, matching
+                        // the hand-written CUDA derivative, CPU `Sign`, and
+                        // PyTorch. `Select` only tests `> 0`, so the inner
+                        // branch tests `-u`: ((-u) > 0) is (u < 0).
+                        let negative = Self::ternary(
+                            IrTernaryOp::Select,
+                            u.clone().neg(),
+                            Self::Const(-1.0),
+                            Self::Const(0.0),
+                        );
                         let sign = Self::ternary(
                             IrTernaryOp::Select,
                             u.clone(),
                             Self::Const(1.0),
-                            Self::Const(-1.0),
+                            negative,
                         );
                         sign.mul(du)
                     }

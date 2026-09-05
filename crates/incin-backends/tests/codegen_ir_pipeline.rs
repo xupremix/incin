@@ -1,7 +1,8 @@
 //! Integration tests for Kernel IR, Algebraic Optimization, Symbolic Differentiation, and Codegen DSL.
 
 use incin_backends::codegen::{
-    IrExpr, IrTernaryOp, define_binary_custom_op, define_unary_custom_op, exp, relu, sigmoid,
+    IrExpr, IrTernaryOp, IrUnaryOp, define_binary_custom_op, define_unary_custom_op, exp, relu,
+    sigmoid,
 };
 use incin_core::tensor::dtype::DTypeId;
 
@@ -33,6 +34,37 @@ fn test_ir_expression_dsl_and_eval() {
     let expr = x.clone() * x + 2.0 * y.clone() * IrExpr::arg(0) + y.clone() * y;
     let result = expr.eval(&[3.0, 4.0]); // 3^2 + 2*4*3 + 4^2 = 9 + 24 + 16 = 49
     assert!((result - 49.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_symbolic_automatic_differentiation_abs_sign_at_zero() {
+    // d/dx |x| is sign(x) with sign(0) = 0: the hand-written CUDA derivative,
+    // CPU `Sign`, and PyTorch all agree, and the fused path must agree with
+    // them rather than with the one-sided (x > 0 ? 1 : -1) form, which
+    // silently diverges exactly where l1-style losses most often evaluate.
+    let x = IrExpr::arg(0);
+    let forward = IrExpr::unary(IrUnaryOp::Abs, x);
+    let diff = forward.diff(0);
+
+    for (val, expected) in [(-2.0, -1.0), (0.0, 0.0), (3.0, 1.0)] {
+        let analytical = diff.eval(&[val]);
+        assert_eq!(
+            analytical, expected,
+            "symbolic d|x|/dx at {val}: got {analytical}, want {expected}"
+        );
+    }
+
+    // Central differences agree, including at the kink.
+    let h = 1e-5;
+    for &val in &[-2.0, 0.0, 3.0] {
+        let fwd = |v: f64| v.abs();
+        let numerical = (fwd(val + h) - fwd(val - h)) / (2.0 * h);
+        let analytical = diff.eval(&[val]);
+        assert!(
+            (analytical - numerical).abs() < 1e-4,
+            "val {val}: analytical {analytical} vs numerical {numerical}"
+        );
+    }
 }
 
 #[test]

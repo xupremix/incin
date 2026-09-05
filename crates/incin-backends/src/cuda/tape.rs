@@ -145,7 +145,19 @@ pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<
         }
     }
 
-    Ok(result)
+    if result.shape == target_shape {
+        return Ok(result);
+    }
+
+    // Expand what reduction left smaller: a reduced-all-the-way scalar seed
+    // reaches here with fewer elements than its target, and the kernels
+    // downstream do not broadcast scalars implicitly the way the CPU ones
+    // do, so handing the scalar on produces a binary launch the iteration
+    // plan refuses. `broadcast_shape` checks compatibility first, because
+    // `launch_broadcast` assumes a legal target and would otherwise read out
+    // of bounds on a genuinely incompatible shape.
+    crate::layout::broadcast_shape(&result.shape, target_shape)?;
+    crate::cuda::ops::shape::launch_broadcast(&result, target_shape)
 }
 
 fn sum_dim_squeeze(storage: &CudaStorage, axis: usize) -> CudaStorage {
