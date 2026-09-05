@@ -776,6 +776,7 @@ impl incin_core::shapes::broadcast::BroadcastShape<incin_core::shapes::Dyn> for 
 impl incin_core::shapes::broadcast::BroadcastShape<incin_core::shapes::Nil> for incin_core::shapes::Nil
 impl incin_core::shapes::broadcast::ReverseShape for incin_core::shapes::Nil
 impl incin_core::shapes::layout::Contiguous for incin_core::shapes::layout::RowMajor
+impl incin_core::shapes::layout::Rank4 for incin_core::shapes::Ranked<typenum::gen::consts::U4>
 impl incin_core::shapes::layout::Restatable for incin_core::shapes::Dyn
 impl incin_core::shapes::layout::Restatable for incin_core::shapes::layout::RowMajor
 impl incin_core::tensor::allocation::CheckedByteLen
@@ -1031,6 +1032,7 @@ impl<D0, D1, D2, D3, D4, D5, D6> incin_core::tensor::arg_into::ArgInto<(D0, D1, 
 impl<D0, D1, D2, D3, D4, D5> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2, D3, D4, D5)> for (D0, D1, D2, D3, D4, D5)
 impl<D0, D1, D2, D3, D4> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2, D3, D4)> for (D0, D1, D2, D3, D4)
 impl<D0, D1, D2> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2)> for (D0, D1, D2)
+impl<D0: incin_core::shapes::Dim, D1: incin_core::shapes::Dim, D2: incin_core::shapes::Dim, D3: incin_core::shapes::Dim> incin_core::shapes::layout::Rank4 for incin_core::shapes::DimCons<D0, incin_core::shapes::DimCons<D1, incin_core::shapes::DimCons<D2, incin_core::shapes::DimCons<D3, incin_core::shapes::Nil>>>>
 impl<D1: incin_core::shapes::Dim, D2: incin_core::shapes::Dim, D3: incin_core::shapes::Dim> incin_core::shapes::SplitLast3 for incin_core::shapes::DimCons<D1, incin_core::shapes::DimCons<D2, incin_core::shapes::DimCons<D3, incin_core::shapes::Nil>>>
 impl<D1: incin_core::shapes::Dim, D2: incin_core::shapes::Dim> incin_core::shapes::SplitLast2 for incin_core::shapes::DimCons<D1, incin_core::shapes::DimCons<D2, incin_core::shapes::Nil>>
 impl<D: incin_core::shapes::Dim, H: incin_core::shapes::Dim, T: incin_core::shapes::Shape> incin_core::shapes::PrependDim<D> for incin_core::shapes::DimCons<H, T>
@@ -1461,10 +1463,8 @@ impl<S: incin_core::shapes::Shape> incin_core::shapes::ShapeValue<S>
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshDense<S> for incin_core::shapes::Dyn
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshDense<S> for incin_core::shapes::layout::RowMajor
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::Dyn
-impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::layout::ChannelsLast
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::layout::RowMajor
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout<S> for incin_core::shapes::Dyn
-impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout<S> for incin_core::shapes::layout::ChannelsLast
 impl<S: incin_core::shapes::Shape> incin_core::shapes::layout::Layout<S> for incin_core::shapes::layout::RowMajor
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::Mean
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::BceReductionShape<S> for incin_core::tensor::reduction::NoneReduction
@@ -1477,6 +1477,8 @@ impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::L1ReductionSha
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::MseReductionShape<S> for incin_core::tensor::reduction::Mean
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::MseReductionShape<S> for incin_core::tensor::reduction::NoneReduction
 impl<S: incin_core::shapes::Shape> incin_core::tensor::reduction::MseReductionShape<S> for incin_core::tensor::reduction::Sum
+impl<S: incin_core::shapes::layout::Rank4> incin_core::shapes::layout::FreshLayout<S> for incin_core::shapes::layout::ChannelsLast
+impl<S: incin_core::shapes::layout::Rank4> incin_core::shapes::layout::Layout<S> for incin_core::shapes::layout::ChannelsLast
 impl<S> core::default::Default for incin_core::exec::tape::GradientMap<S>
 impl<S> core::default::Default for incin_core::exec::tape::Tape<S>
 impl<S> core::fmt::Debug for incin_core::exec::tape::TapeNode<S>
@@ -12832,6 +12834,7 @@ pub trait incin_core::shapes::Pool2dShape<K, S, P, D>: incin_core::shapes::Shape
 pub trait incin_core::shapes::PrependDim<D: incin_core::shapes::Dim>: incin_core::shapes::Shape
 pub trait incin_core::shapes::PreserveRank
 pub trait incin_core::shapes::ProductDims: incin_core::shapes::Shape
+pub trait incin_core::shapes::Rank4: incin_core::shapes::Shape
 pub trait incin_core::shapes::ReduceAt<Cursor>: incin_core::shapes::Shape
 pub trait incin_core::shapes::ReduceKeepAt<Cursor>: incin_core::shapes::Shape
 pub trait incin_core::shapes::RemoveAt<Cursor>: incin_core::shapes::Shape
@@ -12886,6 +12889,7 @@ pub trait incin_core::shapes::layout::Contiguous
 pub trait incin_core::shapes::layout::FreshDense<S: incin_core::shapes::Shape>: incin_core::shapes::layout::Layout<S> + incin_core::shapes::layout::sealed::SealedFresh
 pub trait incin_core::shapes::layout::FreshLayout<S: incin_core::shapes::Shape>: incin_core::shapes::layout::Layout<S>
 pub trait incin_core::shapes::layout::Layout<S: incin_core::shapes::Shape>: 'static + core::clone::Clone + core::fmt::Debug + core::marker::Send + core::marker::Sync + core::cmp::Eq + core::cmp::PartialEq
+pub trait incin_core::shapes::layout::Rank4: incin_core::shapes::Shape
 pub trait incin_core::shapes::layout::Restatable
 pub trait incin_core::shapes::prelude::AdaptiveAvgPool2dShape<HOut, WOut>: incin_core::shapes::Shape
 pub trait incin_core::shapes::prelude::AddOneRank

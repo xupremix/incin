@@ -419,6 +419,42 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
     out
 }
 
+/// A shape the type settles as rank four.
+///
+/// [`Layout::STATIC_STRIDES`] could already tell rank four from anything else,
+/// but only at the value level: `ChannelsLast` implemented `Layout<S>` for
+/// every `S` and reported an empty stride list when the rank was wrong. That
+/// left `Tensor<s![2, 3], .., ChannelsLast>` a nameable type whose layout
+/// claimed nothing -- an impossible state the compiler had no reason to
+/// reject, because the rank test lived in a constant rather than in a bound.
+///
+/// Rank is not expressible as a bound directly: `Shape::RANK` is an associated
+/// `Option<usize>`, and a `const` cannot gate an impl. It is expressible
+/// *structurally*, which is what this does -- a canonical shape is rank four
+/// exactly when it is four `DimCons` cells terminated by [`Nil`](crate::shapes::Nil), and
+/// [`Ranked<U4>`](crate::shapes::Ranked) carries the same fact as a typenum.
+///
+/// [`Dyn`] deliberately does not implement it. A shape whose rank is a runtime
+/// fact cannot prove it is four, and a layout that needs rank four should not
+/// be claimable over it.
+pub trait Rank4: Shape {}
+
+/// Four dimensions and a terminator: rank four, whatever the extents are.
+impl<D0: crate::shapes::Dim, D1: crate::shapes::Dim, D2: crate::shapes::Dim, D3: crate::shapes::Dim>
+    Rank4
+    for crate::shapes::DimCons<
+        D0,
+        crate::shapes::DimCons<
+            D1,
+            crate::shapes::DimCons<D2, crate::shapes::DimCons<D3, crate::shapes::Nil>>,
+        >,
+    >
+{
+}
+
+/// Runtime extents, but the rank is still a type-level four.
+impl Rank4 for crate::shapes::Ranked<typenum::U4> {}
+
 /// The NHWC memory order for a tensor whose *shape* is NCHW.
 ///
 /// The shape is unchanged -- axis 1 is still channels -- and only the strides
@@ -447,7 +483,7 @@ pub const fn row_major_strides(extents: &[Option<usize>]) -> [Option<usize>; MAX
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct ChannelsLast;
 
-impl<S: Shape> Layout<S> for ChannelsLast {
+impl<S: Rank4> Layout<S> for ChannelsLast {
     const STRIDE_BUF: [Option<usize>; MAX_STATIC_RANK] = channels_last_strides(S::STATIC_EXTENTS);
 
     const STATIC_STRIDES: &'static [Option<usize>] = match S::RANK {
@@ -464,7 +500,7 @@ impl<S: Shape> Layout<S> for ChannelsLast {
     const PROOF: ProofLevel = S::PROOF;
 }
 
-impl<S: Shape> FreshLayout<S> for ChannelsLast {
+impl<S: Rank4> FreshLayout<S> for ChannelsLast {
     fn strides(dims: &[usize]) -> crate::shapes::StrideBuf {
         channels_last_stride_values(dims)
     }

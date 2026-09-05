@@ -11,12 +11,8 @@
 //! no shape of its own to be wrong about, so the mismatch cannot be spelled.
 //! What fails here is naming `RowMajor` with an argument at all.
 //!
-//! Note what this does *not* say. `ChannelsLast` is defined for rank four and
-//! still implements `Layout<S>` for every `S`, with the rank guard living
-//! inside its constants rather than in the impl. Bounding that away needs a
-//! rank predicate the shape system does not yet expose, so a channels-last
-//! claim on a rank-two tensor is still accepted. This case pins the hole that
-//! was closed, not one that was not.
+//! The rank half is pinned separately by
+//! `channels_last_needs_a_rank_four_shape.rs`.
 extern crate incin_core as incin;
 use incin_backends::cpu::CpuBackendImpl;
 use incin_core::prelude::*;

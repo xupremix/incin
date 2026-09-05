@@ -1,0 +1,26 @@
+error[E0277]: the trait bound `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>: Rank4` is not satisfied
+  --> tests/compile_fail/channels_last_needs_a_rank_four_shape.rs:22:16
+   |
+22 | fn rank_two(t: Tensor<s![2, 3], CpuBackendImpl, f32, NoGrad, Local, ChannelsLast>) {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Rank4` is not implemented for `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>`
+   |
+help: the trait `Rank4` is implemented for `DimCons<D0, DimCons<D1, DimCons<D2, DimCons<D3, Nil>>>>`
+  --> src/shapes/layout.rs
+   |
+   | / impl<D0: crate::shapes::Dim, D1: crate::shapes::Dim, D2: crate::shapes::Dim, D3: crate::shapes::Dim>
+   | |     Rank4
+   | |     for crate::shapes::DimCons<
+   | |         D0,
+...  |
+   | |         >,
+   | |     >
+   | |_____^
+   = note: required for `ChannelsLast` to implement `incin::shapes::Layout<DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>>`
+note: required by a bound in `incin::prelude::Tensor`
+  --> src/tensor/base/types.rs
+   |
+   | pub struct Tensor<
+   |            ------ required by a bound in this struct
+...
+   |     L: Layout<S> = Dyn,
+   |        ^^^^^^^^^ required by this bound in `Tensor`

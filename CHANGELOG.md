@@ -43,10 +43,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   better: `ChannelsLast: Restatable is not satisfied` in place of a line of
   typenum.
 
-  What this does *not* fix: `ChannelsLast` is rank-four but still implements
-  `Layout<S>` for every `S`, its rank guard living in its constants rather than
-  its impl, so a channels-last claim on a rank-two tensor is still accepted.
-  Bounding that away needs a rank predicate the shape system does not expose.
+- **`ChannelsLast` is claimable only at rank four.** It previously implemented
+  `Layout<S>` for every `S` and reported an empty stride list when the rank was
+  wrong, so `Tensor<s![2, 3], .., ChannelsLast>` was a nameable type whose
+  layout claimed nothing -- an impossible state the compiler had no reason to
+  reject, because the rank test lived in a constant rather than in a bound.
+  Rank is not directly bindable (`Shape::RANK` is an associated `Option<usize>`,
+  and a constant cannot gate an impl) but it is expressible structurally, which
+  is what the new `Rank4` marker does: four `DimCons` cells terminated by `Nil`,
+  or a `Ranked<U4>`. `Dyn` is excluded deliberately, since a runtime rank cannot
+  prove it is four.
 
 ### Added
 
