@@ -86,6 +86,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The reference page taught testing instead of usage.** Every section ended
+  in a dump of worked examples while the items themselves showed either
+  nothing or one-line occurrence matches, and the pool behind both included
+  `#[test]` suites whose scaffolding and assertion plumbing confuse a reader
+  trying to learn the call. The pool is now the book chapters plus the
+  runnable example programs, both compiled by CI; each operation, type,
+  dtype, layout, shape and target method opens onto the guide blocks that
+  name it, with an honest empty state and a book link where none does. The
+  section-end dumps are gone. The shapes section opens with the chapter's
+  own static/mixed/dynamic blocks as a gallery, and the data-flow tab walks
+  a custom operation from declaration to dispatch through the runnable polar
+  example -- contract, kernel, readout, backward -- resolved from that file
+  at build time. The browser suite was rewritten to the new contract: inline
+  examples, gallery and authoring steps, same scale/tick/scroll/docs-link
+  checks as before.
+
 - **A third vacuous suite, and what it found.** `cuda_shape_dtypes.rs` asserted
   that `DTypeDescriptor::size_bytes` returns 1, 2, 4 or 8 for eight dtypes. It
   launched nothing, opened no device, and would have passed unchanged with the

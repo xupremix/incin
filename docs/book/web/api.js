@@ -253,11 +253,11 @@
         (c.api ? '<div class="api-kv"><span class="k">reached via</span><span class="v">' + c.api + '</span></div>' : "") +
         '</div>';
     }
-    /* The one-liners are filled when the row opens: the usage payload is
-       fetched on demand, and the detail node does not exist before that. */
-    var used = '<div class="api-dcell"><h4>used in</h4>' +
-      '<div class="api-lines" data-names="' + usageKeysForOp(op).join(" ") + '">' +
-      '<p class="api-none">Loading usage&hellip;</p></div></div>';
+    /* The guide fills when the row opens: the usage payload is fetched on
+       demand, and the detail node does not exist before that. */
+    var example = '<div class="api-dcell"><h4>example</h4>' +
+      '<div class="api-usage" data-keys="' + usageKeysForOp(op).join(" ") + '">' +
+      '<p class="api-none">Loading example&hellip;</p></div></div>';
     return '<div class="api-detail-in">' + docsLink(op) + head + B.map(function (b) {
       var e = op.backends[b];
       if (!e.dtypes.length) {
@@ -273,7 +273,7 @@
         '<div class="api-kv"><span class="k">training</span><span class="v">' + (e.training ? "yes" : "no") + '</span></div>' +
         '<div class="api-kv"><span class="k">impl</span><span class="v">' + (e.impl || "&mdash;") + '</span></div>' +
         '</div>';
-    }).join("") + used + '</div>';
+    }).join("") + example + '</div>';
   }
 
   function render() {
@@ -308,7 +308,11 @@
     var open = btn.getAttribute("aria-expanded") === "true";
     btn.setAttribute("aria-expanded", open ? "false" : "true");
     if (open) { det.hidden = true; return; }
-    if (!det.innerHTML) { det.innerHTML = detailFor(rows._list[i]); fillLines(det); }
+    if (!det.innerHTML) {
+      det.innerHTML = detailFor(rows._list[i]);
+      var box = det.querySelector(".api-usage[data-keys]");
+      if (box) fillUsagePanel(box.dataset.keys.split(" "), box);
+    }
     det.hidden = false;
   }
   rows.addEventListener("click", function (e) {
@@ -392,9 +396,9 @@
           ? d.backends.map(function (b) { return '<span class="api-dt">' + b + '</span>'; }).join("")
           : "&mdash;") +
       '</span></div>' +
-      '<button type="button" class="api-linesbtn" data-lines="' + d.id +
-        '" aria-expanded="false">use sites</button>' +
-      '<div class="api-lines" hidden></div></div>';
+      '<button type="button" class="api-exbtn" data-usage="' + d.id +
+        '" aria-expanded="false">Example</button>' +
+      '<div class="api-usage" hidden></div></div>';
   }).join("");
 
   /* -- backends ---------------------------------------------------------- */
@@ -414,11 +418,8 @@
       '</span></div></div>';
   }).join("");
 
-  /* -- data flow --------------------------------------------------------- */
-  document.getElementById("flowSteps").innerHTML = (DATA.flow || []).map(function (f) {
-    return '<li class="api-step"><h3>' + f.stage + '</h3><p>' + f.detail + '</p>' +
-      (f.error ? '<code class="api-err">' + f.error + '</code>' : "") + '</li>';
-  }).join("");
+  /* -- data flow renders with the authoring guide below, next to the code
+     it illustrates. */
 
   /* -- types ------------------------------------------------------------- */
   var TYPES = null;
@@ -546,12 +547,12 @@
   }).join("");
 
 
-  /* -- usage snippets ---------------------------------------------------- */
-  /* Fetched on demand and shared by every section: an item is clickable, and
-     opening it shows real compiled code that uses it. A literal word match is
-     a fact about the snippet -- if the name appears in the code, the code uses
-     it -- so the heading says "used in", never "the example for", because a
-     name can appear incidentally. */
+  /* -- guide examples -------------------------------------------------- */
+  /* Fetched on demand and shared by every section: opening an item shows the
+     guide blocks that name it -- book chapters and runnable example programs,
+     never test suites. A literal word match is a fact about the block, so the
+     heading says "Example": the pool was written to teach, and an item with
+     no block says so rather than borrowing an unrelated one. */
   var USAGE = null;
   var usagePending = null;
 
@@ -566,57 +567,10 @@
     return usagePending;
   }
 
-  function usageHtml(name) {
-    var hits = (USAGE && USAGE.index[name]) || [];
-    if (!hits.length) {
-      return '<p class="api-none">No compiled snippet in this repository uses <code>' +
-        name + '</code> by name yet.</p>';
-    }
-    return hits.map(function (i) {
-      var sn = USAGE.snippets[i];
-      return '<figure class="api-ex"><figcaption>' +
-        '<a href="' + sn.href + '"' +
-        (sn.origin === "test" ? ' target="_blank" rel="noopener noreferrer"' : '') +
-        '>' + sn.label + '</a>' +
-        '<span class="api-extag' + (sn.checked ? " ok" : "") + '">' +
-        (sn.origin === "book" ? "book · " : "test · ") +
-        (sn.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
-        '<pre><code>' + code(sn.code) + '</code></pre></figure>';
-    }).join("");
-  }
-
-  /* One-line use sites for rows that already open for another reason: the
-     operation detail and the element-type cards. A full snippet per item would
-     triple the length of an already long expander, and the section-end worked
-     examples already carry the long form; what the expander is missing is the
-     answer to "what does using this look like", which is one line plus a link
-     to the file it came from. The line shown is the first one naming the item,
-     so it is the use rather than the surrounding scaffolding. */
-  function escHtml(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function lineFor(text, names) {
-    var lines = text.split("\n");
-    var fallback = "";
-    for (var li = 0; li < lines.length; li++) {
-      var line = lines[li].trim();
-      if (!line) continue;
-      if (!fallback) fallback = line;
-      for (var ni = 0; ni < names.length; ni++) {
-        if (line.indexOf(names[ni]) >= 0) {
-          return line.length > 220 ? line.slice(0, 220) + "…" : line;
-        }
-      }
-    }
-    return fallback.length > 220 ? fallback.slice(0, 220) + "…" : fallback;
-  }
-
-  /* Every name the usage index might know this operation under: the catalog
-     wire name and the public method it is reached through. `broadcast_as` is
-     why both are needed -- no snippet writes the bare word `broadcast`, while
-     several write the method. */
+  /* Every name the usage index might know one item under, space-separated in
+     the button: the catalog wire name and the public method it is reached
+     through. `broadcast_as` is why both travel -- no guide block writes the
+     bare word `broadcast`, while several write the method. */
   function usageKeysForOp(op) {
     var keys = [op.name];
     var api = (op.catalog && op.catalog.api) || "";
@@ -625,7 +579,7 @@
     return keys;
   }
 
-  function linesHtmlFor(names) {
+  function usageHtml(names) {
     var seen = {}, ids = [];
     names.forEach(function (n) {
       ((USAGE && USAGE.index[n]) || []).forEach(function (i) {
@@ -634,73 +588,46 @@
     });
     ids = ids.slice(0, 3);
     if (!ids.length) {
-      return '<p class="api-none">No compiled snippet in this repository uses ' +
-        names.map(function (n) { return '<code>' + escHtml(n) + '</code>'; }).join(" or ") +
-        ' by name yet.</p>';
+      return '<p class="api-none">No guide block names ' +
+        names.map(function (n) { return '<code>' + n + '</code>'; }).join(" or ") +
+        ' yet. <a href="./#/">Start from the book</a>.</p>';
     }
-    return '<ul class="api-lines-list">' + ids.map(function (i) {
+    return '<h4>Example</h4>' + ids.map(function (i) {
       var sn = USAGE.snippets[i];
-      return '<li class="api-line"><a href="' + escHtml(sn.href) + '"' +
-        (sn.origin === "test" ? ' target="_blank" rel="noopener noreferrer"' : '') +
-        '>' + escHtml(sn.label) + '</a>' +
+      var external = sn.origin !== "book";
+      return '<figure class="api-ex"><figcaption>' +
+        '<a href="' + sn.href + '"' +
+        (external ? ' target="_blank" rel="noopener noreferrer"' : '') +
+        '>' + sn.label + '</a>' +
         '<span class="api-extag' + (sn.checked ? " ok" : "") + '">' +
-        (sn.origin === "book" ? "book" : "test") + ' · ' +
-        (sn.checked ? "compiled" : "not compiled") + '</span>' +
-        '<code>' + code(lineFor(sn.code, names)) + '</code></li>';
-    }).join("") + '</ul>';
+        (sn.origin === "book" ? "book" : "example") + ' \u00b7 ' +
+        (sn.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
+        '<pre><code>' + code(sn.code) + '</code></pre></figure>';
+    }).join("");
   }
 
-  function fillLinesBox(box) {
-    if (box.dataset.filled) return;
+  function fillUsagePanel(names, panel) {
+    panel.hidden = false;
+    if (panel.dataset.filled) return;
+    panel.innerHTML = '<p class="api-none">Loading example&hellip;</p>';
     loadUsage().then(function () {
-      box.innerHTML = linesHtmlFor(box.dataset.names.split(" "));
-      box.dataset.filled = "1";
+      panel.innerHTML = usageHtml(names);
+      panel.dataset.filled = "1";
     }).catch(function (error) {
-      box.innerHTML = '<p class="api-none">Usage could not be loaded: ' +
-        escHtml(String(error.message || error)) + '</p>';
+      panel.innerHTML = '<p class="api-none">Example could not be loaded: ' +
+        String(error.message || error) + '</p>';
     });
   }
-
-  function fillLines(root) {
-    var boxes = root.querySelectorAll
-      ? root.querySelectorAll(".api-lines[data-names]:not([data-filled])")
-      : [];
-    for (var bi = 0; bi < boxes.length; bi++) fillLinesBox(boxes[bi]);
-  }
-
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-lines]");
-    if (!btn) return;
-    var panel = btn.nextElementSibling;
-    if (!panel || !panel.classList.contains("api-lines")) return;
-    if (!panel.dataset.names) panel.dataset.names = btn.dataset.lines;
-    var open = btn.getAttribute("aria-expanded") === "true";
-    btn.setAttribute("aria-expanded", open ? "false" : "true");
-    if (open) { panel.hidden = true; return; }
-    panel.hidden = false;
-    fillLinesBox(panel);
-  });
 
   document.addEventListener("click", function (e) {
     var item = e.target.closest("[data-usage]");
     if (!item) return;
-    var name = item.dataset.usage;
     var panel = item.nextElementSibling;
     if (!panel || !panel.classList.contains("api-usage")) return;
     var open = item.getAttribute("aria-expanded") === "true";
     item.setAttribute("aria-expanded", open ? "false" : "true");
     if (open) { panel.hidden = true; return; }
-    panel.hidden = false;
-    if (!panel.dataset.filled) {
-      panel.innerHTML = '<p class="api-none">Loading usage&hellip;</p>';
-      loadUsage().then(function () {
-        panel.innerHTML = '<h4>Used in</h4>' + usageHtml(name);
-        panel.dataset.filled = "1";
-      }).catch(function (error) {
-        panel.innerHTML = '<p class="api-none">Usage could not be loaded: ' +
-          String(error.message || error) + '</p>';
-      });
-    }
+    fillUsagePanel(item.dataset.usage.split(" "), panel);
   });
 
   function expandable(name, inner, cls) {
@@ -709,10 +636,6 @@
       '<div class="api-usage" hidden></div>';
   }
 
-  /* -- worked examples --------------------------------------------------- */
-  /* The book chapters are include_str!'d into a doctest-only module in the
-     facade, so a `no_run` or `compile_fail` block is compiled by CI. An
-     `ignore` block is not, and says so rather than passing for checked. */
   /* The book and this page share one highlighter, so a snippet reads the same
      in both places. It escapes as it tokenises, so the raw text goes in. */
   function code(text) {
@@ -721,34 +644,32 @@
       : text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  function examplesFor(section) {
-    var list = (DATA.examples || []).filter(function (e) { return e.section === section; });
-    if (!list.length) return "";
-    return '<h3 class="api-h">Examples</h3>' +
-      '<p class="api-lede">' + list.length + ' from the book' +
-      ', ' + list.filter(function (e) { return e.checked; }).length +
-      ' of them compiled by CI. Each links to the chapter it is taken from.</p>' +
-      list.map(function (e) {
-        return '<figure class="api-ex">' +
-          '<figcaption><a href="./#/' + e.chapter + '">' + e.heading + '</a>' +
-          '<span class="api-extag' + (e.checked ? " ok" : "") + '">' +
-          (e.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
-          '<pre><code>' + code(e.code) + '</code></pre></figure>';
-      }).join("");
-  }
+  /* -- shape gallery ----------------------------------------------------- */
+  /* The shapes chapter opens with the three kinds side by side; the gallery
+     shows those opening blocks where the reference lists the types, resolved
+     from the chapter at build time so the two cannot drift apart. */
+  document.getElementById("shapeGallery").innerHTML = (DATA.shapeGallery || []).map(function (g) {
+    return '<figure class="api-ex">' +
+      '<figcaption><a href="' + g.href + '">' + g.heading + '</a>' +
+      '<span class="api-extag' + (g.checked ? " ok" : "") + '">' +
+      (g.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
+      '<pre><code>' + code(g.code) + '</code></pre></figure>';
+  }).join("");
 
-  ["operations", "types", "dtypes", "backends", "layouts", "shapes", "target", "flow"]
-    .forEach(function (id) {
-      var host = document.getElementById("sec-" + id);
-      if (!host) return;
-      var html = examplesFor(id);
-      if (html) {
-        var wrap = document.createElement("div");
-        wrap.className = "api-exwrap";
-        wrap.innerHTML = html;
-        host.appendChild(wrap);
-      }
-    });
+  /* -- authoring guide ----------------------------------------------------- */
+  /* The data-flow tab walks a custom operation from declaration to dispatch,
+     through the runnable polar example: contract, kernel, readout, backward.
+     Steps resolve from that file at build time; a renamed function fails the
+     build instead of silently dropping a step. */
+  document.getElementById("flowSteps").innerHTML = (DATA.authoring || []).map(function (a) {
+    return '<li class="api-step"><h3>' + a.title + '</h3>' +
+      '<figure class="api-ex">' +
+      '<figcaption><a href="' + a.href + '" target="_blank" rel="noopener noreferrer">' +
+      a.where + '</a>' +
+      '<span class="api-extag' + (a.checked ? " ok" : "") + '">' +
+      (a.checked ? "compiled" : "not compiled") + '</span></figcaption>' +
+      '<pre><code>' + code(a.code) + '</code></pre></figure></li>';
+  }).join("");
 
   var initial = window.location.hash.slice(1);
   showSection(["types", "dtypes", "backends", "layouts", "shapes", "target", "flow"].indexOf(initial) >= 0 ? initial : "operations");

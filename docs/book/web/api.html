@@ -127,7 +127,7 @@
 
       <p class="api-lede" style="margin-top:12px;font-size:13.5px;opacity:.75">
         Select a row for the element types, layouts, rank and training boundary each backend
-        advertises, the public entry point, and one-line use sites from compiled code.
+        advertises, the public entry point, and a worked example.
       </p>
       </section>
 
@@ -149,7 +149,7 @@
       <section id="sec-dtypes" class="api-sec" hidden>
         <p class="api-lede">The nine element types, read from the <code>DTypeId</code> enum that
           defines them, with the storage each one actually occupies, the backends that accept it,
-          and how many operations do.</p>
+          and how many operations do. Select a card for a worked example of the type in use.</p>
         <div class="api-note">
           <p><b>Storage is a block encoding, not a scalar width.</b> A dtype declares how many
             logical values sit in a block, how many bytes that block costs, and its alignment
@@ -191,6 +191,12 @@
         <p class="api-lede">The shape system, by module. Every rule here is discharged at compile
           time where the extents are known and falls back to a checked runtime rule where they are
           not, so a shape error is a type error rather than a panic.</p>
+        <h3 class="api-h">What the three kinds look like</h3>
+        <p class="api-lede">Taken from the opening of the
+          <a href="./#/shapes">shapes chapter</a>: fully static, a named runtime axis, an
+          unnamed one, the fully dynamic form, and a mismatch that fails to compile.</p>
+        <div id="shapeGallery"></div>
+        <h3 class="api-h">The types</h3>
         <div class="api-controls">
           <div class="api-search"><input id="shQ" type="search"
             placeholder="Filter shape types — try Broadcast, Dim, Axis" aria-label="Filter shape types"></div>
@@ -209,9 +215,12 @@
       </section>
 
       <section id="sec-flow" class="api-sec" hidden>
-        <p class="api-lede">Between <code>x.matmul(&amp;w)?</code> and a running kernel sits a short,
-          fixed pipeline. Each stage answers a different question and owns a different class of
-          failure &mdash; the class is what tells you who is at fault.</p>
+        <p class="api-lede">Defining a custom operation, end to end: declare the contract,
+          implement the kernel, close the graph, run it backward. Each step shows the
+          corresponding function from the runnable
+          <a href="https://github.com/xupremix/incin/blob/master/crates/incin-backends/examples/polar_cartesian.rs">polar-to-Cartesian example</a>
+          -- two inputs, two outputs, its own backward -- written up in the
+          <a href="./#/custom_operations">custom operations chapter</a>.</p>
         <ol class="api-flow" id="flowSteps"></ol>
       </section>
 

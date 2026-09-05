@@ -226,6 +226,10 @@
   display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
   gap: 1px; background: var(--table-border); border-bottom: 1px solid var(--table-border);
 }
+/* Grid items default to min-width:auto, which lets one long code line widen
+   the whole track past a phone viewport. The figures keep their own
+   horizontal scroll; the page must not scroll. */
+.api-detail-in > *, #flowSteps > .api-step, #shapeGallery > .api-ex { min-width: 0; }
 .api-dcell { background: var(--bg); padding: 12px 15px; }
 .api-dcell h4 {
   margin: 0 0 8px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
@@ -413,8 +417,7 @@
 .api-note p { margin: 0 0 8px; font-size: 13px; opacity: .85; }
 .api-note p:last-child { margin-bottom: 0; }
 
-/* -- worked examples ---------------------------------------------------- */
-.api-exwrap { margin-top: 26px; }
+/* -- guide figures -------------------------------------------------------- */
 .api-ex {
   margin: 0 0 12px; border: 1px solid var(--table-border);
   border-radius: var(--radius-lg); overflow: hidden;
@@ -463,32 +466,17 @@
 }
 .api-card .api-usage { border-bottom: 0; padding-bottom: 0; }
 
-/* -- inline use sites ----------------------------------------------------- */
-/* One line plus a source link, not the full snippet: the expander already runs
-   long, and the section-end worked examples carry the long form. Lines wrap
-   rather than scroll, so a long path never pushes the page wide on a phone. */
-.api-linesbtn {
+/* -- per-item example buttons ------------------------------------------------ */
+.api-exbtn {
   appearance: none; width: 100%; margin-top: 10px; padding: 6px 10px;
   border: 1px solid var(--table-border); border-radius: var(--radius-sm);
   background: var(--table-alt-bg); color: var(--fg); font: inherit; font-size: 12px;
   cursor: pointer;
 }
-.api-linesbtn:hover { text-decoration: underline; }
-.api-linesbtn:focus-visible { outline: 2px solid var(--links); outline-offset: 2px; }
-.api-linesbtn[aria-expanded="true"] { font-weight: 600; }
-.api-lines { margin-top: 8px; }
-.api-lines-list { list-style: none; margin: 0; padding: 0; }
-.api-line { margin: 0 0 10px; font-size: 12px; }
-.api-line:last-child { margin-bottom: 2px; }
-.api-line a { color: var(--links); text-decoration: none; overflow-wrap: anywhere; }
-.api-line a:hover { text-decoration: underline; }
-.api-line .api-extag { margin-left: 8px; }
-.api-line code {
-  display: block; margin-top: 3px; padding: 7px 10px;
-  border: 1px solid var(--table-border); border-radius: var(--radius-sm);
-  background: var(--table-alt-bg); font-family: var(--font-mono); font-size: 11.5px;
-  line-height: 1.5; white-space: normal; overflow-wrap: anywhere;
-}
+.api-exbtn:hover { text-decoration: underline; }
+.api-exbtn:focus-visible { outline: 2px solid var(--links); outline-offset: 2px; }
+.api-exbtn[aria-expanded="true"] { font-weight: 600; }
+#shapeGallery { display: grid; gap: 12px; margin: 12px 0 6px; }
 .api-tylink {
   display: inline-block; font-family: var(--font-mono); font-size: 11px;
   color: var(--links); text-decoration: none; margin: 0 0 6px 68px;

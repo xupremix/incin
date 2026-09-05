@@ -234,7 +234,7 @@ async function run() {
   const counts = {
     dtypes: [".api-card", 9],
     backends: [".api-card", 4],
-    flow: [".api-step", 5],
+    flow: [".api-step", 4],
     layouts: [".api-card", 9],
     target: [".api-tyrow", 21],
   };
@@ -305,25 +305,47 @@ async function run() {
   }
   doc().querySelector('.api-tab[data-sec="operations"]').click();
 
-  /* Examples are the reason to trust the page, so they must actually be
-     there, must not be silently truncated, and must say whether the compiler
-     checks them -- 20 of the 82 are `ignore` blocks that it does not. */
-  for (const tab of tabs) {
-    tab.click();
-    const id = tab.dataset.sec;
-    const figures = [...doc().querySelectorAll(".api-sec:not([hidden]) .api-ex")];
-    check(figures.length > 0, "the " + id + " section shows no worked example");
-    for (const figure of figures) {
-      const code = figure.querySelector("pre code");
-      check(code && code.textContent.trim().length > 0,
-        "an example in " + id + " renders no code");
-      const link = figure.querySelector("figcaption a");
-      check(link && (link.getAttribute("href") || "").indexOf("./#/") === 0,
-        "an example in " + id + " does not link to its chapter");
-      const tag = figure.querySelector(".api-extag");
-      check(tag && /^(compiled|not compiled)$/.test(tag.textContent.trim()),
-        "an example in " + id + " does not state whether it is compiled");
-    }
+  /* The shapes gallery shows the chapter's opening blocks where the
+     reference lists the types: static, mixed and dynamic side by side. */
+  doc().querySelector('.api-tab[data-sec="shapes"]').click();
+  const gallery = [...doc().querySelectorAll("#shapeGallery .api-ex")];
+  check(gallery.length === 3,
+    "the shape gallery shows " + gallery.length + " blocks, not 3");
+  for (const figure of gallery) {
+    const code = figure.querySelector("pre code");
+    check(code && code.textContent.trim().length > 0,
+      "a gallery block renders no code");
+    const link = figure.querySelector("figcaption a");
+    check(link && (link.getAttribute("href") || "").indexOf("./#/shapes") === 0,
+      "a gallery block does not link to the shapes chapter");
+    const tag = figure.querySelector(".api-extag");
+    check(tag && /^(compiled|not compiled)$/.test(tag.textContent.trim()),
+      "a gallery block does not state whether it is compiled");
+    check(code.querySelector(".hl-kw"),
+      "a gallery block is not syntax highlighted");
+  }
+
+  /* The data-flow tab walks a custom operation from declaration to dispatch,
+     through the runnable polar example: four steps, each with its code. */
+  doc().querySelector('.api-tab[data-sec="flow"]').click();
+  const steps = [...doc().querySelectorAll("#flowSteps .api-step")];
+  check(steps.length === 4,
+    "the authoring guide shows " + steps.length + " steps, not 4");
+  for (const step of steps) {
+    check(step.querySelector("h3"), "an authoring step has no title");
+    const figure = step.querySelector(".api-ex");
+    check(figure, "an authoring step shows no code");
+    const code = figure.querySelector("pre code");
+    check(code && code.textContent.trim().length > 0,
+      "an authoring step renders no code");
+    const link = figure.querySelector("figcaption a");
+    check(link && (link.getAttribute("href") || "").indexOf("polar_cartesian.rs") >= 0,
+      "an authoring step does not link to the example file");
+    const tag = figure.querySelector(".api-extag");
+    check(tag && /^(compiled|not compiled)$/.test(tag.textContent.trim()),
+      "an authoring step does not state whether it is compiled");
+    check(code.querySelector(".hl-kw"),
+      "an authoring step is not syntax highlighted");
   }
   doc().querySelector('.api-tab[data-sec="operations"]').click();
 
@@ -357,59 +379,53 @@ async function run() {
   rowMajor.click();
   check(rowMajor.nextElementSibling.hidden, "an opened item did not close again");
 
-  /* Opening an operation shows one-line use sites inline, inside the expanded
-     detail -- the section-end worked examples are the long form, and what the
-     row itself was missing is the answer to "what does using this look like". */
+  /* Opening an operation shows guide examples inline, inside the expanded
+     detail -- there is no section-end dump anymore, so this is where a reader
+     meets working code. */
   doc().querySelector('.api-tab[data-sec="operations"]').click();
-  const mq = doc().querySelector("#apiQ");
-  mq.value = "matmul";
-  mq.dispatchEvent(new (doc().defaultView.Event)("input", {bubbles: true}));
+  const tq = doc().querySelector("#apiQ");
+  tq.value = "transpose";
+  tq.dispatchEvent(new (doc().defaultView.Event)("input", {bubbles: true}));
   await until(() => doc().querySelectorAll(".api-row").length >= 1,
-    "the matmul filter to narrow");
-  const matmulRow = [...doc().querySelectorAll(".api-row")]
-    .find((row) => row.querySelector(".api-name").firstChild.textContent.trim() === "matmul");
-  check(matmulRow, "no matmul operation row rendered");
-  matmulRow.click();
+    "the transpose filter to narrow");
+  const transposeRow = [...doc().querySelectorAll(".api-row")]
+    .find((row) => row.querySelector(".api-name").firstChild.textContent.trim() === "transpose");
+  check(transposeRow, "no transpose operation row rendered");
+  transposeRow.click();
   await until(() => {
-    const box = doc().querySelector(".api-detail:not([hidden]) .api-lines");
+    const box = doc().querySelector(".api-detail:not([hidden]) .api-usage");
     return box && box.dataset.filled === "1";
-  }, "the operation use sites to load");
-  const opLines = [...doc().querySelectorAll(".api-detail:not([hidden]) .api-line")];
-  check(opLines.length > 0, "opening matmul produced no inline use site");
-  for (const li of opLines) {
-    const text = li.querySelector("code").textContent;
-    check(text.indexOf("matmul") >= 0,
-      "an inline use site for matmul does not mention it: " + text);
-    check(li.querySelector("a") && li.querySelector(".api-extag"),
-      "an inline use site has no source link or provenance tag");
+  }, "the operation example to load");
+  const opFigures = [...doc().querySelectorAll(".api-detail:not([hidden]) .api-ex")];
+  check(opFigures.length > 0, "opening transpose produced no inline example");
+  for (const figure of opFigures) {
+    const text = figure.querySelector("pre code").textContent;
+    check(text.indexOf("transpose") >= 0,
+      "an inline example for transpose does not mention it");
+    check(figure.querySelector("figcaption a") && figure.querySelector(".api-extag"),
+      "an inline example has no source link or provenance tag");
   }
-  matmulRow.click();
-  mq.value = "";
-  mq.dispatchEvent(new (doc().defaultView.Event)("input", {bubbles: true}));
+  transposeRow.click();
+  tq.value = "";
+  tq.dispatchEvent(new (doc().defaultView.Event)("input", {bubbles: true}));
 
-  /* Element-type cards open their own use sites the same way. */
+  /* Element-type cards open their own examples the same way. */
   doc().querySelector('.api-tab[data-sec="dtypes"]').click();
-  const f32btn = doc().querySelector('#dtypeCards [data-lines="f32"]');
+  const f32btn = doc().querySelector('#dtypeCards [data-usage="f32"]');
   check(f32btn, "the element-type section has no expandable f32 card");
   f32btn.click();
   await until(() => {
     const panel = f32btn.nextElementSibling;
     return panel && !panel.hidden && panel.dataset.filled === "1";
-  }, "the f32 use sites to load");
-  const dtLines = [...f32btn.nextElementSibling.querySelectorAll(".api-line")];
-  check(dtLines.length > 0, "opening f32 produced no inline use site");
-  for (const li of dtLines) {
-    check(li.querySelector("code").textContent.indexOf("f32") >= 0,
-      "an inline use site for f32 does not mention it");
+  }, "the f32 example to load");
+  const dtFigures = [...f32btn.nextElementSibling.querySelectorAll(".api-ex")];
+  check(dtFigures.length > 0, "opening f32 produced no inline example");
+  for (const figure of dtFigures) {
+    check(figure.querySelector("pre code").textContent.indexOf("f32") >= 0,
+      "an inline example for f32 does not mention it");
   }
   f32btn.click();
   check(f32btn.nextElementSibling.hidden, "an opened element-type card did not close again");
-
-  /* The section examples must be highlighted too, not only the usage ones. */
-  doc().querySelector('.api-tab[data-sec="operations"]').click();
-  const anyExample = doc().querySelector(".api-sec:not([hidden]) .api-ex pre code");
-  check(anyExample && anyExample.querySelector(".hl-kw"),
-    "the worked examples are not syntax highlighted");
 
   const shapeItems = doc().querySelectorAll("#shapeGroups .api-tyrow").length;
   check(shapeItems > 50,

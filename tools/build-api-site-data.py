@@ -201,69 +201,28 @@ TYPE_DECL = re.compile(r"^pub (struct|trait|enum|type) ([A-Za-z0-9_:]+)")
 
 
 
-# The stages canonical dispatch runs, in order, with the failure class each
-# one owns. Taken from the lowering chapter and exec/dispatch.rs, which keep
-# these apart deliberately: the class says who is at fault.
-DISPATCH_FLOW = [
-    {
-        "stage": "logical metadata",
-        "detail": "Shape, dtype and device are read off the storage that will "
-                  "actually run, so validation cannot be satisfied by metadata "
-                  "describing some other tensor.",
-        "error": None,
-    },
-    {
-        "stage": "output inference and cross-check",
-        "detail": "Outputs are computed from the operation and its inputs, never "
-                  "dictated by the caller; the caller's predicted shape must agree "
-                  "with what was inferred.",
-        "error": "DescriptorError",
-    },
-    {
-        "stage": "payload validation",
-        "detail": "The descriptor's own invariants are checked before anything is "
-                  "asked of a backend.",
-        "error": "DescriptorError",
-    },
-    {
-        "stage": "capability admission",
-        "detail": "The backend's registry is asked whether it accepts this "
-                  "operation over these operands, and the context's fallback "
-                  "policy filters the answer, so no route reaches a kernel with a "
-                  "composed or transfer fallback it was not granted.",
-        "error": "PolicyViolation",
-    },
-    {
-        "stage": "backend launch",
-        "detail": "The kernel runs. A failure here means a legal request failed at "
-                  "or after launch, which is the device's fault rather than the "
-                  "caller's.",
-        "error": "BackendError",
-    },
+# The authoring walkthrough for the data-flow section, in the order a reader
+# follows it. Bodies resolve from the runnable polar example at build time,
+# so a renamed function fails the build instead of silently dropping a step.
+# Anchor is the impl block the method lives in (None for a top-level fn).
+AUTHORING_STEPS = [
+    ("Declare the operation and its contract",
+     "crates/incin-backends/examples/polar_cartesian.rs",
+     "impl Operation for PolarToCartesian", "infer_outputs"),
+    ("Implement the kernel",
+     "crates/incin-backends/examples/polar_cartesian.rs",
+     "impl Execute<PolarToCartesian> for CpuBackend", "execute"),
+    ("Close the graph with a readout op",
+     "crates/incin-backends/examples/polar_cartesian.rs",
+     "impl Operation for SquaredError", "infer_outputs"),
+    ("Assemble the graph and run it backward",
+     "crates/incin-backends/examples/polar_cartesian.rs",
+     None, "analytic_gradients"),
 ]
 
 
-
-
-# Which chapters carry the worked examples for each reference section. The
-# mapping is stated rather than guessed from the prose: an example is shown
-# under a section because that chapter is about that subject, not because a
-# keyword matched.
-EXAMPLE_CHAPTERS = {
-    "operations": ["tensors", "quickstart", "building_models", "pytorch_cheatsheet"],
-    "dtypes": ["quantization", "tensors"],
-    "layouts": ["layout"],
-    "shapes": ["shapes", "advanced_shapes", "macros"],
-    "target": ["target_api", "backend_authoring"],
-    "flow": ["deep_lowering", "proofs_to_execution", "custom_operations"],
-    "backends": ["backends", "backend_conformance"],
-    "types": ["deep_type_semantics", "invariants"],
-}
-FENCE = re.compile(r"^```(rust[\w,]*)$")
-
-
-
 REPO_BLOB = "https://github.com/xupremix/incin/blob/master/"
+FENCE = re.compile(r"^```(rust[\w,]*)$")
 FN_START = re.compile(r"^(?:pub\s+)?(?:async\s+)?fn\s+([a-z0-9_]+)", re.M)
 
 
@@ -294,11 +253,14 @@ def _fn_body(text: str, start: int):
 
 
 def collect_snippets() -> list:
-    """A pool of real, compiled usages: book examples, then test functions.
+    """Guide code blocks: the book, plus the runnable example programs.
 
-    Book blocks come first because they were written to be read. Test
-    functions fill in what the book does not reach -- they are compiled and
-    run, so they cannot describe an API that no longer exists.
+    Test suites used to fill this pool too, until readers pointed out that
+    scaffolding and assertion plumbing teach testing, not usage. The book was
+    written to be read, and the examples under crates/*/examples run in CI,
+    so both read as guides. A `#[test]` suite reads as a test suite, so those
+    stay out; an item with no block that names it says so on the page rather
+    than borrowing an unrelated one.
     """
     pool = []
     for path in sorted((ROOT / "docs/book/src").glob("*.md")):
@@ -328,12 +290,10 @@ def collect_snippets() -> list:
                 index = end
             index += 1
 
-    # The runnable custom-operation examples live beside the backend, not in
-    # crates/incin/examples/, so the second pattern misses them: without the
-    # third, opening CpuStorage or f64 shows test snippets but never the
-    # calibration/polar programs that use them end to end.
+    # The runnable example programs live beside their crates. They run in CI,
+    # so they cannot describe an API that no longer exists, and they read as
+    # guides rather than test scaffolding.
     for pattern in (
-        "crates/*/tests/*.rs",
         "crates/incin/examples/*/*.rs",
         "crates/incin-backends/examples/*.rs",
     ):
@@ -346,7 +306,7 @@ def collect_snippets() -> list:
                     continue
                 name = match.group(1)
                 pool.append({
-                    "origin": "test",
+                    "origin": "example",
                     "label": name,
                     "where": rel,
                     "href": REPO_BLOB + rel,
@@ -365,12 +325,13 @@ def collect_snippets() -> list:
 
 
 def index_usage(pool: list, names: list, limit: int = 3) -> dict:
-    """Which snippets literally use each name.
+    """Which guide blocks use each name, to show inline per item.
 
     A literal word match is a fact about the snippet, not a guess about its
-    meaning: if `RowMajor` appears in the code, that code uses `RowMajor`. The
-    page says "used in", never "the example for", because a name can appear
-    incidentally. Book snippets are offered first.
+    meaning: if `RowMajor` appears in the code, that code uses `RowMajor`.
+    The page says "Example", never "the example for", because a name can
+    appear incidentally. Book blocks come first: they were written to teach,
+    while example programs were written to run.
     """
     order = sorted(range(len(pool)), key=lambda i: (pool[i]["origin"] != "book", len(pool[i]["code"])))
     out = {}
@@ -389,55 +350,82 @@ def index_usage(pool: list, names: list, limit: int = 3) -> dict:
     return out
 
 
-def collect_examples() -> list:
-    """Every worked example in the book, with whether the compiler checks it.
+def collect_shape_gallery() -> list:
+    """The opening blocks of the shapes chapter, in file order.
 
-    The chapters are `include_str!`d into a doctest-only module in the facade,
-    so a `no_run` or `compile_fail` block is compiled by CI. An `ignore` block
-    is not, and is labelled that way here rather than presented as if it were
-    checked -- 25 of the 96 are in that state.
+    The chapter opens with the three kinds side by side (fully static, named
+    runtime axis, unnamed runtime axis), then the fully dynamic form, then a
+    mismatch that fails to compile. The gallery follows the chapter rather
+    than restating it, so it cannot drift from the prose it illustrates; the
+    build fails if the chapter stops opening with at least three blocks.
     """
-    # A chapter can serve more than one section: `tensors` carries both the
-    # operation examples and the element-type ones.
-    sections_of = {}
-    for section, chapters in EXAMPLE_CHAPTERS.items():
-        for chapter in chapters:
-            sections_of.setdefault(chapter, []).append(section)
+    path = ROOT / "docs/book/src/shapes.md"
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    out, heading, index = [], None, 0
+    while index < len(lines) and len(out) < 3:
+        if lines[index].startswith("#"):
+            heading = lines[index].lstrip("#").strip()
+        match = FENCE.match(lines[index].strip())
+        if match:
+            end = index + 1
+            while end < len(lines) and lines[end].strip() != "```":
+                end += 1
+            shown = "\n".join(
+                l for l in lines[index + 1:end]
+                if not l.lstrip().startswith("# ") and l.strip() != "#"
+            ).strip()
+            if shown:
+                out.append({
+                    "chapter": "shapes",
+                    "heading": heading or "shapes",
+                    "href": "./#/shapes",
+                    "checked": "ignore" not in match.group(1),
+                    "tags": match.group(1),
+                    "code": shown,
+                })
+            index = end
+        index += 1
+    if len(out) < 3:
+        raise SystemExit(
+            "shapes.md opens with fewer than three code blocks; "
+            "the shape gallery needs three"
+        )
+    return out
 
+
+def _method_body(text: str, anchor, fn_name: str):
+    """The method named `fn_name` after `anchor`, brace-matched."""
+    start = 0 if anchor is None else text.find(anchor)
+    if start < 0:
+        return None
+    match = re.search(
+        r"^[ \t]*(?:pub\s+)?fn\s+" + re.escape(fn_name) + r"\b",
+        text[start:],
+        re.M,
+    )
+    if not match:
+        return None
+    return _fn_body(text, start + match.start())
+
+
+def collect_authoring() -> list:
+    """The four authoring steps with their code, resolved from the example."""
     out = []
-    for path in sorted((ROOT / "docs/book/src").glob("*.md")):
-        chapter = path.stem
-        if chapter not in sections_of:
-            continue
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        heading, index = None, 0
-        while index < len(lines):
-            line = lines[index]
-            if line.startswith("#"):
-                heading = line.lstrip("#").strip()
-            match = FENCE.match(line.strip())
-            if match:
-                end = index + 1
-                while end < len(lines) and lines[end].strip() != "```":
-                    end += 1
-                body = "\n".join(lines[index + 1:end])
-                # Hidden doctest scaffolding is not part of the example.
-                shown = "\n".join(
-                    l for l in body.splitlines()
-                    if not l.lstrip().startswith("# ") and l.strip() != "#"
-                ).strip()
-                tags = match.group(1)
-                for section in sections_of[chapter] if shown else []:
-                    out.append({
-                        "section": section,
-                        "chapter": chapter,
-                        "heading": heading or chapter,
-                        "checked": "ignore" not in tags,
-                        "tags": tags,
-                        "code": shown,
-                    })
-                index = end
-            index += 1
+    for title, rel, anchor, fn_name in AUTHORING_STEPS:
+        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        body = _method_body(text, anchor, fn_name)
+        if body is None:
+            raise SystemExit(
+                f"authoring step {title!r}: fn {fn_name!r} not found after "
+                f"{anchor!r} in {rel}; update AUTHORING_STEPS"
+            )
+        out.append({
+            "title": title,
+            "where": rel,
+            "href": REPO_BLOB + rel,
+            "checked": True,
+            "code": body.strip(),
+        })
     return out
 
 
@@ -740,11 +728,11 @@ def main() -> int:
         "backends": BACKENDS,
         "dtypes": dtypes_out,
         "backendDetail": backends_out,
-        "flow": DISPATCH_FLOW,
         "shapes": shape_groups,
         "layouts": layout_out,
         "targetApi": target_out,
-        "examples": collect_examples(),
+        "shapeGallery": collect_shape_gallery(),
+        "authoring": collect_authoring(),
         "typeCount": len(types),
         "typeLinked": sum(1 for t in types if t["url"]),
         "usageNames": len(usage),
