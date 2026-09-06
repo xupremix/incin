@@ -23,15 +23,18 @@ const LOOPS: usize = 3;
 
 /// A deliberately small looped encoder block: four tokens, model width
 /// eight, single head — the same geometry as the unlooped proof, so the
-/// only difference under test is the sharing.
-#[module(no_stats)]
+/// only difference under test is the sharing. The attention projections
+/// stay explicit (fan-out cannot be a chain); the MLP is one `Sequential`.
+/// `no_shape_info` is required: static shape debug formatting has nothing
+/// to say about `Dyn` extents, so a `Sequential` of dynamic linears does
+/// not implement it.
+#[module(no_stats, no_shape_info)]
 struct LoopedBlock {
     query: LinearLayer,
     key: LinearLayer,
     value: LinearLayer,
     projection: LinearLayer,
-    feed_forward_in: LinearLayer,
-    feed_forward_out: LinearLayer,
+    mlp: SeqTy!(LinearLayer, ReLU, LinearLayer),
 }
 
 impl LoopedBlock {
@@ -41,8 +44,11 @@ impl LoopedBlock {
             key: LinearLayer::build((8, 8))?,
             value: LinearLayer::build((8, 8))?,
             projection: LinearLayer::build((8, 8))?,
-            feed_forward_in: LinearLayer::build((8, 16))?,
-            feed_forward_out: LinearLayer::build((16, 8))?,
+            mlp: seq!(
+                LinearLayer::build((8, 16))?,
+                ReLU,
+                LinearLayer::build((16, 8))?
+            ),
         })
     }
 
@@ -56,11 +62,7 @@ impl LoopedBlock {
         let attention = scores.softmax(1)?;
         let attended = attention.matmul(&value)?;
         let attention_residual = input.clone() + &self.projection.forward(attended)?;
-        let feed_forward = self.feed_forward_out.forward(
-            self.feed_forward_in
-                .forward(attention_residual.clone())?
-                .gelu()?,
-        )?;
+        let feed_forward = self.mlp.forward(attention_residual.clone())?;
         Ok((attention_residual + &feed_forward).forget_layout())
     }
 }
@@ -99,14 +101,16 @@ fn looped_block_trains_through_shared_weights() -> Result<()> {
     let grads = loss.backward()?;
 
     // Every parameter group receives a finite, nonzero gradient: three
-    // iterations accumulated into one update per weight.
+    // iterations accumulated into one update per weight. The MLP lives
+    // behind one `mlp` field, reached positionally through `Sequential`'s
+    // public tuple elements.
     let mut nonzero_gradient_count = 0usize;
     macro_rules! assert_parameter_gradient {
         ($name:literal, $parameter:expr) => {{
             let parameter = $parameter.as_tensor()?;
-            let gradient = grads
-                .require(&parameter)
-                .map_err(|error| Error::Msg(format!("missing gradient for {}: {error}", $name)))?;
+            let gradient = grads.require(&parameter).map_err(|error| {
+                Error::Msg(format!("missing gradient for {}: {error}", $name))
+            })?;
             let bytes = Cpu::to_bytes::<f32>(gradient.inner())?;
             let values = bytes
                 .chunks_exact(core::mem::size_of::<f32>())
@@ -120,9 +124,13 @@ fn looped_block_trains_through_shared_weights() -> Result<()> {
 
     assert_parameter_gradient!("query.weight", model.query.weight);
     assert_parameter_gradient!("query.bias", model.query.bias.as_ref().unwrap());
+    assert_parameter_gradient!("key.weight", model.key.weight);
     assert_parameter_gradient!("value.weight", model.value.weight);
     assert_parameter_gradient!("projection.weight", model.projection.weight);
-    assert_parameter_gradient!("feed_forward_out.weight", model.feed_forward_out.weight);
+    assert_parameter_gradient!("mlp.0.weight", model.mlp.0.weight);
+    assert_parameter_gradient!("mlp.0.bias", model.mlp.0.bias.as_ref().unwrap());
+    assert_parameter_gradient!("mlp.1.1.weight", model.mlp.1.1.weight);
+    assert_parameter_gradient!("mlp.1.1.bias", model.mlp.1.1.bias.as_ref().unwrap());
     assert!(
         nonzero_gradient_count > 0,
         "the looped model produced only zero gradients"

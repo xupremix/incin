@@ -12,7 +12,7 @@ divide cleanly by what they *make*: a type, a value, or an item.
 | `dim!(...)` | named dimension **types** | below |
 | `tensor![...]` | a `Result<Tensor>` **value** | [Tensors](./tensors.md) |
 | `idx![...]` | a slicing **type** | below |
-| `#[module]` | trait **impls** on your struct | [Building models](./building_models.md) |
+| `#[module]` | trait **impls** on your struct | below, [Building models](./building_models.md) |
 | `seq!` / `SeqTy!` | a `Sequential` value / its type | [Sequential](./sequential.md) |
 | `best_device!()` | a device **type** | [Backends](./backends.md), below |
 | `mesh!`, `placement!`, `parallel!` | distributed **types** | [Experimental](./experimental.md) |
@@ -140,8 +140,123 @@ on purpose: a `#[cfg(feature = "cuda")]` written inside a `macro_rules!` body
 is evaluated against the *calling* crate's features, so it would read as
 disabled in every downstream crate and silently select CPU.
 
-## Path resolution, and the one thing that breaks it
+## `#[module]`: composable module impls
 
+Derives the visitor traits for a struct by walking its fields. Built-in
+layers, nested `#[module]` structs, and `Sequential` blocks aggregate
+automatically; each generated impl recurses into the fields, prefixing
+child paths with the field name (`query.weight`, `mlp.0.weight`).
+
+With no arguments every impl is generated: `VisitParameters` (optimizer
+discovery), `VisitState` / `VisitStateMut` (checkpoints), `NamedLayers`
+(hierarchy introspection), `ShapeInfo` (shape debug formatting),
+`ComputeStats` (parameter/MAC estimation), `TrainMode` (`train()` /
+`eval()` switching), and `ToDevice` (device transfer). Each can be
+disabled individually:
+
+| Argument | Skips | Reach for it when |
+|:---|:---|:---|
+| `no_parameters` | `VisitParameters` | the module holds no trainable state (stateless or inference-only) |
+| `no_state` | `VisitState` / `VisitStateMut` | the module must not checkpoint (ephemeral scaffolding) |
+| `no_named_layers` | `NamedLayers` | hierarchy introspection is unnecessary overhead |
+| `no_shape_info` | `ShapeInfo` | static shape debug formatting is unwanted |
+| `no_stats` | `ComputeStats` | parameter/MAC estimation is meaningless here |
+| `no_train_mode` | `TrainMode` | recursive `train()` / `eval()` switching is handled manually |
+| `no_to_device` | `ToDevice` | fields cannot cross device boundaries, or transfer is manual |
+| `internal` | — | in-tree use only: routes macro support paths at the defining crate |
+
+Anything else is a compile error: the grammar is versioned and unknown
+keys are rejected rather than silently ignored, so a typo fails instead
+of changing behaviour.
+
+```rust,no_run
+use incin::prelude::*;
+
+type B = DefaultBackend;
+
+// An inference-only block: no optimizer discovery, no training modes,
+// but checkpoints and device transfer still work.
+#[module(no_parameters, no_train_mode)]
+pub struct FrozenBackbone {
+    fc1: Linear<s![768, 256], B>,
+    fc2: Linear<s![256, 10], B>,
+}
+
+impl FrozenBackbone {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            fc1: Linear::build(())?,
+            fc2: Linear::build(())?,
+        })
+    }
+
+    pub fn forward(&self, x: Tensor<s![2, 768], B>) -> Result<Tensor<s![2, 10], B, f32, Grad>> {
+        self.fc2.forward(self.fc1.forward(x)?.relu()?)
+    }
+}
+# fn main() -> Result<()> {
+let model = FrozenBackbone::new()?;
+let x = Tensor::<s![2, 768], B>::ones(())?;
+let y = model.forward(x)?;
+assert_eq!(y.dims().as_ref(), &[2, 10]);
+# Ok(())
+# }
+```
+
+Field attributes refine the traversal per field:
+
+| Attribute | Effect |
+|:---|:---|
+| `#[module(ignore)]` | skips the field in every visitor (parameters, state, modes, transfer) |
+| `#[state(name = "custom_name")]` | overrides the deterministic snapshot/checkpoint key for the field |
+| `#[parallel(mesh = "m", stage = 0)]` | declares distributed pipeline/mesh placement (distributed feature) |
+| `#[shard(axis = "dp")]` | shards the field along a mesh axis (distributed feature) |
+
+```rust,no_run
+use incin::prelude::*;
+
+type B = DefaultBackend;
+
+#[module]
+pub struct WithCache {
+    fc: Linear<s![8, 8], B>,
+    #[module(ignore)]
+    step: usize,
+    #[state(name = "backbone")]
+    trunk: Linear<s![8, 8], B>,
+}
+
+impl WithCache {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            fc: Linear::build(())?,
+            step: 0,
+            trunk: Linear::build(())?,
+        })
+    }
+}
+# fn main() -> Result<()> {
+let model = WithCache::new()?;
+// `step` is invisible to parameters, state, modes, and transfer;
+// `trunk` snapshots under "backbone" instead of "trunk".
+let group = incin::optim::ParameterGroup::<B, f32>::from_module(&model)?;
+assert_eq!(group.len(), 4);
+# Ok(())
+# }
+```
+
+`#[parallel]` and `#[shard]` only mean something with the distributed
+machinery; without that feature they parse but have no runtime to target:
+
+```rust,ignore
+#[module]
+pub struct Sharded {
+    #[shard(axis = "dp")]
+    fc: Linear<s![8, 8], B>,
+}
+```
+
+## Path resolution, and the one thing that breaks it
 Every macro here expands to absolute `::incin::...` (or `::incin_core::...`)
 paths, so it resolves against the crate rather than whatever the caller has in
 scope, including a module of the caller's own named `incin`.
