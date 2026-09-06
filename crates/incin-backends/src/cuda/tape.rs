@@ -195,13 +195,13 @@ pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<
 
     // Reduce leading dims
     for _ in 0..ndim_diff {
-        result = sum_dim_squeeze(&result, 0);
+        result = sum_dim_squeeze(&result, 0)?;
     }
 
     // Reduce keepdim dims
     for (i, &t_dim) in target_shape.iter().enumerate() {
         if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i);
+            result = sum_dim_keepdim(&result, i)?;
         }
     }
 
@@ -220,13 +220,19 @@ pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<
     crate::cuda::ops::shape::launch_broadcast(&result, target_shape)
 }
 
-fn sum_dim_squeeze(storage: &CudaStorage, axis: usize) -> CudaStorage {
-    let reduced = sum_dim_keepdim(storage, axis);
+fn sum_dim_squeeze(storage: &CudaStorage, axis: usize) -> Result<CudaStorage> {
+    let reduced = sum_dim_keepdim(storage, axis)?;
     let mut new_shape = reduced.shape.to_vec();
     new_shape.remove(axis);
-    CudaStorage::new(reduced.buffer.clone(), new_shape)
+    Ok(CudaStorage::new(reduced.buffer.clone(), new_shape))
 }
 
-fn sum_dim_keepdim(storage: &CudaStorage, axis: usize) -> CudaStorage {
-    crate::cuda::ops::reduce::launch_reduce_op("sum", storage, axis, true).unwrap()
+/// Sum one axis, keeping it.
+///
+/// Fallible rather than unwrapping the launch. Every CUDA recipe with a
+/// broadcast operand reaches this through `unbroadcast`, so a panic here is a
+/// panic inside a backward pass - the exact shape `GRD-005` made `BackwardFn`
+/// fallible to remove, and the one site that kept it.
+fn sum_dim_keepdim(storage: &CudaStorage, axis: usize) -> Result<CudaStorage> {
+    crate::cuda::ops::reduce::launch_reduce_op("sum", storage, axis, true)
 }

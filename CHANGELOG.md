@@ -32,6 +32,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A CUDA backward pass no longer panics when it un-broadcasts.** Every CUDA
+  recipe with a broadcast operand reaches `sum_dim_keepdim` through
+  `unbroadcast`, and that helper unwrapped its reduction launch. `GRD-005` made
+  `BackwardFn` fallible precisely to remove panics from the reverse walk, and
+  this was the site that kept one: a failed reduction aborted the process
+  instead of returning the structured error the walk is built to propagate.
+  `sum_dim_keepdim` and `sum_dim_squeeze` now return `Result` and
+  `unbroadcast` forwards it.
+
 - **Examples sit with the operation they demonstrate**, in its expanded row,
   rather than pooled at the end of the section, and a code block scrolls inside
   itself instead of widening the page. The page test now opens a row carrying
