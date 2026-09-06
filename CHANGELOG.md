@@ -32,6 +32,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **`sin`, `cos`, `log2` and `log10` record a gradient.** All four advertised
+  training-mode execution and pushed nothing on the tape, so a graph
+  containing one came apart at that operation: `backward` reached everything
+  below it and nothing above, and the optimizer skipped the parameters it
+  found no gradient for without an error. Sinusoidal position encodings and
+  rotary embeddings are the shapes where that bites, and a wrong forward value
+  would have been visible where a missing gradient was not. Each now goes
+  through the derivative-recording path with its own backward kernel
+  (`d/dx cos = -sin`, `d/dx log2 = 1/(x ln 2)`, `d/dx log10 = 1/(x ln 10)`;
+  `sin` reuses `cos`), and each is checked against central differences.
+
+  `sign`, `floor`, `ceil` and `round` stay on the non-recording path. Their
+  derivative is zero wherever it exists, which is a gradient, not a missing
+  one.
+
 - **Reachability on the tape is a set, not a linear scan.**
   `Tape::drain_reachable` runs once per training step over the whole graph and
   tested membership with `Vec::contains`, which made collecting the reachable

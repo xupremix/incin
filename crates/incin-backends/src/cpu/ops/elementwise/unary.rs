@@ -295,6 +295,24 @@ pub(crate) fn canonical_tan(t: &CpuStorage) -> Result<CpuStorage> {
     canonical_unary_with_deriv_op(UnaryOp::Tan, UnaryOp::TanBackward, t)
 }
 
+/// `d/dx sin(x) = cos(x)`, which is a forward kernel already and needs no
+/// dedicated backward variant.
+pub(crate) fn canonical_sin(t: &CpuStorage) -> Result<CpuStorage> {
+    canonical_unary_with_deriv_op(UnaryOp::Sin, UnaryOp::Cos, t)
+}
+
+pub(crate) fn canonical_cos(t: &CpuStorage) -> Result<CpuStorage> {
+    canonical_unary_with_deriv_op(UnaryOp::Cos, UnaryOp::CosBackward, t)
+}
+
+pub(crate) fn canonical_log2(t: &CpuStorage) -> Result<CpuStorage> {
+    canonical_unary_with_deriv_op(UnaryOp::Log2, UnaryOp::Log2Backward, t)
+}
+
+pub(crate) fn canonical_log10(t: &CpuStorage) -> Result<CpuStorage> {
+    canonical_unary_with_deriv_op(UnaryOp::Log10, UnaryOp::Log10Backward, t)
+}
+
 pub(crate) fn canonical_asin(t: &CpuStorage) -> Result<CpuStorage> {
     canonical_unary_with_deriv_op(UnaryOp::Asin, UnaryOp::AsinBackward, t)
 }

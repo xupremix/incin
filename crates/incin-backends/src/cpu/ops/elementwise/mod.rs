@@ -55,8 +55,10 @@ pub(crate) use softmax::{canonical_softmax, log_softmax};
 pub(crate) use unary::{
     canonical_abs, canonical_acos, canonical_acosh, canonical_add_scalar, canonical_asin,
     canonical_asinh, canonical_atan, canonical_atanh, canonical_clamp, canonical_cosh,
-    canonical_elu, canonical_erf, canonical_exp, canonical_frac, canonical_gelu, canonical_log,
+    canonical_cos, canonical_elu, canonical_erf, canonical_exp, canonical_frac, canonical_gelu,
+    canonical_log, canonical_log10, canonical_log2,
     canonical_mish, canonical_mul_scalar, canonical_neg, canonical_powf, canonical_relu,
-    canonical_rsqrt, canonical_sigmoid, canonical_sinh, canonical_sqrt, canonical_step,
+    canonical_rsqrt, canonical_sigmoid, canonical_sin, canonical_sinh, canonical_sqrt,
+    canonical_step,
     canonical_swish, canonical_tan, canonical_tanh, canonical_trunc,
 };

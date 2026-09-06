@@ -167,6 +167,20 @@ pub fn record(entry: TapeNode<CpuStorage>) {
     push(entry);
 }
 
+/// Discard every node on this thread's tape without walking it.
+///
+/// For harnesses that pose many forward passes on one thread and measure each
+/// one, not for training code: a training loop ends a graph with
+/// `backward`, which drains what it walks. Nodes abandoned between
+/// measurements would otherwise be counted against the next one, and the
+/// saved values their recipes captured would stay alive until the thread
+/// recorded over them.
+pub fn clear() {
+    TAPE.with(|t| {
+        let _ = t.borrow_mut().drain();
+    });
+}
+
 impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::CpuBackendImpl<D>
 where
     D: incin_core::tensor::device::Device,

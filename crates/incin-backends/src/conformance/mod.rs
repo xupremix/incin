@@ -70,6 +70,7 @@ use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 pub use fixtures::Coverage;
 pub use plan::{AdvertisedTuple, RANK_CAP, advertised_tuples};
 
+use crate::cpu::tape;
 use fixtures::{Route, Subject};
 
 /// What running one advertised tuple concluded.
@@ -94,6 +95,18 @@ pub enum Verdict {
     /// error contract says a bad invocation comes back as a value, and a
     /// panic past admission is as much a contract break as one before it.
     Panicked(String),
+    /// The tuple ran, and the row said it trains, but the kernel recorded
+    /// nothing on the tape.
+    ///
+    /// A capability defect of the quietest kind. The dispatcher enforces the
+    /// row in one direction only: a query asking for training is refused when
+    /// the row does not claim it (`exec::capability`). Nothing enforced the
+    /// converse, so a row could claim training while its kernel forgot to
+    /// push, and the result is a graph with a hole in it. `backward` then
+    /// reaches the operations below the hole and not the ones above, the
+    /// optimizer skips the parameters it found no gradient for, and the run
+    /// finishes having trained part of the model.
+    RecordedNothing,
     /// Nothing was concluded, because the harness could not pose the question.
     NotCovered(Coverage),
 }
@@ -276,11 +289,28 @@ fn execute_tuple(
     // instead has broken it, and a harness that dies on the first one reports
     // a single tuple where a reader wanted all of them. This caught
     // `dot`'s validation indexing into a rank-zero shape.
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        (fixture.run)(context, tuple, route, &handles)
-    }));
+    //
+    // A training tuple runs inside an enabled `GradMode` and is measured. The
+    // tape is thread-local and the harness is single-threaded per test, so the
+    // depth before and after bracket exactly this invocation. `Enabled` is set
+    // explicitly rather than inherited: the ambient default already records,
+    // but a harness that depended on the default would stop measuring anything
+    // the day the default changed, and would report every row as holding.
+    let before = tape::depth();
+    let outcome = incin_core::exec::GradMode::Enabled.scope(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (fixture.run)(context, tuple, route, &handles)
+        }))
+    });
+    let recorded = tape::depth() > before;
+
+    // Drained whether or not this tuple recorded. The harness poses thousands
+    // of tuples on one thread, and nodes left behind would make the next
+    // measurement read this one's.
+    tape::clear();
 
     match outcome {
+        Ok(Ok(())) if tuple.training && !recorded => Verdict::RecordedNothing,
         Ok(Ok(())) => Verdict::Executed,
         Ok(Err(error)) => classify(&error),
         Err(_) => Verdict::Panicked(

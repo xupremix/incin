@@ -19,7 +19,8 @@ use crate::cpu::ops::elementwise::{
     canonical_gelu, canonical_log, canonical_mish, canonical_mul_scalar, canonical_neg,
     canonical_powf, canonical_relu, canonical_remainder, canonical_rsqrt, canonical_sigmoid,
     canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
-    canonical_tan, canonical_tanh, canonical_trunc, canonical_unary, log_softmax,
+    canonical_cos, canonical_log10, canonical_log2, canonical_sin, canonical_tan,
+    canonical_tanh, canonical_trunc, canonical_unary, log_softmax,
 };
 use crate::cpu::ops::shape_ops::{div_scalar_storage, sub_scalar_storage};
 use crate::cpu::storage::CpuStorage;
@@ -345,6 +346,14 @@ impl<D: Device> Execute<op::Neg> for CpuBackendImpl<D> {
     }
 }
 
+/// Executors whose derivative is zero wherever it exists.
+///
+/// These record nothing, and that is the whole derivative: `sign`, `floor`,
+/// `ceil` and `round` are piecewise constant, so the gradient of anything
+/// downstream with respect to their input is zero almost everywhere. Their
+/// capability rows still claim training, because a training graph may legally
+/// contain one; what a row claims is that the operation *runs* under training,
+/// not that it carries gradient.
 macro_rules! direct_unary_float_executors {
     ($(($operation:ident, $kernel:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$operation> for CpuBackendImpl<D> {
@@ -373,10 +382,22 @@ direct_unary_float_executors![
     (Floor, Floor),
     (Ceil, Ceil),
     (Round, Round),
-    (Log2, Log2),
-    (Log10, Log10),
-    (Sin, Sin),
-    (Cos, Cos),
+];
+
+// Operations that sat in the table above until the conformance oracle began
+// asserting that a row claiming training records a node.
+//
+// `sin`, `cos`, `log2` and `log10` have ordinary derivatives, so recording
+// nothing did not make their gradient zero, it made it absent: a graph
+// containing one came apart at that operation, every parameter above it
+// received no gradient at all, and the optimizer skipped them without a word.
+// Sinusoidal position encodings and rotary embeddings are the shapes where
+// that bites.
+canonical_unary_executors![
+    (Sin, canonical_sin),
+    (Cos, canonical_cos),
+    (Log2, canonical_log2),
+    (Log10, canonical_log10),
 ];
 
 macro_rules! scalar_float_executors {

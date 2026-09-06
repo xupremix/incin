@@ -260,6 +260,75 @@ fn relu_forward_and_backward_zero_at_boundary() {
 }
 
 #[test]
+/// `sin_gradcheck_matches_cos`.
+///
+/// These four recorded nothing until the conformance oracle asked whether a
+/// row claiming training also pushes a node. A forward kernel that is right
+/// and a gradient that is absent look identical from the forward side, which
+/// is why the check is numerical rather than a spot value.
+fn sin_gradcheck_matches_cos() {
+    let x = vector(vec![0.3, -1.2, 2.4]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let a = canonical_sin(&inputs[0]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&a).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "sin gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
+/// `cos_gradcheck_matches_negative_sin`.
+fn cos_gradcheck_matches_negative_sin() {
+    let x = vector(vec![0.4, -0.9, 1.7]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let a = canonical_cos(&inputs[0]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&a).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "cos gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
+/// `log2_gradcheck_matches_reciprocal_x_ln2`.
+///
+/// Inputs stay well away from zero: the derivative is `1 / (x ln 2)`, so a
+/// central difference near the singularity measures the singularity rather
+/// than the recipe.
+fn log2_gradcheck_matches_reciprocal_x_ln2() {
+    let x = vector(vec![1.5, 3.0, 7.25]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let a = canonical_log2(&inputs[0]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&a).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "log2 gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
+/// `log10_gradcheck_matches_reciprocal_x_ln10`.
+fn log10_gradcheck_matches_reciprocal_x_ln10() {
+    let x = vector(vec![1.5, 3.0, 7.25]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let a = canonical_log10(&inputs[0]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&a).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "log10 gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
 /// `relu_gradcheck_on_nonzero_input`.
 fn relu_gradcheck_on_nonzero_input() {
     let x = vector(vec![2.0, -1.5, 0.7]);

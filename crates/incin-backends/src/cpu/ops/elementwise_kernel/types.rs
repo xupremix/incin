@@ -62,6 +62,13 @@ pub(crate) enum UnaryOp {
     RsqrtBackward,
     GeluBackward,
     MishBackward,
+    /// `d/dx cos(x)`. Spelled out rather than composing `Neg` with `Sin`,
+    /// because the derivative helper takes exactly one kernel.
+    CosBackward,
+    /// `d/dx log2(x)`.
+    Log2Backward,
+    /// `d/dx log10(x)`.
+    Log10Backward,
 }
 
 impl UnaryOp {
@@ -157,6 +164,9 @@ impl UnaryOp {
             Self::AtanhBackward => 1.0 / (1.0 - value * value),
             Self::ErfBackward => (2.0 / core::f32::consts::PI.sqrt()) * (-value * value).exp(),
             Self::RsqrtBackward => -0.5 / (value * value.sqrt()),
+            Self::CosBackward => -value.sin(),
+            Self::Log2Backward => 1.0 / (value * core::f32::consts::LN_2),
+            Self::Log10Backward => 1.0 / (value * core::f32::consts::LN_10),
             Self::GeluBackward => {
                 let value_f64 = f64::from(value);
                 let cdf = 0.5 * (1.0 + erf_approx_f64(value_f64 / core::f64::consts::SQRT_2));
@@ -263,6 +273,9 @@ impl UnaryOp {
             Self::AtanhBackward => 1.0 / (1.0 - value * value),
             Self::ErfBackward => (2.0 / core::f64::consts::PI.sqrt()) * (-value * value).exp(),
             Self::RsqrtBackward => -0.5 / (value * value.sqrt()),
+            Self::CosBackward => -value.sin(),
+            Self::Log2Backward => 1.0 / (value * core::f64::consts::LN_2),
+            Self::Log10Backward => 1.0 / (value * core::f64::consts::LN_10),
             Self::GeluBackward => {
                 let cdf = 0.5 * (1.0 + erf_approx_f64(value / core::f64::consts::SQRT_2));
                 let pdf =
