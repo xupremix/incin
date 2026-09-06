@@ -48,9 +48,11 @@ The recipe type is `BackwardFn<S> = Box<dyn Fn(&S) -> Result<Vec<S>>>`.
 Three properties of that signature are load-bearing:
 
 - **Order, not names.** The `Vec` lines up with `input_ids` positionally.
-  Returning gradients in the wrong order credits the wrong tensor, and
-  nothing downstream can detect it — which is why every custom recipe is
-  cross-checked against central finite differences, per element.
+  A recipe returning fewer gradients than inputs, or more, fails the whole
+  pass with an invariant violation rather than starving an input or dropping
+  a surplus silently — the walk checks the counts before it zips. Getting
+  the order itself right is still on the author, which is why every custom
+  recipe is cross-checked against central finite differences, per element.
 - **Fallible.** A recipe that cannot produce a gradient returns a structured
   error rather than panicking. The infallible alternative was tried: it gave
   every backend exactly one way to report failure, and over a hundred sites

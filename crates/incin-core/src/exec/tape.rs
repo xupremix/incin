@@ -31,7 +31,7 @@ use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::err::{BackwardError, NonFiniteSite, Result};
+use crate::err::{BackwardError, Error, NonFiniteSite, Result};
 use crate::exec::policy::{GradMode, NanPolicy};
 
 /// A monotonic identity tag for one backend allocation.
@@ -316,6 +316,19 @@ pub fn backward_with_seed<S: TapeStorage>(
             continue;
         };
         let contributions = (node.backward)(&grad_out)?;
+        // Recipes are positional: one gradient per input, in `input_ids`
+        // order. Zipping here would silently starve an input when a recipe
+        // returns too few, or silently drop a surplus gradient when it
+        // returns too many, so a mismatch fails the pass instead. The node
+        // carries no operation identity to name, which is why this reports
+        // the walk rather than the recipe; giving nodes a checked gradient
+        // structure belongs with the GRD-006 node reshape.
+        if contributions.len() != node.input_ids.len() {
+            return Err(Error::InternalInvariant {
+                operation: "autograd backward",
+                reason: "backward recipe returned a different number of gradients than inputs",
+            });
+        }
         for (input, contribution) in node.input_ids.into_iter().zip(contributions) {
             if checked {
                 check_finite(&contribution, input, NonFiniteSite::Contribution)?;
@@ -358,4 +371,104 @@ fn check_finite<S: TapeStorage>(grad: &S, id: TensorId, site: NonFiniteSite) -> 
         .into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::boxed::Box;
+    use alloc::vec::Vec;
+
+    /// Minimal storage for walk-level tests: one scalar value plus identity.
+    #[derive(Clone, Debug)]
+    struct DummyStorage {
+        id: TensorId,
+        value: f64,
+    }
+
+    impl TapeStorage for DummyStorage {
+        fn id(&self) -> TensorId {
+            self.id
+        }
+
+        fn ones_like(&self) -> Result<Self> {
+            Ok(Self {
+                id: self.id,
+                value: 1.0,
+            })
+        }
+
+        fn accumulate(&self, contribution: &Self) -> Result<Self> {
+            Ok(Self {
+                id: self.id,
+                value: self.value + contribution.value,
+            })
+        }
+
+        fn has_non_finite(&self) -> Result<bool> {
+            Ok(!self.value.is_finite())
+        }
+    }
+
+    fn scalar(value: f64) -> DummyStorage {
+        DummyStorage {
+            id: TensorId::next(),
+            value,
+        }
+    }
+
+    #[test]
+    fn backward_walks_a_well_formed_recipe() {
+        let x = scalar(2.0);
+        let out = scalar(4.0);
+        let x_id = x.id;
+        let nodes = Vec::from([TapeNode {
+            output_id: out.id,
+            input_ids: Vec::from([x_id]),
+            backward: Box::new(|grad_out: &DummyStorage| {
+                Ok(Vec::from([DummyStorage {
+                    id: TensorId::next(),
+                    value: 2.0 * grad_out.value,
+                }]))
+            }),
+        }]);
+        let grads = backward(nodes, &out).expect("well-formed recipe walks");
+        assert_eq!(grads.get(x_id).expect("input reached").value, 2.0);
+    }
+
+    #[test]
+    fn backward_refuses_a_recipe_with_too_few_gradients() {
+        let x = scalar(2.0);
+        let out = scalar(4.0);
+        let nodes = Vec::from([TapeNode {
+            output_id: out.id,
+            input_ids: Vec::from([x.id]),
+            backward: Box::new(|_: &DummyStorage| Ok(Vec::new())),
+        }]);
+        match backward(nodes, &out) {
+            Err(error) => assert!(
+                matches!(error, Error::InternalInvariant { .. }),
+                "expected an invariant violation, got {error:?}"
+            ),
+            Ok(_) => panic!("starved input must fail loudly"),
+        }
+    }
+
+    #[test]
+    fn backward_refuses_a_recipe_with_surplus_gradients() {
+        let x = scalar(2.0);
+        let out = scalar(4.0);
+        let nodes = Vec::from([TapeNode {
+            output_id: out.id,
+            input_ids: Vec::from([x.id]),
+            backward: Box::new(|_: &DummyStorage| Ok(Vec::from([scalar(1.0), scalar(2.0)]))),
+        }]);
+        match backward(nodes, &out) {
+            Err(error) => assert!(
+                matches!(error, Error::InternalInvariant { .. }),
+                "expected an invariant violation, got {error:?}"
+            ),
+            Ok(_) => panic!("surplus gradient must fail loudly"),
+        }
+    }
 }
