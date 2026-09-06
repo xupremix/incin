@@ -165,6 +165,30 @@ You can selectively disable derived trait implementations:
 * `#[parallel(mesh = "m", stage = 0)]`: Declares distributed pipeline and mesh stage placement for the field.
 * `#[shard(axis = "dp")]`: Specifies distributed tensor sharding along a mesh axis.
 
+```rust,no_run
+use incin::prelude::*;
+
+type B = DefaultBackend;
+
+#[module]
+pub struct WithCache {
+    fc: Linear<s![8, 8], B>,
+    // Never a parameter, never checkpointed, never transferred:
+    #[module(ignore)]
+    step: usize,
+    // Snapshots under "backbone" instead of "trunk":
+    #[state(name = "backbone")]
+    trunk: Linear<s![8, 8], B>,
+}
+# fn main() -> Result<()> {
+let model = WithCache { fc: Linear::build(())?, step: 0, trunk: Linear::build(())? };
+let group = incin::optim::ParameterGroup::<B, f32>::from_module(&model)?;
+// fc and trunk contribute weight+bias each; step contributes nothing.
+assert_eq!(group.len(), 4);
+# Ok(())
+# }
+```
+
 ### Training and evaluation modes (`TrainMode`)
 
 Modules implement `TrainMode` by default, providing:
