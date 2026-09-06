@@ -145,8 +145,11 @@ and output inference. A backend opts into that identity through
 `ExecutionRequest`. The downstream fixture demonstrates descriptor creation,
 attribute validation, capability admission, and execution against the public
 authoring traits. A custom operation trains when its `Execute` impl additionally
-records a backward recipe: on the CPU backend call `cpu::tape_record` with a
+records a backward recipe: call the backend's `tape_record` with a
 `TapeNode` whose closure maps one output gradient to one gradient per input
-(`crates/incin-core/tests/custom_training.rs` is the worked fixture). A
+(`cpu::tape_record`, `wgpu::tape_record`, `cuda::tape_record`, and
+`metal::tape_record` all expose the same contract;
+`crates/incin-core/tests/custom_training.rs` is the worked fixture, with
+WGPU and CUDA twins beside it in `crates/incin-backends/tests/`). A
 custom operation that neither records nor composes from existing
 differentiable tensor operations should be documented as forward-only.

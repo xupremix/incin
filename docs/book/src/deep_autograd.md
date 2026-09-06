@@ -109,10 +109,13 @@ below.
 ## Recording: the custom-operation contract
 
 A custom operation trains when its `Execute` implementation records a node
-for every output it produces. On the CPU backend the entry points are
-`incin_backends::cpu::tape_record` and the lazy `tape_record_with`, which
-builds the entry only when the ambient mode records. The shape of the call,
-abbreviated from `crates/incin-core/tests/custom_training.rs`:
+for every output it produces. Each backend with a training tape exposes the
+same entry points — `incin_backends::cpu::tape_record`,
+`incin_backends::wgpu::tape_record`, `incin_backends::cuda::tape_record`,
+and `incin_backends::metal::tape_record` — plus a lazy `tape_record_with`
+variant that builds the entry only when the ambient mode records.
+The shape of the call, abbreviated from
+`crates/incin-core/tests/custom_training.rs`:
 
 ```rust,ignore
 use incin_backends::cpu::tape_record;

@@ -129,22 +129,101 @@ There is no silent narrowing anywhere in that chain: an unsupported dtype is
 a typed refusal naming the operation, never a quiet cast or a fallback
 backend.
 
-Custom autodiff on the CPU backend works through the public tape-record
-entry points. Inside `Execute<YourOperation>`, run the forward kernel, then
-call `incin_backends::cpu::tape_record` (or the lazy `tape_record_with`) with
-a core `TapeNode`: the output id, the input ids in recipe order, and a
-`backward` closure mapping one output gradient to one gradient per input,
-capturing its saved values by move. The node joins the same thread-local tape
-the built-in kernels record on, under the same `GradMode` gate, so mixed
-graphs walk as one graph and `AutogradBackend::backward` returns gradients
-for custom inputs alongside built-in ones. The recipe must be validated like
-any other: hand-derived gradients cross-checked against central finite
+Custom autodiff works through public tape-record entry points, one per
+backend with a training tape: `incin_backends::cpu::tape_record` (and the
+lazy `tape_record_with`), `incin_backends::wgpu::tape_record`,
+`incin_backends::cuda::tape_record`, and `incin_backends::metal::tape_record`.
+Inside `Execute<YourOperation>`, run the forward kernel, then record a core
+`TapeNode`: the output id, the input ids in recipe order, and a `backward`
+closure mapping one output gradient to one gradient per input, capturing its
+saved values by move. The node joins the same thread-local tape the
+built-in kernels record on, under the same `GradMode` gate, so mixed graphs
+walk as one graph and `AutogradBackend::backward` returns gradients for
+custom inputs alongside built-in ones. The recipe must be validated like any
+other: hand-derived gradients cross-checked against central finite
 differences, `NoGrad` asserting nothing is recorded, and capability refusals
-for dtypes the kernel does not hold. `crates/incin-core/tests/custom_training.rs`
-is the downstream fixture: a custom `square` operation training end to end
-from a user crate's perspective. Unless a custom operation records this way
-or is composed from existing differentiable tensor operations, document it as
-forward-only.
+for dtypes the kernel does not hold. Unless a custom operation records this
+way or is composed from existing differentiable tensor operations, document
+it as forward-only.
+
+## Training a custom operation, end to end
+
+What follows is the whole pattern, condensed from the executed fixture in
+`crates/incin-core/tests/custom_training.rs` (CPU; WGPU and CUDA twins live
+beside it in `crates/incin-backends/tests/`). A custom `square` operation,
+`y = x^2`, training through the standard backward pass:
+
+```rust,ignore
+use incin_backends::cpu::{tape_record, CpuBackendImpl, CpuBuffer, CpuStorage};
+use incin_core::backend_authoring::{
+    AutogradBackend, Execute, ExecutionRequest, Operation, OperationKey,
+    TapeNode, TapeStorage,
+};
+use incin_core::exec::catalog::NoAttributes;
+
+#[derive(Clone, Debug)]
+struct Square;
+
+impl Operation for Square {
+    type Attributes = NoAttributes;
+    const KEY: OperationKey = OperationKey {
+        namespace: Cow::Borrowed("example.org"),
+        name: Cow::Borrowed("square"),
+        version: 1,
+    };
+    fn infer_outputs(_, inputs: &[LogicalTensorMeta]) -> Result<..> {
+        Ok(inputs.first().cloned().into_iter().collect())
+    }
+}
+
+impl Execute<Square> for CpuBackendImpl<Cpu> {
+    type Output = CpuStorage;
+
+    fn supports_custom(&self, query: &CapabilityQuery) -> SupportLevel {
+        // f32 only: anything else is refused before launch, never executed
+        // against a dtype the kernel was not written for.
+        if query.dtype != DTypeId::F32.descriptor() {
+            SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
+                operation: Square::KEY,
+            })
+        } else {
+            SupportLevel::Native
+        }
+    }
+
+    fn execute(&self, request: ExecutionRequest<'_, Square, Self>)
+        -> Result<CpuStorage, BackendError>
+    {
+        let x = /* downcast the single input handle to &CpuStorage */;
+        let out = /* elementwise x^2 into fresh storage (fresh id) */;
+        // The training half: dy/dx = 2x, with x saved by move.
+        let x_saved = x.clone();
+        tape_record(TapeNode {
+            output_id: out.id(),
+            input_ids: vec![x.id()],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                Ok(vec![/* 2 * x_saved * grad_out, same shape */])
+            }),
+        });
+        Ok(out)
+    }
+}
+
+// Dispatch, lift back into a typed tensor, train through the standard pass:
+let out: CpuStorage = execute(&context, NoAttributes, &[handle])?;
+let y = Tensor::<Dyn, Cpu, f32, Grad>::try_from_storage(out, shape, ..)?;
+let grads = y.sum_all()?.backward()?; // walks built-in and custom nodes as one
+```
+
+Three details carry the soundness, and all three are pinned by the fixture
+rather than left as advice. First, the recipe returns one gradient per
+input in input order — the walk zips positionally, so a swapped pair trains
+the wrong tensor with the right numbers. Second, `try_from_storage` moves
+the storage rather than rebuilding it, so the recorded output id still
+matches and the custom node stays reachable. Third, the fixture sweeps the
+hand-derived gradient against central finite differences, asserts a
+`NoGrad` forward records nothing, and drives an `f16` input at the
+`f32`-only kernel to prove the refusal happens before any kernel runs.
 
 The remaining seam for a fully foreign backend is its own thread-local tape
 push, which stays `pub(crate)` by design: an in-tree backend moves its
