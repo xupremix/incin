@@ -251,7 +251,7 @@ Type error. Nothing switches backends behind your back.
 | `cpu-blas` | stable | `std`, `cpu` | no | `std`, `cpu`, `incin-backends/cpu-blas` | none | Hands large f32 CPU matmuls to a blocked GEMM. The CPU backend is complete without it; see incin-backends for what it does and does not change. |
 | `cuda` | preview | `std` | no | `std`, `incin-core/cuda`, `incin-backends/cuda` | none | Preview: the native CUDA backend, covering the subset in docs/capabilities.md. Never enabled implicitly. |
 | `wgpu` | preview | `std` | no | `std`, `incin-backends/wgpu` | none | Preview: the cross-platform WGPU backend, covering the subset in docs/capabilities.md. Never enabled implicitly. |
-| `metal` | preview | `std` | no | `std`, `incin-backends/metal` | none | Preview: the native Metal backend for Apple Silicon. Its executors are stubs pending MTL-002/003; see docs/capabilities.md. Never enabled implicitly. |
+| `metal` | preview | `std` | no | `std`, `incin-backends/metal` | none | Preview: the native Metal backend for Apple Silicon, covering the subset in docs/capabilities.md. Never enabled implicitly. |
 | `metal-mps` | preview | `metal` | no | `metal`, `incin-backends/metal-mps` | none | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
 | `update-check` | stable | `std` | no | `std`, `dep:ureq` | none | Lets `cargo incin doctor --check-updates` ask crates.io whether a newer incin exists. Off by default: it is the only feature that can reach the network, and no build should gain that ability without asking for it. |
 | `external-candle` | stable | `std` | no | `std`, `incin-backends/external-candle` | none | Enables the external Candle backend at `incin::external::candle`. |

@@ -25,7 +25,8 @@ their signatures. (2) Move saved-storage ownership into the graph
 deterministically), delete the four statics, and reshape `TapeNode` to a
 checked gradient structure, consuming the parked arity item. (3) Keep
 drain-by-value semantics re-expressed per graph (D-06 survives: a second
-`backward` on a drained graph still returns only the seed), with one now
+`backward` on a drained graph still fails with `GraphConsumed` rather than
+returning a seed-only gradient), with one now
 meaningful addition — a retained graph both backward calls can walk, which
 is currently unrepresentable. Non-goals: second-order rules, in-place
 mutation, cross-backend execution itself (this only makes the graph a value

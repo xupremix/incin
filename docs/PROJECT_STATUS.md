@@ -24,14 +24,15 @@ it is not repeated here as if it were a current API description.
 
 - CPU is the verified execution backend in this environment, and the complete
   one: all 164 backend-executable catalog operations have CPU executors.
-- CUDA, WGPU, and Metal are previews advertising 159, 64, and 34 operations
+- CUDA, WGPU, and Metal are previews advertising 159, 64, and 31 operations
   respectively (counted from the generated matrix, not maintained here).
   Each covers arithmetic, reductions, `matmul`, and convolution/pooling;
   WGPU adds the unary activations and CUDA adds `softmax` and `rms_norm`,
   the normalization family through `batch_norm`, and — unlike the other two
   previews — the loss functions, `embedding`, and `dropout`, all with
   training rows. These are advertisement counts rather than verified
-  capability: Metal's executors are stubs pending MTL-002/003, and neither
+  capability: the Metal shader and MPS infrastructure from MTL-001/002/003
+  is complete and the gap is operation coverage on top of it, and neither
   CUDA nor Metal has an execution runner in CI. `docs/capabilities.md` is
   generated from the registrations and is authoritative per operation,
   including its `Training` column.

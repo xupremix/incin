@@ -1113,9 +1113,10 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
 /// `where_cond`/`masked_fill`'s mixed `bool`+`f32`, so the capability row
 /// this answers to is `Bool`-only rather than a union - no `F32_AND_BOOL`
 /// reasoning needed. Broadcasting still goes through
-/// `cuda::ops::select::launch_broadcast_bool_mask`, the same non-`shape_op`
-/// path `impl_cuda_cmp!`/`Execute<op::WhereCond>` use, since `shape_op`'s
-/// `float*` kernel still cannot answer a 1-byte dtype.
+/// `cuda::ops::select::launch_broadcast_bool_mask`, the same dedicated path
+/// `impl_cuda_cmp!`/`Execute<op::WhereCond>` use. `shape_op` has since grown
+/// width-parametric entry points that move 1-byte elements correctly, which
+/// may make this dedicated path redundant -- see #122.
 macro_rules! impl_cuda_logical_binary {
     ($(($op:ident, $func:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {

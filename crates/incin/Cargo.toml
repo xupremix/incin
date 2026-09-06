@@ -39,7 +39,7 @@ cpu-blas = ["std", "cpu", "incin-backends/cpu-blas"]
 cuda = ["std", "incin-core/cuda", "incin-backends/cuda"]
 # Preview: the cross-platform WGPU backend, covering the subset in docs/capabilities.md. Never enabled implicitly.
 wgpu = ["std", "incin-backends/wgpu"]
-# Preview: the native Metal backend for Apple Silicon. Its executors are stubs pending MTL-002/003; see docs/capabilities.md. Never enabled implicitly.
+# Preview: the native Metal backend for Apple Silicon, covering the subset in docs/capabilities.md. Never enabled implicitly.
 metal = ["std", "incin-backends/metal"]
 # Enables MPS and MPSGraph structured primitives for Apple Silicon.
 metal-mps = ["metal", "incin-backends/metal-mps"]

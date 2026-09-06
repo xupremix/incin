@@ -27,19 +27,20 @@ backend registrations rather than written by hand:
 | CPU | 164 | complete, and the only one verified by execution |
 | CUDA | 159 | preview |
 | WGPU | 64 | preview |
-| Metal | 34 | preview |
+| Metal | 31 | preview |
 
 Those are counts from the `Element types by operation and backend` matrix, so
 they say what each backend *advertises*, which is not the same as what it has
 been observed to compute. Two caveats belong next to the numbers:
 
 - **Advertised is not trainable.** The per-backend tables carry a `Training`
-  column. CUDA marks 157 of its 192 rows trainable; Metal marks 23 of 48
-  trainable, WGPU 53 of 76.
-- **Metal is the least proven of the three.** Its own feature description
-  calls its executors stubs pending MTL-002/003, and every Metal row reports
+  column. CUDA marks 136 of its 192 rows trainable; Metal marks 18 of 43
+  trainable, WGPU 52 of 76.
+- **Metal is the least proven of the three.** The Metal shader and MPS
+  infrastructure from MTL-001/002/003 is complete and the gap is operation
+  coverage on top of it, and every Metal row reports
   `Implementation: native`, so that column does not distinguish a finished
-  kernel from a placeholder. Read Metal's 34 as a registry claim, not a
+  kernel from a placeholder. Read Metal's 31 as a registry claim, not a
   capability.
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,

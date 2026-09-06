@@ -333,6 +333,18 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
         }
     }
 
+    if result.shape.dims() == target_shape {
+        return Ok(result);
+    }
+
+    // Refuse a genuinely incompatible shape rather than handing a wrong-shaped
+    // gradient on: `broadcast_shape` checks compatibility first, mirroring the
+    // CUDA/WGPU tails (`cuda/tape.rs`, `wgpu/tape.rs`). Unlike those backends,
+    // nothing is materialized here -- the CPU kernels broadcast a scalar or
+    // size-1 operand implicitly, so the reduced storage is already what the
+    // next consumer reads. See #121 for the scalar-seed shape the
+    // accelerator tails expand.
+    crate::layout::broadcast_shape(result.shape.dims(), target_shape)?;
     Ok(result)
 }
 
@@ -479,6 +491,18 @@ mod tests {
         assert_eq!(result.get(&[0]), 1.0);
         assert_eq!(result.get(&[1]), 2.0);
         assert_eq!(result.get(&[2]), 3.0);
+    }
+
+    #[test]
+    /// `unbroadcast_incompatible_shapes_are_refused`.
+    fn unbroadcast_incompatible_shapes_are_refused() {
+        // A grad that no broadcast could have produced for this target must
+        // refuse rather than hand a wrong-shaped gradient on to accumulation
+        // (mirrors the CUDA/WGPU tails' `broadcast_shape` check; see #121).
+        let grad = vector(vec![1.0, 2.0, 3.0]);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+        let grad = matrix(vec![1.0; 6], 2, 3);
+        assert!(unbroadcast(&grad, &[4]).is_err());
     }
 
     // --- tape accumulation tests (CPUBACK-05) ---

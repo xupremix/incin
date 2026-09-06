@@ -183,8 +183,12 @@ after `P`, so writing it means writing `Local`, which means rustc prints
 `Local` in diagnostics where it was previously elided as a default. That
 exposed a path-rendering instability: rustc spells it `incin::prelude::Local`
 under CI's feature set and `incin_core::dist::placement::Local` under workspace
-defaults. Only one spelling can be stored in a trybuild snapshot. Recorded
-under CI's invocation, with the divergence documented in the owning test.
+defaults. Only one spelling can be stored in a trybuild snapshot. The three
+spelling-sensitive fixtures live in their own
+`tests/target_api_compile_fail_no_distributed/` directory, compiled only when
+the `distributed` feature is off and skipped otherwise, with the pinned
+non-distributed invocation recorded in the owning test
+(`crates/incin/tests/target_api_facade.rs`).
 
 The general lesson for any future parameter: appending to a defaulted list is
 not free even when every existing signature keeps compiling, because it changes

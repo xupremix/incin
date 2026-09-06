@@ -149,6 +149,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   added, and `tools/check-large-files.sh` had been failing on them. Both now
   carry a named reason and a stated extraction target in `docs/HANDOFF.md`,
   which is what that gate asks for.
+- **A backward pass over an empty tape is a `GraphConsumed` error, not a
+  seed-only `Ok`.** The tape drains into the walk that consumes it (D-06),
+  so a second `backward()` from the same loss -- or a `backward` on a thread
+  that never recorded the forward pass -- returned the ones seed as if it
+  were a gradient and trained on nothing. `backward` and `backward_with_seed`
+  now refuse an empty node list with
+  `Error::Backward(BackwardError::GraphConsumed)`, pinned by core and CPU
+  tape tests asserting the error rather than the seed.
 
 ### Removed
 

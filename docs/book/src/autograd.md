@@ -85,10 +85,11 @@ session.
 ## One backward per graph
 
 The tape is drained into the walk that consumes it: a second `backward()`
-from the same loss finds an empty graph and returns only the seed. There is
-no `retain_graph` or `create_graph`, and no second-order gradients — running
-`backward()` twice, or differentiating through a gradient (gradient
-penalties, meta-learning, Hessian-vector products), is not expressible yet.
+from the same loss finds an empty graph and fails with
+`BackwardError::GraphConsumed` rather than returning a seed-only gradient.
+There is no `retain_graph` or `create_graph`, and no second-order gradients —
+differentiating through a gradient (gradient penalties, meta-learning,
+Hessian-vector products) is not expressible yet.
 
 In practice this means one forward per backward. Two optimizers (or a GAN's
 discriminator and generator steps) sharing one loss must each run their own

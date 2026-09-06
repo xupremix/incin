@@ -39,9 +39,10 @@ where
 /// Record a custom operation's backward recipe on this thread's tape.
 ///
 /// The Metal instantiation of the custom-training contract documented at
-/// `crate::cpu::tape_record`. Metal executors are stubs pending MTL-002/003,
-/// so this is currently a compile-checked contract surface rather than an
-/// executed training path.
+/// `crate::cpu::tape_record`. The Metal shader and MPS infrastructure from
+/// MTL-001/002/003 is complete and the remaining gap is operation coverage
+/// on top of it (see #92), so this records onto the same tape the built-in
+/// Metal kernels use.
 pub fn record(entry: TapeNode<MetalStorage>) {
     push(entry);
 }

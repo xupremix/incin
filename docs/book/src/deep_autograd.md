@@ -72,7 +72,9 @@ re-enter it or panic on the second borrow. Draining first makes that
 structural — there is no way to call the walk without having taken the nodes
 out — and nodes recorded *during* the walk land on the fresh tape, belonging
 to the next pass. A second `backward()` from the same loss therefore finds
-an empty graph and returns only the seed. There is no `retain_graph`, no
+an empty graph and fails with `BackwardError::GraphConsumed` instead of
+returning a seed-only gradient: a seed-only `Ok` reads like a successful
+gradient while training on nothing. There is no `retain_graph`, no
 `create_graph`, and no second-order gradient; see [Autograd](./autograd.md).
 
 The remaining steps are the rest of the contract, in order:
