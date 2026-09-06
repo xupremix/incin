@@ -110,30 +110,30 @@ below.
 
 ## Recording: the custom-operation contract
 
-A custom operation trains when its `Execute` implementation records a node
-for every output it produces. Each backend with a training tape exposes the
-same entry points — `incin_backends::cpu::tape_record`,
-`incin_backends::wgpu::tape_record`, `incin_backends::cuda::tape_record`,
-and `incin_backends::metal::tape_record` — plus a lazy `tape_record_with`
-variant that builds the entry only when the ambient mode records.
-The shape of the call, abbreviated from
+The ergonomic form is the `DifferentiableOp` trait: a forward kernel plus a
+backward rule over one backend's storage, with a blanket `Execute`
+implementation building the node, deriving its identities from the
+storages, and recording through the backend's `RecordingBackend`
+implementation. The author writes no `execute` body, names no ids, and
+cannot forget to record. The raw entry points underneath —
+`incin_backends::cpu::tape_record` (plus lazy `tape_record_with`) and the
+WGPU, CUDA, and Metal twins — remain for multi-output operations, where one
+node per output cannot be derived from a single return type.
+The shape of the trait, abbreviated from
 `crates/incin-core/tests/custom_training.rs`:
 
 ```rust,ignore
-use incin_backends::cpu::tape_record;
-use incin_core::backend_authoring::{TapeNode, TapeStorage};
+use incin_core::backend_authoring::DifferentiableOp;
 
-// Inside Execute<YourOperation>::execute, after the forward kernel:
-let node = TapeNode {
-    output_id: out.id(),       // the fresh output storage's identity
-    input_ids: vec![x.id()],   // every consumed input, in recipe order
-    backward: Box::new(move |grad_out: &CpuStorage| {
-        // One gradient per input, same order. Saved values (x_saved) are
-        // owned by this closure, cloned out of the forward inputs above.
-        Ok(vec![/* dL/dx for this grad_out */])
-    }),
-};
-tape_record(node);
+impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
+    type Dtype = f32;          // one implementation trains one dtype
+    type Saved = CpuStorage;   // what forward saves: the input itself
+
+    fn forward(inputs: &[CpuStorage], _: &NoAttributes)
+        -> Result<(CpuStorage, Self::Saved), BackendError>;
+    fn backward(saved: &CpuStorage, grad_out: &CpuStorage)
+        -> Result<Vec<CpuStorage>, incin_core::error::Error>;
+}
 ```
 
 Four rules keep recorded graphs sound, and each has a failure mode worth
@@ -142,9 +142,10 @@ naming:
 1. **Save by move.** Clone what the recipe needs out of the forward inputs
    before returning. Borrowing them ties the recipe's lifetime to values
    the caller is free to drop.
-2. **Match the input order.** The walk zips recipe outputs with `input_ids`
-   positionally. A swapped pair trains the wrong tensor with the right
-   numbers.
+2. **Match the input order.** The walk pairs recipe outputs with inputs
+   positionally and refuses a count mismatch instead of zipping silently.
+   A swapped pair still trains the wrong tensor with the right numbers —
+   that half is what finite differences catch.
 3. **Shape-match before returning.** Accumulation sums without broadcasting,
    so a recipe that returns a broadcast-shaped gradient where a smaller one
    belongs breaks the sum. Reduce in the recipe (the CPU backend's

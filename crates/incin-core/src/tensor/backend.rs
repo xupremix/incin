@@ -10,6 +10,8 @@ mod transfer;
 pub use transfer::{StorageTransfer, TransferTo, VariableTransfer};
 mod autograd;
 pub use autograd::AutogradBackend;
+mod differentiable;
+pub use differentiable::{DifferentiableOp, RecordingBackend};
 mod variable;
 pub use variable::VariableBackend;
 mod capability;

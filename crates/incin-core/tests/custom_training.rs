@@ -11,10 +11,10 @@
 
 extern crate incin_core as incin;
 
-use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage, tape_record, tape_record_with};
+use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage, tape_record_with};
 use incin_core::backend_authoring::{
-    AutogradBackend, DescriptorError, Execute, ExecutionRequest, LogicalTensorMeta, Operation,
-    OperationIdentity, OperationKey, SupportLevel, TapeNode, TapeStorage, TensorId,
+    AutogradBackend, DescriptorError, DifferentiableOp, LogicalTensorMeta, Operation,
+    OperationIdentity, OperationKey, SupportLevel, TapeStorage, TensorId,
 };
 use incin_core::exec::catalog::NoAttributes;
 use incin_core::exec::{CanonicalError, ExecutionContext, GradMode, TensorHandle};
@@ -54,10 +54,12 @@ fn contiguous_f32(values: Vec<f32>, dims: &[usize]) -> Result<CpuStorage, Backen
     })
 }
 
-impl Execute<Square> for CpuBackendImpl<Cpu> {
-    type Output = CpuStorage;
+impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
+    type Dtype = f32;
+    /// The saved input itself: the recipe needs every `x` next to its gradient.
+    type Saved = CpuStorage;
 
-    fn supports_custom(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
+    fn supports(query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
         assert_eq!(query.operation, OperationIdentity::Custom(Square::KEY));
         // Layer 3 of the dtype contract: this kernel is `f32` only, so say so
         // per query. Anything else is refused before launch, never executed
@@ -71,22 +73,17 @@ impl Execute<Square> for CpuBackendImpl<Cpu> {
         }
     }
 
-    fn execute(
-        &self,
-        request: ExecutionRequest<'_, Square, Self>,
-    ) -> Result<Self::Output, BackendError> {
-        let x = request
-            .inputs
-            .first()
-            .and_then(|input| input.downcast_ref::<CpuStorage>())
-            .cloned()
-            .ok_or(BackendError::InvalidInput {
-                operation: OperationKind::Pointwise,
-                reason: "square requires one CPU input",
-            })?;
+    fn forward(
+        inputs: &[CpuStorage],
+        _attributes: &NoAttributes,
+    ) -> Result<(CpuStorage, Self::Saved), BackendError> {
+        let x = inputs.first().cloned().ok_or(BackendError::InvalidInput {
+            operation: OperationKind::Pointwise,
+            reason: "square requires one CPU input",
+        })?;
         // Layer 4 of the dtype contract: the descriptor already promised
-        // `f32` (see `supports_custom`), and the kernel proves the buffer
-        // agrees rather than trusting the advertisement.
+        // `f32` (see `supports`), and the kernel proves the buffer agrees
+        // rather than trusting the advertisement.
         if x.metadata().dtype != DTypeId::F32.descriptor() {
             return Err(BackendError::InvalidInput {
                 operation: OperationKind::Pointwise,
@@ -105,27 +102,24 @@ impl Execute<Square> for CpuBackendImpl<Cpu> {
             odometer(&mut index, &dims);
         }
         let out = contiguous_f32(values, &dims)?;
-        // The training half: leave the VJP recipe on the thread's tape under
-        // the same GradMode gate as every built-in kernel. `dy/dx = 2x`, with
-        // `x` captured by move so the recipe owns its saved values.
-        let x_saved = x.clone();
-        let node = TapeNode {
-            output_id: out.id(),
-            input_ids: vec![x.id()],
-            backward: Box::new(move |grad_out: &CpuStorage| {
-                let dims = x_saved.metadata().shape.dims().to_vec();
-                let flat: usize = dims.iter().product();
-                let mut grads = Vec::with_capacity(flat);
-                let mut index = vec![0usize; dims.len()];
-                for _ in 0..flat {
-                    grads.push(2.0f32 * x_saved.get(&index) as f32 * grad_out.get(&index) as f32);
-                    odometer(&mut index, &dims);
-                }
-                Ok(vec![contiguous_f32_for_recipe(grads, &dims)?])
-            }),
-        };
-        tape_record(node);
-        Ok(out)
+        Ok((out, x))
+    }
+
+    fn backward(
+        saved: &CpuStorage,
+        grad_out: &CpuStorage,
+    ) -> incin_core::error::Result<Vec<CpuStorage>> {
+        // dy/dx = 2x, with `x` owned by the recipe rather than borrowed from
+        // the live graph.
+        let dims = saved.metadata().shape.dims().to_vec();
+        let flat: usize = dims.iter().product();
+        let mut grads = Vec::with_capacity(flat);
+        let mut index = vec![0usize; dims.len()];
+        for _ in 0..flat {
+            grads.push(2.0f32 * saved.get(&index) as f32 * grad_out.get(&index) as f32);
+            odometer(&mut index, &dims);
+        }
+        Ok(vec![contiguous_f32_for_recipe(grads, &dims)?])
     }
 }
 

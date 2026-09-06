@@ -144,12 +144,12 @@ and output inference. A backend opts into that identity through
 `Capabilities` and implements `Execute<YourOperation>` with an
 `ExecutionRequest`. The downstream fixture demonstrates descriptor creation,
 attribute validation, capability admission, and execution against the public
-authoring traits. A custom operation trains when its `Execute` impl additionally
-records a backward recipe: call the backend's `tape_record` with a
-`TapeNode` whose closure maps one output gradient to one gradient per input
-(`cpu::tape_record`, `wgpu::tape_record`, `cuda::tape_record`, and
-`metal::tape_record` all expose the same contract;
-`crates/incin-core/tests/custom_training.rs` is the worked fixture, with
-WGPU and CUDA twins beside it in `crates/incin-backends/tests/`). A
-custom operation that neither records nor composes from existing
-differentiable tensor operations should be documented as forward-only.
+authoring traits. A custom operation trains by implementing
+`DifferentiableOp`: a forward kernel plus a backward rule over one
+backend's storage, with the blanket `Execute` building the node, deriving
+its identities, and recording (`crates/incin-core/tests/custom_training.rs`
+is the worked fixture, with WGPU and CUDA twins beside it in
+`crates/incin-backends/tests/`). Multi-output operations keep the explicit
+`tape_record` path instead. A custom operation that neither implements the
+trait nor composes from existing differentiable tensor operations should be
+documented as forward-only.

@@ -26,6 +26,16 @@ pub fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
 }
 
+impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::MetalBackendImpl<D>
+where
+    D: incin_core::tensor::device::Device,
+    K: incin_core::tensor::dtype::DType,
+{
+    fn record_custom(node: TapeNode<MetalStorage>) {
+        push(node);
+    }
+}
+
 /// Record a custom operation's backward recipe on this thread's tape.
 ///
 /// The Metal instantiation of the custom-training contract documented at

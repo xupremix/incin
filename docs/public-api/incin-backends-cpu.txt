@@ -71,6 +71,7 @@ impl incin_core::tensor::backend::execute::ExecuteOutput for incin_backends::cpu
 impl incin_core::tensor::backend::execute::ExecuteOutput for incin_backends::dispatch::DispatchVar
 impl incin_core::tensor::backend::execute::StorageOutput for incin_backends::cpu::CpuStorage
 impl incin_core::tensor::backend::execute::StorageOutput for incin_backends::dispatch::DispatchStorage
+impl<D, K> incin_core::tensor::backend::differentiable::RecordingBackend<K> for incin_backends::cpu::CpuBackendImpl<D> where D: incin_core::tensor::device::Device, K: incin_core::tensor::dtype::traits::DType
 impl<D: incin_core::tensor::device::Device, K: incin_core::tensor::dtype::traits::DType> incin_core::tensor::backend::SupportsDType<K> for incin_backends::cpu::CpuBackendImpl<D>
 impl<D: incin_core::tensor::device::Device, NewD: incin_core::tensor::device::Device> incin_core::tensor::backend::transfer::StorageTransfer<NewD> for incin_backends::cpu::CpuBackendImpl<D> where incin_backends::target::Native: incin_backends::target::EngineOn<NewD>, incin_backends::cpu::CpuBackendImpl<D>: incin_core::tensor::backend::capability::HostInterop, incin_backends::IncinBackend<NewD>: incin_core::tensor::backend::capability::HostInterop
 impl<D: incin_core::tensor::device::Device, NewD: incin_core::tensor::device::Device> incin_core::tensor::backend::transfer::StorageTransfer<NewD> for incin_backends::dispatch::DispatchBackend<D> where incin_backends::target::Native: incin_backends::target::EngineOn<NewD>, incin_backends::dispatch::DispatchBackend<D>: incin_core::tensor::backend::capability::HostInterop, incin_backends::IncinBackend<NewD>: incin_core::tensor::backend::capability::HostInterop
@@ -839,6 +840,7 @@ pub fn incin_backends::cpu::CpuBackendImpl<D>::l1_loss<K: incin_core::tensor::dt
 pub fn incin_backends::cpu::CpuBackendImpl<D>::metadata<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage) -> &incin_core::exec::meta::TensorMeta
 pub fn incin_backends::cpu::CpuBackendImpl<D>::mse_loss<K: incin_core::tensor::dtype::traits::DType>(&incin_backends::cpu::CpuStorage, &incin_backends::cpu::CpuStorage, incin_core::tensor::reduction::Reduction) -> incin_core::err::Result<incin_backends::cpu::CpuStorage>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::native_precision(&self, &incin_core::exec::precision::PrecisionRequest) -> incin_core::err::Result<incin_core::exec::precision::ResolvedPrecision>
+pub fn incin_backends::cpu::CpuBackendImpl<D>::record_custom(incin_core::exec::tape::TapeNode<incin_backends::cpu::CpuStorage>)
 pub fn incin_backends::cpu::CpuBackendImpl<D>::resolve_dtype(&<K as incin_core::tensor::dtype::traits::DType>::Field, &incin_core::tensor::device::DeviceId) -> incin_core::err::Result<incin_core::tensor::dtype::registry::DTypeDescriptor>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::set_grad<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage, &mut Self::Grads, Self::Storage) -> incin_core::err::Result<()>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::support(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel

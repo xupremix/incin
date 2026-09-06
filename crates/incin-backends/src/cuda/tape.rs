@@ -93,6 +93,16 @@ pub fn record_with(entry: impl FnOnce() -> TapeNode<CudaStorage>) {
     push(entry());
 }
 
+impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::CudaBackendImpl<D>
+where
+    D: incin_core::tensor::device::Device,
+    K: incin_core::tensor::dtype::DType,
+{
+    fn record_custom(node: TapeNode<CudaStorage>) {
+        push(node);
+    }
+}
+
 /// Number of entries currently on the tape.
 #[must_use]
 pub fn depth() -> usize {

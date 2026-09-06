@@ -1186,6 +1186,7 @@ impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::InsertAt<incin_core::s
 impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::ReplaceLastDim<NewDim> for incin_core::shapes::Dyn
 impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::ReplaceLastDim<NewDim> for incin_core::shapes::Nil
 impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::ReplaceLastTail<NewDim> for incin_core::shapes::Nil
+impl<O, B> incin_core::backend_authoring::Execute<O> for B where O: incin_core::backend_authoring::DifferentiableOp<B>, B: incin_core::backend_authoring::RecordingBackend<<O as incin_core::backend_authoring::DifferentiableOp>::Dtype> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::StorageBackend>::Storage: core::any::Any + incin_core::backend_authoring::StorageOutput + incin_core::exec::tape::TapeStorage
 impl<O: core::fmt::Debug> core::fmt::Display for incin_core::exec::proof::Validated<O>
 impl<O: incin_core::exec::catalog::CanonicalOperation> incin_core::exec::catalog::Descriptor<O> where <O as incin_core::exec::catalog::Operation>::Attributes: incin_core::exec::catalog::AttributeContract
 impl<O: incin_core::exec::catalog::Operation> incin_core::exec::catalog::Descriptor<O>
@@ -4592,6 +4593,7 @@ pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (),
 pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
 pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
 pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+pub fn B::execute(&self, incin_core::backend_authoring::ExecutionRequest<'_, O, Self>) -> core::result::Result<Self::Output, incin_core::error::BackendError>
 pub fn B::execute_plan_raw(&[usize], &<K as incin_core::prelude::DType>::Field, &<<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field, incin_core::nn::init::InitPlan) -> core::result::Result<<B as incin_core::backend_authoring::VariableBackend>::Var, incin_core::error::Error>
 pub fn B::optimizer_add(&<B as incin_core::backend_authoring::StorageBackend>::Storage, &<B as incin_core::backend_authoring::StorageBackend>::Storage) -> core::result::Result<<B as incin_core::backend_authoring::StorageBackend>::Storage, incin_core::error::Error>
 pub fn B::optimizer_add_scalar(&<B as incin_core::backend_authoring::StorageBackend>::Storage, f64) -> core::result::Result<<B as incin_core::backend_authoring::StorageBackend>::Storage, incin_core::error::Error>
@@ -4606,6 +4608,8 @@ pub fn B::sample_distribution<S, G>(&incin_core::distributions::Exponential, inc
 pub fn B::sample_distribution<S, G>(&incin_core::distributions::Gumbel, incin_core::shapes::ShapeBuf, &<<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field) -> core::result::Result<incin_core::prelude::Tensor<S, B, f32, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>, incin_core::error::Error> where S: incin_core::shapes::Shape + incin_core::shapes::DynShape, G: incin_core::tensor::grad::RequiresGrad, (S, f32, <B as incin_core::backend_authoring::StorageBackend>::Device, G): incin_core::tensor::arg::TensorArgs<S, f32, <B as incin_core::backend_authoring::StorageBackend>::Device, G>
 pub fn B::sample_distribution<S, G>(&incin_core::distributions::Normal, incin_core::shapes::ShapeBuf, &<<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field) -> core::result::Result<incin_core::prelude::Tensor<S, B, f32, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>, incin_core::error::Error> where S: incin_core::shapes::Shape + incin_core::shapes::DynShape, G: incin_core::tensor::grad::RequiresGrad, (S, f32, <B as incin_core::backend_authoring::StorageBackend>::Device, G): incin_core::tensor::arg::TensorArgs<S, f32, <B as incin_core::backend_authoring::StorageBackend>::Device, G>
 pub fn B::sample_distribution<S, G>(&incin_core::distributions::Uniform, incin_core::shapes::ShapeBuf, &<<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field) -> core::result::Result<incin_core::prelude::Tensor<S, B, f32, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>, incin_core::error::Error> where S: incin_core::shapes::Shape + incin_core::shapes::DynShape, G: incin_core::tensor::grad::RequiresGrad, (S, f32, <B as incin_core::backend_authoring::StorageBackend>::Device, G): incin_core::tensor::arg::TensorArgs<S, f32, <B as incin_core::backend_authoring::StorageBackend>::Device, G>
+pub fn B::supports_custom(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
+pub fn B::supports_custom_operation(&self, &incin_core::exec::capability::OperationIdentity, bool, incin_core::exec::policy::MathMode) -> incin_core::exec::capability::SupportLevel
 pub fn B::transfer_var<K: incin_core::prelude::DType>(&Self::Var, &<K as incin_core::prelude::DType>::Field, &<NewD as incin_core::tensor::device::Device>::Field) -> incin_core::error::Result<<Self::VariableOutput as incin_core::backend_authoring::VariableBackend>::Var> where Self::VariableOutput: incin_core::backend_authoring::SupportsDType<K>
 pub fn L::check_compatible(&self, &Rhs) -> core::result::Result<(), incin_core::shapes::ShapeError>
 pub fn L::output_shape(&incin_core::shapes::ShapeBuf, &incin_core::shapes::ShapeBuf) -> core::result::Result<incin_core::shapes::ShapeBuf, incin_core::shapes::ShapeError>
@@ -4740,6 +4744,9 @@ pub fn incin_core::backend_authoring::AutogradBackend::backward_with<K: incin_co
 pub fn incin_core::backend_authoring::AutogradBackend::get_grad<K: incin_core::prelude::DType>(&Self::Storage, &Self::Grads) -> incin_core::error::Result<core::option::Option<Self::Storage>>
 pub fn incin_core::backend_authoring::AutogradBackend::set_grad<K: incin_core::prelude::DType>(&Self::Storage, &mut Self::Grads, Self::Storage) -> incin_core::error::Result<()>
 pub fn incin_core::backend_authoring::Capabilities::support(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
+pub fn incin_core::backend_authoring::DifferentiableOp::backward(&Self::Saved, &<B as incin_core::backend_authoring::StorageBackend>::Storage) -> incin_core::error::Result<alloc::vec::Vec<<B as incin_core::backend_authoring::StorageBackend>::Storage>>
+pub fn incin_core::backend_authoring::DifferentiableOp::forward(&[<B as incin_core::backend_authoring::StorageBackend>::Storage], &Self::Attributes) -> core::result::Result<(<B as incin_core::backend_authoring::StorageBackend>::Storage, Self::Saved), incin_core::error::BackendError>
+pub fn incin_core::backend_authoring::DifferentiableOp::supports(&incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
 pub fn incin_core::backend_authoring::Execute::execute(&self, incin_core::backend_authoring::ExecutionRequest<'_, O, Self>) -> core::result::Result<Self::Output, incin_core::error::BackendError>
 pub fn incin_core::backend_authoring::Execute::supports_custom(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
 pub fn incin_core::backend_authoring::Execute::supports_custom_operation(&self, &incin_core::exec::capability::OperationIdentity, bool, incin_core::exec::policy::MathMode) -> incin_core::exec::capability::SupportLevel
@@ -4761,6 +4768,7 @@ pub fn incin_core::backend_authoring::PrecisionSpec::generated_dtype_field(&Self
 pub fn incin_core::backend_authoring::PrecisionSpec::init_field(&self) -> Self::Field
 pub fn incin_core::backend_authoring::PrecisionSpec::parameter_dtype_field(&Self::Field) -> <Self::ParameterDType as incin_core::prelude::DType>::Field
 pub fn incin_core::backend_authoring::PrecisionSpec::runtime_policy(&Self::Field) -> incin_core::exec::precision::RuntimePrecisionPolicy
+pub fn incin_core::backend_authoring::RecordingBackend::record_custom(incin_core::exec::tape::TapeNode<Self::Storage>)
 pub fn incin_core::backend_authoring::StorageBackend::fresh_autograd_identity<K: incin_core::prelude::DType>(Self::Storage) -> Self::Storage
 pub fn incin_core::backend_authoring::StorageBackend::metadata<K: incin_core::prelude::DType>(&Self::Storage) -> &incin_core::exec::meta::TensorMeta
 pub fn incin_core::backend_authoring::StorageBackend::shape<K: incin_core::prelude::DType>(&Self::Storage) -> incin_core::shapes::ShapeBuf
@@ -12612,6 +12620,7 @@ pub trait incin_core::backend_authoring::AutogradBackend: incin_core::backend_au
 pub trait incin_core::backend_authoring::Backend: incin_core::backend_authoring::StorageBackend + incin_core::exec::capability::Capabilities + core::default::Default + core::marker::Sized + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static
 pub trait incin_core::backend_authoring::CanonicalOperation: incin_core::exec::catalog::descriptor::private::Sealed + incin_core::exec::catalog::Operation
 pub trait incin_core::backend_authoring::Capabilities
+pub trait incin_core::backend_authoring::DifferentiableOp<B> where B: incin_core::backend_authoring::StorageBackend: incin_core::exec::catalog::Operation
 pub trait incin_core::backend_authoring::Execute<O> where O: incin_core::exec::catalog::Operation: incin_core::backend_authoring::StorageBackend + core::marker::Sized
 pub trait incin_core::backend_authoring::ExecuteOutput
 pub trait incin_core::backend_authoring::ExecutionDescriptor: core::clone::Clone + core::fmt::Debug
@@ -12619,6 +12628,7 @@ pub trait incin_core::backend_authoring::HostInterop: incin_core::backend_author
 pub trait incin_core::backend_authoring::HostReadback: incin_core::backend_authoring::StorageBackend
 pub trait incin_core::backend_authoring::Operation: core::clone::Clone + core::fmt::Debug + 'static
 pub trait incin_core::backend_authoring::PrecisionSpec: 'static + core::marker::Send + core::marker::Sync + core::marker::Copy + core::fmt::Debug + core::cmp::Eq + core::cmp::PartialEq + core::hash::Hash
+pub trait incin_core::backend_authoring::RecordingBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::StorageBackend
 pub trait incin_core::backend_authoring::StorageBackend<P: incin_core::dist::placement::Placement>: core::marker::Sized
 pub trait incin_core::backend_authoring::StorageOutput
 pub trait incin_core::backend_authoring::StorageTransfer<NewD: incin_core::tensor::device::Device>: incin_core::backend_authoring::Backend
@@ -13107,6 +13117,7 @@ pub type ()::Output = <S as incin_core::shapes::SwapFromEndAt<incin_core::shapes
 pub type ()::Output = incin_core::shapes::Dyn
 pub type (S, K, D, G)::Args = incin_core::tensor::arg_into::TensorArgsData<<S as incin_core::shapes::Shape>::Arg, <K as incin_core::prelude::DType>::Arg, <D as incin_core::tensor::device::Device>::Arg, <G as incin_core::tensor::grad::RequiresGrad>::Arg>
 pub type (incin_core::tensor::device::Cpu, core::marker::PhantomData<N>)::Device = incin_core::tensor::device::Cpu
+pub type B::Output = <B as incin_core::backend_authoring::StorageBackend>::Storage
 pub type B::VariableOutput = <B as incin_core::backend_authoring::StorageTransfer<NewD>>::Output
 pub type L::Output = <<L as typenum::type_operators::IsEqual<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>>>::Output as BroadcastChoice<R, <<R as typenum::type_operators::IsEqual<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>>>::Output as BroadcastChoice<L, <<L as typenum::type_operators::IsEqual<R>>::Output as BroadcastChoice<L, ()>>::Output>>::Output>>::Output
 pub type L::Output = <<L as typenum::type_operators::IsEqual<typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>>>::Output as BroadcastChoice<usize, L>>::Output
@@ -13167,6 +13178,8 @@ pub type incin_core::advanced::SwapAt::Output: incin_core::shapes::Shape
 pub type incin_core::backend_authoring::AutogradBackend::Grads
 pub type incin_core::backend_authoring::Backend::InnerBackend: incin_core::backend_authoring::Backend
 pub type incin_core::backend_authoring::BackwardFn<S> = alloc::boxed::Box<(dyn core::ops::function::Fn(&S) -> incin_core::error::Result<alloc::vec::Vec<S>> + core::marker::Send + core::marker::Sync)>
+pub type incin_core::backend_authoring::DifferentiableOp::Dtype: incin_core::prelude::DType
+pub type incin_core::backend_authoring::DifferentiableOp::Saved: core::marker::Send + core::marker::Sync + 'static
 pub type incin_core::backend_authoring::Execute::Output: incin_core::backend_authoring::ExecuteOutput
 pub type incin_core::backend_authoring::Operation::Attributes: core::clone::Clone + core::fmt::Debug + core::cmp::PartialEq + core::any::Any + serde_core::ser::Serialize + for<'de> serde_core::de::Deserialize<'de>
 pub type incin_core::backend_authoring::PrecisionSpec::Field: core::clone::Clone + core::marker::Send + core::marker::Sync + 'static + core::fmt::Debug

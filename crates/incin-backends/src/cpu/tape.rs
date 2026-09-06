@@ -167,6 +167,16 @@ pub fn record(entry: TapeNode<CpuStorage>) {
     push(entry);
 }
 
+impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::CpuBackendImpl<D>
+where
+    D: incin_core::tensor::device::Device,
+    K: incin_core::tensor::dtype::DType,
+{
+    fn record_custom(node: TapeNode<CpuStorage>) {
+        push(node);
+    }
+}
+
 /// Record a custom operation's backward recipe, building it only if kept.
 ///
 /// The lazy form of [`record`](self::record): the entry closure runs only

@@ -96,6 +96,16 @@ pub fn record_with(entry: impl FnOnce() -> TapeNode<WgpuStorage>) {
     push_with(entry);
 }
 
+impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::WgpuBackendImpl<D>
+where
+    D: incin_core::tensor::device::Device,
+    K: incin_core::tensor::dtype::DType,
+{
+    fn record_custom(node: TapeNode<WgpuStorage>) {
+        push(node);
+    }
+}
+
 pub struct WgpuGrads {
     pub(crate) grads: GradientMap<WgpuStorage>,
 }

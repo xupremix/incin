@@ -10,10 +10,10 @@
 
 extern crate incin_core as incin;
 
-use incin_backends::cuda::{CudaBackendImpl, tape_depth, tape_record, tape_record_with};
+use incin_backends::cuda::{CudaBackendImpl, tape_depth, tape_record_with};
 use incin_core::backend_authoring::{
-    AutogradBackend, DescriptorError, Execute, ExecutionRequest, HostInterop, LogicalTensorMeta,
-    Operation, OperationIdentity, OperationKey, SupportLevel, TapeNode, TapeStorage, TensorId,
+    AutogradBackend, DescriptorError, DifferentiableOp, HostInterop, LogicalTensorMeta, Operation,
+    OperationIdentity, OperationKey, SupportLevel, TapeStorage, TensorId,
 };
 use incin_core::exec::catalog::NoAttributes;
 use incin_core::exec::{
@@ -79,10 +79,11 @@ impl Operation for CudaSquare {
     }
 }
 
-impl Execute<CudaSquare> for TestBackend {
-    type Output = TestStorage;
+impl DifferentiableOp<TestBackend> for CudaSquare {
+    type Dtype = f32;
+    type Saved = TestStorage;
 
-    fn supports_custom(&self, query: &incin_core::exec::CapabilityQuery) -> SupportLevel {
+    fn supports(query: &CapabilityQuery) -> SupportLevel {
         assert_eq!(query.operation, OperationIdentity::Custom(CudaSquare::KEY));
         if query.dtype != DTypeId::F32.descriptor() {
             SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
@@ -93,20 +94,15 @@ impl Execute<CudaSquare> for TestBackend {
         }
     }
 
-    fn execute(
-        &self,
-        request: ExecutionRequest<'_, CudaSquare, Self>,
-    ) -> Result<Self::Output, BackendError> {
+    fn forward(
+        inputs: &[TestStorage],
+        _attributes: &NoAttributes,
+    ) -> Result<(TestStorage, Self::Saved), BackendError> {
         use incin_core::prelude::OperationKind;
-        let x = request
-            .inputs
-            .first()
-            .and_then(|input| input.downcast_ref::<TestStorage>())
-            .cloned()
-            .ok_or(BackendError::InvalidInput {
-                operation: OperationKind::Pointwise,
-                reason: "cuda square requires one CUDA input",
-            })?;
+        let x = inputs.first().cloned().ok_or(BackendError::InvalidInput {
+            operation: OperationKind::Pointwise,
+            reason: "cuda square requires one CUDA input",
+        })?;
         if x.metadata().dtype != DTypeId::F32.descriptor() {
             return Err(BackendError::InvalidInput {
                 operation: OperationKind::Pointwise,
@@ -116,22 +112,20 @@ impl Execute<CudaSquare> for TestBackend {
         let dims = x.metadata().shape.dims().to_vec();
         let values: Vec<f32> = download(&x).into_iter().map(|v| v * v).collect();
         let out = upload(&values, &dims);
-        let x_saved = x.clone();
-        let node = TapeNode {
-            output_id: out.id(),
-            input_ids: vec![x.id()],
-            backward: Box::new(move |grad_out: &TestStorage| {
-                let dims = x_saved.metadata().shape.dims().to_vec();
-                let grads: Vec<f32> = download(&x_saved)
-                    .into_iter()
-                    .zip(download(grad_out))
-                    .map(|(x, g)| 2.0 * x * g)
-                    .collect();
-                Ok(vec![upload(&grads, &dims)])
-            }),
-        };
-        tape_record(node);
-        Ok(out)
+        Ok((out, x))
+    }
+
+    fn backward(
+        saved: &TestStorage,
+        grad_out: &TestStorage,
+    ) -> incin_core::error::Result<Vec<TestStorage>> {
+        let dims = saved.metadata().shape.dims().to_vec();
+        let grads: Vec<f32> = download(saved)
+            .into_iter()
+            .zip(download(grad_out))
+            .map(|(x, g)| 2.0 * x * g)
+            .collect();
+        Ok(vec![upload(&grads, &dims)])
     }
 }
 

@@ -71,6 +71,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   software adapter with its own training fixture; CUDA ships an
   `#[ignore]`d hardware twin; Metal is compile-checked pending real
   kernels).
+- **`DifferentiableOp`: custom training without hand-built nodes.**
+  Implementing `Execute` by hand meant naming output ids, ordering input id
+  vectors, and remembering to record — all conventions the compiler could
+  not see. The new trait takes a forward kernel and a backward rule over one
+  backend's storage plus one dtype each; a blanket `Execute` builds the
+  node, derives identities from the storages, forwards admission to a
+  per-query `supports`, and records through a new `RecordingBackend` seam
+  implemented by all four training backends. Multi-output operations keep
+  the explicit `tape_record` path, and the walk now refuses arity-mismatched
+  recipes instead of zipping silently (see Fixed).
 - **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**
   `Dense<S, B>` has always existed for the row-major case, and its own
   documentation names the reason: the layout is congruent with the shape it
