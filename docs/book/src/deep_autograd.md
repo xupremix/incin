@@ -150,19 +150,90 @@ naming:
    that half is what finite differences catch.
 3. **Shape-match before returning.** Accumulation sums without broadcasting,
    so a recipe that returns a broadcast-shaped gradient where a smaller one
-   belongs breaks the sum. Reduce in the recipe (the CPU backend's
-   `unbroadcast` is the in-tree pattern), and re-broadcast only where the
-   target genuinely needs the width.
+   belongs breaks the sum. Reduce in the recipe, and re-broadcast only where
+   the target genuinely needs the width. Each backend keeps an `unbroadcast`
+   for this and all four are `pub(crate)` on purpose: they are four
+   implementations, not one contract, differing in how a reduced-all-the-way
+   scalar seed is expanded back and in which reduce kernel they reach for.
+   Exporting them as one API is how a recipe comes to depend on the CPU
+   backend's edge cases and meets CUDA's. Write the reduction your kernel
+   needs; it is a sum over the axes the forward broadcast.
 4. **One node per output.** A two-output operation records two nodes sharing
    the inputs — that is how the polar example's `x` and `y` nodes work, and
    the walk's summation is what combines their contributions. A single node
    cannot name two outputs.
 
-Then validate like any other kernel: hand-derived gradients swept against
-central finite differences per element, a `NoGrad` run asserting nothing is
-recorded, and capability refusals for every dtype the kernel does not hold.
+## Checking that the gradient is actually right
+
+A backward recipe is the part of a custom operation that fails quietly. A
+wrong forward kernel produces visibly wrong numbers; a wrong recipe produces
+a model that trains slightly worse, which is not a signal anyone can act on.
+Check it numerically before trusting it, with
+`incin_core::exec::gradcheck`:
+
+```rust,ignore
+use incin_core::exec::{GradCheckOptions, gradcheck};
+
+let report = gradcheck(
+    |inputs| my_scalar_loss(&inputs[0]),
+    &[input.clone()],
+    GradCheckOptions::for_f32(),
+)?;
+assert!(report.passed(), "{report}");
+```
+
+It perturbs one element, re-runs the forward, and compares the slope against
+the recipe's own gradient at that element, for every element of every input.
+Sweeping all of them rather than spot-checking is the point: an accumulation
+that overwrites instead of summing agrees everywhere except at the one input
+two operations share.
+
+Two things it does for you that are easy to get wrong alone. The step size in
+`for_f32()` is the one that minimises total error at `f32` precision, near
+`1e-2`; the `1e-4` that looks conservative is roughly a hundredth of that and
+sits at its own noise floor, where a real defect and a rounding artifact are
+indistinguishable. And the report names the input, the element, both values
+and the relative error rather than returning one number, because a constant
+factor across every element is a missing term in the recipe while a single
+element is usually the perturbation stepping across a boundary the derivative
+does not exist at. Print it; it says which.
+
+`GradCheckStorage` is the whole of what the sweep asks of a backend: read one
+element, perturb one element, run the backward pass. A foreign backend that
+implements those three gets the sweep for free.
+
+`incin_core::exec::check_gradients` is *not* this check, despite the name. It
+installs `NanPolicy::Reject` for the enclosed code, so the walk stops at the
+first non-finite contribution and names the tensor it appeared on. That finds
+where a gradient exploded; it says nothing about whether a finite gradient is
+the right number.
+
+Then validate the rest like any other kernel: a `NoGrad` run asserting nothing
+is recorded, and capability refusals for every dtype the kernel does not hold.
 An operation that neither records nor composes from existing differentiable
 tensor operations is forward-only and should say so.
+
+## The framework checks that a training row records
+
+A capability row claiming `training` is enforced in both directions now. The
+dispatcher refuses a training query against a row that does not claim it, and
+the conformance oracle runs every training tuple with recording enabled and
+fails the row if the tape did not grow.
+
+That second direction is the one that used to be missing, and it matters more
+than it sounds. A kernel that runs correctly and records nothing does not
+produce a wrong number, it produces a graph with a hole in it: `backward`
+reaches everything below the hole and nothing above, the optimizer skips the
+parameters it found no gradient for, and the run finishes having trained part
+of the model. `sin`, `cos`, `log2`, `log10`, `to_dtype`, `frac`, `fmod` and
+`remainder` were all in that state until the check went in.
+
+Operations whose derivative is genuinely zero or undefined are declared by
+hand, with a reason each, in the oracle's `carries_no_gradient`: `sign`,
+`floor`, `ceil`, `round` and `trunc` are piecewise constant, and `one_hot`
+reads indices. A new operation is a finding until somebody writes down which
+group it belongs to, because there is no way to tell "has no derivative" from
+"forgot to write one" by reading a kernel.
 
 ## From storage back to `Tensor`
 

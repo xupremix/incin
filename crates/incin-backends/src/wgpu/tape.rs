@@ -194,7 +194,15 @@ fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {
     Ok(WgpuStorage::new(out_buf, a.shape.to_vec()))
 }
 
-pub fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuStorage> {
+/// `pub(crate)`, as on CPU and CUDA.
+///
+/// It was the one of the four that was public, and the four are not one
+/// contract: they differ in how a reduced-all-the-way scalar seed is expanded
+/// back and in which reduce kernel they reach for. Exporting them as if they
+/// were one API is how a downstream recipe comes to depend on this backend's
+/// edge cases and finds another's. If un-broadcasting is ever offered
+/// downstream it belongs on a trait beside `TapeStorage`, written once.
+pub(crate) fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuStorage> {
     if grad.shape == target_shape {
         return Ok(grad.clone());
     }

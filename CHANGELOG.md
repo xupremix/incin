@@ -50,6 +50,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The custom-operation chapters point at the real gradient check.** They
+  described sweeping a recipe against central finite differences without
+  naming an API to do it with, because until now there was none. Both
+  chapters now show `incin_core::exec::gradcheck`, say what its report means,
+  and state the guarantee that a capability row claiming `training` is tested
+  for actually recording a node. The un-broadcast note is corrected: all four
+  backends keep that helper internal deliberately, since they are four
+  implementations rather than one contract.
+
+- **The higher-order ceiling is written down.** `BackwardFn` is over storage
+  and every backend runs the walk under `GradMode::Disabled`, so a backward
+  pass cannot be differentiated. That was true and undocumented, and the note
+  claiming a recipe may itself record, "as every convolution backward on the
+  CPU backend does", was false: those recipes call raw kernel helpers, and
+  anything they did record would be refused by the disabled scope. The
+  by-value signature is still right, for re-entrancy, which is the reason now
+  given.
+
 - **All four backends present the same recording seam.** `tape_record` and
   `tape_record_with` are the two names a downstream `Execute` implementation
   needs, and Metal had only the first while its `tape` module was the one of

@@ -110,6 +110,23 @@ pub trait TapeStorage: Clone + 'static {
 /// could not produce a gradient, and 115 sites across three backends took it,
 /// as `.expect("unbroadcast lhs (add)")` and `.unwrap()` on kernels that
 /// genuinely can fail.
+///
+/// # No higher-order gradients
+///
+/// The signature is over storage, not over tensors, so there is nothing in a
+/// recipe's output for a second backward pass to differentiate. Every
+/// backend also runs the walk inside `GradMode::Disabled`, which refuses
+/// anything a recipe records. Both are deliberate for 0.1: gradient
+/// penalties, meta-learning and Hessian-vector products are out of scope, and
+/// a half-built version of them is worse than a stated absence.
+///
+/// This is the one limit here that is not cheap to lift later, because
+/// lifting it changes this type. What it does not foreclose is the shape of
+/// the user-facing contract: a
+/// [`DifferentiableOp`](crate::tensor::backend::DifferentiableOp) declares
+/// its saved values and its rule separately from how they are recorded, so
+/// the same implementations would survive a walk that could differentiate
+/// itself.
 pub type BackwardFn<S> = Box<dyn Fn(&S) -> Result<Vec<S>> + Send + Sync>;
 
 /// One recorded operation: what it produced, what it consumed, and how to run
@@ -300,13 +317,18 @@ impl<S> Tape<S> {
 /// Walk `nodes` backward from `loss`, returning the accumulated gradients.
 ///
 /// Taking the nodes by value rather than borrowing a [`Tape`] is the whole
-/// point of the signature. A recipe may itself record - every convolution
-/// backward on the CPU backend does - so a walk that still held the tape would
-/// either re-enter it or, with the tape behind a `RefCell`, panic on the
-/// second borrow. `D-06` says drain before invoking anything; this makes that
-/// structural, because there is no way to call the walk without having already
-/// taken the nodes out. Nodes recorded *during* the walk land on the fresh
-/// tape and belong to the next pass.
+/// point of the signature. A recipe is arbitrary code and may reach the tape,
+/// so a walk that still held it would either re-enter it or, with the tape
+/// behind a `RefCell`, panic on the second borrow. `D-06` says drain before
+/// invoking anything; this makes that structural, because there is no way to
+/// call the walk without having already taken the nodes out.
+///
+/// In practice nothing recorded during a walk is kept: every backend wraps
+/// this call in `GradMode::Disabled`, so [`Tape::push`] refuses whatever a
+/// recipe pushes. That is what makes the reverse pass non-differentiable, and
+/// it is a deliberate ceiling rather than an oversight - see the note on
+/// [`BackwardFn`]. The by-value signature is about re-entrancy, which is a
+/// separate hazard and remains real.
 ///
 /// The order of the remaining steps is the rest of the contract:
 ///

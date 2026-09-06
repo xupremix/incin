@@ -247,3 +247,66 @@ fn downstream_custom_operation_refuses_dtypes_it_does_not_support() {
         other => panic!("expected a typed Unsupported refusal, got {other:?}"),
     }
 }
+
+/// A chain that mixes built-in operations with a custom one walks as one graph.
+///
+/// This is the property the extension seam exists for, and the one a
+/// downstream crate could not have before `tape_record` was public: the custom
+/// operation's node lands on the same thread-local tape the built-in kernels
+/// record on, so a single backward call crosses all of them. Before, a
+/// downstream author owned a separate node list, and a graph with a built-in
+/// operation on either side of their kernel came apart at the seam without
+/// saying so.
+///
+/// The chain is `sum((x * x)^2)`, so the closed form is `sum(x^4)` and the
+/// gradient is `4 x^3`. Built-in `Mul` below the custom operation, built-in
+/// `SumAll` above it: if either half failed to join, the gradient would be
+/// absent rather than wrong, which is why this asserts values and not just
+/// presence.
+#[test]
+fn a_graph_mixing_builtin_and_custom_operations_walks_as_one() {
+    use incin_core::exec::catalog::op;
+
+    let ctx = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+    let values = [1.0f32, 2.0, 3.0, 4.0];
+    let x = CpuStorage::try_from_contiguous(CpuBuffer::F32(values.to_vec()), vec![4]).unwrap();
+    let x_id: TensorId = x.id();
+
+    fn handle(storage: &CpuStorage) -> TensorHandle<'_> {
+        TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(storage)
+    }
+
+    // Built-in, below the custom operation.
+    let squared = incin_core::backend_authoring::execute::<op::Mul, _>(
+        &ctx,
+        NoAttributes,
+        &[handle(&x), handle(&x)],
+    )
+    .expect("the built-in multiply runs");
+
+    // The custom operation, in the middle.
+    let quartic = square_forward(&ctx, &squared);
+
+    // Built-in, above it.
+    let loss = incin_core::backend_authoring::execute::<op::SumAll, _>(
+        &ctx,
+        NoAttributes,
+        &[handle(&quartic)],
+    )
+    .expect("the built-in reduction runs");
+
+    let grads =
+        <CpuBackendImpl<Cpu> as AutogradBackend>::backward::<f32>(&loss).expect("backward runs");
+    let gx = grads
+        .get(x_id)
+        .expect("the gradient crossed both built-in operations and the custom one");
+
+    for (i, value) in values.iter().enumerate() {
+        let expected = 4.0 * f64::from(*value).powi(3);
+        assert!(
+            (gx.get(&[i]) - expected).abs() < 1e-3,
+            "d/dx sum(x^4) at {i}: got {}, want {expected}",
+            gx.get(&[i])
+        );
+    }
+}

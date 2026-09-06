@@ -207,7 +207,19 @@ the recorded output id still matches and the custom node stays reachable.
 Third, the fixture sweeps the hand-derived gradient against central finite
 differences, asserts a `NoGrad` forward records nothing, and drives an
 `f16` input at the `f32`-only kernel to prove the refusal happens before
-any kernel runs.
+any kernel runs. That sweep is `incin_core::exec::gradcheck`, which is public
+and backend generic: hand it a scalar-output closure and its inputs and it
+walks every element, with a step size already chosen for the dtype and a
+report that names which element disagreed and by how much. The deep autograd
+chapter covers what its output means. Run it before trusting a recipe: a
+wrong forward kernel produces visibly wrong numbers, and a wrong recipe
+produces a model that trains slightly worse.
+
+A recipe that records nothing at all is caught earlier, and not by you. The
+conformance oracle runs every tuple whose capability row claims `training`
+with recording enabled and fails the row if no node reached the tape, so an
+operation that advertises training and forgets its backward is a test
+failure rather than a hole in somebody's graph.
 
 The remaining seam for a multi-output operation is the explicit per-backend
 `tape_record` path, which is public on all four training backends: one node
