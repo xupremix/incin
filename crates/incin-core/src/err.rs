@@ -193,6 +193,17 @@ pub enum BackwardError {
         /// What the recipe expected and did not find.
         reason: &'static str,
     },
+
+    #[error("backward pass found no recorded operations: the tape is empty or was already drained")]
+    /// A backward pass ran over an empty node list.
+    ///
+    /// The tape is drained into the walk that consumes it (`D-06`), so a
+    /// second `backward` from the same loss — or a `backward` on a thread
+    /// that never recorded the forward pass — used to return only the seed
+    /// with `Ok`. That silent seed-only result reads like a successful
+    /// gradient and trains on nothing. Failing here makes the consumed-graph
+    /// case loud instead.
+    GraphConsumed,
 }
 
 /// Where a non-finite gradient was found.

@@ -884,6 +884,21 @@ pub enum BindError {
         /// The rank it could not reach.
         to: usize,
     },
+
+    #[error("collective group along {} for rank {rank} has no members", axis.name())]
+    /// The mesh's own group table did not cover a rank the count guard checked.
+    ///
+    /// `axis` comes from the table itself and `rank` is below `M::WORLD`,
+    /// so `None` here means the type-level degrees disagree with the world
+    /// size - a broken mesh definition, not a launcher mistake. Returned
+    /// rather than panicked because `bind` already reports every other
+    /// binding failure as data.
+    InconsistentTopology {
+        /// The axis whose group was missing.
+        axis: MeshAxis,
+        /// The rank the group was requested for.
+        rank: usize,
+    },
 }
 
 impl<M: ValidMesh> DeviceMesh<M> {
@@ -975,7 +990,7 @@ impl<M: ValidMesh> DeviceMesh<M> {
             for from in 0..M::WORLD {
                 let members = groups
                     .group(axis, from)
-                    .expect("rank is below the world size the count guard already checked");
+                    .ok_or(BindError::InconsistentTopology { axis, rank: from })?;
                 for to in members {
                     if to == from {
                         continue;

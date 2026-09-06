@@ -184,8 +184,12 @@ impl<S> Default for GradientMap<S> {
 /// The recorded operations of one backward-reachable graph.
 ///
 /// A tape is drained into the walk that consumes it, so a second [`backward`]
-/// from the same loss returns only the seed. That is `D-06`, and it is
-/// deliberate: invoking a recipe twice would double every gradient it feeds.
+/// from the same loss fails with
+/// [`BackwardError::GraphConsumed`]
+/// rather than returning only the seed. That is `D-06`, and it is
+/// deliberate: invoking a recipe twice would double every gradient it feeds,
+/// and a seed-only `Ok` reads like a successful gradient while training on
+/// nothing.
 pub struct Tape<S> {
     nodes: Vec<TapeNode<S>>,
 }
@@ -293,6 +297,9 @@ impl<S> Tape<S> {
 ///    `CPUBACK-05` defect, which is why [`Entry`] is matched here rather than a
 ///    `contains_key` guarding an assignment.
 pub fn backward<S: TapeStorage>(nodes: Vec<TapeNode<S>>, loss: &S) -> Result<GradientMap<S>> {
+    if nodes.is_empty() {
+        return Err(BackwardError::GraphConsumed.into());
+    }
     let seed = loss.ones_like()?;
     backward_with_seed(nodes, loss, &seed)
 }
@@ -303,6 +310,9 @@ pub fn backward_with_seed<S: TapeStorage>(
     loss: &S,
     seed: &S,
 ) -> Result<GradientMap<S>> {
+    if nodes.is_empty() {
+        return Err(BackwardError::GraphConsumed.into());
+    }
     // Read once, not per gradient: the policy is ambient for the whole pass,
     // and a walk that re-read it could check some contributions and not
     // others if a recipe installed a scope.
@@ -469,6 +479,28 @@ mod tests {
                 "expected an invariant violation, got {error:?}"
             ),
             Ok(_) => panic!("surplus gradient must fail loudly"),
+        }
+    }
+
+    #[test]
+    fn backward_over_an_empty_tape_is_a_consumed_graph_error() {
+        // `D-06`: the tape is drained into the walk, so a second backward —
+        // or any backward over an empty node list — must fail loudly rather
+        // than return a seed-only gradient map with `Ok`.
+        let loss = scalar(1.0);
+        match backward(Vec::new(), &loss) {
+            Err(error) => assert!(
+                matches!(error, Error::Backward(BackwardError::GraphConsumed)),
+                "expected a GraphConsumed backward error, got {error:?}"
+            ),
+            Ok(_) => panic!("an empty tape must fail loudly, not seed-only Ok"),
+        }
+        match backward_with_seed(Vec::new(), &loss, &loss) {
+            Err(error) => assert!(
+                matches!(error, Error::Backward(BackwardError::GraphConsumed)),
+                "expected a GraphConsumed backward error, got {error:?}"
+            ),
+            Ok(_) => panic!("an empty seeded walk must fail loudly"),
         }
     }
 }

@@ -989,12 +989,17 @@ fn zero_output_gradient_and_determinism_exceptions_override_their_family() {
     }
 
     // Piecewise-constant unary functions are float-typed but have no
-    // useful gradient, unlike the rest of `UnaryFloat`.
+    // useful gradient, unlike the rest of `UnaryFloat`. `trunc`/`frac`
+    // included: their derivative is 1 almost everywhere but the CPU records
+    // no tape node, so the row must not claim gradient flow.
     for operation in [
         OperationKind::Step,
         OperationKind::Sign,
         OperationKind::Floor,
+        OperationKind::Ceil,
         OperationKind::Round,
+        OperationKind::Trunc,
+        OperationKind::Frac,
     ] {
         assert_eq!(
             catalog_entry(operation).unwrap().gradient,

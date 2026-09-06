@@ -138,6 +138,10 @@ pub trait FloatDType: PlainDType {}
 /// Marker for integer dtypes (`u8`/`u32`/`i64`).
 pub trait IntDType: PlainDType {}
 /// Marker for the boolean dtype.
+///
+/// Bool storage is one byte per element, of which only `0` and `1` are
+/// valid bit patterns. Host extraction validates each byte and rejects
+/// anything else rather than reinterpreting it as `bool`.
 pub trait BoolDType: ConstDType {}
 /// Marker for block-quantized dtypes (e.g. `Q8_0`) - storage formats with
 /// their own internal scale/block structure, not plain scalar elements.

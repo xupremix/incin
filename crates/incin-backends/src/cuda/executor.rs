@@ -12,7 +12,7 @@ use incin_core::exec::catalog::LossReduction;
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
 use incin_core::shapes::OperationKind;
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind};
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 use incin_core::tensor::reduction::Reduction;
 
 use super::backend::CudaBackendImpl;
@@ -1066,10 +1066,13 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
     }
 }
 
-/// Overwrites the masked positions with the declared scalar. No tape entry:
-/// see `cuda::ops::select::launch_masked_fill`'s own doc for why this
-/// matches CPU's existing (gradient-less) behaviour rather than diverging
-/// from it.
+/// Overwrites the masked positions with the declared scalar, then pushes the
+/// backward CPU's `masked_fill_storage` proves: the filled value is a
+/// constant, so the gradient reaches only the input, with positions under a
+/// true mask zeroed (`grad_input = masked_fill(grad_out, mask, 0.0)`). The
+/// previous revision pushed no entry and claimed that matched CPU's
+/// gradient-less behaviour; CPU's `masked_fill_backward_passes_through_only_
+/// unmasked_positions` test shows it never was gradient-less.
 impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
     type Output = CudaStorage;
 
@@ -1087,8 +1090,22 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let mask = downcast(mask, operation, "mask is not CUDA storage")?;
         let value = request.operation.descriptor().attributes().value;
-        crate::cuda::ops::select::launch_masked_fill(input, mask, value)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        let out = crate::cuda::ops::select::launch_masked_fill(input, mask, value)
+            .map_err(|e| kernel_error("Cuda", operation, e))?;
+        let mask_capture = mask.clone();
+        let (input_id, out_id) = (input.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![input_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                Ok(vec![crate::cuda::ops::select::launch_masked_fill(
+                    grad_out,
+                    &mask_capture,
+                    0.0,
+                )?])
+            }),
+        });
+        Ok(out)
     }
 }
 
@@ -2141,7 +2158,14 @@ impl<D: Device> Execute<op::IndexSelect> for CudaBackendImpl<D> {
         let idx_broadcasted =
             crate::cuda::backend::shape_ops::cuda_broadcast_as_storage(&idx_reshaped, &out_shape)
                 .map_err(wrap)?;
-        crate::cuda::ops::shape::launch_gather(input, axis, &idx_broadcasted).map_err(wrap)
+        // The tape-tracked gather, not the raw `launch_gather`: the raw launch
+        // runs the kernel but records nothing, so the input gradient was
+        // silently absent. The tracked form's backward (scatter the upstream
+        // gradient back through the index, accumulating repeated selections)
+        // is what CPU's `index_select_storage` proves. The reshape/broadcast
+        // above already pushed their own exact-inverse entries, so the
+        // composite's backward is the tape replay over all three.
+        CudaBackendImpl::<D>::gather::<f32, i64>(input, axis, &idx_broadcasted).map_err(wrap)
     }
 }
 
@@ -2255,28 +2279,147 @@ impl<D: Device> Execute<op::ToDType> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let target_dtype = request.operation.descriptor().attributes().dtype;
-        if input.buffer.dtype == target_dtype {
-            return Ok(input.clone());
-        }
-        let total = input.shape.iter().product::<usize>();
-        let byte_len = crate::bytes::byte_len(target_dtype, total, operation)
-            .map_err(|e| kernel_error("Cuda", operation, e))?;
-        let stream = input.buffer.device.default_stream();
-        let out_buffer = CudaBuffer {
-            len: total,
-            dtype: target_dtype,
-            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
-                kernel_error(
-                    "Cuda",
-                    operation,
-                    incin_core::error::Error::Msg(format!("{e:?}")),
-                )
-            })?),
-            device: input.buffer.device.clone(),
-            device_id: input.buffer.device_id,
-        };
-        Ok(CudaStorage::new(Arc::new(out_buffer), input.shape.to_vec()))
+        cuda_to_dtype_storage(input, target_dtype, operation)
     }
+}
+
+/// Real dtype conversion backing `Execute<op::ToDType>`.
+///
+/// CUDA has no cross-dtype cast kernel, so the conversion round-trips through
+/// the host: download the input bytes, decode each element to f64, narrow to
+/// the target representation exactly the way CPU's `tensor_to_dtype_storage`
+/// does (`as` casts, `half::{f16,bf16}::from_f64`), upload the result. The
+/// previous revision allocated a zeroed buffer of the target dtype and
+/// returned it without copying or converting anything: every `to_dtype` with
+/// differing dtypes silently produced all zeros.
+///
+/// Support is decided by the dtype pair, never by the values, and mirrors
+/// CPU's refusal set: Q8_0 is block-packed rather than element-addressable in
+/// either direction, and Bool/unknown targets have no CPU conversion either,
+/// so all three fail loudly instead of producing zeros. No tape entry is
+/// pushed on any path, matching CPU's grad-less conversion.
+fn cuda_to_dtype_storage(
+    input: &CudaStorage,
+    target_dtype: DTypeDescriptor,
+    operation: OperationKind,
+) -> Result<CudaStorage, BackendError> {
+    let unsupported = |dtype: DTypeDescriptor| {
+        BackendError::unsupported("Cuda", UnsupportedReason::DType { operation, dtype })
+    };
+    // Same conversion family CPU's `tensor_to_dtype_storage` admits; anything
+    // else (Q8_0, Bool, custom) has no CPU conversion to match.
+    match target_dtype.builtin_id() {
+        Some(
+            DTypeId::F32
+            | DTypeId::F64
+            | DTypeId::U8
+            | DTypeId::U32
+            | DTypeId::I64
+            | DTypeId::F16
+            | DTypeId::BF16,
+        ) => {}
+        _ => return Err(unsupported(target_dtype)),
+    }
+    if input.buffer.dtype == target_dtype {
+        return Ok(input.clone());
+    }
+    let total = input.shape.iter().product::<usize>();
+    let wrap = |e| kernel_error("Cuda", operation, e);
+    let input_bytes = input
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*input.buffer.data)
+        .map_err(|e| {
+            kernel_error(
+                "Cuda",
+                operation,
+                incin_core::error::Error::Msg(format!("CUDA to_dtype download failed: {e:?}")),
+            )
+        })?;
+    let source_dtype = input.buffer.dtype;
+    let values: Vec<f64> = match source_dtype.builtin_id() {
+        Some(DTypeId::F32) => bytemuck::cast_slice::<u8, f32>(&input_bytes)
+            .iter()
+            .map(|&v| f64::from(v))
+            .collect(),
+        Some(DTypeId::F64) => bytemuck::cast_slice::<u8, f64>(&input_bytes).to_vec(),
+        Some(DTypeId::F16) => bytemuck::cast_slice::<u8, half::f16>(&input_bytes)
+            .iter()
+            .map(|&v| v.to_f64())
+            .collect(),
+        Some(DTypeId::BF16) => bytemuck::cast_slice::<u8, half::bf16>(&input_bytes)
+            .iter()
+            .map(|&v| v.to_f64())
+            .collect(),
+        Some(DTypeId::I64) => bytemuck::cast_slice::<u8, i64>(&input_bytes)
+            .iter()
+            .map(|&v| v as f64)
+            .collect(),
+        Some(DTypeId::U32) => bytemuck::cast_slice::<u8, u32>(&input_bytes)
+            .iter()
+            .map(|&v| f64::from(v))
+            .collect(),
+        Some(DTypeId::U8) => input_bytes.iter().map(|&v| f64::from(v)).collect(),
+        Some(DTypeId::Bool) => input_bytes
+            .iter()
+            .map(|&v| f64::from(u8::from(v != 0)))
+            .collect(),
+        _ => return Err(unsupported(source_dtype)),
+    };
+    if values.len() < total {
+        return Err(wrap(incin_core::error::Error::Msg(format!(
+            "CUDA to_dtype download holds {} elements but the storage claims {total}",
+            values.len(),
+        ))));
+    }
+    let values = &values[..total];
+    // Same narrowing CPU applies (`as` casts saturate; halves round through
+    // `from_f64`), so out-of-range values agree rather than each backend
+    // inventing its own overflow rule.
+    let out_bytes: Vec<u8> = match target_dtype.builtin_id() {
+        Some(DTypeId::F32) => {
+            let converted: Vec<f32> = values.iter().map(|&v| v as f32).collect();
+            bytemuck::cast_slice(&converted).to_vec()
+        }
+        Some(DTypeId::F64) => bytemuck::cast_slice::<f64, u8>(values).to_vec(),
+        Some(DTypeId::U8) => values.iter().map(|&v| v as u8).collect(),
+        Some(DTypeId::U32) => {
+            let converted: Vec<u32> = values.iter().map(|&v| v as u32).collect();
+            bytemuck::cast_slice(&converted).to_vec()
+        }
+        Some(DTypeId::I64) => {
+            let converted: Vec<i64> = values.iter().map(|&v| v as i64).collect();
+            bytemuck::cast_slice(&converted).to_vec()
+        }
+        Some(DTypeId::F16) => {
+            let converted: Vec<half::f16> =
+                values.iter().map(|&v| half::f16::from_f64(v)).collect();
+            bytemuck::cast_slice(&converted).to_vec()
+        }
+        Some(DTypeId::BF16) => {
+            let converted: Vec<half::bf16> =
+                values.iter().map(|&v| half::bf16::from_f64(v)).collect();
+            bytemuck::cast_slice(&converted).to_vec()
+        }
+        _ => return Err(unsupported(target_dtype)),
+    };
+    let stream = input.buffer.device.default_stream();
+    let data = stream.clone_htod(&out_bytes).map_err(|e| {
+        kernel_error(
+            "Cuda",
+            operation,
+            incin_core::error::Error::Msg(format!("CUDA to_dtype upload failed: {e:?}")),
+        )
+    })?;
+    let out_buffer = CudaBuffer {
+        len: total,
+        dtype: target_dtype,
+        data: Arc::new(data),
+        device: input.buffer.device.clone(),
+        device_id: input.buffer.device_id,
+    };
+    Ok(CudaStorage::new(Arc::new(out_buffer), input.shape.to_vec()))
 }
 
 fn cuda_loss_reduction(reduction: LossReduction) -> Reduction {

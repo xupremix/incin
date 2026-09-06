@@ -144,9 +144,36 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<
 
 // ─── Concrete creation helpers ──────────────────────────────────────────────
 
+/// Time-seeded LCG state for the host-side `rand`/`randn` fills below.
+/// Same constants as WGPU's `creation.rs`; GPU-side generation would need
+/// more infrastructure than either backend has today.
+fn lcg_seed() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos() as u64
+}
+
+fn lcg_uniform(state: &mut u64) -> f32 {
+    *state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
+    ((*state >> 33) as f32) / (u32::MAX as f32)
+}
+
 impl<D: Device> MetalBackendImpl<D> {
     /// `full`. Same host-fill-then-upload pattern `ones` above already
     /// uses.
+    ///
+    /// Honesty note (latent, unreachable): this fills a `Vec<f32>` and
+    /// stores its bytes under whatever `dtype` was requested, with no
+    /// numeric conversion — a non-`f32` request would mislabel `f32` bit
+    /// patterns. It cannot happen through canonical dispatch: the
+    /// capability rows gate every filling identity to `F32_ONLY`, and the
+    /// validator rejects the rest before any method below runs. Same holds
+    /// for `ones`/`arange`/`linspace`. If filling ever widens past `f32`,
+    /// convert here instead of reinterpreting.
     pub(crate) fn full<K: DType>(
         val: f64,
         shape: &[usize],
@@ -230,6 +257,9 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
+    /// `rand`. Host-side LCG upload, the same approach as WGPU's
+    /// `creation.rs`: there is no Metal-side generator yet, and the previous
+    /// constant `0.5` fill advertised sampling while returning a constant.
     pub(crate) fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -238,12 +268,15 @@ impl<D: Device> MetalBackendImpl<D> {
         validate_metal(dtype, device, OperationKind::Random, "rand")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
         let n = num_elements(shape)?;
-        let data: Vec<f32> = vec![0.5; n];
+        let mut state = lcg_seed();
+        let data: Vec<f32> = (0..n).map(|_| lcg_uniform(&mut state)).collect();
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
+    /// `randn`. Box-Muller over the same host LCG as `rand`, mirroring WGPU;
+    /// the previous constant `0.0` fill is why this exists.
     pub(crate) fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -252,7 +285,17 @@ impl<D: Device> MetalBackendImpl<D> {
         validate_metal(dtype, device, OperationKind::Random, "randn")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
         let n = num_elements(shape)?;
-        let data: Vec<f32> = vec![0.0; n];
+        let mut state = lcg_seed();
+        let data: Vec<f32> = (0..n.div_ceil(2))
+            .flat_map(|_| {
+                let u1 = lcg_uniform(&mut state).max(1e-7);
+                let u2 = lcg_uniform(&mut state);
+                let r = (-2.0 * u1.ln()).sqrt();
+                let theta = 2.0 * core::f32::consts::PI * u2;
+                [r * theta.cos(), r * theta.sin()]
+            })
+            .take(n)
+            .collect();
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
@@ -893,8 +936,23 @@ impl<D: Device> MetalBackendImpl<D> {
         let dims = t.metadata().shape().dims();
         let total: usize = incin_core::shapes::ShapeBuf::from_slice(dims)
             .checked_numel(incin_core::shapes::OperationKind::Storage)?;
+        // `sum_all` pushes its own `t -> sum` entry; the rescale below used
+        // to push nothing, detaching the output from the tape while the
+        // table advertised `training = yes`. Chain a `sum -> out` entry so
+        // backward walks `out -> sum -> t`, mirroring WGPU's `mean_all`
+        // (which inlines the raw sum and pushes one entry instead).
+        let scale = 1.0 / (total as f64);
         let sum = Self::sum_all::<K>(t)?;
-        scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)
+        let out = scalar_op_metal(&sum, scale, |x, s| x * s)?;
+        let (sum_id, out_id) = (sum.id(), out.id());
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![sum_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                Ok(vec![scalar_op_metal(grad_out, scale, |x, s| x * s)?])
+            }),
+        });
+        Ok(out)
     }
 }
 

@@ -43,21 +43,39 @@ fn the_whole_surface_is_reachable_from_the_facade_prelude() {
 fn target_api_compile_fail_diagnostics() {
     // Snapshots here are recorded under CI's invocation:
     //
-    //   cargo test --all-targets --no-default-features \
-    //     --features incin-backends/cpu,incin/cpu
+    //   cargo test -p incin --no-default-features \
+    //     --features incin/cpu --test target_api_facade
     //
-    // `numeric_where_mask` prints the impl's self type in a "the method was
-    // found for" note, and that type now includes `Local`, because naming the
-    // layout parameter forces the placement before it to be named too. The
-    // facade prelude gates `Local` behind the `distributed` feature, which
-    // that invocation does not enable, so rustc renders the canonical
-    // `incin_core::dist::placement::Local` path here. Feature sets that do
-    // enable `distributed` (including plain workspace builds, via feature
-    // unification) render the shorter `incin::prelude::Local` instead, and
-    // only that spelling can be stored: running this under a different
-    // feature set reports a mismatch that is purely the path spelling.
+    // `numeric_where_mask`, `logical_on_float_tensor`, and
+    // `numeric_masked_fill_mask` print the impl's self type in a "the method
+    // was found for" / "expected reference" note, and that type now includes
+    // `Local`, because naming the layout parameter forces the placement before
+    // it to be named too. The facade prelude gates `Local` behind the
+    // `distributed` feature, which that invocation does not enable, so rustc
+    // renders the canonical `incin_core::dist::placement::Local` path here.
+    // Feature sets that do enable `distributed` (including plain workspace
+    // builds, via feature unification) render the shorter
+    // `incin::prelude::Local` instead, and only that spelling can be stored:
+    // running those fixtures under a different feature set reports a mismatch
+    // that is purely the path spelling.
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/target_api_compile_fail/*.rs");
+    // Those three spelling-sensitive fixtures live in their own directory
+    // rather than as a `cfg` inside a fixture: trybuild compiles each fixture
+    // as a whole file, and a body that `cfg`s itself out compiles clean,
+    // which a `compile_fail` case reports as a failure. They still run under
+    // the pinned invocation above, which never enables `distributed`; any
+    // other feature set skips them instead of failing on the path spelling.
+    #[cfg(not(feature = "distributed"))]
+    t.compile_fail("tests/target_api_compile_fail_no_distributed/*.rs");
+    #[cfg(feature = "distributed")]
+    eprintln!(
+        "SKIP target_api_compile_fail_no_distributed/*: the `distributed` feature unifies in, \
+         so rustc renders `incin::prelude::Local` where the snapshots record \
+         `incin_core::dist::placement::Local`; run the pinned invocation \
+         `cargo test -p incin --no-default-features --features incin/cpu \
+         --test target_api_facade` for the assertion"
+    );
     // A second directory rather than a `cfg` inside a fixture: trybuild
     // compiles each fixture as a whole file, and a body that `cfg`s itself out
     // compiles clean, which a `compile_fail` case reports as a failure.

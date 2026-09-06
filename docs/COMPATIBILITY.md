@@ -53,3 +53,16 @@ Before 1.0, the API is intentionally unstable while foundations settle:
 Generated documents (`docs/capabilities.md`, operation semantics), audit
 evidence, and derived directories are outputs of the source and tests; their
 content may change in any release as truth changes, without notice.
+
+## Hardware and feature-combination coverage
+
+Compiling every supported feature combination is a per-PR gate (the
+`all-features-check` union job and the feature-contract matrix in CI);
+executing them is not. The CUDA, Metal, native-WGPU, multi-host NCCL, and
+other device suites need hardware no per-PR runner has, so they run on the
+scheduled hardware matrix (`.github/workflows/hardware.yml`), which states
+what it skipped and why when no runner is registered. Per-PR, the
+accelerator backends get compile coverage of all their targets (library,
+tests, examples) without hardware. A green PR therefore means "every
+supported combination compiles and the CPU surface passes", never "the
+device surface was executed".

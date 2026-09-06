@@ -568,7 +568,40 @@ impl<D: Device> CudaBackendImpl<D> {
         index: &CudaStorage,
         src: &CudaStorage,
     ) -> Result<CudaStorage> {
-        crate::cuda::ops::shape::launch_scatter(t, dim, index, src)
+        let out = crate::cuda::ops::shape::launch_scatter(t, dim, index, src)?;
+        // Backward mirrors CPU's `scatter_storage`: the input keeps its
+        // cotangent everywhere EXCEPT the positions a write overwrote (those
+        // land on the source instead), and the source receives the output
+        // cotangent only through the LAST write to each destination, because
+        // the forward's last-write-wins rule means earlier writes to the same
+        // position contributed nothing. The integer index operand is off the
+        // tape by construction, same as CPU.
+        let (t_capture, index_capture, src_capture) =
+            (t.clone(), index.clone(), src.clone());
+        let (t_id, src_id, out_id) = (t.id, src.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, src_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                // Scattering zeros over the same index zeroes exactly the
+                // overwritten positions however many writes collided there,
+                // which is the whole of the input path; no bookkeeping needed.
+                let zeros = Self::zeros::<K>(
+                    &src_capture.shape,
+                    DTypeId::F32.descriptor(),
+                    &DeviceId::cuda(src_capture.buffer.device_id),
+                )?;
+                let grad_t = crate::cuda::ops::shape::launch_scatter(
+                    grad_out,
+                    dim,
+                    &index_capture,
+                    &zeros,
+                )?;
+                let grad_src = scatter_src_grad(&index_capture, &src_capture, grad_out, dim)?;
+                Ok(vec![grad_t, grad_src])
+            }),
+        });
+        Ok(out)
     }
 
     pub(crate) fn diag<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {

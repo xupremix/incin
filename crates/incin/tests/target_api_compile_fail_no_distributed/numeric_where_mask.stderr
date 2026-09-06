@@ -1,5 +1,5 @@
 error[E0599]: no method named `where_cond` found for struct `incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>, incin_backends::cpu::CpuBackendImpl, i64>` in the current scope
- --> tests/target_api_compile_fail/numeric_where_mask.rs:7:18
+ --> tests/target_api_compile_fail_no_distributed/numeric_where_mask.rs:7:18
   |
 7 |     let _ = mask.where_cond(&yes, &no)?;
   |                  ^^^^^^^^^^ method not found in `incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>, incin_backends::cpu::CpuBackendImpl, i64>`

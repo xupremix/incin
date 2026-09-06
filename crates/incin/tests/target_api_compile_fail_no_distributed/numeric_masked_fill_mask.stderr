@@ -1,5 +1,5 @@
 error[E0308]: mismatched types
- --> tests/target_api_compile_fail/numeric_masked_fill_mask.rs:6:27
+ --> tests/target_api_compile_fail_no_distributed/numeric_masked_fill_mask.rs:6:27
   |
 6 |     let _ = x.masked_fill(&mask, 0.0)?;
   |               ----------- ^^^^^ expected `&Tensor<..., ..., bool, _, ..., _>`, found `&Tensor<DimCons<..., ...>, ..., u8>`

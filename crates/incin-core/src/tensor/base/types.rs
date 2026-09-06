@@ -23,6 +23,11 @@ use core::marker::PhantomData;
 /// * `G`: Trait marker representing whether the tensor requires gradients ([`Grad`](crate::tensor::grad::Grad) or [`NoGrad`]). Defaults to `NoGrad`.
 /// * `P`: Logical [`Placement`]. Defaults to [`Local`]; distributed code may
 ///   select a static placement or [`crate::shapes::Dyn`] for runtime placement metadata.
+/// * `L`: What the type settles about *where* the elements live: strides,
+///   offset, alignment, contiguity. Defaults to [`Dyn`], which claims
+///   nothing; most callers should write the [`Dense`](crate::shapes::Dense)
+///   alias instead of naming this parameter, which spells a row-major dense
+///   tensor without repeating the shape.
 ///
 /// ## Examples
 ///
@@ -71,6 +76,13 @@ pub struct Tensor<
 impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>> Clone
     for Tensor<S, B, K, G, P, L>
 {
+    /// A shallow handle clone: the new tensor shares the backend storage
+    /// allocation with the original rather than copying its elements.
+    ///
+    /// Mutating through one handle is visible through the other wherever the
+    /// backend shares storage. For an owned, independent copy, materialize
+    /// through the backend (e.g. clone the storage into a fresh allocation
+    /// via the backend's copy/creation path) rather than relying on `clone`.
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),

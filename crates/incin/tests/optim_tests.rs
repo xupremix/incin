@@ -558,3 +558,99 @@ fn clip_grad_value_rejects_a_bound_that_is_not_positive_and_finite() {
         clip_grad_value(&group, &mut grads, bound).expect_err("a bound of {bound} must be refused");
     }
 }
+
+/// Builds an optimizer map covering two models plus gradients that reach
+/// only the first, i.e. a SOME-but-not-all step.
+fn partial_coverage_fixture() -> (
+    Linear<s![4, 2], CpuBackendImpl>,
+    Linear<s![4, 2], CpuBackendImpl>,
+    BTreeMap<String, <CpuBackendImpl as VariableBackend>::Var<f32>>,
+    incin::Gradients<CpuBackendImpl>,
+) {
+    let used = Linear::<s![4, 2], CpuBackendImpl>::build(()).unwrap();
+    let unused = Linear::<s![4, 2], CpuBackendImpl>::build(()).unwrap();
+    let mut map = BTreeMap::new();
+    for (name, var) in ParameterGroup::<CpuBackendImpl, f32>::from_module(&used)
+        .unwrap()
+        .iter()
+    {
+        map.insert(format!("used.{name}"), var.clone());
+    }
+    for (name, var) in ParameterGroup::<CpuBackendImpl, f32>::from_module(&unused)
+        .unwrap()
+        .iter()
+    {
+        map.insert(format!("unused.{name}"), var.clone());
+    }
+    assert_eq!(map.len(), 4);
+    let input = Tensor::<s![1, 4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .require_grad();
+    let grads = used
+        .forward(input)
+        .unwrap()
+        .sum_all()
+        .unwrap()
+        .backward()
+        .unwrap();
+    (used, unused, map, grads)
+}
+
+/// `step` stays PyTorch-compatible and commits a partial step, while
+/// `step_strict` refuses SOME-but-not-all coverage. Zero-coverage stays
+/// refused by both spellings (covered by
+/// `a_step_that_reaches_no_parameter_is_refused_rather_than_committing_nothing`).
+#[test]
+fn step_strict_refuses_partial_coverage_while_step_commits() {
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut sgd = SGD::<CpuBackendImpl>::new(map.clone(), 0.01);
+    sgd.step(&grads)
+        .expect("lenient SGD step must commit a partial step");
+
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut sgd = SGD::<CpuBackendImpl>::new(map, 0.01);
+    let error = sgd
+        .step_strict(&grads)
+        .expect_err("strict SGD step must refuse partial coverage");
+    assert!(
+        error.to_string().contains("every parameter"),
+        "strict error must name full coverage, got: {error}"
+    );
+
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut adam = Adam::<CpuBackendImpl>::new(map, 1e-3);
+    adam.step_strict(&grads)
+        .expect_err("strict Adam step must refuse partial coverage");
+
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut adamw = AdamW::<CpuBackendImpl>::new(map, 1e-4);
+    adamw
+        .step_strict(&grads)
+        .expect_err("strict AdamW step must refuse partial coverage");
+}
+
+/// A strict step over full coverage succeeds and moves the parameters.
+#[test]
+fn step_strict_commits_full_coverage() {
+    let (linear, grads) = get_linear_and_grads().unwrap();
+    let before = parameter_bytes(&linear).unwrap();
+    let mut sgd = SGD::<CpuBackendImpl>::from_module(&linear, 0.01).unwrap();
+    sgd.step_strict(&grads)
+        .expect("strict step over full coverage must succeed");
+    assert_ne!(
+        parameter_bytes(&linear).unwrap(),
+        before,
+        "a strict step must move the parameters"
+    );
+
+    let (linear, grads) = get_linear_and_grads().unwrap();
+    let mut adam = Adam::<CpuBackendImpl>::from_module(&linear, 1e-3).unwrap();
+    adam.step_strict(&grads)
+        .expect("strict Adam step over full coverage must succeed");
+
+    let (linear, grads) = get_linear_and_grads().unwrap();
+    let mut adamw = AdamW::<CpuBackendImpl>::from_module(&linear, 1e-4).unwrap();
+    adamw
+        .step_strict(&grads)
+        .expect("strict AdamW step over full coverage must succeed");
+}

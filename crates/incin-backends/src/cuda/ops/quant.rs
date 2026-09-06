@@ -1,4 +1,9 @@
 //! CUDA launchers for Q8_0 quantization kernels.
+//!
+//! `quantize_q8_0`'s kernel reads its input as `const float*`, so only f32
+//! storage may reach it. `launch_quantize_q8_0` refuses anything else loudly
+//! rather than reinterpreting narrower/wider bytes as floats; extending the
+//! kernel to bf16/f16/f64 is future work, not a silent reinterpretation.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
@@ -20,6 +25,11 @@ fn ensure_quant_loaded(device_id: usize) -> Result<()> {
 
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
+    // The kernel below reads `const float*`: a bf16/f16 input would hand the
+    // transmute fewer bytes than it asks for (driver panic), an f64 input
+    // would hand it more (first half read as f32, wrong values, no error).
+    // Both become the same typed refusal here.
+    crate::cuda::backend::cuda_require_f32(input.buffer.dtype, "quantize")?;
     let total_numel = input.shape.iter().product::<usize>();
     if total_numel % 32 != 0 {
         return Err(Error::Msg(format!(

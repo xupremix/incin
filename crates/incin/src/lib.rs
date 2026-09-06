@@ -725,6 +725,22 @@ pub mod macros {
 }
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
+///
+/// The facade has three import tiers:
+///
+/// * **User** — this prelude. Everything an ordinary model or training loop
+///   needs, behind the stable `std`/`cpu` surface.
+/// * **Backend authoring** — the `backend_authoring` module (behind the
+///   `backend-authoring` Cargo feature) plus `incin_backends::prelude`: the
+///   contracts a new backend implements against.
+/// * **Advanced** — the `advanced` module: structural shape proofs and
+///   type-level machinery for generic code below prelude control.
+///
+/// Which Cargo features each tier needs, and whether a feature is stable,
+/// preview, or hardware-gated, is declared per feature in the manifests'
+/// `[package.metadata.incin.feature-contract]` tables and rendered as
+/// `docs/FEATURE_MATRIX.md`; module-tier assignments live in
+/// `docs/public-api/API_TIERS.md`.
 pub mod prelude {
     pub use super::{Dense, Tensor};
     pub use incin_core::SeqTy;

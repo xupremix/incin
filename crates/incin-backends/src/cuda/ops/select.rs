@@ -218,14 +218,12 @@ pub(crate) fn launch_where_cond(
     Ok(CudaStorage::new(Arc::new(out_b), mask.shape.to_vec()))
 }
 
-/// No tape entry is pushed here, matching `cpu::ops::shape_ops::masked_fill_storage`
-/// exactly: neither backend's `masked_fill` currently routes a gradient back
-/// to `input`, so a masked-fill result is a leaf on the tape on both. That is
-/// an existing, pre-`compare`/`select` gap shared by both backends rather
-/// than something this module introduces - fixing it would mean adding the
-/// same backward (`grad_input = masked_fill(grad_out, mask, 0.0)`) to CPU
-/// too, which is separate work, not a CUDA-only patch that would leave the
-/// two backends disagreeing on what `masked_fill` differentiates through.
+/// No tape entry is pushed here by design, not by omission: `launch_where_cond`
+/// follows the same split, and the `Execute<op::MaskedFill>` implementation in
+/// `cuda/executor.rs` pushes the backward (`grad_input = masked_fill(grad_out,
+/// mask, 0.0)`, mirroring CPU's `masked_fill_storage`) around this launch.
+/// Keeping the launch itself tape-free is what lets both the forward-only and
+/// the tracked call sites share it.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_masked_fill(
     input: &CudaStorage,

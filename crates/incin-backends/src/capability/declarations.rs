@@ -461,7 +461,13 @@ macro_rules! metal_descriptor_operations {
                 SumAll, MeanAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim
             ],
-            spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
+            // Empty on purpose: `MetalBackendImpl::conv2d`/`max_pool2d`/
+            // `avg_pool2d` always return `Err(unsupported(..))`, and the
+            // legacy table carries no coarse `Conv2d`/`Pool2d` rows either.
+            // Listing them here would advertise operations that can never
+            // execute; the `Execute` impls in `metal/executor.rs` stay as
+            // loud errors. Do NOT refill this without real Metal kernels.
+            spatial = [],
             matmul = [MatMulExact],
             // No canonical executor was written for this backend beyond the
             // groups above, so it advertises none. An empty group is a truthful

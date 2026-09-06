@@ -9,7 +9,7 @@
 use super::group::PreparedUpdate;
 use super::traits::OptimizerBackend;
 use crate::backend_authoring::{Capabilities, Execute};
-use crate::err::{Error, ErrorMessage, Result};
+use crate::err::{Error, ErrorMessage, FloatToIntPolicy, Result, convert_f64_to_i64};
 use crate::exec::catalog::{FullAttributes, op};
 use crate::exec::dispatch;
 use crate::exec::{ExecutionContext, GradMode};
@@ -53,6 +53,31 @@ pub(super) fn require_gradients_reached_the_group(
              reach it. A tape is thread-local, so a backward call on a thread other than \
              the one that recorded the forward pass drains an empty graph and produces \
              exactly this state.",
+        ));
+    }
+    Ok(())
+}
+
+/// Refuse a step in which only *some* parameters received a gradient.
+///
+/// [`require_gradients_reached_the_group`] fires when zero parameters were
+/// reached; this fires when the coverage is partial (`0 < updated <
+/// parameters`). The lenient `step` keeps skipping unreached parameters for
+/// PyTorch compatibility (an unused parameter genuinely has nothing to
+/// apply); `step_strict` calls this so a silently detached branch cannot hide
+/// inside an otherwise successful step.
+pub(super) fn require_full_gradient_coverage(
+    operation: &'static str,
+    parameters: usize,
+    updated: usize,
+) -> Result<()> {
+    require_gradients_reached_the_group(operation, parameters, updated)?;
+    if updated != parameters {
+        return Err(invalid_optimizer_config(
+            operation,
+            "strict step requires every parameter in this group to have received a \
+             gradient, but only some did: a parameter the forward pass did not use, \
+             or a detached branch, was silently skipped.",
         ));
     }
     Ok(())
@@ -241,7 +266,15 @@ where
             "optimizer step counter must be a finite non-negative number",
         ));
     }
-    Ok(Some(value.round() as usize))
+    // The counter is written as `step as f64`, so a well-formed entry is
+    // integral. A fractional value means a corrupted checkpoint, and `as
+    // usize` would silently truncate it (and saturate an out-of-range one),
+    // so this goes through the exact float-to-int conversion instead.
+    let from = crate::tensor::dtype::DTypeId::F64.descriptor();
+    let step_i64 = convert_f64_to_i64(operation, from, value, FloatToIntPolicy::Exact)?;
+    usize::try_from(step_i64)
+        .map_err(|_| invalid_optimizer_config(operation, "optimizer step counter out of range"))
+        .map(Some)
 }
 
 pub(super) fn load_adam_state<B: VariableBackend, K: DType>(

@@ -11,8 +11,8 @@
 use super::group::{ParameterGroup, PreparedUpdate};
 use super::support::{
     commit_parameter_updates, load_adam_state, load_adam_step, prepare_adam_update,
-    require_gradients_reached_the_group, save_adam_step, validate_adam_config,
-    validate_learning_rate, validate_storage_pair,
+    require_full_gradient_coverage, require_gradients_reached_the_group, save_adam_step,
+    validate_adam_config, validate_learning_rate, validate_storage_pair,
 };
 use super::traits::{Optimizer, OptimizerBackend, ScaledOptimizer};
 use crate::autograd::Gradients;
@@ -91,6 +91,40 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
         K: ConstDType,
     {
         Ok(Self::from_group(ParameterGroup::from_module(module)?, lr))
+    }
+}
+
+impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> SGD<B, K> {
+    /// Strict step: like [`Optimizer::step`](super::traits::Optimizer::step),
+    /// but refuses a partial step in which some — but not all — parameters
+    /// received gradients.
+    ///
+    /// The lenient `step` stays PyTorch-compatible and skips unreached
+    /// parameters; this reports them as
+    /// [`Error::InvalidModuleState`] instead. A step that reaches zero
+    /// parameters is refused by both spellings.
+    pub fn step_strict(&mut self, grads: &Gradients<B>) -> Result<()> {
+        const OPERATION: &str = "sgd_step_strict";
+        validate_learning_rate(OPERATION, self.lr)?;
+        let mut updates = alloc::vec::Vec::new();
+        for (name, var) in &self.params {
+            let t = B::var_as_tensor::<K>(var)?;
+            if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
+                validate_storage_pair::<B, K>(OPERATION, &t, &grad)?;
+                let grad_scaled = B::optimizer_mul_scalar(&grad, self.lr)?;
+                let updated = B::optimizer_sub(&t, &grad_scaled)?;
+                updates.push(PreparedUpdate {
+                    name: name.clone(),
+                    before: t,
+                    updated,
+                    first_moment: None,
+                    second_moment: None,
+                });
+            }
+        }
+        require_full_gradient_coverage(OPERATION, self.params.len(), updates.len())?;
+        commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
+        Ok(())
     }
 }
 
@@ -298,6 +332,73 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
         if let Some(step) = load_adam_step::<B, K>("adamw_load_state_dict", prefix, dict)? {
             self.step = step;
         }
+        Ok(())
+    }
+}
+
+impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> AdamW<B, K> {
+    /// Strict step: like `step`, but refuses a partial step in which some —
+    /// but not all — parameters received gradients. See
+    /// [`SGD::step_strict`](SGD::step_strict).
+    pub fn step_strict(&mut self, grads: &Gradients<B>) -> Result<()> {
+        const OPERATION: &str = "adamw_step_strict";
+        validate_adam_config(
+            OPERATION,
+            self.lr,
+            self.beta1,
+            self.beta2,
+            self.eps,
+            Some(self.weight_decay),
+        )?;
+        let next_step = self.step.checked_add(1).ok_or(Error::ArithmeticOverflow {
+            operation: OPERATION,
+            expression: "optimizer step + 1",
+        })?;
+        let mut updates = alloc::vec::Vec::new();
+        for (name, var) in &self.params {
+            let t = B::var_as_tensor::<K>(var)?;
+            if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
+                let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
+                    OPERATION,
+                    &t,
+                    &grad,
+                    self.m.get(name),
+                    self.v.get(name),
+                    self.lr,
+                    self.beta1,
+                    self.beta2,
+                    self.eps,
+                    self.weight_decay,
+                    next_step,
+                )?;
+                updates.push(PreparedUpdate {
+                    name: name.clone(),
+                    before: t,
+                    updated,
+                    first_moment: Some(m_t),
+                    second_moment: Some(v_t),
+                });
+            }
+        }
+        require_full_gradient_coverage(OPERATION, self.params.len(), updates.len())?;
+        commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
+        for update in updates {
+            self.m.insert(
+                update.name.clone(),
+                update.first_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared AdamW update lost first moment",
+                })?,
+            );
+            self.v.insert(
+                update.name,
+                update.second_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared AdamW update lost second moment",
+                })?,
+            );
+        }
+        self.step = next_step;
         Ok(())
     }
 }
@@ -540,6 +641,66 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
         if let Some(step) = load_adam_step::<B, K>("adam_load_state_dict", prefix, dict)? {
             self.step = step;
         }
+        Ok(())
+    }
+}
+
+impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Adam<B, K> {
+    /// Strict step: like `step`, but refuses a partial step in which some —
+    /// but not all — parameters received gradients. See
+    /// [`SGD::step_strict`](SGD::step_strict).
+    pub fn step_strict(&mut self, grads: &Gradients<B>) -> Result<()> {
+        const OPERATION: &str = "adam_step_strict";
+        validate_adam_config(OPERATION, self.lr, self.beta1, self.beta2, self.eps, None)?;
+        let next_step = self.step.checked_add(1).ok_or(Error::ArithmeticOverflow {
+            operation: OPERATION,
+            expression: "optimizer step + 1",
+        })?;
+        let mut updates = alloc::vec::Vec::new();
+        for (name, var) in &self.params {
+            let t = B::var_as_tensor::<K>(var)?;
+            if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
+                let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
+                    OPERATION,
+                    &t,
+                    &grad,
+                    self.m.get(name),
+                    self.v.get(name),
+                    self.lr,
+                    self.beta1,
+                    self.beta2,
+                    self.eps,
+                    0.0,
+                    next_step,
+                )?;
+                updates.push(PreparedUpdate {
+                    name: name.clone(),
+                    before: t,
+                    updated,
+                    first_moment: Some(m_t),
+                    second_moment: Some(v_t),
+                });
+            }
+        }
+        require_full_gradient_coverage(OPERATION, self.params.len(), updates.len())?;
+        commit_parameter_updates::<B, K>(OPERATION, &mut self.params, &updates)?;
+        for update in updates {
+            self.m.insert(
+                update.name.clone(),
+                update.first_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared Adam update lost first moment",
+                })?,
+            );
+            self.v.insert(
+                update.name,
+                update.second_moment.ok_or(Error::InternalInvariant {
+                    operation: OPERATION,
+                    reason: "prepared Adam update lost second moment",
+                })?,
+            );
+        }
+        self.step = next_step;
         Ok(())
     }
 }

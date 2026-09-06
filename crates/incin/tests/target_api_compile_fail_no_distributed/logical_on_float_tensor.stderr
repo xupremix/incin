@@ -1,5 +1,5 @@
 error[E0599]: no method named `logical_and` found for struct `incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl>` in the current scope
- --> tests/target_api_compile_fail/logical_on_float_tensor.rs:6:15
+ --> tests/target_api_compile_fail_no_distributed/logical_on_float_tensor.rs:6:15
   |
 6 |     let _ = a.logical_and(&b);
   |               ^^^^^^^^^^^ method not found in `incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl>`

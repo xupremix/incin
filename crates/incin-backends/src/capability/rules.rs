@@ -107,6 +107,12 @@ macro_rules! descriptor_capability_rules {
         tensor_dtypes = $tensor_dtypes:expr,
         tensor_layouts = $tensor_layouts:expr,
         logical_dtypes = $logical_dtypes:expr,
+        // Rank-bound function for this backend's invocation: CPU/Metal pass
+        // `descriptor_max_rank` (host loops are rank-agnostic), CUDA/WGPU
+        // pass `accelerator_max_rank` (the shape kernels pack a fixed
+        // rank-6 block). Per-op, so backends that need no cap observe no
+        // change; see `accelerator_max_rank`'s own doc for the routed set.
+        max_rank = $max_rank:path,
         legacy = [$($legacy:expr),* $(,)?];
         elementwise = [$($elementwise_op:ident),* $(,)?],
         broadcast = [$($broadcast_op:ident),* $(,)?],
@@ -136,22 +142,51 @@ macro_rules! descriptor_capability_rules {
             // unary float set, the scalar-parametrised forms, and clamp. They
             // share one dtype and layout declaration because they share one
             // traversal, and every rank is a legal operand rank for all of them.
-            $(native(OperationKind::$elementwise_op, $elementwise, $elementwise_layouts, true),)*
-            $(native(OperationKind::$broadcast_op, $broadcast, $broadcast_layouts, false),)*
+            // Training is per-operation (`descriptor_training`): the grad-less
+            // identities in this group resolve to `false` and fail loudly in
+            // training mode rather than deliver a missing gradient.
+            $(native_ranked(
+                OperationKind::$elementwise_op,
+                $elementwise,
+                $elementwise_layouts,
+                descriptor_min_rank(OperationKind::$elementwise_op),
+                $max_rank(OperationKind::$elementwise_op),
+                descriptor_training(OperationKind::$elementwise_op),
+            ),)*
+            // `broadcast_as` routes through the fixed rank-6 shape kernel on
+            // the accelerators, so its bound goes through `$max_rank` rather
+            // than the unbounded `native` shorthand. `reshape` stays on
+            // `native`: every backend answers it by rewrapping bytes, which
+            // is rank-agnostic.
+            $(native_ranked(
+                OperationKind::$broadcast_op,
+                $broadcast,
+                $broadcast_layouts,
+                descriptor_min_rank(OperationKind::$broadcast_op),
+                $max_rank(OperationKind::$broadcast_op),
+                false,
+            ),)*
             $(native(OperationKind::$reshape_op, $reshape, $reshape_layouts, false),)*
             // A view operation records a gradient, so it is usable while
             // training over the dtypes a gradient exists for. Without these
             // rows the exact identities are strictly narrower than the legacy
             // family rows they replace, and a training reshape would stop
             // resolving the moment those family rows are removed.
-            $(native(OperationKind::$broadcast_op, $broadcast_training, $broadcast_layouts, true),)*
+            $(native_ranked(
+                OperationKind::$broadcast_op,
+                $broadcast_training,
+                $broadcast_layouts,
+                descriptor_min_rank(OperationKind::$broadcast_op),
+                $max_rank(OperationKind::$broadcast_op),
+                true,
+            ),)*
             $(native(OperationKind::$reshape_op, $reshape_training, $reshape_layouts, true),)*
             $(native_ranked(
                 OperationKind::$matmul_op,
                 $matmul,
                 $matmul_layouts,
                 descriptor_min_rank(OperationKind::$matmul_op),
-                descriptor_max_rank(OperationKind::$matmul_op),
+                $max_rank(OperationKind::$matmul_op),
                 true,
             ),)*
             // Allocation, which admits every rank the shape contract allows and
@@ -164,15 +199,15 @@ macro_rules! descriptor_capability_rules {
                 $reduction,
                 $reduction_layouts,
                 descriptor_min_rank(OperationKind::$reduction_op),
-                descriptor_max_rank(OperationKind::$reduction_op),
-                true,
+                $max_rank(OperationKind::$reduction_op),
+                descriptor_training(OperationKind::$reduction_op),
             ),)*
             $(native_ranked(
                 OperationKind::$spatial_op,
                 $spatial,
                 $spatial_layouts,
                 descriptor_min_rank(OperationKind::$spatial_op),
-                descriptor_max_rank(OperationKind::$spatial_op),
+                $max_rank(OperationKind::$spatial_op),
                 true,
             ),)*
             // `softmax` normalizes along an axis, so it needs one, and it does
@@ -184,7 +219,7 @@ macro_rules! descriptor_capability_rules {
                 $normalization_dtypes,
                 $elementwise_layouts,
                 descriptor_min_rank(OperationKind::$normalization_op),
-                descriptor_max_rank(OperationKind::$normalization_op),
+                $max_rank(OperationKind::$normalization_op),
                 true,
             ),)*
             // The union of the index operand's integer dtypes and the weight
@@ -195,7 +230,7 @@ macro_rules! descriptor_capability_rules {
                 $embedding_dtypes,
                 $elementwise_layouts,
                 descriptor_min_rank(OperationKind::$embedding_op),
-                descriptor_max_rank(OperationKind::$embedding_op),
+                $max_rank(OperationKind::$embedding_op),
                 true,
             ),)*
             // The tensor family reads its operands through the stride-aware
@@ -208,8 +243,8 @@ macro_rules! descriptor_capability_rules {
                 $tensor_dtypes,
                 $tensor_layouts,
                 descriptor_min_rank(OperationKind::$native_tensor_op),
-                descriptor_max_rank(OperationKind::$native_tensor_op),
-                true,
+                $max_rank(OperationKind::$native_tensor_op),
+                descriptor_training(OperationKind::$native_tensor_op),
             ),)*
             // Boolean throughout, on every operand and on the result, which
             // is why these cannot sit in the tensor group even though they
@@ -225,8 +260,8 @@ macro_rules! descriptor_capability_rules {
                 $logical_dtypes,
                 $tensor_layouts,
                 descriptor_min_rank(OperationKind::$logical_op),
-                descriptor_max_rank(OperationKind::$logical_op),
-                true,
+                $max_rank(OperationKind::$logical_op),
+                descriptor_training(OperationKind::$logical_op),
             ),)*
             // Same shape, reported as composed: these answer by rewriting into
             // another operation rather than by running a kernel of their own.
@@ -235,7 +270,7 @@ macro_rules! descriptor_capability_rules {
                 $tensor_dtypes,
                 $tensor_layouts,
                 descriptor_min_rank(OperationKind::$composed_tensor_op),
-                descriptor_max_rank(OperationKind::$composed_tensor_op),
+                $max_rank(OperationKind::$composed_tensor_op),
                 true,
             ),)*
             // `bmm`, `addmm` and attention all rewrite into `matmul`, so they
@@ -246,7 +281,7 @@ macro_rules! descriptor_capability_rules {
                 $matmul,
                 $matmul_layouts,
                 descriptor_min_rank(OperationKind::$composed_matmul_op),
-                descriptor_max_rank(OperationKind::$composed_matmul_op),
+                $max_rank(OperationKind::$composed_matmul_op),
                 true,
             ),)*
             // Same constraint as the product they wrap, with the rank bound
@@ -256,7 +291,7 @@ macro_rules! descriptor_capability_rules {
                 $matmul,
                 $matmul_layouts,
                 descriptor_min_rank(OperationKind::$composed_matmul_bias_op),
-                descriptor_max_rank(OperationKind::$composed_matmul_bias_op),
+                $max_rank(OperationKind::$composed_matmul_bias_op),
                 true,
             ),)*
             // The compression reads the float set its kernel accepts, which is
@@ -267,7 +302,7 @@ macro_rules! descriptor_capability_rules {
                 $reduction,
                 $quantized_layouts,
                 descriptor_min_rank(OperationKind::$quantizing_op),
-                descriptor_max_rank(OperationKind::$quantizing_op),
+                $max_rank(OperationKind::$quantizing_op),
                 false,
             ),)*
             // Operations over compressed storage. `training` is false on both:
@@ -279,7 +314,7 @@ macro_rules! descriptor_capability_rules {
                 $quantized_dtypes,
                 $quantized_layouts,
                 descriptor_min_rank(OperationKind::$quantized_op),
-                descriptor_max_rank(OperationKind::$quantized_op),
+                $max_rank(OperationKind::$quantized_op),
                 false,
             ),)*
             // Same relationship to the reduction rows: a loss that ends in an
@@ -289,7 +324,7 @@ macro_rules! descriptor_capability_rules {
                 $reduction,
                 $reduction_layouts,
                 descriptor_min_rank(OperationKind::$composed_reduction_op),
-                descriptor_max_rank(OperationKind::$composed_reduction_op),
+                $max_rank(OperationKind::$composed_reduction_op),
                 true,
             ),)*
             // The same rule, widened to the union of a float operand's dtypes
@@ -299,7 +334,7 @@ macro_rules! descriptor_capability_rules {
                 $embedding_dtypes,
                 $reduction_layouts,
                 descriptor_min_rank(OperationKind::$composed_reduction_indexed_op),
-                descriptor_max_rank(OperationKind::$composed_reduction_indexed_op),
+                $max_rank(OperationKind::$composed_reduction_indexed_op),
                 true,
             ),)*
         ]
@@ -416,6 +451,88 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // rank contract the descriptor validates separately.
         OperationKind::EmbeddingExact => 1,
         _ => 0,
+    }
+}
+
+/// Whether `operation` may run while a gradient is being tracked.
+///
+/// Most exact identities push a real tape entry and so cover training. The
+/// ones listed here do not, on any backend: the comparisons and logicals
+/// produce `bool`/`index` output with nowhere to send a gradient, the index
+/// reductions (`argmax`/`argmin`/`argsort`/`topk`) never link their output
+/// back to an input on any tape, and `step`/`sign`/`floor`/`ceil`/`round`
+/// are flat almost everywhere (the zero-gradient entries some kernels push
+/// for `step` record that flatness; they do not make the operation usefully
+/// differentiable). Advertising them with `training = true` would let a
+/// training-mode invocation through admission only to deliver a missing or
+/// vacuous gradient, so they resolve to `false` and fail loudly instead.
+/// `trunc`/`frac` are deliberately absent here: stream C owns their rows.
+pub(super) const fn descriptor_training(operation: OperationKind) -> bool {
+    match operation {
+        OperationKind::CmpEq
+        | OperationKind::CmpNe
+        | OperationKind::CmpLt
+        | OperationKind::CmpLe
+        | OperationKind::CmpGt
+        | OperationKind::CmpGe
+        | OperationKind::ArgMax
+        | OperationKind::ArgMin
+        | OperationKind::Argsort
+        | OperationKind::TopK
+        | OperationKind::LogicalAnd
+        | OperationKind::LogicalOr
+        | OperationKind::LogicalNot
+        | OperationKind::Step
+        | OperationKind::Sign
+        | OperationKind::Floor
+        | OperationKind::Ceil
+        | OperationKind::Round => false,
+        _ => true,
+    }
+}
+
+/// The rank ceiling for `operation` on CUDA/WGPU.
+///
+/// Both accelerators pack shapes into a fixed rank-6 parameter block
+/// (`cuda/ops/shape.rs::prepare_shape_params`, `wgpu/dispatch.rs::
+/// prepare_shape_params`, `shape.wgsl`'s "Maximum rank supported: 6"), so
+/// any identity routed through that index arithmetic refuses rank 7+ at
+/// launch. The operations listed here are exactly those routed through it:
+/// `broadcast_as` (`launch_broadcast`/`broadcast_storage`), the transpose /
+/// narrow materializations, the comparison broadcasts (`launch_broadcast`),
+/// and the `bool`-mask broadcasts (`launch_broadcast_bool_mask`) behind
+/// `where_cond`/`masked_fill`/the logicals. Everything else keeps its
+/// descriptor bound: `concat` addresses outer/inner extents rather than a
+/// packed shape, and the fused or rewritten families never touch the shape
+/// kernel. CPU/Metal keep `descriptor_max_rank` (their host loops are
+/// rank-agnostic); only the CUDA/WGPU table invocations select this
+/// function, via the `max_rank` macro parameter below.
+pub(super) const fn accelerator_max_rank(operation: OperationKind) -> usize {
+    match operation {
+        OperationKind::BroadcastAs
+        | OperationKind::TransposeExact
+        | OperationKind::TransposeView
+        | OperationKind::Narrow
+        | OperationKind::CmpEq
+        | OperationKind::CmpNe
+        | OperationKind::CmpLt
+        | OperationKind::CmpLe
+        | OperationKind::CmpGt
+        | OperationKind::CmpGe
+        | OperationKind::WhereCond
+        | OperationKind::MaskedFill
+        | OperationKind::LogicalAnd
+        | OperationKind::LogicalOr
+        | OperationKind::LogicalNot => {
+            let capped = 6;
+            let described = descriptor_max_rank(operation);
+            if described < capped {
+                described
+            } else {
+                capped
+            }
+        }
+        _ => descriptor_max_rank(operation),
     }
 }
 

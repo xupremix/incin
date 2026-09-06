@@ -2,13 +2,13 @@ name: Incin CI
 
 on:
   push:
-    branches: [ "main", "master", "develop" ]
+    branches: [ "master", "develop" ]
     paths-ignore:
       - "docs/wiki/**"
       - ".github/ISSUE_TEMPLATE/**"
       - "LICENSE*"
   pull_request:
-    branches: [ "main", "master", "develop" ]
+    branches: [ "master", "develop" ]
     paths-ignore:
       - "docs/wiki/**"
       - ".github/ISSUE_TEMPLATE/**"
@@ -177,6 +177,27 @@ jobs:
     - name: Run Bare-CPU Tests With The Optional Blocked GEMM
       run: cargo test -p incin-backends --no-default-features --features std,cpu,cpu-blas
 
+  # `--all-features` is the union of every opt-in, including the preview
+  # accelerator backends (cuda, wgpu, metal), the external Candle backend, and
+  # the distributed transports. That union compiles as one graph, so this is
+  # the per-PR gate that catches a combination no focused row enables
+  # together. It is check-only on purpose: executing the union would need
+  # hardware (cuda/metal/multi-host NCCL) and would unify `distributed` into
+  # the trybuild suite, whose snapshots pin the non-distributed path spelling
+  # (see target_api_facade.rs). Runtime coverage stays in hardware.yml.
+  all-features-check:
+    name: All-Features Union Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers
+    - name: Check the full feature union
+      run: cargo check --workspace --all-features
+
   # Core, macros, and diagnostics have small enough feature spaces for useful
   # cargo-hack powersets. Backend and facade combinations are validated by the
   # explicit supported contract matrix in tools/feature-matrix.sh; exhaustive
@@ -249,6 +270,13 @@ jobs:
   # default x86_64 build every branch into the dense AVX2 path is const-false
   # and eliminated. The `+avx2` leg inside the script is the only thing in this
   # file that runs them at all.
+  #
+  # Scheduled rather than per-PR on purpose: Miri needs a nightly toolchain
+  # with the `miri` and `rust-src` components, and ASan/TSan need nightly
+  # `-Zsanitizer` with an isolated target directory, none of which the pinned
+  # stable PR toolchain provides. Installing a second toolchain and re-running
+  # the suite under instrumentation on every PR buys little over the weekly
+  # run, so soundness stays a scheduled gate (see tools/soundness.sh).
   soundness:
     name: Miri and Sanitizers
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
@@ -295,6 +323,13 @@ jobs:
       run: cargo test -p xtask
     - name: Enforce regression budgets and feature inventory
       run: cargo xtask budgets
+    # The budgets above compare checked-in files; they never execute a
+    # benchmark. This compiles the bench targets so a bitrotted benchmark is
+    # a per-PR failure rather than a release-day surprise. Timing is never
+    # gated here: live perf gates are future work (TUN-008/CI-006), run on
+    # quiet hardware per docs/plan/baselines/README.md.
+    - name: Compile benchmarks without running them
+      run: cargo bench -p incin --no-run
     # UX-013. README.md's feature tables are generated from the Cargo
     # manifests; this fails when the checked-in text and the manifests
     # disagree. The capability tables have a different authority and are
@@ -441,11 +476,15 @@ jobs:
     # every GPU and external-backend item undocumented by CI: an intra-doc link
     # into `incin_backends::cuda` resolves only when `cuda` is on, so a broken
     # one is invisible to a CPU-only doc build. This is the set docs.rs would
-    # publish, minus `nightly`, which the stable channel rejects outright.
+    # publish, minus `nightly`, which the stable channel rejects outright,
+    # plus the remaining public surfaces: `metal`/`metal-mps` (no
+    # platform-gated dependency, so Linux type-checks them), `train`,
+    # `distributed`, `autotune` (CUDA-gated code, compile-only without a
+    # device), and `backend-authoring`.
     - name: Build docs with every backend enabled
       env:
         RUSTDOCFLAGS: -D warnings
-      run: cargo doc -p incin -p incin-backends -p incin-core --no-deps --no-default-features --features incin/cpu,incin/cuda,incin/wgpu,incin/telemetry,incin/external-candle
+      run: cargo doc -p incin -p incin-backends -p incin-core --no-deps --no-default-features --features incin/cpu,incin/cuda,incin/wgpu,incin/telemetry,incin/external-candle,incin/metal,incin/metal-mps,incin/train,incin/distributed,incin/autotune,incin/backend-authoring
     # UX-013. `cargo test --all-targets` in the `test` job does NOT run
     # doctests; `--all-targets` excludes them, so until this step existed no
     # job compiled a single public example. That is how the workspace reached
@@ -514,6 +553,18 @@ jobs:
     - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
     - name: Compile CUDA backend without requiring a GPU
       run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,cuda
+
+    # Metal pulls in no platform-gated dependency, so a Linux runner
+    # type-checks its full target set without Apple hardware. Candle's graph
+    # is large but CPU-executable, so its test targets compile here too. Both
+    # are compile-only: executing either needs a device, and that stays in
+    # hardware.yml. The doc build (lib-only) cannot catch test-target bitrot,
+    # which is why these rows exist alongside it.
+    - name: Compile Metal backend test targets without requiring hardware
+      run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,metal
+
+    - name: Compile external-Candle backend test targets without requiring hardware
+      run: cargo check -p incin-backends --all-targets --no-default-features --features std,cpu,external-candle
 
   semver:
     name: SemVer Checks

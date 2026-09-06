@@ -17,8 +17,8 @@ use super::declarations::{
     wgpu_descriptor_operations,
 };
 use super::rules::{
-    composed_ranked, descriptor_capability_rules, descriptor_max_rank, descriptor_min_rank, native,
-    native_ranked,
+    accelerator_max_rank, composed_ranked, descriptor_capability_rules, descriptor_max_rank,
+    descriptor_min_rank, descriptor_training, native, native_ranked,
 };
 use incin_core::exec::{CapabilityRule, ImplementationKind, LayoutClass};
 use incin_core::shapes::error::OperationKind;
@@ -49,6 +49,8 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     tensor_dtypes = NON_QUANTIZED,
     tensor_layouts = CPU_LAYOUTS,
     logical_dtypes = BOOL_ONLY,
+    // Host loops are rank-agnostic: the descriptor bound stands everywhere.
+    max_rank = descriptor_max_rank,
     legacy = [
         // Composed, meaning it materializes the strided operand and reshapes
         // the copy. Materializing walks the logical index space one value at a
@@ -191,6 +193,10 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
     logical_dtypes = BOOL_ONLY,
+    // The shape-kernel identities (`broadcast_as`, transpose/narrow, the
+    // comparison broadcasts, the `bool`-mask broadcasts) refuse rank 7+ at
+    // launch; `reshape`/`concat`/the fused families keep descriptor bounds.
+    max_rank = accelerator_max_rank,
     legacy = [
         native(
             OperationKind::Storage,
@@ -281,16 +287,20 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // the coarse row has to match the exact row it stands beside, or
         // `doctor`'s coarse probe and a real `broadcast_as` call would
         // disagree about what runs.
-        native(
+        native_ranked(
             OperationKind::Broadcast,
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
+            0,
+            6,
             false,
         ),
-        native(
+        native_ranked(
             OperationKind::Broadcast,
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
+            0,
+            6,
             true,
         ),
         // The movement operations, measured dtype by dtype on hardware across
@@ -304,7 +314,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::TransposeExact),
-            descriptor_max_rank(OperationKind::TransposeExact),
+            accelerator_max_rank(OperationKind::TransposeExact),
             false,
         ),
         native_ranked(
@@ -312,7 +322,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::TransposeExact),
-            descriptor_max_rank(OperationKind::TransposeExact),
+            accelerator_max_rank(OperationKind::TransposeExact),
             true,
         ),
         native_ranked(
@@ -320,7 +330,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::TransposeView),
-            descriptor_max_rank(OperationKind::TransposeView),
+            accelerator_max_rank(OperationKind::TransposeView),
             false,
         ),
         native_ranked(
@@ -328,7 +338,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::TransposeView),
-            descriptor_max_rank(OperationKind::TransposeView),
+            accelerator_max_rank(OperationKind::TransposeView),
             true,
         ),
         native_ranked(
@@ -336,7 +346,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::Narrow),
-            descriptor_max_rank(OperationKind::Narrow),
+            accelerator_max_rank(OperationKind::Narrow),
             false,
         ),
         native_ranked(
@@ -344,7 +354,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::Narrow),
-            descriptor_max_rank(OperationKind::Narrow),
+            accelerator_max_rank(OperationKind::Narrow),
             true,
         ),
         native_ranked(
@@ -413,7 +423,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             F32_AND_BOOL,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::WhereCond),
-            descriptor_max_rank(OperationKind::WhereCond),
+            accelerator_max_rank(OperationKind::WhereCond),
             true,
         ),
         native_ranked(
@@ -421,7 +431,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             F32_AND_BOOL,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::MaskedFill),
-            descriptor_max_rank(OperationKind::MaskedFill),
+            accelerator_max_rank(OperationKind::MaskedFill),
             true,
         ),
         // `logical_and`/`logical_or`/`logical_not` (`cuda/ops/logical.rs`):
@@ -433,24 +443,24 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             BOOL_ONLY,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::LogicalAnd),
-            descriptor_max_rank(OperationKind::LogicalAnd),
-            true,
+            accelerator_max_rank(OperationKind::LogicalAnd),
+            false,
         ),
         native_ranked(
             OperationKind::LogicalOr,
             BOOL_ONLY,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::LogicalOr),
-            descriptor_max_rank(OperationKind::LogicalOr),
-            true,
+            accelerator_max_rank(OperationKind::LogicalOr),
+            false,
         ),
         native_ranked(
             OperationKind::LogicalNot,
             BOOL_ONLY,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::LogicalNot),
-            descriptor_max_rank(OperationKind::LogicalNot),
-            true,
+            accelerator_max_rank(OperationKind::LogicalNot),
+            false,
         ),
     ]
 );
@@ -485,6 +495,10 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
     logical_dtypes = BOOL_ONLY,
+    // `broadcast_as`/`transpose` route through `prepare_shape_params`' fixed
+    // rank-6 block, so the accelerator bound applies; `reshape` stays
+    // unbounded (a metadata-only buffer rewrap on this backend).
+    max_rank = accelerator_max_rank,
     legacy = [
         native(OperationKind::Storage, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
@@ -530,7 +544,10 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             F32_ONLY,
             CONTIGUOUS,
             0,
-            usize::MAX,
+            // `broadcast_storage` routes through `prepare_shape_params`' fixed
+            // rank-6 block; the typed `BroadcastAs` row above is capped the
+            // same way, so the coarse row has to match it.
+            6,
             true,
             PRECISE,
             ImplementationKind::Native,
@@ -582,7 +599,12 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
 pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     descriptor_capability_rules,
     elementwise = F32_ONLY,
-    broadcast = CUDA_STORAGE_DTYPES,
+    // `binary_op_metal` reinterprets both operands' bytes as `f32`
+    // (`backend.rs`/`executor.rs` hardcode `::<f32>` throughout), so only
+    // `f32` is honest here. `reshape` keeps the wider set deliberately:
+    // `reshape_metal` rewraps bytes without reading a value, so it is
+    // byte-exact for every dtype the validator admits.
+    broadcast = F32_ONLY,
     reshape = CUDA_STORAGE_DTYPES,
     reduction = F32_ONLY,
     // `zeros`/`full`/`ones`/`arange`/`linspace` compute in `f32` and hand
@@ -608,6 +630,8 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     tensor_dtypes = F32_ONLY,
     tensor_layouts = CONTIGUOUS,
     logical_dtypes = BOOL_ONLY,
+    // Host loops are rank-agnostic: the descriptor bound stands everywhere.
+    max_rank = descriptor_max_rank,
     legacy = [
         native(
             OperationKind::Storage,
@@ -623,13 +647,12 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
         // `normalization = []` list above already advertises none, honestly;
         // a coarse row here claimed native LayerNorm/BatchNorm support this
         // backend has never executed.
-        native(
-            OperationKind::Broadcast,
-            CUDA_STORAGE_DTYPES,
-            CONTIGUOUS,
-            false,
-        ),
-        native(OperationKind::Broadcast, FLOAT_DTYPES, CONTIGUOUS, true),
+        // `broadcast_as` computes through `binary_op_metal`, which reinterprets
+        // both operands as `f32`: the wider claim used to bless silent
+        // misreads of `f16`/`bf16`/`f64`/`i64` bytes. `reshape` keeps the
+        // wider set: `reshape_metal` rewraps bytes without reading a value.
+        native(OperationKind::Broadcast, F32_ONLY, CONTIGUOUS, false),
+        native(OperationKind::Broadcast, F32_ONLY, CONTIGUOUS, true),
         native(
             OperationKind::Reshape,
             CUDA_STORAGE_DTYPES,
@@ -637,9 +660,12 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
             false,
         ),
         native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+        // `matmul_metal` is the same `f32`-reinterpretation story as
+        // `broadcast_as` above: `F32_ONLY`, matching the typed `MatMulExact`
+        // row, not the `FLOAT_DTYPES` this row used to claim.
         CapabilityRule::new(
             OperationKind::MatMul,
-            FLOAT_DTYPES,
+            F32_ONLY,
             CONTIGUOUS,
             2,
             usize::MAX,
@@ -647,25 +673,9 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
             PRECISE,
             ImplementationKind::Native,
         ),
-        CapabilityRule::new(
-            OperationKind::Conv2d,
-            F32_ONLY,
-            CONTIGUOUS,
-            3,
-            4,
-            true,
-            PRECISE,
-            ImplementationKind::Native,
-        ),
-        CapabilityRule::new(
-            OperationKind::Pool2d,
-            F32_ONLY,
-            CONTIGUOUS,
-            3,
-            4,
-            true,
-            PRECISE,
-            ImplementationKind::Native,
-        ),
+        // No `Conv2d`/`Pool2d` rows: `MetalBackendImpl::conv2d`/`max_pool2d`/
+        // `avg_pool2d` always return `Err(unsupported(..))`, so any row here
+        // would advertise an operation that can never execute. The
+        // `Execute` impls stay as loud errors behind the registry's refusal.
     ]
 );
