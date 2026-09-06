@@ -500,3 +500,32 @@
   color: var(--links); text-decoration: none; margin: 0 0 6px 68px;
 }
 .api-tylink:hover { text-decoration: underline; }
+
+/* -- code that fits a phone --------------------------------------------- */
+/* A code block is the one thing here that must not be reflowed: a wrapped Rust
+   line is harder to read than a scrolled one. So the block scrolls inside
+   itself and spans the detail grid.
+
+   What keeps it from widening the page is the `min-width: 0` on
+   `.api-detail-in > *` above -- a grid item otherwise takes its content's
+   min-content width, which for a `pre` is its longest line. Verified by
+   removing that rule, which makes the page scroll sideways at 375px. The rule
+   is stated there once rather than repeated here. */
+.api-dcell.wide { grid-column: 1 / -1; }
+.api-ex.bare { border: 0; border-radius: 0; margin: 0; }
+.api-ex.bare pre {
+  border: 1px solid var(--table-border); border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+.api-ex pre { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.api-ex code { white-space: pre; display: block; }
+@media (max-width: 640px) {
+  .api-ex pre { font-size: 11.5px; line-height: 1.5; padding: 9px 10px; }
+}
+/* Says what `B` is once, beside the code, rather than repeating a `use` block
+   in all 59 examples. */
+.api-exnote {
+  border: 0; background: none; padding: 7px 2px 0; font-size: 11.5px; opacity: .6;
+  display: block;
+}
+.api-exnote code { font-family: var(--font-mono); font-size: 11px; }

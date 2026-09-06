@@ -259,6 +259,22 @@
       '</div>';
   }
 
+  /* The example for this operation, shown with it rather than pooled at the
+     end of the section. Every one compiles and runs -- they are generated from
+     the catalog by tools/build-api-examples.py and dropped unless they pass,
+     so what is displayed is code the compiler and the test runner both
+     accepted. Operations without one show nothing rather than a near-miss. */
+  function exampleFor(op) {
+    if (!op.example) return "";
+    return '<div class="api-dcell wide"><h4>example</h4>' +
+      '<figure class="api-ex bare"><pre><code>' + code(op.example) +
+      '</code></pre>' +
+      '<figcaption class="api-exnote">Compiled and run by CI. <code>B</code> is the ' +
+      'backend &mdash; <code>type B = incin_backends::cpu::CpuBackendImpl;</code> ' +
+      'here &mdash; and <code>incin::prelude::*</code> is in scope.</figcaption>' +
+      '</figure></div>';
+  }
+
   function detailFor(op) {
     var c = op.catalog;
     var head = "";
@@ -278,7 +294,7 @@
     var example = '<div class="api-dcell api-example"><h4>example</h4>' +
       '<div class="api-usage" data-keys="' + esc(usageKeysForOp(op).join(" ")) + '">' +
       '<p class="api-none">Loading example&hellip;</p></div></div>';
-    return '<div class="api-detail-in">' + docsLink(op) + head + B.map(function (b) {
+    return '<div class="api-detail-in">' + exampleFor(op) + docsLink(op) + head + B.map(function (b) {
       var e = op.backends[b];
       if (!e.dtypes.length) {
         return '<div class="api-dcell"><h4>' + esc(b) + '</h4>' +

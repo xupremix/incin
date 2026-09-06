@@ -87,14 +87,20 @@ session.
 The tape is drained into the walk that consumes it: a second `backward()`
 from the same loss finds an empty graph and fails with
 `BackwardError::GraphConsumed` rather than returning a seed-only gradient.
-There is no `retain_graph` or `create_graph`, and no second-order gradients —
+There is no `retain_graph` or `create_graph`, and no second-order gradients:
 differentiating through a gradient (gradient penalties, meta-learning,
 Hessian-vector products) is not expressible yet.
 
 In practice this means one forward per backward. Two optimizers (or a GAN's
 discriminator and generator steps) sharing one loss must each run their own
 forward pass first; reusing a spent `Gradients` matches nothing, and a step
-that matches nothing is refused rather than silently committing. To train
-through your own operations under these rules, see [Custom and fused
-operations](./custom_operations.md) for the contract and [Deep
-autograd](./deep_autograd.md) for the tape model underneath it.
+that matches nothing is refused rather than silently committing.
+
+## Gradients through a custom kernel
+
+Everything above is the user-facing half: the tape entries are recorded for
+you by the operations you call. If you are writing a fused kernel of your own,
+the recording is yours to do, and
+[Custom and fused operations](./custom_operations.md) covers the recipe type,
+the reverse walk, and how to check the result against finite differences.
+[Deep autograd](./deep_autograd.md) has the tape model underneath both.

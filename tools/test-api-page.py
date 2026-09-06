@@ -225,6 +225,7 @@ async function run() {
   /* Every section: one visible at a time, the right content in each, and no
      sideways scroll in any of them. The overflow has been reported twice by a
      reader, so it is checked per section rather than only on the default. */
+  const rows_list = doc().getElementById("apiRows")._list;
   const tabs = [...doc().querySelectorAll(".api-tab")];
   check(tabs.length === 8, "expected eight section tabs, found " + tabs.length);
 
@@ -432,6 +433,42 @@ async function run() {
     "the shape reference rendered " + shapeItems + " entries, which cannot be right");
 
   doc().querySelector('.api-tab[data-sec="operations"]').click();
+
+  /* An operation's example is shown with the operation, and an open row must
+     not widen the page. A `pre` reports its longest line as its min-content
+     width, so a grid ancestor without `min-width: 0` grows to fit it -- which
+     is how a code block silently pushes a phone layout sideways. */
+  doc().querySelector('.api-tab[data-sec="operations"]').click();
+  const withExample = [...doc().querySelectorAll(".api-row")]
+    .find((row) => {
+      const i = row.dataset.i;
+      return rows_list && rows_list[i] && rows_list[i].example;
+    });
+  check(withExample, "no operation row carries a worked example");
+  withExample.click();
+  await until(() => {
+    const panel = doc().querySelector('.api-detail[data-d="' + withExample.dataset.i + '"]');
+    return panel && !panel.hidden && panel.querySelector(".api-ex pre code");
+  }, "the operation's example to render");
+
+  const codeBlock = doc().querySelector('.api-detail[data-d="' + withExample.dataset.i +
+    '"] .api-ex pre');
+  check(codeBlock.textContent.trim().length > 0, "the example renders no code");
+  /* The example is read on its own, so it must not lean on a helper defined
+     somewhere the reader cannot see. `t23()` was exactly that mistake: valid in
+     the generated test file, meaningless on the page. */
+  check(!/\bt23\(|\bu23\(/.test(codeBlock.textContent),
+    "an example calls a helper that does not exist for the reader");
+  check(codeBlock.textContent.indexOf("Tensor::<") >= 0,
+    "an example does not construct the tensor it operates on");
+  check(codeBlock.querySelector(".hl-kw"), "the example is not syntax highlighted");
+  check(codeBlock.scrollWidth > 0, "the example block has no content box");
+
+  const openRoot = doc().documentElement;
+  check(openRoot.scrollWidth <= openRoot.clientWidth + 1,
+    "an open example widens the page: scrollWidth " + openRoot.scrollWidth +
+    " exceeds " + openRoot.clientWidth);
+  withExample.click();
 
   /* The other repeatedly reported defect: sideways scroll on a phone. */
   const root = doc().documentElement;

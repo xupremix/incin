@@ -8,6 +8,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Every operation's example is written for that operation, compiled, and run.**
+  The reference used to show examples harvested from the book, which made
+  coverage an accident of what the prose happened to demonstrate -- and at some
+  point the harvest was dropped from the payload entirely, so operations showed
+  none at all. `tools/build-api-examples.py` now writes one from each
+  operation's own catalog entry (its entry point, arity and attributes), emits
+  the whole set as `crates/incin/tests/api_examples.rs`, and keeps only those
+  that both compile and pass. 59 of 174 operations have one; the rest show
+  nothing rather than a near-miss, because a plausible example that does not
+  run is worse than none.
+
+  Rejections are found from rustc's JSON spans rather than by scraping stderr
+  for a function name. The first version did the latter, reported success, and
+  left a file with 79 errors -- most diagnostics never name the enclosing
+  function, so the regex matched nothing and nothing looked wrong.
+
+  `--check` verifies the committed set still builds against the current API,
+  and is wired into CI. It checks what is shipped rather than re-drafting, so
+  the examples that never compiled are not re-proposed on every run.
+
+### Fixed
+
+- **Examples sit with the operation they demonstrate**, in its expanded row,
+  rather than pooled at the end of the section, and a code block scrolls inside
+  itself instead of widening the page. The page test now opens a row carrying
+  an example and asserts the layout does not scroll sideways at 390px with it
+  open -- the case that was missing, since the previous overflow checks only
+  ever looked at closed rows.
+
 ### Changed
 
 - **BREAKING: the layout parameter moved from the marker onto the trait.**

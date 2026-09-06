@@ -126,6 +126,12 @@ jobs:
     # Building an example only proves it compiles. This one asserts its own
     # arithmetic and that its per-operand contract refuses the operand lists it
     # is supposed to refuse, so it is worth running.
+    # The reference's examples are generated, so the gate is that they still
+    # build and run against the current API rather than that someone reran the
+    # generator. `--check` fails instead of silently dropping the stale ones.
+    - name: Check the generated reference examples
+      run: python3 tools/build-api-examples.py --check
+
     - name: Run the custom-operation example
       run: cargo run -p incin-backends --no-default-features --features cpu --example calibration_update
 
