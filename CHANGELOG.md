@@ -66,7 +66,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `backend_authoring`, and `crates/incin-core/tests/custom_training.rs`
   proves the contract from a user crate's perspective: forward, recorded
   backward through the standard pass, finite-difference cross-check, `NoGrad`
-  silence, and an `f16` typed refusal for an `f32`-only kernel.
+  silence, and an `f16` typed refusal for an `f32`-only kernel. WGPU, CUDA,
+  and Metal expose the same `tape_record` surface (`wgpu` executed on the
+  software adapter with its own training fixture; CUDA ships an
+  `#[ignore]`d hardware twin; Metal is compile-checked pending real
+  kernels).
 - **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**
   `Dense<S, B>` has always existed for the row-major case, and its own
   documentation names the reason: the layout is congruent with the shape it

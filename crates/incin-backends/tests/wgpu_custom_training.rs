@@ -123,7 +123,7 @@ impl Execute<WgpuSquare> for TestBackend {
                 let dims = x_saved.metadata().shape.dims().to_vec();
                 let grads: Vec<f32> = download(&x_saved)
                     .into_iter()
-                    .zip(download(grad_out).into_iter())
+                    .zip(download(grad_out))
                     .map(|(x, g)| 2.0 * x * g)
                     .collect();
                 Ok(vec![upload(&grads, &dims)])
