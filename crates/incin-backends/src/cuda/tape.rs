@@ -68,6 +68,31 @@ pub(crate) fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
 }
 
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The downstream half of the custom-training contract, mirroring
+/// `cpu::tape_record`: a foreign `Execute` implementation runs its forward
+/// kernel, then calls this with a `TapeNode` whose recipe maps one output
+/// gradient to one gradient per input. The node joins the same tape the
+/// built-in kernels record on, under the same `GradMode` gate, so mixed
+/// graphs walk as one graph. Recipes should stay in-kernel (broadcast,
+/// scale, elementwise launches): every host value access is a readback.
+/// Hardware-executed coverage arrives with the GPU execution runner (#82).
+pub fn record(entry: TapeNode<CudaStorage>) {
+    push(entry);
+}
+
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of [`record`](self::record): the entry closure runs only
+/// when the ambient `GradMode` records.
+pub fn record_with(entry: impl FnOnce() -> TapeNode<CudaStorage>) {
+    if !incin_core::exec::GradMode::current().records() {
+        return;
+    }
+    push(entry());
+}
+
 /// Number of entries currently on the tape.
 #[must_use]
 pub fn depth() -> usize {

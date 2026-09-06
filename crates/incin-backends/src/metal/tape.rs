@@ -26,6 +26,16 @@ pub fn push(entry: TapeEntry) {
     TAPE.with(|t| t.borrow_mut().push(entry));
 }
 
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The Metal instantiation of the custom-training contract documented at
+/// `crate::cpu::tape_record`. Metal executors are stubs pending MTL-002/003,
+/// so this is currently a compile-checked contract surface rather than an
+/// executed training path.
+pub fn record(entry: TapeNode<MetalStorage>) {
+    push(entry);
+}
+
 /// The Metal backend's gradient container.
 pub struct MetalGrads {
     pub(crate) grads: GradientMap<MetalStorage>,

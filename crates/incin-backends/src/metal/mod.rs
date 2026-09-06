@@ -18,6 +18,12 @@ pub mod tuning;
 pub use backend::{MetalBackendImpl, MetalVar};
 pub use storage::{MetalStorage, MetalStorageMode, is_unified_memory};
 pub use tape::MetalGrads;
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The Metal instantiation of the custom-training contract documented at
+/// `crate::cpu::tape_record`. Compile-checked; executed coverage waits on
+/// real Metal kernels (MTL-002/003).
+pub use tape::record as tape_record;
 pub use tuning::{
     MetalLaunchCandidate, default_metal_pointwise_candidate, default_metal_reduction_candidate,
     metal_environment_fingerprint, metal_matmul_candidates, metal_pointwise_candidates,
