@@ -16,6 +16,9 @@ use incin::prelude::*;
 use incin::typenum::{U0, U1, U2};
 use incin_backends::cpu::{CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::StorageBackend;
+/// `Local` left the facade prelude behind the `distributed` feature gate;
+/// import it from its ungated home so cpu-only feature sets keep compiling.
+use incin_core::dist::Local;
 use incin_core::exec::catalog::{Conv2dAttributes, NoAttributes, op};
 use incin_core::exec::conformance::{
     ConformanceClass, ConformanceVector, ExpectedDisposition, SEMANTIC_CONFORMANCE_VECTORS,

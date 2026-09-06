@@ -4,6 +4,9 @@
 // operations retain known dimensions instead of erasing them to `Dyn`.
 #![allow(clippy::type_complexity)]
 use incin::prelude::*;
+/// `Local` left the facade prelude behind the `distributed` feature gate;
+/// import it from its ungated home so cpu-only feature sets keep compiling.
+use incin_core::dist::Local;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;

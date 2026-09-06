@@ -6,8 +6,8 @@ error[E0308]: mismatched types
   |               |
   |               arguments to this method are incorrect
   |
-  = note: expected reference `&incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl, bool, _, incin::prelude::Local, _>`
-             found reference `&incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl, u8, NoGrad, incin::prelude::Local, Dyn>`
+  = note: expected reference `&incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl, bool, _, incin_core::dist::placement::Local, _>`
+             found reference `&incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl, u8, NoGrad, incin_core::dist::placement::Local, Dyn>`
 note: method defined here
  --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation/indexing.rs
   |

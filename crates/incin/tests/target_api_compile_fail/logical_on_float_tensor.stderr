@@ -4,4 +4,4 @@ error[E0599]: no method named `logical_and` found for struct `incin_core::tensor
 6 |     let _ = a.logical_and(&b);
   |               ^^^^^^^^^^^ method not found in `incin_core::tensor::base::types::Tensor<DimCons<UInt<UInt<UTerm, B1>, B0>, Nil>, incin_backends::cpu::CpuBackendImpl>`
   |
-  = note: the method was found for `incin_core::tensor::base::types::Tensor<S, B, bool, G, incin::prelude::Local, L>`
+  = note: the method was found for `incin_core::tensor::base::types::Tensor<S, B, bool, G, incin_core::dist::placement::Local, L>`
