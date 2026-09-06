@@ -199,3 +199,51 @@ fn matmul_2d_contract_on_seeded_shapes() {
         }
     }
 }
+
+#[test]
+fn transpose_swaps_axes_on_seeded_shapes() {
+    let mut rng = Lcg(0x51ED5409769A9B35);
+    for case in 0..200 {
+        // Rank 2..=3, dims 1..=4.
+        let rank = 2 + rng.below(2);
+        let dims: Vec<usize> = (0..rank).map(|_| 1 + rng.below(4)).collect();
+        let (a, b) = (rng.below(rank), rng.below(rank));
+        if a == b {
+            continue;
+        }
+        let mut expected = dims.clone();
+        expected.swap(a, b);
+        let t = dyn_ones(&dims);
+        let got = t.transpose(a as isize, b as isize).unwrap_or_else(|error| {
+            panic!("case {case}: transpose {dims:?} over {a},{b} refused: {error:?}")
+        });
+        assert_eq!(got.dims().dims(), expected.as_slice());
+        for v in got.to_vec1::<f32>().unwrap() {
+            assert_eq!(v, 1.0);
+        }
+    }
+}
+
+#[test]
+fn concat_sums_the_axis_on_seeded_shapes() {
+    let mut rng = Lcg(0x1F3A5C6D7E8F9A0B);
+    for case in 0..200 {
+        // Rank 1..=3; both operands share every axis except the concat one.
+        let rank = 1 + rng.below(3);
+        let axis = rng.below(rank);
+        let mut a: Vec<usize> = (0..rank).map(|_| 1 + rng.below(4)).collect();
+        let mut b = a.clone();
+        b[axis] = 1 + rng.below(4);
+        let mut expected = a.clone();
+        expected[axis] += b[axis];
+        let got = dyn_ones(&a)
+            .concat(&dyn_ones(&b), axis as isize)
+            .unwrap_or_else(|error| {
+                panic!("case {case}: concat {a:?} with {b:?} over {axis} refused: {error:?}")
+            });
+        assert_eq!(got.dims().dims(), expected.as_slice());
+        for v in got.to_vec1::<f32>().unwrap() {
+            assert_eq!(v, 1.0);
+        }
+    }
+}
