@@ -105,6 +105,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Activation modules train in any gradient state.** `GELU`, `Swish`,
+  `Mish`, `ELU`, `Softmax`, `Sigmoid`, and `Tanh` implemented `Module`
+  for `NoGrad` inputs only, while `ReLU` was already generic over `G`
+  and every op underneath records its backward. All seven now mirror
+  `ReLU`, so they compose inside `Sequential` and gradient-tracked
+  forwards; the looped-transformer fixture runs its MLP through
+  `SeqTy!(Linear, GELU, Linear)` end to end.
 - **Adam/AdamW `state_dict` persists the step counter.** The dictionary gains
   a scalar `step` entry next to `m.*`/`v.*`, and `load_state_dict` restores
   it, so a resumed run bias-corrects with the same `t` the moments were

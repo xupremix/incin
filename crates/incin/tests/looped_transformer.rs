@@ -34,7 +34,7 @@ struct LoopedBlock {
     key: LinearLayer,
     value: LinearLayer,
     projection: LinearLayer,
-    mlp: SeqTy!(LinearLayer, ReLU, LinearLayer),
+    mlp: SeqTy!(LinearLayer, GELU, LinearLayer),
 }
 
 impl LoopedBlock {
@@ -46,7 +46,7 @@ impl LoopedBlock {
             projection: LinearLayer::build((8, 8))?,
             mlp: seq!(
                 LinearLayer::build((8, 16))?,
-                ReLU,
+                GELU,
                 LinearLayer::build((16, 8))?
             ),
         })
@@ -108,9 +108,9 @@ fn looped_block_trains_through_shared_weights() -> Result<()> {
     macro_rules! assert_parameter_gradient {
         ($name:literal, $parameter:expr) => {{
             let parameter = $parameter.as_tensor()?;
-            let gradient = grads.require(&parameter).map_err(|error| {
-                Error::Msg(format!("missing gradient for {}: {error}", $name))
-            })?;
+            let gradient = grads
+                .require(&parameter)
+                .map_err(|error| Error::Msg(format!("missing gradient for {}: {error}", $name)))?;
             let bytes = Cpu::to_bytes::<f32>(gradient.inner())?;
             let values = bytes
                 .chunks_exact(core::mem::size_of::<f32>())

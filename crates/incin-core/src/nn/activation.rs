@@ -78,13 +78,14 @@ impl TrainMode for GELU {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Gelu>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for GELU
+> Module<Tensor<S, B, f32, G, Local, L>> for GELU
 where
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -92,7 +93,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.gelu()
     }
@@ -115,13 +116,14 @@ impl TrainMode for Swish {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Swish>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Swish
+> Module<Tensor<S, B, f32, G, Local, L>> for Swish
 where
     <B as Execute<op::Swish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -129,7 +131,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.swish()
     }
@@ -152,13 +154,14 @@ impl TrainMode for Mish {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Mish>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Mish
+> Module<Tensor<S, B, f32, G, Local, L>> for Mish
 where
     <B as Execute<op::Mish>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -166,7 +169,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.mish()
     }
@@ -191,13 +194,14 @@ impl TrainMode for ELU {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Elu>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for ELU
+> Module<Tensor<S, B, f32, G, Local, L>> for ELU
 where
     <B as Execute<op::Elu>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -205,7 +209,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.elu()
     }
@@ -243,16 +247,16 @@ impl TrainMode for Softmax {}
 
 impl<
     S: Shape + DynShape + crate::shapes::RuntimeRankProjection,
-    B: crate::tensor::backend::VariableBackend
-        + crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>,
+    B: crate::tensor::backend::VariableBackend + Execute<crate::exec::catalog::op::Softmax>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Softmax
+> Module<Tensor<S, B, f32, G, Local, L>> for Softmax
 where
     <B as crate::tensor::backend::Execute<crate::exec::catalog::op::Softmax>>::Output:
         Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -260,7 +264,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.softmax(self.dim as isize)
     }
@@ -282,13 +286,14 @@ impl TrainMode for Sigmoid {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Sigmoid>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Sigmoid
+> Module<Tensor<S, B, f32, G, Local, L>> for Sigmoid
 where
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -296,7 +301,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.sigmoid()
     }
@@ -318,13 +323,14 @@ impl TrainMode for Tanh {}
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend + Execute<op::Tanh>,
+    G: RequiresGrad,
     L: Layout<S>,
-> Module<Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>> for Tanh
+> Module<Tensor<S, B, f32, G, Local, L>> for Tanh
 where
     <B as Execute<op::Tanh>>::Output: Into<B::Storage<f32>>,
 {
     /// The output tensor type produced by this module's forward pass.
-    type Output = Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, RowMajor>;
+    type Output = Tensor<S, B, f32, G, Local, RowMajor>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -332,7 +338,7 @@ where
     /// Runs the forward pass of this module on the given input.
     fn forward(
         &self,
-        x: Tensor<S, B, f32, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<S, B, f32, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         x.tanh()
     }
