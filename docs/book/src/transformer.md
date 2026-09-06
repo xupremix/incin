@@ -26,6 +26,14 @@ example does not claim causal masking, normalization, dropout, portable GPU
 training, or a complete decoder implementation. Those are separate composition
 and backend contracts rather than features hidden in this example.
 
+For the weight-shared variant — one block iterated several times, the
+looped-transformer shape — see
+[`crates/incin/tests/looped_transformer.rs`](../../../crates/incin/tests/looped_transformer.rs):
+same geometry, three iterations over shared parameters, one gradient per
+weight accumulated across iterations, and one copy of the weights in the
+state snapshot. No custom operation is involved; sharing falls out of the
+tape's accumulation rule.
+
 One masking limitation to know about before designing around it: shape
 equality is reflexive only, so a `[T, T]` causal mask does not meet `[B, H,
 T, T]` scores at the type level even though the backend would broadcast
