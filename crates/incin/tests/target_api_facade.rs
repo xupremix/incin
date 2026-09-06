@@ -48,11 +48,14 @@ fn target_api_compile_fail_diagnostics() {
     //
     // `numeric_where_mask` prints the impl's self type in a "the method was
     // found for" note, and that type now includes `Local`, because naming the
-    // layout parameter forces the placement before it to be named too. rustc
-    // renders that path as `incin::prelude::Local` under the feature set above
-    // and as `incin_core::dist::placement::Local` under workspace defaults, and
-    // only one spelling can be stored. Running this under a different feature
-    // set will report a mismatch that is purely the path spelling.
+    // layout parameter forces the placement before it to be named too. The
+    // facade prelude gates `Local` behind the `distributed` feature, which
+    // that invocation does not enable, so rustc renders the canonical
+    // `incin_core::dist::placement::Local` path here. Feature sets that do
+    // enable `distributed` (including plain workspace builds, via feature
+    // unification) render the shorter `incin::prelude::Local` instead, and
+    // only that spelling can be stored: running this under a different
+    // feature set reports a mismatch that is purely the path spelling.
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/target_api_compile_fail/*.rs");
     // A second directory rather than a `cfg` inside a fixture: trybuild
