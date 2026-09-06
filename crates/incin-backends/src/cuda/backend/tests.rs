@@ -1123,3 +1123,127 @@ fn dropout_trains_through_the_replayed_mask_on_cuda() {
         );
     }
 }
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn gather_backward_accumulates_duplicate_indices_like_cpu() {
+    // Duplicate indices: every position contributes, so grad_t sums.
+    // The overwrite kernel kept one contribution (`[1,1,0]`); the CPU
+    // reference (`gather_storage` backward, `+=`) is `[2,1,0]`.
+    let t = cuda_f32(&[3], vec![10.0, 20.0, 30.0]);
+    let index_bytes: Vec<u8> = [0i64, 0i64, 1i64]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let index =
+        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::I64.into(), 0, &index_bytes).unwrap();
+    let t_id = t.id;
+    let out = B::gather::<f32, i64>(&t, 0, &index).unwrap();
+    assert_eq!(download_f32_host(&out).unwrap(), vec![10.0, 10.0, 20.0]);
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let got = download_f32_host(grads.get(t_id).unwrap()).unwrap();
+    // CPU reference on the same values.
+    let host_t = host_f32(&[3], vec![10.0, 20.0, 30.0]);
+    let host_idx = HostStorage::from_contiguous(HostBuffer::I64(vec![0, 0, 1]), &[3]);
+    let host_out = crate::cpu::ops::shape_ops::gather_storage(&host_t, 0, &host_idx).unwrap();
+    let host_grads = crate::cpu::tape::backward(&host_out).unwrap();
+    let want = host_values(host_grads.get(host_t.id).unwrap());
+    assert_close(
+        &got.iter().map(|v| *v as f64).collect::<Vec<_>>(),
+        &want,
+        1e-5,
+        "gather duplicate dx",
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn scatter_src_grad_keeps_only_last_write_like_cpu() {
+    // Duplicate writes: forward last-wins, so only the surviving write earns
+    // a cotangent. The plain gather returned every writer's copy (`[1,1]`);
+    // the CPU reference (`scatter_storage` backward) is `[0,1]`.
+    // Forward itself still races on GPU (plain stores, no ordering), so this
+    // pins the backward only -- a deterministic forward needs a bigger kernel.
+    let t = cuda_f32(&[1, 2], vec![1.0, 2.0]);
+    let index_bytes: Vec<u8> = [0i64, 0i64].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let index =
+        crate::cuda::backend::cuda_from_bytes(&[2, 1], DTypeId::I64.into(), 0, &index_bytes)
+            .unwrap();
+    let src = cuda_f32(&[2, 1], vec![7.0, 8.0]);
+    let (t_id, src_id) = (t.id, src.id);
+    let out = B::scatter::<f32, i64>(&t, 0, &index, &src).unwrap();
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let got_t = download_f32_host(grads.get(t_id).unwrap()).unwrap();
+    let got_src = download_f32_host(grads.get(src_id).unwrap()).unwrap();
+    let host_t = host_f32(&[1, 2], vec![1.0, 2.0]);
+    let host_idx = HostStorage::from_contiguous(HostBuffer::I64(vec![0, 0]), &[2, 1]);
+    let host_src = host_f32(&[2, 1], vec![7.0, 8.0]);
+    let host_out =
+        crate::cpu::ops::shape_ops::scatter_storage(&host_t, 0, &host_idx, &host_src).unwrap();
+    let host_grads = crate::cpu::tape::backward(&host_out).unwrap();
+    assert_close(
+        &got_t.iter().map(|v| *v as f64).collect::<Vec<_>>(),
+        &host_values(host_grads.get(host_t.id).unwrap()),
+        1e-5,
+        "scatter duplicate grad_t",
+    );
+    assert_close(
+        &got_src.iter().map(|v| *v as f64).collect::<Vec<_>>(),
+        &host_values(host_grads.get(host_src.id).unwrap()),
+        1e-5,
+        "scatter duplicate grad_src",
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn nograd_chain_records_nothing_on_cuda() {
+    // GRD-002 on the CUDA tape: a NoGrad forward leaves the depth unchanged.
+    use incin_core::exec::GradMode;
+    let depth_before = crate::cuda::tape::depth();
+    GradMode::Disabled.scope(|| {
+        let a = cuda_f32(&[2], vec![1.0, 2.0]);
+        let b = cuda_f32(&[2], vec![3.0, 4.0]);
+        let _ = B::add::<f32>(&a, &b).unwrap();
+    });
+    assert_eq!(crate::cuda::tape::depth(), depth_before);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn f64_exp_trains_on_cuda() {
+    // `ones_like` hardcoded f32 bytes under the loss dtype, so any f64
+    // backward panicked in `CudaStorage::new` before reaching the kernel.
+    fn download_f64(t: &CudaStorage) -> Vec<f64> {
+        let bytes = t
+            .buffer
+            .device
+            .default_stream()
+            .clone_dtoh(&*t.buffer.data)
+            .unwrap();
+        bytemuck::cast_slice::<u8, f64>(&bytes).to_vec()
+    }
+    let vals = vec![0.5f64, 1.0, 1.5];
+    let bytes: Vec<u8> = bytemuck::cast_slice(&vals).to_vec();
+    let t = crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::F64.into(), 0, &bytes).unwrap();
+    let t_id = t.id;
+    let out = B::exp::<f64>(&t).unwrap();
+    assert_eq!(out.shape, vec![3]);
+    let fwd = download_f64(&out);
+    for (got, x) in fwd.iter().zip(vals.iter()) {
+        assert!(
+            (got - x.exp()).abs() < 1e-9,
+            "f64 exp fwd: got {got}, want {}",
+            x.exp()
+        );
+    }
+    // Ones seed: dx = exp(x).
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let g = download_f64(grads.get(t_id).unwrap());
+    for (got, x) in g.iter().zip(vals.iter()) {
+        assert!(
+            (got - x.exp()).abs() < 1e-9,
+            "f64 exp bwd: got {got}, want {}",
+            x.exp()
+        );
+    }
+}

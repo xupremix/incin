@@ -151,7 +151,7 @@ pub mod metal;
 /// advertises, expanded into tuples and executed.
 ///
 /// Gated on `cpu` because the CPU backend is the oracle. It is the only
-/// backend with an executor for all 158 backend-executable catalog operations,
+/// backend with an executor for all 164 backend-executable catalog operations,
 /// and any other choice of reference would be a second implementation that can
 /// itself be wrong.
 #[cfg(feature = "cpu")]

@@ -550,7 +550,11 @@ impl<D: Device> CudaBackendImpl<D> {
                     }),
                     t_capture.shape.to_vec(),
                 );
-                let grad_input = crate::cuda::ops::shape::launch_scatter(
+                // Scatter-add, not scatter-overwrite: every index position
+                // contributes its cotangent, accumulating on duplicates to
+                // match CPU's `gather_storage` backward (`+=`). The plain
+                // scatter kept only one contribution there.
+                let grad_input = crate::cuda::ops::shape::launch_scatter_add(
                     &zero_base,
                     dim,
                     &index_capture,
@@ -592,14 +596,20 @@ impl<D: Device> CudaBackendImpl<D> {
                 )?;
                 let grad_t =
                     crate::cuda::ops::shape::launch_scatter(grad_out, dim, &index_capture, &zeros)?;
-                // Source path is a gather of the output cotangent at the index
-                // positions. Exact when indices are unique; with duplicate
-                // indices the forward kernel races (last-write-wins is
-                // nondeterministic on GPU) while CPU credits only the last
-                // row-major write, so the two backends diverge there by
-                // construction.
-                let grad_src =
-                    crate::cuda::ops::shape::launch_gather(grad_out, dim, &index_capture)?;
+                // Source path gathers the output cotangent, then keeps only
+                // the last write per destination (row-major, like CPU).
+                // Unique indices are exact; duplicates previously returned
+                // every writer's copy (`[1,1]` for a `[0,1]` reference).
+                // Note the forward itself still races with duplicates -- the
+                // kernel stores with plain writes, so which value wins is
+                // nondeterministic on GPU while CPU keeps the last row-major
+                // write. A deterministic forward needs a bigger kernel (see
+                // follow-ups); this makes the backward match CPU semantics.
+                let grad_src = crate::cuda::ops::shape::launch_scatter_src_grad(
+                    grad_out,
+                    dim,
+                    &index_capture,
+                )?;
                 Ok(vec![grad_t, grad_src])
             }),
         });

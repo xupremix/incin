@@ -540,6 +540,48 @@ extern "C" __global__ void incin_cuda_scatter(
     }
 }
 
+extern "C" __global__ void incin_cuda_scatter_add(
+    const float* __restrict__ input,
+    const int64_t* __restrict__ index,
+    const float* __restrict__ src,
+    float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    int numel_src,
+    int numel_out,
+    int rank,
+    const int* __restrict__ idx_shape,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ idx_strides,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides,
+    int dim)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < numel_out) {
+        output[idx] = input[idx];
+    }
+    __syncthreads();
+
+    if (idx < numel_src) {
+        int rem = idx;
+        int out_flat = 0;
+        for (int d = 0; d < rank; d++) {
+            int coord = rem / idx_strides[d];
+            rem = rem % idx_strides[d];
+            if (d == dim) {
+                int64_t target_i = index[idx];
+                if (target_i < 0 || target_i >= out_shape[dim]) {
+                    atomicExch(error_flag, 1);
+                    return;
+                }
+                coord = (int)target_i;
+            }
+            out_flat += coord * out_strides[d];
+        }
+        atomicAdd(&output[out_flat], src[idx]);
+    }
+}
+
 extern "C" __global__ void incin_cuda_triangular(
     const float* __restrict__ input,
     float* __restrict__ output,
@@ -1119,6 +1161,253 @@ pub(crate) fn launch_scatter(
     }
 
     Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+/// Scatter-add: like [`launch_scatter`], except colliding writes sum via
+/// `atomicAdd` rather than the last one winning.
+///
+/// This is the backward of [`launch_gather`]: every output position routes
+/// its cotangent back to the source position its index named, accumulating
+/// where an index selects the same row twice (matching CPU's
+/// `gather_storage` backward, which does `grad_t_data[flat_dst] += ...`).
+/// The overwrite kernel kept only one contribution there, so duplicate
+/// indices diverged as `[1,1,0]` where the CPU reference is `[2,1,0]`.
+/// f32-only, like the scatter/gather pair it mirrors.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter_add(
+    input: &CudaStorage,
+    dim: usize,
+    index: &CudaStorage,
+    src: &CudaStorage,
+) -> Result<CudaStorage> {
+    if dim >= input.shape.len() {
+        return Err(Error::Msg(format!(
+            "CUDA scatter_add dimension {dim} is out of bounds for input shape {:?}",
+            input.shape
+        )));
+    }
+    let rank = input.shape.len();
+    if index.shape.len() != rank || src.shape.len() != rank {
+        return Err(Error::Msg(format!(
+            "CUDA scatter_add index and src rank must match input rank {rank}"
+        )));
+    }
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_scatter_add")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_shape = input.shape.to_vec();
+    let out_numel = out_shape.iter().product::<usize>();
+    let src_numel = src.shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+            Error::Msg(format!("CUDA scatter_add output allocation failed: {e:?}"))
+        })?),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    let out_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&out_shape).strides(),
+        "stride",
+    )?;
+    let in_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&input.shape).strides(),
+        "stride",
+    )?;
+    let idx_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&index.shape).strides(),
+        "stride",
+    )?;
+    let out_shape_i32 = checked_i32_vec(&out_shape, "shape")?;
+    let idx_shape_i32 = checked_i32_vec(&index.shape, "shape")?;
+
+    let out_shape_dev = stream
+        .clone_htod(&out_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let idx_shape_dev = stream
+        .clone_htod(&idx_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let out_strides_dev = stream
+        .clone_htod(&out_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_strides_dev = stream
+        .clone_htod(&in_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let idx_strides_dev = stream
+        .clone_htod(&idx_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+
+    let block_size = 256u32;
+    let grid_size = checked_u32(out_numel.max(src_numel), "element count")?.div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let src_numel_i32 = checked_i32(src_numel, "element count")?;
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let dim_i32 = checked_i32(dim, "axis")?;
+
+    // SAFETY: Launches scatter_add kernel with bounds-checked parameters and device error flag.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&*index.buffer.data)
+            .arg(&*src.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&error_flag_dev)
+            .arg(&src_numel_i32)
+            .arg(&out_numel_i32)
+            .arg(&rank_i32)
+            .arg(&idx_shape_dev)
+            .arg(&out_shape_dev)
+            .arg(&idx_strides_dev)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .arg(&dim_i32)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA scatter_add launch failed: {e:?}")))?;
+    }
+
+    let mut host_err = [0u32; 1];
+    stream
+        .memcpy_dtoh(&error_flag_dev, &mut host_err)
+        .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+    if host_err[0] != 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Scatter,
+            reason: "index out of bounds",
+        }));
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+/// Scatter source-gradient with last-write-wins masking.
+///
+/// `launch_gather(grad_out, dim, index)` routes the output cotangent to
+/// every index position, but the scatter forward's last-write-wins rule
+/// means only the LAST write to each destination contributed: earlier
+/// writes to the same position earned no cotangent. With unique indices
+/// the gather is exact; with duplicates it over-counts (e.g. `[1,1]`
+/// where the CPU reference is `[0,1]`).
+///
+/// This gathers on-device, then zeroes non-surviving positions on the host:
+/// the index is read back, the last writer per destination is identified in
+/// row-major order (matching CPU's `scatter_storage` bookkeeping), and the
+/// gathered gradient is masked before re-upload. The host round-trips are
+/// the honest cost of deterministic duplicate handling without a bespoke
+/// on-device last-writer kernel; the forward race itself (which value wins
+/// with duplicates) remains nondeterministic -- see the shape_ops caller.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter_src_grad(
+    grad_out: &CudaStorage,
+    dim: usize,
+    index: &CudaStorage,
+) -> Result<CudaStorage> {
+    let gathered = launch_gather(grad_out, dim, index)?;
+    let src_numel = index.shape.iter().product::<usize>();
+    if src_numel == 0 {
+        return Ok(gathered);
+    }
+    // Read back the index as i64.
+    let index_bytes = index
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*index.buffer.data)
+        .map_err(|e| {
+            Error::Msg(format!(
+                "CUDA scatter src-grad index readback failed: {e:?}"
+            ))
+        })?;
+    let index_vals: Vec<i64> = bytemuck::cast_slice::<u8, i64>(&index_bytes).to_vec();
+
+    let idx_strides = crate::layout::contiguous_strides(&index.shape)
+        .strides()
+        .to_vec();
+    let out_strides = crate::layout::contiguous_strides(&grad_out.shape)
+        .strides()
+        .to_vec();
+    let out_numel: usize = grad_out.shape.iter().product::<usize>().max(1);
+    let dim_extent = grad_out.shape.get(dim).copied().unwrap_or(0);
+
+    // Last writer per destination flat index, in row-major src order.
+    let mut last_writer: alloc::collections::BTreeMap<usize, usize> =
+        alloc::collections::BTreeMap::new();
+    for src_flat in 0..src_numel {
+        // Decode row-major multi-index of src_flat within index.shape.
+        let mut rem = src_flat;
+        let mut dest_flat = 0usize;
+        let mut oob = false;
+        for (d, (&stride, &extent)) in idx_strides.iter().zip(index.shape.iter()).enumerate() {
+            let coord = rem / stride;
+            rem %= stride;
+            let _ = extent;
+            if d == dim {
+                let target = index_vals.get(src_flat).copied().unwrap_or(-1);
+                if target < 0 || (target as usize) >= dim_extent {
+                    oob = true;
+                    break;
+                }
+                dest_flat += (target as usize) * out_strides[d];
+            } else {
+                dest_flat += coord * out_strides[d];
+            }
+        }
+        if oob || dest_flat >= out_numel {
+            continue;
+        }
+        last_writer.insert(dest_flat, src_flat);
+    }
+    let surviving: alloc::collections::BTreeSet<usize> = last_writer.into_values().collect();
+
+    let grad_bytes = gathered
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*gathered.buffer.data)
+        .map_err(|e| Error::Msg(format!("CUDA scatter src-grad readback failed: {e:?}")))?;
+    let mut grad_vals: Vec<f32> = bytemuck::cast_slice::<u8, f32>(&grad_bytes).to_vec();
+    for (i, v) in grad_vals.iter_mut().enumerate() {
+        if !surviving.contains(&i) {
+            *v = 0.0;
+        }
+    }
+    let stream = gathered.buffer.device.default_stream();
+    let data = stream
+        .clone_htod(bytemuck::cast_slice(&grad_vals))
+        .map_err(|e| Error::Msg(format!("CUDA scatter src-grad upload failed: {e:?}")))?;
+    let buffer = CudaBuffer {
+        len: gathered.buffer.len,
+        dtype: gathered.buffer.dtype,
+        data: Arc::new(data),
+        device: gathered.buffer.device.clone(),
+        device_id: gathered.buffer.device_id,
+    };
+    Ok(CudaStorage::new(Arc::new(buffer), gathered.shape.to_vec()))
 }
 
 #[cfg(feature = "cuda")]

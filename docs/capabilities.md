@@ -599,7 +599,9 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `reduction` | `f32` | `contiguous` | any | yes | native |
 | `softmax` | `f32` | `contiguous` | 1+ | yes | composed |
 | `rms_norm` | `f32` | `contiguous` | 1+ | yes | composed |
+| `broadcast` | `f32` | `contiguous` | 0–6 | no | native |
 | `broadcast` | `f32` | `contiguous` | 0–6 | yes | native |
+| `reshape` | `f32` | `contiguous` | any | no | native |
 | `reshape` | `f32` | `contiguous` | any | yes | native |
 | `matmul` | `f32` | `contiguous` | 2+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |

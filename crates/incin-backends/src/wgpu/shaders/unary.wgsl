@@ -1,6 +1,12 @@
 // Unary elementwise operations
 // op_mode: 0=relu, 1=gelu, 2=tanh, 3=sigmoid, 4=abs, 5=neg, 6=sqrt, 7=exp, 8=log, 9=swish,
-//          10=step, 11=mish, 12=elu, 13=logical_not
+//          10=step, 11=mish, 12=elu
+//
+// Every mode above is dispatched by `backend/elementwise.rs`. There is no
+// logical-not mode here: the logical operations stay unadvertised on this
+// backend until their boolean representation is settled (see the
+// `native_tensor`/`logical` groups in `capability/declarations.rs`), so a
+// branch for one would be dead code that reads as coverage.
 
 @group(0) @binding(0) var<storage, read> inp: array<f32>;
 @group(0) @binding(1) var<storage, read_write> out: array<f32>;
@@ -70,11 +76,19 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // Mish = x * tanh(softplus(x))
         let sp = select(log(1.0 + exp(x)), x, x > 20.0);
         out[idx] = x * tanh(sp);
-    } else if op == 13u {
-        // Logical NOT
-        out[idx] = select(0.0, 1.0, x == 0.0);
-    } else {
+    } else if op == 12u {
         // ELU (alpha = 1.0)
+        if x > 0.0 {
+            out[idx] = x;
+        } else {
+            out[idx] = exp(x) - 1.0;
+        }
+    } else {
+        // Unreachable through `backend/elementwise.rs`: every mode dispatched
+        // there is named above. WGSL cannot trap, so the default repeats the
+        // ELU computation rather than leaving `out` unwritten; any value
+        // produced here means the dispatcher passed a mode that does not
+        // exist, which is a bug at the call site rather than in this shader.
         if x > 0.0 {
             out[idx] = x;
         } else {

@@ -548,7 +548,30 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             // rank-6 block; the typed `BroadcastAs` row above is capped the
             // same way, so the coarse row has to match it.
             6,
+            false,
+            PRECISE,
+            ImplementationKind::Native,
+        ),
+        CapabilityRule::new(
+            OperationKind::Broadcast,
+            F32_ONLY,
+            CONTIGUOUS,
+            0,
+            // `broadcast_storage` routes through `prepare_shape_params`' fixed
+            // rank-6 block; the typed `BroadcastAs` row above is capped the
+            // same way, so the coarse row has to match it.
+            6,
             true,
+            PRECISE,
+            ImplementationKind::Native,
+        ),
+        CapabilityRule::new(
+            OperationKind::Reshape,
+            F32_ONLY,
+            CONTIGUOUS,
+            0,
+            usize::MAX,
+            false,
             PRECISE,
             ImplementationKind::Native,
         ),

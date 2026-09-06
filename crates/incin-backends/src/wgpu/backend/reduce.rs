@@ -72,6 +72,88 @@ pub(crate) fn reduce_dim_to_storage(
     Ok(WgpuStorage::new(out_buf, final_shape))
 }
 
+/// Zero-aware cotangent of a full product, mirroring
+/// `cpu::ops::reduce::helpers::prod_all_grad` in `f32`: no zeros means
+/// `g * prod / x[i]`; exactly one zero means `g * (product of the rest)` at
+/// the zero position and zero elsewhere; two or more zeros mean the whole
+/// gradient is zero.
+fn prod_all_backward(input: &[f32], scalar_grad: f32) -> Vec<f32> {
+    let mut nonzero_product = 1.0f32;
+    let mut zero_count = 0usize;
+    let mut zero_flat_idx = 0usize;
+    for (flat, &value) in input.iter().enumerate() {
+        if value == 0.0 {
+            zero_count += 1;
+            zero_flat_idx = flat;
+        } else {
+            nonzero_product *= value;
+        }
+    }
+    let mut grads = vec![0.0f32; input.len()];
+    match zero_count {
+        0 => {
+            for (grad, &value) in grads.iter_mut().zip(input.iter()) {
+                *grad = scalar_grad * nonzero_product / value;
+            }
+        }
+        1 => grads[zero_flat_idx] = scalar_grad * nonzero_product,
+        _ => {}
+    }
+    grads
+}
+
+/// Zero-aware cotangent of [`prod_dim`], one independent product per
+/// `dim`-slice of `input_shape`, with the same zero rule as
+/// [`prod_all_backward`] applied per slice. Mirrors
+/// `cpu::ops::reduce::helpers::prod_dim_grad`.
+fn prod_dim_backward(
+    input_shape: &[usize],
+    dim: usize,
+    input: &[f32],
+    grad_out: &[f32],
+) -> Vec<f32> {
+    let rank = input_shape.len();
+    // Map an input flat index to its slice's flat index in `grad_out`: drop
+    // the `dim` coordinate and pack the survivors row-major.
+    let slice_of = |flat: usize| -> usize {
+        let mut key = 0usize;
+        let mut mult = 1usize;
+        let mut rest = flat;
+        for axis in (0..rank).rev() {
+            let coord = rest % input_shape[axis];
+            rest /= input_shape[axis];
+            if axis != dim {
+                key += coord * mult;
+                mult *= input_shape[axis];
+            }
+        }
+        key
+    };
+    let out_len = grad_out.len();
+    let mut nonzero_product = vec![1.0f32; out_len];
+    let mut zero_count = vec![0usize; out_len];
+    let mut zero_flat_idx = vec![0usize; out_len];
+    for (flat, &value) in input.iter().enumerate() {
+        let slice = slice_of(flat);
+        if value == 0.0 {
+            zero_count[slice] += 1;
+            zero_flat_idx[slice] = flat;
+        } else {
+            nonzero_product[slice] *= value;
+        }
+    }
+    let mut grads = vec![0.0f32; input.len()];
+    for (flat, grad) in grads.iter_mut().enumerate() {
+        let slice = slice_of(flat);
+        let g = grad_out[slice];
+        match zero_count[slice] {
+            0 => *grad = g * nonzero_product[slice] / input[flat],
+            1 if flat == zero_flat_idx[slice] => *grad = g * nonzero_product[slice],
+            _ => {}
+        }
+    }
+    grads
+}
 /// Splits a contiguous shape into `(outer, axis, inner)` element counts
 /// around `dim`, i.e. `shape[..dim]`, `shape[dim]`, `shape[dim+1..]`
 /// products. For a contiguous row-major tensor this is enough to address
@@ -185,14 +267,60 @@ impl<D: Device> WgpuBackendImpl<D> {
     pub(crate) fn prod_all<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        reduce_all_to_storage(t, 3)
+        let out = reduce_all_to_storage(t, 3)?;
+        // This row is advertised with `training = true`, so the reduction
+        // records its backward: the zero-aware product rule CPU proves in
+        // `cpu::ops::reduce::helpers::prod_all_grad`.
+        let t_capture = t.clone();
+        let original_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let input_data = t_capture.buffer.to_vec::<f32>()?;
+                let scalar = grad_out
+                    .buffer
+                    .to_vec::<f32>()?
+                    .into_iter()
+                    .next()
+                    .unwrap_or(0.0);
+                Ok(vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&prod_all_backward(&input_data, scalar)),
+                    original_shape.clone(),
+                )])
+            }),
+        });
+        Ok(out)
     }
-    /// `prod_dim`. Not autograd-wired, matching CPU.
+    /// `prod_dim`, with the per-slice zero-aware product rule CPU proves in
+    /// `cpu::ops::reduce::helpers::prod_dim_grad`.
     pub(crate) fn prod_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         dim: usize,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        reduce_dim_to_storage(t, dim, 3, false)
+        let out = reduce_dim_to_storage(t, dim, 3, false)?;
+        let t_capture = t.clone();
+        let input_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let input_data = t_capture.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                Ok(vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&prod_dim_backward(
+                        &input_shape,
+                        dim,
+                        &input_data,
+                        &grad_data,
+                    )),
+                    input_shape.clone(),
+                )])
+            }),
+        });
+        Ok(out)
     }
 
     /// `sum_all`.

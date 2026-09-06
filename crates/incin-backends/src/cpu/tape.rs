@@ -52,7 +52,7 @@ impl TapeStorage for CpuStorage {
     }
 
     fn accumulate(&self, contribution: &Self) -> Result<Self> {
-        Ok(add_cpu_storage(self, contribution))
+        add_cpu_storage(self, contribution)
     }
 
     fn has_non_finite(&self) -> Result<bool> {
@@ -259,7 +259,7 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
 /// broadcast) - tape-internal accumulation only ever sums two gradients that
 /// have already been shape-matched to their target via `unbroadcast`, so no
 /// broadcast logic is needed here.
-fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
+fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> Result<CpuStorage> {
     debug_assert_eq!(
         a.shape, b.shape,
         "tape accumulation requires matching shapes"
@@ -293,16 +293,65 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
                 |s: &CpuStorage, i: &[usize]| s.get(i)
             )
         }
-        _ => {
+        (CpuBuffer::F16(_), CpuBuffer::F16(_)) => {
             add_variant!(
-                F32,
-                |s: &CpuStorage, i: &[usize]| s.get(i) as f32,
-                |s: &CpuStorage, i: &[usize]| s.get(i) as f32
+                F16,
+                |s: &CpuStorage, i: &[usize]| half::f16::from_f64(s.get(i)),
+                |s: &CpuStorage, i: &[usize]| half::f16::from_f64(s.get(i))
             )
+        }
+        (CpuBuffer::BF16(_), CpuBuffer::BF16(_)) => {
+            add_variant!(
+                BF16,
+                |s: &CpuStorage, i: &[usize]| half::bf16::from_f64(s.get(i)),
+                |s: &CpuStorage, i: &[usize]| half::bf16::from_f64(s.get(i))
+            )
+        }
+        (CpuBuffer::U8(_), CpuBuffer::U8(_)) => {
+            add_variant!(
+                U8,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8
+            )
+        }
+        (CpuBuffer::U32(_), CpuBuffer::U32(_)) => {
+            add_variant!(
+                U32,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u32,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u32
+            )
+        }
+        (CpuBuffer::I64(_), CpuBuffer::I64(_)) => {
+            add_variant!(
+                I64,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as i64,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as i64
+            )
+        }
+        (CpuBuffer::Bool(_), CpuBuffer::Bool(_)) => {
+            add_variant!(
+                Bool,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8
+            )
+        }
+        (CpuBuffer::Q8_0(_), _) | (_, CpuBuffer::Q8_0(_)) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: "autograd accumulate",
+            });
+        }
+        _ => {
+            return Err(incin_core::error::Error::DTypeMismatch {
+                operation: "autograd accumulate",
+                expected: a.buffer.dtype_id().descriptor(),
+                actual: b.buffer.dtype_id().descriptor(),
+            });
         }
     };
 
-    CpuStorage::from_contiguous(new_buffer, &a.shape)
+    Ok(CpuStorage::from_contiguous(new_buffer, &a.shape))
 }
 
 /// Right-align `grad.shape` and `target_shape`; sum-reduce over any leading
@@ -314,6 +363,13 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
 pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<CpuStorage> {
     if grad.shape.dims() == target_shape {
         return Ok(grad.clone());
+    }
+
+    // A target rank above the grad rank can never be a broadcast of it;
+    // refuse before indexing into result.shape below (avoids a panic for
+    // direct custom-autograd callers).
+    if target_shape.len() > grad.shape.len() {
+        crate::layout::broadcast_shape(grad.shape.dims(), target_shape)?;
     }
 
     let ndim_diff = grad.shape.len().saturating_sub(target_shape.len());
@@ -433,6 +489,7 @@ fn increment_index(idx: &mut [usize], shape: &[usize]) {
 mod tests {
     use super::*;
     use crate::cpu::storage::CpuBuffer;
+    use crate::quant::BlockQ8_0;
 
     /// `scalar`.
     fn scalar(v: f32) -> CpuStorage {
@@ -503,6 +560,76 @@ mod tests {
         assert!(unbroadcast(&grad, &[4]).is_err());
         let grad = matrix(vec![1.0; 6], 2, 3);
         assert!(unbroadcast(&grad, &[4]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_singleton_axis_sums_with_keepdim`.
+    fn unbroadcast_singleton_axis_sums_with_keepdim() {
+        // grad shape [2,3] broadcast from [1,3]: the size-1 axis is kept,
+        // summing the two rows into one.
+        let grad = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let result = unbroadcast(&grad, &[1, 3]).unwrap();
+        assert_eq!(result.shape, vec![1, 3]);
+        assert_eq!(result.get(&[0, 0]), 5.0);
+        assert_eq!(result.get(&[0, 1]), 7.0);
+        assert_eq!(result.get(&[0, 2]), 9.0);
+    }
+
+    #[test]
+    /// `unbroadcast_leading_and_singleton_axes_combine`.
+    fn unbroadcast_leading_and_singleton_axes_combine() {
+        // grad shape [2,1,3] from a [3] target: leading dims squeeze away
+        // entirely before the keepdim pass runs.
+        let grad = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 6]), vec![2, 1, 3]);
+        let result = unbroadcast(&grad, &[3]).unwrap();
+        assert_eq!(result.shape, vec![3]);
+        assert_eq!(result.get(&[0]), 2.0);
+        assert_eq!(result.get(&[1]), 2.0);
+        assert_eq!(result.get(&[2]), 2.0);
+    }
+
+    #[test]
+    /// `q8_0_seed_is_refused_with_a_typed_error`.
+    fn q8_0_seed_is_refused_with_a_typed_error() {
+        // A quantized loss has no ones-like seed: refusal, not a silently
+        // dequantized float seed.
+        let block = BlockQ8_0 {
+            d: half::f16::from_f32(1.0),
+            qs: [1i8; 32],
+        };
+        let quantized = CpuStorage::from_contiguous(CpuBuffer::Q8_0(vec![block]), vec![32]);
+        assert!(matches!(
+            CpuStorage::ones_like(&quantized),
+            Err(incin_core::error::Error::UnsupportedDType { .. })
+        ));
+    }
+
+    #[test]
+    /// `q8_0_unbroadcast_reduction_is_refused`.
+    fn q8_0_unbroadcast_reduction_is_refused() {
+        // A quantized gradient that must be summed back cannot be reduced on
+        // the CPU: refusal, not a silently dequantized wrong-dtype sum.
+        let block = || BlockQ8_0 {
+            d: half::f16::from_f32(1.0),
+            qs: [1i8; 32],
+        };
+        let grad =
+            CpuStorage::from_contiguous(CpuBuffer::Q8_0(vec![block(), block()]), vec![2, 32]);
+        assert!(unbroadcast(&grad, &[32]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_is_kept_for_implicit_broadcast`.
+    fn unbroadcast_scalar_seed_is_kept_for_implicit_broadcast() {
+        // The CPU side of #121: a scalar seed for a `[3]` target stays a
+        // scalar after the compatibility check, because the CPU kernels
+        // broadcast a scalar operand implicitly. The CUDA/WGPU tails
+        // materialize here instead; pin the CPU half so the split cannot
+        // drift silently.
+        let grad = scalar(2.0);
+        let result = unbroadcast(&grad, &[3]).unwrap();
+        assert_eq!(result.shape, Vec::<usize>::new());
+        assert_eq!(result.get(&[]), 2.0);
     }
 
     // --- tape accumulation tests (CPUBACK-05) ---
@@ -614,6 +741,71 @@ mod tests {
         assert_eq!(g.get(&[2]), 5.0);
     }
 
+    /// `f64_vector`.
+    fn f64_vector(v: Vec<f64>) -> CpuStorage {
+        let len = v.len();
+        CpuStorage::from_contiguous(CpuBuffer::F64(v), vec![len])
+    }
+
+    /// `f64_scalar`.
+    fn f64_scalar(v: f64) -> CpuStorage {
+        CpuStorage::from_contiguous(CpuBuffer::F64(vec![v]), vec![])
+    }
+
+    #[test]
+    /// `backward_accumulates_f64_contributions_without_downcasting`.
+    fn backward_accumulates_f64_contributions_without_downcasting() {
+        // The F64 twin of the F32 reuse test above: two consumers of one
+        // F64 input must sum in F64, so the stored gradient keeps its
+        // variant instead of collapsing to F32.
+        let x = f64_vector(vec![1.0, 2.0]);
+        let out1 = f64_vector(vec![10.0, 20.0]);
+        let out2 = f64_vector(vec![100.0, 200.0]);
+
+        let x_id = x.id;
+        let out1_id = out1.id;
+        let out2_id = out2.id;
+
+        push(TapeEntry {
+            output_id: out1_id,
+            input_ids: vec![x_id],
+            backward: Box::new(|grad_out: &CpuStorage| {
+                let data: Vec<f64> = (0..grad_out.shape[0])
+                    .map(|i| grad_out.get(&[i]) * 2.0)
+                    .collect();
+                Ok(vec![f64_vector(data)])
+            }),
+        });
+        push(TapeEntry {
+            output_id: out2_id,
+            input_ids: vec![x_id],
+            backward: Box::new(|grad_out: &CpuStorage| {
+                let data: Vec<f64> = (0..grad_out.shape[0])
+                    .map(|i| grad_out.get(&[i]) * 3.0)
+                    .collect();
+                Ok(vec![f64_vector(data)])
+            }),
+        });
+
+        let total_loss = f64_scalar(0.0);
+        push(TapeEntry {
+            output_id: total_loss.id,
+            input_ids: vec![out1_id, out2_id],
+            backward: Box::new(|_grad_out: &CpuStorage| {
+                Ok(vec![f64_vector(vec![1.0, 1.0]), f64_vector(vec![1.0, 1.0])])
+            }),
+        });
+
+        let grads = backward(&total_loss).unwrap();
+        let g = grads
+            .get(x_id)
+            .expect("x should have an accumulated gradient");
+        assert_eq!(g.shape, vec![2]);
+        assert!(matches!(&*g.buffer, CpuBuffer::F64(_)));
+        assert_eq!(g.get(&[0]), 5.0);
+        assert_eq!(g.get(&[1]), 5.0);
+    }
+
     #[test]
     /// `backward_drains_tape_and_second_call_is_not_contaminated`.
     fn backward_drains_tape_and_second_call_is_not_contaminated() {
@@ -683,6 +875,27 @@ mod tests {
         // not look, and this used to be a separate method that aborted.
         let Err(err) = incin_core::exec::check_gradients(|| backward(&out)) else {
             panic!("a NaN gradient was not reported under NanPolicy::Reject");
+        };
+        assert!(matches!(
+            err,
+            incin_core::error::Error::Backward(incin_core::error::BackwardError::NonFinite { .. })
+        ));
+    }
+
+    #[test]
+    /// `an_infinite_gradient_is_returned_rather_than_panicked`.
+    fn an_infinite_gradient_is_returned_rather_than_panicked() {
+        // The infinity twin of the NaN case above: `has_non_finite` covers
+        // both, and the policy reports either as a typed error.
+        let x = scalar(1.0);
+        let out = scalar(2.0);
+        push(TapeEntry {
+            output_id: out.id,
+            input_ids: vec![x.id],
+            backward: Box::new(|_grad_out: &CpuStorage| Ok(vec![scalar(f32::INFINITY)])),
+        });
+        let Err(err) = incin_core::exec::check_gradients(|| backward(&out)) else {
+            panic!("an infinite gradient was not reported under NanPolicy::Reject");
         };
         assert!(matches!(
             err,

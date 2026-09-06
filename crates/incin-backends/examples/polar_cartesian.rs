@@ -14,7 +14,7 @@
 //!    two-output inference the single-output `calibration_update` example does
 //!    not exercise.
 //! 2. `Execute` with a real CPU kernel, run through the validated production
-//!    path (`execute_shaped`), not around it.
+//!    path (`execute_shaped_n` with one `ShapeValue` per output), not around it.
 //! 3. A backward recipe per output, assembled into core `TapeNode`s and run
 //!    through `incin_core::exec::tape::backward` -- the same reverse walk the
 //!    CPU backend calls, with the same accumulation semantics. A tensor
@@ -24,10 +24,13 @@
 //!    through the custom backward, proving the gradients are good for
 //!    something beyond their own test.
 //!
-//! The one seam an external crate cannot touch is the backend's thread-local
-//! tape push (`pub(crate)` by design): an in-tree backend would move the node
-//! construction of section 3 into its `Execute` impl and push there, so its
-//! custom nodes and the built-in ones share one graph. The recipe and the walk
+//! Multi-output operations keep the explicit per-backend `tape_record` path --
+//! one node per output cannot be derived from a single return type, so there
+//! is no `DifferentiableOp` blanket impl for this shape. This example shows
+//! the node shape directly: an in-tree backend moves the node construction of
+//! section 3 into its `Execute` impl and records via its public `tape_record`
+//! (CPU, WGPU, CUDA, Metal), so its custom nodes and the built-in ones share
+//! one graph. The recipe and the walk
 //! are identical either way, which is what this example pins down.
 //!
 //! Run it with:

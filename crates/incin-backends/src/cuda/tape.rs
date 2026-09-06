@@ -21,13 +21,26 @@ impl TapeStorage for CudaStorage {
     }
 
     fn ones_like(&self) -> Result<Self> {
+        use incin_core::tensor::dtype::DTypeId;
         let numel = ShapeBuf::from_slice(&self.shape).checked_numel(OperationKind::Storage)?;
         let device_id = self.buffer.device_id;
         let stream = self.buffer.device.default_stream();
-        let data_ones = vec![1.0f32; numel];
-        let data_u8: &[u8] = bytemuck::cast_slice(&data_ones);
+        // The seed must match the loss storage's own dtype: a hardcoded f32
+        // ones vector under an f64 descriptor allocates numel*4 bytes for a
+        // numel*8 claim, which `CudaStorage::new` refuses (and f16/bf16
+        // would silently mis-shape the same way).
+        let data_u8: Vec<u8> = match self.buffer.dtype.builtin_id() {
+            Some(DTypeId::F64) => bytemuck::cast_slice(&vec![1.0f64; numel]).to_vec(),
+            Some(DTypeId::F16) => {
+                bytemuck::cast_slice(&vec![half::f16::from_f32(1.0); numel]).to_vec()
+            }
+            Some(DTypeId::BF16) => {
+                bytemuck::cast_slice(&vec![half::bf16::from_f32(1.0); numel]).to_vec()
+            }
+            _ => bytemuck::cast_slice(&vec![1.0f32; numel]).to_vec(),
+        };
         let u8_slice = stream
-            .clone_htod(data_u8)
+            .clone_htod(&data_u8)
             .map_err(|e| Error::Msg(alloc::format!("CUDA HTOD failed: {e:?}")))?;
 
         let buf = CudaBuffer {
@@ -48,6 +61,7 @@ impl TapeStorage for CudaStorage {
     }
 
     fn has_non_finite(&self) -> Result<bool> {
+        use incin_core::tensor::dtype::DTypeId;
         let bytes = self
             .buffer
             .device
@@ -57,9 +71,20 @@ impl TapeStorage for CudaStorage {
                 operation: incin_core::shapes::error::OperationKind::Storage,
                 message: alloc::format!("CUDA gradient readback failed: {error:?}").into(),
             })?;
-        Ok(bytemuck::cast_slice::<u8, f32>(&bytes)
-            .iter()
-            .any(|x| x.is_nan() || x.is_infinite()))
+        Ok(match self.buffer.dtype.builtin_id() {
+            Some(DTypeId::F64) => bytemuck::cast_slice::<u8, f64>(&bytes)
+                .iter()
+                .any(|x| x.is_nan() || x.is_infinite()),
+            Some(DTypeId::F16) => bytemuck::cast_slice::<u8, half::f16>(&bytes)
+                .iter()
+                .any(|x| x.is_nan() || x.is_infinite()),
+            Some(DTypeId::BF16) => bytemuck::cast_slice::<u8, half::bf16>(&bytes)
+                .iter()
+                .any(|x| x.is_nan() || x.is_infinite()),
+            _ => bytemuck::cast_slice::<u8, f32>(&bytes)
+                .iter()
+                .any(|x| x.is_nan() || x.is_infinite()),
+        })
     }
 }
 

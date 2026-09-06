@@ -654,3 +654,26 @@ fn step_strict_commits_full_coverage() {
         .step_strict(&grads)
         .expect("strict AdamW step over full coverage must succeed");
 }
+
+/// A refused zero-coverage step commits nothing: the Adam counter stays put
+/// and every parameter keeps its bytes.
+#[test]
+fn refused_zero_coverage_step_leaves_counter_and_parameters_untouched() {
+    let model = Linear::<s![10, 5], CpuBackendImpl>::build(()).unwrap();
+    let before = parameter_bytes(&model).unwrap();
+
+    // Gradients from a graph that has nothing to do with `model`.
+    let unrelated = Tensor::<s![2], CpuBackendImpl>::ones(())
+        .unwrap()
+        .require_grad()
+        .sum_all()
+        .unwrap()
+        .backward()
+        .unwrap();
+
+    let mut adam = Adam::<CpuBackendImpl>::from_module(&model, 1e-3).unwrap();
+    adam.step(&unrelated)
+        .expect_err("a step that updates nothing must not report success");
+    assert_eq!(adam.step_count(), 0);
+    assert_eq!(parameter_bytes(&model).unwrap(), before);
+}

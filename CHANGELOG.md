@@ -223,9 +223,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   answers, sweeps every input element against central finite differences
   (worst relative error `1e-11`), asserts the contract refusals, and fits
   `(r, theta)` to a target point by gradient descent through nothing but its
-  own backward. The one seam it does not cross is the backend's thread-local
-  tape push, which stays `pub(crate)` by design; an in-tree backend would move
-  the same node construction into its `Execute` impl.
+   own backward. Multi-output operations keep the explicit public
+   `tape_record` path -- one node per output cannot be derived from a single
+   return type, so there is no `DifferentiableOp` blanket impl for this shape;
+   an in-tree backend moves the same node construction into its `Execute` impl
+   and records via `tape_record`, while a single-output op implements
+   `DifferentiableOp` instead.
 
 - **Typed dispatch takes N outputs with per-output dtypes.** `execute_shaped`
   held exactly one `&ShapeValue<S>`, so a multi-output operation -- TopK's
