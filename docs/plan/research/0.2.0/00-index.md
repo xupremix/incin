@@ -46,6 +46,11 @@ themselves are left as written rather than edited in place.
 - **CUDA movement rows widened** -- transpose, broadcast, narrow and concat
   claim the dense storage set on CUDA after a byte-exact hardware matrix;
   catalog 174 operations, 164 backend-executable, oracle floor 163.
+- **GRD-006 remainder scoped** -- new report `grd-006-graph-owned-tapes.md`:
+  the unification half stays complete; the remainder (explicit graph values
+  replacing four thread-locals, saved-tensor lifetime owned by the graph,
+  checked node structure consuming the parked arity item) is staged so the
+  recent `tape_record` shims keep working through the migration.
 
 **Corrections the later work forced**
 
