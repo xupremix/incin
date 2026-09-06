@@ -141,6 +141,8 @@ and output inference. A backend opts into that identity through
 `Capabilities` and implements `Execute<YourOperation>` with an
 `ExecutionRequest`. The downstream fixture demonstrates descriptor creation,
 attribute validation, capability admission, and execution against the public
-authoring traits. Custom autodiff extension points are not part of this
-contract yet, so a custom operation should be documented as forward-only
-unless it is composed from existing differentiable tensor operations.
+authoring traits. A custom operation is not confined to the forward pass:
+there is no autodiff registration hook, but the tape a backward recipe is
+recorded onto is public, and
+[Custom and fused operations](./custom_operations.md) walks through making
+one differentiable.

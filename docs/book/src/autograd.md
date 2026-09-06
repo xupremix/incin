@@ -81,3 +81,11 @@ values; `require_grad` does the reverse. Both change `G` in the type, so a
 detached tensor accidentally used where a `Grad` one is expected is a compile
 error, not a silently-missing gradient discovered during a debugging
 session.
+
+## Gradients through a custom kernel
+
+Everything above is the user-facing half: the tape entries are recorded for
+you by the operations you call. If you are writing a fused kernel of your own,
+the recording is yours to do, and
+[Custom and fused operations](./custom_operations.md) covers the recipe type,
+the reverse walk, and how to check the result against finite differences.
