@@ -468,27 +468,27 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
 /// vacuous gradient, so they resolve to `false` and fail loudly instead.
 /// `trunc`/`frac` are deliberately absent here: stream C owns their rows.
 pub(super) const fn descriptor_training(operation: OperationKind) -> bool {
-    match operation {
+    !matches!(
+        operation,
         OperationKind::CmpEq
-        | OperationKind::CmpNe
-        | OperationKind::CmpLt
-        | OperationKind::CmpLe
-        | OperationKind::CmpGt
-        | OperationKind::CmpGe
-        | OperationKind::ArgMax
-        | OperationKind::ArgMin
-        | OperationKind::Argsort
-        | OperationKind::TopK
-        | OperationKind::LogicalAnd
-        | OperationKind::LogicalOr
-        | OperationKind::LogicalNot
-        | OperationKind::Step
-        | OperationKind::Sign
-        | OperationKind::Floor
-        | OperationKind::Ceil
-        | OperationKind::Round => false,
-        _ => true,
-    }
+            | OperationKind::CmpNe
+            | OperationKind::CmpLt
+            | OperationKind::CmpLe
+            | OperationKind::CmpGt
+            | OperationKind::CmpGe
+            | OperationKind::ArgMax
+            | OperationKind::ArgMin
+            | OperationKind::Argsort
+            | OperationKind::TopK
+            | OperationKind::LogicalAnd
+            | OperationKind::LogicalOr
+            | OperationKind::LogicalNot
+            | OperationKind::Step
+            | OperationKind::Sign
+            | OperationKind::Floor
+            | OperationKind::Ceil
+            | OperationKind::Round
+    )
 }
 
 /// The rank ceiling for `operation` on CUDA/WGPU.

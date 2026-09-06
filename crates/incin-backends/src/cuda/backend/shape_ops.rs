@@ -576,8 +576,7 @@ impl<D: Device> CudaBackendImpl<D> {
         // the forward's last-write-wins rule means earlier writes to the same
         // position contributed nothing. The integer index operand is off the
         // tape by construction, same as CPU.
-        let (t_capture, index_capture, src_capture) =
-            (t.clone(), index.clone(), src.clone());
+        let (index_capture, src_capture) = (index.clone(), src.clone());
         let (t_id, src_id, out_id) = (t.id, src.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
@@ -591,13 +590,16 @@ impl<D: Device> CudaBackendImpl<D> {
                     DTypeId::F32.descriptor(),
                     &DeviceId::cuda(src_capture.buffer.device_id),
                 )?;
-                let grad_t = crate::cuda::ops::shape::launch_scatter(
-                    grad_out,
-                    dim,
-                    &index_capture,
-                    &zeros,
-                )?;
-                let grad_src = scatter_src_grad(&index_capture, &src_capture, grad_out, dim)?;
+                let grad_t =
+                    crate::cuda::ops::shape::launch_scatter(grad_out, dim, &index_capture, &zeros)?;
+                // Source path is a gather of the output cotangent at the index
+                // positions. Exact when indices are unique; with duplicate
+                // indices the forward kernel races (last-write-wins is
+                // nondeterministic on GPU) while CPU credits only the last
+                // row-major write, so the two backends diverge there by
+                // construction.
+                let grad_src =
+                    crate::cuda::ops::shape::launch_gather(grad_out, dim, &index_capture)?;
                 Ok(vec![grad_t, grad_src])
             }),
         });

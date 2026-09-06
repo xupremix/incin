@@ -231,7 +231,7 @@ fn concat_sums_the_axis_on_seeded_shapes() {
         // Rank 1..=3; both operands share every axis except the concat one.
         let rank = 1 + rng.below(3);
         let axis = rng.below(rank);
-        let mut a: Vec<usize> = (0..rank).map(|_| 1 + rng.below(4)).collect();
+        let a: Vec<usize> = (0..rank).map(|_| 1 + rng.below(4)).collect();
         let mut b = a.clone();
         b[axis] = 1 + rng.below(4);
         let mut expected = a.clone();

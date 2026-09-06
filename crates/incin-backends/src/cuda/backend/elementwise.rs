@@ -698,13 +698,7 @@ pub(crate) fn cuda_remainder_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Re
     } else {
         "remainderf(a, b)"
     };
-    crate::cuda::ops::elementwise::launch_binary_op(
-        "remainder",
-        expr,
-        lhs,
-        rhs,
-        &out_shape,
-    )
+    crate::cuda::ops::elementwise::launch_binary_op("remainder", expr, lhs, rhs, &out_shape)
 }
 
 pub(crate) fn cuda_lerp_storage(
@@ -936,17 +930,46 @@ mod f64_precision_tests {
     use super::*;
 
     const FWD_OPS: &[&str] = &[
-        "relu", "mish", "elu", "gelu", "abs", "neg", "log", "swish", "sin", "cos", "tan",
-        "asin", "acos", "atan", "sinh", "cosh", "asinh", "acosh", "atanh", "erf", "log2",
-        "log10", "exp", "sqrt", "rsqrt", "tanh", "sigmoid", "step", "sign", "floor", "ceil",
-        "round", "trunc", "frac", "maximum", "minimum", "abs_diff",
+        "relu", "mish", "elu", "gelu", "abs", "neg", "log", "swish", "sin", "cos", "tan", "asin",
+        "acos", "atan", "sinh", "cosh", "asinh", "acosh", "atanh", "erf", "log2", "log10", "exp",
+        "sqrt", "rsqrt", "tanh", "sigmoid", "step", "sign", "floor", "ceil", "round", "trunc",
+        "frac", "maximum", "minimum", "abs_diff",
     ];
 
     const DERIV_OPS: &[&str] = &[
-        "relu", "mish", "elu", "gelu", "abs", "neg", "log", "swish", "sin", "cos", "tan",
-        "asin", "acos", "atan", "sinh", "cosh", "asinh", "acosh", "atanh", "erf", "log2",
-        "log10", "exp", "sqrt", "rsqrt", "tanh", "sigmoid", "maximum_lhs", "maximum_rhs",
-        "minimum_lhs", "minimum_rhs", "abs_diff_lhs", "abs_diff_rhs",
+        "relu",
+        "mish",
+        "elu",
+        "gelu",
+        "abs",
+        "neg",
+        "log",
+        "swish",
+        "sin",
+        "cos",
+        "tan",
+        "asin",
+        "acos",
+        "atan",
+        "sinh",
+        "cosh",
+        "asinh",
+        "acosh",
+        "atanh",
+        "erf",
+        "log2",
+        "log10",
+        "exp",
+        "sqrt",
+        "rsqrt",
+        "tanh",
+        "sigmoid",
+        "maximum_lhs",
+        "maximum_rhs",
+        "minimum_lhs",
+        "minimum_rhs",
+        "abs_diff_lhs",
+        "abs_diff_rhs",
     ];
 
     #[test]
@@ -969,10 +992,9 @@ mod f64_precision_tests {
     #[test]
     fn double_spellings_name_no_float_intrinsics_or_suffixed_literals() {
         const FORBIDDEN_INTRINSICS: &[&str] = &[
-            "expf", "logf", "log1pf", "log2f", "log10f", "tanhf", "fabsf", "sinf", "cosf",
-            "tanf", "asinf", "acosf", "atanf", "atan2f", "sinhf", "coshf", "asinhf", "acoshf",
-            "atanhf", "erff", "sqrtf", "rsqrtf", "powf", "fmodf", "floorf", "ceilf", "roundf",
-            "truncf",
+            "expf", "logf", "log1pf", "log2f", "log10f", "tanhf", "fabsf", "sinf", "cosf", "tanf",
+            "asinf", "acosf", "atanf", "atan2f", "sinhf", "coshf", "asinhf", "acoshf", "atanhf",
+            "erff", "sqrtf", "rsqrtf", "powf", "fmodf", "floorf", "ceilf", "roundf", "truncf",
         ];
         let mut spellings = Vec::new();
         for op in FWD_OPS {

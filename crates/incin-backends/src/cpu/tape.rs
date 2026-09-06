@@ -486,7 +486,22 @@ mod tests {
     #[test]
     /// `backward_seeds_loss_gradient_with_ones`.
     fn backward_seeds_loss_gradient_with_ones() {
+        // D-06: an empty tape is a consumed graph, not a seed-only `Ok`.
+        let bare = scalar(5.0);
+        assert!(matches!(
+            backward(&bare),
+            Err(incin_core::error::Error::Backward(
+                incin_core::error::BackwardError::GraphConsumed
+            ))
+        ));
+        // Seeding still holds when a graph exists: the loss gradient is ones.
+        let x = scalar(1.0);
         let loss = scalar(5.0);
+        push(TapeEntry {
+            output_id: loss.id,
+            input_ids: vec![x.id],
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+        });
         let grads = backward(&loss).unwrap();
         let g = grads.get(loss.id).unwrap();
         assert_eq!(g.get(&[]), 1.0);
