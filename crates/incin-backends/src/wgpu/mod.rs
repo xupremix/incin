@@ -23,3 +23,13 @@ pub use backend::{WgpuBackendImpl, WgpuGrads, WgpuVar};
 /// nothing, and its evidence test lives outside this crate. A guarantee
 /// nothing outside can observe is not a guarantee.
 pub use tape::depth as tape_depth;
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The WGPU instantiation of the custom-training contract documented at
+/// `crate::cpu::tape_record`: run the forward kernel, then record a
+/// `TapeNode` whose recipe maps one output gradient to one gradient per
+/// input. Recipes should stay in-kernel; every host value access is a
+/// readback.
+pub use tape::record as tape_record;
+/// Record a custom operation's backward recipe, building it only if kept.
+pub use tape::record_with as tape_record_with;
