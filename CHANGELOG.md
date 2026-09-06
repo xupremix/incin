@@ -32,6 +32,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Reachability on the tape is a set, not a linear scan.**
+  `Tape::drain_reachable` runs once per training step over the whole graph and
+  tested membership with `Vec::contains`, which made collecting the reachable
+  subgraph quadratic in graph size. The set is never iterated in insertion
+  order, only asked whether it holds an id, so a `BTreeSet` costs nothing and
+  removes the quadratic term. The doc comment now also states the ordering
+  assumption the single reverse pass depends on.
+
+- **`GradientMap`'s doc no longer contradicts its own API.** The type comment
+  said the map was private and that nothing outside needed to write it, sitting
+  directly above a public `insert`. That method is real and needed:
+  `AutogradBackend::set_grad` is how a post-backward rescale such as clipping is
+  written once against the trait instead of once per backend. The comment now
+  says so, and says that the write is a replacement rather than an
+  accumulation.
+
 - **A CUDA backward pass no longer panics when it un-broadcasts.** Every CUDA
   recipe with a broadcast operand reaches `sum_dim_keepdim` through
   `unbroadcast`, and that helper unwrapped its reduction launch. `GRD-005` made

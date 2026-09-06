@@ -27,6 +27,7 @@
 
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
@@ -138,8 +139,13 @@ impl<S> core::fmt::Debug for TapeNode<S> {
 
 /// Accumulated gradients, keyed by the id of the tensor each belongs to.
 ///
-/// The map is private. A caller asks for one tensor's gradient; nothing
-/// outside needs to rewrite the result of a backward pass in place.
+/// The `BTreeMap` itself stays private: a caller asks for one tensor's
+/// gradient rather than borrowing the whole result of a backward pass.
+/// [`insert`](Self::insert) is the one write, and it exists for
+/// [`AutogradBackend::set_grad`](crate::tensor::backend::AutogradBackend::set_grad),
+/// so that a post-backward transform which rescales a whole gradient set
+/// (clipping is the one in tree) can be written once against the trait rather
+/// than once per backend.
 pub struct GradientMap<S> {
     grads: BTreeMap<TensorId, S>,
 }
@@ -150,7 +156,11 @@ impl<S> GradientMap<S> {
         self.grads.get(&id)
     }
 
-    /// Insert or replace the accumulated gradient for `id`.
+    /// Replace the accumulated gradient for `id`, returning the previous one.
+    ///
+    /// A replacement, never an accumulation. The reverse walk's own summing
+    /// has finished by the time anything calls this; a second summing spelling
+    /// here is how a gradient gets counted twice.
     pub fn insert(&mut self, id: TensorId, grad: S) -> Option<S> {
         self.grads.insert(id, grad)
     }
@@ -249,15 +259,26 @@ impl<S> Tape<S> {
 
     /// Remove only the nodes reachable from `root`, leaving unrelated graphs
     /// on the tape for their own backward calls.
+    ///
+    /// The single reverse pass is correct only because the tape is in
+    /// insertion order and eager execution produces a value after every value
+    /// it consumed: a node's inputs therefore always sit earlier in `nodes`
+    /// than its output, which the reverse walk reaches later. Nothing enforces
+    /// that ordering, and a backend that recorded out of order would silently
+    /// under-collect here rather than fail.
+    ///
+    /// Membership is a [`BTreeSet`] rather than a `Vec`. This runs once per
+    /// training step over the whole graph, and a linear scan per lookup made
+    /// it quadratic in graph size for no gain: the set is never iterated in
+    /// insertion order, only asked whether it holds an id.
     #[must_use]
     pub fn drain_reachable(&mut self, root: TensorId) -> Vec<TapeNode<S>> {
-        let mut reachable_ids = alloc::vec![root];
+        let mut reachable_ids = BTreeSet::new();
+        reachable_ids.insert(root);
         for node in self.nodes.iter().rev() {
             if reachable_ids.contains(&node.output_id) {
                 for input in &node.input_ids {
-                    if !reachable_ids.contains(input) {
-                        reachable_ids.push(*input);
-                    }
+                    reachable_ids.insert(*input);
                 }
             }
         }
