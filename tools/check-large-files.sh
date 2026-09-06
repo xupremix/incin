@@ -17,6 +17,7 @@ declare -A explained=(
     [crates/incin-core/src/nn/param.rs]=1
     [crates/incin-backends/src/cuda/executor.rs]=1
     [crates/incin-backends/src/cuda/ops/shape.rs]=1
+    [crates/incin-backends/src/cuda/backend/tests.rs]=1
 )
 
 mapfile -t actual < <(

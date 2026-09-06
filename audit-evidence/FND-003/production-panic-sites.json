@@ -8328,7 +8328,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/mod.rs:271",
+    "site": "crates/incin-backends/src/cpu/mod.rs:284",
     "code": "<$ty>::from_ne_bytes(chunk.try_into().expect(\"checked chunk size\"))",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -8412,7 +8412,7 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/executor.rs:1937",
+    "site": "crates/incin-backends/src/cuda/executor.rs:1955",
     "code": "batch_cols.into_iter().next().unwrap()",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
@@ -8694,7 +8694,7 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/tape.rs:171",
+    "site": "crates/incin-backends/src/cuda/tape.rs:231",
     "code": "crate::cuda::ops::reduce::launch_reduce_op(\"sum\", storage, axis, true).unwrap()",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
@@ -8826,12 +8826,6 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/dist/mesh.rs:978",
-    "code": ".expect(\"rank is below the world size the count guard already checked\");",
-    "disposition": "statically proven internal transition",
-    "evidence": "FND-003 classification and focused crate tests"
-  },
-  {
     "site": "crates/incin-core/src/exec/proof.rs:278",
     "code": "panic!(\"paranoid-validation: descriptor failed its own invariants: {error:?}\");",
     "disposition": "opt-in invariant assertion",
@@ -8904,14 +8898,14 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/shapes/dim.rs:56",
-    "code": "panic!(\"invalid static dimension expression\");",
+    "site": "crates/incin-core/src/shapes/dim.rs:60",
+    "code": "panic!(",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/shapes/dim.rs:306",
-    "code": "panic!(\"Invalid static dimension expression\");",
+    "site": "crates/incin-core/src/shapes/dim.rs:316",
+    "code": "panic!(\"DimCompatible::STATIC_ASSERT: invalid static dimension expression\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
