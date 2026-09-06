@@ -1630,6 +1630,7 @@ pub incin_backends::conformance::Verdict::Executed
 pub incin_backends::conformance::Verdict::Failed(alloc::string::String)
 pub incin_backends::conformance::Verdict::NotCovered(incin_backends::conformance::Coverage)
 pub incin_backends::conformance::Verdict::Panicked(alloc::string::String)
+pub incin_backends::conformance::Verdict::RecordedNothing
 pub incin_backends::conformance::Verdict::Refused(alloc::string::String)
 pub incin_backends::conformance::Verdict::Rejected(alloc::string::String)
 pub incin_backends::cpu::CpuBuffer::BF16(alloc::vec::Vec<half::bfloat::bf16>)

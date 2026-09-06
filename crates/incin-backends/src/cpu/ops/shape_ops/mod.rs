@@ -43,8 +43,8 @@ pub(crate) use combine::{
     unfold_storage,
 };
 pub(crate) use convert::{
-    float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage, int_to_vec1_storage,
-    canonical_to_dtype,
+    canonical_to_dtype, float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage,
+    int_to_vec1_storage,
 };
 pub(crate) use linalg::{
     addmm_storage, lerp_storage, matmul_storage, scaled_dot_product_attention_storage,

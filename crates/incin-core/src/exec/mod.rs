@@ -91,10 +91,8 @@ pub use conformance::{
     ConformanceClass, ConformanceVector, ExpectedDisposition, SEMANTIC_CONFORMANCE_VECTORS,
 };
 pub use context::ExecutionContext;
-pub use gradcheck::{
-    Disagreement, GradCheckOptions, GradCheckReport, GradCheckStorage, gradcheck,
-};
 pub use dispatch::{CanonicalError, PolicyViolation};
+pub use gradcheck::{Disagreement, GradCheckOptions, GradCheckReport, GradCheckStorage, gradcheck};
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
 #[cfg(feature = "std")]
 pub use policy::check_gradients;

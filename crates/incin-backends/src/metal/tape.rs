@@ -47,6 +47,19 @@ pub fn record(entry: TapeNode<MetalStorage>) {
     push(entry);
 }
 
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of [`record`]. The entry closure runs only when the ambient
+/// [`GradMode`](incin_core::exec::GradMode) records, so a `NoGrad` forward
+/// pass does not allocate a boxed closure and an id vector per operation for
+/// a value nothing can read.
+pub fn record_with(entry: impl FnOnce() -> TapeNode<MetalStorage>) {
+    if !incin_core::exec::GradMode::current().records() {
+        return;
+    }
+    push(entry());
+}
+
 /// The Metal backend's gradient container.
 pub struct MetalGrads {
     pub(crate) grads: GradientMap<MetalStorage>,

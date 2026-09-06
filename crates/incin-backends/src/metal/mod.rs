@@ -12,18 +12,34 @@ pub mod executor;
 pub mod mps;
 pub mod shaders;
 pub mod storage;
-pub mod tape;
+// `pub(crate)`, matching cpu, cuda and wgpu. The thread-local itself is not
+// the seam: `tape_record` and `tape_record_with` below are, and they are the
+// same two names on every backend. This module was the one of the four left
+// public, which meant the most important boundary in the crate, whether a
+// third party can add a differentiable operation, differed by backend for no
+// stated reason.
+pub(crate) mod tape;
 pub mod tuning;
 
 pub use backend::{MetalBackendImpl, MetalVar};
 pub use storage::{MetalStorage, MetalStorageMode, is_unified_memory};
 pub use tape::MetalGrads;
+/// Number of entries currently on this thread's tape.
+///
+/// Re-exported for the same reason it is on the other three backends: the
+/// claim that a `NoGrad` chain records nothing is only a guarantee if
+/// something outside can count.
+pub use tape::depth as tape_depth;
 /// Record a custom operation's backward recipe on this thread's tape.
 ///
 /// The Metal instantiation of the custom-training contract documented at
 /// `crate::cpu::tape_record`. Compile-checked; executed coverage waits on
 /// real Metal kernels (MTL-002/003).
 pub use tape::record as tape_record;
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of `tape_record`, as on the other three backends.
+pub use tape::record_with as tape_record_with;
 pub use tuning::{
     MetalLaunchCandidate, default_metal_pointwise_candidate, default_metal_reduction_candidate,
     metal_environment_fingerprint, metal_matmul_candidates, metal_pointwise_candidates,

@@ -10,6 +10,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`incin_core::exec::gradcheck` is public, and backend generic.** A backward
+  recipe is the part of a custom operation that fails quietly: a wrong forward
+  kernel produces visibly wrong numbers, a wrong recipe produces a model that
+  trains slightly worse. The book used to tell authors there was no public
+  helper and to write a central-difference sweep themselves, including
+  choosing a step size, which is the part that is easy to get wrong. In `f32`
+  the step that minimises total error is near `1e-2`; the `1e-4` that looks
+  conservative sits at its own noise floor, where a real defect and a rounding
+  artifact are indistinguishable.
+
+  It lives in the core, beside `DifferentiableOp`, because it is part of the
+  custom-operation contract rather than a CPU convenience. `GradCheckStorage`
+  is everything it needs of a backend: read one element, perturb one element,
+  and run the backward pass. `GradCheckReport` names the input, the element,
+  both values and the relative error rather than returning a bare number, and
+  its `Display` says what a constant-factor failure means as against a single
+  disagreeing element.
+
 - **Every operation's example is written for that operation, compiled, and run.**
   The reference used to show examples harvested from the book, which made
   coverage an accident of what the prose happened to demonstrate -- and at some
@@ -31,6 +49,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the examples that never compiled are not re-proposed on every run.
 
 ### Fixed
+
+- **All four backends present the same recording seam.** `tape_record` and
+  `tape_record_with` are the two names a downstream `Execute` implementation
+  needs, and Metal had only the first while its `tape` module was the one of
+  the four left `pub`. The most important boundary in the crate, whether a
+  third party can add a differentiable operation, therefore differed by
+  backend for no stated reason. Metal gains `tape_depth` and
+  `tape_record_with` and its module joins the other three at `pub(crate)`.
 
 - **A capability row claiming `training` now has to record a node.** The
   dispatcher enforced the row in one direction only: a query asking for

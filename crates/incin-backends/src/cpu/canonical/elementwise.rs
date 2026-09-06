@@ -15,12 +15,12 @@ use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::elementwise::{
     canonical_abs, canonical_acos, canonical_acosh, canonical_add_scalar, canonical_asin,
     canonical_asinh, canonical_atan, canonical_atan2, canonical_atanh, canonical_clamp,
-    canonical_cosh, canonical_elu, canonical_erf, canonical_exp, canonical_fmod, canonical_frac,
-    canonical_gelu, canonical_log, canonical_mish, canonical_mul_scalar, canonical_neg,
-    canonical_powf, canonical_relu, canonical_remainder, canonical_rsqrt, canonical_sigmoid,
-    canonical_sinh, canonical_softmax, canonical_sqrt, canonical_step, canonical_swish,
-    canonical_cos, canonical_log10, canonical_log2, canonical_sin, canonical_tan,
-    canonical_tanh, canonical_trunc, canonical_unary, log_softmax,
+    canonical_cos, canonical_cosh, canonical_elu, canonical_erf, canonical_exp, canonical_fmod,
+    canonical_frac, canonical_gelu, canonical_log, canonical_log2, canonical_log10, canonical_mish,
+    canonical_mul_scalar, canonical_neg, canonical_powf, canonical_relu, canonical_remainder,
+    canonical_rsqrt, canonical_sigmoid, canonical_sin, canonical_sinh, canonical_softmax,
+    canonical_sqrt, canonical_step, canonical_swish, canonical_tan, canonical_tanh,
+    canonical_trunc, canonical_unary, log_softmax,
 };
 use crate::cpu::ops::shape_ops::{div_scalar_storage, sub_scalar_storage};
 use crate::cpu::storage::CpuStorage;
@@ -377,12 +377,7 @@ macro_rules! direct_unary_float_executors {
     )*};
 }
 
-direct_unary_float_executors![
-    (Sign, Sign),
-    (Floor, Floor),
-    (Ceil, Ceil),
-    (Round, Round),
-];
+direct_unary_float_executors![(Sign, Sign), (Floor, Floor), (Ceil, Ceil), (Round, Round),];
 
 // Operations that sat in the table above until the conformance oracle began
 // asserting that a row claiming training records a node.

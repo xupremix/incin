@@ -80,6 +80,7 @@ impl core::convert::From<usize> for incin_core::tensor::ops::index::IndexSpec
 impl core::default::Default for incin_core::distributions::Gumbel<f32>
 impl core::default::Default for incin_core::distributions::Normal<f32>
 impl core::default::Default for incin_core::distributions::Uniform<f32>
+impl core::default::Default for incin_core::exec::gradcheck::GradCheckOptions
 impl core::default::Default for incin_core::exec::meta::Alignment
 impl core::default::Default for incin_core::exec::precision::PrecisionRequest
 impl core::default::Default for incin_core::exec::precision::RuntimePrecisionPolicy
@@ -107,6 +108,7 @@ impl core::fmt::Display for incin_core::exec::catalog::DescriptorCaptureError
 impl core::fmt::Display for incin_core::exec::catalog::DescriptorError
 impl core::fmt::Display for incin_core::exec::dispatch::CanonicalError
 impl core::fmt::Display for incin_core::exec::dispatch::PolicyViolation
+impl core::fmt::Display for incin_core::exec::gradcheck::GradCheckReport
 impl core::fmt::Display for incin_core::exec::meta::MetaError
 impl core::fmt::Display for incin_core::exec::spec::DescriptorSchemaVersion
 impl core::fmt::Display for incin_core::exec::spec::ReduceOp
@@ -566,6 +568,8 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Whe
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Zeros
 impl incin_core::exec::catalog::OutputRule
 impl incin_core::exec::dispatch::CanonicalError
+impl incin_core::exec::gradcheck::GradCheckOptions
+impl incin_core::exec::gradcheck::GradCheckReport
 impl incin_core::exec::meta::Alignment
 impl incin_core::exec::meta::LayoutClass
 impl incin_core::exec::meta::TensorMeta
@@ -2694,6 +2698,10 @@ pub const fn incin_core::exec::context::ExecutionContext<B>::with_policy(B, inci
 pub const fn incin_core::exec::context::ExecutionContext<B>::with_precision_policy(self, incin_core::exec::precision::RuntimePrecisionPolicy) -> Self
 pub const fn incin_core::exec::context::ExecutionContext<B>::with_training(self, bool) -> Self
 pub const fn incin_core::exec::dispatch::CanonicalError::unsupported(&'static str, incin_core::exec::capability::UnsupportedReason) -> Self
+pub const fn incin_core::exec::gradcheck::GradCheckOptions::for_f32() -> Self
+pub const fn incin_core::exec::gradcheck::GradCheckOptions::for_f64() -> Self
+pub const fn incin_core::exec::gradcheck::GradCheckOptions::with_step(self, f64) -> Self
+pub const fn incin_core::exec::gradcheck::GradCheckOptions::with_tolerance(self, f64) -> Self
 pub const fn incin_core::exec::meta::Alignment::bytes(self) -> usize
 pub const fn incin_core::exec::meta::Alignment::of<T>() -> Self
 pub const fn incin_core::exec::meta::Alignment::supports(self, usize) -> bool
@@ -4847,6 +4855,10 @@ pub fn incin_core::exec::AttributeContract::trace_attributes(&self) -> core::res
 pub fn incin_core::exec::AttributeContract::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::Capabilities::support(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
 pub fn incin_core::exec::ExecutionDescriptor::output_shape(&self) -> core::option::Option<&incin_core::shapes::ShapeBuf>
+pub fn incin_core::exec::GradCheckStorage::backward_from(&Self) -> incin_core::error::Result<incin_core::exec::tape::GradientMap<Self>>
+pub fn incin_core::exec::GradCheckStorage::element(&self, usize) -> incin_core::error::Result<f64>
+pub fn incin_core::exec::GradCheckStorage::element_count(&self) -> usize
+pub fn incin_core::exec::GradCheckStorage::with_element_perturbed(&self, usize, f64) -> incin_core::error::Result<Self>
 pub fn incin_core::exec::Operation::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError> where Self: core::marker::Sized
 pub fn incin_core::exec::Operation::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError> where Self: core::marker::Sized
 pub fn incin_core::exec::Operation::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -6031,6 +6043,15 @@ pub fn incin_core::exec::dispatch::execute_shaped_with_payload<O, B, S>(&incin_c
 pub fn incin_core::exec::dispatch::execute_with_payload<O, B>(&incin_core::exec::context::ExecutionContext<B>, <O as incin_core::exec::catalog::Operation>::Attributes, &[incin_core::exec::request::TensorHandle<'_>], core::option::Option<&[u8]>) -> core::result::Result<<B as incin_core::backend_authoring::Execute<O>>::Output, incin_core::exec::dispatch::CanonicalError> where O: incin_core::exec::catalog::Operation, B: incin_core::backend_authoring::Execute<O> + incin_core::exec::capability::Capabilities
 pub fn incin_core::exec::dispatch::logical_meta(&incin_core::exec::meta::TensorMeta) -> incin_core::exec::catalog::LogicalTensorMeta
 pub fn incin_core::exec::dispatch::support_for<O, B>(&incin_core::exec::context::ExecutionContext<B>, &incin_core::exec::meta::TensorMeta) -> core::result::Result<incin_core::exec::capability::SupportLevel, incin_core::exec::capability::UnsupportedReason> where O: incin_core::exec::catalog::CanonicalOperation, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::StorageBackend
+pub fn incin_core::exec::gradcheck::GradCheckOptions::default() -> Self
+pub fn incin_core::exec::gradcheck::GradCheckReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_core::exec::gradcheck::GradCheckReport::passed(&self) -> bool
+pub fn incin_core::exec::gradcheck::GradCheckStorage::backward_from(&Self) -> incin_core::error::Result<incin_core::exec::tape::GradientMap<Self>>
+pub fn incin_core::exec::gradcheck::GradCheckStorage::element(&self, usize) -> incin_core::error::Result<f64>
+pub fn incin_core::exec::gradcheck::GradCheckStorage::element_count(&self) -> usize
+pub fn incin_core::exec::gradcheck::GradCheckStorage::with_element_perturbed(&self, usize, f64) -> incin_core::error::Result<Self>
+pub fn incin_core::exec::gradcheck::gradcheck<S: incin_core::exec::gradcheck::GradCheckStorage>(impl core::ops::function::Fn(&[S]) -> incin_core::error::Result<S>, &[S], incin_core::exec::gradcheck::GradCheckOptions) -> incin_core::error::Result<incin_core::exec::gradcheck::GradCheckReport>
+pub fn incin_core::exec::gradcheck<S: incin_core::exec::gradcheck::GradCheckStorage>(impl core::ops::function::Fn(&[S]) -> incin_core::error::Result<S>, &[S], incin_core::exec::gradcheck::GradCheckOptions) -> incin_core::error::Result<incin_core::exec::gradcheck::GradCheckReport>
 pub fn incin_core::exec::meta::Alignment::default() -> Self
 pub fn incin_core::exec::meta::Alignment::new(usize) -> core::result::Result<Self, incin_core::exec::meta::MetaError>
 pub fn incin_core::exec::meta::MetaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -8542,6 +8563,11 @@ pub incin_core::exec::DimExpr::NamedSymbol::name: alloc::string::String
 pub incin_core::exec::DimExpr::Sub(alloc::boxed::Box<incin_core::exec::symbolic::DimExpr>, alloc::boxed::Box<incin_core::exec::symbolic::DimExpr>)
 pub incin_core::exec::DimExpr::Symbol(incin_core::exec::symbolic::SymbolId)
 pub incin_core::exec::DimExpr::Unknown
+pub incin_core::exec::Disagreement::analytic: f64
+pub incin_core::exec::Disagreement::element: usize
+pub incin_core::exec::Disagreement::input: usize
+pub incin_core::exec::Disagreement::numeric: f64
+pub incin_core::exec::Disagreement::relative_error: f64
 pub incin_core::exec::EmptyRule::Allowed
 pub incin_core::exec::EmptyRule::IdentityOrDefined
 pub incin_core::exec::EmptyRule::RejectedWhenReductionIsEmpty
@@ -8568,6 +8594,13 @@ pub incin_core::exec::ExpectedDisposition::TypedError
 pub incin_core::exec::FallbackPolicy::AllowComposition
 pub incin_core::exec::FallbackPolicy::AllowTransfer
 pub incin_core::exec::FallbackPolicy::Deny
+pub incin_core::exec::GradCheckOptions::absolute_floor: f64
+pub incin_core::exec::GradCheckOptions::step: f64
+pub incin_core::exec::GradCheckOptions::tolerance: f64
+pub incin_core::exec::GradCheckReport::compared: usize
+pub incin_core::exec::GradCheckReport::disagreements: alloc::vec::Vec<incin_core::exec::gradcheck::Disagreement>
+pub incin_core::exec::GradCheckReport::options: incin_core::exec::gradcheck::GradCheckOptions
+pub incin_core::exec::GradCheckReport::worst_relative_error: f64
 pub incin_core::exec::GradMode::Disabled
 pub incin_core::exec::GradMode::Enabled
 pub incin_core::exec::GradientRule::Defined
@@ -9131,6 +9164,18 @@ pub incin_core::exec::dispatch::CanonicalError::Policy(incin_core::exec::dispatc
 pub incin_core::exec::dispatch::PolicyViolation::fallback: incin_core::exec::policy::FallbackPolicy
 pub incin_core::exec::dispatch::PolicyViolation::operation: incin_core::exec::capability::OperationIdentity
 pub incin_core::exec::dispatch::PolicyViolation::support: incin_core::exec::capability::SupportLevel
+pub incin_core::exec::gradcheck::Disagreement::analytic: f64
+pub incin_core::exec::gradcheck::Disagreement::element: usize
+pub incin_core::exec::gradcheck::Disagreement::input: usize
+pub incin_core::exec::gradcheck::Disagreement::numeric: f64
+pub incin_core::exec::gradcheck::Disagreement::relative_error: f64
+pub incin_core::exec::gradcheck::GradCheckOptions::absolute_floor: f64
+pub incin_core::exec::gradcheck::GradCheckOptions::step: f64
+pub incin_core::exec::gradcheck::GradCheckOptions::tolerance: f64
+pub incin_core::exec::gradcheck::GradCheckReport::compared: usize
+pub incin_core::exec::gradcheck::GradCheckReport::disagreements: alloc::vec::Vec<incin_core::exec::gradcheck::Disagreement>
+pub incin_core::exec::gradcheck::GradCheckReport::options: incin_core::exec::gradcheck::GradCheckOptions
+pub incin_core::exec::gradcheck::GradCheckReport::worst_relative_error: f64
 pub incin_core::exec::meta::LayoutClass::ChannelWise
 pub incin_core::exec::meta::LayoutClass::Contiguous
 pub incin_core::exec::meta::LayoutClass::ContiguousLastAxis
@@ -11168,6 +11213,7 @@ pub mod incin_core::exec::catalog::op
 pub mod incin_core::exec::conformance
 pub mod incin_core::exec::context
 pub mod incin_core::exec::dispatch
+pub mod incin_core::exec::gradcheck
 pub mod incin_core::exec::meta
 pub mod incin_core::exec::op
 pub mod incin_core::exec::policy
@@ -11727,8 +11773,11 @@ pub struct incin_core::exec::CapturedDescriptor
 pub struct incin_core::exec::ConformanceVector
 pub struct incin_core::exec::Descriptor<O: incin_core::exec::catalog::Operation>
 pub struct incin_core::exec::DescriptorSchemaVersion(_)
+pub struct incin_core::exec::Disagreement
 pub struct incin_core::exec::ExecutionContext<B: incin_core::backend_authoring::StorageBackend>
 pub struct incin_core::exec::ExecutionPolicy
+pub struct incin_core::exec::GradCheckOptions
+pub struct incin_core::exec::GradCheckReport
 pub struct incin_core::exec::GradientMap<S>
 pub struct incin_core::exec::LogicalTensorMeta
 pub struct incin_core::exec::LossScaleState
@@ -11996,6 +12045,9 @@ pub struct incin_core::exec::catalog::op::Zeros
 pub struct incin_core::exec::conformance::ConformanceVector
 pub struct incin_core::exec::context::ExecutionContext<B: incin_core::backend_authoring::StorageBackend>
 pub struct incin_core::exec::dispatch::PolicyViolation
+pub struct incin_core::exec::gradcheck::Disagreement
+pub struct incin_core::exec::gradcheck::GradCheckOptions
+pub struct incin_core::exec::gradcheck::GradCheckReport
 pub struct incin_core::exec::meta::Alignment(_)
 pub struct incin_core::exec::meta::TensorMeta
 pub struct incin_core::exec::meta::TensorMetaFields
@@ -12661,6 +12713,7 @@ pub trait incin_core::exec::AttributeContract
 pub trait incin_core::exec::CanonicalOperation: incin_core::exec::catalog::descriptor::private::Sealed + incin_core::exec::catalog::Operation
 pub trait incin_core::exec::Capabilities
 pub trait incin_core::exec::ExecutionDescriptor: core::clone::Clone + core::fmt::Debug
+pub trait incin_core::exec::GradCheckStorage: incin_core::exec::tape::TapeStorage + core::marker::Sized
 pub trait incin_core::exec::Operation: core::clone::Clone + core::fmt::Debug + 'static
 pub trait incin_core::exec::PrecisionCapabilities
 pub trait incin_core::exec::PrecisionSpec: 'static + core::marker::Send + core::marker::Sync + core::marker::Copy + core::fmt::Debug + core::cmp::Eq + core::cmp::PartialEq + core::hash::Hash
@@ -12671,6 +12724,7 @@ pub trait incin_core::exec::catalog::AttributeContract
 pub trait incin_core::exec::catalog::CanonicalOperation: incin_core::exec::catalog::descriptor::private::Sealed + incin_core::exec::catalog::Operation
 pub trait incin_core::exec::catalog::Operation: core::clone::Clone + core::fmt::Debug + 'static
 pub trait incin_core::exec::catalog::TraceDescriptor: incin_core::exec::spec::ExecutionDescriptor
+pub trait incin_core::exec::gradcheck::GradCheckStorage: incin_core::exec::tape::TapeStorage + core::marker::Sized
 pub trait incin_core::exec::precision::PrecisionCapabilities
 pub trait incin_core::exec::precision::PrecisionSpec: 'static + core::marker::Send + core::marker::Sync + core::marker::Copy + core::fmt::Debug + core::cmp::Eq + core::cmp::PartialEq + core::hash::Hash
 pub trait incin_core::exec::rule::ShapeRule<Inputs>: core::marker::Sized

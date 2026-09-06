@@ -12,10 +12,10 @@ use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::shape_ops::{
-    broadcast_left_storage, concat_storage, diag_storage, flatten_storage, gather_storage,
-    index_select_storage, lerp_storage, masked_fill_storage, narrow_storage, one_hot_storage,
-    pad_storage, pixel_shuffle_storage, repeat_storage, scatter_add_storage, scatter_storage,
-    canonical_to_dtype, slice_storage, squeeze_storage, stack_storage, transpose_storage,
+    broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage, flatten_storage,
+    gather_storage, index_select_storage, lerp_storage, masked_fill_storage, narrow_storage,
+    one_hot_storage, pad_storage, pixel_shuffle_storage, repeat_storage, scatter_add_storage,
+    scatter_storage, slice_storage, squeeze_storage, stack_storage, transpose_storage,
     tril_storage, triu_storage, unfold_storage, unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
