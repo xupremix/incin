@@ -96,7 +96,8 @@ pub enum Verdict {
     /// panic past admission is as much a contract break as one before it.
     Panicked(String),
     /// The tuple ran, and the row said it trains, but the kernel recorded
-    /// nothing on the tape.
+    /// nothing on the tape, and the operation is not one of the declared
+    /// zero-derivative ones.
     ///
     /// A capability defect of the quietest kind. The dispatcher enforces the
     /// row in one direction only: a query asking for training is refused when
@@ -117,7 +118,11 @@ impl Verdict {
     pub const fn is_finding(&self) -> bool {
         matches!(
             self,
-            Self::Refused(_) | Self::Rejected(_) | Self::Failed(_) | Self::Panicked(_)
+            Self::Refused(_)
+                | Self::Rejected(_)
+                | Self::Failed(_)
+                | Self::Panicked(_)
+                | Self::RecordedNothing
         )
     }
 }
@@ -211,6 +216,13 @@ impl OracleReport {
                 Verdict::Panicked(why) => {
                     alloc::format!("  PANICKED {}: {why}\n", observation.tuple.label())
                 }
+                Verdict::RecordedNothing => alloc::format!(
+                    "  NO RECIPE {}: the row claims training and the kernel recorded no \
+                     tape node, so a graph through this operation has a hole in it. Give \
+                     the kernel a backward rule, or, if its derivative is genuinely zero \
+                     or undefined, add it to `carries_no_gradient` with the reason.\n",
+                    observation.tuple.label()
+                ),
                 _ => String::new(),
             };
             out.push_str(&line);
@@ -310,13 +322,58 @@ fn execute_tuple(
     tape::clear();
 
     match outcome {
-        Ok(Ok(())) if tuple.training && !recorded => Verdict::RecordedNothing,
+        Ok(Ok(())) if tuple.training && !recorded && !carries_no_gradient(tuple) => {
+            Verdict::RecordedNothing
+        }
         Ok(Ok(())) => Verdict::Executed,
         Ok(Err(error)) => classify(&error),
         Err(_) => Verdict::Panicked(
             "panicked; the descriptor contract requires a returned error".to_string(),
         ),
     }
+}
+
+/// Operations that legitimately record nothing under training.
+///
+/// A capability row claiming `training` says the operation *runs* in a
+/// training graph, not that it carries gradient into its inputs. For most
+/// operations those are the same thing, and an operation that runs under
+/// training and pushes no node has a hole where its derivative should be. For
+/// these, recording nothing is the derivative.
+///
+/// Declared here, by hand, with a reason each, rather than inferred. There is
+/// no way to look at a kernel and tell "this has no derivative" apart from
+/// "this forgot to write one", which is exactly the confusion that let `sin`
+/// and `cos` sit in the second group looking like the first. A new operation
+/// is a finding until somebody writes down which group it is in.
+///
+/// The longer-term shape is a differentiability property on the catalog
+/// operation itself, so a custom operation could declare it too. That belongs
+/// on the operation rather than on a backend's capability row, since whether
+/// `floor` has a derivative is not a fact about CPU.
+fn carries_no_gradient(tuple: &AdvertisedTuple) -> bool {
+    // A cast is differentiable exactly when both ends are floating. The
+    // integer end of one truncates, so its derivative is zero almost
+    // everywhere and passing a gradient through would report a sensitivity
+    // the forward pass does not have. The tuple's dtype is the end that
+    // varies, so a non-float one here is an integer cast.
+    if tuple.operation == OperationKind::ToDType {
+        return !tuple.dtype.builtin_id().is_some_and(DTypeId::is_float);
+    }
+
+    matches!(
+        tuple.operation,
+        // Piecewise constant. The derivative is zero wherever it exists, and
+        // zero is a gradient rather than a missing one.
+        OperationKind::Sign
+            | OperationKind::Floor
+            | OperationKind::Ceil
+            | OperationKind::Round
+            | OperationKind::Trunc
+            // Reads indices and writes an indicator. There is no dense input
+            // to be sensitive to.
+            | OperationKind::OneHot
+    )
 }
 
 /// Pose one advertised tuple: the registry must admit it and the backend must

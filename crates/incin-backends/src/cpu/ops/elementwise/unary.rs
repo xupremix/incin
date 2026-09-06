@@ -199,8 +199,23 @@ pub(crate) fn canonical_trunc(t: &CpuStorage) -> Result<CpuStorage> {
     elementwise_unary_typed(UnaryOp::Trunc, t)
 }
 
+/// `frac(x) = x - trunc(x)`, whose derivative is `1` wherever it exists.
+///
+/// The gradient passes straight through. It is undefined on the integers,
+/// where the sawtooth steps, and that is a measure zero set the same way
+/// `relu` at zero is.
+///
+/// `trunc` is the other half of the same identity and keeps no recipe: its
+/// derivative is zero wherever it exists.
 pub(crate) fn canonical_frac(t: &CpuStorage) -> Result<CpuStorage> {
-    elementwise_unary_typed(UnaryOp::Frac, t)
+    let out = elementwise_unary_typed(UnaryOp::Frac, t)?;
+    let (t_id, out_id) = (t.id, out.id);
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+    });
+    Ok(out)
 }
 
 pub(crate) fn canonical_log(t: &CpuStorage) -> Result<CpuStorage> {

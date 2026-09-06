@@ -2,6 +2,8 @@
 //! Used to verify analytic gradients against numerical finite-difference approximations.
 //!
 //! `gradcheck` calls the REAL Phase 1 API (`tape::backward`, `CpuGrads::get`).
+use incin_core::error::Result;
+
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
 use crate::cpu::tape;
@@ -31,6 +33,31 @@ pub(crate) const F32_STEP: f64 = 1e-2;
 /// crate falls to `1.0e-4`, so a `1e-3` ceiling clears real noise by 10x
 /// while catching gradient errors an order of magnitude smaller than before.
 pub(crate) const GRAD_TOL: f64 = 1e-3;
+
+/// The CPU backend's answer to the core's gradient-check contract.
+///
+/// Three of the four methods are the helpers this module already had, given
+/// the names the shared sweep calls them by. The fourth, `backward_from`, is
+/// this backend's own thread-local walk, so a check written against the core
+/// trait exercises the path `Tensor::backward` takes rather than a
+/// reconstruction of it.
+impl incin_core::exec::GradCheckStorage for CpuStorage {
+    fn backward_from(loss: &Self) -> Result<incin_core::exec::GradientMap<Self>> {
+        tape::backward(loss).map(|grads| grads.grads)
+    }
+
+    fn element_count(&self) -> usize {
+        crate::cpu::stride::validated_numel(&self.shape).max(1)
+    }
+
+    fn element(&self, index: usize) -> Result<f64> {
+        Ok(flat_get(self, index))
+    }
+
+    fn with_element_perturbed(&self, index: usize, delta: f64) -> Result<Self> {
+        Ok(perturbed(self, index, delta))
+    }
+}
 
 /// Build a fresh, owned copy of `storage` with the scalar at flat buffer
 /// position `flat_idx` perturbed by `delta`. Never mutates the input's
@@ -220,6 +247,70 @@ mod tests {
         assert!(
             max_rel_err < GRAD_TOL,
             "gradcheck max relative error too high: {max_rel_err}"
+        );
+    }
+
+    /// The public core sweep reaches the same verdict as this module's own.
+    ///
+    /// Both are pointed at `sum(x^2)`, whose gradient is `2x` in closed form.
+    /// The point is not that either is right in isolation but that the
+    /// generic path, which an out-of-tree backend will use, agrees with the
+    /// in-tree one that every gradient test in this crate is written against.
+    #[test]
+    fn the_public_gradcheck_agrees_with_the_internal_one() {
+        use incin_core::exec::{GradCheckOptions, gradcheck as public_gradcheck};
+
+        let x = vector(vec![2.0, 3.0, -1.0]);
+        let op = |inputs: &[CpuStorage]| -> incin_core::error::Result<CpuStorage> {
+            let squared = crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0])?;
+            crate::cpu::ops::reduce::sum_all(&squared)
+        };
+
+        let report = public_gradcheck(op, &[x], GradCheckOptions::for_f32())
+            .expect("the sweep ran to completion");
+        assert!(report.passed(), "{report}");
+        assert_eq!(report.compared, 3);
+        assert!(report.worst_relative_error < GRAD_TOL);
+    }
+
+    /// A recipe that is wrong by a constant factor is caught and located.
+    ///
+    /// A check that has never failed a bad gradient says nothing when it
+    /// passes a good one. This records the deliberate defect: the recipe
+    /// halves every contribution, so every element disagrees by the same
+    /// factor, which is the shape the report tells the reader to look for.
+    #[test]
+    fn a_recipe_wrong_by_a_constant_factor_is_reported_on_every_element() {
+        use alloc::boxed::Box;
+        use incin_core::exec::{GradCheckOptions, TapeNode, gradcheck as public_gradcheck};
+
+        let x = vector(vec![2.0, 3.0, -1.0]);
+        let op = |inputs: &[CpuStorage]| -> incin_core::error::Result<CpuStorage> {
+            let squared = crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0])?;
+            let out = crate::cpu::ops::reduce::sum_all(&squared)?;
+            // Half of `2x`. Recorded after the real chain, so it is the node
+            // the walk reaches first and the one whose contribution lands.
+            let saved = inputs[0].clone();
+            let (input_id, out_id) = (inputs[0].id, out.id);
+            tape::push(TapeNode {
+                output_id: out_id,
+                input_ids: alloc::vec![input_id],
+                backward: Box::new(move |_grad: &CpuStorage| {
+                    Ok(alloc::vec![crate::cpu::ops::elementwise::mul_storage(
+                        &saved,
+                        &saved.clone(),
+                    )?])
+                }),
+            });
+            Ok(out)
+        };
+
+        let report = public_gradcheck(op, &[x], GradCheckOptions::for_f32())
+            .expect("the sweep ran to completion");
+        assert!(!report.passed(), "a wrong recipe passed: {report}");
+        assert!(
+            !report.disagreements.is_empty(),
+            "the report named no element"
         );
     }
 

@@ -119,7 +119,7 @@ fn unsupported_methods_return_typed_error_not_silent_placeholder() {
     // All other  methods are now fully implemented. We prove that
     // unsupported operations return typed errors by attempting to convert
     // to Q8_0, which is intentionally left unsupported in the Cpu backend.
-    let result = tensor_to_dtype_storage(&t, DTypeId::Q8_0.descriptor());
+    let result = super::convert::tensor_to_dtype_storage(&t, DTypeId::Q8_0.descriptor());
     assert!(matches!(
         result,
         Err(Error::UnsupportedBackendOperation {
@@ -974,4 +974,43 @@ fn group_norm_gradcheck_proves_the_statistical_path_is_recorded() {
     };
     let err = gradcheck(op, &operands, F32_STEP);
     assert!(err < GRAD_TOL, "group_norm gradcheck too high: {err}");
+}
+
+#[test]
+/// `casting_between_float_dtypes_carries_the_gradient`.
+///
+/// A mid-graph dtype change is an ordinary research move, and until this
+/// recorded it detached the graph without saying so: everything upstream of
+/// the cast received no gradient and the optimizer skipped those parameters
+/// silently. The rule is the identity, so the gradient arrives back at the
+/// input unchanged and in the input's own dtype.
+fn casting_between_float_dtypes_carries_the_gradient() {
+    use crate::cpu::tape;
+    use incin_core::tensor::dtype::DTypeId;
+
+    let x = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.5, -2.25, 3.0]), vec![3]);
+    let wide = canonical_to_dtype(&x, DTypeId::F64.descriptor()).unwrap();
+    let loss = crate::cpu::ops::reduce::sum_all(&wide).unwrap();
+
+    let grads = tape::backward(&loss).unwrap();
+    let grad = grads.get(x.id).expect("the cast carried the gradient back");
+
+    assert_eq!(grad.shape, vec![3]);
+    assert_eq!(f32_vec(grad), vec![1.0, 1.0, 1.0]);
+}
+
+#[test]
+/// `casting_to_an_integer_dtype_records_nothing`.
+///
+/// Truncation to an integer has a zero derivative almost everywhere, so
+/// passing a gradient through one would report a sensitivity the forward pass
+/// does not have. Recording nothing is the rule, not a gap in it.
+fn casting_to_an_integer_dtype_records_nothing() {
+    use crate::cpu::tape;
+    use incin_core::tensor::dtype::DTypeId;
+
+    tape::clear();
+    let x = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.5, -2.25, 3.0]), vec![3]);
+    let _ = canonical_to_dtype(&x, DTypeId::I64.descriptor()).unwrap();
+    assert_eq!(tape::depth(), 0);
 }

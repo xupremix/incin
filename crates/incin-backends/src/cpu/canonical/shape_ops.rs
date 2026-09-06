@@ -15,7 +15,7 @@ use crate::cpu::ops::shape_ops::{
     broadcast_left_storage, concat_storage, diag_storage, flatten_storage, gather_storage,
     index_select_storage, lerp_storage, masked_fill_storage, narrow_storage, one_hot_storage,
     pad_storage, pixel_shuffle_storage, repeat_storage, scatter_add_storage, scatter_storage,
-    slice_storage, squeeze_storage, stack_storage, tensor_to_dtype_storage, transpose_storage,
+    canonical_to_dtype, slice_storage, squeeze_storage, stack_storage, transpose_storage,
     tril_storage, triu_storage, unfold_storage, unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
@@ -706,7 +706,6 @@ impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        tensor_to_dtype_storage(input, dtype)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        canonical_to_dtype(input, dtype).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

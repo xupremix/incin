@@ -44,7 +44,7 @@ pub(crate) use combine::{
 };
 pub(crate) use convert::{
     float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage, int_to_vec1_storage,
-    tensor_to_dtype_storage,
+    canonical_to_dtype,
 };
 pub(crate) use linalg::{
     addmm_storage, lerp_storage, matmul_storage, scaled_dot_product_attention_storage,

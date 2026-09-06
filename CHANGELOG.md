@@ -32,6 +32,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A capability row claiming `training` now has to record a node.** The
+  dispatcher enforced the row in one direction only: a query asking for
+  training is refused when the row does not claim it, and nothing checked the
+  converse. A row could therefore claim training while its kernel pushed
+  nothing, which puts a hole in the graph rather than a wrong number in it.
+  The CPU conformance oracle now runs every training tuple inside an enabled
+  `GradMode` and fails the row if the tape did not grow. That is what found
+  the six operations below.
+
+  Operations whose derivative is genuinely zero or undefined are declared, by
+  hand and with a reason each, in `carries_no_gradient`: `sign`, `floor`,
+  `ceil`, `round`, `trunc` are piecewise constant, and `one_hot` reads
+  indices. A new operation is a finding until somebody writes down which
+  group it belongs to, because there is no way to tell "has no derivative"
+  from "forgot to write one" by looking at a kernel.
+
+- **A mid-graph dtype change carries its gradient.** Casting to `f64` for a
+  delicate step and back is ordinary practice, and it detached the graph:
+  everything upstream of the cast received nothing. `to_dtype` between two
+  floating dtypes now records the identity and casts the gradient back to the
+  input's dtype. A cast to an integer still records nothing, which is its real
+  derivative.
+
+- **`frac`, `fmod` and `remainder` record a gradient.** `frac` passes it
+  through, and both modulus operations use one rule: every modulus here is
+  `r = a - b * q` for a locally constant integer `q`, so `dr/da = 1` and
+  `dr/db = -q`. `q` is recovered as `(a - r) / b` from the values rather than
+  recomputed with a rounding rule, which is exact for whichever convention the
+  forward used and stops the two recipes drifting from their kernels.
+
 - **`sin`, `cos`, `log2` and `log10` record a gradient.** All four advertised
   training-mode execution and pushed nothing on the tape, so a graph
   containing one came apart at that operation: `backward` reached everything

@@ -1,11 +1,63 @@
 use super::*;
 
 pub(crate) fn canonical_fmod(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
-    elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a % b)
+    let out = elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a % b)?;
+    record_modulus(lhs, rhs, &out);
+    Ok(out)
 }
 
 pub(crate) fn canonical_remainder(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
-    elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a.rem_euclid(b))
+    let out = elementwise_binary(lhs, rhs, &lhs.shape, |a, b| a.rem_euclid(b))?;
+    record_modulus(lhs, rhs, &out);
+    Ok(out)
+}
+
+/// The shared backward rule for both modulus operations.
+///
+/// Every modulus in this crate has the form `r = a - b * q` for an integer
+/// `q`, and the two differ only in how `q` is rounded: `fmod` truncates
+/// toward zero, `remainder` takes the least non-negative residue. `q` is
+/// locally constant in both, so the derivatives are `dr/da = 1` and
+/// `dr/db = -q` wherever they exist, which is everywhere except the measure
+/// zero set where `q` steps.
+///
+/// `q` is recovered as `(a - r) / b` from the values themselves rather than
+/// recomputed with a rounding rule. That is exact for whichever convention
+/// the forward used, and it means neither recipe can drift from the kernel it
+/// belongs to by picking `floor` where the kernel picked `trunc`. Where `b`
+/// is zero the forward already produced a `NaN`, and the same `NaN` flows
+/// back rather than a fabricated finite number.
+fn record_modulus(lhs: &CpuStorage, rhs: &CpuStorage, out: &CpuStorage) {
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    let (lhs_capture, rhs_capture, out_capture) = (lhs.clone(), rhs.clone(), out.clone());
+    tape::push_with(|| TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let numerator = elementwise_binary_numeric(
+                BinaryOp::Sub,
+                &lhs_capture,
+                &out_capture,
+                &grad_out.shape,
+            )?;
+            let quotient = elementwise_binary_numeric(
+                BinaryOp::Div,
+                &numerator,
+                &rhs_capture,
+                &grad_out.shape,
+            )?;
+            let grad_rhs = elementwise_binary_numeric(
+                BinaryOp::Mul,
+                grad_out,
+                &negate(&quotient),
+                &grad_out.shape,
+            )?;
+            Ok(vec![
+                tape::unbroadcast(grad_out, &lhs_capture.shape)?,
+                tape::unbroadcast(&grad_rhs, &rhs_capture.shape)?,
+            ])
+        }),
+    });
 }
 
 pub(crate) fn canonical_atan2(y: &CpuStorage, x: &CpuStorage) -> Result<CpuStorage> {

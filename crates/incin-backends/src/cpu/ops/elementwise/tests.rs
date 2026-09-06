@@ -260,6 +260,64 @@ fn relu_forward_and_backward_zero_at_boundary() {
 }
 
 #[test]
+/// `frac_gradcheck_passes_the_gradient_through`.
+///
+/// Inputs sit away from the integers, where the sawtooth steps and the
+/// derivative does not exist.
+fn frac_gradcheck_passes_the_gradient_through() {
+    let x = vector(vec![0.3, 1.6, -2.4]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let a = canonical_frac(&inputs[0]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&a).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[x], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "frac gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
+/// `fmod_gradcheck_in_both_operands`.
+///
+/// Away from the steps in the quotient, which is where `q` is locally
+/// constant and the rule holds. The step is the default rather than a smaller
+/// one on purpose: a step that crossed a wrap would measure the wrap.
+fn fmod_gradcheck_in_both_operands() {
+    let a = vector(vec![1.3, 2.7, 5.1]);
+    let b = vector(vec![3.0, 4.0, 6.0]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let r = canonical_fmod(&inputs[0], &inputs[1]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&r).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[a, b], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "fmod gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
+/// `remainder_gradcheck_in_both_operands`.
+///
+/// The same recipe as `fmod` on a different rounding convention, which is the
+/// point: the quotient is recovered from the values rather than recomputed,
+/// so one rule covers both.
+fn remainder_gradcheck_in_both_operands() {
+    let a = vector(vec![1.3, 2.7, 5.1]);
+    let b = vector(vec![3.0, 4.0, 6.0]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let r = canonical_remainder(&inputs[0], &inputs[1]).unwrap();
+        crate::cpu::ops::reduce::sum_all(&r).unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[a, b], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "remainder gradcheck error too high: {max_rel_err}"
+    );
+}
+
+#[test]
 /// `sin_gradcheck_matches_cos`.
 ///
 /// These four recorded nothing until the conformance oracle asked whether a

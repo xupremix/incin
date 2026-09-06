@@ -45,6 +45,7 @@ pub mod conformance;
 pub mod context;
 /// The production path from a canonical operation to native execution.
 pub mod dispatch;
+pub mod gradcheck;
 /// Checked physical storage metadata shared by all backends.
 pub mod meta;
 /// Backend-neutral execution policy vocabulary.
@@ -90,6 +91,9 @@ pub use conformance::{
     ConformanceClass, ConformanceVector, ExpectedDisposition, SEMANTIC_CONFORMANCE_VECTORS,
 };
 pub use context::ExecutionContext;
+pub use gradcheck::{
+    Disagreement, GradCheckOptions, GradCheckReport, GradCheckStorage, gradcheck,
+};
 pub use dispatch::{CanonicalError, PolicyViolation};
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
 #[cfg(feature = "std")]
