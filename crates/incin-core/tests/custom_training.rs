@@ -350,16 +350,23 @@ fn a_custom_operation_is_one_call_from_a_tensor() {
     )
     .expect("the leaf builds");
 
-    // The custom operation, then a built-in reduction, then backward.
+    // The custom operation, then a built-in elementwise op, then a built-in
+    // reduction, then backward. The `relu` in the middle is not decoration: it
+    // is the layout-sensitive successor, and it is here so the `Dyn` layout
+    // `apply_op` returns is proven to compose rather than assumed to.
     let squared = x.apply_op::<Square>(NoAttributes).expect("square runs");
-    let loss = squared.sum_all().expect("the built-in reduction runs");
+    let gated = squared
+        .relu()
+        .expect("a built-in successor accepts the result");
+    let loss = gated.sum_all().expect("the built-in reduction runs");
     let grads = loss.backward().expect("backward runs");
 
     let gx = grads
         .require(&x)
         .expect("the custom node is on the same graph as the built-in one");
 
-    // d/dx sum(x^2) = 2x.
+    // Every square is positive, so the relu is the identity here and
+    // d/dx sum(relu(x^2)) = 2x.
     let values: Vec<f32> = gx.to_vec1().expect("gradient reads back");
     for (i, got) in values.iter().enumerate() {
         let expected = 2.0 * (i as f32 + 1.0);
