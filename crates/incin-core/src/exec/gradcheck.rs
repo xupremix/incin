@@ -318,7 +318,10 @@ fn central_difference<S: GradCheckStorage>(
     // installs a thread-local, and this module is not. `restrict` is the
     // tighten-only direction and is exactly what is wanted here -- it
     // delegates to `scope` where there is a thread-local to install into, and
-    // is a no-op where there is no ambient tape to record onto either.
+    // is a no-op elsewhere. The no-op is safe for a reason about the feature
+    // graph rather than about the tape: every backend feature implies `std`,
+    // so a build without `std` has no `TapeStorage` implementation and
+    // therefore no caller that could reach this in the first place.
     GradMode::Disabled.restrict(|| {
         let high = op(&plus)?.element(0)?;
         let low = op(&minus)?.element(0)?;

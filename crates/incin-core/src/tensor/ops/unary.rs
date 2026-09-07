@@ -142,11 +142,14 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// built-ins can make because their kernels are known to write contiguous
     /// output; a custom kernel is by definition not known to, and promising
     /// contiguity on its behalf would be a promise this crate cannot keep.
-    /// `Dyn` claims nothing, which is the honest description and still
-    /// composes: a `Dyn` result feeds every built-in successor, as
-    /// `a_custom_operation_is_one_call_from_a_tensor` in `tests/custom_training.rs`
-    /// exercises. An author who does know their kernel is contiguous can say
-    /// so by going through the explicit dispatch path.
+    /// `Dyn` claims nothing, which is the honest description, and it costs the
+    /// caller nothing: every layout bound in the tensor operation surface is
+    /// the fully general `L: Layout<S>`, so no built-in successor can refuse a
+    /// `Dyn` operand. That is a property of the bounds rather than of any one
+    /// case, and `a_custom_operation_is_one_call_from_a_tensor` in
+    /// `tests/custom_training.rs` exercises the concrete one. An author who
+    /// does know their kernel is contiguous can say so by going through the
+    /// explicit dispatch path.
     pub fn apply_op<O>(&self, attributes: O::Attributes) -> Result<Tensor<S, B, K, G, Local>>
     where
         O: crate::exec::catalog::Operation,

@@ -119,3 +119,19 @@ not itself feature-gated.
 **Not taken:** a session scratchpad. The whole point of recording the options
 not taken is that somebody can return to them after this session ends, which a
 scratchpad file cannot support.
+
+## D14. Pre-existing drift left alone
+Three things were found while running the gates and deliberately not touched,
+because each predates this work and folding a fix into an autograd commit
+hides it:
+- `tools/build-api-examples.py` emits one blank line that the committed
+  `crates/incin/tests/api_examples.rs` does not have, and `--check` is lenient
+  about it. **A contributor who regenerates will get a spurious one-line diff
+  and no gate will explain it.** Worth fixing in its own commit.
+- `crates/incin/tests/api_examples.rs` warns `unused import: incin::prelude::*`
+  (from `9a8426b7`).
+- `crates/incin-backends/src/cuda/backend/tests.rs:903` imports `crate::cpu`
+  (from `69570485`), so `--all-targets` clippy on a `cuda`-without-`cpu`
+  configuration fails. CI runs that suite with both features, and the library
+  itself builds in every configuration, so this is a property of the test tree
+  rather than a break.
