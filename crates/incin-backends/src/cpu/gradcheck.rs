@@ -2,8 +2,6 @@
 //! Used to verify analytic gradients against numerical finite-difference approximations.
 //!
 //! `gradcheck` calls the REAL Phase 1 API (`tape::backward`, `CpuGrads::get`).
-use incin_core::error::Result;
-
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use crate::cpu::stride;
 use crate::cpu::tape;
@@ -33,31 +31,6 @@ pub(crate) const F32_STEP: f64 = 1e-2;
 /// crate falls to `1.0e-4`, so a `1e-3` ceiling clears real noise by 10x
 /// while catching gradient errors an order of magnitude smaller than before.
 pub(crate) const GRAD_TOL: f64 = 1e-3;
-
-/// The CPU backend's answer to the core's gradient-check contract.
-///
-/// Three of the four methods are the helpers this module already had, given
-/// the names the shared sweep calls them by. The fourth, `backward_from`, is
-/// this backend's own thread-local walk, so a check written against the core
-/// trait exercises the path `Tensor::backward` takes rather than a
-/// reconstruction of it.
-impl incin_core::exec::GradCheckStorage for CpuStorage {
-    fn backward_from(loss: &Self) -> Result<incin_core::exec::GradientMap<Self>> {
-        tape::backward(loss).map(|grads| grads.grads)
-    }
-
-    fn element_count(&self) -> usize {
-        crate::cpu::stride::validated_numel(&self.shape).max(1)
-    }
-
-    fn element(&self, index: usize) -> Result<f64> {
-        Ok(flat_get(self, index))
-    }
-
-    fn with_element_perturbed(&self, index: usize, delta: f64) -> Result<Self> {
-        Ok(perturbed(self, index, delta))
-    }
-}
 
 /// Build a fresh, owned copy of `storage` with the scalar at flat buffer
 /// position `flat_idx` perturbed by `delta`. Never mutates the input's

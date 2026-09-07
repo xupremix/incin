@@ -8310,25 +8310,25 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:97",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:70",
     "code": "_ => panic!(\"gradcheck: perturbation only supported for F32/F64 buffers\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:175",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:148",
     "code": "let grads = tape::backward(&out).expect(\"gradcheck: backward() must succeed\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:181",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:154",
     "code": ".expect(\"gradcheck: missing analytic gradient for input\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/mod.rs:284",
+    "site": "crates/incin-backends/src/cpu/mod.rs:288",
     "code": "<$ty>::from_ne_bytes(chunk.try_into().expect(\"checked chunk size\"))",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"

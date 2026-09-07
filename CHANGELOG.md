@@ -50,6 +50,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The CPU backend implements the public gradient checker.** The
+  implementation was written inside `cpu::gradcheck`, which is `#[cfg(test)]`,
+  so `incin_core::exec::gradcheck` compiled and was unusable by anyone
+  outside this crate: the trait it needs had no implementation in a shipped
+  build. It now lives in its own module that is not test-gated, and
+  perturbing an operand whose dtype cannot be perturbed returns an error
+  rather than panicking. The downstream fixture in
+  `crates/incin-core/tests/custom_training.rs` uses the public checker
+  instead of hand-rolling a two-point difference, which is both the proof it
+  works from outside and the example the chapters point at.
+
+  The checker's probe forwards run under `NoGrad`. Each one runs the whole
+  forward, and a recording probe would push a graph nothing will ever drain:
+  two nodes per element per input, held with their saved values, for the
+  length of the sweep.
+
 - **The custom-operation chapters point at the real gradient check.** They
   described sweeping a recipe against central finite differences without
   naming an API to do it with, because until now there was none. Both

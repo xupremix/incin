@@ -66,6 +66,7 @@ impl incin_backends::target::EngineSpec for incin_backends::target::Native
 impl incin_backends::target::EngineSpec for incin_core::shapes::dynamic::Dyn
 impl incin_backends::target::Native
 impl incin_backends::target::TensorTarget for incin_core::tensor::device::Cpu
+impl incin_core::exec::gradcheck::GradCheckStorage for incin_backends::cpu::CpuStorage
 impl incin_core::exec::tape::TapeStorage for incin_backends::cpu::CpuStorage
 impl incin_core::tensor::backend::execute::ExecuteOutput for incin_backends::cpu::CpuVar
 impl incin_core::tensor::backend::execute::ExecuteOutput for incin_backends::dispatch::DispatchVar
@@ -858,8 +859,11 @@ pub fn incin_backends::cpu::CpuGrads::is_empty(&self) -> bool
 pub fn incin_backends::cpu::CpuGrads::len(&self) -> usize
 pub fn incin_backends::cpu::CpuGrads::set(&mut self, incin_core::exec::tape::TensorId, incin_backends::cpu::CpuStorage)
 pub fn incin_backends::cpu::CpuStorage::accumulate(&self, &Self) -> incin_core::err::Result<Self>
+pub fn incin_backends::cpu::CpuStorage::backward_from(&Self) -> incin_core::err::Result<incin_core::exec::tape::GradientMap<Self>>
 pub fn incin_backends::cpu::CpuStorage::broadcast_as(&self, &[usize]) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::CpuStorage::deref(&self) -> &Self::Target
+pub fn incin_backends::cpu::CpuStorage::element(&self, usize) -> incin_core::err::Result<f64>
+pub fn incin_backends::cpu::CpuStorage::element_count(&self) -> usize
 pub fn incin_backends::cpu::CpuStorage::get(&self, &[usize]) -> f64
 pub fn incin_backends::cpu::CpuStorage::has_non_finite(&self) -> incin_core::err::Result<bool>
 pub fn incin_backends::cpu::CpuStorage::id(&self) -> incin_core::exec::tape::TensorId
@@ -871,6 +875,7 @@ pub fn incin_backends::cpu::CpuStorage::reshape(&self, &[usize]) -> incin_core::
 pub fn incin_backends::cpu::CpuStorage::transpose(&self, usize, usize) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::CpuStorage::try_from_contiguous(incin_backends::cpu::CpuBuffer, impl core::convert::AsRef<[usize]>) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::CpuStorage::try_from_parts(alloc::sync::Arc<incin_backends::cpu::CpuBuffer>, impl core::convert::AsRef<[usize]>, impl core::convert::AsRef<[usize]>, usize) -> incin_core::err::Result<Self>
+pub fn incin_backends::cpu::CpuStorage::with_element_perturbed(&self, usize, f64) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::CpuStorage::zeros_like(&incin_backends::cpu::CpuStorage) -> incin_core::err::Result<Self>
 pub fn incin_backends::cpu::tape_depth() -> usize
 pub fn incin_backends::cpu::tape_record(incin_core::exec::tape::TapeNode<incin_backends::cpu::CpuStorage>)

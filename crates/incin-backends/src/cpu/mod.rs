@@ -35,6 +35,10 @@ pub(crate) mod creation;
 /// Finite-difference checks are compiled only for the CPU unit-test suite.
 #[cfg(test)]
 pub(crate) mod gradcheck;
+/// The public gradient checker's storage contract. Not test-gated: an
+/// implementation that existed only in this crate's tests would leave
+/// `incin_core::exec::gradcheck` unusable by the authors it is for.
+mod gradcheck_storage;
 pub(crate) mod ops;
 /// Internal storage types.
 pub(crate) mod storage;

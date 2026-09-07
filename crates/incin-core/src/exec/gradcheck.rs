@@ -39,6 +39,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use crate::err::Result;
+use crate::exec::policy::GradMode;
 use crate::exec::tape::{GradientMap, TapeStorage};
 
 /// What gradient checking needs of a backend's storage, and nothing else.
@@ -307,7 +308,14 @@ fn central_difference<S: GradCheckStorage>(
     plus[position] = inputs[position].with_element_perturbed(element, step)?;
     minus[position] = inputs[position].with_element_perturbed(element, -step)?;
 
-    let high = op(&plus)?.element(0)?;
-    let low = op(&minus)?.element(0)?;
-    Ok((high - low) / (2.0 * step))
+    // Under `NoGrad`, so the probes leave nothing behind. Each one runs the
+    // whole forward, and a recording probe would push a graph the walk has
+    // already finished with onto a tape nothing will ever drain: two nodes
+    // per element per input, held with their saved values, for the length of
+    // the sweep.
+    GradMode::Disabled.scope(|| {
+        let high = op(&plus)?.element(0)?;
+        let low = op(&minus)?.element(0)?;
+        Ok((high - low) / (2.0 * step))
+    })
 }

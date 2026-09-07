@@ -166,32 +166,6 @@ fn downstream_custom_operation_trains_end_to_end() {
         );
     }
 
-    // Finite-difference cross-check of the recipe, run under NoGrad so the
-    // probe executions leave no nodes behind for the real backward pass.
-    let analytic = 2.0 * 3.0f64;
-    let eps = 1e-2f64;
-    let (plus, minus) = GradMode::Disabled.scope(|| {
-        let xp = CpuStorage::try_from_contiguous(
-            CpuBuffer::F32(vec![1.0, 2.0, 3.0 + eps as f32, 4.0]),
-            vec![4],
-        )
-        .unwrap();
-        let xm = CpuStorage::try_from_contiguous(
-            CpuBuffer::F32(vec![1.0, 2.0, 3.0 - eps as f32, 4.0]),
-            vec![4],
-        )
-        .unwrap();
-        (
-            square_forward(&ctx, &xp).get(&[2]),
-            square_forward(&ctx, &xm).get(&[2]),
-        )
-    });
-    let numeric = (plus - minus) / (2.0 * eps);
-    assert!(
-        (numeric - analytic).abs() < 5e-2,
-        "finite-difference {numeric} disagrees with analytic {analytic}"
-    );
-
     // Backward through the standard backend pass: the custom node drains from
     // the same tape the built-in kernels use.
     let grads =
@@ -309,4 +283,41 @@ fn a_graph_mixing_builtin_and_custom_operations_walks_as_one() {
             gx.get(&[i])
         );
     }
+}
+
+/// The recipe, swept against central differences by the public checker.
+///
+/// This is the check a custom-operation author should run before trusting a
+/// backward rule, and it is one call: `gradcheck` perturbs every element of
+/// every input, re-runs the forward under `NoGrad` so the probes leave
+/// nothing on the tape, and compares each slope against what the recipe
+/// produced at that element.
+///
+/// `for_f32()` carries the step size, which is the part that is easy to get
+/// wrong alone: at `f32` precision the total error is minimised near `1e-2`,
+/// and the `1e-4` that looks conservative sits at its own noise floor.
+///
+/// The closure reduces to a scalar, because one central difference
+/// approximates the whole gradient contribution of the element it perturbed
+/// only for a scalar output. Reduce the way the model does.
+#[test]
+fn the_public_gradcheck_sweeps_the_custom_recipe() {
+    use incin_core::exec::catalog::op;
+    use incin_core::exec::{GradCheckOptions, gradcheck};
+
+    let ctx = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+    let x =
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4]).unwrap();
+
+    let scalar_loss = |inputs: &[CpuStorage]| -> incin_core::error::Result<CpuStorage> {
+        let squared = square_forward(&ctx, &inputs[0]);
+        let handle = TensorHandle::from_storage::<CpuBackendImpl<Cpu>, f32, Local>(&squared);
+        incin_core::backend_authoring::execute::<op::SumAll, _>(&ctx, NoAttributes, &[handle])
+            .map_err(Into::into)
+    };
+
+    let report = gradcheck(scalar_loss, &[x], GradCheckOptions::for_f32())
+        .expect("the sweep ran to completion");
+    assert!(report.passed(), "{report}");
+    assert_eq!(report.compared, 4);
 }
