@@ -71,6 +71,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The public gradient checker builds without `std`.** `GradMode::scope`
+  installs a thread-local and is gated on `std`; `incin_core::exec::gradcheck`
+  is not gated, and called it to run its probe forwards under `NoGrad`. The
+  effect was that `incin-core` stopped compiling in every feature
+  configuration without `std`. No test could have caught it, because every
+  backend feature implies `std`; `cargo xtask feature-matrix` is the gate that
+  did. The call is now `restrict`, the ungated tighten-only direction, which
+  delegates to `scope` where there is a thread-local to install into and is a
+  no-op where there is no ambient tape to record onto in the first place.
 - **The CPU backend implements the public gradient checker.** The
   implementation was written inside `cpu::gradcheck`, which is `#[cfg(test)]`,
   so `incin_core::exec::gradcheck` compiled and was unusable by anyone
