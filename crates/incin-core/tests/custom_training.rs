@@ -321,3 +321,51 @@ fn the_public_gradcheck_sweeps_the_custom_recipe() {
     assert!(report.passed(), "{report}");
     assert_eq!(report.compared, 4);
 }
+
+/// The whole flow from a tensor, in one call.
+///
+/// This is what a custom operation should cost its author at the call site:
+/// `apply_op`, then ordinary tensor operations, then `backward`. No handle,
+/// no execution context, no `try_from_storage` restating the shape, dtype,
+/// device and gradient marker that were already known.
+///
+/// `Square` is the same implementation the other tests use. Nothing about it
+/// changes to be callable this way, which is the point: the trait describes
+/// the operation, and how it is reached is a separate question.
+#[test]
+fn a_custom_operation_is_one_call_from_a_tensor() {
+    use incin_core::shapes::{Dyn, ShapeBuf};
+    use incin_core::tensor::base::Tensor;
+    use incin_core::tensor::device::Device;
+    use incin_core::tensor::grad::{Grad, RequiresGrad};
+
+    let storage =
+        CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4]).unwrap();
+    let x = Tensor::<Dyn, CpuBackendImpl<Cpu>, f32, Grad>::try_from_storage(
+        storage,
+        ShapeBuf::from_slice(&[4]),
+        core::marker::PhantomData,
+        <Cpu as Device>::init(()),
+        <Grad as RequiresGrad>::init(()),
+    )
+    .expect("the leaf builds");
+
+    // The custom operation, then a built-in reduction, then backward.
+    let squared = x.apply_op::<Square>(NoAttributes).expect("square runs");
+    let loss = squared.sum_all().expect("the built-in reduction runs");
+    let grads = loss.backward().expect("backward runs");
+
+    let gx = grads
+        .require(&x)
+        .expect("the custom node is on the same graph as the built-in one");
+
+    // d/dx sum(x^2) = 2x.
+    let values: Vec<f32> = gx.to_vec1().expect("gradient reads back");
+    for (i, got) in values.iter().enumerate() {
+        let expected = 2.0 * (i as f32 + 1.0);
+        assert!(
+            (got - expected).abs() < 1e-5,
+            "at {i}: got {got}, want {expected}"
+        );
+    }
+}

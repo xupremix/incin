@@ -104,6 +104,64 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         frac, Frac
     );
 
+    /// Run a custom operation on this tensor and get a tensor back.
+    ///
+    /// The one call a custom-operation author needs. Without it the author
+    /// assembles a [`TensorHandle`](crate::exec::TensorHandle), builds an
+    /// execution context, dispatches, and lifts the result storage back with
+    /// `try_from_storage`, naming the shape, dtype, device and gradient
+    /// marker again by hand at the end. All four are already known here, so
+    /// none of them is a question the caller should have to answer, and each
+    /// one restated by hand is a chance to restate it wrong.
+    ///
+    /// The output keeps this tensor's shape, dtype, device and gradient
+    /// marker. That covers the common custom operation, which is elementwise:
+    /// a fused activation, a custom loss term, a quantization stub. An
+    /// operation that changes shape, takes more than one input, or returns
+    /// more than one output keeps the explicit
+    /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path,
+    /// where the output geometry is something the caller has to state because
+    /// nothing else knows it.
+    ///
+    /// Recording is not the caller's concern either. If `O` implements
+    /// [`DifferentiableOp`](crate::tensor::backend::DifferentiableOp) the
+    /// blanket `Execute` records the node during dispatch, so the result is
+    /// already on the graph and `backward` walks it together with every
+    /// built-in operation around it. If it does not, the operation is
+    /// forward-only and nothing is recorded. Neither case needs a different
+    /// call here.
+    ///
+    /// The ambient gradient mode is narrowed by this tensor's own marker
+    /// before dispatch, exactly as for a built-in operation, so a `NoGrad`
+    /// input records nothing however the operation was written.
+    pub fn apply_op<O>(&self, attributes: O::Attributes) -> Result<Tensor<S, B, K, G, Local>>
+    where
+        O: crate::exec::catalog::Operation,
+        B: Execute<O> + crate::exec::Capabilities,
+        <B as Execute<O>>::Output: Into<B::Storage<K>>,
+    {
+        let handle = crate::exec::TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let shape_val = self._shape.clone();
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let storage = G::grad_mode(&self._grad)
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped::<O, B, S>(
+                    &context,
+                    attributes,
+                    &[handle],
+                    &shape_val,
+                )
+            })
+            .map_err(crate::err::Error::from)?;
+        Tensor::from_shape_value(
+            storage.into(),
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
     /// Computes the absolute value of each element in the tensor.
     pub fn abs(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where

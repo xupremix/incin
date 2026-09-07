@@ -10,6 +10,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`Tensor::apply_op` runs a custom operation without leaving tensor space.**
+  Reaching a custom operation used to mean assembling a `TensorHandle`,
+  building an execution context, dispatching, and lifting the result back with
+  `try_from_storage`, restating the shape, dtype, device and gradient marker
+  by hand at the end. All four were already known, so none of them was a
+  question worth asking, and each restated by hand was a chance to restate it
+  wrong. One call now covers it, and the result is an ordinary tensor that
+  built-in operations and `backward` treat like any other.
+
+  Recording is not the caller's concern either: if the operation implements
+  `DifferentiableOp` the blanket `Execute` records during dispatch, and if it
+  does not the operation is forward-only. Neither needs a different call. The
+  ambient gradient mode is narrowed by the input tensor's own marker first, so
+  a `NoGrad` input records nothing however the operation was written.
+
+  It is deliberately the single-input, shape-preserving case, which is what a
+  fused activation, a custom loss term or a quantization stub is. An operation
+  that changes shape or has more than one input or output keeps
+  `execute_shaped_n`, where the output geometry is something only the caller
+  knows.
+
 - **`incin_core::exec::gradcheck` is public, and backend generic.** A backward
   recipe is the part of a custom operation that fails quietly: a wrong forward
   kernel produces visibly wrong numbers, a wrong recipe produces a model that
