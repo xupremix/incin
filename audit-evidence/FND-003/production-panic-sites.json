@@ -8304,25 +8304,25 @@
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/conformance/mod.rs:370",
+    "site": "crates/incin-backends/src/conformance/mod.rs:457",
     "code": ".expect(\"the operation was drawn from an executed observation\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:70",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:97",
     "code": "_ => panic!(\"gradcheck: perturbation only supported for F32/F64 buffers\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:148",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:175",
     "code": "let grads = tape::backward(&out).expect(\"gradcheck: backward() must succeed\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/gradcheck.rs:154",
+    "site": "crates/incin-backends/src/cpu/gradcheck.rs:181",
     "code": ".expect(\"gradcheck: missing analytic gradient for input\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"

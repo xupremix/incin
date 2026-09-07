@@ -1143,7 +1143,7 @@ fn gather_backward_accumulates_duplicate_indices_like_cpu() {
     let got = download_f32_host(grads.get(t_id).unwrap()).unwrap();
     // CPU reference on the same values.
     let host_t = host_f32(&[3], vec![10.0, 20.0, 30.0]);
-    let host_idx = HostStorage::from_contiguous(HostBuffer::I64(vec![0, 0, 1]), &[3]);
+    let host_idx = HostStorage::from_contiguous(HostBuffer::I64(vec![0, 0, 1]), [3]);
     let host_out = crate::cpu::ops::shape_ops::gather_storage(&host_t, 0, &host_idx).unwrap();
     let host_grads = crate::cpu::tape::backward(&host_out).unwrap();
     let want = host_values(host_grads.get(host_t.id).unwrap());
@@ -1175,7 +1175,7 @@ fn scatter_src_grad_keeps_only_last_write_like_cpu() {
     let got_t = download_f32_host(grads.get(t_id).unwrap()).unwrap();
     let got_src = download_f32_host(grads.get(src_id).unwrap()).unwrap();
     let host_t = host_f32(&[1, 2], vec![1.0, 2.0]);
-    let host_idx = HostStorage::from_contiguous(HostBuffer::I64(vec![0, 0]), &[2, 1]);
+    let host_idx = HostStorage::from_contiguous(HostBuffer::I64(vec![0, 0]), [2, 1]);
     let host_src = host_f32(&[2, 1], vec![7.0, 8.0]);
     let host_out =
         crate::cpu::ops::shape_ops::scatter_storage(&host_t, 0, &host_idx, &host_src).unwrap();
