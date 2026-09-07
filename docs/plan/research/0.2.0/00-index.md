@@ -51,6 +51,17 @@ themselves are left as written rather than edited in place.
   replacing four thread-locals, saved-tensor lifetime owned by the graph,
   checked node structure consuming the parked arity item) is staged so the
   recent `tape_record` shims keep working through the migration.
+- **Custom-operation autograd reviewed and repaired** -- new report
+  `custom-op-autograd.md`, with the options not taken in
+  `custom-op-autograd-decisions.md`. The lever was the capability system
+  enforcing `training` in one direction only: the dispatcher refuses a training
+  query against a non-training row, and nothing checked that a row claiming
+  training actually records. The CPU oracle now runs all 2286 training tuples
+  with recording enabled and fails a row whose tape did not grow, which named
+  eight operations carrying no gradient at all (`sin`, `cos`, `log2`, `log10`,
+  `to_dtype` float-to-float, `frac`, `fmod`, `remainder`). Also lands
+  `Tensor::apply_op`, a public backend-generic `gradcheck`, and a uniform
+  `tape_record`/`tape_record_with` seam across all four backends.
 
 **Corrections the later work forced**
 
