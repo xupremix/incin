@@ -313,7 +313,13 @@ fn central_difference<S: GradCheckStorage>(
     // already finished with onto a tape nothing will ever drain: two nodes
     // per element per input, held with their saved values, for the length of
     // the sweep.
-    GradMode::Disabled.scope(|| {
+    //
+    // `restrict` rather than `scope`: `scope` is `std`-only, because it
+    // installs a thread-local, and this module is not. `restrict` is the
+    // tighten-only direction and is exactly what is wanted here -- it
+    // delegates to `scope` where there is a thread-local to install into, and
+    // is a no-op where there is no ambient tape to record onto either.
+    GradMode::Disabled.restrict(|| {
         let high = op(&plus)?.element(0)?;
         let low = op(&minus)?.element(0)?;
         Ok((high - low) / (2.0 * step))
