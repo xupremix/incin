@@ -1,3 +1,4 @@
+#[non_exhaustive] pub enum incin_backends::conformance::Verdict
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchGrads
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchStorage
 #[non_exhaustive] pub enum incin_backends::dispatch::DispatchVar
@@ -24,7 +25,9 @@ impl incin_backends::codegen::fragment::ScalarFragment
 impl incin_backends::codegen::fused_epilogue::FusedEpilogueSpec
 impl incin_backends::codegen::fusion::CompositeFusionSpec
 impl incin_backends::codegen::gemm::GemmSpec
+impl incin_backends::codegen::ir::IrBinaryOp
 impl incin_backends::codegen::ir::IrExpr
+impl incin_backends::codegen::ir::IrUnaryOp
 impl incin_backends::codegen::ir::KernelDefinition
 impl incin_backends::codegen::jit::CpuJitKernel
 impl incin_backends::codegen::mma::TensorCoreMmaSpec
@@ -416,7 +419,6 @@ pub enum incin_backends::codegen::sota_gemm::EpilogueActivation
 pub enum incin_backends::codegen::sota_gemm::GemmComputeEngine
 pub enum incin_backends::codegen::vectorized::VectorWidth
 pub enum incin_backends::conformance::Coverage
-pub enum incin_backends::conformance::Verdict
 pub enum incin_backends::cpu::CpuBuffer
 pub enum incin_backends::external::conformance::Outcome
 pub enum incin_backends::prelude::GeneratedFill
@@ -544,6 +546,7 @@ pub fn incin_backends::codegen::gemm::GemmSpec::render_cuda(&self) -> alloc::str
 pub fn incin_backends::codegen::gemm::GemmSpec::render_msl(&self) -> alloc::string::String
 pub fn incin_backends::codegen::gemm::GemmSpec::render_wgsl(&self) -> alloc::string::String
 pub fn incin_backends::codegen::gemm::GemmTileConfig::default() -> Self
+pub fn incin_backends::codegen::ir::IrBinaryOp::apply(self, f64, f64) -> f64
 pub fn incin_backends::codegen::ir::IrExpr::add(self, Self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::add(self, f64) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::ir::IrExpr::add(self, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
@@ -577,6 +580,7 @@ pub fn incin_backends::codegen::ir::IrExpr::tanh(self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::ternary(incin_backends::codegen::ir::IrTernaryOp, Self, Self, Self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::unary(incin_backends::codegen::ir::IrUnaryOp, Self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::var(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn incin_backends::codegen::ir::IrUnaryOp::apply(self, f64) -> f64
 pub fn incin_backends::codegen::ir::KernelDefinition::new(impl core::convert::Into<alloc::string::String>, usize, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::ir::IrExpr) -> Self
 pub fn incin_backends::codegen::ir::KernelDefinition::render_backward_cuda(&self, usize) -> core::option::Option<alloc::string::String>
 pub fn incin_backends::codegen::ir::KernelDefinition::render_forward_cuda(&self) -> alloc::string::String
@@ -1157,6 +1161,7 @@ pub incin_backends::codegen::ImplicitConv2dSpec::name: alloc::string::String
 pub incin_backends::codegen::ImplicitConv2dSpec::padding: (usize, usize)
 pub incin_backends::codegen::ImplicitConv2dSpec::stride: (usize, usize)
 pub incin_backends::codegen::IrBinaryOp::Add
+pub incin_backends::codegen::IrBinaryOp::Atan2
 pub incin_backends::codegen::IrBinaryOp::Div
 pub incin_backends::codegen::IrBinaryOp::Max
 pub incin_backends::codegen::IrBinaryOp::Min
@@ -1173,21 +1178,35 @@ pub incin_backends::codegen::IrTernaryOp::Clamp
 pub incin_backends::codegen::IrTernaryOp::Fma
 pub incin_backends::codegen::IrTernaryOp::Select
 pub incin_backends::codegen::IrUnaryOp::Abs
+pub incin_backends::codegen::IrUnaryOp::Acos
+pub incin_backends::codegen::IrUnaryOp::Acosh
+pub incin_backends::codegen::IrUnaryOp::Asin
+pub incin_backends::codegen::IrUnaryOp::Asinh
+pub incin_backends::codegen::IrUnaryOp::Atan
+pub incin_backends::codegen::IrUnaryOp::Atanh
+pub incin_backends::codegen::IrUnaryOp::Ceil
 pub incin_backends::codegen::IrUnaryOp::Cos
+pub incin_backends::codegen::IrUnaryOp::Cosh
+pub incin_backends::codegen::IrUnaryOp::Erf
 pub incin_backends::codegen::IrUnaryOp::Exp
+pub incin_backends::codegen::IrUnaryOp::Floor
 pub incin_backends::codegen::IrUnaryOp::Gelu
 pub incin_backends::codegen::IrUnaryOp::Log
 pub incin_backends::codegen::IrUnaryOp::Neg
 pub incin_backends::codegen::IrUnaryOp::Reciprocal
 pub incin_backends::codegen::IrUnaryOp::Relu
+pub incin_backends::codegen::IrUnaryOp::Round
 pub incin_backends::codegen::IrUnaryOp::Rsqrt
 pub incin_backends::codegen::IrUnaryOp::Sigmoid
 pub incin_backends::codegen::IrUnaryOp::Silu
 pub incin_backends::codegen::IrUnaryOp::Sin
+pub incin_backends::codegen::IrUnaryOp::Sinh
 pub incin_backends::codegen::IrUnaryOp::Sqrt
 pub incin_backends::codegen::IrUnaryOp::Square
 pub incin_backends::codegen::IrUnaryOp::Step
+pub incin_backends::codegen::IrUnaryOp::Tan
 pub incin_backends::codegen::IrUnaryOp::Tanh
+pub incin_backends::codegen::IrUnaryOp::Trunc
 pub incin_backends::codegen::KernelDefinition::backward_derivatives: alloc::vec::Vec<incin_backends::codegen::ir::IrExpr>
 pub incin_backends::codegen::KernelDefinition::dtype: incin_core::tensor::dtype::registry::DTypeId
 pub incin_backends::codegen::KernelDefinition::forward: incin_backends::codegen::ir::IrExpr
@@ -1412,6 +1431,7 @@ pub incin_backends::codegen::gemm::GemmTileConfig::bn: usize
 pub incin_backends::codegen::gemm::GemmTileConfig::tm: usize
 pub incin_backends::codegen::gemm::GemmTileConfig::tn: usize
 pub incin_backends::codegen::ir::IrBinaryOp::Add
+pub incin_backends::codegen::ir::IrBinaryOp::Atan2
 pub incin_backends::codegen::ir::IrBinaryOp::Div
 pub incin_backends::codegen::ir::IrBinaryOp::Max
 pub incin_backends::codegen::ir::IrBinaryOp::Min
@@ -1428,21 +1448,35 @@ pub incin_backends::codegen::ir::IrTernaryOp::Clamp
 pub incin_backends::codegen::ir::IrTernaryOp::Fma
 pub incin_backends::codegen::ir::IrTernaryOp::Select
 pub incin_backends::codegen::ir::IrUnaryOp::Abs
+pub incin_backends::codegen::ir::IrUnaryOp::Acos
+pub incin_backends::codegen::ir::IrUnaryOp::Acosh
+pub incin_backends::codegen::ir::IrUnaryOp::Asin
+pub incin_backends::codegen::ir::IrUnaryOp::Asinh
+pub incin_backends::codegen::ir::IrUnaryOp::Atan
+pub incin_backends::codegen::ir::IrUnaryOp::Atanh
+pub incin_backends::codegen::ir::IrUnaryOp::Ceil
 pub incin_backends::codegen::ir::IrUnaryOp::Cos
+pub incin_backends::codegen::ir::IrUnaryOp::Cosh
+pub incin_backends::codegen::ir::IrUnaryOp::Erf
 pub incin_backends::codegen::ir::IrUnaryOp::Exp
+pub incin_backends::codegen::ir::IrUnaryOp::Floor
 pub incin_backends::codegen::ir::IrUnaryOp::Gelu
 pub incin_backends::codegen::ir::IrUnaryOp::Log
 pub incin_backends::codegen::ir::IrUnaryOp::Neg
 pub incin_backends::codegen::ir::IrUnaryOp::Reciprocal
 pub incin_backends::codegen::ir::IrUnaryOp::Relu
+pub incin_backends::codegen::ir::IrUnaryOp::Round
 pub incin_backends::codegen::ir::IrUnaryOp::Rsqrt
 pub incin_backends::codegen::ir::IrUnaryOp::Sigmoid
 pub incin_backends::codegen::ir::IrUnaryOp::Silu
 pub incin_backends::codegen::ir::IrUnaryOp::Sin
+pub incin_backends::codegen::ir::IrUnaryOp::Sinh
 pub incin_backends::codegen::ir::IrUnaryOp::Sqrt
 pub incin_backends::codegen::ir::IrUnaryOp::Square
 pub incin_backends::codegen::ir::IrUnaryOp::Step
+pub incin_backends::codegen::ir::IrUnaryOp::Tan
 pub incin_backends::codegen::ir::IrUnaryOp::Tanh
+pub incin_backends::codegen::ir::IrUnaryOp::Trunc
 pub incin_backends::codegen::ir::KernelDefinition::backward_derivatives: alloc::vec::Vec<incin_backends::codegen::ir::IrExpr>
 pub incin_backends::codegen::ir::KernelDefinition::dtype: incin_core::tensor::dtype::registry::DTypeId
 pub incin_backends::codegen::ir::KernelDefinition::forward: incin_backends::codegen::ir::IrExpr
@@ -1636,6 +1670,7 @@ pub incin_backends::conformance::Verdict::Failed(alloc::string::String)
 pub incin_backends::conformance::Verdict::NotCovered(incin_backends::conformance::Coverage)
 pub incin_backends::conformance::Verdict::Panicked(alloc::string::String)
 pub incin_backends::conformance::Verdict::RecordedNothing
+pub incin_backends::conformance::Verdict::RecordedOneOutputTwice(usize)
 pub incin_backends::conformance::Verdict::Refused(alloc::string::String)
 pub incin_backends::conformance::Verdict::Rejected(alloc::string::String)
 pub incin_backends::cpu::CpuBuffer::BF16(alloc::vec::Vec<half::bfloat::bf16>)
