@@ -117,11 +117,11 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// The output keeps this tensor's shape, dtype, device and gradient
     /// marker. That covers the common custom operation, which is elementwise:
     /// a fused activation, a custom loss term, a quantization stub. An
-    /// operation that changes shape, takes more than one input, or returns
-    /// more than one output keeps the explicit
-    /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path,
-    /// where the output geometry is something the caller has to state because
-    /// nothing else knows it.
+    /// operation that changes shape or takes more than one input goes through
+    /// [`apply_op_n`](Self::apply_op_n), which is this call plus the one thing
+    /// it cannot infer, the output geometry. Only a multi-output operation
+    /// still needs the explicit
+    /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path.
     ///
     /// Recording is not the caller's concern either. If `O` implements
     /// [`DifferentiableOp`](crate::tensor::backend::DifferentiableOp) the
@@ -172,6 +172,86 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         Tensor::from_shape_value(
             storage.into(),
             self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// [`apply_op`](Self::apply_op) for an operation with several inputs and a
+    /// caller-stated output shape.
+    ///
+    /// The shape is a parameter because nothing on this side knows it. A
+    /// shape-changing operation's output geometry is the operation author's
+    /// knowledge, and inventing a guess at it is the one thing `apply_op` is
+    /// careful not to do. Everything else is inherited from `self` exactly as
+    /// there: the dtype, the device and the gradient marker are already known
+    /// here, so none of them is restated and none of them can be restated
+    /// wrong.
+    ///
+    /// The extra operands are borrowed *storage*, not borrowed tensors. A
+    /// slice of `&Self` would force every operand to share this tensor's shape
+    /// and layout, which rules out precisely the operations the method exists
+    /// for: a two-operand kernel whose operands have different geometry, a
+    /// matrix multiply over `[m, k]` and `[k, n]` being the obvious one.
+    /// Dispatch asks for none of that.
+    /// [`TensorHandle::from_storage`](crate::exec::TensorHandle::from_storage)
+    /// is parameterized by backend, dtype and placement only, so a storage
+    /// reference is the widest operand type that keeps the call type-safe, and
+    /// [`inner`](Tensor::inner) is public, so the call site reads
+    /// `&[w.inner()]`.
+    ///
+    /// `self` is the first input and `others` follow in order. The gradient
+    /// mode comes from `self`'s marker alone, which is the rule `apply_op` and
+    /// the explicit dispatch path already follow: a `Grad` receiver records
+    /// even when an operand's storage came from a `NoGrad` tensor. Recording
+    /// is otherwise the same story as in `apply_op`. If `O` implements
+    /// [`DifferentiableOp`](crate::tensor::backend::DifferentiableOp) the
+    /// blanket `Execute` records the node during dispatch; if it does not, the
+    /// operation is forward-only. Neither case needs a different call here.
+    ///
+    /// An operation returning more than one output still keeps the explicit
+    /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path,
+    /// because there is no single tensor for this method to hand back.
+    ///
+    /// # Layout
+    ///
+    /// The result carries `Dyn`, for the reason set out under `apply_op`'s own
+    /// `# Layout` heading: a custom kernel is not known to write contiguous
+    /// output, and the general `L: Layout<S>` bound on the operation surface
+    /// means claiming nothing costs the caller nothing.
+    pub fn apply_op_n<O, S2>(
+        &self,
+        others: &[&B::Storage<K>],
+        attributes: O::Attributes,
+        shape: crate::shapes::ShapeValue<S2>,
+    ) -> Result<Tensor<S2, B, K, G, Local>>
+    where
+        O: crate::exec::catalog::Operation,
+        S2: Shape,
+        B: Execute<O> + crate::exec::Capabilities,
+        <B as Execute<O>>::Output: Into<B::Storage<K>>,
+    {
+        let mut handles = alloc::vec::Vec::with_capacity(1 + others.len());
+        handles.push(crate::exec::TensorHandle::from_storage::<B, K, Local>(
+            &self.inner,
+        ));
+        for operand in others {
+            handles.push(crate::exec::TensorHandle::from_storage::<B, K, Local>(
+                operand,
+            ));
+        }
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let storage = G::grad_mode(&self._grad)
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped_n::<O, B, _>(
+                    &context, attributes, &handles, &shape,
+                )
+            })
+            .map_err(crate::err::Error::from)?;
+        Tensor::from_shape_value(
+            storage.into(),
+            shape,
             self._dtype.clone(),
             self._device.clone(),
             self._grad.clone(),

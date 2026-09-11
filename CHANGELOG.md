@@ -59,10 +59,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   a `NoGrad` input records nothing however the operation was written.
 
   It is deliberately the single-input, shape-preserving case, which is what a
-  fused activation, a custom loss term or a quantization stub is. An operation
-  that changes shape or has more than one input or output keeps
-  `execute_shaped_n`, where the output geometry is something only the caller
-  knows.
+  fused activation, a custom loss term or a quantization stub is. Anything
+  wider goes through `Tensor::apply_op_n`, below.
+
+- **`Tensor::apply_op_n` extends that to several inputs and a new output
+  shape.** The shape is a parameter, because a shape-changing operation's
+  output geometry is the operation author's knowledge and nothing on the
+  framework side can infer it. Everything else is inherited from the receiver
+  exactly as in `apply_op`, so the dtype, the device and the gradient marker
+  are still never restated and the caller still never builds a handle.
+
+  The extra operands are borrowed storage rather than borrowed tensors. A
+  slice of `&Self` would force every operand to share the receiver's shape and
+  layout, which rules out the operations the method exists for: a two-operand
+  kernel whose operands have different geometry, a matrix multiply over
+  `[m, k]` and `[k, n]` being the obvious one. Dispatch asks for none of that,
+  since `TensorHandle::from_storage` is parameterized by backend, dtype and
+  placement alone, and `Tensor::inner` is public, so the call site reads
+  `&[w.inner()]`. The receiver is the first input and the slice follows in
+  order, and the gradient mode comes from the receiver's marker alone, which
+  is the rule `apply_op` and the explicit dispatch path already follow.
+
+  Only a multi-output operation still needs `execute_shaped_n`, because there
+  is no single tensor for a method like this to hand back.
 
 - **`incin_core::exec::gradcheck` is public, and backend generic.** A backward
   recipe is the part of a custom operation that fails quietly: a wrong forward

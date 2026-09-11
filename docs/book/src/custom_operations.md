@@ -188,10 +188,17 @@ impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
     }
 }
 
-// Dispatch, lift back into a typed tensor, train through the standard pass:
-let out: CpuStorage = execute(&context, NoAttributes, &[handle])?;
-let y = Tensor::<Dyn, Cpu, f32, Grad>::try_from_storage(out, shape, ..)?;
+// Call it, and train through the standard pass. No handle and no execution
+// context, and the shape, dtype, device and gradient marker are not restated,
+// because `x` already carries all four:
+let y = x.apply_op::<Square>(NoAttributes)?;
 let grads = y.sum_all()?.backward()?; // walks built-in and custom nodes as one
+
+// Several inputs, or an output shape that differs from the input's:
+// `apply_op_n` adds the one thing that cannot be inherited from `x`. The extra
+// operands are borrowed storage rather than borrowed tensors, so each is free
+// to have a shape of its own.
+let joined = x.apply_op_n::<Concat2, s![6]>(&[w.inner()], NoAttributes, expected)?;
 ```
 
 How many implementations an operation needs is a question about how its
@@ -204,7 +211,11 @@ dtype has to appear in the self type rather than only in the associated type,
 because an impl type parameter that appears nowhere in the self type is
 rejected (E0207). `crates/incin-core/tests/custom_op_composition.rs` is the
 worked example. Which to write is a performance question: a fused kernel is
-still one implementation per backend, and a composed one is not. Multi-output
+still one implementation per backend, and a composed one is not. The same file
+holds the two-input, shape-changing case, which is `apply_op_n`'s reason to
+exist: a concatenation whose operands are `s![4]` and `s![2]` and whose result
+is `s![6]`, three shapes that are three distinct Rust types, none of them
+derivable from the receiver. Multi-output
 operations keep the explicit `tape_record` path — one node per output
 cannot be derived from a single return type, and that shape is rare enough
 to deserve spelling out (the polar example is the reference).
