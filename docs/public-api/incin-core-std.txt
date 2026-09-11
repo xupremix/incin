@@ -722,6 +722,7 @@ impl incin_core::prelude::DType for u8
 impl incin_core::prelude::DTypeDescriptor
 impl incin_core::prelude::DTypeId
 impl incin_core::prelude::DTypeKey
+impl incin_core::prelude::DTypeRegistry
 impl incin_core::prelude::FloatDType for f32
 impl incin_core::prelude::FloatDType for f64
 impl incin_core::prelude::FloatDType for half::bfloat::bf16
@@ -7058,6 +7059,8 @@ pub fn incin_core::prelude::DTypeId::into_arg(self) -> incin_core::prelude::DTyp
 pub fn incin_core::prelude::DTypeId::size_bytes(self, usize, incin_core::shapes::OperationKind) -> core::result::Result<usize, incin_core::shapes::ShapeError>
 pub fn incin_core::prelude::DTypeKey::deserialize<D>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error> where D: serde_core::de::Deserializer<'de>
 pub fn incin_core::prelude::DTypeKey::serialize<S>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error> where S: serde_core::ser::Serializer
+pub fn incin_core::prelude::DTypeRegistry::lookup(incin_core::prelude::DTypeKey) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
+pub fn incin_core::prelude::DTypeRegistry::register(incin_core::prelude::DTypeDescriptor) -> incin_core::error::Result<()>
 pub fn incin_core::prelude::Device::init(Self::Arg) -> Self::Field
 pub fn incin_core::prelude::Device::to_incin(&Self::Field) -> incin_core::error::Result<incin_core::tensor::device::DeviceId>
 pub fn incin_core::prelude::Dim::matches_tag<Tag: incin_core::shapes::AxisTag>() -> bool
@@ -8348,6 +8351,11 @@ pub incin_core::error::Error::DTypeMismatch
 pub incin_core::error::Error::DTypeMismatch::actual: incin_core::prelude::DTypeDescriptor
 pub incin_core::error::Error::DTypeMismatch::expected: incin_core::prelude::DTypeDescriptor
 pub incin_core::error::Error::DTypeMismatch::operation: &'static str
+pub incin_core::error::Error::DTypeRegistration
+pub incin_core::error::Error::DTypeRegistration::name: &'static str
+pub incin_core::error::Error::DTypeRegistration::namespace: &'static str
+pub incin_core::error::Error::DTypeRegistration::reason: &'static str
+pub incin_core::error::Error::DTypeRegistration::version: u32
 pub incin_core::error::Error::DTypeStorageMismatch
 pub incin_core::error::Error::DTypeStorageMismatch::expected: incin_core::prelude::DTypeDescriptor
 pub incin_core::error::Error::DTypeStorageMismatch::got: incin_core::prelude::DTypeDescriptor
@@ -9823,6 +9831,11 @@ pub incin_core::prelude::Error::DTypeMismatch
 pub incin_core::prelude::Error::DTypeMismatch::actual: incin_core::prelude::DTypeDescriptor
 pub incin_core::prelude::Error::DTypeMismatch::expected: incin_core::prelude::DTypeDescriptor
 pub incin_core::prelude::Error::DTypeMismatch::operation: &'static str
+pub incin_core::prelude::Error::DTypeRegistration
+pub incin_core::prelude::Error::DTypeRegistration::name: &'static str
+pub incin_core::prelude::Error::DTypeRegistration::namespace: &'static str
+pub incin_core::prelude::Error::DTypeRegistration::reason: &'static str
+pub incin_core::prelude::Error::DTypeRegistration::version: u32
 pub incin_core::prelude::Error::DTypeStorageMismatch
 pub incin_core::prelude::Error::DTypeStorageMismatch::expected: incin_core::prelude::DTypeDescriptor
 pub incin_core::prelude::Error::DTypeStorageMismatch::got: incin_core::prelude::DTypeDescriptor
@@ -12458,6 +12471,7 @@ pub struct incin_core::prelude::Cpu
 pub struct incin_core::prelude::CrossEntropyLoss<R: incin_core::tensor::reduction::ReductionMode>(_)
 pub struct incin_core::prelude::DTypeDescriptor
 pub struct incin_core::prelude::DTypeKey
+pub struct incin_core::prelude::DTypeRegistry
 pub struct incin_core::prelude::DeviceId
 pub struct incin_core::prelude::DeviceSet
 pub struct incin_core::prelude::DimCons<H, T>
@@ -12641,6 +12655,7 @@ pub struct incin_core::tensor::device::MetalDevice
 pub struct incin_core::tensor::device::WgpuDevice
 pub struct incin_core::tensor::dtype::DTypeDescriptor
 pub struct incin_core::tensor::dtype::DTypeKey
+pub struct incin_core::tensor::dtype::DTypeRegistry
 pub struct incin_core::tensor::dtype::Q8_0
 pub struct incin_core::tensor::dtype::StorageEncoding
 pub struct incin_core::tensor::grad::Grad
@@ -12649,6 +12664,7 @@ pub struct incin_core::tensor::prelude::CheckedByteLen(_)
 pub struct incin_core::tensor::prelude::Cpu
 pub struct incin_core::tensor::prelude::DTypeDescriptor
 pub struct incin_core::tensor::prelude::DTypeKey
+pub struct incin_core::tensor::prelude::DTypeRegistry
 pub struct incin_core::tensor::prelude::DeviceId
 pub struct incin_core::tensor::prelude::DeviceSet
 pub struct incin_core::tensor::prelude::Dyn(_)

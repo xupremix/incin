@@ -54,11 +54,18 @@ impl<'de> serde::Deserialize<'de> for DTypeKey {
             }
         }
 
+        // Not a built-in. The registry is the only other place a `'static`
+        // descriptor for this key can come from, and the refusal below is the
+        // same one as before when it holds nothing matching: an unregistered
+        // key still fails loudly rather than being guessed at.
+        if let Some(descriptor) = DTypeRegistry::lookup_parts(&ns, &name, version) {
+            return Ok(descriptor.key());
+        }
+
         Err(serde::de::Error::custom(alloc::format!(
-            "Deserializing custom DTypeKey ({}, {}, {}) is not supported without a persistent DType registry",
-            ns,
-            name,
-            version
+            "Deserializing custom DTypeKey ({ns}, {name}, {version}) requires that dtype to be \
+             registered first: call DTypeRegistry::register(descriptor) at startup, before \
+             loading anything that mentions it"
         )))
     }
 }
@@ -691,5 +698,120 @@ impl DTypeId {
         operation: OperationKind,
     ) -> Result<usize, ShapeError> {
         self.encoding().size_bytes(elements, operation)
+    }
+}
+
+// ============================================================================
+// DTypeRegistry - the wire key's way back to a descriptor
+// ============================================================================
+
+/// Descriptors for dtypes this binary did not define, keyed by wire identity.
+///
+/// A `BTreeMap` rather than a `HashMap` so the store needs no hasher and no
+/// `std`, and behind `spin::Mutex` for the same reason
+/// [`TRACING_GRAPH`](crate::graph_recording) is: a process-wide table in a
+/// crate that builds without an allocator-plus-threads environment.
+static CUSTOM_DTYPES: spin::LazyLock<
+    spin::Mutex<alloc::collections::BTreeMap<DTypeKey, DTypeDescriptor>>,
+> = spin::LazyLock::new(|| spin::Mutex::new(alloc::collections::BTreeMap::new()));
+
+/// Process-wide map from a wire key back to the descriptor that defines it.
+///
+/// A custom dtype could already be defined, dispatched and executed:
+/// `CapabilityRule::dtypes` and `CapabilityQuery::dtype` are both
+/// [`DTypeDescriptor`]-keyed, so the capability layer never needed widening.
+/// What it could not do is survive a checkpoint. [`DTypeKey`] holds
+/// `&'static str`, and a key arriving off the wire holds owned `String`s, so
+/// deserializing one means finding the `'static` descriptor it names. For a
+/// built-in that is a match arm. For everything else there was nothing to
+/// match against, and the refusal said so.
+///
+/// This is that something. Built-ins are not stored here, because they are
+/// already reachable through those match arms and storing them would give the
+/// same key two sources of truth. A downstream crate registers its own dtypes
+/// once, at startup, before loading anything that mentions them.
+///
+/// ```ignore
+/// DTypeRegistry::register(MY_DTYPE_DESCRIPTOR)?;
+/// let model = incin::load("checkpoint.safetensors")?; // now readable
+/// ```
+///
+/// # Ordering
+///
+/// Registration has to happen before the load, not before first use. Nothing
+/// here can detect a late registration, because the failure it causes is a
+/// deserialize error that already happened.
+#[derive(Debug)]
+pub struct DTypeRegistry;
+
+impl DTypeRegistry {
+    /// Register a custom dtype so its key can be read back.
+    ///
+    /// Registering the same key twice with the same descriptor is idempotent,
+    /// which is what lets two independent crates depend on a third that
+    /// registers its own dtype without ordering themselves. Registering it
+    /// with a *different* descriptor is refused rather than applied: the
+    /// second caller's tensors would otherwise be read with the first
+    /// caller's encoding, which is a silent corruption rather than a load
+    /// failure.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::DTypeRegistration`](crate::err::Error::DTypeRegistration) if
+    /// the key is in the reserved `incin` namespace, or if it is already
+    /// registered with a descriptor that differs.
+    pub fn register(descriptor: DTypeDescriptor) -> crate::err::Result<()> {
+        let key = descriptor.key();
+        if key.namespace() == "incin" {
+            return Err(crate::err::Error::DTypeRegistration {
+                namespace: key.namespace(),
+                name: key.name(),
+                version: key.version(),
+                reason: "the `incin` namespace is reserved for built-in dtypes, which are \
+                         already readable without registration",
+            });
+        }
+        let mut registered = CUSTOM_DTYPES.lock();
+        match registered.get(&key) {
+            Some(existing) if *existing == descriptor => Ok(()),
+            Some(_) => Err(crate::err::Error::DTypeRegistration {
+                namespace: key.namespace(),
+                name: key.name(),
+                version: key.version(),
+                reason: "already registered with a different descriptor; bump the key's \
+                         version rather than redefining one that tensors may already use",
+            }),
+            None => {
+                registered.insert(key, descriptor);
+                Ok(())
+            }
+        }
+    }
+
+    /// The descriptor registered for `key`, if any.
+    ///
+    /// Built-in keys are not held here and answer `None`. Use
+    /// [`DTypeId::descriptor`] for those.
+    #[must_use]
+    pub fn lookup(key: DTypeKey) -> Option<DTypeDescriptor> {
+        CUSTOM_DTYPES.lock().get(&key).copied()
+    }
+
+    /// The descriptor registered under a key spelled out in owned parts.
+    ///
+    /// The form deserialization needs. A wire key is three owned values and
+    /// [`DTypeKey`] is three `'static` ones, so the comparison has to run on
+    /// contents rather than on a constructed key. A linear scan is right here:
+    /// the map holds the dtypes one process defined beyond the built-ins,
+    /// which is a handful, and storing owned duplicates to index it would put
+    /// the same strings in the table twice.
+    fn lookup_parts(namespace: &str, name: &str, version: u32) -> Option<DTypeDescriptor> {
+        CUSTOM_DTYPES
+            .lock()
+            .iter()
+            .find(|(key, _)| {
+                key.namespace() == namespace && key.name() == name && key.version() == version
+            })
+            .map(|(_, descriptor)| *descriptor)
     }
 }

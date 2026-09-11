@@ -43,6 +43,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the enum is now `#[non_exhaustive]` so the next finding class is not a
   breaking change.
 
+- **A custom dtype can survive a checkpoint.** `DTypeRegistry` is the
+  process-wide map from a wire key back to the descriptor that defines it.
+  Custom dtypes could already be defined, dispatched and executed, because
+  `CapabilityRule::dtypes` and `CapabilityQuery::dtype` are both
+  descriptor-keyed and never needed widening. What they could not do is be
+  read back: `DTypeKey` holds `&'static str`, a key off the wire holds owned
+  `String`s, and resolving one meant finding the `'static` descriptor it
+  names. Built-ins have a match arm for that. Everything else had a refusal
+  that named the missing piece in as many words.
+
+  Built-ins are not stored in the registry, since that would give one key two
+  sources of truth. An unregistered key is still refused rather than guessed
+  at, and the message now names the call that fixes it. Registering the same
+  key twice with the same descriptor is idempotent, so two crates depending on
+  a third that registers its own dtype need not order themselves; registering
+  it with a different descriptor is refused rather than applied, because the
+  alternative is reading the second caller's tensors with the first caller's
+  encoding, which is a silent corruption rather than a load failure.
+
+  `Error::DTypeRegistration` is new, on the already `#[non_exhaustive]`
+  `Error`.
+
 - **`ExecuteInto` collapses the two bounds a dispatched built-in costs into
   one.** A kernel written as dispatched built-ins paid `B: Execute<op::X>` and
   `<B as Execute<op::X>>::Output: Into<B::Storage<K>>` for every operation it

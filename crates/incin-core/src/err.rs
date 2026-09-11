@@ -286,6 +286,25 @@ pub enum Error {
         op: &'static str,
     },
 
+    #[error("dtype registry refused ({namespace}, {name}, {version}): {reason}")]
+    /// A [`DTypeRegistry`](crate::tensor::dtype::DTypeRegistry) registration
+    /// was refused.
+    ///
+    /// Refusing rather than replacing is the point. A second registration of
+    /// the same key with a different descriptor would silently change how
+    /// every tensor already written with that key is read back, so the
+    /// registry treats the disagreement as the error it is.
+    DTypeRegistration {
+        /// Namespace component of the key being registered.
+        namespace: &'static str,
+        /// Name component of the key being registered.
+        name: &'static str,
+        /// Version component of the key being registered.
+        version: u32,
+        /// Why the registration was refused.
+        reason: &'static str,
+    },
+
     #[error(
         "Precision choice {requested:?} for {role:?} role is unsupported for operation '{operation:?}', storage {storage:?} on backend '{backend}'"
     )]

@@ -240,10 +240,11 @@ pub mod prelude {
     pub use super::tensor::prelude::PlacedTensorError;
     pub use super::tensor::prelude::{
         ArgInto, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, CheckedByteLen, ConstDType,
-        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId,
-        DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
-        IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
-        Tensor, TensorArgs, TensorArgsData, TensorElement, ToDevice, checked_byte_len_from_dims,
+        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, DTypeRegistry,
+        Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType,
+        Grad, GradJoin, IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType,
+        RequiresGrad, Tensor, TensorArgs, TensorArgsData, TensorElement, ToDevice,
+        checked_byte_len_from_dims,
     };
     #[cfg(feature = "cuda")]
     pub use super::tensor::prelude::{Cuda, CudaN};

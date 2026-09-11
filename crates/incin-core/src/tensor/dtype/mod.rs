@@ -23,7 +23,7 @@ mod tests;
 mod traits;
 
 pub use builtin::Q8_0;
-pub use registry::{DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, StorageEncoding};
+pub use registry::{DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, DTypeRegistry, StorageEncoding};
 pub use traits::{
     BoolDType, BuiltinDType, ConstDType, DType, FloatDType, IntDType, PlainDType, QuantDType,
     TensorElement,
