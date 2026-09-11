@@ -35,6 +35,8 @@ use alloc::string::String;
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -42,7 +44,7 @@ use alloc::string::String;
 /// // The gradients must come from a backward pass over *this* model. A step
 /// // whose gradients reach none of the group's parameters is refused rather
 /// // than silently committing nothing.
-/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let input = Cpu.ones(shape![1, 4])?.require_grad();
 /// let loss = model.forward(input)?.sum_all()?;
 /// let gradients = loss.backward()?;
 ///
@@ -182,6 +184,8 @@ impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostRead
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -189,7 +193,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostRead
 /// // The gradients must come from a backward pass over *this* model. A step
 /// // whose gradients reach none of the group's parameters is refused rather
 /// // than silently committing nothing.
-/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let input = Cpu.ones(shape![1, 4])?.require_grad();
 /// let loss = model.forward(input)?.sum_all()?;
 /// let gradients = loss.backward()?;
 ///
@@ -494,6 +498,8 @@ impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostRead
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
@@ -501,7 +507,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend + crate::tensor::backend::HostRead
 /// // The gradients must come from a backward pass over *this* model. A step
 /// // whose gradients reach none of the group's parameters is refused rather
 /// // than silently committing nothing.
-/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let input = Cpu.ones(shape![1, 4])?.require_grad();
 /// let loss = model.forward(input)?.sum_all()?;
 /// let gradients = loss.backward()?;
 ///

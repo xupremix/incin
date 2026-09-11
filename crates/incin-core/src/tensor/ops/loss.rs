@@ -69,10 +69,11 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let pred = Tensor::<s![2, 10], DefaultBackend>::zeros(()).unwrap();
-    /// let target = Tensor::<s![2], DefaultBackend, i64>::zeros(()).unwrap();
+    /// let pred = Cpu.zeros(shape![2, 10]).unwrap();
+    /// let target = Cpu.tensor([0i64, 0]).unwrap();
     /// let loss = pred.cross_entropy_loss(&target).unwrap();
     /// ```
     pub fn cross_entropy_loss<S2: Shape, KT: crate::tensor::dtype::DType, G2: RequiresGrad>(
@@ -138,10 +139,11 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let pred = Tensor::<s![2], DefaultBackend>::ones(()).unwrap();
-    /// let target = Tensor::<s![2], DefaultBackend>::zeros(()).unwrap();
+    /// let pred = Cpu.ones(shape![2]).unwrap();
+    /// let target = Cpu.zeros(shape![2]).unwrap();
     /// let loss = pred.mse_loss(&target).unwrap();
     /// ```
     pub fn mse_loss<S2: Shape, G2: RequiresGrad>(

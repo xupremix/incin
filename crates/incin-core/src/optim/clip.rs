@@ -24,11 +24,13 @@ use crate::tensor::dtype::ConstDType;
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::optim::{ParameterGroup, clip_grad_norm};
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
-/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let input = Cpu.ones(shape![1, 4])?.require_grad();
 /// let mut gradients = model.forward(input)?.sum_all()?.backward()?;
 ///
 /// let group = ParameterGroup::<DefaultBackend, f32>::from_module(&model)?;
@@ -120,11 +122,13 @@ where
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::optim::{ParameterGroup, clip_grad_value};
 /// use incin::prelude::*;
 ///
 /// let model = Linear::<s![4, 2], DefaultBackend>::build(())?;
-/// let input = Tensor::<s![1, 4], DefaultBackend>::ones(())?.require_grad();
+/// let input = Cpu.ones(shape![1, 4])?.require_grad();
 /// let mut gradients = model.forward(input)?.sum_all()?.backward()?;
 ///
 /// let group = ParameterGroup::<DefaultBackend, f32>::from_module(&model)?;

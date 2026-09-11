@@ -98,9 +98,10 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![2, 3]).unwrap();
     /// let r = t.reshape(shape![6]).unwrap();
     /// ```
     pub fn reshape<Spec>(&self, spec: Spec) -> Result<Tensor<Spec::Shape, B, K, G, P>>
@@ -253,10 +254,11 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
     /// use incin::advanced::idx;
-    /// let t = Tensor::<s![2, 3], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![2, 3]).unwrap();
     /// let r = t.reshape_idx::<idx![6]>().unwrap();
     /// ```
     pub fn reshape_idx<T: crate::shapes::idx::ReshapeTarget<S>>(
@@ -299,9 +301,10 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![1, 5], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![1, 5]).unwrap();
     /// let sq = t.try_squeeze(0isize).unwrap(); // shape [5]
     /// ```
     pub fn try_squeeze<A>(self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>

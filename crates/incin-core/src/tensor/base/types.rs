@@ -31,27 +31,44 @@ use core::marker::PhantomData;
 ///
 /// ## Examples
 ///
+/// Tensors are built from a target value, which is a device. Backend and
+/// device come from the value, the geometry from the shape argument, and the
+/// dtype from the target or the data, so no argument can be written in
+/// another's position and there is no order to remember.
+///
 /// Creating and inspecting statically shaped tensors:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
-/// use incin::prelude::*;
-/// // Compile-time 3D tensor of shape [2, 5, 10]
-/// let t = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(()).unwrap();
+/// use incin_backends::prelude::*;
+/// use incin_core::prelude::*;
+/// use incin_core::tensor::device::Cpu;
+/// # use incin_core::error::Error;
+/// // Compile-time 3D tensor of shape [2, 5, 10]: `shape!` fixes the extents
+/// // in the type, so `t` is a `Tensor<s![2, 5, 10], _>`.
+/// let t = Cpu.zeros(shape![2, 5, 10])?;
 ///
-/// assert_eq!(t.dims(), [2, 5, 10]);
+/// assert_eq!(t.dims().as_ref(), &[2, 5, 10]);
+/// # Ok::<(), Error>(())
 /// ```
 ///
-/// Using dynamically shaped tensors:
+/// Using dynamically shaped tensors, where the extents are a runtime value:
 /// ```rust
 /// # extern crate incin_core as incin;
-/// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
-/// use incin::prelude::*;
-/// // Shape determined at runtime
-/// let dyn_t = Tensor::<Dyn, DefaultBackend>::ones(vec![32, 64]).unwrap();
+/// use incin_backends::prelude::*;
+/// use incin_core::tensor::device::Cpu;
+/// # use incin_core::error::Error;
+/// let dyn_t = Cpu.ones(vec![32, 64])?;
 ///
-/// assert_eq!(dyn_t.dims(), vec![32, 64]);
+/// assert_eq!(dyn_t.dims().as_ref(), &[32, 64]);
+/// # Ok::<(), Error>(())
 /// ```
+///
+/// The tuple constructors those examples used to show
+/// (`Tensor::<s![2, 5, 10], B>::zeros(())`) still exist and still work. They
+/// are the compatibility path: the leading unit is not decoration but a
+/// supplied-argument marker, so a device selector has to move to second
+/// position, and passing one alone is read as the shape and diagnosed as an
+/// unsatisfied `ArgInto` bound naming none of the four things it is about.
 pub struct Tensor<
     S: Shape,
     B: Backend,

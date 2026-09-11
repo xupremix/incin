@@ -87,13 +87,15 @@ pub trait VisitParameters<B: VariableBackend> {
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::prelude::*;
 ///
 /// let mut model = seq!(
 ///     Linear::<s![4, 4], DefaultBackend>::build(())?,
 ///     Dropout::new(0.5)
 /// );
-/// let x = Tensor::<Dyn, DefaultBackend>::zeros(vec![1, 4])?;
+/// let x = Cpu.zeros(vec![1, 4])?;
 ///
 /// model.eval();   // nested Dropout layers become identity functions
 /// let out = model.forward(x)?;

@@ -83,9 +83,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![3, 3]).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
     /// ```
     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
@@ -103,9 +104,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # fn main() -> incin::prelude::Result<()> {
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
+    /// let tensor = Cpu.ones(shape![2, 4, 4])?;
     /// let sliced = tensor.get(vec![
     ///     IndexSpec::Index(0),
     ///     IndexSpec::Range(1, 3),
@@ -327,9 +329,10 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![10]).unwrap();
     /// let n = t.try_narrow(0isize, 2, 5).unwrap(); // shape [5]
     /// ```
     pub fn try_narrow<A>(
@@ -512,12 +515,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
     /// // Two sources, both aimed at slot 0, as a token routed to two experts.
-    /// let base = Tensor::<s![3], DefaultBackend>::zeros(()).unwrap();
-    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 0], ()).unwrap();
-    /// let src = Tensor::<s![2], DefaultBackend>::from_slice(&[2.0, 3.0], ()).unwrap();
+    /// let base = Cpu.zeros(shape![3]).unwrap();
+    /// let index = Cpu.tensor([0u32, 0]).unwrap();
+    /// let src = Cpu.tensor([2.0f32, 3.0]).unwrap();
     /// let summed = base.scatter_add(0, &index, &src).unwrap();
     /// // Both contributions land. `scatter` would have kept only the 3.0.
     /// assert_eq!(summed.to_vec1::<f32>().unwrap(), vec![5.0, 0.0, 0.0]);
@@ -593,10 +597,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
     /// // Two tokens routed to experts 0 and 2 of 3.
-    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 2], ()).unwrap();
+    /// let index = Cpu.tensor([0u32, 2]).unwrap();
     /// let dispatch = index.one_hot::<3>().unwrap();
     /// assert_eq!(
     ///     dispatch.to_vec1::<bool>().unwrap(),

@@ -167,6 +167,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and is wired into CI. It checks what is shipped rather than re-drafting, so
   the examples that never compiled are not re-proposed on every run.
 
+### Changed
+
+- **The library's own documentation now builds tensors from a target value.**
+  `Tensor`'s rustdoc and the thirty method examples under `incin-core` used
+  `Tensor::<s![2, 3], B>::zeros(())`; they use `Cpu.zeros(shape![2, 3])`.
+  The book already taught the target form and never mentioned the other, so
+  the type's own documentation was the last place teaching the path with the
+  unreadable diagnostics: the leading unit is a supplied-argument marker
+  rather than decoration, so a device selector has to shift to second
+  position, and passing one alone is read as the shape and reported as an
+  unsatisfied `ArgInto` bound naming none of the four things it is about.
+
+  The tuple constructors are unchanged and undeprecated. Deprecating them is
+  a several-hundred-call-site migration rather than an attribute, which is
+  measured in D17 of the 0.2.0 decision record, and it is its own change.
+
+- **`API_TIERS.md` says what tier a re-exported item carries.** The tables
+  assign tiers to modules, which left the most commonly written call in the
+  library unstated rather than wrong: `TargetExt` is defined in
+  `incin_backends::target`, tier X, and re-exported into `incin::prelude`,
+  tier S. A re-export carries the tier of the module it is re-exported into,
+  so `Cpu.zeros(shape![2, 3])` is a tier S call.
+
 ### Fixed
 
 - **Every public type carrying an attribute was missing from the API site's

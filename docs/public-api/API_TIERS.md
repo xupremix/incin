@@ -21,6 +21,17 @@ it does not appear in a baseline. The governing rule is
 [API_DESIGN.md](../API_DESIGN.md): `pub(crate)` is the default, and a module
 earns `pub` only by being named in the table below.
 
+**A re-exported item carries the tier of the module it is re-exported into,
+not the tier of the module that defines it.** The tables below assign tiers to
+modules, which left the most commonly written call in the library without a
+stated compatibility status. `TargetExt` is defined in
+`incin_backends::target`, tier X, and re-exported into `incin::prelude`, tier
+S; the baseline records that as `pub use incin::prelude::TargetExt`. So
+`Cpu.zeros(shape![2, 3])` is a tier S call, with tier S's compatibility
+intent, and stays one for as long as the re-export does. This is not an
+inversion but what a facade is for: the expert-tier module is where a backend
+author reaches the trait, and the prelude is where a user reaches the method.
+
 ## `incin` — the facade
 
 | Module | Items | Tier | Notes |

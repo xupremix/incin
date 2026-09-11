@@ -438,6 +438,8 @@ where
 /// # extern crate incin_core as incin;
 /// # fn main() -> incin::prelude::Result<()> {
 /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+/// # use incin_backends::prelude::*;
+/// # use incin_core::tensor::device::Cpu;
 /// use incin::prelude::*;
 ///
 /// let cell = RNNCell::new(
@@ -445,10 +447,10 @@ where
 ///     Linear::<s![20, 20], DefaultBackend>::build(())?,
 /// );
 /// let rnn = RNN::<s![10, 20], DefaultBackend>::new(cell);
-/// let input = Tensor::<s![2, 5, 10], DefaultBackend>::zeros(())
+/// let input = Cpu.zeros(shape![2, 5, 10])
 ///     .unwrap()
 ///     .require_grad();
-/// let h0 = Tensor::<s![2, 20], DefaultBackend>::zeros(())
+/// let h0 = Cpu.zeros(shape![2, 20])
 ///     .unwrap()
 ///     .require_grad();
 /// let (output, h_n) = rnn.forward((input, h0)).unwrap();

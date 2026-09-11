@@ -338,9 +338,10 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[300.0, 300.0, 300.0], ()).unwrap();
+    /// let t = Cpu.tensor([300.0f32, 300.0, 300.0]).unwrap();
     /// let total = t.logsumexp(0).unwrap().to_vec1::<f32>().unwrap()[0];
     /// // ln(3 * e^300) = 300 + ln(3). Summing the exponentials directly would
     /// // have overflowed to infinity three times over before the logarithm.
@@ -586,9 +587,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let s = t.sum_all().unwrap(); // shape is ()
         /// ```
         sum_all, SumAll
@@ -600,9 +602,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let m = t.mean_all().unwrap(); // shape is ()
         /// ```
         mean_all, MeanAll
@@ -614,9 +617,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let m = t.max_all().unwrap(); // shape is ()
         /// ```
         max_all, MaxAll
@@ -628,9 +632,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let m = t.min_all().unwrap(); // shape is ()
         /// ```
         min_all, MinAll

@@ -370,9 +370,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[0.0, -200.0, 1.0], ()).unwrap();
+    /// let t = Cpu.tensor([0.0f32, -200.0, 1.0]).unwrap();
     /// let logits = t.log_softmax(0).unwrap().to_vec1::<f32>().unwrap();
     /// // The middle entry survives as a large finite number; through
     /// // `softmax` then `log` it would have been negative infinity.
@@ -532,9 +533,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
     /// ```
     pub fn mul_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
@@ -558,9 +560,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
     /// ```
     pub fn add_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(

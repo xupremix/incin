@@ -261,3 +261,52 @@ rather than committed, because a parked file in the tree is surface without a
 consumer. The measurement above is the thing worth keeping, and the command
 that reproduces it is a member count per group over `declarations.rs`.
 
+## D17. Retiring the tuple construction path, in two halves
+**Taken now:** the teaching surface. `Tensor`'s own rustdoc and the thirty
+method examples under `incin-core/src` build their tensors from a target
+value, so nothing a reader copies out of the library's documentation teaches
+the path with the unreadable diagnostics. The book already taught the target
+form; the type's own documentation was still teaching the other one.
+
+**Not taken now:** the `#[deprecated]` attribute the review pairs with it.
+The review calls the whole item "documentation, examples, and a deprecation.
+No architecture moves", and the first three words are right while the fourth
+hides a migration. The attribute fires on every use, including uses inside
+the crate that declares the item, which was measured rather than assumed:
+putting `#[deprecated]` on `Tensor::zeros` alone and building produces 64
+warnings from `incin-core`'s own tests and 54 more from `incin`'s targets.
+`zeros` is one of ten such constructors, and 442 tuple-form call sites exist
+across `crates/` and `examples/`. Every one is an error under CI's
+`clippy -D warnings`.
+
+So the attribute is a several-hundred-site mechanical migration wearing a
+one-line hat. It is worth doing and it is not worth doing inside a
+documentation commit, because a commit that large stops being reviewable and
+the deprecation stops being the thing under review.
+
+**Sequencing:** the teaching surface first, which is this, and which makes the
+migration smaller by removing the examples that would otherwise have to be
+migrated twice. Then the attribute plus the call-site sweep, as one change
+whose diff is allowed to be enormous because that is all it is.
+
+**Left alone deliberately:** the two examples in `incin-macros`, at
+`lib.rs:85` and `lib.rs:336`. They document `s!` and the shape-alias macro,
+so the shape *type* is their subject and the construction is incidental;
+rewriting them to a target value would move the reader's eye off the thing
+being documented. `incin-macros` also does not depend on `incin-backends`,
+which is where a target value comes from.
+
+**Also settled here:** `API_TIERS.md` now says that a re-exported item carries
+the tier of the module it is re-exported into. The review notes that the tier
+table assigns tiers to modules and therefore leaves `Cpu.zeros` unstated
+rather than wrong. It is stated now: `TargetExt` is tier X where it is defined
+and tier S where a user reaches it, and the baseline records the re-export
+that makes that true.
+
+**Correction to the review's sketch:** section 3.2 proposes
+`let t: Dense<s![2, 5, 10], _> = Cpu.zeros(shape![2, 5, 10])?;`. That does not
+compile. `Dense` is the row-major alias and the target constructors return the
+`Dyn` layout, for the same reason `apply_op` does: contiguity is a claim, not
+a default. The annotation is unnecessary anyway, since `shape![2, 5, 10]`
+already fixes the extents in the type.
+
