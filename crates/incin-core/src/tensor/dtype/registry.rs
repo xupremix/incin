@@ -731,9 +731,22 @@ static CUSTOM_DTYPES: spin::LazyLock<
 /// same key two sources of truth. A downstream crate registers its own dtypes
 /// once, at startup, before loading anything that mentions them.
 ///
-/// ```ignore
-/// DTypeRegistry::register(MY_DTYPE_DESCRIPTOR)?;
-/// let model = incin::load("checkpoint.safetensors")?; // now readable
+/// ```rust
+/// # extern crate incin_core as incin;
+/// use incin_core::tensor::dtype::{
+///     DTypeDescriptor, DTypeKey, DTypeKind, DTypeRegistry, StorageEncoding,
+/// };
+///
+/// const PACKED: DTypeDescriptor = DTypeDescriptor::new(
+///     DTypeKey::new("mycrate", "packed3x5", 1),
+///     DTypeKind::Opaque,
+///     StorageEncoding::block(3, 5, 1),
+/// );
+///
+/// // Once, at startup, before loading anything that mentions it.
+/// DTypeRegistry::register(PACKED)?;
+/// assert_eq!(DTypeRegistry::lookup(PACKED.key()), Some(PACKED));
+/// # Ok::<(), incin_core::error::Error>(())
 /// ```
 ///
 /// # Ordering

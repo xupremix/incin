@@ -129,7 +129,7 @@ where
 /// operation it uses: one saying the backend executes it, and one saying the
 /// result converts to storage.
 ///
-/// ```ignore
+/// ```text
 /// B: Execute<op::Mul> + Execute<op::MulScalar>,
 /// <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
 /// <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
