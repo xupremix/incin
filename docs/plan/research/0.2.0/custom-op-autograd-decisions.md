@@ -123,31 +123,43 @@ not itself feature-gated.
 not taken is that somebody can return to them after this session ends, which a
 scratchpad file cannot support.
 
-## D14. Pre-existing drift left alone
-Three things were found while running the gates and deliberately not touched,
-because each predates this work and folding a fix into an autograd commit
-hides it:
-- `tools/build-api-examples.py` emits one blank line that the committed
-  `crates/incin/tests/api_examples.rs` does not have, and `--check` is lenient
-  about it. **A contributor who regenerates will get a spurious one-line diff
-  and no gate will explain it.** Worth fixing in its own commit.
-- `crates/incin/tests/api_examples.rs` warns `unused import: incin::prelude::*`
-  (from `9a8426b7`).
-- `crates/incin-backends/src/cuda/backend/tests.rs:903` imports `crate::cpu`
-  (from `69570485`), so `--all-targets` clippy on a `cuda`-without-`cpu`
-  configuration fails. CI runs that suite with both features, and the library
-  itself builds in every configuration, so this is a property of the test tree
-  rather than a break.
-- `test_cuda_jit_kernel_forward_and_backward` in
-  `crates/incin-backends/tests/codegen_ir_pipeline.rs` is `#[cfg(feature =
-  "cuda")]` but not `#[ignore]`, unlike the CUDA conformance tests beside it,
-  so it launches a kernel rather than only compiling one. **`cargo test
-  --workspace --all-features` therefore cannot pass on a machine with the CUDA
-  toolkit but no driver**, which is the ordinary developer configuration; the
-  failure is `Unable to dynamically load the "cuda" shared library` out of
-  `cudarc`. CI never sees it, because every `cargo test` line in `ci.yml`
-  selects `incin-backends/cpu` explicitly and none enables `cuda`. The fix is
-  an `#[ignore]` matching its neighbours, in its own commit.
+## D14. Pre-existing drift, now all closed
+Four things were found while running the gates and deliberately not fixed in
+an autograd commit, because each predated this work and folding a fix in would
+have hidden it. Re-checked on 2026-09-11: all four are closed, and three of
+them were closed by somebody else while this record sat. The list is kept
+rather than deleted because a stale finding is worth more as a dated
+correction than as a silent removal.
+
+- **Closed by `2ef12574`.** `tools/build-api-examples.py` emitted one blank
+  line the committed `crates/incin/tests/api_examples.rs` did not have, and
+  `--check` was lenient about it. That commit made the gate compare rather
+  than regenerate. Verified by running the generator three times in a row
+  against a clean tree: no diff on any run.
+- **Closed, and the original claim does not reproduce.**
+  `crates/incin/tests/api_examples.rs` was recorded as warning `unused import:
+  incin::prelude::*`. It carries `#![allow(unused_variables, unused_imports,
+  clippy::type_complexity)]` and has since `ba6bec4f`, the commit that created
+  it, and neither `cargo build --tests` nor `cargo clippy --test api_examples`
+  under the CI feature set emits any warning. Recorded as an error in the
+  original finding rather than as a fix.
+- **Closed.** `crates/incin-backends/src/cuda/backend/tests.rs:903` imported
+  `crate::cpu`, so `--all-targets` clippy on a `cuda`-without-`cpu`
+  configuration failed. That configuration now passes clean.
+- **Closed by `c9b78ec0`.** `test_cuda_jit_kernel_forward_and_backward` was
+  `#[cfg(feature = "cuda")]` but not `#[ignore]`, unlike the CUDA tests beside
+  it, so it launched a kernel rather than only compiling one and
+  `cargo test --workspace --all-features` could not pass on a machine with the
+  toolkit and no driver. `hardware.yml` states the rule in its own header, and
+  runs the plain suite and then the ignored suite on the CUDA runner, so the
+  attribute costs no coverage.
+
+One method note, because it cost time. A workspace-wide `cargo test` run
+overlapping a `tools/build-api-examples.py` run reports compile errors in
+`crates/incin/tests/api_examples.rs` that are not real: the generator rewrites
+that tracked file in stages, compiling and dropping failing examples as it
+goes, so a concurrent reader sees an intermediate state. Run the generators
+and the suites one at a time.
 
 ## D15. `apply_op_n` operand type
 **Taken:** `others: &[&B::Storage<K>]`, with the output shape as a parameter.
