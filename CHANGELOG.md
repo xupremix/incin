@@ -43,6 +43,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the enum is now `#[non_exhaustive]` so the next finding class is not a
   breaking change.
 
+- **`ExecuteInto` collapses the two bounds a dispatched built-in costs into
+  one.** A kernel written as dispatched built-ins paid `B: Execute<op::X>` and
+  `<B as Execute<op::X>>::Output: Into<B::Storage<K>>` for every operation it
+  used, so a ten-operation recipe carried twenty bounds and half of them named
+  `Output`, an associated type the author never wrote. `B: ExecuteInto<op::X,
+  K>` says both, and carries `Capabilities` as a supertrait, so dispatch asks
+  for nothing further.
+
+  The conversion is a method on the trait rather than an empty marker, and
+  that is the whole trick. An alias carrying the `Into` bound only in its
+  blanket impl's where-clause compiles at the declaration and fails at the
+  use, because Rust does not propagate a blanket impl's where-clause back to
+  generic code: a helper that writes `.map(Into::into)` still owes the
+  obligation and reports it one level down. `ExecuteInto::dispatch_into`
+  discharges it inside the blanket impl, where it is in scope.
+
+  Nothing is given up. `Execute` is untouched and `Output` stays an associated
+  type, which is what lets an operation return a pair, a `ShapeBuf` or a
+  scalar. An operation whose output is not storage simply has no
+  implementation, and a multi-output operation never had one to lose.
+  `crates/incin-core/tests/custom_op_composition.rs` carries both of its
+  recipes on the new bound, which is what took `Capabilities` and `Execute`
+  out of its imports entirely.
+
 - **`Tensor::apply_op` runs a custom operation without leaving tensor space.**
   Reaching a custom operation used to mean assembling a `TensorHandle`,
   building an execution context, dispatching, and lifting the result back with

@@ -949,6 +949,7 @@ impl<B, NewD> incin_core::backend_authoring::StorageTransfer<NewD> for incin_cor
 impl<B, NewD> incin_core::backend_authoring::TransferBackend<NewD> for B where B: incin_core::backend_authoring::StorageTransfer<NewD>, NewD: incin_core::tensor::device::Device
 impl<B, NewD> incin_core::backend_authoring::TransferTo<NewD> for incin_core::tensor::tracing::TracingBackend<B> where B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::TransferTo<NewD> + incin_core::backend_authoring::HostInterop, <B as incin_core::backend_authoring::StorageTransfer<NewD>>::Output: incin_core::backend_authoring::HostInterop + incin_core::backend_authoring::VariableBackend<Device = NewD>, NewD: incin_core::tensor::device::Device
 impl<B, NewD> incin_core::backend_authoring::VariableTransfer<NewD> for B where B: incin_core::backend_authoring::TransferTo<NewD>, NewD: incin_core::tensor::device::Device, <B as incin_core::backend_authoring::StorageTransfer<NewD>>::Output: incin_core::backend_authoring::VariableBackend<Device = NewD>
+impl<B, O, K> incin_core::backend_authoring::ExecuteInto<O, K> for B where B: incin_core::backend_authoring::Execute<O> + incin_core::exec::capability::Capabilities, O: incin_core::exec::catalog::Operation, K: incin_core::prelude::DType, <B as incin_core::backend_authoring::Execute<O>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::AutogradBackend, K: incin_core::prelude::FloatDType, P: incin_core::dist::placement::Placement, L: incin_core::shapes::layout::Layout<incin_core::shapes::Nil>> incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, incin_core::tensor::grad::Grad, P, L>
 impl<B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::AutogradBackend> incin_core::autograd::Gradients<B>
 impl<B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::AutogradBackend> incin_core::backend_authoring::AutogradBackend for incin_core::tensor::tracing::TracingBackend<B>
@@ -4604,6 +4605,7 @@ pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (),
 pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), (), B, ()>
 pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<(), B, (), ()>
 pub fn A::into_arg(self) -> incin_core::tensor::arg_into::TensorArgsData<B, (), (), ()>
+pub fn B::dispatch_into(&incin_core::exec::context::ExecutionContext<B>, <O as incin_core::exec::catalog::Operation>::Attributes, &[incin_core::exec::request::TensorHandle<'_>]) -> core::result::Result<<B as incin_core::backend_authoring::StorageBackend>::Storage, incin_core::exec::dispatch::CanonicalError>
 pub fn B::execute(&self, incin_core::backend_authoring::ExecutionRequest<'_, O, Self>) -> core::result::Result<Self::Output, incin_core::error::BackendError>
 pub fn B::execute_plan_raw(&[usize], &<K as incin_core::prelude::DType>::Field, &<<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Field, incin_core::nn::init::InitPlan) -> core::result::Result<<B as incin_core::backend_authoring::VariableBackend>::Var, incin_core::error::Error>
 pub fn B::optimizer_add(&<B as incin_core::backend_authoring::StorageBackend>::Storage, &<B as incin_core::backend_authoring::StorageBackend>::Storage) -> core::result::Result<<B as incin_core::backend_authoring::StorageBackend>::Storage, incin_core::error::Error>
@@ -4761,6 +4763,7 @@ pub fn incin_core::backend_authoring::DifferentiableOp::supports(&incin_core::ex
 pub fn incin_core::backend_authoring::Execute::execute(&self, incin_core::backend_authoring::ExecutionRequest<'_, O, Self>) -> core::result::Result<Self::Output, incin_core::error::BackendError>
 pub fn incin_core::backend_authoring::Execute::supports_custom(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
 pub fn incin_core::backend_authoring::Execute::supports_custom_operation(&self, &incin_core::exec::capability::OperationIdentity, bool, incin_core::exec::policy::MathMode) -> incin_core::exec::capability::SupportLevel
+pub fn incin_core::backend_authoring::ExecuteInto::dispatch_into(&incin_core::exec::context::ExecutionContext<Self>, <O as incin_core::exec::catalog::Operation>::Attributes, &[incin_core::exec::request::TensorHandle<'_>]) -> core::result::Result<Self::Storage, incin_core::exec::dispatch::CanonicalError>
 pub fn incin_core::backend_authoring::ExecutionDescriptor::output_shape(&self) -> core::option::Option<&incin_core::shapes::ShapeBuf>
 pub fn incin_core::backend_authoring::HostInterop::from_bytes<K: incin_core::prelude::DType>(&[u8], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
 pub fn incin_core::backend_authoring::HostInterop::from_bytes_strided<K: incin_core::prelude::DType>(&[u8], &[usize], &[usize], incin_core::prelude::DTypeDescriptor, &incin_core::tensor::device::DeviceId) -> incin_core::error::Result<Self::Storage>
@@ -12685,6 +12688,7 @@ pub trait incin_core::backend_authoring::CanonicalOperation: incin_core::exec::c
 pub trait incin_core::backend_authoring::Capabilities
 pub trait incin_core::backend_authoring::DifferentiableOp<B> where B: incin_core::backend_authoring::StorageBackend, Self::Attributes: core::marker::Send + core::marker::Sync: incin_core::exec::catalog::Operation
 pub trait incin_core::backend_authoring::Execute<O> where O: incin_core::exec::catalog::Operation: incin_core::backend_authoring::StorageBackend + core::marker::Sized
+pub trait incin_core::backend_authoring::ExecuteInto<O, K> where O: incin_core::exec::catalog::Operation, K: incin_core::prelude::DType: incin_core::backend_authoring::Execute<O> + incin_core::exec::capability::Capabilities
 pub trait incin_core::backend_authoring::ExecuteOutput
 pub trait incin_core::backend_authoring::ExecutionDescriptor: core::clone::Clone + core::fmt::Debug
 pub trait incin_core::backend_authoring::HostInterop: incin_core::backend_authoring::StorageBackend + incin_core::backend_authoring::HostReadback

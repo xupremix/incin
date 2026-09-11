@@ -121,3 +121,71 @@ where
         request: ExecutionRequest<'_, O, Self>,
     ) -> core::result::Result<Self::Output, BackendError>;
 }
+
+/// [`Execute`], with the storage conversion discharged once instead of at
+/// every call site.
+///
+/// A kernel written as dispatched built-in operations pays two bounds for each
+/// operation it uses: one saying the backend executes it, and one saying the
+/// result converts to storage.
+///
+/// ```ignore
+/// B: Execute<op::Mul> + Execute<op::MulScalar>,
+/// <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+/// <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
+/// ```
+///
+/// A ten-operation recipe carries twenty, and the second half of each pair
+/// names `Output`, an associated type the author never wrote and does not care
+/// about. This trait halves that: `B: ExecuteInto<op::Mul, K>` says both
+/// things.
+///
+/// The conversion has to be a *method* rather than an empty marker. An alias
+/// with the bound in its blanket `impl` where-clause compiles at the
+/// declaration and fails at the use, because Rust does not propagate a blanket
+/// impl's where-clause back to generic code: a helper that actually writes
+/// `.map(Into::into)` still owes the `Into` obligation and reports it one
+/// level down, as `Storage<K>: From<<B as Execute<O>>::Output> is not
+/// satisfied`. Putting [`dispatch_into`](Self::dispatch_into) on the trait
+/// discharges the obligation inside the blanket impl, where it is in scope,
+/// and generic code never names it again.
+///
+/// Nothing is given up for this. [`Execute`] is untouched and `Output` stays
+/// an associated type, which is what lets an operation return a pair, a
+/// `ShapeBuf` or a scalar. An operation whose output is not storage simply has
+/// no `ExecuteInto` implementation, and a multi-output operation is
+/// unaffected because it never had one to lose.
+pub trait ExecuteInto<O, K>: Execute<O> + crate::exec::Capabilities
+where
+    O: crate::exec::catalog::Operation,
+    K: DType,
+{
+    /// Dispatch `O` and hand back the result as this backend's storage.
+    ///
+    /// The same call as [`dispatch::execute`](crate::exec::dispatch::execute),
+    /// with the conversion applied. The error type is dispatch's own rather
+    /// than a narrowed one, so a caller that wants
+    /// [`BackendError`] can map to it and a caller that wants the
+    /// canonical detail still has it.
+    fn dispatch_into(
+        context: &ExecutionContext<Self>,
+        attributes: O::Attributes,
+        inputs: &[TensorHandle<'_>],
+    ) -> core::result::Result<Self::Storage<K>, crate::exec::dispatch::CanonicalError>;
+}
+
+impl<B, O, K> ExecuteInto<O, K> for B
+where
+    B: Execute<O> + crate::exec::Capabilities,
+    O: crate::exec::catalog::Operation,
+    K: DType,
+    <B as Execute<O>>::Output: Into<B::Storage<K>>,
+{
+    fn dispatch_into(
+        context: &ExecutionContext<B>,
+        attributes: O::Attributes,
+        inputs: &[TensorHandle<'_>],
+    ) -> core::result::Result<B::Storage<K>, crate::exec::dispatch::CanonicalError> {
+        crate::exec::dispatch::execute::<O, B>(context, attributes, inputs).map(Into::into)
+    }
+}

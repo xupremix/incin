@@ -5,7 +5,9 @@ use crate::tensor::dtype::DTypeId;
 use crate::tensor::dtype::{DType, DTypeDescriptor};
 
 mod execute;
-pub use execute::{Execute, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput};
+pub use execute::{
+    Execute, ExecuteInto, ExecuteOutput, ExecutionRequest, StorageBackend, StorageOutput,
+};
 mod transfer;
 pub use transfer::{StorageTransfer, TransferTo, VariableTransfer};
 mod autograd;

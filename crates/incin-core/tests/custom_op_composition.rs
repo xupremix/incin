@@ -21,8 +21,8 @@ use core::marker::PhantomData;
 
 use incin_backends::cpu::{CpuBackendImpl, CpuBuffer, CpuStorage};
 use incin_core::backend_authoring::{
-    Backend, Capabilities, DescriptorError, DifferentiableOp, Execute, LogicalTensorMeta,
-    Operation, OperationKey, RecordingBackend, StorageOutput, SupportsDType, TapeStorage,
+    Backend, DescriptorError, DifferentiableOp, ExecuteInto, LogicalTensorMeta, Operation,
+    OperationKey, RecordingBackend, StorageOutput, SupportsDType, TapeStorage,
 };
 use incin_core::exec::catalog::{
     AxisAttributes, NarrowAttributes, NoAttributes, ScalarAttributes, op,
@@ -73,9 +73,8 @@ fn run<O, B, K>(
 ) -> core::result::Result<B::Storage<K>, BackendError>
 where
     O: Operation,
-    B: Backend + Execute<O> + Capabilities + SupportsDType<K>,
+    B: Backend + ExecuteInto<O, K> + SupportsDType<K>,
     K: DType,
-    <B as Execute<O>>::Output: Into<B::Storage<K>>,
     B::Storage<K>: 'static,
 {
     let ctx = ExecutionContext::from_scope(B::default());
@@ -83,27 +82,27 @@ where
         .iter()
         .map(|s| TensorHandle::from_storage::<B, K, incin_core::dist::Local>(s))
         .collect();
-    incin_core::backend_authoring::execute::<O, B>(&ctx, attributes, &handles)
-        .map(Into::into)
-        .map_err(|error| BackendError::Execution {
-            operation: OperationKind::Pointwise,
-            message: ErrorMessage::new(error.to_string()),
-        })
+    B::dispatch_into(&ctx, attributes, &handles).map_err(|error| BackendError::Execution {
+        operation: OperationKind::Pointwise,
+        message: ErrorMessage::new(error.to_string()),
+    })
 }
 
 /// One impl, one recipe. `B` is any backend that can multiply, `K` any float
 /// dtype it supports.
 impl<B, K> DifferentiableOp<B> for ScaledSquare<K>
 where
+    // Two bounds, not four. `ExecuteInto<O, K>` says both that the backend
+    // executes the operation and that its result converts to storage, and it
+    // carries `Capabilities` as a supertrait, so dispatch asks for nothing
+    // more. A fifth built-in inside the recipe would add one line here rather
+    // than two.
     B: Backend
-        + Capabilities
         + SupportsDType<K>
-        + Execute<op::Mul>
-        + Execute<op::MulScalar>
-        + RecordingBackend<K>,
+        + RecordingBackend<K>
+        + ExecuteInto<op::Mul, K>
+        + ExecuteInto<op::MulScalar, K>,
     K: FloatDType,
-    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
-    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
     B::Storage<K>: core::any::Any + StorageOutput + TapeStorage + Send + Sync,
 {
     type Dtype = K;
@@ -344,14 +343,11 @@ fn leading_extent(meta: &LogicalTensorMeta) -> usize {
 impl<B, K> DifferentiableOp<B> for Concat2<K>
 where
     B: Backend
-        + Capabilities
         + SupportsDType<K>
-        + Execute<op::ConcatExact>
-        + Execute<op::Narrow>
-        + RecordingBackend<K>,
+        + RecordingBackend<K>
+        + ExecuteInto<op::ConcatExact, K>
+        + ExecuteInto<op::Narrow, K>,
     K: FloatDType,
-    <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
-    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     B::Storage<K>: core::any::Any + StorageOutput + TapeStorage + Send + Sync,
 {
     type Dtype = K;
