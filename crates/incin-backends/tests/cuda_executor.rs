@@ -126,6 +126,7 @@ where
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_matmul_descriptor_execution_matches_matrix_multiplication() {
     require_cuda();
     let lhs = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
@@ -152,6 +153,7 @@ fn cuda_matmul_descriptor_execution_matches_matrix_multiplication() {
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_conv2d_descriptor_execution_matches_direct_convolution() {
     require_cuda();
     let input_values: Vec<f32> = (0..32).map(|value| value as f32 * 0.25 - 4.0).collect();
@@ -182,6 +184,7 @@ fn cuda_conv2d_descriptor_execution_matches_direct_convolution() {
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_reduction_descriptor_routes_to_the_accumulation_it_names() {
     require_cuda();
     let input = storage(&[2, 3], &[1., 2., 3., 4., 5., 6.]);
@@ -209,6 +212,7 @@ fn cuda_reduction_descriptor_routes_to_the_accumulation_it_names() {
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_pool_descriptor_routes_to_the_accumulation_it_names() {
     require_cuda();
     let values: Vec<f32> = (1..=16).map(|value| value as f32).collect();
@@ -255,6 +259,7 @@ fn cuda_pool_descriptor_routes_to_the_accumulation_it_names() {
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_every_advertised_unary_activation_is_reachable_through_canonical_dispatch() {
     require_cuda();
     use incin_core::backend_authoring::execute;
@@ -306,6 +311,7 @@ fn cuda_every_advertised_unary_activation_is_reachable_through_canonical_dispatc
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_fused_rms_norm_matches_analytical_reference() {
     require_cuda();
     let input = storage(&[2, 4], &[1.0, 2.0, 3.0, 4.0, 2.0, 2.0, 2.0, 2.0]);
@@ -353,6 +359,7 @@ fn cuda_fused_rms_norm_matches_analytical_reference() {
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_fused_softmax_matches_analytical_reference() {
     require_cuda();
     let input = storage(&[2, 3], &[0.0, 1.0, 2.0, -1.0, 0.0, 1.0]);
@@ -379,6 +386,7 @@ fn cuda_fused_softmax_matches_analytical_reference() {
 }
 
 #[test]
+#[ignore = "requires CUDA hardware"]
 fn cuda_scaled_dot_product_attention_executes_cleanly() {
     require_cuda();
     use incin_core::exec::catalog::AttentionAttributes;
