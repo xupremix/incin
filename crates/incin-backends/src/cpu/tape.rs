@@ -181,6 +181,25 @@ pub fn clear() {
     });
 }
 
+/// Drain this thread's tape and return the output identity of every node,
+/// in record order.
+///
+/// The conformance oracle's window into what a kernel recorded, beyond how
+/// much. `depth()` counts nodes, which cannot tell a composed implementation
+/// recording several intermediates from one operation recording its own
+/// output twice; the identities can, because intermediates each mint their
+/// own and a double record repeats one.
+#[must_use]
+pub fn drain_output_ids() -> alloc::vec::Vec<incin_core::exec::TensorId> {
+    TAPE.with(|t| {
+        t.borrow_mut()
+            .drain()
+            .into_iter()
+            .map(|node| node.output_id)
+            .collect()
+    })
+}
+
 impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::CpuBackendImpl<D>
 where
     D: incin_core::tensor::device::Device,

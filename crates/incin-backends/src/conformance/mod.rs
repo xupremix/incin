@@ -79,6 +79,12 @@ use fixtures::{Route, Subject};
 /// because a report that lumps them together costs a reader the triage the
 /// harness already did.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// This enum exists to grow: every new class of conformance finding is a new
+// variant, and `RecordedOneOutputTwice` was added after `RecordedNothing` had
+// been the only recording verdict for a whole release cycle. Marking it
+// non-exhaustive is what keeps the next one from being a breaking change for
+// anyone matching on a report.
+#[non_exhaustive]
 pub enum Verdict {
     /// The tuple ran and produced a result. The advertisement holds.
     Executed,
@@ -108,6 +114,21 @@ pub enum Verdict {
     /// optimizer skips the parameters it found no gradient for, and the run
     /// finishes having trained part of the model.
     RecordedNothing,
+    /// Two tape nodes from one invocation claimed the same output identity.
+    ///
+    /// The mirror image of [`RecordedNothing`](Self::RecordedNothing), and
+    /// invisible to the same measurement: recording twice makes the tape grow,
+    /// so a depth comparison reports the row as holding. The reverse walk then
+    /// finds both nodes, hands each the same output gradient, and sums two
+    /// contributions into every input, so every gradient below the operation
+    /// is doubled. Nothing else catches it. The shapes agree, the arity check
+    /// passes, and the number that comes out is plausible.
+    ///
+    /// Recording several nodes is not itself a finding, and cannot be: a
+    /// composed implementation records one per intermediate. What is never
+    /// legitimate is two of them naming one value, because a fresh allocation
+    /// mints a fresh identity.
+    RecordedOneOutputTwice(usize),
     /// Nothing was concluded, because the harness could not pose the question.
     NotCovered(Coverage),
 }
@@ -123,6 +144,7 @@ impl Verdict {
                 | Self::Failed(_)
                 | Self::Panicked(_)
                 | Self::RecordedNothing
+                | Self::RecordedOneOutputTwice(_)
         )
     }
 }
@@ -216,6 +238,14 @@ impl OracleReport {
                 Verdict::Panicked(why) => {
                     alloc::format!("  PANICKED {}: {why}\n", observation.tuple.label())
                 }
+                Verdict::RecordedOneOutputTwice(nodes) => alloc::format!(
+                    "  DOUBLE RECORD {}: {nodes} tape nodes were pushed and two of them \
+                     claim the same output, so the reverse walk runs both recipes against \
+                     one gradient and doubles every input below this operation. A kernel \
+                     that composes built-in operations must run them with recording \
+                     disabled.\n",
+                    observation.tuple.label()
+                ),
                 Verdict::RecordedNothing => alloc::format!(
                     "  NO RECIPE {}: the row claims training and the kernel recorded no \
                      tape node, so a graph through this operation has a hole in it. Give \
@@ -316,12 +346,39 @@ fn execute_tuple(
     });
     let recorded = tape::depth() > before;
 
-    // Drained whether or not this tuple recorded. The harness poses thousands
-    // of tuples on one thread, and nodes left behind would make the next
-    // measurement read this one's.
-    tape::clear();
+    // How much a kernel recorded is not the only question worth asking of it.
+    // `depth` counts nodes, and a count cannot separate a composed
+    // implementation recording its intermediates from one operation recording
+    // its own output twice: 90 of the tuples posed here are declared `Native`
+    // and legitimately record between two and thirteen nodes, so there is no
+    // expected count to compare against. The identities can separate them,
+    // because each intermediate allocation mints its own, so a repeated output
+    // identity is never a composition and always two recipes claiming one
+    // value.
+    //
+    // The identities are collected only for the training tuples that recorded
+    // something, and the rest take the cheaper drain. Either way the tape is
+    // emptied: the harness poses thousands of tuples on one thread, and nodes
+    // left behind would make the next measurement read this one's.
+    let duplicate_output = if tuple.training && recorded {
+        let mut output_ids = tape::drain_output_ids();
+        let node_count = output_ids.len();
+        output_ids.sort_unstable();
+        output_ids.dedup();
+        if output_ids.len() == node_count {
+            None
+        } else {
+            Some(node_count)
+        }
+    } else {
+        tape::clear();
+        None
+    };
 
     match outcome {
+        Ok(Ok(())) if duplicate_output.is_some() => {
+            Verdict::RecordedOneOutputTwice(duplicate_output.unwrap_or_default())
+        }
         Ok(Ok(())) if tuple.training && !recorded && !carries_no_gradient(tuple) => {
             Verdict::RecordedNothing
         }

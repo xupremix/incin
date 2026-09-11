@@ -10,6 +10,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **The conformance oracle can see a surplus tape node, not only a missing
+  one.** `RecordedNothing` catches a training row whose kernel pushes nothing,
+  which leaves a hole in the graph. Its mirror image went uncovered: a kernel
+  that records the same output twice makes the tape *grow*, so a depth
+  comparison reports the row as holding while the reverse walk runs both
+  recipes against one gradient and doubles every input below the operation.
+
+  A node count cannot separate the two. Measured over the whole training set,
+  361 tuples record nothing, 1178 record one node, and 203 record between two
+  and thirteen; of those, 90 are declared `Native`, so `ImplementationKind`
+  does not separate them either. What does separate them is the output
+  identity, because every intermediate allocation mints its own, so a repeated
+  one is never a composition. `Verdict::RecordedOneOutputTwice` reports it, and
+  the enum is now `#[non_exhaustive]` so the next finding class is not a
+  breaking change.
+
 - **`Tensor::apply_op` runs a custom operation without leaving tensor space.**
   Reaching a custom operation used to mean assembling a `TensorHandle`,
   building an execution context, dispatching, and lifting the result back with
