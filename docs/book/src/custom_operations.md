@@ -170,7 +170,7 @@ impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
         ...
     }
 
-    fn forward(inputs: &[CpuStorage], _: &NoAttributes)
+    fn forward(inputs: &[CpuStorage], _attributes: &NoAttributes)
         -> Result<(CpuStorage, Self::Saved), BackendError>
     {
         let x = /* the single input */;
@@ -178,7 +178,10 @@ impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
         Ok((out, x))
     }
 
-    fn backward(saved: &CpuStorage, grad_out: &CpuStorage)
+    // Both halves receive the invocation's attributes. `Square` has none, but
+    // an operation whose derivative depends on its configuration (a leaky
+    // ReLU's slope) reads it here rather than copying it into `Saved`.
+    fn backward(saved: &CpuStorage, _attributes: &NoAttributes, grad_out: &CpuStorage)
         -> Result<Vec<CpuStorage>, incin_core::error::Error>
     {
         Ok(vec![/* 2 * saved * grad_out, same shape */])
@@ -191,8 +194,17 @@ let y = Tensor::<Dyn, Cpu, f32, Grad>::try_from_storage(out, shape, ..)?;
 let grads = y.sum_all()?.backward()?; // walks built-in and custom nodes as one
 ```
 
-One implementation trains one dtype; an operation that trains in two dtypes
-is two implementations, conventionally via a generic wrapper. Multi-output
+How many implementations an operation needs is a question about how its
+kernel is written, not a property of the trait. A recipe written as a hand
+loop over one buffer variant covers that dtype on that backend, so covering a
+second means a second implementation, conventionally via a generic wrapper. A
+recipe written as dispatched built-in operations covers every backend that
+implements them and every dtype they accept, from one implementation; the
+dtype has to appear in the self type rather than only in the associated type,
+because an impl type parameter that appears nowhere in the self type is
+rejected (E0207). `crates/incin-core/tests/custom_op_composition.rs` is the
+worked example. Which to write is a performance question: a fused kernel is
+still one implementation per backend, and a composed one is not. Multi-output
 operations keep the explicit `tape_record` path — one node per output
 cannot be derived from a single return type, and that shape is rare enough
 to deserve spelling out (the polar example is the reference).

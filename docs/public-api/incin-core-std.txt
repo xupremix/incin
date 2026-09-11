@@ -1193,7 +1193,7 @@ impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::InsertAt<incin_core::s
 impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::ReplaceLastDim<NewDim> for incin_core::shapes::Dyn
 impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::ReplaceLastDim<NewDim> for incin_core::shapes::Nil
 impl<NewDim: incin_core::shapes::Dim> incin_core::shapes::ReplaceLastTail<NewDim> for incin_core::shapes::Nil
-impl<O, B> incin_core::backend_authoring::Execute<O> for B where O: incin_core::backend_authoring::DifferentiableOp<B>, B: incin_core::backend_authoring::RecordingBackend<<O as incin_core::backend_authoring::DifferentiableOp>::Dtype> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::StorageBackend>::Storage: core::any::Any + incin_core::backend_authoring::StorageOutput + incin_core::exec::tape::TapeStorage
+impl<O, B> incin_core::backend_authoring::Execute<O> for B where O: incin_core::backend_authoring::DifferentiableOp<B>, <O as incin_core::exec::catalog::Operation>::Attributes: core::marker::Send + core::marker::Sync, B: incin_core::backend_authoring::RecordingBackend<<O as incin_core::backend_authoring::DifferentiableOp>::Dtype> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::StorageBackend>::Storage: core::any::Any + incin_core::backend_authoring::StorageOutput + incin_core::exec::tape::TapeStorage
 impl<O: core::fmt::Debug> core::fmt::Display for incin_core::exec::proof::Validated<O>
 impl<O: incin_core::exec::catalog::CanonicalOperation> incin_core::exec::catalog::Descriptor<O> where <O as incin_core::exec::catalog::Operation>::Attributes: incin_core::exec::catalog::AttributeContract
 impl<O: incin_core::exec::catalog::Operation> incin_core::exec::catalog::Descriptor<O>
@@ -4755,7 +4755,7 @@ pub fn incin_core::backend_authoring::AutogradBackend::backward_with<K: incin_co
 pub fn incin_core::backend_authoring::AutogradBackend::get_grad<K: incin_core::prelude::DType>(&Self::Storage, &Self::Grads) -> incin_core::error::Result<core::option::Option<Self::Storage>>
 pub fn incin_core::backend_authoring::AutogradBackend::set_grad<K: incin_core::prelude::DType>(&Self::Storage, &mut Self::Grads, Self::Storage) -> incin_core::error::Result<()>
 pub fn incin_core::backend_authoring::Capabilities::support(&self, &incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
-pub fn incin_core::backend_authoring::DifferentiableOp::backward(&Self::Saved, &<B as incin_core::backend_authoring::StorageBackend>::Storage) -> incin_core::error::Result<alloc::vec::Vec<<B as incin_core::backend_authoring::StorageBackend>::Storage>>
+pub fn incin_core::backend_authoring::DifferentiableOp::backward(&Self::Saved, &Self::Attributes, &<B as incin_core::backend_authoring::StorageBackend>::Storage) -> incin_core::error::Result<alloc::vec::Vec<<B as incin_core::backend_authoring::StorageBackend>::Storage>>
 pub fn incin_core::backend_authoring::DifferentiableOp::forward(&[<B as incin_core::backend_authoring::StorageBackend>::Storage], &Self::Attributes) -> core::result::Result<(<B as incin_core::backend_authoring::StorageBackend>::Storage, Self::Saved), incin_core::error::BackendError>
 pub fn incin_core::backend_authoring::DifferentiableOp::supports(&incin_core::exec::capability::CapabilityQuery) -> incin_core::exec::capability::SupportLevel
 pub fn incin_core::backend_authoring::Execute::execute(&self, incin_core::backend_authoring::ExecutionRequest<'_, O, Self>) -> core::result::Result<Self::Output, incin_core::error::BackendError>
@@ -12682,7 +12682,7 @@ pub trait incin_core::backend_authoring::AutogradBackend: incin_core::backend_au
 pub trait incin_core::backend_authoring::Backend: incin_core::backend_authoring::StorageBackend + incin_core::exec::capability::Capabilities + core::default::Default + core::marker::Sized + core::clone::Clone + core::marker::Send + core::marker::Sync + 'static
 pub trait incin_core::backend_authoring::CanonicalOperation: incin_core::exec::catalog::descriptor::private::Sealed + incin_core::exec::catalog::Operation
 pub trait incin_core::backend_authoring::Capabilities
-pub trait incin_core::backend_authoring::DifferentiableOp<B> where B: incin_core::backend_authoring::StorageBackend: incin_core::exec::catalog::Operation
+pub trait incin_core::backend_authoring::DifferentiableOp<B> where B: incin_core::backend_authoring::StorageBackend, Self::Attributes: core::marker::Send + core::marker::Sync: incin_core::exec::catalog::Operation
 pub trait incin_core::backend_authoring::Execute<O> where O: incin_core::exec::catalog::Operation: incin_core::backend_authoring::StorageBackend + core::marker::Sized
 pub trait incin_core::backend_authoring::ExecuteOutput
 pub trait incin_core::backend_authoring::ExecutionDescriptor: core::clone::Clone + core::fmt::Debug

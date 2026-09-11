@@ -269,6 +269,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **BREAKING: `DifferentiableOp::backward` receives its operation's
+  attributes.** The signature gains a `&Self::Attributes` parameter between
+  the saved values and the output gradient, and the trait gains
+  `Self::Attributes: Send + Sync`, which the recorded recipe needs because it
+  holds a copy of the payload and the tape's `BackwardFn` is `Send + Sync`.
+
+  `forward` already received the attributes; `backward` did not, so an
+  operation whose derivative depends on its own configuration had nowhere to
+  read it from. A leaky ReLU is the smallest case: its slope had to be copied
+  into `Saved` for `backward` to reach it, which puts the configuration on
+  every recorded node a second time and makes `Saved` mean both what the
+  kernel computed and what the caller asked for. PyTorch's `ctx` carries both;
+  JAX returns residuals from a rule that already had the parameters in scope.
+
+  Updating an implementation means adding the parameter, and `_attributes` is
+  the whole change for an operation that does not need it. The bound sits on
+  the trait rather than the blanket `Execute` so that an attribute type that
+  does not satisfy it is reported against the `impl DifferentiableOp` that
+  introduced it, rather than as a missing `Execute`.
+
 - **BREAKING: the layout parameter moved from the marker onto the trait.**
   `Layout` is now `Layout<S>`, and `RowMajor` and `ChannelsLast` are unit
   structs. The shape is written once:

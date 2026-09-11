@@ -131,9 +131,9 @@ impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
     type Dtype = f32;          // one implementation trains one dtype
     type Saved = CpuStorage;   // what forward saves: the input itself
 
-    fn forward(inputs: &[CpuStorage], _: &NoAttributes)
+    fn forward(inputs: &[CpuStorage], attributes: &NoAttributes)
         -> Result<(CpuStorage, Self::Saved), BackendError>;
-    fn backward(saved: &CpuStorage, grad_out: &CpuStorage)
+    fn backward(saved: &CpuStorage, attributes: &NoAttributes, grad_out: &CpuStorage)
         -> Result<Vec<CpuStorage>, incin_core::error::Error>;
 }
 ```

@@ -34,17 +34,20 @@ use incin_core::tensor::device::{Cpu, Device};
 use incin_core::tensor::dtype::{DType, FloatDType};
 use incin_core::tensor::grad::{Grad, RequiresGrad};
 
-/// `y = 3 * x^2`. The dtype rides in a `PhantomData` parameter rather than
-/// only in the associated type, because an impl type parameter that appears
-/// nowhere in the self type is rejected (E0207): `type Dtype = K` alone does
-/// not constrain `K`.
+/// `y = s * x^2`, where `s` is the descriptor's scale. The dtype rides in a
+/// `PhantomData` parameter rather than only in the associated type, because an
+/// impl type parameter that appears nowhere in the self type is rejected
+/// (E0207): `type Dtype = K` alone does not constrain `K`.
+///
+/// The scale lives in [`Operation::Attributes`] rather than in a constant so
+/// that `backward` has to read it from the invocation. `d(s x^2)/dx = 2 s x`
+/// depends on the configuration, which is the shape of operation that could
+/// not be written before `backward` received the attributes.
 #[derive(Debug, Clone)]
 struct ScaledSquare<K>(PhantomData<K>);
 
-const SCALE: f64 = 3.0;
-
 impl<K: DType> Operation for ScaledSquare<K> {
-    type Attributes = NoAttributes;
+    type Attributes = ScalarAttributes;
 
     const KEY: OperationKey = OperationKey {
         namespace: std::borrow::Cow::Borrowed("company.example"),
@@ -105,23 +108,36 @@ where
 
     fn forward(
         inputs: &[B::Storage<K>],
-        _attributes: &NoAttributes,
+        attributes: &ScalarAttributes,
     ) -> core::result::Result<(B::Storage<K>, Self::Saved), BackendError> {
         let x = inputs.first().ok_or(BackendError::InvalidInput {
             operation: OperationKind::Pointwise,
             reason: "scaled_square requires one input",
         })?;
         let squared = run::<op::Mul, B, K>(NoAttributes, &[x, x])?;
-        let scaled = run::<op::MulScalar, B, K>(ScalarAttributes { value: SCALE }, &[&squared])?;
+        let scaled = run::<op::MulScalar, B, K>(
+            ScalarAttributes {
+                value: attributes.value,
+            },
+            &[&squared],
+        )?;
+        // `Saved` holds what the kernel computed with. The scale is not in it:
+        // that is the descriptor's, and `backward` is handed the descriptor.
         Ok((scaled, x.clone()))
     }
 
     fn backward(
         saved: &Self::Saved,
+        attributes: &ScalarAttributes,
         grad_out: &B::Storage<K>,
     ) -> incin_core::error::Result<Vec<B::Storage<K>>> {
-        let slope = run::<op::MulScalar, B, K>(ScalarAttributes { value: 2.0 * SCALE }, &[saved])
-            .map_err(incin_core::error::Error::Backend)?;
+        let slope = run::<op::MulScalar, B, K>(
+            ScalarAttributes {
+                value: 2.0 * attributes.value,
+            },
+            &[saved],
+        )
+        .map_err(incin_core::error::Error::Backend)?;
         let grad = run::<op::Mul, B, K>(NoAttributes, &[&slope, grad_out])
             .map_err(incin_core::error::Error::Backend)?;
         Ok(vec![grad])
@@ -149,7 +165,7 @@ fn one_impl_reaches_the_tensor_api() {
 
     // The whole call: one method, no handles, no context, no storage plumbing.
     let y = x
-        .apply_op::<ScaledSquare<f32>>(NoAttributes)
+        .apply_op::<ScaledSquare<f32>>(ScalarAttributes { value: 3.0 })
         .expect("apply_op");
     let loss = y.sum_all().expect("reduce to a scalar");
     let grads = loss.backward().expect("backward");
@@ -181,7 +197,7 @@ fn a_composed_kernel_does_not_count_its_gradient_twice() {
 
     let y = incin_core::backend_authoring::execute::<ScaledSquare<f32>, B>(
         &ctx,
-        NoAttributes,
+        ScalarAttributes { value: 3.0 },
         &[handle],
     )
     .expect("the composed kernel runs");
@@ -212,7 +228,7 @@ fn the_same_impl_covers_a_second_dtype() {
 
     let y = incin_core::backend_authoring::execute::<ScaledSquare<f64>, B>(
         &ctx,
-        NoAttributes,
+        ScalarAttributes { value: 3.0 },
         &[handle],
     )
     .expect("the same impl runs on f64");
@@ -228,4 +244,53 @@ fn the_same_impl_covers_a_second_dtype() {
         vec![6.0, 12.0, 18.0, 24.0],
         "the same recipe, in f64"
     );
+}
+
+/// The recorded recipe reads the scale from the invocation it belongs to.
+///
+/// Two calls to the same operation with different descriptors, both live on
+/// the tape at once. `d(s x^2)/dx = 2 s x`, so each node's gradient is a
+/// different multiple of its input, and a `backward` that read the scale from
+/// anywhere other than its own attributes would give both nodes the same one.
+///
+/// This is what the attributes parameter buys. Before it, the only way to
+/// reach the scale from `backward` was to copy it into `Saved`, which puts the
+/// configuration on the node twice and makes `Saved` mean both what the kernel
+/// computed and what the caller asked for.
+#[test]
+fn each_recorded_node_reads_its_own_attributes() {
+    use incin_core::backend_authoring::AutogradBackend;
+
+    let ctx = ExecutionContext::new(CpuBackendImpl::<Cpu>::new());
+
+    let run_with = |scale: f64| {
+        let x = CpuStorage::try_from_contiguous(CpuBuffer::F32(vec![1.0, 2.0, 3.0, 4.0]), vec![4])
+            .unwrap();
+        let x_id = x.id();
+        let handle = TensorHandle::from_storage::<B, f32, incin_core::dist::Local>(&x);
+        let y = incin_core::backend_authoring::execute::<ScaledSquare<f32>, B>(
+            &ctx,
+            ScalarAttributes { value: scale },
+            &[handle],
+        )
+        .expect("the scaled kernel runs");
+        (x_id, y)
+    };
+
+    // Both nodes are recorded before either is walked, so neither backward can
+    // be reading an ambient "most recent" configuration.
+    let (x3_id, y3) = run_with(3.0);
+    let (x5_id, y5) = run_with(5.0);
+
+    let g3 = <B as AutogradBackend>::backward::<f32>(&y3).expect("backward at scale 3");
+    let observed3: Vec<f64> = (0..4)
+        .map(|i| g3.get(x3_id).expect("gradient for x3").get(&[i]))
+        .collect();
+    assert_eq!(observed3, vec![6.0, 12.0, 18.0, 24.0], "2 * 3 * x");
+
+    let g5 = <B as AutogradBackend>::backward::<f32>(&y5).expect("backward at scale 5");
+    let observed5: Vec<f64> = (0..4)
+        .map(|i| g5.get(x5_id).expect("gradient for x5").get(&[i]))
+        .collect();
+    assert_eq!(observed5, vec![10.0, 20.0, 30.0, 40.0], "2 * 5 * x");
 }

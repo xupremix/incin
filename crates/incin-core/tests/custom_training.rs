@@ -107,6 +107,7 @@ impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
 
     fn backward(
         saved: &CpuStorage,
+        _attributes: &NoAttributes,
         grad_out: &CpuStorage,
     ) -> incin_core::error::Result<Vec<CpuStorage>> {
         // dy/dx = 2x, with `x` owned by the recipe rather than borrowed from

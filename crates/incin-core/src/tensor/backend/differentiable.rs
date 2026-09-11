@@ -8,6 +8,11 @@
 //! id vector by hand, and cannot forget to record: there is no `execute`
 //! body left to forget it in.
 //!
+//! Both halves are handed the invocation's attributes, so a derivative that
+//! depends on the operation's own configuration reads it from the descriptor
+//! rather than from a copy the forward kernel had to smuggle through
+//! [`Saved`](DifferentiableOp::Saved).
+//!
 //! What the trait does not cover is deliberate. Multi-output operations keep
 //! the explicit per-backend `tape_record` path, because one node per output
 //! cannot be derived from a single return type without specialization
@@ -104,11 +109,27 @@ pub trait RecordingBackend<K: DType>: StorageBackend {
 pub trait DifferentiableOp<B>: Operation
 where
     B: StorageBackend,
+    // The recorded recipe holds a copy of the attributes and lives on a tape
+    // whose `BackwardFn` is `Send + Sync`, so the payload has to be. The bound
+    // sits here rather than on the blanket [`Execute`] so that an attribute
+    // type that does not satisfy it is reported against the
+    // `impl DifferentiableOp` that introduced it, naming the missing bound.
+    // On the blanket impl the same mistake reads as "no `Execute` for this
+    // operation", which does not say what is wrong or where.
+    //
+    // It is not on `Operation::Attributes` because most operations never
+    // record a custom recipe, and widening the open operation contract for
+    // the ones that do would put the bound on all 174 catalog entries.
+    Self::Attributes: Send + Sync,
 {
     /// The dtype whose storage this recipe is written against.
     type Dtype: DType;
     /// What forward saves for backward. Owned values, never handles: the
     /// recipe closure moves them and must be self-contained.
+    ///
+    /// What the kernel computed, not what the caller configured. The
+    /// invocation's attributes reach [`backward`](Self::backward) on their own,
+    /// so a configuration value put here would be stored on the node twice.
     type Saved: Send + Sync + 'static;
 
     /// Capability answer for this operation on this backend and dtype.
@@ -129,10 +150,20 @@ where
     ) -> core::result::Result<(B::Storage<Self::Dtype>, Self::Saved), BackendError>;
 
     /// Map one output gradient to one gradient per input, in input order.
+    ///
     /// Receives the saved values by shared reference; clone out of them,
     /// never out of the live graph.
+    ///
+    /// `attributes` is the descriptor payload this invocation was configured
+    /// with, the same value [`forward`](Self::forward) saw. An operation whose
+    /// derivative depends on its own configuration, a leaky ReLU's slope being
+    /// the smallest case, reads it from here. The alternative is to copy the
+    /// configuration into [`Saved`](Self::Saved) so `backward` can reach it,
+    /// which puts a second copy on every recorded node and makes `Saved` mean
+    /// two things: what the kernel computed, and what the caller asked for.
     fn backward(
         saved: &Self::Saved,
+        attributes: &Self::Attributes,
         grad_out: &B::Storage<Self::Dtype>,
     ) -> CoreResult<Vec<B::Storage<Self::Dtype>>>;
 }
@@ -140,6 +171,9 @@ where
 impl<O, B> Execute<O> for B
 where
     O: DifferentiableOp<B>,
+    // Restated from the trait: a where-clause on a trait is a requirement its
+    // implementors must meet, not a fact its users get for free.
+    O::Attributes: Send + Sync,
     B: RecordingBackend<O::Dtype> + Capabilities,
     B::Storage<O::Dtype>: Any + StorageOutput + TapeStorage,
 {
@@ -184,11 +218,16 @@ where
         for storage in &owned {
             input_ids.push(storage.id());
         }
+        // The recipe outlives this call, so it needs its own copy of the
+        // configuration rather than the borrow `forward` was handed. One clone
+        // per recorded node, of a payload the descriptor already requires to
+        // be `Clone`.
+        let recorded_attributes = attributes.clone();
         let node = TapeNode {
             output_id: out.id(),
             input_ids,
             backward: Box::new(move |grad_out: &B::Storage<O::Dtype>| {
-                O::backward(&saved, grad_out)
+                O::backward(&saved, &recorded_attributes, grad_out)
             }),
         };
         B::record_custom(node);

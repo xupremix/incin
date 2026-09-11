@@ -116,6 +116,7 @@ impl DifferentiableOp<TestBackend> for WgpuSquare {
 
     fn backward(
         saved: &TestStorage,
+        _attributes: &NoAttributes,
         grad_out: &TestStorage,
     ) -> incin_core::error::Result<Vec<TestStorage>> {
         let dims = saved.metadata().shape.dims().to_vec();
