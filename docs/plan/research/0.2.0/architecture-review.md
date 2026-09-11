@@ -828,6 +828,16 @@ generated from `capability/declarations.rs` rather than hand-written, which is
 a macro change in `incin-backends` and a public API addition in both crates.
 It wants its own change with its own baseline regeneration.
 
+> **Correction, 2026-09-11.** `ExecuteInto` landed. The group traits did not,
+> and should not: the claim above that "the group is the unit a backend
+> implements and the completeness proof enforces it" is false. The proof
+> enforces that a backend implements what *it* advertises, not that the four
+> advertise the same members, and they differ sharply -- `elementwise` is 48
+> members on CPU and CUDA, 17 on WGPU and 4 on Metal. A group trait generated
+> from the CPU declaration is unsatisfiable for two of four backends. See D16
+> in `custom-op-autograd-decisions.md` for the full count and for the five
+> groups that could never have one regardless.
+
 ## 4. What landed, and what is next
 
 ### Landed, each with a test that fails without it

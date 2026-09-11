@@ -201,3 +201,63 @@ free and should be taken. The multi-device configurations that could exercise
 it (`distributed-nccl`, multi-ordinal CUDA) are the ones to test it from.
 **Back out:** delete the method and the `Concat2` fixture; nothing else
 depends on either.
+
+## D16. Capability-group traits
+**Taken:** `ExecuteInto<O, K>` alone, which halves what a dispatched-built-in
+recipe pays per operation and is portable.
+**Not taken:** the generated per-group traits (`ElementwiseOps<K>` and
+friends) that the architecture review's section 3.4 proposes as the version
+that "stops scaling with the recipe". They were built, they generate cleanly,
+and they must not ship, because the premise they rest on is false.
+
+The review's argument is that "the group is the unit a backend implements and
+the completeness proof enforces it". The proof exists, and all four backends
+carry it: `assert_every_advertised_row_executes` and its CUDA, WGPU and Metal
+twins. What it proves is that a backend implements everything *it* advertises.
+It does not prove, and nothing proves, that the four backends advertise the
+same members, and they do not. Counting members per group from
+`declarations.rs`:
+
+| group | cpu | cuda | wgpu | metal | common |
+|---|---|---|---|---|---|
+| elementwise | 48 | 48 | 17 | 4 | 4 |
+| native_tensor | 33 | 31 | 4 | 0 | 0 |
+| reduction | 17 | 15 | 14 | 6 | 6 |
+| composed_reduction | 11 | 11 | 0 | 0 | 0 |
+| normalization | 6 | 5 | 0 | 0 | 0 |
+
+Only six of the twenty groups have identical membership across all four, and
+they are the small ones: `broadcast`, `reshape`, `filling`, `sampling`,
+`readback`, `matmul`. So an `ElementwiseOps` generated from the CPU
+declaration is satisfiable by CPU and CUDA and by neither WGPU nor Metal, and
+a generic kernel bounded by it would compile, pass on CPU, and silently not
+exist for half the backends. Generated from the intersection instead it has
+four members out of forty-eight, and it *shrinks* whenever a backend is added,
+which makes the meaning of a published bound depend on unrelated future work.
+Both are worse than naming the two operations a kernel actually uses.
+
+**How the false premise survived:** the review says all three candidates were
+"compiled and run", which is consistent with having been compiled against the
+CPU backend only. Compiling a group trait proves nothing about whether any
+backend satisfies it: a blanket impl with an unsatisfiable bound is a trait
+nobody implements, not an error. The assertion that catches it is
+`const fn satisfies<B: ElementwiseOps<f32>>()` instantiated at a concrete
+backend, which is how the divergence above was found.
+
+**Worth keeping from the attempt,** because it is a fact about the catalog
+rather than about the groups: five of the twenty groups could never have a
+group trait whatever the membership question, because `ExecuteInto` requires
+an operation's output to convert to storage and one member of each returns
+something else. `readback` returns host scalars, vectors and bytes, which is
+the group that exists because `Execute::Output` is an associated type at all;
+`filling` and `sampling` carry the `Variable*` forms, which return a variable;
+`reduction` carries `TopK`, which returns a values/indices pair; and
+`composed_tensor` carries `Chunk` and `Split`, which return a `Vec`. The other
+fifteen are clean.
+
+**Revisit:** if backend parity closes, the membership objection goes with it
+and the generator is twenty lines. It is parked in the session scratchpad
+rather than committed, because a parked file in the tree is surface without a
+consumer. The measurement above is the thing worth keeping, and the command
+that reproduces it is a member count per group over `declarations.rs`.
+
