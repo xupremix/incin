@@ -71,6 +71,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **A custom operation whose forward kernel used built-in operations got its
+  gradient counted twice.** `DifferentiableOp::forward` ran under whatever
+  gradient mode was ambient. Building a kernel out of dispatched built-ins is
+  the obvious way to avoid writing the same loop once per backend, but each of
+  those records a node of its own against the storage the custom node is about
+  to be recorded for, so two nodes carried one output identity and the reverse
+  walk summed both into every input. The result was not a crash or a missing
+  gradient: it was a plausible number that was exactly twice the right one.
+  `forward` now runs under a disabled recording scope, so the custom node is
+  the single authority on the operation's derivative, and
+  `crates/incin-core/tests/custom_op_composition.rs` pins the number.
+
+  One consequence is worth stating, because the documentation said otherwise.
+  A recipe written as dispatched built-ins now covers every backend that
+  implements them and every dtype they accept, from one implementation, which
+  is what the module documentation previously described as two implementations
+  each with its own recipe.
+
 - **The public gradient checker builds without `std`.** `GradMode::scope`
   installs a thread-local and is gated on `std`; `incin_core::exec::gradcheck`
   is not gated, and called it to run its probe forwards under `NoGrad`. The

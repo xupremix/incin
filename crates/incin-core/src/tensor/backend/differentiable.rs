@@ -9,18 +9,55 @@
 //! body left to forget it in.
 //!
 //! What the trait does not cover is deliberate. Multi-output operations keep
-//! the explicit per-backend `tape_record` path — one node per output cannot
-//! be derived from a single return type without specialization acrobatics, and that shape is rare enough to deserve spelling out (see
-//! the polar example). Composing existing differentiable tensor operations
-//! needs no trait at all: the graph is inherited. And implementing both this
-//! trait and a manual [`Execute`] for the same operation on the same backend
-//! is a coherence error, which is the compiler enforcing that there is one
-//! execution path, not two.
+//! the explicit per-backend `tape_record` path, because one node per output
+//! cannot be derived from a single return type without specialization
+//! acrobatics, and that shape is rare enough to deserve spelling out (see the
+//! polar example). And implementing both this trait and a manual [`Execute`]
+//! for the same operation on the same backend is a coherence error, which is
+//! the compiler enforcing that there is one execution path, not two.
 //!
-//! One implementation trains one dtype: the associated [`Dtype`](Self::Dtype)
-//! names the storage the recipe is written against. An operation that trains
-//! in two dtypes is two implementations, conventionally via a generic
-//! wrapper (`Square<f32>`, `Square<f64>`), each with its own recipe.
+//! # Composing built-in operations
+//!
+//! Chaining differentiable tensor methods needs no trait at all: each built-in
+//! records its own node and the graph is inherited. That is composition at the
+//! *tensor* level, and it produces no custom node.
+//!
+//! Building a kernel *inside* [`forward`](DifferentiableOp::forward) out of
+//! dispatched built-in operations is a different thing, and it is supported:
+//! the blanket [`Execute`] runs `forward` under
+//! [`GradMode::Disabled`](crate::exec::GradMode), so the built-ins record
+//! nothing and the custom node is the single authority on this operation's
+//! derivative. Without that scope both the inner nodes and the custom node
+//! would carry the same output identity, the reverse walk would invoke every
+//! recipe against the same output gradient, and each input would receive its
+//! gradient twice. `tests/custom_op_composition.rs` pins the number.
+//!
+//! # One implementation, or several
+//!
+//! The associated [`Dtype`](Self::Dtype) names the storage one recipe is
+//! written against, so a recipe written as a hand loop over one buffer variant
+//! covers one dtype on one backend.
+//!
+//! A recipe written as dispatched built-in operations covers every backend
+//! that implements them and every dtype they accept, from one implementation.
+//! The dtype has to appear in the self type rather than only in the associated
+//! type, because an impl type parameter that appears nowhere in the self type
+//! is rejected (E0207) and `type Dtype = K` does not constrain `K`:
+//!
+//! ```text
+//! struct ScaledSquare<K>(PhantomData<K>);
+//!
+//! impl<B, K> DifferentiableOp<B> for ScaledSquare<K>
+//! where
+//!     B: Backend + Execute<op::Mul> + RecordingBackend<K>,
+//!     K: FloatDType,
+//!     // ...
+//! { type Dtype = K; /* ... */ }
+//! ```
+//!
+//! Which to write is a performance question rather than a constraint of the
+//! design: a fused kernel is still one implementation per backend, and a
+//! composed one is not.
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -30,7 +67,7 @@ use super::{Execute, StorageBackend, StorageOutput};
 use crate::err::{BackendError, Result as CoreResult};
 use crate::exec::UnsupportedReason;
 use crate::exec::catalog::Operation;
-use crate::exec::{Capabilities, CapabilityQuery, SupportLevel, TapeNode, TapeStorage};
+use crate::exec::{Capabilities, CapabilityQuery, GradMode, SupportLevel, TapeNode, TapeStorage};
 use crate::tensor::dtype::DType;
 
 /// A backend that accepts recorded custom backward recipes.
@@ -129,7 +166,20 @@ where
             }
         }
         let attributes = request.operation.descriptor().attributes();
-        let (out, saved) = O::forward(&owned, attributes)?;
+        // The forward kernel runs with recording off. A recipe author is
+        // entitled to build their kernel out of built-in operations rather
+        // than a hand-written loop, and those record nodes of their own
+        // against the very output this impl is about to record a custom node
+        // for. Both nodes would then carry the same `output_id`, the reverse
+        // walk would invoke both recipes against the same output gradient,
+        // and every input would receive its gradient twice. Disabling here is
+        // what makes the custom node the single authority on this
+        // operation's derivative, which is what declaring one means.
+        //
+        // `restrict` rather than `scope` for the reason recorded in D12:
+        // `scope` installs a thread-local and is `std`-only, and this module
+        // is not gated.
+        let (out, saved) = GradMode::Disabled.restrict(|| O::forward(&owned, attributes))?;
         let mut input_ids = Vec::with_capacity(owned.len());
         for storage in &owned {
             input_ids.push(storage.id());
