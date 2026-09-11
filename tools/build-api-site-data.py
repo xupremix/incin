@@ -197,7 +197,13 @@ CRATE_OF_MODULE = {
     "incin_diagnostics": "incin-diagnostics", "incin_lsp": "incin-lsp",
     "incin_macros": "incin-macros",
 }
-TYPE_DECL = re.compile(r"^pub (struct|trait|enum|type) ([A-Za-z0-9_:]+)")
+# The baseline prints a type's attributes ahead of its declaration on the same
+# line, so `#[non_exhaustive] pub enum ...` has to be allowed through or every
+# type carrying an attribute is missing from the site's type index. Four were:
+# `conformance::Verdict` and the three `dispatch::Dispatch*` enums.
+TYPE_DECL = re.compile(
+    r"^(?:#\[[^\]]*\]\s+)*pub (struct|trait|enum|type) ([A-Za-z0-9_:]+)"
+)
 
 
 

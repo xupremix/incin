@@ -104,6 +104,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Every public type carrying an attribute was missing from the API site's
+  type index.** `build-api-site-data.py` matched declarations with a pattern
+  anchored at `^pub`, and the reviewed baselines print a type's attributes
+  ahead of its declaration on the same line. A `#[non_exhaustive] pub enum`
+  therefore never matched, and the type simply was not in `api-types.json`.
+
+  Forty-nine were absent, including `Error`, `BackendError`, `ShapeError`,
+  `DTypeId`, `OperationKind` and `UnsupportedReason`: the error and identifier
+  types a reader is most likely to look up. The pattern now allows leading
+  attributes.
+
+  Nothing reported it because the generator has no expected count to check
+  against, and the gap only became visible when `conformance::Verdict` was
+  marked `#[non_exhaustive]` and disappeared from a file it had been in.
+
 - **A custom operation whose forward kernel used built-in operations got its
   gradient counted twice.** `DifferentiableOp::forward` ran under whatever
   gradient mode was ambient. Building a kernel out of dispatched built-ins is
