@@ -249,6 +249,11 @@ fn test_cpu_jit_kernel_forward_and_backward() {
 
 #[cfg(feature = "cuda")]
 #[test]
+// Launches a kernel, so it belongs to the hardware suite rather than the one
+// that passes anywhere. `hardware.yml` runs both, and `require_cuda` below
+// documents the rule this was the exception to: every hardware test is
+// ignored, so reaching one means the caller asked for the device.
+#[ignore = "requires CUDA hardware"]
 fn test_cuda_jit_kernel_forward_and_backward() {
     use incin_backends::codegen::CudaJitKernel;
     use incin_backends::cuda::CudaBackendImpl;
