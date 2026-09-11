@@ -78,6 +78,9 @@ from the receiver.
 output geometry of a shape-changing custom operation is something only the
 caller knows, so a general version has to ask for it, which is
 `execute_shaped_n` with extra steps.
+**Superseded in part by D15**, which takes the version that does ask for the
+geometry and inherits everything else. The objection above stands: what D15
+declines is inferring the shape, not accepting it.
 **Back out:** delete the method; nothing else depends on it.
 
 ## D9. Higher-order gradients
@@ -135,3 +138,37 @@ hides it:
   configuration fails. CI runs that suite with both features, and the library
   itself builds in every configuration, so this is a property of the test tree
   rather than a break.
+- `test_cuda_jit_kernel_forward_and_backward` in
+  `crates/incin-backends/tests/codegen_ir_pipeline.rs` is `#[cfg(feature =
+  "cuda")]` but not `#[ignore]`, unlike the CUDA conformance tests beside it,
+  so it launches a kernel rather than only compiling one. **`cargo test
+  --workspace --all-features` therefore cannot pass on a machine with the CUDA
+  toolkit but no driver**, which is the ordinary developer configuration; the
+  failure is `Unable to dynamically load the "cuda" shared library` out of
+  `cudarc`. CI never sees it, because every `cargo test` line in `ci.yml`
+  selects `incin-backends/cpu` explicitly and none enables `cuda`. The fix is
+  an `#[ignore]` matching its neighbours, in its own commit.
+
+## D15. `apply_op_n` operand type
+**Taken:** `others: &[&B::Storage<K>]`, with the output shape as a parameter.
+**Not taken:** `others: &[&Self]`, which is what the architecture review's
+section 3.3 proposed. A slice of `&Self` forces every operand to share the
+receiver's shape *and* layout, so it cannot express the case that section
+itself gives as the motivation, a two-operand kernel over `[m, k]` and
+`[k, n]`. It would also leave the review's own claim that this method "removes
+the only remaining reason a user touches `TensorHandle`" false, because a
+shape-mismatched operand would still need a handle. Dispatch never asked for
+the uniformity: `TensorHandle::from_storage` is parameterized by backend,
+dtype and placement, not by shape, so the storage reference is the widest
+operand type that keeps the call type-safe.
+**Not taken either:** an erasure trait (`&[&dyn StorageRef<B, K>]`) to keep
+`&[&w]` at the call site. It buys one `.inner()` per argument and costs public
+surface plus dynamic dispatch on a method whose whole point is that it is
+small.
+**Consequence accepted:** the gradient mode comes from the receiver's marker
+alone, so a `Grad` receiver records even when an operand's storage came from a
+`NoGrad` tensor. That is the rule `apply_op` and `execute_shaped_n` already
+follow rather than a new one, so it is documented on the method instead of
+being guarded against.
+**Back out:** delete the method and the `Concat2` fixture; nothing else
+depends on either.
