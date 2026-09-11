@@ -62,6 +62,15 @@ themselves are left as written rather than edited in place.
   `to_dtype` float-to-float, `frac`, `fmod`, `remainder`). Also lands
   `Tensor::apply_op`, a public backend-generic `gradcheck`, and a uniform
   `tape_record`/`tape_record_with` seam across all four backends.
+- **The construction and custom-operation surfaces reviewed as a whole** --
+  new report `architecture-review.md`. Four findings the earlier record
+  missed, of which the load-bearing one is that a custom forward kernel built
+  out of dispatched built-in operations had its gradient counted twice, with
+  nothing reporting it: the conformance oracle measured tape *depth*, which a
+  double record raises rather than lowers. That is repaired, and the oracle
+  gained the verdict that sees it. The report also corrects the record on the
+  per-backend and per-dtype multiplication a `DifferentiableOp` was thought to
+  imply, and section 4 carries the ordered list of what is next.
 
 **Corrections the later work forced**
 
