@@ -10,6 +10,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **The kernel IR can express the transcendental and rounding pointwise
+  operations.** `IrUnaryOp` gains `Tan`, `Asin`, `Acos`, `Atan`, `Sinh`,
+  `Cosh`, `Asinh`, `Acosh`, `Atanh`, `Erf` and the rounding family `Floor`,
+  `Ceil`, `Round` and `Trunc`; `IrBinaryOp` gains quadrant-aware `Atan2`, which
+  is not composable from `Atan` because the correction is a branch on the signs
+  of both operands. Each carries a derivative rule, so `IrExpr::diff` covers
+  them, and each numeric definition is stated once in `IrUnaryOp::apply` and
+  `IrBinaryOp::apply`, which constant folding and `IrExpr::eval` now both route
+  through rather than repeating.
+
+  `codegen::catalog` does not yet name these operations, so nothing changes
+  about the kernels the CUDA backend emits today. Adopting them replaces a
+  hand-written CUDA literal with a generated one, and the only check that the
+  two agree needs a GPU, so the adoption and the hardware run belong in the
+  same change. The module documentation says which operation to look at first
+  and why.
+
 - **The conformance oracle can see a surplus tape node, not only a missing
   one.** `RecordedNothing` catches a training row whose kernel pushes nothing,
   which leaves a hole in the graph. Its mirror image went uncovered: a kernel

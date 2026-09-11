@@ -47,6 +47,112 @@ pub enum IrUnaryOp {
     Square,
     /// Heaviside step function (`x > 0 ? 1 : 0`).
     Step,
+    /// Tangent.
+    Tan,
+    /// Arcsine.
+    Asin,
+    /// Arccosine.
+    Acos,
+    /// Arctangent.
+    Atan,
+    /// Hyperbolic sine.
+    Sinh,
+    /// Hyperbolic cosine.
+    Cosh,
+    /// Inverse hyperbolic sine.
+    Asinh,
+    /// Inverse hyperbolic cosine.
+    Acosh,
+    /// Inverse hyperbolic tangent.
+    Atanh,
+    /// Gauss error function.
+    Erf,
+    /// Round toward negative infinity.
+    Floor,
+    /// Round toward positive infinity.
+    Ceil,
+    /// Round half away from zero, matching Rust's `f64::round` and CUDA's
+    /// `roundf`. Deliberately not `rint`, which follows the current rounding
+    /// mode and breaks ties to even.
+    Round,
+    /// Round toward zero.
+    Trunc,
+}
+
+impl IrUnaryOp {
+    /// This operator's value at `v`, in `f64`.
+    ///
+    /// The single numeric definition of every unary operator. Constant folding
+    /// and [`IrExpr::eval`] both route through it, so the two cannot disagree
+    /// about what an operator means, and a new operator states its semantics
+    /// once rather than in each of them.
+    ///
+    /// The rounding family matches Rust's `f64` methods exactly, because the
+    /// CPU executor is written against those and CUDA parity is judged against
+    /// the CPU result.
+    #[must_use]
+    pub fn apply(self, v: f64) -> f64 {
+        match self {
+            Self::Abs => v.abs(),
+            Self::Exp => v.exp(),
+            Self::Log => v.ln(),
+            Self::Sin => v.sin(),
+            Self::Cos => v.cos(),
+            Self::Sqrt => v.sqrt(),
+            Self::Rsqrt => 1.0 / v.sqrt(),
+            Self::Neg => -v,
+            Self::Relu => v.max(0.0),
+            Self::Step => {
+                if v > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Self::Square => v * v,
+            Self::Reciprocal => 1.0 / v,
+            Self::Tanh => v.tanh(),
+            Self::Sigmoid => 1.0 / (1.0 + (-v).exp()),
+            Self::Silu => v / (1.0 + (-v).exp()),
+            Self::Gelu => {
+                // The tanh approximation, matching what the CUDA literal and
+                // the CPU kernel both compute.
+                let k = 0.797_884_560_802_865_4; // sqrt(2 / pi)
+                let cdf = 0.5 * (1.0 + (k * (v + 0.044715 * v.powi(3))).tanh());
+                v * cdf
+            }
+            Self::Tan => v.tan(),
+            Self::Asin => v.asin(),
+            Self::Acos => v.acos(),
+            Self::Atan => v.atan(),
+            Self::Sinh => v.sinh(),
+            Self::Cosh => v.cosh(),
+            Self::Asinh => v.asinh(),
+            Self::Acosh => v.acosh(),
+            Self::Atanh => v.atanh(),
+            // No `f64::erf` on stable, so this is the Abramowitz and Stegun
+            // 7.1.26 rational approximation, accurate to about 1.5e-7. It is
+            // the host-side reference for folding and testing only: the
+            // emitted kernel calls the device `erff`/`erf`.
+            Self::Erf => {
+                let sign = if v < 0.0 { -1.0 } else { 1.0 };
+                let x = v.abs();
+                let t = 1.0 / (1.0 + 0.327_591_1 * x);
+                let y = 1.0
+                    - (((((1.061_405_429 * t - 1.453_152_027) * t) + 1.421_413_741) * t
+                        - 0.284_496_736)
+                        * t
+                        + 0.254_829_592)
+                        * t
+                        * (-x * x).exp();
+                sign * y
+            }
+            Self::Floor => v.floor(),
+            Self::Ceil => v.ceil(),
+            Self::Round => v.round(),
+            Self::Trunc => v.trunc(),
+        }
+    }
 }
 
 /// Binary operators supported in the IR.
@@ -66,6 +172,32 @@ pub enum IrBinaryOp {
     Max,
     /// Minimum (`min(a, b)`).
     Min,
+    /// Two-argument arctangent (`atan2(a, b)`), quadrant-aware.
+    ///
+    /// Not composable from [`IrUnaryOp::Atan`]: the quadrant correction is a
+    /// branch on the signs of both operands, and every target language
+    /// provides the primitive.
+    Atan2,
+}
+
+impl IrBinaryOp {
+    /// This operator's value at `(l, r)`, in `f64`.
+    ///
+    /// The binary counterpart to [`IrUnaryOp::apply`], and shared by constant
+    /// folding and [`IrExpr::eval`] for the same reason.
+    #[must_use]
+    pub fn apply(self, l: f64, r: f64) -> f64 {
+        match self {
+            Self::Add => l + r,
+            Self::Sub => l - r,
+            Self::Mul => l * r,
+            Self::Div => l / r,
+            Self::Pow => l.powf(r),
+            Self::Max => l.max(r),
+            Self::Min => l.min(r),
+            Self::Atan2 => l.atan2(r),
+        }
+    }
 }
 
 /// Ternary operators supported in the IR.
@@ -262,28 +394,7 @@ impl IrExpr {
             Self::Unary(op, inner) => {
                 let opt_inner = inner.constant_fold_and_simplify();
                 if let Self::Const(c) = opt_inner {
-                    match op {
-                        IrUnaryOp::Neg => Self::Const(-c),
-                        IrUnaryOp::Abs => Self::Const(c.abs()),
-                        IrUnaryOp::Exp => Self::Const(c.exp()),
-                        IrUnaryOp::Log => Self::Const(c.ln()),
-                        IrUnaryOp::Sin => Self::Const(c.sin()),
-                        IrUnaryOp::Cos => Self::Const(c.cos()),
-                        IrUnaryOp::Sqrt => Self::Const(c.sqrt()),
-                        IrUnaryOp::Rsqrt => Self::Const(1.0 / c.sqrt()),
-                        IrUnaryOp::Relu => Self::Const(c.max(0.0)),
-                        IrUnaryOp::Step => Self::Const(if c > 0.0 { 1.0 } else { 0.0 }),
-                        IrUnaryOp::Square => Self::Const(c * c),
-                        IrUnaryOp::Reciprocal => Self::Const(1.0 / c),
-                        IrUnaryOp::Tanh => Self::Const(c.tanh()),
-                        IrUnaryOp::Sigmoid => Self::Const(1.0 / (1.0 + (-c).exp())),
-                        IrUnaryOp::Silu => Self::Const(c / (1.0 + (-c).exp())),
-                        IrUnaryOp::Gelu => {
-                            let k = 0.797_884_560_802_865_4; // sqrt(2 / pi)
-                            let cdf = 0.5 * (1.0 + (k * (c + 0.044715 * c.powi(3))).tanh());
-                            Self::Const(c * cdf)
-                        }
-                    }
+                    Self::Const(op.apply(c))
                 } else {
                     // Algebraic identities
                     match (op, &opt_inner) {
@@ -299,15 +410,7 @@ impl IrExpr {
                 let opt_r = rhs.constant_fold_and_simplify();
 
                 if let (Self::Const(cl), Self::Const(cr)) = (&opt_l, &opt_r) {
-                    match op {
-                        IrBinaryOp::Add => Self::Const(cl + cr),
-                        IrBinaryOp::Sub => Self::Const(cl - cr),
-                        IrBinaryOp::Mul => Self::Const(cl * cr),
-                        IrBinaryOp::Div => Self::Const(cl / cr),
-                        IrBinaryOp::Pow => Self::Const(cl.powf(*cr)),
-                        IrBinaryOp::Max => Self::Const(cl.max(*cr)),
-                        IrBinaryOp::Min => Self::Const(cl.min(*cr)),
-                    }
+                    Self::Const(op.apply(*cl, *cr))
                 } else {
                     // Algebraic simplification rules
                     match (op, &opt_l, &opt_r) {
@@ -442,6 +545,63 @@ impl IrExpr {
                         Self::unary(IrUnaryOp::Step, u.clone()).mul(du)
                     }
                     IrUnaryOp::Step => Self::Const(0.0),
+                    IrUnaryOp::Tan => {
+                        // d/dx tan(u) = 1 + tan(u)^2, which avoids dividing by
+                        // cos(u)^2 and so has no removable singularity of its
+                        // own to render.
+                        let t = Self::unary(IrUnaryOp::Tan, u.clone());
+                        Self::Const(1.0).add(t.clone().mul(t)).mul(du)
+                    }
+                    IrUnaryOp::Asin => {
+                        // d/dx asin(u) = 1 / sqrt(1 - u^2) * du
+                        let inner = Self::Const(1.0).sub(u.clone().mul(u.clone()));
+                        du.div(Self::unary(IrUnaryOp::Sqrt, inner))
+                    }
+                    IrUnaryOp::Acos => {
+                        // d/dx acos(u) = -1 / sqrt(1 - u^2) * du
+                        let inner = Self::Const(1.0).sub(u.clone().mul(u.clone()));
+                        du.div(Self::unary(IrUnaryOp::Sqrt, inner)).neg()
+                    }
+                    IrUnaryOp::Atan => {
+                        // d/dx atan(u) = 1 / (1 + u^2) * du
+                        du.div(Self::Const(1.0).add(u.clone().mul(u.clone())))
+                    }
+                    IrUnaryOp::Sinh => {
+                        // d/dx sinh(u) = cosh(u) * du
+                        Self::unary(IrUnaryOp::Cosh, u.clone()).mul(du)
+                    }
+                    IrUnaryOp::Cosh => {
+                        // d/dx cosh(u) = sinh(u) * du
+                        Self::unary(IrUnaryOp::Sinh, u.clone()).mul(du)
+                    }
+                    IrUnaryOp::Asinh => {
+                        // d/dx asinh(u) = 1 / sqrt(u^2 + 1) * du
+                        let inner = u.clone().mul(u.clone()).add(Self::Const(1.0));
+                        du.div(Self::unary(IrUnaryOp::Sqrt, inner))
+                    }
+                    IrUnaryOp::Acosh => {
+                        // d/dx acosh(u) = 1 / sqrt(u^2 - 1) * du
+                        let inner = u.clone().mul(u.clone()).sub(Self::Const(1.0));
+                        du.div(Self::unary(IrUnaryOp::Sqrt, inner))
+                    }
+                    IrUnaryOp::Atanh => {
+                        // d/dx atanh(u) = 1 / (1 - u^2) * du
+                        du.div(Self::Const(1.0).sub(u.clone().mul(u.clone())))
+                    }
+                    IrUnaryOp::Erf => {
+                        // d/dx erf(u) = 2 / sqrt(pi) * exp(-u^2) * du
+                        let two_over_root_pi = Self::Const(core::f64::consts::FRAC_2_SQRT_PI);
+                        let bell = Self::unary(IrUnaryOp::Exp, u.clone().mul(u.clone()).neg());
+                        two_over_root_pi.mul(bell).mul(du)
+                    }
+                    // The rounding family is piecewise constant, so its
+                    // derivative is zero everywhere it exists. The jumps are a
+                    // measure-zero set, which is the same answer CPU `sign`,
+                    // `floor`, `ceil`, `round` and `trunc` already record and
+                    // what `carries_no_gradient` declares them under.
+                    IrUnaryOp::Floor | IrUnaryOp::Ceil | IrUnaryOp::Round | IrUnaryOp::Trunc => {
+                        Self::Const(0.0)
+                    }
                     IrUnaryOp::Square => {
                         // d/dx (u^2) = 2 * u * du
                         Self::Const(2.0).mul(u.clone()).mul(du)
@@ -537,6 +697,15 @@ impl IrExpr {
                         // subgradient: u < v ? du : dv
                         Self::ternary(IrTernaryOp::Select, v.clone().sub(u.clone()), du, dv)
                     }
+                    IrBinaryOp::Atan2 => {
+                        // d/dx atan2(u, v) = (v * du - u * dv) / (u^2 + v^2).
+                        // The denominator vanishes only at the origin, which
+                        // is the one point atan2 itself does not define, so
+                        // the rule is defined exactly where the forward is.
+                        let num = v.clone().mul(du).sub(u.clone().mul(dv));
+                        let den = u.clone().mul(u.clone()).add(v.clone().mul(v.clone()));
+                        num.div(den)
+                    }
                 }
             }
             Self::Ternary(op, a, b, c) => match op {
@@ -569,50 +738,8 @@ impl IrExpr {
             Self::Arg(i) => inputs.get(*i).copied().unwrap_or(0.0),
             Self::Const(c) => *c,
             Self::Var(_) => 0.0,
-            Self::Unary(op, inner) => {
-                let val = inner.eval(inputs);
-                match op {
-                    IrUnaryOp::Abs => val.abs(),
-                    IrUnaryOp::Exp => val.exp(),
-                    IrUnaryOp::Log => val.ln(),
-                    IrUnaryOp::Sin => val.sin(),
-                    IrUnaryOp::Cos => val.cos(),
-                    IrUnaryOp::Sqrt => val.sqrt(),
-                    IrUnaryOp::Rsqrt => 1.0 / val.sqrt(),
-                    IrUnaryOp::Neg => -val,
-                    IrUnaryOp::Relu => val.max(0.0),
-                    IrUnaryOp::Step => {
-                        if val > 0.0 {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    }
-                    IrUnaryOp::Square => val * val,
-                    IrUnaryOp::Reciprocal => 1.0 / val,
-                    IrUnaryOp::Tanh => val.tanh(),
-                    IrUnaryOp::Sigmoid => 1.0 / (1.0 + (-val).exp()),
-                    IrUnaryOp::Silu => val / (1.0 + (-val).exp()),
-                    IrUnaryOp::Gelu => {
-                        let k = 0.797_884_560_802_865_4;
-                        let cdf = 0.5 * (1.0 + (k * (val + 0.044715 * val.powi(3))).tanh());
-                        val * cdf
-                    }
-                }
-            }
-            Self::Binary(op, lhs, rhs) => {
-                let l = lhs.eval(inputs);
-                let r = rhs.eval(inputs);
-                match op {
-                    IrBinaryOp::Add => l + r,
-                    IrBinaryOp::Sub => l - r,
-                    IrBinaryOp::Mul => l * r,
-                    IrBinaryOp::Div => l / r,
-                    IrBinaryOp::Pow => l.powf(r),
-                    IrBinaryOp::Max => l.max(r),
-                    IrBinaryOp::Min => l.min(r),
-                }
-            }
+            Self::Unary(op, inner) => op.apply(inner.eval(inputs)),
+            Self::Binary(op, lhs, rhs) => op.apply(lhs.eval(inputs), rhs.eval(inputs)),
             Self::Ternary(op, a, b, c) => {
                 let va = a.eval(inputs);
                 let vb = b.eval(inputs);
@@ -648,6 +775,13 @@ impl IrExpr {
             Self::Var(v) => v.clone(),
             Self::Unary(op, inner) => {
                 let sub = inner.render_cuda_expr(dtype);
+                let call = |name: &str| {
+                    if is_f64 {
+                        format!("{name}({sub})")
+                    } else {
+                        format!("{name}f({sub})")
+                    }
+                };
                 match op {
                     IrUnaryOp::Neg => format!("(-({sub}))"),
                     IrUnaryOp::Abs => {
@@ -750,6 +884,53 @@ impl IrExpr {
                             "({half} * ({sub}) * ({one} + {tanh_fn}({k} * (({sub}) + {c} * ({sub}) * ({sub}) * ({sub})))))"
                         )
                     }
+                    // Everything below is a plain libdevice call whose double
+                    // and single spellings differ only by the `f` suffix, so
+                    // one arm names the function and the call is rendered
+                    // once. The arms above are spelled out because each is
+                    // something else: an expression, a different function per
+                    // precision, or a name the suffix does not simply append
+                    // to.
+                    //
+                    // `Erf` renders the device function rather than the
+                    // rational approximation `IrUnaryOp::apply` evaluates on
+                    // the host. The two are not the same function: the host
+                    // one is accurate to about 1.5e-7, which is a little over
+                    // one f32 ulp and far short of f64. Rendering the call is
+                    // what keeps the emitted kernel as accurate as the
+                    // hand-written literal it is meant to replace.
+                    // Each of the following is a plain libdevice call whose
+                    // single-precision spelling is the same name with an `f`
+                    // appended, so `call` renders the pick once. They are
+                    // still listed one variant at a time: a wildcard here
+                    // would let a future operator render as whichever call
+                    // the arm happened to name.
+                    //
+                    // `Erf` renders the device function rather than the
+                    // rational approximation `IrUnaryOp::apply` evaluates on
+                    // the host. The two are not the same function: the host
+                    // one is accurate to about 1.5e-7, a little over one f32
+                    // ulp and far short of f64. Rendering the call is what
+                    // keeps the emitted kernel as accurate as the
+                    // hand-written literal it exists to replace.
+                    IrUnaryOp::Tan => call("tan"),
+                    IrUnaryOp::Asin => call("asin"),
+                    IrUnaryOp::Acos => call("acos"),
+                    IrUnaryOp::Atan => call("atan"),
+                    IrUnaryOp::Sinh => call("sinh"),
+                    IrUnaryOp::Cosh => call("cosh"),
+                    IrUnaryOp::Asinh => call("asinh"),
+                    IrUnaryOp::Acosh => call("acosh"),
+                    IrUnaryOp::Atanh => call("atanh"),
+                    IrUnaryOp::Erf => call("erf"),
+                    IrUnaryOp::Floor => call("floor"),
+                    IrUnaryOp::Ceil => call("ceil"),
+                    // `round`, not `rint`: CUDA's `round` breaks ties away
+                    // from zero, which is what `f64::round` does and what the
+                    // hand-written literal calls. `rint` follows the current
+                    // rounding mode and breaks ties to even.
+                    IrUnaryOp::Round => call("round"),
+                    IrUnaryOp::Trunc => call("trunc"),
                 }
             }
             Self::Binary(op, lhs, rhs) => {
@@ -779,6 +960,13 @@ impl IrExpr {
                             format!("fmin({sl}, {sr})")
                         } else {
                             format!("fminf({sl}, {sr})")
+                        }
+                    }
+                    IrBinaryOp::Atan2 => {
+                        if is_f64 {
+                            format!("atan2({sl}, {sr})")
+                        } else {
+                            format!("atan2f({sl}, {sr})")
                         }
                     }
                 }

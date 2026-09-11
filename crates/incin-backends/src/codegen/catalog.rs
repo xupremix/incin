@@ -18,11 +18,24 @@
 //!
 //! Coverage is deliberately partial. An operation appears here only when the IR
 //! can express it exactly, either through a dedicated operator or as a
-//! composition of operators it already has. The inverse and hyperbolic
-//! transcendentals (`asin`, `atan`, `sinh`, `asinh`, `erf`, `tan`) and the
-//! rounding family have neither, so they keep their hand-written literals until
-//! the vocabulary grows, and `unary_forward` returns `None` for them rather than
-//! guessing.
+//! composition of operators it already has.
+//!
+//! The inverse and hyperbolic transcendentals (`tan`, `asin`, `acos`, `atan`,
+//! `sinh`, `cosh`, `asinh`, `acosh`, `atanh`, `erf`), the rounding family
+//! (`floor`, `ceil`, `round`, `trunc`) and binary `atan2` now have dedicated
+//! operators, with derivative rules and emitted call text covered by
+//! `tests/codegen_ir_pipeline.rs`. They are still absent from the tables below,
+//! and `unary_forward` still returns `None` for them.
+//!
+//! That is a sequencing decision rather than a missing operator. Adding a name
+//! here changes what `lower_scalar` emits for an operation that currently ships
+//! a hand-written literal, and the only check that the two agree is
+//! `cuda::ops::ir_conformance_tests`, every test of which is `#[ignore]`d behind
+//! real hardware. Adoption is therefore one edit plus one run of
+//! `cargo test --features cuda -- --ignored`, and the edit should not land
+//! without the run. `tan` is the one to look at first: the shipped derivative
+//! literal is `1.0 / (cos(x) * cos(x))` and `diff` produces `1 + tan(x)^2`,
+//! which is the same function and not the same rounding.
 
 use super::ir::{IrExpr, IrTernaryOp, IrUnaryOp};
 

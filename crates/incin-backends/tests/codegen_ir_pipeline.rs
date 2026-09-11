@@ -1,8 +1,8 @@
 //! Integration tests for Kernel IR, Algebraic Optimization, Symbolic Differentiation, and Codegen DSL.
 
 use incin_backends::codegen::{
-    IrExpr, IrTernaryOp, IrUnaryOp, define_binary_custom_op, define_unary_custom_op, exp, relu,
-    sigmoid,
+    IrBinaryOp, IrExpr, IrTernaryOp, IrUnaryOp, define_binary_custom_op, define_unary_custom_op,
+    exp, lower_scalar, relu, sigmoid,
 };
 use incin_core::tensor::dtype::DTypeId;
 
@@ -287,4 +287,214 @@ fn test_cuda_jit_kernel_forward_and_backward() {
         let expected = val / (1.0 + (-val).exp());
         assert!((out_host[i] - expected).abs() < 1e-4);
     }
+}
+
+// ---------------------------------------------------------------------------
+// The transcendental and rounding vocabulary
+//
+// These operators exist so `codegen::catalog` can eventually express the
+// pointwise operations it currently declines (`tan`, `asin`, `erf`, the
+// rounding family and the rest), each of which ships a hand-written CUDA
+// literal and a hand-written derivative literal that nothing checks. The
+// checks below are the host half of that: they pin the derivative rules and
+// the emitted call text without needing a device. The GPU half, comparing the
+// emitted kernel against the shipped literal, lives in
+// `cuda::ops::ir_conformance_tests` and runs only with hardware.
+// ---------------------------------------------------------------------------
+
+/// Central finite difference of `expr` in argument 0.
+fn numerical_derivative(expr: &IrExpr, at: f64, h: f64) -> f64 {
+    (expr.eval(&[at + h]) - expr.eval(&[at - h])) / (2.0 * h)
+}
+
+#[test]
+fn the_new_unary_derivatives_match_a_numerical_reference() {
+    // Sample points are chosen inside each operator's domain, and far enough
+    // from its singularities that a central difference is meaningful: `asin`
+    // and `acos` blow up at +-1, `acosh` at 1, `atanh` at +-1, and `tan` at
+    // +-pi/2.
+    let cases: &[(IrUnaryOp, &[f64])] = &[
+        (IrUnaryOp::Tan, &[-1.0, -0.3, 0.0, 0.5, 1.2]),
+        (IrUnaryOp::Asin, &[-0.8, -0.3, 0.0, 0.4, 0.85]),
+        (IrUnaryOp::Acos, &[-0.8, -0.3, 0.0, 0.4, 0.85]),
+        (IrUnaryOp::Atan, &[-3.0, -0.5, 0.0, 1.0, 4.0]),
+        (IrUnaryOp::Sinh, &[-2.0, -0.5, 0.0, 1.0, 2.0]),
+        (IrUnaryOp::Cosh, &[-2.0, -0.5, 0.0, 1.0, 2.0]),
+        (IrUnaryOp::Asinh, &[-2.0, -0.5, 0.0, 1.0, 3.0]),
+        (IrUnaryOp::Acosh, &[1.2, 1.8, 3.0, 6.0]),
+        (IrUnaryOp::Atanh, &[-0.8, -0.3, 0.0, 0.4, 0.85]),
+    ];
+
+    for &(op, samples) in cases {
+        let forward = IrExpr::unary(op, IrExpr::arg(0));
+        let derivative = forward.diff(0);
+        for &x in samples {
+            let symbolic = derivative.eval(&[x]);
+            let numerical = numerical_derivative(&forward, x, 1e-5);
+            let tolerance = 1e-4 * symbolic.abs().max(numerical.abs()).max(1.0);
+            assert!(
+                (symbolic - numerical).abs() <= tolerance,
+                "{op:?} at {x}: symbolic {symbolic} vs numerical {numerical}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_erf_derivative_matches_a_numerical_reference() {
+    // `erf` is separated out because the host evaluator is a rational
+    // approximation accurate to about 1.5e-7, not the device function. A
+    // central difference at h = 1e-5 would divide that error by 1e-5 and
+    // report 1e-2 of noise, so the step is widened until the approximation
+    // error is the smaller term.
+    let forward = IrExpr::unary(IrUnaryOp::Erf, IrExpr::arg(0));
+    let derivative = forward.diff(0);
+    for &x in &[-1.5, -0.5, 0.0, 0.7, 1.8] {
+        let symbolic = derivative.eval(&[x]);
+        let numerical = numerical_derivative(&forward, x, 1e-2);
+        assert!(
+            (symbolic - numerical).abs() <= 1e-3,
+            "erf at {x}: symbolic {symbolic} vs numerical {numerical}"
+        );
+    }
+}
+
+#[test]
+fn the_host_erf_approximation_tracks_the_real_function() {
+    // The values the rational approximation is judged against, and the bound
+    // it is documented to hold to. A change that swaps the approximation for
+    // another has to keep this true or it is not the same function.
+    let forward = IrExpr::unary(IrUnaryOp::Erf, IrExpr::arg(0));
+    let known: &[(f64, f64)] = &[
+        (0.0, 0.0),
+        (0.5, 0.520_499_877_813_046_5),
+        (1.0, 0.842_700_792_949_714_9),
+        (2.0, 0.995_322_265_018_952_7),
+        (-1.0, -0.842_700_792_949_714_9),
+    ];
+    for &(x, expected) in known {
+        let got = forward.eval(&[x]);
+        assert!(
+            (got - expected).abs() <= 2e-7,
+            "erf({x}): got {got}, expected {expected}"
+        );
+    }
+}
+
+#[test]
+fn the_rounding_family_differentiates_to_zero() {
+    // Piecewise constant, so the derivative is zero everywhere it exists and
+    // the jumps are a measure-zero set. This is the same answer the CPU
+    // backend records for these operations.
+    for op in [
+        IrUnaryOp::Floor,
+        IrUnaryOp::Ceil,
+        IrUnaryOp::Round,
+        IrUnaryOp::Trunc,
+    ] {
+        let derivative = IrExpr::unary(op, IrExpr::arg(0)).diff(0);
+        for &x in &[-2.5, -0.5, 0.0, 0.5, 1.5, 2.5] {
+            assert!(
+                derivative.eval(&[x]).abs() < f64::EPSILON,
+                "{op:?} at {x} should have a zero derivative"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_rounding_family_evaluates_the_way_rust_does() {
+    // `round` is the one worth pinning: it breaks ties away from zero, which
+    // is what `f64::round` and CUDA's `round` do, and not what `rint` does.
+    let round = IrExpr::unary(IrUnaryOp::Round, IrExpr::arg(0));
+    let trunc = IrExpr::unary(IrUnaryOp::Trunc, IrExpr::arg(0));
+    for &x in &[-2.5, -1.5, -0.5, 0.5, 1.5, 2.5] {
+        assert!(
+            (round.eval(&[x]) - x.round()).abs() < f64::EPSILON,
+            "round({x})"
+        );
+        assert!(
+            (trunc.eval(&[x]) - x.trunc()).abs() < f64::EPSILON,
+            "trunc({x})"
+        );
+    }
+    // Ties to even would give 2.0 here, away from zero gives 3.0.
+    assert!((round.eval(&[2.5]) - 3.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn atan2_differentiates_in_both_arguments() {
+    // d/da atan2(a, b) = b / (a^2 + b^2), d/db = -a / (a^2 + b^2).
+    let forward = IrExpr::binary(IrBinaryOp::Atan2, IrExpr::arg(0), IrExpr::arg(1));
+    let d_da = forward.diff(0);
+    let d_db = forward.diff(1);
+
+    for &(a, b) in &[(1.0, 2.0), (-1.5, 0.5), (0.3, -2.0), (-2.0, -3.0)] {
+        let denominator = a * a + b * b;
+        let expected_da = b / denominator;
+        let expected_db = -a / denominator;
+        assert!(
+            (d_da.eval(&[a, b]) - expected_da).abs() < 1e-9,
+            "d/da atan2({a}, {b})"
+        );
+        assert!(
+            (d_db.eval(&[a, b]) - expected_db).abs() < 1e-9,
+            "d/db atan2({a}, {b})"
+        );
+        // And the forward agrees with the host function it is named after.
+        assert!((forward.eval(&[a, b]) - a.atan2(b)).abs() < 1e-12);
+    }
+}
+
+#[test]
+fn the_new_operators_render_the_device_call_in_both_precisions() {
+    // Both CUDA emitters have to name the same function for one operator.
+    // `render_cuda_expr` writes against the IR's own kernel signature and
+    // `lower_scalar` against caller-named operands, which is the only
+    // difference the text below should show.
+    let expectations: &[(IrUnaryOp, &str)] = &[
+        (IrUnaryOp::Tan, "tan"),
+        (IrUnaryOp::Asin, "asin"),
+        (IrUnaryOp::Acos, "acos"),
+        (IrUnaryOp::Atan, "atan"),
+        (IrUnaryOp::Sinh, "sinh"),
+        (IrUnaryOp::Cosh, "cosh"),
+        (IrUnaryOp::Asinh, "asinh"),
+        (IrUnaryOp::Acosh, "acosh"),
+        (IrUnaryOp::Atanh, "atanh"),
+        (IrUnaryOp::Erf, "erf"),
+        (IrUnaryOp::Floor, "floor"),
+        (IrUnaryOp::Ceil, "ceil"),
+        (IrUnaryOp::Round, "round"),
+        (IrUnaryOp::Trunc, "trunc"),
+    ];
+
+    for &(op, name) in expectations {
+        let expr = IrExpr::unary(op, IrExpr::arg(0));
+
+        let f32_text = expr.render_cuda_expr(DTypeId::F32);
+        assert_eq!(f32_text, format!("{name}f(in0[idx])"), "{op:?} in f32");
+        let f64_text = expr.render_cuda_expr(DTypeId::F64);
+        assert_eq!(f64_text, format!("{name}(in0[idx])"), "{op:?} in f64");
+
+        let fragment = lower_scalar(&expr, &["x"], DTypeId::F32).expect("lowers");
+        assert!(
+            fragment.value.contains(&format!("{name}f(x)"))
+                || fragment
+                    .prologue
+                    .iter()
+                    .any(|line| line.contains(&format!("{name}f(x)"))),
+            "{op:?} did not emit {name}f(x); got {fragment:?}"
+        );
+    }
+
+    let atan2 = IrExpr::binary(IrBinaryOp::Atan2, IrExpr::arg(0), IrExpr::arg(1));
+    assert_eq!(
+        atan2.render_cuda_expr(DTypeId::F32),
+        "atan2f(in0[idx], in1[idx])"
+    );
+    assert_eq!(
+        atan2.render_cuda_expr(DTypeId::F64),
+        "atan2(in0[idx], in1[idx])"
+    );
 }
