@@ -310,3 +310,43 @@ compile. `Dense` is the row-major alias and the target constructors return the
 a default. The annotation is unnecessary anyway, since `shape![2, 5, 10]`
 already fixes the extents in the type.
 
+## D18. The layout trio is two-thirds built, not none of it
+**Not taken:** the layout work of review section 2.3, which is correctly out of
+reach here. **Recorded instead:** the section's own inventory is wrong, and
+acting on it would mean rebuilding things that exist.
+
+The review says the trio is "all three specced in the record and none built".
+Checked against the tree on 2026-09-12:
+
+1. **`transpose_view` exists.** `Tensor::transpose_view` is at
+   `tensor/ops/manipulation/transpose.rs:96`, and `TransposeView` is a catalog
+   row declared by both CPU and CUDA. What is true is narrower: WGPU and Metal
+   do not declare it, and WGPU's absence is deliberate and already explained in
+   `declarations.rs`, because its pointwise shaders address linearly and would
+   read the wrong elements from a non-contiguous view rather than fail. So the
+   remaining work is strided WGSL shaders, not the operation.
+2. **`to_layout` is genuinely missing,** and it is the one piece of the trio
+   that is. Note that the *checking* general form does exist:
+   `Tensor::into_layout::<L2>()` at `tensor/base/layout_proof.rs:146` asks the
+   layout for its strides and grants the claim on a match. What has no
+   counterpart is the copying form, the one that succeeds by materializing a
+   buffer in the requested layout instead of refusing. Doing that properly
+   needs a layout-converting kernel per backend, which is why it is item-6
+   sized rather than a method.
+3. **An allocatable `ChannelsLast` exists.** `impl<S: Rank4> FreshLayout<S> for
+   ChannelsLast` is at `shapes/layout.rs:503`, so `zeros_in` and `tensor_in`
+   both produce one, and the `Nhwc` alias spells it. The conformance test the
+   review asks for exists twice over:
+   `a_channels_last_tensor_is_built_with_its_elements_interleaved` in
+   `tests/target_layout_examples.rs` and `channels_last_puts_channels_fastest`
+   in `tests/typed_layout.rs` both assert element positions rather than types.
+
+So the parameter is earning more than "one bound and a measurement" already.
+The honest remaining list for 2.3 is `to_layout`, plus strided WGSL shaders if
+`transpose_view` is wanted on WGPU.
+
+**Method note, since this is the third stale claim found in the review:**
+2.4's premise was current, 3.3's signature and 3.2's `Dense` annotation were
+not, 3.4's portability premise was false, and 2.3's inventory is stale. Check
+a section against the tree before implementing it, not after.
+
