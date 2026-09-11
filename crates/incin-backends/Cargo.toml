@@ -122,6 +122,18 @@ cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 
+# Both examples use the CPU backend as their reference implementation, so a
+# `cuda`-only or `wgpu`-only build cannot compile them. Declaring that here is
+# what lets `cargo check --all-targets` succeed in those configurations rather
+# than failing on an unresolved `incin_backends::cpu`.
+[[example]]
+name = "calibration_update"
+required-features = ["cpu"]
+
+[[example]]
+name = "polar_cartesian"
+required-features = ["cpu"]
+
 [dev-dependencies]
 trybuild = "1.0.117"
 tempfile = "3.27"

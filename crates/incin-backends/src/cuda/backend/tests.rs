@@ -502,6 +502,8 @@ fn test_linspace() {
 // layer_norm forward parity and backward (issue #4)
 // ---------------------------------------------------------------------------
 
+// Parity against the CPU reference, so these need both backends.
+#[cfg(feature = "cpu")]
 use crate::cpu::storage::{CpuBuffer as HostBuffer, CpuStorage as HostStorage};
 
 /// The documented fixture: two rows of four, non-trivial weight and bias, so
@@ -518,10 +520,12 @@ fn ln_bias() -> CudaStorage {
     cuda_f32(&[4], vec![0.1, -0.1, 0.2, -0.2])
 }
 
+#[cfg(feature = "cpu")]
 fn host_f32(shape: &[usize], values: Vec<f32>) -> HostStorage {
     HostStorage::from_contiguous(HostBuffer::F32(values), shape)
 }
 
+#[cfg(feature = "cpu")]
 fn host_values(storage: &HostStorage) -> Vec<f64> {
     let total: usize = storage.shape.iter().product::<usize>().max(1);
     let mut out = Vec::with_capacity(total);
@@ -539,6 +543,7 @@ fn host_values(storage: &HostStorage) -> Vec<f64> {
     out
 }
 
+#[cfg(feature = "cpu")]
 /// CPU forward plus its composed backward, on the same values the CUDA side
 /// runs: the reference the parity tests below compare against.
 fn cpu_layer_norm_grads(
@@ -579,6 +584,7 @@ fn assert_close(left: &[f64], right: &[f64], tol: f64, what: &str) {
     }
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn layer_norm_forward_matches_cpu_reference() {
@@ -602,6 +608,7 @@ fn layer_norm_forward_matches_cpu_reference() {
     let _ = crate::cuda::tape::backward(&out);
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn layer_norm_backward_matches_cpu_reference() {
@@ -658,6 +665,7 @@ fn layer_norm_uniform_upstream_gradient_gives_zero_input_gradient() {
     assert_eq!(db, vec![2.0, 2.0, 2.0, 2.0]);
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn layer_norm_backward_without_bias_returns_two_gradients() {
@@ -685,6 +693,7 @@ fn layer_norm_backward_without_bias_returns_two_gradients() {
     assert_close(&read(dw), &expected_dw, 1e-4, "dw without bias");
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn layer_norm_backward_replays_saved_statistics() {
@@ -900,8 +909,11 @@ fn cross_entropy_loss_trains_through_gather_on_cuda() {
 // and the attention chain through softmax.
 // ---------------------------------------------------------------------------
 
+// Parity against the CPU reference, so these need both backends.
+#[cfg(feature = "cpu")]
 use crate::cpu::CpuBackendImpl as HostBackend;
 
+#[cfg(feature = "cpu")]
 /// CPU forward of a canonical op plus backward under an explicit seed, on
 /// the same values the CUDA side runs. Untyped dispatch: shapes still
 /// validate, only the caller-held proof is absent, which value parity does
@@ -942,6 +954,7 @@ fn sm_values() -> (Vec<usize>, Vec<f32>) {
     (vec![2, 3], vec![1.0, 2.0, 3.0, 0.5, -0.5, 0.0])
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn softmax_trains_on_cuda() {
@@ -979,6 +992,7 @@ fn softmax_trains_on_cuda() {
     );
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn rms_norm_trains_on_cuda() {
@@ -1123,6 +1137,7 @@ fn dropout_trains_through_the_replayed_mask_on_cuda() {
         );
     }
 }
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn gather_backward_accumulates_duplicate_indices_like_cpu() {
@@ -1155,6 +1170,7 @@ fn gather_backward_accumulates_duplicate_indices_like_cpu() {
     );
 }
 
+#[cfg(feature = "cpu")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn scatter_src_grad_keeps_only_last_write_like_cpu() {

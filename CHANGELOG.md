@@ -115,6 +115,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   harness nor `docs/api-examples.json` is written under `--check`, and the two
   agree.
 
+- **`cargo check --all-targets` failed on a `cuda`-only or `wgpu`-only
+  build.** Two examples and part of the CUDA test module use the CPU backend
+  as their reference implementation and named it unconditionally. The examples
+  now declare `required-features = ["cpu"]` and the CPU-parity tests carry the
+  matching gate, so those configurations build every target while the combined
+  `cpu,cuda` and `cpu,wgpu` builds keep every test they had.
+
 - **The public gradient checker builds without `std`.** `GradMode::scope`
   installs a thread-local and is gated on `std`; `incin_core::exec::gradcheck`
   is not gated, and called it to run its probe forwards under `NoGrad`. The
