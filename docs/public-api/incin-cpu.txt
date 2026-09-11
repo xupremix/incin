@@ -271,6 +271,8 @@ pub use incin::metrics::Precision
 pub use incin::metrics::Recall
 pub use incin::module
 pub use incin::nn::AdaptiveAvgPool2d
+pub use incin::nn::AttentionBackend
+pub use incin::nn::AttentionConfig
 pub use incin::nn::AvgPool2d
 pub use incin::nn::BCEWithLogitsLoss
 pub use incin::nn::BCEWithLogitsShape
@@ -312,11 +314,13 @@ pub use incin::nn::Mean
 pub use incin::nn::Mish
 pub use incin::nn::ModelStats
 pub use incin::nn::Module
+pub use incin::nn::MultiHeadAttention
 pub use incin::nn::NamedLayers
 pub use incin::nn::NoneReduction
 pub use incin::nn::OptionalField
 pub use incin::nn::Param
 pub use incin::nn::ParameterVisitor
+pub use incin::nn::PositionEncoding
 pub use incin::nn::RMSNorm
 pub use incin::nn::RMSNormShape
 pub use incin::nn::RNN
@@ -325,6 +329,7 @@ pub use incin::nn::ReLU
 pub use incin::nn::Reduction
 pub use incin::nn::ReductionMode
 pub use incin::nn::RnnShape
+pub use incin::nn::RotaryBackend
 pub use incin::nn::Sequential
 pub use incin::nn::Sigmoid
 pub use incin::nn::Softmax

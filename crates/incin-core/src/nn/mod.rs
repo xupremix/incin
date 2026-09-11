@@ -51,6 +51,8 @@
 pub mod activation;
 /// `adaptive_avg_pool2d`.
 pub mod adaptive_avg_pool2d;
+/// Multi-head attention, grouped-query attention and rotary positions.
+pub mod attention;
 /// `avg_pool2d`.
 pub mod avg_pool2d;
 /// `batch_norm`.
@@ -100,6 +102,9 @@ pub mod stats;
 
 pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
 pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
+pub use attention::{
+    AttentionBackend, AttentionConfig, MultiHeadAttention, PositionEncoding, RotaryBackend,
+};
 pub use avg_pool2d::AvgPool2d;
 pub use batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
 pub use conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d};
