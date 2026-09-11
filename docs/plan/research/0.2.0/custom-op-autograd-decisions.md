@@ -170,5 +170,22 @@ alone, so a `Grad` receiver records even when an operand's storage came from a
 `NoGrad` tensor. That is the rule `apply_op` and `execute_shaped_n` already
 follow rather than a new one, so it is documented on the method instead of
 being guarded against.
+**Second consequence, and the harder one:** the result is labelled with the
+receiver's device, and nothing compares the operands against it. Unlike the
+gradient marker this was not previously a question, because one input cannot
+disagree with itself. **Not taken:** refusing operands whose device differs
+from the receiver's. The canonical path's check reads `row.same_device`, which
+`table.rs` derives from the semantic profile and sets to false for `Transfer`
+and `Creation`, so a per-operation answer is the framework's existing position
+rather than an oversight. A custom operation has no row, so a strict check
+here would decide for every author that their operation is same-device, and
+the one class of custom operation that most obviously is not is the one a
+`Transfer` profile would describe. It is also unreachable on CPU, where
+`DeviceId::cpu()` is a singleton and `CpuStorage` exposes no constructor
+taking metadata, so the guard could not be given a failing test in a CPU-only
+CI. Documented under `# Devices` on the method instead.
+**Revisit:** if custom operations gain a declared profile, the check becomes
+free and should be taken. The multi-device configurations that could exercise
+it (`distributed-nccl`, multi-ordinal CUDA) are the ones to test it from.
 **Back out:** delete the method and the `Concat2` fixture; nothing else
 depends on either.

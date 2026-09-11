@@ -198,7 +198,7 @@ let grads = y.sum_all()?.backward()?; // walks built-in and custom nodes as one
 // `apply_op_n` adds the one thing that cannot be inherited from `x`. The extra
 // operands are borrowed storage rather than borrowed tensors, so each is free
 // to have a shape of its own.
-let joined = x.apply_op_n::<Concat2, s![6]>(&[w.inner()], NoAttributes, expected)?;
+let joined = x.apply_op_n::<Concat2<f32>, s![6]>(&[w.inner()], NoAttributes, expected)?;
 ```
 
 How many implementations an operation needs is a question about how its

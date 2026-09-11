@@ -214,6 +214,22 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path,
     /// because there is no single tensor for this method to hand back.
     ///
+    /// # Devices
+    ///
+    /// The result is labelled with `self`'s device, and nothing here verifies
+    /// that the other operands agree. For a custom operation nothing can. The
+    /// canonical dispatch path gates its cross-input device check on a
+    /// per-operation `same_device` row, which the `Transfer` and `Creation`
+    /// profiles set to false precisely because changing device is what they
+    /// are for, so the framework does not hold that every operation wants its
+    /// operands together. A custom operation has no such row to read, and
+    /// answering strictly here would settle that question on the author's
+    /// behalf. With a single input the label was right by construction; with
+    /// several it is an assumption, so an author whose operands can live on
+    /// different devices should compare them before calling. The explicit
+    /// path is no stricter: there the caller writes the device field by hand
+    /// at `try_from_storage`, and nothing checks that either.
+    ///
     /// # Layout
     ///
     /// The result carries `Dyn`, for the reason set out under `apply_op`'s own
