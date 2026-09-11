@@ -105,6 +105,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   is what the module documentation previously described as two implementations
   each with its own recipe.
 
+- **`tools/build-api-examples.py --check` rewrote a tracked file and reported
+  success.** It called the same emit path the write mode calls, so the
+  committed harness was replaced by the generator's version before anything
+  was checked, and a harness that had drifted arbitrarily far still passed.
+  Underneath that, the generator emitted one blank line the committed file did
+  not carry, so regenerating always produced a diff no gate explained. Check
+  mode now compares and fails with the regeneration command, neither the
+  harness nor `docs/api-examples.json` is written under `--check`, and the two
+  agree.
+
 - **The public gradient checker builds without `std`.** `GradMode::scope`
   installs a thread-local and is gated on `std`; `incin_core::exec::gradcheck`
   is not gated, and called it to run its probe forwards under `NoGrad`. The
