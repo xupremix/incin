@@ -2,7 +2,6 @@ use crate::backend_authoring::SupportsDType;
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::{LayerNormAttributes, op};
-use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::module::ShapeInfo;
@@ -228,46 +227,64 @@ impl<
     B: crate::tensor::backend::VariableBackend + crate::exec::Capabilities + Execute<op::LayerNorm>,
     K: DType,
     Train: TrainState,
+    G: crate::tensor::grad::RequiresGrad + crate::tensor::grad::GradJoin<Train::TensorGrad>,
     L: Layout<InS>,
-> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for LayerNorm<S, B, K, Train>
+> Module<Tensor<InS, B, K, G, Local, L>> for LayerNorm<S, B, K, Train>
 where
     <B as Execute<op::LayerNorm>>::Output: Into<B::Storage<K>>,
 {
-    type Output = Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>;
+    /// Carries the operand's layout, as normalization rewrites values in
+    /// place of the shape it was handed.
+    type Output =
+        Tensor<InS, B, K, crate::tensor::grad::JoinedGrad<G, Train::TensorGrad>, Local, L>;
     type Error = Error;
 
     #[inline]
     fn forward(
         &self,
-        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<InS, B, K, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         let weight = self.weight.as_tensor()?;
         let bias = self.bias.as_tensor()?;
+
+        // The result requires a gradient if either the operand or the scale
+        // does, and the execution context has to say so or the tape records
+        // nothing and the layer trains no one.
+        let joined = <G as crate::tensor::grad::GradJoin<Train::TensorGrad>>::join_field(
+            x.grad_field(),
+            weight.grad_field(),
+        );
 
         let inputs = [
             TensorHandle::from_storage::<B, K, Local>(x.inner()),
             TensorHandle::from_storage::<B, K, Local>(weight.inner()),
             TensorHandle::from_storage::<B, K, Local>(bias.inner()),
         ];
-        let context = ExecutionContext::from_scope(B::default());
-        let out_inner = dispatch::execute_shaped::<op::LayerNorm, B, InS>(
-            &context,
-            LayerNormAttributes {
-                normalized_shape: weight.shape_buf().as_ref().to_vec(),
-                epsilon: self.eps as f64,
-                has_bias: true,
-            },
-            &inputs,
-            &x._shape,
-        )
-        .map_err(crate::err::Error::from)?;
+        let context = crate::tensor::grad::execution_context::<
+            B,
+            crate::tensor::grad::JoinedGrad<G, Train::TensorGrad>,
+        >(&joined);
+        let out_inner = <crate::tensor::grad::JoinedGrad<G, Train::TensorGrad> as crate::tensor::grad::RequiresGrad>::grad_mode(&joined)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::LayerNorm, B, InS>(
+                    &context,
+                    LayerNormAttributes {
+                        normalized_shape: weight.shape_buf().as_ref().to_vec(),
+                        epsilon: f64::from(self.eps),
+                        has_bias: true,
+                    },
+                    &inputs,
+                    &x._shape,
+                )
+            })
+            .map_err(crate::err::Error::from)?;
 
         Tensor::from_shape_value(
             out_inner.into(),
             x._shape.clone(),
             x._dtype.clone(),
             weight._device,
-            *x.grad_field(),
+            joined,
         )
     }
 }
