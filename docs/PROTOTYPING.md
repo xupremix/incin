@@ -34,16 +34,23 @@ for this proof alongside tiny tensor, MLP, and CNN fixtures. Use
 `incin` package build. The test observes finite output and nonzero gradients for the query,
 key, value, output, and both feed-forward projection groups.
 
-This is an executable composition proof, not a claim of a stable public
-`MultiHeadAttention` or `TransformerEncoderLayer` module. It does not yet
-prove causal masking, multi-head reshaping, dropout, or portable accelerator
-execution. Those remain separate milestones and must not be inferred from the
-CPU fixture.
+That fixture is no longer the whole story. `incin::nn` now carries
+`MultiHeadAttention` (with grouped-query attention and rotary positions),
+`FeedForward`, and the `TransformerEncoderLayer`/`TransformerDecoderLayer`
+pair, and `crates/incin/tests/gpt_decoder_model.rs` trains a decoder-only
+model end to end on CPU. Causal masking, multi-head reshaping and dropout are
+covered there and in `crates/incin/tests/transformer_layers.rs`, which checks
+the module's attention against the hand-composed block above.
+
+What still must not be inferred from any of it is portable accelerator
+execution: all of this is CPU-verified only. Cross-attention and a fused
+attention kernel are also absent, and the layers are written against `Dyn`
+rather than static shapes.
 
 ## Modern training
 
 AdamW and checkpoint/state contracts are available independently of the
-missing attention module. Learning-rate scheduling and gradient accumulation
+transformer layers. Learning-rate scheduling and gradient accumulation
 are not presented as stable first-class APIs in this snapshot; users can
 express a small manual loop, but those paths need dedicated fixtures before
 being promoted as framework guarantees.

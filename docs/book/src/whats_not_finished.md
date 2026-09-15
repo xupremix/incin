@@ -18,11 +18,21 @@ of repeating a number that won't.
   so the CUDA training path is a declared capability awaiting evidence
   (issues #82 and #83), and verified training anything in this book's
   [Building models](./building_models.md) chapter is CPU-only right now.
-- **No transformer/attention modules.** The raw
-  `scaled_dot_product_attention` operation exists; there is no
-  `MultiHeadAttention` or `TransformerEncoderLayer` composed module, and no
-  `GRU` alongside `LSTM`/`RNN`. Building a transformer means hand-composing
-  it from primitives.
+- **No `GRU`.** `RNN`/`RNNCell` and `LSTM`/`LSTMCell` are there; the gated
+  recurrent unit is not, so a model that wants one has to compose it from
+  `Linear` and the activations. The attention side of this gap has closed:
+  `MultiHeadAttention`, `FeedForward` and the
+  `TransformerEncoderLayer`/`TransformerDecoderLayer` pair are in
+  `incin::nn`, and the [Transformer](./transformer.md) chapter builds a
+  decoder-only model from them.
+- **No cross-attention layer.** The encoder and decoder layers attend to
+  their own input only. A layer that also attends to an encoder's output
+  takes two tensors, and `Module` is parameterized by one input, so that is
+  a separate module rather than a configuration of the existing one.
+- **Attention is composed, not fused.** The layers run on any backend that
+  advertises the operations they use, rather than on the subset with an
+  attention kernel. There is no fused kernel and no KV cache underneath
+  them yet.
 
 ## Facade gaps (the functionality exists, but not through `incin`)
 
