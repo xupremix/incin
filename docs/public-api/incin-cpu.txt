@@ -292,6 +292,9 @@ pub use incin::nn::ELU
 pub use incin::nn::Embedding
 pub use incin::nn::EmbeddingShape
 pub use incin::nn::False
+pub use incin::nn::FeedForward
+pub use incin::nn::FeedForwardBackend
+pub use incin::nn::FeedForwardKind
 pub use incin::nn::Flatten
 pub use incin::nn::GELU
 pub use incin::nn::Init

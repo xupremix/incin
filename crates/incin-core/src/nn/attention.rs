@@ -585,14 +585,14 @@ where
     Buffer::<Dyn, B, K>::from_parts_checked(var, shape, dtype.clone(), device.clone())
 }
 
-fn invalid(operation: &'static str, reason: &'static str) -> Error {
+pub(crate) fn invalid(operation: &'static str, reason: &'static str) -> Error {
     Error::InvalidModuleState {
         operation,
         reason: ErrorMessage::new(reason),
     }
 }
 
-fn invalid_owned(operation: &'static str, reason: alloc::string::String) -> Error {
+pub(crate) fn invalid_owned(operation: &'static str, reason: alloc::string::String) -> Error {
     Error::InvalidModuleState {
         operation,
         reason: ErrorMessage::new(reason),

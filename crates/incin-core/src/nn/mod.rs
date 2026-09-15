@@ -65,6 +65,8 @@ pub mod conv2d;
 pub mod dropout;
 /// `embedding`.
 pub mod embedding;
+/// Position-wise feed-forward networks, including the gated SwiGLU shape.
+pub mod feed_forward;
 /// `flatten`.
 pub mod flatten;
 /// `init`.
@@ -111,6 +113,7 @@ pub use conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d};
 pub use conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d};
 pub use dropout::Dropout;
 pub use embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding};
+pub use feed_forward::{FeedForward, FeedForwardBackend, FeedForwardKind};
 pub use flatten::{Flatten, FlattenAxes, StructuralFlatten};
 pub use init::{
     Fan, Init, InitContext, InitPlan, ParameterRole, constant, kaiming_normal,
