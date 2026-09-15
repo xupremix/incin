@@ -265,3 +265,98 @@ the forward values and the hand-derived gradients against textbook answers,
 sweeps every input element against central finite differences, asserts the
 contract refusals, and then fits `(r, theta)` to a target point by gradient
 descent through nothing but its own backward.
+
+### The walk accumulates; the recipe shapes
+
+```rust,ignore
+use incin_core::exec::tape;
+
+let grads = tape::backward(vec![node_x, node_y, node_loss], &loss)?;
+let d_radius = grads
+    .get(radius.id())
+    .expect("the backward pass reached the radius");
+```
+
+`tape::backward` seeds the loss with ones, walks the nodes in reverse
+insertion order, and for an input that already holds a gradient **sums** the
+new contribution into it rather than overwriting. That accumulation is why
+both halves of a two-output operation can name the same inputs and still come
+out right. It is also the step that was silently wrong when each backend
+carried its own copy of the walk: one contribution was inserted over the
+other rather than added to it. The walk is written once in the core now, and
+its accumulation has no overwrite spelling.
+
+The division of labour between the walk and the recipe is precise, and
+getting it backwards produces gradients that are wrong only for some shapes:
+
+- **The walk never broadcasts.** `TapeStorage::accumulate` assumes both
+  operands already have the target's shape.
+- **The recipe must therefore un-broadcast.** If the forward pass broadcast an
+  operand -- a bias vector added across a batch, a scalar multiplied into a
+  matrix -- the recipe has to sum the incoming gradient back down to that
+  operand's shape before returning it. The CPU backend keeps an `unbroadcast`
+  helper for exactly this, but it is `pub(crate)`; an out-of-tree backend
+  writes its own reduction.
+
+Three more contract details the signature encodes:
+
+- `backward` takes the nodes **by value**. A recipe may itself record -- every
+  convolution backward on the CPU backend does -- so a walk still holding the
+  tape would re-enter it. Drain first; there is no spelling that avoids it.
+- A second `backward` from the same loss **fails** with
+  `BackwardError::GraphConsumed`. The nodes were consumed by the first walk,
+  and running a recipe twice would double every gradient it feeds; a
+  seed-only `Ok` would read like a successful gradient while training on
+  nothing.
+- `tape::backward_with_seed(nodes, &loss, &seed)` takes an explicit output
+  cotangent instead of ones, which is what a vector-Jacobian product or a
+  non-scalar output needs.
+
+An operation whose recipes call tape-recording operations should run the walk
+inside `GradMode::Disabled.scope(..)`, as the CPU backend's `backward` does,
+so the backward pass does not record a graph of its own.
+
+### A new backend implements `TapeStorage`
+
+The walk is generic over storage, and the trait is the complete list of what
+it needs -- four methods, each one a place where backends genuinely differ:
+
+```rust,ignore
+use incin_core::exec::{TapeStorage, TensorId};
+
+impl TapeStorage for MyStorage {
+    /// This allocation's identity, from a monotonic counter, never a pointer
+    /// address: reused addresses credit one tensor's gradient to another.
+    fn id(&self) -> TensorId { self.id }
+
+    /// The seed a backward pass starts from.
+    fn ones_like(&self) -> Result<Self> { /* ... */ }
+
+    /// Sum two contributions for the same tensor. Fallible because on some
+    /// backends adding allocates.
+    fn accumulate(&self, contribution: &Self) -> Result<Self> { /* ... */ }
+
+    /// Only consulted under `NanPolicy::Reject`.
+    fn has_non_finite(&self) -> Result<bool> { /* ... */ }
+}
+```
+
+A custom operation on an in-tree backend reuses that backend's storage, so
+this is already implemented and there is nothing to write.
+
+### One note on the step size
+
+`gradcheck` picks its own step from the dtype, and the number is worth knowing
+before you override it or write a sweep by hand. In `f64`, `1e-5` is
+comfortable. In `f32` it is not: the rounding term of a central difference
+grows as `1 / step` while truncation grows as `step^2`, and the two meet near
+`(6 * f32::EPSILON).cbrt()`, about `9e-3`. The `1e-4` that looks conservative
+is roughly a hundredth of that and sits at its own noise floor, where a real
+defect and a rounding artifact are indistinguishable. `GradCheckOptions::for_f32`
+therefore steps by `1e-2`, and `for_f64` by `1e-5`.
+
+`incin_core::exec::check_gradients` is *not* this check, despite the name. It
+installs `NanPolicy::Reject` for the enclosed code, so the walk stops at the
+first non-finite contribution and names the tensor it appeared on instead of
+letting a `NaN` reach the optimizer. That finds where a gradient exploded; it
+says nothing about whether a finite gradient is the right number.
