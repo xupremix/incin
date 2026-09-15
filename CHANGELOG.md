@@ -1346,6 +1346,69 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - `DuplicateIndexRule` is `#[non_exhaustive]`.
 
+### Added
+
+- **`incin::nn` composes a transformer instead of leaving it to be
+  hand-assembled.** `FeedForward` is the position-wise half, in `Relu`, `Gelu`
+  and gated `SwiGlu` form, and `TransformerLayer` puts self-attention and
+  feed-forward each behind a residual and a `LayerNorm`, in pre-norm or
+  post-norm placement. The direction is a type parameter with two aliases,
+  `TransformerEncoderLayer` and `TransformerDecoderLayer`: two structs would be
+  two copies of one forward pass, and a `causal: bool` field would make masking
+  a value that no signature could require. `build` overwrites
+  `config.attention.causal` with the marker's constant, so
+  `layer.config.attention.causal` reads back what the layer does rather than
+  what was asked for.
+
+  `crates/incin/tests/gpt_decoder_model.rs` trains a two-block decoder-only
+  model on CPU end to end, token ids in and logits over the vocabulary out, and
+  round-trips the whole thing through `collect_state`/`load_state`. The Book's
+  Transformers chapter includes that file in full, so the prose and the
+  compiled proof cannot drift apart. `MultiHeadAttention`, `FeedForward` and
+  `TransformerLayer` also gained the `ShapeInfo` implementations the
+  `#[module]` derive requires of every field.
+
+- **`GRU` and `GRUCell` sit alongside `RNN` and `LSTM`.** Six projections, the
+  same builder typestate as the gated cell (`no_input_bias`, `no_hidden_bias`,
+  `no_bias`, `frozen`, and the four `*_init` setters), the `gru_cell()` and
+  `gru()` free functions, and the parameter and state visitors. The reset gate
+  multiplies the recurrent projection alone, so the candidate is
+  `tanh(W_in x + r * (W_hn h))`. `crates/incin/tests/gru_module.rs` asserts
+  that against the other placement rather than only against the cell's own
+  output: a test that rebuilds the recurrence from the layer's own projections
+  agrees with itself under either spelling, and proves nothing.
+
+- **`LayerNorm::build_full`** takes the channel count, dtype, device and
+  epsilon as ordinary runtime arguments. The `LayerArgInto` impls are written
+  for concrete types, so a module generic over its backend and element could
+  not name one, which is exactly what a composed transformer layer is.
+
+### Fixed
+
+- **An `Embedding` could not be trained through the module path.** Its `Module`
+  implementation named `NoGrad` as the output's requirement, so a lookup's
+  result never carried one and `backward` had nothing to walk back to the
+  table. The kernel had been recording the node all along; the layer above it
+  discarded the type that makes the node reachable, and the layer is how anyone
+  uses it. The output is now the parameter's requirement, and the execution
+  context is built from the weight's own gradient field rather than defaulted.
+  Code that fed a trainable embedding sees its forward output change from
+  `NoGrad` to that requirement, which is the fix rather than a side effect
+  of it.
+
+- **`LSTMCell` and `LSTM` had the same defect, and could not be checkpointed
+  either.** `Module` was implemented only for a `NoGrad` operand, and only over
+  the static `(In, Out)` pair although the struct is parameterized by
+  `LstmShape`, so the implementation was narrower than the type it belonged to
+  and narrower than the `RNN` beside it, which was already generic over both.
+  Separately, neither type implemented `VisitState` or `VisitStateMut`, so
+  `collect_state` refused an `LSTM` outright: the one recurrent layer that
+  could not train also could not be saved. Both implementations are now generic
+  over the shape and over the operand's requirement, and the state visitors
+  exist. The layout parameter narrowed on the way: it now also requires
+  `Layout<Dyn>` and `Restatable`, which is what the per-step reshapes have
+  always needed.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified
