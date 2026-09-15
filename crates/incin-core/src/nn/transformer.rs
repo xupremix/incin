@@ -248,6 +248,29 @@ where
     }
 }
 
+impl<D, B, K, Train> crate::nn::ShapeInfo for TransformerLayer<D, B, K, Train>
+where
+    D: AttentionDirection,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: TrainState,
+{
+    /// Reports the three things that are not visible from the type.
+    ///
+    /// The direction is, so it is named here as well: a summary that printed
+    /// twelve identical `TransformerLayer` rows would not say which of them
+    /// is masked, and the alias a caller wrote is not what a layer summary
+    /// prints.
+    fn shape_info(&self) -> Option<alloc::string::String> {
+        Some(alloc::format!(
+            "{}, norm={:?}, feed_forward={:?}",
+            D::NAME,
+            self.config.norm,
+            self.config.feed_forward
+        ))
+    }
+}
+
 impl<D, B, K, Train> TransformerLayer<D, B, K, Train>
 where
     D: AttentionDirection,
