@@ -15,6 +15,7 @@ declare -A explained=(
     [crates/incin-macros/src/generated/onnx.rs]=1
     [crates/incin-core/src/shapes/shape.rs]=1
     [crates/incin-core/src/nn/param.rs]=1
+    [crates/incin-backends/src/codegen/ir.rs]=1
     [crates/incin-backends/src/cuda/executor.rs]=1
     [crates/incin-backends/src/cuda/ops/shape.rs]=1
     [crates/incin-backends/src/cuda/backend/tests.rs]=1
