@@ -139,7 +139,7 @@ macro_rules! cpu_descriptor_operations {
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
-                ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
+                ConcatExact, Gather, Scatter, IndexSelect, Repeat, RepeatInterleave, Pad, Unfold,
                 // Same operands and the same row as `scatter` beside it, and
                 // declared on this backend only. The rule it advertises is a
                 // fixed summation order, which a CUDA kernel built on atomics

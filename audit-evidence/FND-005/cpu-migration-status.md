@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<O>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**164 of 164 backend-executable operations migrated**, out of 174 catalog operations in total.
+**165 of 165 backend-executable operations migrated**, out of 175 catalog operations in total.
 
 ## Backend-executable operations
 
@@ -108,6 +108,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `masked_fill` | `Kernel` | yes | `::masked_fill` |
 | `unsqueeze` | `Kernel` | yes | `::unsqueeze` |
 | `repeat` | `Kernel` | yes | `::repeat` |
+| `repeat_interleave` | `Kernel` | yes | `::repeat_interleave` |
 | `pad` | `Kernel` | yes | `::pad` |
 | `triu` | `Kernel` | yes | `::triu` |
 | `tril` | `Kernel` | yes | `::tril` |

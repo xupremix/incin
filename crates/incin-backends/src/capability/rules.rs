@@ -422,6 +422,10 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         | OperationKind::SqueezeExact
         | OperationKind::Triu
         | OperationKind::Tril
+        // `repeat` states no minimum because its factors are per-axis and a
+        // scalar simply has none to give. `repeat_interleave` names one axis,
+        // and a scalar does not have it.
+        | OperationKind::RepeatInterleave
         | OperationKind::Diag => 1,
         // Measured, not assumed: each of these was run against ranks zero
         // through four and this is the lowest one that executed. The indexing

@@ -39,8 +39,8 @@ mod view;
 
 pub(crate) use cmp::{div_scalar_storage, elementwise_cmp, sub_scalar_storage};
 pub(crate) use combine::{
-    concat_storage, pad_storage, pixel_shuffle_storage, repeat_storage, stack_storage,
-    unfold_storage,
+    concat_storage, pad_storage, pixel_shuffle_storage, repeat_interleave_storage, repeat_storage,
+    stack_storage, unfold_storage,
 };
 pub(crate) use convert::{
     canonical_to_dtype, float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage,

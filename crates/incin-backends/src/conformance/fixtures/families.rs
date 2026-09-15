@@ -18,9 +18,9 @@ use incin_core::exec::catalog::{
     DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
     GroupNormAttributes, IndexReductionAttributes, LerpAttributes, LinearAttributes,
     LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
-    OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes, ScalarAttributes,
-    ScatterAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
-    TransposeAttributes, VarianceAttributes,
+    OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes,
+    RepeatInterleaveAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes,
+    SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes, VarianceAttributes,
 };
 use incin_core::exec::{CanonicalError, Capabilities, ExecutionContext, Operation, TensorHandle};
 use incin_core::shapes::error::OperationKind;
@@ -305,6 +305,17 @@ derived_attribute_shim!(padding_by_one, PadAttributes, |tuple| PadAttributes {
 derived_attribute_shim!(repeating_twice, RepeatAttributes, |tuple| {
     RepeatAttributes {
         repeats: alloc::vec![2; tuple.rank],
+    }
+});
+
+// The axis is fixed at zero rather than derived from the tuple: every
+// accepted rank has an axis zero, and the fixture exists to prove the row
+// executes, not to sweep the axis.
+derived_attribute_shim!(interleaving_twice, RepeatInterleaveAttributes, |tuple| {
+    let _ = tuple;
+    RepeatInterleaveAttributes {
+        repeats: 2,
+        axis: 0,
     }
 });
 
@@ -790,6 +801,13 @@ family!(
 family!(padding, Operands::UnaryAxis, padding_by_one, [Pad]);
 
 family!(repeating, Operands::UnaryAxis, repeating_twice, [Repeat]);
+
+family!(
+    interleaving,
+    Operands::UnaryAxis,
+    interleaving_twice,
+    [RepeatInterleave]
+);
 
 family!(chunking, Operands::UnaryAxis, one_chunk, [Chunk]);
 

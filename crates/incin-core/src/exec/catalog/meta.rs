@@ -50,6 +50,7 @@ attributes! {
     LerpAttributes { weight: f64 }
     ShapeAttributes { shape: Vec<usize> }
     RepeatAttributes { repeats: Vec<usize> }
+    RepeatInterleaveAttributes { repeats: usize, axis: usize }
     TransposeAttributes { first: usize, second: usize }
     NarrowAttributes { axis: usize, start: usize, length: usize }
     SliceAttributes { ranges: Vec<(usize, usize)> }

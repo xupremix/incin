@@ -213,6 +213,20 @@ fn transformed_shape<A: AttributeContract>(
                     .ok_or_else(|| invalid(operation, "repeats", "repeated extent overflows usize"))
             })
             .collect::<Result<Vec<_>, _>>()?,
+        ShapeTransform::RepeatInterleave { axis, repeats } => {
+            let mut output = input.to_vec();
+            let extent = output.get(axis).copied().ok_or_else(|| {
+                invalid(
+                    operation,
+                    "axis",
+                    "repeat_interleave axis is outside the operand's rank",
+                )
+            })?;
+            output[axis] = extent.checked_mul(repeats).ok_or_else(|| {
+                invalid(operation, "repeats", "interleaved extent overflows usize")
+            })?;
+            output
+        }
         ShapeTransform::Pad(padding) => input
             .iter()
             .zip(padding)

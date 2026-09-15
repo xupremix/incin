@@ -1409,6 +1409,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `Layout<Dyn>` and `Restatable`, which is what the per-step reshapes have
   always needed.
 
+### Added
+
+- **`repeat_interleave` is a catalog operation.** It repeats each element in
+  place, where `repeat` tiles the whole axis: `[a, b]` becomes `[a, a, b, b]`
+  rather than `[a, b, a, b]`. Composing one from the other needs a reshape on
+  either side, and expanding one token per expert it was routed to is the
+  interleaving form, so issue #103 lists it among the operations a
+  mixture-of-experts layer cannot be written without.
+
+  The row is `Storage`/`Shape` beside `repeat`, CPU-native over the same eight
+  dtypes, with a defined gradient: each source element takes the sum over the
+  block of outputs it reached. The output extent is the input's multiplied by
+  the factor, so the shape is `Dyn` for the same reason `repeat`'s is, and the
+  minimum rank is one rather than `repeat`'s zero, because this operation names
+  an axis and a scalar does not have one.
+
+  Four of the eight operations that issue lists were already in the catalog
+  with tensor methods and CPU executors: `log_softmax`, `logsumexp`, `one_hot`
+  and `scatter_add`. What is still missing after this change is `sort`,
+  `bincount`, and `nonzero`, whose output extent depends on its data and so
+  waits on the shape decision in #102.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

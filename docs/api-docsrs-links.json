@@ -596,6 +596,11 @@
    "kind": "method",
    "item": "Tensor::repeat"
   },
+  "repeat_interleave": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=repeat_interleave",
+   "kind": "search",
+   "item": "repeat_interleave"
+  },
   "require_grad": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.require_grad",
    "kind": "method",

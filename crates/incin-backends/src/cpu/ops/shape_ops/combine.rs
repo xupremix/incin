@@ -341,6 +341,82 @@ pub(crate) fn repeat_storage(t: &CpuStorage, repeats: &[usize]) -> Result<CpuSto
     Ok(out_storage)
 }
 
+pub(crate) fn repeat_interleave_storage(
+    t: &CpuStorage,
+    repeats: usize,
+    axis: usize,
+) -> Result<CpuStorage> {
+    if axis >= t.shape.len() {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "repeat_interleave axis is outside the operand's rank",
+        }));
+    }
+    if repeats == 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "repeat_interleave needs at least one repeat per element",
+        }));
+    }
+    let mut out_shape = t.shape.to_vec();
+    out_shape[axis] = out_shape[axis].checked_mul(repeats).ok_or_else(|| {
+        Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "interleaved output dimension overflows usize",
+        })
+    })?;
+    let total = crate::cpu::stride::checked_numel(&out_shape)?;
+    let mut out = Vec::with_capacity(total);
+    let mut idx = vec![0usize; out_shape.len()];
+    for _ in 0..total {
+        // The only difference from `repeat` is this line: the block index
+        // divides where tiling takes a remainder, which is what puts the
+        // copies of one element next to each other.
+        let mut src_idx = idx.clone();
+        src_idx[axis] = idx[axis] / repeats;
+        out.push(t.get(&src_idx));
+        if !out_shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &out_shape);
+        }
+    }
+    let buffer = t.buffer.from_f64_values(out)?;
+    let out_storage = CpuStorage::from_contiguous(buffer, out_shape);
+
+    // Each source element reaches `repeats` contiguous output positions, so
+    // its cotangent is the sum over that block.
+    let original_shape = t.shape.to_vec();
+    let (t_id, out_id) = (t.id, out_storage.id);
+    tape::push_with(move || TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CpuStorage| {
+            let mut grads = vec![0.0; crate::cpu::stride::checked_numel(&original_shape)?];
+            let strides = crate::cpu::stride::contiguous_strides(&original_shape);
+            let grad_total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+            let mut grad_idx = vec![0usize; grad_out.shape.len()];
+            for _ in 0..grad_total {
+                let flat_src: usize = grad_idx
+                    .iter()
+                    .enumerate()
+                    .map(|(dim, &value)| {
+                        let source = if dim == axis { value / repeats } else { value };
+                        source * strides[dim]
+                    })
+                    .sum();
+                grads[flat_src] += grad_out.get(&grad_idx);
+                if !grad_out.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut grad_idx, &grad_out.shape);
+                }
+            }
+            Ok(vec![CpuStorage::from_contiguous(
+                grad_out.buffer.from_f64_values(grads)?,
+                &original_shape,
+            )])
+        }),
+    });
+    Ok(out_storage)
+}
+
 pub(crate) fn pad_storage(
     t: &CpuStorage,
     padding: &[(usize, usize)],

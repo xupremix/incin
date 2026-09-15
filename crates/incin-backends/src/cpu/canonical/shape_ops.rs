@@ -14,9 +14,10 @@ use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::shape_ops::{
     broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage, flatten_storage,
     gather_storage, index_select_storage, lerp_storage, masked_fill_storage, narrow_storage,
-    one_hot_storage, pad_storage, pixel_shuffle_storage, repeat_storage, scatter_add_storage,
-    scatter_storage, slice_storage, squeeze_storage, stack_storage, transpose_storage,
-    tril_storage, triu_storage, unfold_storage, unsqueeze_storage, where_storage,
+    one_hot_storage, pad_storage, pixel_shuffle_storage, repeat_interleave_storage, repeat_storage,
+    scatter_add_storage, scatter_storage, slice_storage, squeeze_storage, stack_storage,
+    transpose_storage, tril_storage, triu_storage, unfold_storage, unsqueeze_storage,
+    where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -456,6 +457,26 @@ impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
         )?;
         let repeats = &request.operation.descriptor().attributes().repeats;
         repeat_storage(input, repeats).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::RepeatInterleave> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RepeatInterleave, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::RepeatInterleave;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let attributes = request.operation.descriptor().attributes();
+        repeat_interleave_storage(input, attributes.repeats, attributes.axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 

@@ -557,6 +557,66 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
+    /// Repeats each element `repeats` times along `dim`, in place of tiling
+    /// the whole axis.
+    ///
+    /// `repeat` lays the axis down end to end, so `[a, b]` repeated twice is
+    /// `[a, b, a, b]`; this repeats each element in turn, so the same input is
+    /// `[a, a, b, b]`. Expanding one token per selected expert is the second
+    /// one, and composing it out of the first needs a reshape on either side.
+    ///
+    /// The output extent is the input's multiplied by `repeats`, so the shape
+    /// is `Dyn` for the same reason [`Self::repeat`]'s is: the factor is a
+    /// runtime argument rather than a const parameter.
+    pub fn repeat_interleave(
+        &self,
+        repeats: usize,
+        dim: isize,
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
+    where
+        B: Capabilities + Execute<op::RepeatInterleave>,
+        <B as Execute<op::RepeatInterleave>>::Output: Into<B::Storage<K>>,
+    {
+        let rank = self.shape_buf().len();
+        let axis = crate::shapes::idx::AxisSelector::new(&[dim])
+            .normalize(rank)
+            .map(|axes| axes[0])
+            .map_err(|_| {
+                crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                    axis: dim.unsigned_abs(),
+                    rank,
+                })
+            })?;
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
+        out_shape[axis] = out_shape[axis].checked_mul(repeats).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::RepeatInterleave,
+                expression: "repeat_interleave output extent",
+            })
+        })?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::RepeatInterleave, B, Dyn>(
+                    &context,
+                    crate::exec::catalog::RepeatInterleaveAttributes { repeats, axis },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
     /// Pads tensor according to `padding` (before, after) pairs per dimension with `val`.
     pub fn pad<Sc: Into<crate::tensor::backend::ScalarValue>>(
         &self,

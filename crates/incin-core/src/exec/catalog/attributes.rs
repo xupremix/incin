@@ -265,6 +265,53 @@ impl AttributeContract for RepeatAttributes {
         Some(ShapeTransform::Repeat(&self.repeats))
     }
 }
+impl AttributeContract for RepeatInterleaveAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        // Zero repeats would empty the axis, which is the same tensor-with-no-
+        // values `one_hot` refuses a zero depth for. One repeat is the
+        // identity and is allowed: a caller computing the count refuses
+        // nothing when the count happens to be one.
+        if self.repeats == 0 {
+            return Err(invalid(
+                operation,
+                "repeats",
+                "repeat_interleave needs at least one repeat per element",
+            ));
+        }
+        if let Some(shape) = first_shape(inputs) {
+            if self.axis >= shape.len() {
+                return Err(invalid(
+                    operation,
+                    "axis",
+                    "repeat_interleave axis is outside the operand's rank",
+                ));
+            }
+            let mut output = shape.to_vec();
+            output[self.axis] = shape[self.axis].checked_mul(self.repeats).ok_or_else(|| {
+                invalid(
+                    operation,
+                    "repeats",
+                    "interleaved output dimension overflows usize",
+                )
+            })?;
+            validate_shape(operation, &output)?;
+        }
+        Ok(())
+    }
+    fn shape_transform(&self) -> Option<ShapeTransform<'_>> {
+        Some(ShapeTransform::RepeatInterleave {
+            axis: self.axis,
+            repeats: self.repeats,
+        })
+    }
+    fn axis(&self) -> Option<usize> {
+        Some(self.axis)
+    }
+}
 impl AttributeContract for AxisAttributes {
     fn validate(
         &self,

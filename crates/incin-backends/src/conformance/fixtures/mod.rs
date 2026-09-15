@@ -82,6 +82,7 @@ pub(crate) fn fixture(operation: OperationKind) -> Result<Fixture, &'static str>
         .or_else(|| slicing(operation))
         .or_else(|| padding(operation))
         .or_else(|| repeating(operation))
+        .or_else(|| interleaving(operation))
         .or_else(|| chunking(operation))
         .or_else(|| splitting(operation))
         .or_else(|| order_statistic(operation))

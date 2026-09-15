@@ -111,6 +111,7 @@ macro_rules! incin_operation_catalog {
             (MaskedFill, "masked_fill", Pointwise, Selection, ScalarAttributes, 2, 2, "::masked_fill"),
             (UnsqueezeExact, "unsqueeze", Storage, Shape, AxisAttributes, 1, 1, "::unsqueeze"),
             (Repeat, "repeat", Storage, Shape, RepeatAttributes, 1, 1, "::repeat"),
+            (RepeatInterleave, "repeat_interleave", Storage, Shape, RepeatInterleaveAttributes, 1, 1, "::repeat_interleave"),
             (Pad, "pad", Storage, Shape, PadAttributes, 1, 1, "::pad"),
             (Triu, "triu", Storage, Shape, DiagonalAttributes, 1, 1, "::triu"),
             (Tril, "tril", Storage, Shape, DiagonalAttributes, 1, 1, "::tril"),
