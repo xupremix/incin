@@ -705,7 +705,6 @@ where
             ));
         }
 
-        let kv_dim = self.n_kv_heads * self.head_dim;
         let query = self.query.forward(x.clone())?.forget_layout();
         let key = self.key.forward(x.clone())?.forget_layout();
         let value = self.value.forward(x)?.forget_layout();
@@ -716,7 +715,6 @@ where
         let query = split_heads(&query, batch, seq, self.n_heads, self.head_dim)?;
         let key = split_heads(&key, batch, seq, self.n_kv_heads, self.head_dim)?;
         let value = split_heads(&value, batch, seq, self.n_kv_heads, self.head_dim)?;
-        let _ = kv_dim;
 
         let (query, key) = match self.config.position {
             PositionEncoding::None => (query, key),
