@@ -10,14 +10,14 @@
 //! # Why the head counts are runtime values
 //!
 //! Query heads and key/value heads are fields rather than const parameters,
-//! and the module is written against [`Dyn`] rather than a static shape. The
-//! reason is the causal mask: masking needs the mask and the score tensor to
-//! meet, and the typed API can only express that pairing through `Dyn` today.
-//! A static-shape attention module is a follow-on to the broadcast-shape work,
-//! not something this module can reach on its own. Both invariants that a
-//! const parameterization would have proven at compile time are checked in
-//! [`MultiHeadAttention::build`] and reported as errors naming the offending
-//! numbers.
+//! and the module is written against [`Dyn`](crate::shapes::Dyn) rather than a
+//! static shape. The reason is the causal mask: masking needs the mask and the
+//! score tensor to meet, and the typed API can only express that pairing
+//! through `Dyn` today. A static-shape attention module is a follow-on to the
+//! broadcast-shape work, not something this module can reach on its own. Both
+//! invariants that a const parameterization would have proven at compile time
+//! are checked in [`MultiHeadAttention::build`] and reported as errors naming
+//! the offending numbers.
 //!
 //! # Grouped-query attention
 //!
