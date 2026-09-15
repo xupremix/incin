@@ -69,6 +69,8 @@ pub mod embedding;
 pub mod feed_forward;
 /// `flatten`.
 pub mod flatten;
+/// The gated recurrent unit, alongside `rnn` and `lstm`.
+pub mod gru;
 /// `init`.
 pub mod init;
 /// `layer_norm`.
@@ -117,6 +119,7 @@ pub use dropout::Dropout;
 pub use embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding};
 pub use feed_forward::{FeedForward, FeedForwardBackend, FeedForwardKind};
 pub use flatten::{Flatten, FlattenAxes, StructuralFlatten};
+pub use gru::{GRU, GRUBuilder, GRUCell, GRUCellBuilder, GruShape, gru, gru_cell};
 pub use init::{
     Fan, Init, InitContext, InitPlan, ParameterRole, constant, kaiming_normal,
     kaiming_normal_with_a, kaiming_uniform, kaiming_uniform_with_a, normal, ones, rand, randn,

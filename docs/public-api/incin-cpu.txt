@@ -300,6 +300,9 @@ pub use incin::nn::FeedForwardBackend
 pub use incin::nn::FeedForwardKind
 pub use incin::nn::Flatten
 pub use incin::nn::GELU
+pub use incin::nn::GRU
+pub use incin::nn::GRUCell
+pub use incin::nn::GruShape
 pub use incin::nn::Init
 pub use incin::nn::L1Loss
 pub use incin::nn::L1ReductionShape
@@ -359,6 +362,8 @@ pub use incin::nn::conv2d
 pub use incin::nn::embedding
 pub use incin::nn::format_layer_summary
 pub use incin::nn::format_layer_summary_with_stats
+pub use incin::nn::gru
+pub use incin::nn::gru_cell
 pub use incin::nn::layer_norm
 pub use incin::nn::linear
 pub use incin::nn::lstm
@@ -436,6 +441,8 @@ pub use incin::prelude::FloatToIntPolicy
 pub use incin::prelude::Format
 pub use incin::prelude::FreshDense
 pub use incin::prelude::GELU
+pub use incin::prelude::GRU
+pub use incin::prelude::GRUCell
 pub use incin::prelude::GeneratedFill
 pub use incin::prelude::Grad
 pub use incin::prelude::Gradients

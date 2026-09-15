@@ -18,13 +18,6 @@ of repeating a number that won't.
   so the CUDA training path is a declared capability awaiting evidence
   (issues #82 and #83), and verified training anything in this book's
   [Building models](./building_models.md) chapter is CPU-only right now.
-- **No `GRU`.** `RNN`/`RNNCell` and `LSTM`/`LSTMCell` are there; the gated
-  recurrent unit is not, so a model that wants one has to compose it from
-  `Linear` and the activations. The attention side of this gap has closed:
-  `MultiHeadAttention`, `FeedForward` and the
-  `TransformerEncoderLayer`/`TransformerDecoderLayer` pair are in
-  `incin::nn`, and the [Transformer](./transformer.md) chapter builds a
-  decoder-only model from them.
 - **No cross-attention layer.** The encoder and decoder layers attend to
   their own input only. A layer that also attends to an encoder's output
   takes two tensors, and `Module` is parameterized by one input, so that is

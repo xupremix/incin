@@ -467,14 +467,15 @@ pub mod nn {
         BCEWithLogitsLoss, BatchNorm2d, BatchNormShape, Bidirectional, Buffer, Causal,
         ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossEntropyLoss, Dropout, ELU,
         Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend, FeedForwardKind,
-        Flatten, GELU, Init, L1Loss, LSTM, LSTMCell, LayerNode, LayerNorm, LayerNormShape,
-        LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d, Mish, ModelStats, Module,
-        MultiHeadAttention, NamedLayers, NormPlacement, OptionalField, Param, ParameterVisitor,
-        PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape, RotaryBackend,
-        Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState, TransformerBackend,
-        TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer, TransformerLayer,
-        True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
-        format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
+        Flatten, GELU, GRU, GRUCell, GruShape, Init, L1Loss, LSTM, LSTMCell, LayerNode, LayerNorm,
+        LayerNormShape, LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d, Mish,
+        ModelStats, Module, MultiHeadAttention, NamedLayers, NormPlacement, OptionalField, Param,
+        ParameterVisitor, PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape,
+        RotaryBackend, Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState,
+        TransformerBackend, TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer,
+        TransformerLayer, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding,
+        format_layer_summary, format_layer_summary_with_stats, gru, gru_cell, layer_norm, linear,
+        lstm, rms_norm, rnn, sum_stats,
     };
     #[cfg(feature = "distributed")]
     pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
@@ -823,6 +824,7 @@ pub mod prelude {
         avg_pool2d::AvgPool2d,
         dropout::Dropout,
         flatten::{Flatten, FlattenAxes, StructuralFlatten},
+        gru::{GRU, GRUCell},
         init::Init,
         loss::{
             BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
