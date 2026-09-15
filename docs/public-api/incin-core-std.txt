@@ -13871,7 +13871,7 @@ pub type incin_core::nn::dropout::Dropout::Output = incin_core::nn::dropout::Dro
 pub type incin_core::nn::dropout::Dropout::Output = incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>
 pub type incin_core::nn::embedding::Embedding<S, B, K, Train>::Error = incin_core::error::Error
 pub type incin_core::nn::embedding::Embedding<S, B, K, Train>::Output = incin_core::nn::embedding::Embedding<S, <B as incin_core::backend_authoring::StorageTransfer<__NewD>>::Output, K, Train>
-pub type incin_core::nn::embedding::Embedding<S, B, K, Train>::Output = incin_core::prelude::Tensor<<InS as incin_core::shapes::AppendDim<<S as incin_core::nn::embedding::EmbeddingShape>::Embed>>::Output, B, K, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>
+pub type incin_core::nn::embedding::Embedding<S, B, K, Train>::Output = incin_core::prelude::Tensor<<InS as incin_core::shapes::AppendDim<<S as incin_core::nn::embedding::EmbeddingShape>::Embed>>::Output, B, K, <Train as incin_core::nn::param::TrainState>::TensorGrad, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>
 pub type incin_core::nn::embedding::EmbeddingShape::BuildArg: incin_core::tensor::arg_into::NotUnit
 pub type incin_core::nn::embedding::EmbeddingShape::Embed: incin_core::shapes::Dim
 pub type incin_core::nn::embedding::EmbeddingShape::Vocab: incin_core::shapes::Dim

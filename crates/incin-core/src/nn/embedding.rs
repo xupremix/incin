@@ -2,7 +2,6 @@ use crate::backend_authoring::SupportsDType;
 use crate::dist::placement::Local;
 use crate::err::{Error, Result};
 use crate::exec::catalog::{NoAttributes, op};
-use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::nn::{Module, Param};
@@ -199,14 +198,16 @@ where
         + Execute<op::EmbeddingExact>,
     <B as Execute<op::EmbeddingExact>>::Output: Into<B::Storage<K>>,
 {
-    /// The output tensor type produced by this module's forward pass.
-    type Output = crate::shapes::Dense<
-        <InS as AppendDim<S::Embed>>::Output,
-        B,
-        K,
-        crate::tensor::grad::NoGrad,
-        Local,
-    >;
+    /// The output carries the table's own gradient requirement.
+    ///
+    /// The index operand is legitimately [`NoGrad`](crate::tensor::grad::NoGrad)
+    /// -- token ids are not differentiable -- but the table is a `Param`, and
+    /// the lookup's gradient is a scatter-add back into its rows. Declaring
+    /// the result `NoGrad` regardless of the train state is what stopped an
+    /// embedding table from training: the CPU kernel has recorded the
+    /// scatter-add backward closure all along, and nothing could reach it.
+    type Output =
+        crate::shapes::Dense<<InS as AppendDim<S::Embed>>::Output, B, K, Train::TensorGrad, Local>;
     /// The error type returned if the forward pass fails.
     type Error = Error;
 
@@ -219,7 +220,12 @@ where
         let weight = self.weight.as_tensor()?;
         let x_handle = TensorHandle::from_storage::<B, InK, Local>(x.inner());
         let weight_handle = TensorHandle::from_storage::<B, K, Local>(weight.inner());
-        let context = ExecutionContext::from_scope(B::default());
+        // The context has to name the gradient mode or the tape records
+        // nothing, which is the second half of the same defect: even where
+        // the types lined up, a table dispatched through a scope-only context
+        // received no gradient.
+        let grad = weight.grad_field().clone();
+        let context = crate::tensor::grad::execution_context::<B, Train::TensorGrad>(&grad);
         let mut dims = x.shape_buf().as_ref().to_vec();
         // Read the validated weight extent so named static axes and runtime
         // axes share the same execution path.
@@ -231,24 +237,27 @@ where
         let output_shape =
             crate::shapes::ShapeValue::<<InS as AppendDim<S::Embed>>::Output>::try_new(shape)
                 .map_err(crate::err::Error::Shape)?;
-        let out = dispatch::execute_shaped::<
-            op::EmbeddingExact,
-            B,
-            <InS as AppendDim<S::Embed>>::Output,
-        >(
-            &context,
-            NoAttributes,
-            &[x_handle, weight_handle],
-            &output_shape,
-        )
-        .map_err(crate::err::Error::from)?;
+        let out = <Train::TensorGrad as crate::tensor::grad::RequiresGrad>::grad_mode(&grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<
+                    op::EmbeddingExact,
+                    B,
+                    <InS as AppendDim<S::Embed>>::Output,
+                >(
+                    &context,
+                    NoAttributes,
+                    &[x_handle, weight_handle],
+                    &output_shape,
+                )
+            })
+            .map_err(crate::err::Error::from)?;
 
         Tensor::from_shape_value(
             out.into(),
             output_shape,
             weight._dtype.clone(),
             x._device.clone(),
-            core::marker::PhantomData,
+            grad,
         )
     }
 }
