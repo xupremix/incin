@@ -195,6 +195,23 @@ where
             )>,
     {
         let (channels, dtype, device, eps) = args.into_layer_arg();
+        Self::build_full(channels, dtype, device, eps)
+    }
+
+    /// Builds the layer from every argument stated explicitly.
+    ///
+    /// The compressed [`build`](Self::build) tuple resolves through
+    /// `LayerArgInto`, whose impls are written for concrete argument types, so
+    /// a caller that is itself generic over `K` and `B::Device` cannot satisfy
+    /// it. A composed module already holds those arguments separately and
+    /// calls this instead, the same way it calls
+    /// [`Linear::build_full`](crate::nn::Linear::build_full).
+    pub fn build_full(
+        channels: <S::Channels as Dim>::Arg,
+        dtype: <K as DType>::Arg,
+        device: <B::Device as Device>::Arg,
+        eps: f32,
+    ) -> Result<Self> {
         let shape = S::build_args(channels);
         let weight = Param::<S::ParamShape, B, K, Trainable>::ones_raw(
             crate::tensor::arg_into::TensorArgsData {

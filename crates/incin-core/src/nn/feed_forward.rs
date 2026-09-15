@@ -141,6 +141,19 @@ impl<B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> cr
     }
 }
 
+impl<B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> crate::nn::ShapeInfo
+    for FeedForward<B, K, Train>
+{
+    /// Reports which shape of feed-forward this is.
+    ///
+    /// The widths are the projections' own and a summary walks into them; the
+    /// kind is this module's only state, and it is what decides whether the
+    /// gate exists.
+    fn shape_info(&self) -> Option<alloc::string::String> {
+        Some(alloc::format!("kind={:?}", self.kind))
+    }
+}
+
 impl<B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
     FeedForward<B, K, Train>
 {

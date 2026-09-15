@@ -463,15 +463,17 @@ pub mod nn {
     };
     pub use incin_core::nn::param;
     pub use incin_core::nn::{
-        AdaptiveAvgPool2d, AttentionBackend, AttentionConfig, AvgPool2d, BCEWithLogitsLoss,
-        BatchNorm2d, BatchNormShape, Buffer, ComputeStats, Conv1d, Conv1dShape, Conv2d,
-        Conv2dShape, CrossEntropyLoss, Dropout, ELU, Embedding, EmbeddingShape, False, FeedForward,
-        FeedForwardBackend, FeedForwardKind, Flatten, GELU, Init, L1Loss, LSTM, LSTMCell,
-        LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape, MSELoss,
-        MaxPool2d, Mish, ModelStats, Module, MultiHeadAttention, NamedLayers, OptionalField, Param,
-        ParameterVisitor, PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape,
-        RotaryBackend, Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState, True,
-        VisitParameters, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        AdaptiveAvgPool2d, AttentionBackend, AttentionConfig, AttentionDirection, AvgPool2d,
+        BCEWithLogitsLoss, BatchNorm2d, BatchNormShape, Bidirectional, Buffer, Causal,
+        ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossEntropyLoss, Dropout, ELU,
+        Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend, FeedForwardKind,
+        Flatten, GELU, Init, L1Loss, LSTM, LSTMCell, LayerNode, LayerNorm, LayerNormShape,
+        LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d, Mish, ModelStats, Module,
+        MultiHeadAttention, NamedLayers, NormPlacement, OptionalField, Param, ParameterVisitor,
+        PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape, RotaryBackend,
+        Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState, TransformerBackend,
+        TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer, TransformerLayer,
+        True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
         format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm, rnn, sum_stats,
     };
     #[cfg(feature = "distributed")]

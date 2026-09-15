@@ -86,6 +86,7 @@ impl core::default::Default for incin_core::exec::precision::PrecisionRequest
 impl core::default::Default for incin_core::exec::precision::RuntimePrecisionPolicy
 impl core::default::Default for incin_core::exec::spec::AxisSet
 impl core::default::Default for incin_core::nn::attention::AttentionConfig
+impl core::default::Default for incin_core::nn::transformer::TransformerConfig
 impl core::default::Default for incin_core::prelude::DTypeDescriptor
 impl core::default::Default for incin_core::resource::ResourceLimits
 impl core::default::Default for incin_core::tensor::device::DeviceId
@@ -685,6 +686,9 @@ impl incin_core::nn::stats::ComputeStats for incin_core::nn::activation::Swish
 impl incin_core::nn::stats::ComputeStats for incin_core::nn::activation::Tanh
 impl incin_core::nn::stats::ComputeStats for incin_core::nn::dropout::Dropout
 impl incin_core::nn::stats::LayerStats
+impl incin_core::nn::transformer::AttentionDirection for incin_core::nn::transformer::Bidirectional
+impl incin_core::nn::transformer::AttentionDirection for incin_core::nn::transformer::Causal
+impl incin_core::nn::transformer::TransformerConfig
 impl incin_core::optim::scheduler::ConstantLR
 impl incin_core::optim::scheduler::CosineAnnealingLR
 impl incin_core::optim::scheduler::LRScheduler for incin_core::optim::scheduler::ConstantLR
@@ -988,6 +992,8 @@ impl<B: incin_core::backend_authoring::VariableBackend + incin_core::backend_aut
 impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::ConstDType> incin_core::optim::ParameterGroup<B, K>
 impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::attention::MultiHeadAttention<B, K, Train>
 impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::feed_forward::FeedForward<B, K, Train>
+impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::module::ShapeInfo for incin_core::nn::attention::MultiHeadAttention<B, K, Train>
+impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::module::ShapeInfo for incin_core::nn::feed_forward::FeedForward<B, K, Train>
 impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::module::TrainMode for incin_core::nn::attention::MultiHeadAttention<B, K, Train>
 impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::module::TrainMode for incin_core::nn::feed_forward::FeedForward<B, K, Train>
 impl<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType> incin_core::optim::Adam<B, K>
@@ -1057,6 +1063,10 @@ impl<COut, K: incin_core::shapes::Dim<Arg = ()>, S: incin_core::shapes::Dim<Arg 
 impl<COut, K: incin_core::shapes::Dim<Arg = ()>, S: incin_core::shapes::Dim<Arg = ()>, P: incin_core::shapes::Dim<Arg = ()>, D: incin_core::shapes::Dim<Arg = ()>> incin_core::shapes::SpatialConv2d<COut, K, S, P, D> for incin_core::shapes::Dyn
 impl<Cursor> incin_core::shapes::ReduceKeepAt<incin_core::shapes::FromEnd<Cursor>> for incin_core::shapes::Dyn
 impl<Cursor> incin_core::shapes::ReduceKeepAt<incin_core::shapes::Next<Cursor>> for incin_core::shapes::Dyn
+impl<D, B, K, Train, G, L> incin_core::nn::module::Module<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local, L>> for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where D: incin_core::nn::transformer::AttentionDirection, B: incin_core::nn::transformer::TransformerBackend<K> + incin_core::backend_authoring::SupportsDType<K>, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState, G: incin_core::tensor::grad::RequiresGrad + incin_core::tensor::grad::GradJoin<<Train as incin_core::nn::param::TrainState>::TensorGrad> + incin_core::tensor::grad::GradJoin<incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>, Output = incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>>, L: incin_core::shapes::layout::Layout<incin_core::shapes::Dyn>, incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>: incin_core::tensor::grad::GradJoin<<Train as incin_core::nn::param::TrainState>::TensorGrad, Output = incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>> + incin_core::tensor::grad::GradJoin<incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>, Output = incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>> + incin_core::tensor::grad::GradJoin<incin_core::tensor::grad::NoGrad, Output = incin_core::tensor::grad::JoinedGrad<G, <Train as incin_core::nn::param::TrainState>::TensorGrad>>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LayerNorm>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+impl<D, B, K, Train> incin_core::nn::module::TrainMode for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where D: incin_core::nn::transformer::AttentionDirection, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState
+impl<D, B, K, Train> incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where D: incin_core::nn::transformer::AttentionDirection, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState
+impl<D, B, K> incin_core::nn::transformer::TransformerLayer<D, B, K, incin_core::nn::param::Trainable> where D: incin_core::nn::transformer::AttentionDirection, B: incin_core::backend_authoring::TensorBackend<K> + incin_core::nn::param::ParameterInit<K> + incin_core::nn::attention::RotaryBackend<K> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>, K: incin_core::prelude::DType, <K as incin_core::prelude::DType>::Arg: core::clone::Clone, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Arg: core::clone::Clone, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Arange>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<D0, D1, D2, D3, D4, D5, D6, D7> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2, D3, D4, D5, D6, D7)> for (D0, D1, D2, D3, D4, D5, D6, D7)
 impl<D0, D1, D2, D3, D4, D5, D6> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2, D3, D4, D5, D6)> for (D0, D1, D2, D3, D4, D5, D6)
 impl<D0, D1, D2, D3, D4, D5> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2, D3, D4, D5)> for (D0, D1, D2, D3, D4, D5)
@@ -1065,6 +1075,11 @@ impl<D0, D1, D2> incin_core::tensor::arg_into::ArgInto<(D0, D1, D2)> for (D0, D1
 impl<D0: incin_core::shapes::Dim, D1: incin_core::shapes::Dim, D2: incin_core::shapes::Dim, D3: incin_core::shapes::Dim> incin_core::shapes::layout::Rank4 for incin_core::shapes::DimCons<D0, incin_core::shapes::DimCons<D1, incin_core::shapes::DimCons<D2, incin_core::shapes::DimCons<D3, incin_core::shapes::Nil>>>>
 impl<D1: incin_core::shapes::Dim, D2: incin_core::shapes::Dim, D3: incin_core::shapes::Dim> incin_core::shapes::SplitLast3 for incin_core::shapes::DimCons<D1, incin_core::shapes::DimCons<D2, incin_core::shapes::DimCons<D3, incin_core::shapes::Nil>>>
 impl<D1: incin_core::shapes::Dim, D2: incin_core::shapes::Dim> incin_core::shapes::SplitLast2 for incin_core::shapes::DimCons<D1, incin_core::shapes::DimCons<D2, incin_core::shapes::Nil>>
+impl<D: incin_core::nn::transformer::AttentionDirection, B, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState, __NewD: incin_core::tensor::device::Device> incin_core::tensor::transfer::ToDevice<B, __NewD> for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::TransferTo<__NewD> + incin_core::backend_authoring::VariableBackend, <B as incin_core::backend_authoring::StorageTransfer<__NewD>>::Output: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::SupportsDType<K>
+impl<D: incin_core::nn::transformer::AttentionDirection, B, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::module::NamedLayers for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::VariableBackend
+impl<D: incin_core::nn::transformer::AttentionDirection, B, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::module::VisitParameters<B> for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::VariableBackend, incin_core::nn::attention::MultiHeadAttention<B, K, Train>: incin_core::nn::module::VisitParameters<B>, incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>: incin_core::nn::module::VisitParameters<B>, incin_core::nn::feed_forward::FeedForward<B, K, Train>: incin_core::nn::module::VisitParameters<B>
+impl<D: incin_core::nn::transformer::AttentionDirection, B, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::state::VisitState<B> for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::VariableBackend, incin_core::nn::attention::MultiHeadAttention<B, K, Train>: incin_core::nn::state::VisitState<B>, incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>: incin_core::nn::state::VisitState<B>, incin_core::nn::feed_forward::FeedForward<B, K, Train>: incin_core::nn::state::VisitState<B>
+impl<D: incin_core::nn::transformer::AttentionDirection, B, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState> incin_core::nn::state::VisitStateMut<B> for incin_core::nn::transformer::TransformerLayer<D, B, K, Train> where B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::VariableBackend, incin_core::nn::attention::MultiHeadAttention<B, K, Train>: incin_core::nn::state::VisitStateMut<B>, incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>: incin_core::nn::state::VisitStateMut<B>, incin_core::nn::feed_forward::FeedForward<B, K, Train>: incin_core::nn::state::VisitStateMut<B>
 impl<D: incin_core::shapes::Dim, H: incin_core::shapes::Dim, T: incin_core::shapes::Shape> incin_core::shapes::PrependDim<D> for incin_core::shapes::DimCons<H, T>
 impl<D: incin_core::shapes::Dim, H: incin_core::shapes::Dim, T> incin_core::shapes::AppendDim<D> for incin_core::shapes::DimCons<H, T> where T: incin_core::shapes::AppendDim<D> + incin_core::shapes::Shape
 impl<D: incin_core::shapes::Dim> incin_core::shapes::AppendDim<D> for incin_core::shapes::Dyn
@@ -1186,6 +1201,7 @@ impl<K: incin_core::prelude::BuiltinDType + incin_core::prelude::FloatDType> inc
 impl<K: incin_core::prelude::DType, B> incin_core::nn::attention::AttentionBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout>
 impl<K: incin_core::prelude::DType, B> incin_core::nn::attention::RotaryBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Arange> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>
 impl<K: incin_core::prelude::DType, B> incin_core::nn::feed_forward::FeedForwardBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>
+impl<K: incin_core::prelude::DType, B> incin_core::nn::transformer::TransformerBackend<K> for B where B: incin_core::nn::attention::AttentionBackend<K> + incin_core::nn::feed_forward::FeedForwardBackend<K> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LayerNorm>
 impl<K: typenum::marker_traits::Unsigned, S: typenum::marker_traits::Unsigned, P: typenum::marker_traits::Unsigned, D: typenum::marker_traits::Unsigned, B: incin_core::backend_authoring::VariableBackend> incin_core::nn::module::VisitParameters<B> for incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
 impl<K: typenum::marker_traits::Unsigned, S: typenum::marker_traits::Unsigned, P: typenum::marker_traits::Unsigned, D: typenum::marker_traits::Unsigned, B: incin_core::backend_authoring::VariableBackend> incin_core::nn::module::VisitParameters<B> for incin_core::nn::max_pool2d::MaxPool2d<K, S, P, D>
 impl<K: typenum::marker_traits::Unsigned, S: typenum::marker_traits::Unsigned, P: typenum::marker_traits::Unsigned, D: typenum::marker_traits::Unsigned> incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>
@@ -2806,6 +2822,12 @@ pub const fn incin_core::nn::flatten::FlattenAxes::new(isize, isize) -> Self
 pub const fn incin_core::nn::init::Fan::new(usize, usize) -> Self
 pub const fn incin_core::nn::init::InitContext::new(incin_core::nn::init::ParameterRole) -> Self
 pub const fn incin_core::nn::init::InitContext::with_fan(self, usize, usize) -> Self
+pub const fn incin_core::nn::transformer::TransformerConfig::with_attention(self, incin_core::nn::attention::AttentionConfig) -> Self
+pub const fn incin_core::nn::transformer::TransformerConfig::with_dropout(self, f32) -> Self
+pub const fn incin_core::nn::transformer::TransformerConfig::with_feed_forward(self, incin_core::nn::feed_forward::FeedForwardKind) -> Self
+pub const fn incin_core::nn::transformer::TransformerConfig::with_norm(self, incin_core::nn::transformer::NormPlacement) -> Self
+pub const fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::d_model(&self) -> usize
+pub const fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::is_causal(&self) -> bool
 pub const fn incin_core::prelude::DTypeDescriptor::builtin(incin_core::prelude::DTypeId, incin_core::prelude::DTypeKey, incin_core::prelude::DTypeKind, incin_core::tensor::dtype::StorageEncoding) -> Self
 pub const fn incin_core::prelude::DTypeDescriptor::builtin_id(self) -> core::option::Option<incin_core::prelude::DTypeId>
 pub const fn incin_core::prelude::DTypeDescriptor::encoding(self) -> incin_core::tensor::dtype::StorageEncoding
@@ -3234,11 +3256,19 @@ pub const incin_core::exec::meta::Alignment::BYTE: Self
 pub const incin_core::exec::meta::TensorMeta::UNALLOCATED: Self
 pub const incin_core::exec::spec::AxisSet::EMPTY: Self
 pub const incin_core::exec::spec::DescriptorSchemaVersion::CURRENT: Self
+pub const incin_core::nn::AttentionDirection::CAUSAL: bool
+pub const incin_core::nn::AttentionDirection::NAME: &'static str
 pub const incin_core::nn::TrainState::TRAINABLE: bool
 pub const incin_core::nn::param::Frozen::TRAINABLE: bool
 pub const incin_core::nn::param::TrainState::TRAINABLE: bool
 pub const incin_core::nn::param::Trainable::TRAINABLE: bool
 pub const incin_core::nn::save::CHECKPOINT_MANIFEST_VERSION: u32
+pub const incin_core::nn::transformer::AttentionDirection::CAUSAL: bool
+pub const incin_core::nn::transformer::AttentionDirection::NAME: &'static str
+pub const incin_core::nn::transformer::Bidirectional::CAUSAL: bool
+pub const incin_core::nn::transformer::Bidirectional::NAME: &'static str
+pub const incin_core::nn::transformer::Causal::CAUSAL: bool
+pub const incin_core::nn::transformer::Causal::NAME: &'static str
 pub const incin_core::prelude::AxisTag::NAME: &'static str
 pub const incin_core::prelude::BuiltinDType::DTYPE: incin_core::prelude::DTypeId
 pub const incin_core::prelude::ConstDType::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
@@ -3506,6 +3536,7 @@ pub enum incin_core::loss::Reduction
 pub enum incin_core::nn::FeedForwardKind
 pub enum incin_core::nn::Init
 pub enum incin_core::nn::InitPlan
+pub enum incin_core::nn::NormPlacement
 pub enum incin_core::nn::ParameterRole
 pub enum incin_core::nn::PositionEncoding
 pub enum incin_core::nn::StateRole
@@ -3516,6 +3547,7 @@ pub enum incin_core::nn::init::InitPlan
 pub enum incin_core::nn::init::ParameterRole
 pub enum incin_core::nn::loss::Reduction
 pub enum incin_core::nn::state::StateRole
+pub enum incin_core::nn::transformer::NormPlacement
 pub enum incin_core::prelude::ConversionFailure
 pub enum incin_core::prelude::DTypeKind
 pub enum incin_core::prelude::FloatToIntPolicy
@@ -6446,6 +6478,7 @@ pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::forward(&self
 pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::freeze(self) -> incin_core::nn::attention::MultiHeadAttention<B, K, incin_core::nn::param::Frozen>
 pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::layer_structure(&self, &str) -> alloc::vec::Vec<incin_core::nn::module::LayerNode>
 pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::set_training(&mut self, bool)
+pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::shape_info(&self) -> core::option::Option<alloc::string::String>
 pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::summary(&self) -> alloc::string::String
 pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::summary_with_stats(&self, u64) -> alloc::string::String where Self: incin_core::nn::stats::ComputeStats
 pub fn incin_core::nn::attention::MultiHeadAttention<B, K, Train>::to_device(self, &<__NewD as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self::Output>
@@ -6609,6 +6642,7 @@ pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::forward(&self, in
 pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::freeze(self) -> incin_core::nn::feed_forward::FeedForward<B, K, incin_core::nn::param::Frozen>
 pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::layer_structure(&self, &str) -> alloc::vec::Vec<incin_core::nn::module::LayerNode>
 pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::set_training(&mut self, bool)
+pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::shape_info(&self) -> core::option::Option<alloc::string::String>
 pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::summary(&self) -> alloc::string::String
 pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::summary_with_stats(&self, u64) -> alloc::string::String where Self: incin_core::nn::stats::ComputeStats
 pub fn incin_core::nn::feed_forward::FeedForward<B, K, Train>::to_device(self, &<__NewD as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self::Output>
@@ -6672,6 +6706,7 @@ pub fn incin_core::nn::layer_norm::LayerNorm<S, B, K, Train>::visit_state_flat<V
 pub fn incin_core::nn::layer_norm::LayerNorm<S, B, K, Train>::visit_state_mut<V: incin_core::nn::state::StateMutVisitor<B>>(&mut self, &incin_core::nn::state::StatePath, &mut V) -> incin_core::error::Result<()>
 pub fn incin_core::nn::layer_norm::LayerNorm<S, B, K, Train>::visit_state_mut_flat<V: incin_core::nn::state::StateMutVisitor<B>>(&mut self, &incin_core::nn::state::StatePath, usize, &mut V) -> incin_core::error::Result<()> where Self: core::marker::Sized
 pub fn incin_core::nn::layer_norm::LayerNorm<S, B, K, incin_core::nn::param::Trainable>::build<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::LayerArgInto<(<<S as incin_core::nn::layer_norm::LayerNormShape>::Channels as incin_core::shapes::Dim>::Arg, <K as incin_core::prelude::DType>::Arg, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Arg, f32)>
+pub fn incin_core::nn::layer_norm::LayerNorm<S, B, K, incin_core::nn::param::Trainable>::build_full(<<S as incin_core::nn::layer_norm::LayerNormShape>::Channels as incin_core::shapes::Dim>::Arg, <K as incin_core::prelude::DType>::Arg, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Arg, f32) -> incin_core::error::Result<Self>
 pub fn incin_core::nn::layer_norm::LayerNormBuilder<S, Train>::bias_init(self, incin_core::nn::init::Init) -> Self
 pub fn incin_core::nn::layer_norm::LayerNormBuilder<S, Train>::frozen(self) -> incin_core::nn::layer_norm::LayerNormBuilder<S, incin_core::nn::param::Frozen>
 pub fn incin_core::nn::layer_norm::LayerNormBuilder<S, Train>::weight_init(self, incin_core::nn::init::Init) -> Self
@@ -7038,6 +7073,25 @@ pub fn incin_core::nn::stats::LayerStats::into_model_stats(self) -> incin_core::
 pub fn incin_core::nn::stats::LayerStats::sum<I: core::iter::traits::iterator::Iterator<Item = Self>>(I) -> Self
 pub fn incin_core::nn::stats::sum_stats(&[incin_core::nn::stats::LayerStats]) -> incin_core::nn::stats::LayerStats
 pub fn incin_core::nn::sum_stats(&[incin_core::nn::stats::LayerStats]) -> incin_core::nn::stats::LayerStats
+pub fn incin_core::nn::transformer::TransformerConfig::default() -> Self
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::eval(&mut self)
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::flat_width() -> usize where Self: core::marker::Sized
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::forward(&self, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local, L>) -> core::result::Result<Self::Output, incin_core::error::Error>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::freeze(self) -> incin_core::nn::transformer::TransformerLayer<D, B, K, incin_core::nn::param::Frozen>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::layer_structure(&self, &str) -> alloc::vec::Vec<incin_core::nn::module::LayerNode>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::set_training(&mut self, bool)
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::summary(&self) -> alloc::string::String
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::summary_with_stats(&self, u64) -> alloc::string::String where Self: incin_core::nn::stats::ComputeStats
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::to_device(self, &<__NewD as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self::Output>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::train(&mut self)
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::unfreeze(self) -> incin_core::nn::transformer::TransformerLayer<D, B, K, incin_core::nn::param::Trainable>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::visit_parameters<V: incin_core::nn::module::ParameterVisitor<B>>(&self, &incin_core::nn::state::StatePath, &mut V) -> incin_core::error::Result<()>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::visit_parameters_flat<V: incin_core::nn::module::ParameterVisitor<B>>(&self, &incin_core::nn::state::StatePath, usize, &mut V) -> incin_core::error::Result<()> where Self: core::marker::Sized
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::visit_state<V: incin_core::nn::state::StateVisitor<B>>(&self, &incin_core::nn::state::StatePath, &mut V) -> incin_core::error::Result<()>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::visit_state_flat<V: incin_core::nn::state::StateVisitor<B>>(&self, &incin_core::nn::state::StatePath, usize, &mut V) -> incin_core::error::Result<()> where Self: core::marker::Sized
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::visit_state_mut<V: incin_core::nn::state::StateMutVisitor<B>>(&mut self, &incin_core::nn::state::StatePath, &mut V) -> incin_core::error::Result<()>
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::visit_state_mut_flat<V: incin_core::nn::state::StateMutVisitor<B>>(&mut self, &incin_core::nn::state::StatePath, usize, &mut V) -> incin_core::error::Result<()> where Self: core::marker::Sized
+pub fn incin_core::nn::transformer::TransformerLayer<D, B, K, incin_core::nn::param::Trainable>::build(usize, usize, usize, usize, incin_core::nn::transformer::TransformerConfig, <K as incin_core::prelude::DType>::Arg, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self>
 pub fn incin_core::nn::uniform(f64) -> incin_core::nn::init::Init
 pub fn incin_core::nn::update_node_name_prefix(&mut incin_core::nn::module::LayerNode, &str)
 pub fn incin_core::nn::xavier_normal() -> incin_core::nn::init::Init
@@ -9622,6 +9676,8 @@ pub incin_core::nn::MultiHeadAttention::query: incin_core::nn::linear::Linear<in
 pub incin_core::nn::MultiHeadAttention::rotary_cos: core::option::Option<incin_core::nn::param::Buffer<incin_core::shapes::Dyn, B, K>>
 pub incin_core::nn::MultiHeadAttention::rotary_sin: core::option::Option<incin_core::nn::param::Buffer<incin_core::shapes::Dyn, B, K>>
 pub incin_core::nn::MultiHeadAttention::value: incin_core::nn::linear::Linear<incin_core::shapes::Dyn, B, incin_core::nn::optional::True, K, Train>
+pub incin_core::nn::NormPlacement::Post
+pub incin_core::nn::NormPlacement::Pre
 pub incin_core::nn::ParameterRole::Bias
 pub incin_core::nn::ParameterRole::Offset
 pub incin_core::nn::ParameterRole::Other
@@ -9654,6 +9710,17 @@ pub incin_core::nn::TensorCheckpointMeta::dtype: incin_core::nn::save::Checkpoin
 pub incin_core::nn::TensorCheckpointMeta::global_shape: alloc::vec::Vec<usize>
 pub incin_core::nn::TensorCheckpointMeta::name: alloc::string::String
 pub incin_core::nn::TensorCheckpointMeta::placement_kind: alloc::string::String
+pub incin_core::nn::TransformerConfig::attention: incin_core::nn::attention::AttentionConfig
+pub incin_core::nn::TransformerConfig::dropout: f32
+pub incin_core::nn::TransformerConfig::eps: f32
+pub incin_core::nn::TransformerConfig::feed_forward: incin_core::nn::feed_forward::FeedForwardKind
+pub incin_core::nn::TransformerConfig::norm: incin_core::nn::transformer::NormPlacement
+pub incin_core::nn::TransformerLayer::attention: incin_core::nn::attention::MultiHeadAttention<B, K, Train>
+pub incin_core::nn::TransformerLayer::attention_norm: incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>
+pub incin_core::nn::TransformerLayer::config: incin_core::nn::transformer::TransformerConfig
+pub incin_core::nn::TransformerLayer::dropout: incin_core::nn::dropout::Dropout
+pub incin_core::nn::TransformerLayer::feed_forward: incin_core::nn::feed_forward::FeedForward<B, K, Train>
+pub incin_core::nn::TransformerLayer::feed_forward_norm: incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>
 pub incin_core::nn::activation::Softmax::dim: usize
 pub incin_core::nn::attention::AttentionConfig::causal: bool
 pub incin_core::nn::attention::AttentionConfig::dropout: f32
@@ -9820,6 +9887,19 @@ pub incin_core::nn::stats::LayerStats::params: u64
 pub incin_core::nn::stats::ModelStats::flops: u64
 pub incin_core::nn::stats::ModelStats::macs: u64
 pub incin_core::nn::stats::ModelStats::params: u64
+pub incin_core::nn::transformer::NormPlacement::Post
+pub incin_core::nn::transformer::NormPlacement::Pre
+pub incin_core::nn::transformer::TransformerConfig::attention: incin_core::nn::attention::AttentionConfig
+pub incin_core::nn::transformer::TransformerConfig::dropout: f32
+pub incin_core::nn::transformer::TransformerConfig::eps: f32
+pub incin_core::nn::transformer::TransformerConfig::feed_forward: incin_core::nn::feed_forward::FeedForwardKind
+pub incin_core::nn::transformer::TransformerConfig::norm: incin_core::nn::transformer::NormPlacement
+pub incin_core::nn::transformer::TransformerLayer::attention: incin_core::nn::attention::MultiHeadAttention<B, K, Train>
+pub incin_core::nn::transformer::TransformerLayer::attention_norm: incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>
+pub incin_core::nn::transformer::TransformerLayer::config: incin_core::nn::transformer::TransformerConfig
+pub incin_core::nn::transformer::TransformerLayer::dropout: incin_core::nn::dropout::Dropout
+pub incin_core::nn::transformer::TransformerLayer::feed_forward: incin_core::nn::feed_forward::FeedForward<B, K, Train>
+pub incin_core::nn::transformer::TransformerLayer::feed_forward_norm: incin_core::nn::layer_norm::LayerNorm<incin_core::shapes::Dyn, B, K, Train>
 pub incin_core::optim::Adam::beta1: f64
 pub incin_core::optim::Adam::beta2: f64
 pub incin_core::optim::Adam::eps: f64
@@ -11403,6 +11483,7 @@ pub mod incin_core::nn::safetensors_index
 pub mod incin_core::nn::save
 pub mod incin_core::nn::state
 pub mod incin_core::nn::stats
+pub mod incin_core::nn::transformer
 pub mod incin_core::onnx
 pub mod incin_core::optim
 pub mod incin_core::optim::scheduler
@@ -12434,7 +12515,9 @@ pub struct incin_core::nn::AvgPool2d<K: typenum::marker_traits::Unsigned, S: typ
 pub struct incin_core::nn::BCEWithLogitsLoss<R: incin_core::tensor::reduction::ReductionMode>(_)
 pub struct incin_core::nn::BatchNorm2d<S: incin_core::nn::batch_norm::BatchNormShape, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::BatchNorm2dBuilder<S: incin_core::nn::batch_norm::BatchNormShape, Train: incin_core::nn::param::TrainState>
+pub struct incin_core::nn::Bidirectional
 pub struct incin_core::nn::Buffer<S: incin_core::shapes::Shape, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType>
+pub struct incin_core::nn::Causal
 pub struct incin_core::nn::CheckpointDType
 pub struct incin_core::nn::Conv1d<S: incin_core::nn::conv1d::Conv1dShape, B: incin_core::backend_authoring::VariableBackend, Bias: incin_core::nn::optional::OptionalField, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::Conv1dBuilder<S: incin_core::nn::conv1d::Conv1dShape, Bias: incin_core::nn::optional::OptionalField, Train: incin_core::nn::param::TrainState>
@@ -12491,6 +12574,8 @@ pub struct incin_core::nn::Swish
 pub struct incin_core::nn::Tanh
 pub struct incin_core::nn::TensorCheckpointMeta
 pub struct incin_core::nn::Trainable
+pub struct incin_core::nn::TransformerConfig
+pub struct incin_core::nn::TransformerLayer<D: incin_core::nn::transformer::AttentionDirection, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::True
 pub struct incin_core::nn::activation::ELU
 pub struct incin_core::nn::activation::GELU
@@ -12559,6 +12644,10 @@ pub struct incin_core::nn::state::StateSnapshotVisitor
 pub struct incin_core::nn::state::StateValue
 pub struct incin_core::nn::stats::LayerStats
 pub struct incin_core::nn::stats::ModelStats
+pub struct incin_core::nn::transformer::Bidirectional
+pub struct incin_core::nn::transformer::Causal
+pub struct incin_core::nn::transformer::TransformerConfig
+pub struct incin_core::nn::transformer::TransformerLayer<D: incin_core::nn::transformer::AttentionDirection, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::onnx::OnnxExporter<'a>
 pub struct incin_core::onnx::OnnxImporter<'a>
 pub struct incin_core::optim::Adam<B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType>
@@ -12897,6 +12986,7 @@ pub trait incin_core::loss::MseReductionShape<S: incin_core::shapes::Shape>
 pub trait incin_core::loss::ReductionMode: core::clone::Clone + core::default::Default + 'static
 pub trait incin_core::metrics::Metric: core::marker::Send + core::marker::Sync
 pub trait incin_core::nn::AttentionBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <Self as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout>
+pub trait incin_core::nn::AttentionDirection: 'static
 pub trait incin_core::nn::BatchNormShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::nn::ComputeStats
 pub trait incin_core::nn::Conv1dShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
@@ -12918,6 +13008,7 @@ pub trait incin_core::nn::StateMutVisitor<B: incin_core::backend_authoring::Vari
 pub trait incin_core::nn::StateVisitor<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::TrainMode
 pub trait incin_core::nn::TrainState: 'static + core::marker::Send + core::marker::Sync + core::fmt::Debug + core::clone::Clone + core::marker::Copy
+pub trait incin_core::nn::TransformerBackend<K: incin_core::prelude::DType>: incin_core::nn::attention::AttentionBackend<K> + incin_core::nn::feed_forward::FeedForwardBackend<K> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LayerNorm>
 pub trait incin_core::nn::VisitParameters<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::VisitState<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::VisitStateMut<B: incin_core::backend_authoring::VariableBackend>
@@ -12956,6 +13047,8 @@ pub trait incin_core::nn::state::StateVisitor<B: incin_core::backend_authoring::
 pub trait incin_core::nn::state::VisitState<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::state::VisitStateMut<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::stats::ComputeStats
+pub trait incin_core::nn::transformer::AttentionDirection: 'static
+pub trait incin_core::nn::transformer::TransformerBackend<K: incin_core::prelude::DType>: incin_core::nn::attention::AttentionBackend<K> + incin_core::nn::feed_forward::FeedForwardBackend<K> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LayerNorm>
 pub trait incin_core::optim::LRScheduler
 pub trait incin_core::optim::Optimizer<B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::AutogradBackend>
 pub trait incin_core::optim::OptimizerBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend
@@ -13700,6 +13793,8 @@ pub type incin_core::nn::RnnShape::IhShape: incin_core::nn::linear::LinearShape<
 pub type incin_core::nn::RnnShape::In: incin_core::shapes::Dim
 pub type incin_core::nn::RnnShape::Out: incin_core::shapes::Dim
 pub type incin_core::nn::TrainState::TensorGrad: incin_core::tensor::grad::RequiresGrad<Arg = ()>
+pub type incin_core::nn::TransformerDecoderLayer<B, K, Train> = incin_core::nn::transformer::TransformerLayer<incin_core::nn::transformer::Causal, B, K, Train>
+pub type incin_core::nn::TransformerEncoderLayer<B, K, Train> = incin_core::nn::transformer::TransformerLayer<incin_core::nn::transformer::Bidirectional, B, K, Train>
 pub type incin_core::nn::activation::ELU::Error = incin_core::error::Error
 pub type incin_core::nn::activation::ELU::Output = incin_core::nn::activation::ELU
 pub type incin_core::nn::activation::ELU::Output = incin_core::prelude::Tensor<S, B, f32, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>
@@ -13857,6 +13952,11 @@ pub type incin_core::nn::rnn::RnnShape::IhShape: incin_core::nn::linear::LinearS
 pub type incin_core::nn::rnn::RnnShape::In: incin_core::shapes::Dim
 pub type incin_core::nn::rnn::RnnShape::Out: incin_core::shapes::Dim
 pub type incin_core::nn::stats::LayerStats::Output = incin_core::nn::stats::LayerStats
+pub type incin_core::nn::transformer::TransformerDecoderLayer<B, K, Train> = incin_core::nn::transformer::TransformerLayer<incin_core::nn::transformer::Causal, B, K, Train>
+pub type incin_core::nn::transformer::TransformerEncoderLayer<B, K, Train> = incin_core::nn::transformer::TransformerLayer<incin_core::nn::transformer::Bidirectional, B, K, Train>
+pub type incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::Error = incin_core::error::Error
+pub type incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::Output = incin_core::nn::transformer::TransformerLayer<D, <B as incin_core::backend_authoring::StorageTransfer<__NewD>>::Output, K, Train>
+pub type incin_core::nn::transformer::TransformerLayer<D, B, K, Train>::Output = incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, <G as incin_core::tensor::grad::GradJoin<<Train as incin_core::nn::param::TrainState>::TensorGrad>>::Output>
 pub type incin_core::prelude::AdaptiveAvgPool2dShape::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub type incin_core::prelude::AnyTensor::Backend: incin_core::backend_authoring::Backend
 pub type incin_core::prelude::AnyTensor::DType: incin_core::prelude::DType

@@ -101,6 +101,8 @@ pub mod save;
 pub mod state;
 /// `stats`.
 pub mod stats;
+/// Transformer encoder and decoder layers.
+pub mod transformer;
 
 pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
 pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
@@ -149,3 +151,7 @@ pub use state::{
     StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
 };
 pub use stats::{ComputeStats, LayerStats, ModelStats, sum_stats};
+pub use transformer::{
+    AttentionDirection, Bidirectional, Causal, NormPlacement, TransformerBackend,
+    TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer, TransformerLayer,
+};

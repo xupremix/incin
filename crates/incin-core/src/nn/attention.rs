@@ -201,6 +201,28 @@ impl<B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> cr
     }
 }
 
+impl<B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState> crate::nn::ShapeInfo
+    for MultiHeadAttention<B, K, Train>
+{
+    /// Reports the head configuration, unlike the shaped layers which report
+    /// nothing.
+    ///
+    /// Every other module encodes its extents in its shape parameter, so a
+    /// layer summary can read them off the type. This one is written against
+    /// `Dyn` and holds its head counts as fields, so a summary that returned
+    /// `None` would print a transformer stack without saying how wide it is or
+    /// how many heads share a key.
+    fn shape_info(&self) -> Option<alloc::string::String> {
+        Some(alloc::format!(
+            "d_model={}, heads={}, kv_heads={}, head_dim={}",
+            self.d_model(),
+            self.n_heads,
+            self.n_kv_heads,
+            self.head_dim
+        ))
+    }
+}
+
 /// Backends able to build the rotary tables.
 ///
 /// Stated once as a trait alias rather than repeated on every constructor: the
@@ -938,7 +960,7 @@ where
 /// attention as a whole for a step that is the identity whenever the
 /// probability is zero. Dispatching the catalog row directly keeps the module
 /// as generic as the rest of its dataflow.
-fn apply_dropout<B, K, G>(
+pub(crate) fn apply_dropout<B, K, G>(
     x: Tensor<Dyn, B, K, G, Local>,
     probability: f32,
     training: bool,

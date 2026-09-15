@@ -273,12 +273,15 @@ pub use incin::module
 pub use incin::nn::AdaptiveAvgPool2d
 pub use incin::nn::AttentionBackend
 pub use incin::nn::AttentionConfig
+pub use incin::nn::AttentionDirection
 pub use incin::nn::AvgPool2d
 pub use incin::nn::BCEWithLogitsLoss
 pub use incin::nn::BCEWithLogitsShape
 pub use incin::nn::BatchNorm2d
 pub use incin::nn::BatchNormShape
+pub use incin::nn::Bidirectional
 pub use incin::nn::Buffer
+pub use incin::nn::Causal
 pub use incin::nn::ComputeStats
 pub use incin::nn::Conv1d
 pub use incin::nn::Conv1dShape
@@ -320,6 +323,7 @@ pub use incin::nn::Module
 pub use incin::nn::MultiHeadAttention
 pub use incin::nn::NamedLayers
 pub use incin::nn::NoneReduction
+pub use incin::nn::NormPlacement
 pub use incin::nn::OptionalField
 pub use incin::nn::Param
 pub use incin::nn::ParameterVisitor
@@ -342,6 +346,11 @@ pub use incin::nn::Tanh
 pub use incin::nn::ToDevice
 pub use incin::nn::TrainMode
 pub use incin::nn::TrainState
+pub use incin::nn::TransformerBackend
+pub use incin::nn::TransformerConfig
+pub use incin::nn::TransformerDecoderLayer
+pub use incin::nn::TransformerEncoderLayer
+pub use incin::nn::TransformerLayer
 pub use incin::nn::True
 pub use incin::nn::VisitParameters
 pub use incin::nn::batch_norm2d
