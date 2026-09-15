@@ -9,8 +9,10 @@ that can be named as a working implementation.
 
 - Static, dynamic, partially dynamic, and named-axis tensor shapes compile in
   the same model.
-- CPU `Linear`, activations, losses, `RNN`, `DataLoader`, `AdamW`, autograd,
-  and visitor-backed state paths are available and covered by examples/tests.
+- CPU `Linear`, activations, losses, the recurrent layers (`RNN`, `LSTM` and
+  `GRU`, each of which trains and checkpoints through the module path),
+  `DataLoader`, `AdamW`, autograd, and visitor-backed state paths are
+  available and covered by examples/tests.
 - The repository examples compile with `cargo check -p incin --examples`.
 - The Book’s current snippets are Cargo-doctested with:
   `cargo test -p incin --features 'backend-authoring' --doc`.

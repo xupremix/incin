@@ -137,6 +137,49 @@ assert_eq!(h_final.dims().as_ref(), &[2, 6]);
 # Ok::<(), incin::Error>(())
 ```
 
+## GRU
+
+`GRU`'s shape is `(InFeatures, OutFeatures)` and, like `LSTM`, it takes its
+initial state explicitly. There is one state tensor rather than two, and the
+wrapper returns the whole output sequence next to the final hidden state:
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let gru = GRU::<s![4, 6], B>::new(GRUCell::<s![4, 6], B>::build(())?);
+
+// [batch, seq, in_features]
+let x = Tensor::<s![2, 5, 4], B>::ones(())?.require_grad();
+let h0 = Tensor::<s![2, 6], B>::zeros(())?.require_grad();
+
+let (sequence, last) = gru.forward((x, h0))?;
+assert_eq!(sequence.dims().as_ref(), &[2, 5, 6]);
+assert_eq!(last.dims().as_ref(), &[2, 6]);
+# Ok::<(), incin::Error>(())
+```
+
+The reset gate multiplies the recurrent projection alone, so the candidate is
+`tanh(W_in x + r * (W_hn h))` rather than `tanh(r * (W_in x + W_hn h))`.
+Applying it to the sum is a different model, and
+[`crates/incin/tests/gru_module.rs`](../../../crates/incin/tests/gru_module.rs)
+asserts the two spellings apart rather than only against itself.
+
+`require_grad` above is not decoration. All three recurrent layers carry the
+operand's gradient requirement through `forward` rather than discarding it, and
+the multi-step wrappers join each step's requirement back onto the loop
+variable's own, so a trainable layer's sequence pass is a training pass. Feeding
+one a tensor that requires no gradient is an inference pass on a frozen layer,
+which is `freeze()`.
+
+## Attention and transformer layers
+
+`MultiHeadAttention`, `FeedForward`, `TransformerEncoderLayer` and
+`TransformerDecoderLayer` are ordinary layers in this sense too, but they have
+enough of their own contract  -  grouped-query attention, rotary buffers, the
+norm placement, and a direction that is a type rather than a flag  -  that they
+have their own chapter: [Transformers](./transformer.md).
+
 ## Custom modules with `#[module]`
 
 The `#[module]` attribute macro derives composable module traits for structs by
