@@ -159,3 +159,35 @@ fn an_inference_pass_computes_the_same_gates() -> Result<()> {
     }
     Ok(())
 }
+
+/// An LSTM can be checkpointed.
+///
+/// `VisitState`/`VisitStateMut` existed for `RNN` and not for `LSTM`, so
+/// `collect_state` refused the gated layer outright: the layer trained and
+/// could not be saved.
+#[test]
+fn an_lstm_round_trips_through_its_state() -> Result<()> {
+    let model = LSTM::<s![4, 3], Cpu>::new(LSTMCell::<s![4, 3], Cpu>::build(())?);
+    let snapshot = incin::state::collect_state::<Cpu, _>(&model)?;
+    // Eight projections, each with a weight and a bias.
+    assert_eq!(snapshot.len(), 16);
+
+    let mut restored = LSTM::<s![4, 3], Cpu>::new(LSTMCell::<s![4, 3], Cpu>::build(())?);
+    incin::state::load_state::<Cpu, _>(&mut restored, &snapshot)?;
+    assert_eq!(incin::state::collect_state::<Cpu, _>(&restored)?, snapshot);
+
+    let x = ramp(vec![BATCH, 5, IN])?
+        .into_shape::<s![2, 5, 4]>()?
+        .require_grad();
+    let h = Tensor::<s![2, 3], Cpu>::zeros(())?.require_grad();
+    let c = Tensor::<s![2, 3], Cpu>::zeros(())?.require_grad();
+    assert_eq!(
+        model
+            .forward((x.clone(), (h.clone(), c.clone())))?
+            .0
+            .to_vec1::<f32>()?,
+        restored.forward((x, (h, c)))?.0.to_vec1::<f32>()?,
+        "the restored layer computes a different sequence"
+    );
+    Ok(())
+}

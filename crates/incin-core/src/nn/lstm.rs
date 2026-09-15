@@ -922,3 +922,106 @@ where
         }]
     }
 }
+
+impl<
+    S: LstmShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitState<B> for LSTMCell<S, B, BiasIh, BiasHh, K, Train>
+where
+    Linear<S::IhShape, B, BiasIh, K, Train>: crate::nn::VisitState<B>,
+    Linear<S::HhShape, B, BiasHh, K, Train>: crate::nn::VisitState<B>,
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.wi_i.visit_state(&path.try_child("wi_i")?, visitor)?;
+        self.wi_f.visit_state(&path.try_child("wi_f")?, visitor)?;
+        self.wi_g.visit_state(&path.try_child("wi_g")?, visitor)?;
+        self.wi_o.visit_state(&path.try_child("wi_o")?, visitor)?;
+        self.wh_i.visit_state(&path.try_child("wh_i")?, visitor)?;
+        self.wh_f.visit_state(&path.try_child("wh_f")?, visitor)?;
+        self.wh_g.visit_state(&path.try_child("wh_g")?, visitor)?;
+        self.wh_o.visit_state(&path.try_child("wh_o")?, visitor)
+    }
+}
+
+impl<
+    S: LstmShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitStateMut<B> for LSTMCell<S, B, BiasIh, BiasHh, K, Train>
+where
+    Linear<S::IhShape, B, BiasIh, K, Train>: crate::nn::VisitStateMut<B>,
+    Linear<S::HhShape, B, BiasHh, K, Train>: crate::nn::VisitStateMut<B>,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.wi_i
+            .visit_state_mut(&path.try_child("wi_i")?, visitor)?;
+        self.wi_f
+            .visit_state_mut(&path.try_child("wi_f")?, visitor)?;
+        self.wi_g
+            .visit_state_mut(&path.try_child("wi_g")?, visitor)?;
+        self.wi_o
+            .visit_state_mut(&path.try_child("wi_o")?, visitor)?;
+        self.wh_i
+            .visit_state_mut(&path.try_child("wh_i")?, visitor)?;
+        self.wh_f
+            .visit_state_mut(&path.try_child("wh_f")?, visitor)?;
+        self.wh_g
+            .visit_state_mut(&path.try_child("wh_g")?, visitor)?;
+        self.wh_o.visit_state_mut(&path.try_child("wh_o")?, visitor)
+    }
+}
+
+impl<
+    S: LstmShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitState<B> for LSTM<S, B, BiasIh, BiasHh, K, Train>
+where
+    LSTMCell<S, B, BiasIh, BiasHh, K, Train>: crate::nn::VisitState<B>,
+{
+    fn visit_state<V: crate::nn::StateVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.cell.visit_state(&path.try_child("cell")?, visitor)
+    }
+}
+
+impl<
+    S: LstmShape,
+    B: crate::tensor::backend::VariableBackend,
+    BiasIh: crate::nn::optional::OptionalField,
+    BiasHh: crate::nn::optional::OptionalField,
+    K: DType,
+    Train: TrainState,
+> crate::nn::VisitStateMut<B> for LSTM<S, B, BiasIh, BiasHh, K, Train>
+where
+    LSTMCell<S, B, BiasIh, BiasHh, K, Train>: crate::nn::VisitStateMut<B>,
+{
+    fn visit_state_mut<V: crate::nn::StateMutVisitor<B>>(
+        &mut self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.cell.visit_state_mut(&path.try_child("cell")?, visitor)
+    }
+}
