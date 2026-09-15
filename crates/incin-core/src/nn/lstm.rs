@@ -14,6 +14,7 @@ use crate::tensor::backend::Execute;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::Device;
 use crate::tensor::dtype::DType;
+use crate::tensor::grad::{GradJoin, JoinedGrad, RequiresGrad};
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
@@ -506,8 +507,7 @@ where
 // ---------------------------------------------------------------------------
 
 impl<
-    In: Dim,
-    Out: Dim,
+    S: LstmShape,
     Batch: Dim,
     B: crate::tensor::backend::VariableBackend
         + Execute<op::Add>
@@ -518,42 +518,41 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
+    G: RequiresGrad + GradJoin<Train::TensorGrad>,
     // One layout parameter serves both the input and the hidden/cell
-    // tensors, which are different shapes, so it has to describe both.
-    L: Layout<D2<Batch, In>> + Layout<D2<Batch, Out>>,
+    // tensors, which are different shapes, so it has to describe both, and
+    // `Linear`'s own impl asks for the two it needs to restate the operand
+    // as `Dyn` before the matmul.
+    L: Layout<D2<Batch, S::In>>
+        + Layout<D2<Batch, S::Out>>
+        + Layout<crate::shapes::Dyn>
+        + crate::shapes::Restatable,
 >
     Module<(
-        Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+        Tensor<D2<Batch, S::In>, B, K, G, Local, L>,
         (
-            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
-            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            Tensor<D2<Batch, S::Out>, B, K, G, Local, L>,
+            Tensor<D2<Batch, S::Out>, B, K, G, Local, L>,
         ),
-    )> for LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
+    )> for LSTMCell<S, B, BiasIh, BiasHh, K, Train>
 where
-    Linear<D2<In, Out>, B, BiasIh, K, Train>: Module<
-            Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
-            Output = Tensor<
-                D2<Batch, Out>,
-                B,
-                K,
-                crate::tensor::grad::NoGrad,
-                Local,
-                crate::shapes::RowMajor,
-            >,
+    Linear<S::IhShape, B, BiasIh, K, Train>: Module<
+            Tensor<D2<Batch, S::In>, B, K, G, Local, L>,
+            Output = Tensor<D2<Batch, S::Out>, B, K, JoinedGrad<G, Train::TensorGrad>>,
             Error = Error,
         >,
-    Linear<D2<Out, Out>, B, BiasHh, K, Train>: Module<
-            Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
-            Output = Tensor<
-                D2<Batch, Out>,
-                B,
-                K,
-                crate::tensor::grad::NoGrad,
-                Local,
-                crate::shapes::RowMajor,
-            >,
+    Linear<S::HhShape, B, BiasHh, K, Train>: Module<
+            Tensor<D2<Batch, S::Out>, B, K, G, Local, L>,
+            Output = Tensor<D2<Batch, S::Out>, B, K, JoinedGrad<G, Train::TensorGrad>>,
             Error = Error,
         >,
+    // The four gates are each a join of the operand with the parameters, and
+    // the cell state then joins those with one another, so the requirement
+    // has to be idempotent under a second join or the result type grows a
+    // layer per gate.
+    JoinedGrad<G, Train::TensorGrad>: GradJoin<JoinedGrad<G, Train::TensorGrad>, Output = JoinedGrad<G, Train::TensorGrad>>
+        + GradJoin<G, Output = JoinedGrad<G, Train::TensorGrad>>,
+    G: GradJoin<JoinedGrad<G, Train::TensorGrad>, Output = JoinedGrad<G, Train::TensorGrad>>,
     <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Sigmoid>>::Output: Into<B::Storage<K>>,
@@ -561,8 +560,22 @@ where
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = (
-        Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::RowMajor>,
-        Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, crate::shapes::RowMajor>,
+        Tensor<
+            D2<Batch, S::Out>,
+            B,
+            K,
+            JoinedGrad<G, Train::TensorGrad>,
+            Local,
+            crate::shapes::RowMajor,
+        >,
+        Tensor<
+            D2<Batch, S::Out>,
+            B,
+            K,
+            JoinedGrad<G, Train::TensorGrad>,
+            Local,
+            crate::shapes::RowMajor,
+        >,
     );
     /// The error type returned if the forward pass fails.
     type Error = Error;
@@ -572,10 +585,10 @@ where
     fn forward(
         &self,
         (x, (h_prev, c_prev)): (
-            Tensor<D2<Batch, In>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+            Tensor<D2<Batch, S::In>, B, K, G, Local, L>,
             (
-                Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
-                Tensor<D2<Batch, Out>, B, K, crate::tensor::grad::NoGrad, Local, L>,
+                Tensor<D2<Batch, S::Out>, B, K, G, Local, L>,
+                Tensor<D2<Batch, S::Out>, B, K, G, Local, L>,
             ),
         ),
     ) -> core::result::Result<Self::Output, Error> {
@@ -704,8 +717,7 @@ where
 }
 
 impl<
-    In: Dim<Arg = ()>,
-    Out: Dim<Arg = ()>,
+    S: LstmShape,
     Batch: Dim<Arg = ()>,
     Seq: Dim<Arg = ()>,
     B: crate::tensor::backend::VariableBackend
@@ -717,28 +729,46 @@ impl<
     BiasHh: crate::nn::optional::OptionalField,
     K: DType,
     Train: TrainState,
+    G: RequiresGrad,
 >
     Module<(
-        Tensor<D3<Batch, Seq, In>, B, K>,
-        (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
-    )> for LSTM<D2<In, Out>, B, BiasIh, BiasHh, K, Train>
+        Tensor<D3<Batch, Seq, S::In>, B, K, G>,
+        (
+            Tensor<D2<Batch, S::Out>, B, K, G>,
+            Tensor<D2<Batch, S::Out>, B, K, G>,
+        ),
+    )> for LSTM<S, B, BiasIh, BiasHh, K, Train>
 where
     <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::SqueezeExact>>::Output: Into<B::Storage<K>>,
-    LSTMCell<D2<In, Out>, B, BiasIh, BiasHh, K, Train>: Module<
+    S::In: Dim<Arg = ()>,
+    S::Out: Dim<Arg = ()>,
+    // The state is carried across steps, so the per-step join has to land
+    // back on the requirement the loop variables already hold.
+    G: GradJoin<Train::TensorGrad, Output = G>,
+    LSTMCell<S, B, BiasIh, BiasHh, K, Train>: Module<
             (
-                Tensor<D2<Batch, In>, B, K>,
-                (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+                Tensor<D2<Batch, S::In>, B, K, G>,
+                (
+                    Tensor<D2<Batch, S::Out>, B, K, G>,
+                    Tensor<D2<Batch, S::Out>, B, K, G>,
+                ),
             ),
-            Output = (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+            Output = (
+                Tensor<D2<Batch, S::Out>, B, K, G, Local, crate::shapes::RowMajor>,
+                Tensor<D2<Batch, S::Out>, B, K, G, Local, crate::shapes::RowMajor>,
+            ),
             Error = Error,
         >,
 {
     /// The output tensor type produced by this module's forward pass.
     type Output = (
-        Tensor<D3<Batch, Seq, Out>, B, K>,
-        (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+        Tensor<D3<Batch, Seq, S::Out>, B, K, G>,
+        (
+            Tensor<D2<Batch, S::Out>, B, K, G>,
+            Tensor<D2<Batch, S::Out>, B, K, G>,
+        ),
     );
     /// The error type returned if the forward pass fails.
     type Error = Error;
@@ -748,8 +778,11 @@ where
     fn forward(
         &self,
         (x, (mut h, mut c)): (
-            Tensor<D3<Batch, Seq, In>, B, K>,
-            (Tensor<D2<Batch, Out>, B, K>, Tensor<D2<Batch, Out>, B, K>),
+            Tensor<D3<Batch, Seq, S::In>, B, K, G>,
+            (
+                Tensor<D2<Batch, S::Out>, B, K, G>,
+                Tensor<D2<Batch, S::Out>, B, K, G>,
+            ),
         ),
     ) -> core::result::Result<Self::Output, Error> {
         let seq_len = Seq::static_size().map_err(Error::Shape)?;
@@ -761,17 +794,17 @@ where
             // through -- but the cell's `Module` impl still binds its input
             // layout to the default, so the proof is dropped at that boundary
             // rather than forced on the cell. Same reason as `h` below.
-            let x_step_static: Tensor<D2<Batch, In>, B, K> =
-                x_step.into_shape::<D2<Batch, In>>()?.forget_layout();
+            let x_step_static: Tensor<D2<Batch, S::In>, B, K, G> =
+                x_step.into_shape::<D2<Batch, S::In>>()?.forget_layout();
             let (h_next, c_next) = self.cell.forward((x_step_static, (h, c)))?;
-            h = h_next;
-            c = c_next;
+            h = h_next.forget_layout();
+            c = c_next.forget_layout();
             outputs.push(h.clone().into_shape::<Dyn>()?);
         }
 
-        let refs: Vec<&Tensor<Dyn, B, K>> = outputs.iter().collect();
+        let refs: Vec<&Tensor<Dyn, B, K, G>> = outputs.iter().collect();
         let stacked_dyn = crate::tensor::ops::manipulation::try_stack_tensors(&refs, 1)?;
-        let stacked: Tensor<D3<Batch, Seq, Out>, B, K> = stacked_dyn.into_shape()?;
+        let stacked: Tensor<D3<Batch, Seq, S::Out>, B, K, G> = stacked_dyn.into_shape()?;
         Ok((stacked, (h, c)))
     }
 }
