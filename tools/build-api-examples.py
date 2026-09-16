@@ -28,6 +28,11 @@ ROOT = Path(__file__).resolve().parent.parent
 PAYLOAD = ROOT / "docs/api-site-data.json"
 OUTPUT = ROOT / "docs/api-examples.json"
 HARNESS = ROOT / "crates/incin/tests/api_examples.rs"
+# The reviewed public surface, committed and checked by
+# tools/check-public-api.sh. Read offline for the same reason
+# build-api-site-data.py reads its links file: the output has to be
+# reproducible for the drift check CI runs against it.
+BASELINE = ROOT / "docs/public-api/incin-core-std.txt"
 
 # Every example builds its own operands. A helper shared by the generated file
 # would read fine here and be meaningless on the page, where the reader sees the
@@ -50,6 +55,52 @@ use incin::prelude::*;
 
 type B = incin_backends::cpu::CpuBackendImpl;
 """
+
+
+def _public_methods() -> dict[str, set[str]]:
+    """Every `Tensor` method, keyed by the catalog operation its bounds execute.
+
+    A method that runs an operation says so in its where-clause, as
+    `Execute<op::Add>`, and that bound is the only statement of which method
+    serves which operation that the compiler checks. The catalog's own source
+    mapping is a migration record and does not always name a method: it
+    spells `Descriptor<op::Zeros>` for a creation and `::add_scalar_float` for
+    an entry point that has since been renamed.
+    """
+    served: dict[str, set[str]] = {}
+    if not BASELINE.exists():
+        return served
+    head = re.compile(r"pub fn incin_core::prelude::Tensor<[^>]*>::([a-z_0-9]+)")
+    bound = re.compile(r"Execute<incin_core::exec::catalog::op::([A-Za-z0-9]+)>")
+    for line in BASELINE.read_text(encoding="utf-8").splitlines():
+        found = head.match(line)
+        if not found:
+            continue
+        for operation in bound.findall(line):
+            served.setdefault(operation, set()).add(found.group(1))
+    return served
+
+
+PUBLIC_METHODS = _public_methods()
+
+
+def resolve(identity: str | None, spelling: str) -> str | None:
+    """The method a caller types for this operation, or `None` if there is none.
+
+    Several methods can execute one operation, so the choice is ordered rather
+    than arbitrary: the operation's own name, then the fallible `try_` form the
+    book leads with, then the exact-shape and broadcasting spellings, and only
+    then a lone candidate. A lone candidate is how `cmp_eq` reaches `eq`. The
+    ordering matters most for `Mul`, whose bound also sits on `dot`, `norm` and
+    `outer`, none of which is multiplication a reader is looking for.
+    """
+    candidates = PUBLIC_METHODS.get(identity or "", set())
+    for preferred in (spelling, f"try_{spelling}", f"{spelling}_exact", f"broadcast_{spelling}"):
+        if preferred in candidates:
+            return preferred
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    return None
 
 
 def method(api: str | None) -> str | None:
@@ -78,18 +129,58 @@ def example_for(op: dict) -> str | None:
     if not name:
         return None
 
+    # Operations whose method does not take the shape its family's generic arm
+    # assumes. Each signature is the public-API baseline's, and each generic
+    # form was failing for a reason that signature states outright.
+    if name == "arange" or spelling == "arange":
+        # A start and an end, not a shape: the extent is the type's.
+        return "let t = Tensor::<s![6], B>::arange(0.0, 6.0, ())?;"
+    if spelling == "linspace":
+        return "let t = Tensor::<s![5], B>::linspace(0.0, 1.0, ())?;"
+    if spelling == "full":
+        return "let t = Tensor::<s![2, 3], B>::full(1.5, ())?;"
+    if spelling == "float_to_vec1":
+        # Reached through `to_vec1`, whose bound is host interop rather than
+        # `Execute<op::ToHostFloatVec>`, which is why no resolver finds it.
+        return f"{T23}\nlet host = t.to_vec1::<f32>()?;"
+    if spelling == "int_to_vec1":
+        return ("let t = Tensor::<s![3], B, i64>::from_slice(&[1, 2, 3], ())?;\n"
+                "let host = t.to_vec1::<i64>()?;")
+    if spelling == "detach":
+        # Only a tracked tensor has anything to detach from; the method is not
+        # offered on a `NoGrad` one, so the operand has to be made tracked.
+        return f"{T23}\nlet tracked = t.require_grad();\nlet plain = tracked.detach();"
+    if spelling == "backward":
+        # Defined on a scalar, since a gradient is of one value with respect to
+        # many; the reduction is what makes a tracked tensor one.
+        return (f"{T23}\nlet tracked = t.require_grad();\n"
+                "let loss = tracked.sum_all()?;\nlet gradients = loss.backward()?;")
     if family == "UnaryFloat" and attrs == "NoAttributes":
         return f"{T23}\nlet y = t.{name}()?;"
     if family == "UnaryFloat" and attrs == "ScalarAttributes":
         return f"{T23}\nlet y = t.{spelling}(2.0)?;"
+    # These three families were written against the catalog spellings, and
+    # none of those is a method: `a.add(&b)` names `std::ops::Add::add`,
+    # `a.cmp_eq(&b)` names nothing, and every logical example built its
+    # operands with that same missing `cmp_gt`, so it failed on the line before
+    # the operation it existed to show.
     if family == "BinaryBroadcast" and attrs == "NoAttributes":
-        return f"{A23}\n{U23}\nlet y = a.{name}(&b)?;"
+        called = resolve(catalog.get("variant"), spelling)
+        return f"{A23}\n{U23}\nlet y = a.{called}(&b)?;" if called else None
     if family == "Comparison":
-        return f"{A23}\n{U23}\nlet mask = a.{name}(&b)?;"
+        called = resolve(catalog.get("variant"), spelling)
+        return f"{A23}\n{U23}\nlet mask = a.{called}(&b)?;" if called else None
     if family == "Logical":
+        called = resolve(catalog.get("variant"), spelling)
+        greater = resolve("CmpGt", "cmp_gt")
+        if not (called and greater):
+            return None
+        if catalog.get("arity") == [1, 1]:
+            return (f"{A23}\n{U23}\n"
+                    f"let mask = a.{greater}(&b)?;\nlet y = mask.{called}()?;")
         return (f"{A23}\n{U23}\n"
-                f"let left = a.cmp_gt(&b)?;\nlet right = b.cmp_gt(&a)?;\n"
-                f"let y = left.{name}(&right)?;")
+                f"let left = a.{greater}(&b)?;\nlet right = b.{greater}(&a)?;\n"
+                f"let y = left.{called}(&right)?;")
     if family == "Reduction" and attrs == "NoAttributes":
         return f"{T23}\nlet total = t.{name}()?;"
     if family == "Reduction" and attrs == "AxisAttributes":

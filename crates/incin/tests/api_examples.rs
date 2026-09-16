@@ -41,9 +41,23 @@ fn example_acosh() -> Result<()> {
 }
 
 #[test]
+fn example_add() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let y = a.try_add(&b)?;
+    Ok(())
+}
+
+#[test]
 fn example_add_scalar() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.add_scalar(2.0)?;
+    Ok(())
+}
+
+#[test]
+fn example_arange() -> Result<()> {
+    let t = Tensor::<s![6], B>::arange(0.0, 6.0, ())?;
     Ok(())
 }
 
@@ -105,9 +119,66 @@ fn example_atanh() -> Result<()> {
 }
 
 #[test]
+fn example_backward() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let tracked = t.require_grad();
+    let loss = tracked.sum_all()?;
+    let gradients = loss.backward()?;
+    Ok(())
+}
+
+#[test]
 fn example_ceil() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.ceil()?;
+    Ok(())
+}
+
+#[test]
+fn example_cmp_eq() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.eq(&b)?;
+    Ok(())
+}
+
+#[test]
+fn example_cmp_ge() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.ge(&b)?;
+    Ok(())
+}
+
+#[test]
+fn example_cmp_gt() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.gt(&b)?;
+    Ok(())
+}
+
+#[test]
+fn example_cmp_le() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.le(&b)?;
+    Ok(())
+}
+
+#[test]
+fn example_cmp_lt() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.lt(&b)?;
+    Ok(())
+}
+
+#[test]
+fn example_cmp_ne() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.ne(&b)?;
     Ok(())
 }
 
@@ -122,6 +193,22 @@ fn example_cos() -> Result<()> {
 fn example_cosh() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.cosh()?;
+    Ok(())
+}
+
+#[test]
+fn example_detach() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let tracked = t.require_grad();
+    let plain = tracked.detach();
+    Ok(())
+}
+
+#[test]
+fn example_div() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let y = a.try_div(&b)?;
     Ok(())
 }
 
@@ -154,6 +241,13 @@ fn example_exp() -> Result<()> {
 }
 
 #[test]
+fn example_float_to_vec1() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let host = t.to_vec1::<f32>()?;
+    Ok(())
+}
+
+#[test]
 fn example_floor() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.floor()?;
@@ -176,9 +270,22 @@ fn example_frac() -> Result<()> {
 }
 
 #[test]
+fn example_full() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::full(1.5, ())?;
+    Ok(())
+}
+
+#[test]
 fn example_gelu() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.gelu()?;
+    Ok(())
+}
+
+#[test]
+fn example_int_to_vec1() -> Result<()> {
+    let t = Tensor::<s![3], B, i64>::from_slice(&[1, 2, 3], ())?;
+    let host = t.to_vec1::<i64>()?;
     Ok(())
 }
 
@@ -187,6 +294,12 @@ fn example_l1_loss() -> Result<()> {
     let prediction = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let target = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
     let loss = prediction.l1_loss(&target)?;
+    Ok(())
+}
+
+#[test]
+fn example_linspace() -> Result<()> {
+    let t = Tensor::<s![5], B>::linspace(0.0, 1.0, ())?;
     Ok(())
 }
 
@@ -208,6 +321,35 @@ fn example_log10() -> Result<()> {
 fn example_log2() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.log2()?;
+    Ok(())
+}
+
+#[test]
+fn example_logical_and() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let left = a.gt(&b)?;
+    let right = b.gt(&a)?;
+    let y = left.logical_and(&right)?;
+    Ok(())
+}
+
+#[test]
+fn example_logical_not() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let mask = a.gt(&b)?;
+    let y = mask.logical_not()?;
+    Ok(())
+}
+
+#[test]
+fn example_logical_or() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let left = a.gt(&b)?;
+    let right = b.gt(&a)?;
+    let y = left.logical_or(&right)?;
     Ok(())
 }
 
@@ -324,6 +466,14 @@ fn example_mse_loss() -> Result<()> {
     let prediction = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let target = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
     let loss = prediction.mse_loss(&target)?;
+    Ok(())
+}
+
+#[test]
+fn example_mul() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let y = a.try_mul(&b)?;
     Ok(())
 }
 
@@ -455,6 +605,14 @@ fn example_sqrt() -> Result<()> {
 fn example_step() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.step()?;
+    Ok(())
+}
+
+#[test]
+fn example_sub() -> Result<()> {
+    let a = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let b = Tensor::<s![2, 3], B>::from_slice(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], ())?;
+    let y = a.try_sub(&b)?;
     Ok(())
 }
 

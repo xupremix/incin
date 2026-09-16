@@ -1522,6 +1522,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   goes from 59 operations to 73. `prod_dim` still has none, correctly, because
   it has no tensor method at all.
 
+- **The example generator now asks the public API which method serves an
+  operation, instead of guessing from the catalog's spelling.** A method that
+  runs an operation states it in its where-clause as `Execute<op::Add>`, and
+  that bound is the one place the pairing is written down and checked by the
+  compiler. The generator reads it from the committed public-API baseline, so
+  it stays offline and reproducible for the drift check CI runs.
+
+  That settles the arithmetic, comparison and logical families together.
+  `a.add(&b)` resolved to `std::ops::Add::add`, `a.cmp_eq(&b)` to nothing, and
+  every logical example built its operands with that same missing `cmp_gt`, so
+  it failed on the line before the operation it existed to show. Where several
+  methods execute one operation the choice is ordered: the operation's own
+  name, then the fallible `try_` form the book leads with, then the exact and
+  broadcasting spellings, then a lone candidate, which is how `cmp_eq` reaches
+  `eq`. The order matters for `Mul`, whose bound also sits on `dot`, `norm` and
+  `outer`.
+
+  Seven more take a signature their family's generic form did not: `arange`,
+  `linspace` and `full` take values rather than a shape; `to_vec1` is reached
+  through host interop rather than an operation bound; `detach` exists only on
+  a tracked tensor and `backward` only on a tracked scalar.
+
+  Coverage is 93 of 177. The ten still without one have no `Tensor` method a
+  reader could call: the axis forms of `var`, `std` and `prod` are executed only
+  inside the backend, the `var_*` constructors are reached through parameter
+  initialisation, and `sample` is a distribution-authoring call that needs a
+  device field.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified
