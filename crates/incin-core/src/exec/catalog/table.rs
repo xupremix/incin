@@ -320,7 +320,10 @@ pub(super) const fn entry(
         _ => 0..=usize::MAX,
     };
     let output_arity = match operation {
-        OperationKind::TopK => 2..=2,
+        // Both carry the sorted values beside the permutation that
+        // produced them. `argsort` is the one-output form: it keeps the
+        // permutation alone.
+        OperationKind::TopK | OperationKind::Sort => 2..=2,
         OperationKind::Chunk | OperationKind::Split => 0..=usize::MAX,
         OperationKind::Rnn => 2..=2,
         OperationKind::Lstm => 3..=3,

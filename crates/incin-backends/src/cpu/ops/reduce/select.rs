@@ -243,3 +243,74 @@ pub(crate) fn argsort<KInt: DType>(
         &shape,
     ))
 }
+
+/// `sort`. The sorted values beside the permutation that produced them.
+///
+/// `argsort` above is this same traversal keeping only the second half. They
+/// are separate kernels rather than one calling the other because recovering
+/// the values from a permutation is a gather over the whole operand, and that
+/// is work this one has already done in place.
+pub(crate) fn sort<KInt: DType>(
+    t: &CpuStorage,
+    dim: usize,
+    descending: bool,
+) -> Result<(CpuStorage, CpuStorage)> {
+    let shape = t.shape.to_vec();
+    if dim >= shape.len() {
+        return Err(Error::ShapeMismatch {
+            op: "sort",
+            expected: shape.to_vec(),
+            got: vec![dim],
+            msg: format!("sort: axis {} out of range", dim),
+        });
+    }
+    let mut base_shape = shape.clone();
+    base_shape[dim] = 1;
+    let n_slices = crate::cpu::stride::checked_numel(&base_shape)?;
+    let total = crate::cpu::stride::checked_numel(&shape)?;
+    // The values keep the operand's dtype. Accumulating them as `f64` and
+    // converting through the operand's own buffer at the end is what makes
+    // that true, the same way `topk` above does it.
+    let mut out_vals = vec![0.0f64; total];
+    let mut out_indices = vec![0i64; total];
+
+    for i in 0..n_slices {
+        let mut rem = i;
+        let mut coords = vec![0usize; shape.len()];
+        for dd in (0..shape.len()).rev() {
+            coords[dd] = rem % base_shape[dd];
+            rem /= base_shape[dd];
+        }
+
+        let mut slice_vals = Vec::with_capacity(shape[dim]);
+        for k in 0..shape[dim] {
+            coords[dim] = k;
+            slice_vals.push((
+                t.get(&coords),
+                i64::try_from(k).map_err(|_| ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Reduction,
+                    expression: "sort index does not fit i64",
+                })?,
+            ));
+        }
+        // `sort_by` is stable, so a tie keeps the order it arrived in and the
+        // permutation is a function of the operand rather than of how the
+        // comparison broke that tie. Descending is the same guarantee: the
+        // comparator reports `Equal` for a tie either way round.
+        if descending {
+            slice_vals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+        } else {
+            slice_vals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+        }
+        for (k, &(val, idx)) in slice_vals.iter().enumerate() {
+            coords[dim] = k;
+            let flat = flatten_index(&coords, &shape);
+            out_vals[flat] = val;
+            out_indices[flat] = idx;
+        }
+    }
+    Ok((
+        CpuStorage::from_contiguous(t.buffer.from_f64_values(out_vals)?, &shape),
+        CpuStorage::from_contiguous(index_buffer::<KInt>("sort", &out_indices)?, &shape),
+    ))
+}

@@ -804,8 +804,8 @@ fn channels_last_is_not_contiguous() {
 
 /// The order-statistic family allocates, so its results are dense too.
 ///
-/// `argmax`, `argmin`, `argsort` and `topk` were the reductions left stating
-/// nothing. They write fresh index buffers -- `argsort` and `topk` write two --
+/// `argmax`, `argmin`, `argsort`, `sort` and `topk` were the reductions left
+/// stating nothing. They write fresh buffers -- `sort` and `topk` write two --
 /// so the same rule applies, and the same strided operand is what makes the
 /// check non-vacuous.
 #[test]
@@ -847,6 +847,11 @@ fn an_order_statistic_result_is_dense_even_from_a_strided_operand() {
         .unwrap();
     assert_dense("topk values", &values);
     assert_dense("topk indices", &indices);
+
+    // `sort` writes the same pair over the operand's own extents.
+    let (sorted, order) = strided.sort(0usize, false).unwrap();
+    assert_dense("sort values", &sorted);
+    assert_dense("sort indices", &order);
 }
 
 /// The spatial and embedding layers allocate, so their results are dense.

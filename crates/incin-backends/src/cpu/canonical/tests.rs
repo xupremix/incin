@@ -1066,3 +1066,65 @@ fn topk_typed_path_checks_both_geometries() {
         "expected an indexed shape refusal, got {error:?}"
     );
 }
+
+#[test]
+fn sort_returns_the_values_beside_a_stable_permutation() {
+    use incin_core::exec::catalog::ArgsortAttributes;
+    use incin_core::shapes::{ShapeBuf, ShapeValue};
+    let context = context();
+    // Two pairs of ties, so a permutation that is merely correct is
+    // distinguishable from one that is stable.
+    let input = storage(&[2.0, 0.0, 2.0, 1.0, 0.0], &[5]);
+    let attrs = ArgsortAttributes {
+        axis: 0,
+        descending: false,
+        index_dtype: DTypeId::U32.descriptor(),
+    };
+    let good = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[5])).unwrap();
+    let (values, indices) = dispatch::execute_shaped_n::<op::Sort, TestBackend, _>(
+        &context,
+        attrs,
+        &[handle(&input)],
+        &(good.clone(), good.clone()),
+    )
+    .expect("sort travels the typed path");
+    let values: CpuStorage = values;
+    let indices: CpuStorage = indices;
+    // Sorting reorders the axis rather than resizing it, unlike `topk` above.
+    assert_eq!(values.shape, vec![5]);
+    assert_eq!(indices.shape, vec![5]);
+    for (position, expected) in [0.0, 0.0, 1.0, 2.0, 2.0].iter().enumerate() {
+        assert_eq!(values.get(&[position]), *expected);
+    }
+    // Both ties keep the order they arrived in: 1 before 4, and 0 before 2.
+    for (position, expected) in [1.0, 4.0, 3.0, 0.0, 2.0].iter().enumerate() {
+        assert_eq!(indices.get(&[position]), *expected);
+    }
+
+    // A tampered second proof is refused with its index, not reshaped into.
+    let lying = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[4])).unwrap();
+    let error = dispatch::execute_shaped_n::<op::Sort, TestBackend, _>(
+        &context,
+        ArgsortAttributes {
+            axis: 0,
+            descending: false,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[handle(&input)],
+        &(good, lying),
+    )
+    .expect_err("a wrong second geometry must be refused");
+    assert!(
+        matches!(
+            error,
+            incin_core::exec::dispatch::CanonicalError::Descriptor(
+                incin_core::exec::catalog::DescriptorError::MetadataMismatch {
+                    output: 1,
+                    field: "shape",
+                    ..
+                }
+            )
+        ),
+        "expected an indexed shape refusal, got {error:?}"
+    );
+}

@@ -158,6 +158,7 @@ macro_rules! incin_operation_catalog {
             (Cumsum, "cumsum", Reduction, Scan, AxisAttributes, 1, 1, "::cumsum"),
             (TopK, "topk", Reduction, IndexReduction, TopKAttributes, 1, 1, "::topk"),
             (Argsort, "argsort", Reduction, IndexReduction, ArgsortAttributes, 1, 1, "::argsort"),
+            (Sort, "sort", Reduction, IndexReduction, ArgsortAttributes, 1, 1, "::sort"),
             (Norm, "norm", Reduction, Reduction, NormAttributes, 1, 1, "Tensor::norm"),
             (VarianceAll, "var_all", Reduction, Reduction, VarianceAttributes, 1, 1, "Tensor::var_all"),
             (VarianceDim, "var_dim", Reduction, Reduction, AxisVarianceAttributes, 1, 1, "Tensor::var_dim"),

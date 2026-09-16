@@ -4,13 +4,13 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 176
-Backend-executable operations: 166
+Canonical operations: 177
+Backend-executable operations: 167
 Non-backend execution sites: 10
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 148 |
+| `Kernel` | 149 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -163,6 +163,7 @@ Non-backend execution sites: 10
 | `cumsum` | `Descriptor<op::Cumsum>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Preserve` / `Preserve` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::cumsum` |
 | `topk` | `Descriptor<op::TopK>` | `TopKAttributes` | `Kernel` | 1-1 / 2-2 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | no | `FreshContiguous` | `::topk` |
 | `argsort` | `Descriptor<op::Argsort>` | `ArgsortAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | no | `FreshContiguous` | `::argsort` |
+| `sort` | `Descriptor<op::Sort>` | `ArgsortAttributes` | `Kernel` | 1-1 / 2-2 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | yes | `FreshContiguous` | `::sort` |
 | `norm` | `Descriptor<op::Norm>` | `NormAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::norm` |
 | `var_all` | `Descriptor<op::VarianceAll>` | `VarianceAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::var_all` |
 | `var_dim` | `Descriptor<op::VarianceDim>` | `AxisVarianceAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::var_dim` |

@@ -569,7 +569,11 @@ fn inferred_shape<A: AttributeContract>(
             if operation == OperationKind::TopK {
                 return transformed_shape(operation, attributes, inputs, output_index);
             }
-            if operation == OperationKind::Argsort {
+            // Both outputs of `sort` are the operand's own geometry, so the
+            // branch is right for either index: sorting reorders an axis
+            // rather than resizing it, which is what separates it from `topk`
+            // above, whose axis shrinks to `k`.
+            if matches!(operation, OperationKind::Argsort | OperationKind::Sort) {
                 Some(Some(ShapeBuf::from_slice(shape)))
             } else if matches!(
                 operation,
@@ -1117,11 +1121,11 @@ fn expected_output<A: AttributeContract>(
         OperationKind::WhereCond | OperationKind::EmbeddingExact => {
             inputs.get(1).and_then(|input| input.dtype)
         }
-        OperationKind::TopK if index == 0 => first_dtype,
+        OperationKind::TopK | OperationKind::Sort if index == 0 => first_dtype,
         OperationKind::ArgMax | OperationKind::ArgMin | OperationKind::Argsort => {
             attributes.declared_dtype()
         }
-        OperationKind::TopK => attributes.declared_dtype(),
+        OperationKind::TopK | OperationKind::Sort => attributes.declared_dtype(),
         OperationKind::QuantizedMatMul => Some(DTypeId::F32.descriptor()),
         OperationKind::CmpEq
         | OperationKind::CmpNe

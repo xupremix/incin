@@ -833,7 +833,7 @@ family!(splitting, Operands::UnaryAxis, splitting_by_one, [Split]);
 
 family!(order_statistic, Operands::UnaryAxis, largest_one, [TopK]);
 
-family!(sorting, Operands::UnaryAxis, ascending, [Argsort]);
+family!(sorting, Operands::UnaryAxis, ascending, [Argsort, Sort]);
 
 family!(grouped_norm, Operands::UnaryAxis, single_group, [GroupNorm]);
 

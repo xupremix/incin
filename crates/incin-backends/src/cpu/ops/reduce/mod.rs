@@ -79,7 +79,7 @@ pub(crate) use helpers::sum_axis_keepdim;
 // it is built from instead of inside `dim`, whose kernels each own a hand
 // written backward.
 pub(crate) use logsumexp::{logsumexp_dim, logsumexp_keepdim};
-pub(crate) use select::{argmax, argmin, argsort, topk};
+pub(crate) use select::{argmax, argmin, argsort, sort, topk};
 
 // `helpers`'s cross-file machinery is `pub(super)` (this module's own reach,
 // not wider), so `all`/`dim`/`select` see it through their own `use

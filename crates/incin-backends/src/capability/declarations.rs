@@ -135,7 +135,11 @@ macro_rules! cpu_descriptor_operations {
             // constraint the row cannot state.
             embedding = [EmbeddingExact],
             native_tensor = [
-                ArgMax, ArgMin, Argsort, Cumsum,
+                // `sort` sits with `argsort` rather than with `topk` in the
+                // f32-only group above: its value buffer is built from the
+                // operand's own buffer, so it comes back in the dtype it was
+                // read in rather than relabelled.
+                ArgMax, ArgMin, Argsort, Sort, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,

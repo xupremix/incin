@@ -1,10 +1,12 @@
 //! Routing primitives on the public API.
 //!
 //! Issue #103 lists the operations a mixture-of-experts layer needs and the
-//! catalog does not have. Four of the eight it names have since been added
+//! catalog does not have. Four of the eight it names were already there
 //! (`log_softmax`, `logsumexp`, `one_hot`, `scatter_add`); this file covers
-//! the ones still arriving, starting with `repeat_interleave`, which is how a
-//! token is expanded once per expert it was routed to.
+//! the ones that arrived since. `repeat_interleave` expands a token once per
+//! expert it was routed to, `bincount` counts how many landed on each, and
+//! `sort` groups them. Only `nonzero` is still missing, and it waits on the
+//! shape decision in #102.
 //!
 //! The kernels are gradchecked inside `incin-backends`. What is pinned here is
 //! the public surface: the operation dispatches under an active `GradMode`,
@@ -153,5 +155,126 @@ fn an_index_outside_the_range_is_refused() -> Result<()> {
     );
     let negative = Tensor::<s![2], B, i64>::from_slice(&[0, -1], ())?;
     assert!(negative.bincount::<3>().is_err());
+    Ok(())
+}
+
+/// `sort` returns the values `argsort` leaves behind.
+///
+/// The permutation alone is enough only when the operand is still to hand to
+/// gather from. The contract pinned here is that the two agree: position `i`
+/// of the values is the element the permutation's position `i` names.
+#[test]
+fn it_returns_the_values_beside_the_permutation_that_made_them() -> Result<()> {
+    let x = Tensor::<s![5], B>::from_slice(&[3.0, 1.0, 4.0, 1.0, 5.0], ())?;
+
+    let (values, order) = x.sort(0, false)?;
+    assert_eq!(values.to_vec1::<f32>()?, vec![1.0, 1.0, 3.0, 4.0, 5.0]);
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 3, 0, 2, 4]);
+
+    // The permutation and the values describe the same reordering.
+    let source = x.to_vec1::<f32>()?;
+    let gathered: Vec<f32> = order
+        .to_vec1::<u32>()?
+        .into_iter()
+        .map(|index| source[index as usize])
+        .collect();
+    assert_eq!(gathered, values.to_vec1::<f32>()?);
+
+    // `argsort` beside it is the same permutation without the values.
+    assert_eq!(
+        x.argsort(0, false)?.to_vec1::<u32>()?,
+        order.to_vec1::<u32>()?
+    );
+    Ok(())
+}
+
+/// Descending is the same sort read the other way, and it is just as stable.
+#[test]
+fn it_sorts_descending_without_reversing_the_ties() -> Result<()> {
+    let x = Tensor::<s![5], B>::from_slice(&[3.0, 1.0, 4.0, 1.0, 5.0], ())?;
+
+    let (values, order) = x.sort(0, true)?;
+    assert_eq!(values.to_vec1::<f32>()?, vec![5.0, 4.0, 3.0, 1.0, 1.0]);
+    // The two ones are still 1 then 3. Reversing the ascending permutation
+    // would have put 3 first, which is the defect this asserts against.
+    assert_eq!(order.to_vec1::<u32>()?, vec![4, 2, 0, 1, 3]);
+    Ok(())
+}
+
+/// Equal keys keep the order they arrived in.
+///
+/// This is what lets a router group the same assignment the same way twice.
+/// An unstable sort would still return correct values, so an assertion on the
+/// values alone would pass while the grouping moved between runs.
+#[test]
+fn equal_keys_keep_the_order_they_arrived_in() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+
+    let (experts, order) = assignment.sort(0, false)?;
+    assert_eq!(experts.to_vec1::<i64>()?, vec![0, 0, 1, 2, 2, 2]);
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 5, 3, 0, 2, 4]);
+    Ok(())
+}
+
+/// The composition the operation exists for.
+///
+/// Sorting the assignment groups the tokens by expert; `bincount` scanned by
+/// `cumsum` says where each expert's block ends. Together they describe a
+/// grouped buffer without the per-expert token count ever being an extent.
+#[test]
+fn the_sorted_assignment_and_the_offsets_describe_the_same_grouping() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+
+    let (experts, order) = assignment.sort(0, false)?;
+    let offsets = assignment
+        .bincount::<3>()?
+        .cumsum(axis!(0))?
+        .to_vec1::<i64>()?;
+    assert_eq!(offsets, vec![2, 3, 6]);
+
+    // Every expert's block in the sorted keys is exactly the span its offsets
+    // name, so a grouped matmul can be handed the ranges rather than a shape.
+    let sorted = experts.to_vec1::<i64>()?;
+    let mut start = 0usize;
+    for (expert, end) in offsets.iter().enumerate() {
+        let end = *end as usize;
+        assert!(
+            sorted[start..end].iter().all(|slot| *slot == expert as i64),
+            "expert {expert} owns {start}..{end}, which holds {:?}",
+            &sorted[start..end]
+        );
+        start = end;
+    }
+
+    // And the permutation names, for each position in that grouping, the token
+    // whose row belongs there.
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 5, 3, 0, 2, 4]);
+    let original = assignment.to_vec1::<i64>()?;
+    for (position, token) in order.to_vec1::<u32>()?.into_iter().enumerate() {
+        assert_eq!(original[token as usize], sorted[position]);
+    }
+    Ok(())
+}
+
+/// A named axis sorts within its rows rather than across them.
+#[test]
+fn it_sorts_along_the_axis_it_is_given() -> Result<()> {
+    let x = Tensor::<s![2, 3], B>::from_slice(&[3.0, 1.0, 2.0, 9.0, 7.0, 8.0], ())?;
+
+    let (values, order) = x.sort(1, false)?;
+    // Row-major, so the flat buffer is the two rows end to end. Each row is
+    // sorted within itself; a sort that ran down the columns instead would
+    // have left the rows unchanged, since they are already ordered that way.
+    assert_eq!(values.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 7.0, 8.0, 9.0]);
+    // Each row's permutation is its own, and indexes within the row.
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 2, 0, 1, 2, 0]);
+    Ok(())
+}
+
+/// An axis the operand does not have is refused.
+#[test]
+fn it_refuses_an_axis_it_does_not_have() -> Result<()> {
+    let x = Tensor::<s![4], B>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
+    assert!(x.sort(1, false).is_err());
     Ok(())
 }

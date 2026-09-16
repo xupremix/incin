@@ -38,7 +38,7 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// to a whole block, which is the shape a block encoding can hold, and the
 /// block size is the dtype registry's rather than a number this harness
 /// invented.
-const COVERED_OPERATION_FLOOR: usize = 165;
+const COVERED_OPERATION_FLOOR: usize = 166;
 
 #[test]
 fn the_cpu_backend_executes_every_advertised_tuple_it_is_asked_about() {

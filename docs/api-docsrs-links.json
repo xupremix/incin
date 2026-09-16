@@ -691,6 +691,11 @@
    "kind": "method",
    "item": "Tensor::softmax"
   },
+  "sort": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=sort",
+   "kind": "search",
+   "item": "sort"
+  },
   "split": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.split",
    "kind": "method",

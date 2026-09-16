@@ -404,6 +404,7 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // the flattened form is defined for a scalar, so their minimum is zero.
         | OperationKind::Cumsum
         | OperationKind::Argsort
+        | OperationKind::Sort
         | OperationKind::TopK
         // `dot` contracts one axis away and `outer` expands two vectors into a
         // matrix; neither has anything to do on a scalar. Both reached this
@@ -463,7 +464,7 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
 /// Most exact identities push a real tape entry and so cover training. The
 /// ones listed here do not, on any backend: the comparisons and logicals
 /// produce `bool`/`index` output with nowhere to send a gradient, the index
-/// reductions (`argmax`/`argmin`/`argsort`/`topk`) never link their output
+/// reductions (`argmax`/`argmin`/`argsort`/`sort`/`topk`) never link their output
 /// back to an input on any tape, and `step`/`sign`/`floor`/`ceil`/`round`
 /// are flat almost everywhere (the zero-gradient entries some kernels push
 /// for `step` record that flatness; they do not make the operation usefully
@@ -483,6 +484,7 @@ pub(super) const fn descriptor_training(operation: OperationKind) -> bool {
             | OperationKind::ArgMax
             | OperationKind::ArgMin
             | OperationKind::Argsort
+            | OperationKind::Sort
             | OperationKind::TopK
             | OperationKind::LogicalAnd
             | OperationKind::LogicalOr

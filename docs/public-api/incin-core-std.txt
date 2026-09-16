@@ -351,6 +351,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Sinh
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::SliceExact
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Softmax
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Sort
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Split
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Sqrt
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::SqueezeExact
@@ -531,6 +532,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sin
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sinh
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::SliceExact
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Softmax
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sort
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Split
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Sqrt
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::SqueezeExact
@@ -3198,6 +3200,8 @@ pub const incin_core::exec::catalog::op::SliceExact::ID: incin_core::shapes::Ope
 pub const incin_core::exec::catalog::op::SliceExact::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Softmax::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Softmax::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::Sort::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::Sort::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Split::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Split::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Sqrt::ID: incin_core::shapes::OperationKind
@@ -6079,6 +6083,9 @@ pub fn incin_core::exec::catalog::op::SliceExact::infer_outputs(&Self::Attribute
 pub fn incin_core::exec::catalog::op::Softmax::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Softmax::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Softmax::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::Sort::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::Sort::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::Sort::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Split::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Split::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Split::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -7604,6 +7611,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G>::batch_norm(&self, &incin_core::p
 pub fn incin_core::prelude::Tensor<S, B, K, G>::layer_norm(&self, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>, f32) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LayerNorm>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::LayerNorm>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::neg(self) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G>::sample<D: incin_core::distributions::Distribution<K>, A>(&D, A) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::distributions::DistributionExecutor<D, K>
+pub fn incin_core::prelude::Tensor<S, B, K, G>::sort(&self, usize, bool) -> incin_core::error::Result<(incin_core::shapes::layout::Dense<S, B, K, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>, incin_core::shapes::layout::Dense<S, B, u32, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>)> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sort> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sort>>::Output: core::convert::Into<(<B as incin_core::backend_authoring::StorageBackend>::Storage, <B as incin_core::backend_authoring::StorageBackend>::Storage)>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::std_all(&self, bool) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Nil, B, K, G, incin_core::dist::placement::Local>>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::to_device(self, &<NewD as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self::Output>
 pub fn incin_core::prelude::Tensor<S, B, K, G>::topk<A>(&self, usize, A, bool) -> incin_core::error::Result<(incin_core::shapes::layout::Dense<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>>::Output, B, K, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>, incin_core::shapes::layout::Dense<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>>::Output, B, u32, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>)> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>>::Output: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TopK> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TopK>>::Output: core::convert::Into<(<B as incin_core::backend_authoring::StorageBackend>::Storage, <B as incin_core::backend_authoring::StorageBackend>::Storage)>
@@ -10555,6 +10563,7 @@ pub incin_core::prelude::OperationKind::Sinh
 pub incin_core::prelude::OperationKind::Slice
 pub incin_core::prelude::OperationKind::SliceExact
 pub incin_core::prelude::OperationKind::Softmax
+pub incin_core::prelude::OperationKind::Sort
 pub incin_core::prelude::OperationKind::Split
 pub incin_core::prelude::OperationKind::Sqrt
 pub incin_core::prelude::OperationKind::Squeeze
@@ -10919,6 +10928,7 @@ pub incin_core::shapes::OperationKind::Sinh
 pub incin_core::shapes::OperationKind::Slice
 pub incin_core::shapes::OperationKind::SliceExact
 pub incin_core::shapes::OperationKind::Softmax
+pub incin_core::shapes::OperationKind::Sort
 pub incin_core::shapes::OperationKind::Split
 pub incin_core::shapes::OperationKind::Sqrt
 pub incin_core::shapes::OperationKind::Squeeze
@@ -11184,6 +11194,7 @@ pub incin_core::shapes::error::OperationKind::Sinh
 pub incin_core::shapes::error::OperationKind::Slice
 pub incin_core::shapes::error::OperationKind::SliceExact
 pub incin_core::shapes::error::OperationKind::Softmax
+pub incin_core::shapes::error::OperationKind::Sort
 pub incin_core::shapes::error::OperationKind::Split
 pub incin_core::shapes::error::OperationKind::Sqrt
 pub incin_core::shapes::error::OperationKind::Squeeze
@@ -11443,6 +11454,7 @@ pub incin_core::shapes::prelude::OperationKind::Sinh
 pub incin_core::shapes::prelude::OperationKind::Slice
 pub incin_core::shapes::prelude::OperationKind::SliceExact
 pub incin_core::shapes::prelude::OperationKind::Softmax
+pub incin_core::shapes::prelude::OperationKind::Sort
 pub incin_core::shapes::prelude::OperationKind::Split
 pub incin_core::shapes::prelude::OperationKind::Sqrt
 pub incin_core::shapes::prelude::OperationKind::Squeeze
@@ -11929,6 +11941,7 @@ pub struct incin_core::backend_authoring::op::Sin
 pub struct incin_core::backend_authoring::op::Sinh
 pub struct incin_core::backend_authoring::op::SliceExact
 pub struct incin_core::backend_authoring::op::Softmax
+pub struct incin_core::backend_authoring::op::Sort
 pub struct incin_core::backend_authoring::op::Split
 pub struct incin_core::backend_authoring::op::Sqrt
 pub struct incin_core::backend_authoring::op::SqueezeExact
@@ -12162,6 +12175,7 @@ pub struct incin_core::backend_authoring::operations::op::Sin
 pub struct incin_core::backend_authoring::operations::op::Sinh
 pub struct incin_core::backend_authoring::operations::op::SliceExact
 pub struct incin_core::backend_authoring::operations::op::Softmax
+pub struct incin_core::backend_authoring::operations::op::Sort
 pub struct incin_core::backend_authoring::operations::op::Split
 pub struct incin_core::backend_authoring::operations::op::Sqrt
 pub struct incin_core::backend_authoring::operations::op::SqueezeExact
@@ -12452,6 +12466,7 @@ pub struct incin_core::exec::catalog::op::Sin
 pub struct incin_core::exec::catalog::op::Sinh
 pub struct incin_core::exec::catalog::op::SliceExact
 pub struct incin_core::exec::catalog::op::Softmax
+pub struct incin_core::exec::catalog::op::Sort
 pub struct incin_core::exec::catalog::op::Split
 pub struct incin_core::exec::catalog::op::Sqrt
 pub struct incin_core::exec::catalog::op::SqueezeExact
@@ -12637,6 +12652,7 @@ pub struct incin_core::exec::op::Sin
 pub struct incin_core::exec::op::Sinh
 pub struct incin_core::exec::op::SliceExact
 pub struct incin_core::exec::op::Softmax
+pub struct incin_core::exec::op::Sort
 pub struct incin_core::exec::op::Split
 pub struct incin_core::exec::op::Sqrt
 pub struct incin_core::exec::op::SqueezeExact
@@ -13894,6 +13910,7 @@ pub type incin_core::exec::catalog::op::Sin::Attributes = incin_core::exec::cata
 pub type incin_core::exec::catalog::op::Sinh::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::SliceExact::Attributes = incin_core::exec::catalog::SliceAttributes
 pub type incin_core::exec::catalog::op::Softmax::Attributes = incin_core::exec::catalog::AxisAttributes
+pub type incin_core::exec::catalog::op::Sort::Attributes = incin_core::exec::catalog::ArgsortAttributes
 pub type incin_core::exec::catalog::op::Split::Attributes = incin_core::exec::catalog::SplitAttributes
 pub type incin_core::exec::catalog::op::Sqrt::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::SqueezeExact::Attributes = incin_core::exec::catalog::AxisAttributes

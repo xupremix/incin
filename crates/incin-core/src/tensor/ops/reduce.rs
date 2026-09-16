@@ -970,6 +970,101 @@ where
             crate::tensor::grad::NoGrad::init(()),
         )
     }
+
+    /// Sorts along `dim`, returning the sorted values beside the permutation
+    /// that produced them.
+    ///
+    /// [`Self::argsort`] returns that permutation alone, which is enough only
+    /// when the values are still to hand. Grouping tokens by the expert each
+    /// was routed to needs both: the sorted expert ids say where one expert's
+    /// block ends and the next begins, and recovering them from the
+    /// permutation costs a `gather` this operation has already performed.
+    ///
+    /// The order is stable. Equal elements keep the order they arrived in, so
+    /// the permutation is a function of the operand rather than of how the
+    /// sort broke its ties, and a router that sorts the same assignment twice
+    /// groups it the same way twice.
+    ///
+    /// Forward-only, like [`Self::topk`] and [`Self::argsort`] beside it: both
+    /// outputs are `NoGrad` whatever the receiver was. Sorting is a
+    /// permutation and a permutation does have an adjoint, so this is a
+    /// narrower contract than the values require rather than an absence of
+    /// one; it is the contract the whole `IndexReduction` profile declares,
+    /// and widening it is a change to the profile rather than to this method.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // Four tokens routed to experts 2, 0, 2 and 1.
+    /// let assignment = Cpu.tensor([2.0f32, 0.0, 2.0, 1.0]).unwrap();
+    /// let (experts, order) = assignment.sort(0, false).unwrap();
+    /// assert_eq!(experts.to_vec1::<f32>().unwrap(), vec![0.0, 1.0, 2.0, 2.0]);
+    /// // The two tokens sharing expert 2 keep the order they arrived in.
+    /// assert_eq!(order.to_vec1::<u32>().unwrap(), vec![1, 3, 0, 2]);
+    /// ```
+    #[allow(clippy::type_complexity)]
+    pub fn sort(
+        &self,
+        dim: usize,
+        descending: bool,
+    ) -> Result<(
+        crate::shapes::Dense<S, B, K, crate::tensor::grad::NoGrad, Local>,
+        crate::shapes::Dense<S, B, u32, crate::tensor::grad::NoGrad, Local>,
+    )>
+    where
+        B: Execute<op::Sort> + crate::exec::Capabilities,
+        <B as Execute<op::Sort>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
+    {
+        // Disabled rather than this tensor's own mode, the same reason
+        // `argsort` above gives: the results are `NoGrad` whatever the
+        // receiver was, and that is a statement about what runs rather than
+        // only about which APIs the results offer.
+        let axis = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, self.rank())?;
+        let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
+        // One proof per output, as `topk` does. Sorting reorders an axis
+        // rather than resizing it, so both geometries are the operand's own,
+        // and stating them twice is what stops a kernel returning a shape the
+        // frontend would then assert into a tensor unchecked.
+        let expected = (output_shape.clone(), output_shape.clone());
+        let (values_inner, indices_inner) = GradMode::Disabled
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped_n::<op::Sort, B, _>(
+                    &context,
+                    crate::exec::catalog::ArgsortAttributes {
+                        axis,
+                        descending,
+                        index_dtype: DTypeId::U32.descriptor(),
+                    },
+                    &[input],
+                    &expected,
+                )
+            })?
+            .into();
+
+        let values =
+            crate::shapes::Dense::<S, B, K, crate::tensor::grad::NoGrad, Local>::from_parts(
+                values_inner,
+                output_shape.shape_buf().clone(),
+                self._dtype.clone(),
+                self._device.clone(),
+                crate::tensor::grad::NoGrad::init(()),
+            )?;
+        let indices =
+            crate::shapes::Dense::<S, B, u32, crate::tensor::grad::NoGrad, Local>::from_parts(
+                indices_inner,
+                output_shape.shape_buf().clone(),
+                core::marker::PhantomData,
+                self._device.clone(),
+                crate::tensor::grad::NoGrad::init(()),
+            )?;
+        Ok((values, indices))
+    }
 }
 
 // -------------------------------------------------------------------------

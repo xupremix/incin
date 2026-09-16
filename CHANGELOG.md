@@ -1446,8 +1446,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   no gradient and says so: perturbing an index does not move a count
   continuously, it moves one count to another slot.
 
-  What issue #103 still lists is `sort` and `nonzero`. The second waits on the
-  shape decision in #102, since its output extent depends on its data.
+- **`sort` returns the values `argsort` leaves behind.** The permutation alone
+  is enough only while the operand is still to hand to gather from, and
+  grouping tokens by the expert each was routed to wants both halves: the
+  sorted expert ids say where one expert's block ends and the next begins,
+  which is the same boundary `bincount` scanned by `cumsum` describes, and the
+  permutation is what carries the token rows into that order.
+
+  Two outputs over one catalog row, the way `topk` beside it is built, but
+  reusing `ArgsortAttributes` rather than declaring a second identical type,
+  the way `scatter_add` reuses `scatter`'s. Sorting reorders an axis rather
+  than resizing it, so both outputs are the operand's own geometry; that is
+  what separates the row from `topk`, whose axis shrinks to `k`. The values
+  come back in the dtype they were read in, so the row sits with `argsort`
+  over all eight CPU dtypes rather than in the f32-only group.
+
+  The order is stable. Equal elements keep the order they arrived in, so the
+  permutation is a function of the operand rather than of how the comparison
+  broke a tie, and a router that sorts the same assignment twice groups it the
+  same way twice. Descending is the same guarantee read the other way round
+  rather than the ascending permutation reversed.
+
+  Forward-only, like the `topk` and `argsort` rows beside it: both outputs are
+  `NoGrad` whatever the receiver was. Sorting is a permutation and a
+  permutation does have an adjoint, so this is the `IndexReduction` profile's
+  contract rather than a property of the operation, and widening it is a
+  change to that profile.
+
+  What issue #103 still lists after this change is `nonzero` alone, which
+  waits on the shape decision in #102 since its output extent depends on its
+  data.
 
 ## [0.1.0] - 2026-08-25
 
