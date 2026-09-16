@@ -7,22 +7,14 @@
 //! `TapeEntry`, the backward gradient through MSE is automatically correct
 //! by composition without any additional code here (T-01-17 mitigation).
 //!
-//! `cross_entropy_loss` (Plan 04-01 Task 2): numerically-stable implementation
-//! using the shared `log_softmax` kernel (D-02) plus a one-hot-multiply
-//! target gather.  The one-hot buffer is a constant w.r.t. the loss (it holds
-//! integer-derived zeros/ones, not a differentiable value), so it does NOT
-//! need a tape entry.  The gradient flows through `log_probs` → `mul` →
-//! `sum_dim` → `neg` → Reduction dispatch, all already-tape-tracked, so no
-//! hand-derived backward is written here.
-//!
 //! `l1_loss` (mean absolute error) and `bce_with_logits_loss` (numerically-stable
 //! binary cross-entropy) are both real, composed implementations landed in
 //! Phase 4 Plan 04-02. `l1_loss` composes from `sub`/`abs`/`mean_all`/`sum_all`;
 
-use crate::cpu::storage::{CpuBuffer, CpuStorage};
+use crate::cpu::storage::CpuStorage;
 use incin_core::error::{ConversionFailure, Error, Result};
 use incin_core::shapes::error::OperationKind;
-use incin_core::shapes::{Axis, DimensionConstraint, RankExpectation, ShapeBuf, ShapeError};
+use incin_core::shapes::{Axis, DimensionConstraint, RankExpectation, ShapeError};
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::{DType, DTypeId};
 use incin_core::tensor::reduction::Reduction;
@@ -127,9 +119,6 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
         .into());
     }
     let log_probs = crate::cpu::ops::elementwise::log_softmax::<D, f32>(pred, 1)?;
-    let one_hot_total =
-        ShapeBuf::from_slice(&[batch, classes]).checked_numel(OperationKind::Storage)?;
-    let mut one_hot_buf = vec![0.0f32; one_hot_total];
     for batch_index in 0..batch {
         let class_index = target.get_i64_checked(&[batch_index], "cross_entropy_target")?;
         let class_index = usize::try_from(class_index).map_err(|_| Error::InvalidConversion {
@@ -146,12 +135,11 @@ pub(crate) fn cross_entropy_loss_storage<D: Device>(
             }
             .into());
         }
-        one_hot_buf[batch_index * classes + class_index] = 1.0;
     }
-    let one_hot = CpuStorage::from_contiguous(CpuBuffer::F32(one_hot_buf), vec![batch, classes]);
-    let picked = crate::cpu::ops::elementwise::mul_storage(&log_probs, &one_hot)?;
-    let summed = crate::cpu::ops::reduce::sum_dim(&picked, 1)?;
-    let per_nll = crate::cpu::ops::elementwise::canonical_neg(&summed)?;
+    let indices = target.reshape(&[batch, 1])?;
+    let picked = crate::cpu::ops::shape_ops::gather_storage(&log_probs, 1, &indices)?;
+    let picked = crate::cpu::ops::shape_ops::reshape_storage(&picked, &[batch])?;
+    let per_nll = crate::cpu::ops::elementwise::canonical_neg(&picked)?;
     reduce_loss(per_nll, reduction)
 }
 
@@ -670,6 +658,70 @@ mod tests {
             max_rel_err < GRAD_TOL,
             "cross_entropy_loss gradcheck error too high: {max_rel_err:.6}"
         );
+    }
+
+    #[test]
+    fn cross_entropy_loss_backward_matches_softmax_minus_target() {
+        for (reduction, scale) in [
+            (Reduction::None, 1.0),
+            (Reduction::Sum, 1.0),
+            (Reduction::Mean, 0.5),
+        ] {
+            let probabilities = [0.2_f32, 0.3, 0.5, 0.6, 0.3, 0.1];
+            let pred = matrix(probabilities.iter().map(|p| p.ln()).collect(), 2, 3);
+            let target = CpuStorage::from_contiguous(CpuBuffer::I64(vec![2, 0]), vec![2]);
+            let out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+                &pred, &target, reduction,
+            )
+            .unwrap();
+            let scalar = if reduction == Reduction::None {
+                crate::cpu::ops::reduce::sum_all(&out).unwrap()
+            } else {
+                out
+            };
+            let grads = tape::backward(&scalar).unwrap();
+            assert!(grads.get(target.id).is_none());
+            let gradient = grads.get(pred.id).expect("pred should have a gradient");
+            assert_eq!(gradient.shape, vec![2, 3]);
+            for (actual, expected) in f32_vec(gradient)
+                .into_iter()
+                .zip([0.2, 0.3, -0.5, -0.4, 0.3, 0.1])
+            {
+                assert!(
+                    (actual - expected * scale).abs() < 1e-6,
+                    "{reduction:?}: got {actual}, expected {}",
+                    expected * scale
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cross_entropy_loss_finite_limits_select_zero_loss_and_gradient() {
+        for reduction in [Reduction::None, Reduction::Sum, Reduction::Mean] {
+            let pred = matrix(vec![f32::MAX, -f32::MAX], 1, 2);
+            let target = CpuStorage::from_contiguous(CpuBuffer::I64(vec![0]), vec![1]);
+            let out = cross_entropy_loss_storage::<incin_core::tensor::device::Cpu>(
+                &pred, &target, reduction,
+            )
+            .unwrap();
+            let expected_shape = if reduction == Reduction::None {
+                vec![1]
+            } else {
+                vec![]
+            };
+            assert_eq!(out.shape, expected_shape);
+            assert_eq!(f32_vec(&out), vec![0.0], "{reduction:?}");
+            let scalar = if reduction == Reduction::None {
+                crate::cpu::ops::reduce::sum_all(&out).unwrap()
+            } else {
+                out
+            };
+            let grads = tape::backward(&scalar).unwrap();
+            let gradient = grads.get(pred.id).expect("pred should have a gradient");
+            assert_eq!(gradient.shape, vec![1, 2]);
+            assert_eq!(f32_vec(gradient), vec![0.0, 0.0], "{reduction:?}");
+        }
     }
 
     #[test]
