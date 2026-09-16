@@ -174,6 +174,7 @@ impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog:
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::AxisAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::AxisVarianceAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::BatchNormAttributes
+impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::BincountAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::ChunkAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::ClampAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::Conv1dAttributes
@@ -241,6 +242,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::BatchNorm
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::BatchedMatMul
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::BceWithLogitsLoss
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Bincount
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::BroadcastAs
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::BroadcastLeft
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Ceil
@@ -420,6 +422,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Bac
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::BatchNorm
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::BatchedMatMul
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::BceWithLogitsLoss
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Bincount
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::BroadcastAs
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::BroadcastLeft
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Ceil
@@ -2977,6 +2980,8 @@ pub const incin_core::exec::catalog::op::BatchedMatMul::ID: incin_core::shapes::
 pub const incin_core::exec::catalog::op::BatchedMatMul::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::BceWithLogitsLoss::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::BceWithLogitsLoss::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::Bincount::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::Bincount::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::BroadcastAs::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::BroadcastAs::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::BroadcastLeft::ID: incin_core::shapes::OperationKind
@@ -4833,6 +4838,7 @@ pub fn incin_core::autograd::Gradients<B>::get<S, K, G>(&self, &incin_core::prel
 pub fn incin_core::autograd::Gradients<B>::into_backend(self) -> <B as incin_core::backend_authoring::AutogradBackend>::Grads
 pub fn incin_core::autograd::Gradients<B>::require<S, K, G>(&self, &incin_core::prelude::Tensor<S, B, K, G>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K>> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad
 pub fn incin_core::backend_authoring::AttributeContract::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::backend_authoring::AttributeContract::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::backend_authoring::AttributeContract::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::backend_authoring::AttributeContract::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::backend_authoring::AttributeContract::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -4937,6 +4943,7 @@ pub fn incin_core::error::ErrorMessage::new(impl core::convert::AsRef<str>) -> S
 pub fn incin_core::error::NonFiniteSite::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn incin_core::error::convert_f64_to_i64(&'static str, incin_core::prelude::DTypeDescriptor, f64, incin_core::error::FloatToIntPolicy) -> incin_core::error::Result<i64>
 pub fn incin_core::exec::AttributeContract::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::AttributeContract::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::AttributeContract::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::AttributeContract::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::AttributeContract::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -4977,6 +4984,7 @@ pub fn incin_core::exec::capability::SupportLevel::is_device_local(&self) -> boo
 pub fn incin_core::exec::capability::SupportLevel::is_supported(&self) -> bool
 pub fn incin_core::exec::capability::UnsupportedReason::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn incin_core::exec::catalog::AdamAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AdamAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdamAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AdamAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AdamAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -4988,6 +4996,7 @@ pub fn incin_core::exec::catalog::AdamAttributes::shape_transform(&self) -> core
 pub fn incin_core::exec::catalog::AdamAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AdamAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AdamWAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AdamWAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdamWAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AdamWAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AdamWAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -4999,6 +5008,7 @@ pub fn incin_core::exec::catalog::AdamWAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::AdamWAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AdamWAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5010,6 +5020,7 @@ pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::shape_transform(&sel
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AdaptivePool2dAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AddmmAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AddmmAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AddmmAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AddmmAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AddmmAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5021,6 +5032,7 @@ pub fn incin_core::exec::catalog::AddmmAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::AddmmAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AddmmAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ArangeAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ArangeAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ArangeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ArangeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ArangeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5032,6 +5044,7 @@ pub fn incin_core::exec::catalog::ArangeAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::ArangeAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ArangeAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ArgsortAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ArgsortAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ArgsortAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ArgsortAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ArgsortAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5043,6 +5056,7 @@ pub fn incin_core::exec::catalog::ArgsortAttributes::shape_transform(&self) -> c
 pub fn incin_core::exec::catalog::ArgsortAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ArgsortAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AttentionAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AttentionAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AttentionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AttentionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AttentionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5054,6 +5068,7 @@ pub fn incin_core::exec::catalog::AttentionAttributes::shape_transform(&self) ->
 pub fn incin_core::exec::catalog::AttentionAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AttentionAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AttributeContract::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AttributeContract::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AttributeContract::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AttributeContract::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AttributeContract::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5065,6 +5080,7 @@ pub fn incin_core::exec::catalog::AttributeContract::shape_transform(&self) -> c
 pub fn incin_core::exec::catalog::AttributeContract::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AttributeContract::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AvgPool2dAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5076,6 +5092,7 @@ pub fn incin_core::exec::catalog::AvgPool2dAttributes::shape_transform(&self) ->
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AvgPool2dAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AxisAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AxisAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AxisAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AxisAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AxisAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5087,6 +5104,7 @@ pub fn incin_core::exec::catalog::AxisAttributes::shape_transform(&self) -> core
 pub fn incin_core::exec::catalog::AxisAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AxisAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::AxisVarianceAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5098,6 +5116,7 @@ pub fn incin_core::exec::catalog::AxisVarianceAttributes::shape_transform(&self)
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::AxisVarianceAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::BatchNormAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::BatchNormAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::BatchNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::BatchNormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::BatchNormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5108,11 +5127,24 @@ pub fn incin_core::exec::catalog::BatchNormAttributes::optional_bias(&self) -> c
 pub fn incin_core::exec::catalog::BatchNormAttributes::shape_transform(&self) -> core::option::Option<ShapeTransform<'_>>
 pub fn incin_core::exec::catalog::BatchNormAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::BatchNormAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::BincountAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::BincountAttributes::bins(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::BincountAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin_core::exec::catalog::BincountAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
+pub fn incin_core::exec::catalog::BincountAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::BincountAttributes::depth(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::BincountAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::BincountAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
+pub fn incin_core::exec::catalog::BincountAttributes::optional_bias(&self) -> core::option::Option<bool>
+pub fn incin_core::exec::catalog::BincountAttributes::shape_transform(&self) -> core::option::Option<ShapeTransform<'_>>
+pub fn incin_core::exec::catalog::BincountAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
+pub fn incin_core::exec::catalog::BincountAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::CapturedDescriptor::capture<O: incin_core::exec::catalog::CanonicalOperation>(&incin_core::exec::catalog::Descriptor<O>) -> core::result::Result<Self, incin_core::exec::catalog::DescriptorCaptureError> where <O as incin_core::exec::catalog::Operation>::Attributes: incin_core::exec::catalog::AttributeContract
 pub fn incin_core::exec::catalog::CapturedDescriptor::decode<O: incin_core::exec::catalog::CanonicalOperation>(&self) -> core::result::Result<incin_core::exec::catalog::Descriptor<O>, incin_core::exec::catalog::DescriptorCaptureError> where <O as incin_core::exec::catalog::Operation>::Attributes: incin_core::exec::catalog::AttributeContract
 pub fn incin_core::exec::catalog::CapturedDescriptor::from_payload(incin_core::shapes::OperationKind, u32, alloc::vec::Vec<u8>) -> Self
 pub fn incin_core::exec::catalog::CapturedDescriptor::payload(&self) -> &[u8]
 pub fn incin_core::exec::catalog::ChunkAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ChunkAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ChunkAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ChunkAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ChunkAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5124,6 +5156,7 @@ pub fn incin_core::exec::catalog::ChunkAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::ChunkAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ChunkAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ClampAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ClampAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ClampAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ClampAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ClampAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5135,6 +5168,7 @@ pub fn incin_core::exec::catalog::ClampAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::ClampAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ClampAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::Conv1dAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::Conv1dAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Conv1dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::Conv1dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::Conv1dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5146,6 +5180,7 @@ pub fn incin_core::exec::catalog::Conv1dAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::Conv1dAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::Conv1dAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::Conv2dAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::Conv2dAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Conv2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::Conv2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::Conv2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5157,6 +5192,7 @@ pub fn incin_core::exec::catalog::Conv2dAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::Conv2dAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::Conv2dAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5168,6 +5204,7 @@ pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::shape_transform(&se
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ConvTranspose2dAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::CreationAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::CreationAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::CreationAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::CreationAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::CreationAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5179,6 +5216,7 @@ pub fn incin_core::exec::catalog::CreationAttributes::shape_transform(&self) -> 
 pub fn incin_core::exec::catalog::CreationAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::CreationAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::DTypeAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::DTypeAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DTypeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DTypeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DTypeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5190,6 +5228,7 @@ pub fn incin_core::exec::catalog::DTypeAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::DTypeAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::DTypeAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::DataAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::DataAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DataAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DataAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DataAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5213,6 +5252,7 @@ pub fn incin_core::exec::catalog::DescriptorCaptureError::fmt(&self, &mut core::
 pub fn incin_core::exec::catalog::DescriptorError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn incin_core::exec::catalog::DescriptorError::from(incin_core::shapes::ShapeError) -> Self
 pub fn incin_core::exec::catalog::DeviceAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::DeviceAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DeviceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DeviceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DeviceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5224,6 +5264,7 @@ pub fn incin_core::exec::catalog::DeviceAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::DeviceAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::DeviceAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::DiagonalAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::DiagonalAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DiagonalAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DiagonalAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DiagonalAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5235,6 +5276,7 @@ pub fn incin_core::exec::catalog::DiagonalAttributes::shape_transform(&self) -> 
 pub fn incin_core::exec::catalog::DiagonalAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::DiagonalAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::DistributionAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::DistributionAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DistributionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DistributionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DistributionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5246,6 +5288,7 @@ pub fn incin_core::exec::catalog::DistributionAttributes::shape_transform(&self)
 pub fn incin_core::exec::catalog::DistributionAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::DistributionAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::DropoutAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::DropoutAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::DropoutAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::DropoutAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::DropoutAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5257,6 +5300,7 @@ pub fn incin_core::exec::catalog::DropoutAttributes::shape_transform(&self) -> c
 pub fn incin_core::exec::catalog::DropoutAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::DropoutAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::EpsilonAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::EpsilonAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::EpsilonAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::EpsilonAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::EpsilonAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5268,6 +5312,7 @@ pub fn incin_core::exec::catalog::EpsilonAttributes::shape_transform(&self) -> c
 pub fn incin_core::exec::catalog::EpsilonAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::EpsilonAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::FlattenAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::FlattenAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::FlattenAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::FlattenAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::FlattenAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5279,6 +5324,7 @@ pub fn incin_core::exec::catalog::FlattenAttributes::shape_transform(&self) -> c
 pub fn incin_core::exec::catalog::FlattenAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::FlattenAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::FullAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::FullAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::FullAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::FullAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::FullAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5290,6 +5336,7 @@ pub fn incin_core::exec::catalog::FullAttributes::shape_transform(&self) -> core
 pub fn incin_core::exec::catalog::FullAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::FullAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::GroupNormAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::GroupNormAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5301,6 +5348,7 @@ pub fn incin_core::exec::catalog::GroupNormAttributes::shape_transform(&self) ->
 pub fn incin_core::exec::catalog::GroupNormAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::GroupNormAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::IndexReductionAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::IndexReductionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5312,6 +5360,7 @@ pub fn incin_core::exec::catalog::IndexReductionAttributes::shape_transform(&sel
 pub fn incin_core::exec::catalog::IndexReductionAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::IndexReductionAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::LayerNormAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::LayerNormAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LayerNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LayerNormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LayerNormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5323,6 +5372,7 @@ pub fn incin_core::exec::catalog::LayerNormAttributes::shape_transform(&self) ->
 pub fn incin_core::exec::catalog::LayerNormAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::LayerNormAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::LerpAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::LerpAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LerpAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LerpAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LerpAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5334,6 +5384,7 @@ pub fn incin_core::exec::catalog::LerpAttributes::shape_transform(&self) -> core
 pub fn incin_core::exec::catalog::LerpAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::LerpAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::LinearAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::LinearAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LinearAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LinearAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LinearAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5345,6 +5396,7 @@ pub fn incin_core::exec::catalog::LinearAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::LinearAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::LinearAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::LinspaceAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::LinspaceAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LinspaceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LinspaceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LinspaceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5356,6 +5408,7 @@ pub fn incin_core::exec::catalog::LinspaceAttributes::shape_transform(&self) -> 
 pub fn incin_core::exec::catalog::LinspaceAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::LinspaceAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::LossAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::LossAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::LossAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::LossAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::LossAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5367,6 +5420,7 @@ pub fn incin_core::exec::catalog::LossAttributes::shape_transform(&self) -> core
 pub fn incin_core::exec::catalog::LossAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::LossAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::NarrowAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::NarrowAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NarrowAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::NarrowAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::NarrowAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5378,6 +5432,7 @@ pub fn incin_core::exec::catalog::NarrowAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::NarrowAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::NarrowAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::NoAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::NoAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NoAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::NoAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::NoAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5389,6 +5444,7 @@ pub fn incin_core::exec::catalog::NoAttributes::shape_transform(&self) -> core::
 pub fn incin_core::exec::catalog::NoAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::NoAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::NormAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::NormAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::NormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::NormAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::NormAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5400,6 +5456,7 @@ pub fn incin_core::exec::catalog::NormAttributes::shape_transform(&self) -> core
 pub fn incin_core::exec::catalog::NormAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::NormAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::OneHotAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::OneHotAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::OneHotAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::OneHotAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::OneHotAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5414,6 +5471,7 @@ pub fn incin_core::exec::catalog::Operation::infer_invocation(Self::Attributes, 
 pub fn incin_core::exec::catalog::Operation::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError> where Self: core::marker::Sized
 pub fn incin_core::exec::catalog::Operation::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::PadAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::PadAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::PadAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::PadAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::PadAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5425,6 +5483,7 @@ pub fn incin_core::exec::catalog::PadAttributes::shape_transform(&self) -> core:
 pub fn incin_core::exec::catalog::PadAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::PadAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::PixelShuffleAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5436,6 +5495,7 @@ pub fn incin_core::exec::catalog::PixelShuffleAttributes::shape_transform(&self)
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::PixelShuffleAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::Pool2dAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::Pool2dAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::Pool2dAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::Pool2dAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::Pool2dAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5447,6 +5507,7 @@ pub fn incin_core::exec::catalog::Pool2dAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::Pool2dAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::Pool2dAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::QuantizationAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::QuantizationAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::QuantizationAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::QuantizationAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::QuantizationAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5458,6 +5519,7 @@ pub fn incin_core::exec::catalog::QuantizationAttributes::shape_transform(&self)
 pub fn incin_core::exec::catalog::QuantizationAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::QuantizationAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::RecurrentAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::RecurrentAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RecurrentAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::RecurrentAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::RecurrentAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5469,6 +5531,7 @@ pub fn incin_core::exec::catalog::RecurrentAttributes::shape_transform(&self) ->
 pub fn incin_core::exec::catalog::RecurrentAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::RecurrentAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::RepeatAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::RepeatAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RepeatAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::RepeatAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::RepeatAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5480,6 +5543,7 @@ pub fn incin_core::exec::catalog::RepeatAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::RepeatAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::RepeatAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5491,6 +5555,7 @@ pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::shape_transform(&s
 pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::RepeatInterleaveAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ScalarAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ScalarAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ScalarAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ScalarAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ScalarAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5502,6 +5567,7 @@ pub fn incin_core::exec::catalog::ScalarAttributes::shape_transform(&self) -> co
 pub fn incin_core::exec::catalog::ScalarAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ScalarAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ScatterAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ScatterAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ScatterAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ScatterAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ScatterAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5513,6 +5579,7 @@ pub fn incin_core::exec::catalog::ScatterAttributes::shape_transform(&self) -> c
 pub fn incin_core::exec::catalog::ScatterAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ScatterAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::SgdAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::SgdAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SgdAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::SgdAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::SgdAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5524,6 +5591,7 @@ pub fn incin_core::exec::catalog::SgdAttributes::shape_transform(&self) -> core:
 pub fn incin_core::exec::catalog::SgdAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::SgdAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ShapeAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::ShapeAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::ShapeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::ShapeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::ShapeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5535,6 +5603,7 @@ pub fn incin_core::exec::catalog::ShapeAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::ShapeAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::ShapeAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::SliceAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::SliceAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SliceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::SliceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::SliceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5546,6 +5615,7 @@ pub fn incin_core::exec::catalog::SliceAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::SliceAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::SliceAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::SplitAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::SplitAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::SplitAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::SplitAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::SplitAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5557,6 +5627,7 @@ pub fn incin_core::exec::catalog::SplitAttributes::shape_transform(&self) -> cor
 pub fn incin_core::exec::catalog::SplitAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::SplitAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::TopKAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::TopKAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::TopKAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::TopKAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::TopKAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5572,6 +5643,7 @@ pub fn incin_core::exec::catalog::TraceDescriptor::trace_descriptor_payload(&sel
 pub fn incin_core::exec::catalog::TraceDescriptor::trace_identity(&self) -> incin_core::exec::capability::OperationIdentity
 pub fn incin_core::exec::catalog::TraceDescriptor::trace_output_dtype(&self, &[incin_core::exec::request::TensorHandle<'_>]) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::TransposeAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::TransposeAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::TransposeAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::TransposeAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::TransposeAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5583,6 +5655,7 @@ pub fn incin_core::exec::catalog::TransposeAttributes::shape_transform(&self) ->
 pub fn incin_core::exec::catalog::TransposeAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::TransposeAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::UnfoldAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::UnfoldAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::UnfoldAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::UnfoldAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::UnfoldAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5595,6 +5668,7 @@ pub fn incin_core::exec::catalog::UnfoldAttributes::trace_attributes(&self) -> c
 pub fn incin_core::exec::catalog::UnfoldAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::ValidatedInvocation<O>::inputs(&self) -> &[incin_core::exec::catalog::LogicalTensorMeta]
 pub fn incin_core::exec::catalog::VarianceAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::VarianceAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::VarianceAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
 pub fn incin_core::exec::catalog::VarianceAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
 pub fn incin_core::exec::catalog::VarianceAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
@@ -5678,6 +5752,9 @@ pub fn incin_core::exec::catalog::op::BatchedMatMul::infer_outputs(&Self::Attrib
 pub fn incin_core::exec::catalog::op::BceWithLogitsLoss::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::BceWithLogitsLoss::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::BceWithLogitsLoss::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::Bincount::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::Bincount::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::Bincount::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::BroadcastAs::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::BroadcastAs::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::BroadcastAs::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -7402,6 +7479,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::atanh(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atanh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Atanh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::bce_with_logits_loss<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::bce_with_logits_loss_with<R, S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad>(&self, &incin_core::prelude::Tensor<S2, B, K, G2>) -> incin_core::error::Result<incin_core::prelude::Tensor<<R as incin_core::tensor::reduction::BceReductionShape>::Output, B, K, G>> where R: incin_core::tensor::reduction::ReductionMode + incin_core::tensor::reduction::BceReductionShape<S>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BceWithLogitsLoss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::bincount<const N: usize>(&self) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::DimCons<incin_core::shapes::ConstDim<N>, incin_core::shapes::Nil>, B, i64, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>> where incin_core::shapes::DimCons<incin_core::shapes::ConstDim<N>, incin_core::shapes::Nil>: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Bincount> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Bincount>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::ceil(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ceil>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ceil>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::chunk<A>(&self, usize, A) -> incin_core::error::Result<alloc::vec::Vec<incin_core::prelude::Tensor<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output, B, K, G>>> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S> + core::marker::Copy, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::clamp(&self, f64, f64) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Clamp>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Clamp>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -9110,6 +9188,7 @@ pub incin_core::exec::catalog::BatchNormAttributes::has_running_variance: bool
 pub incin_core::exec::catalog::BatchNormAttributes::has_weight: bool
 pub incin_core::exec::catalog::BatchNormAttributes::momentum: f64
 pub incin_core::exec::catalog::BatchNormAttributes::training: bool
+pub incin_core::exec::catalog::BincountAttributes::bins: usize
 pub incin_core::exec::catalog::BroadcastingRule::ExplicitTarget
 pub incin_core::exec::catalog::BroadcastingRule::None
 pub incin_core::exec::catalog::BroadcastingRule::Numpy
@@ -10350,6 +10429,7 @@ pub incin_core::prelude::OperationKind::Backward
 pub incin_core::prelude::OperationKind::BatchNorm
 pub incin_core::prelude::OperationKind::BatchedMatMul
 pub incin_core::prelude::OperationKind::BceWithLogitsLoss
+pub incin_core::prelude::OperationKind::Bincount
 pub incin_core::prelude::OperationKind::Broadcast
 pub incin_core::prelude::OperationKind::BroadcastAs
 pub incin_core::prelude::OperationKind::BroadcastLeft
@@ -10713,6 +10793,7 @@ pub incin_core::shapes::OperationKind::Backward
 pub incin_core::shapes::OperationKind::BatchNorm
 pub incin_core::shapes::OperationKind::BatchedMatMul
 pub incin_core::shapes::OperationKind::BceWithLogitsLoss
+pub incin_core::shapes::OperationKind::Bincount
 pub incin_core::shapes::OperationKind::Broadcast
 pub incin_core::shapes::OperationKind::BroadcastAs
 pub incin_core::shapes::OperationKind::BroadcastLeft
@@ -10977,6 +11058,7 @@ pub incin_core::shapes::error::OperationKind::Backward
 pub incin_core::shapes::error::OperationKind::BatchNorm
 pub incin_core::shapes::error::OperationKind::BatchedMatMul
 pub incin_core::shapes::error::OperationKind::BceWithLogitsLoss
+pub incin_core::shapes::error::OperationKind::Bincount
 pub incin_core::shapes::error::OperationKind::Broadcast
 pub incin_core::shapes::error::OperationKind::BroadcastAs
 pub incin_core::shapes::error::OperationKind::BroadcastLeft
@@ -11235,6 +11317,7 @@ pub incin_core::shapes::prelude::OperationKind::Backward
 pub incin_core::shapes::prelude::OperationKind::BatchNorm
 pub incin_core::shapes::prelude::OperationKind::BatchedMatMul
 pub incin_core::shapes::prelude::OperationKind::BceWithLogitsLoss
+pub incin_core::shapes::prelude::OperationKind::Bincount
 pub incin_core::shapes::prelude::OperationKind::Broadcast
 pub incin_core::shapes::prelude::OperationKind::BroadcastAs
 pub incin_core::shapes::prelude::OperationKind::BroadcastLeft
@@ -11737,6 +11820,7 @@ pub struct incin_core::backend_authoring::op::Backward
 pub struct incin_core::backend_authoring::op::BatchNorm
 pub struct incin_core::backend_authoring::op::BatchedMatMul
 pub struct incin_core::backend_authoring::op::BceWithLogitsLoss
+pub struct incin_core::backend_authoring::op::Bincount
 pub struct incin_core::backend_authoring::op::BroadcastAs
 pub struct incin_core::backend_authoring::op::BroadcastLeft
 pub struct incin_core::backend_authoring::op::Ceil
@@ -11969,6 +12053,7 @@ pub struct incin_core::backend_authoring::operations::op::Backward
 pub struct incin_core::backend_authoring::operations::op::BatchNorm
 pub struct incin_core::backend_authoring::operations::op::BatchedMatMul
 pub struct incin_core::backend_authoring::operations::op::BceWithLogitsLoss
+pub struct incin_core::backend_authoring::operations::op::Bincount
 pub struct incin_core::backend_authoring::operations::op::BroadcastAs
 pub struct incin_core::backend_authoring::operations::op::BroadcastLeft
 pub struct incin_core::backend_authoring::operations::op::Ceil
@@ -12183,6 +12268,7 @@ pub struct incin_core::exec::catalog::AvgPool2dAttributes
 pub struct incin_core::exec::catalog::AxisAttributes
 pub struct incin_core::exec::catalog::AxisVarianceAttributes
 pub struct incin_core::exec::catalog::BatchNormAttributes
+pub struct incin_core::exec::catalog::BincountAttributes
 pub struct incin_core::exec::catalog::CapturedDescriptor
 pub struct incin_core::exec::catalog::ChunkAttributes
 pub struct incin_core::exec::catalog::ClampAttributes
@@ -12257,6 +12343,7 @@ pub struct incin_core::exec::catalog::op::Backward
 pub struct incin_core::exec::catalog::op::BatchNorm
 pub struct incin_core::exec::catalog::op::BatchedMatMul
 pub struct incin_core::exec::catalog::op::BceWithLogitsLoss
+pub struct incin_core::exec::catalog::op::Bincount
 pub struct incin_core::exec::catalog::op::BroadcastAs
 pub struct incin_core::exec::catalog::op::BroadcastLeft
 pub struct incin_core::exec::catalog::op::Ceil
@@ -12441,6 +12528,7 @@ pub struct incin_core::exec::op::Backward
 pub struct incin_core::exec::op::BatchNorm
 pub struct incin_core::exec::op::BatchedMatMul
 pub struct incin_core::exec::op::BceWithLogitsLoss
+pub struct incin_core::exec::op::Bincount
 pub struct incin_core::exec::op::BroadcastAs
 pub struct incin_core::exec::op::BroadcastLeft
 pub struct incin_core::exec::op::Ceil
@@ -13697,6 +13785,7 @@ pub type incin_core::exec::catalog::op::Backward::Attributes = incin_core::exec:
 pub type incin_core::exec::catalog::op::BatchNorm::Attributes = incin_core::exec::catalog::BatchNormAttributes
 pub type incin_core::exec::catalog::op::BatchedMatMul::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::BceWithLogitsLoss::Attributes = incin_core::exec::catalog::LossAttributes
+pub type incin_core::exec::catalog::op::Bincount::Attributes = incin_core::exec::catalog::BincountAttributes
 pub type incin_core::exec::catalog::op::BroadcastAs::Attributes = incin_core::exec::catalog::ShapeAttributes
 pub type incin_core::exec::catalog::op::BroadcastLeft::Attributes = incin_core::exec::catalog::ShapeAttributes
 pub type incin_core::exec::catalog::op::Ceil::Attributes = incin_core::exec::catalog::NoAttributes

@@ -153,6 +153,10 @@ macro_rules! cpu_descriptor_operations {
                 // operand before this row is consulted, and the kernel reads
                 // every integer width through the same accessor.
                 OneHot,
+                // One integer operand in, one i64 histogram out, and the bin
+                // count is an attribute. The same union the `one_hot` note
+                // above explains, for the same reason.
+                Bincount,
                 PixelShuffle,
                 // `to_dtype` reads through the same stride-aware accessor and
                 // writes a fresh contiguous buffer, which is this group's shape

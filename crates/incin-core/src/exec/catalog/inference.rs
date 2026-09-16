@@ -649,6 +649,14 @@ fn inferred_shape<A: AttributeContract>(
                 }
                 _ => Some(None),
             },
+            // Every index lands in one of `bins` slots whatever geometry
+            // addressed it, so the operand's own shape does not survive: the
+            // output is the histogram, rank one and as wide as the attribute
+            // says.
+            OperationKind::Bincount => match attributes.bins() {
+                Some(bins) => Some(Some(ShapeBuf::from_slice(&[bins]))),
+                None => Some(None),
+            },
             OperationKind::IndexSelect => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
@@ -845,7 +853,7 @@ pub(super) fn verify_outputs<A: AttributeContract>(
         | OperationKind::IndexSelect => Some(1),
         // The index is the only operand, so it is operand zero rather than
         // operand one the way the scatter family's is.
-        OperationKind::EmbeddingExact | OperationKind::OneHot => Some(0),
+        OperationKind::EmbeddingExact | OperationKind::OneHot | OperationKind::Bincount => Some(0),
         OperationKind::CrossEntropyLoss => Some(1),
         _ => None,
     };
@@ -1125,6 +1133,10 @@ fn expected_output<A: AttributeContract>(
         | OperationKind::LogicalOr
         | OperationKind::LogicalNot
         | OperationKind::OneHot => Some(DTypeId::Bool.descriptor()),
+        // A count is not a value in the operand's dtype: counting f32-encoded
+        // indices still produces integers, and the width is the attribute's
+        // rather than the operand's.
+        OperationKind::Bincount => Some(DTypeId::I64.descriptor()),
         _ => attributes.declared_dtype().or(first_dtype),
     };
     Ok(ExpectedOutput {

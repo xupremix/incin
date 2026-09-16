@@ -8304,7 +8304,7 @@
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/conformance/mod.rs:514",
+    "site": "crates/incin-backends/src/conformance/mod.rs:518",
     "code": ".expect(\"the operation was drawn from an executed observation\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"

@@ -51,7 +51,7 @@ pub(crate) use linalg::{
 };
 pub(crate) use norm::{group_norm_storage, instance_norm_storage};
 pub(crate) use select::{
-    gather_storage, index_select_storage, masked_fill_storage, one_hot_storage,
+    bincount_storage, gather_storage, index_select_storage, masked_fill_storage, one_hot_storage,
     scatter_add_storage, scatter_storage, where_storage,
 };
 pub(crate) use triangular::{diag_storage, tril_storage, triu_storage};

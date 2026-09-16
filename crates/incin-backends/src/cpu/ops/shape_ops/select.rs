@@ -446,6 +446,44 @@ pub(crate) fn one_hot_storage(t: &CpuStorage, depth: usize) -> Result<CpuStorage
     Ok(CpuStorage::from_contiguous(CpuBuffer::Bool(out), out_shape))
 }
 
+/// Counts how many times each of `bins` slots appears in an index operand.
+///
+/// An index outside the range is an error rather than a skipped element: a
+/// count that is quietly low makes every offset derived from it wrong, and
+/// nothing downstream can tell that from a genuinely empty bin.
+pub(crate) fn bincount_storage(t: &CpuStorage, bins: usize) -> Result<CpuStorage> {
+    if bins == 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Bincount,
+            reason: "bincount needs at least one bin to count into",
+        }));
+    }
+    let total = crate::cpu::stride::checked_numel(&t.shape)?;
+    let mut counts = alloc::vec![0i64; bins];
+    let mut idx = alloc::vec![0usize; t.shape.len()];
+    for _ in 0..total {
+        let value = t.get(&idx);
+        // `is_finite` first so a NaN index is refused rather than slipping
+        // through comparisons that are all false for it.
+        let addressable =
+            value.is_finite() && value >= 0.0 && value < bins as f64 && value.fract() == 0.0;
+        if !addressable {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Bincount,
+                reason: "bincount index is not a whole number inside the bin range",
+            }));
+        }
+        counts[value as usize] += 1;
+        if !t.shape.is_empty() {
+            crate::cpu::storage::increment_index(&mut idx, &t.shape);
+        }
+    }
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::I64(counts),
+        alloc::vec![bins],
+    ))
+}
+
 /// Flat row-major index of `idx` within `shape`, saturating each coordinate
 /// into range so an out-of-bounds write target cannot panic in backward.
 fn flatten_index_checked(idx: &[usize], shape: &[usize]) -> usize {

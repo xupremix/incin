@@ -106,3 +106,52 @@ fn it_refuses_a_zero_repeat_and_an_axis_it_does_not_have() -> Result<()> {
     assert!(x.repeat_interleave(2, -2).is_err());
     Ok(())
 }
+
+/// `bincount` turns an assignment into the per-slot counts a router needs.
+///
+/// The geometry that addressed the indices does not survive: a `[T, K]`
+/// top-k assignment counts into the same `[N]` histogram as a flat vector of
+/// the same indices.
+#[test]
+fn bincount_counts_every_index_whatever_shape_held_it() -> Result<()> {
+    let flat = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    assert_eq!(flat.bincount::<3>()?.to_vec1::<i64>()?, vec![2, 1, 3]);
+
+    let assignment = Tensor::<s![3, 2], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    assert_eq!(assignment.bincount::<3>()?.to_vec1::<i64>()?, vec![2, 1, 3]);
+
+    // Wider than the indices used: the unused slot counts zero rather than
+    // being absent, which is what keeps the offsets aligned with the experts.
+    assert_eq!(flat.bincount::<5>()?.to_vec1::<i64>()?, vec![2, 1, 3, 0, 0]);
+    Ok(())
+}
+
+/// The counts are the offsets, once scanned.
+///
+/// This is the composition the operation exists for: `bincount` then `cumsum`
+/// describes where each expert's rows begin in a grouped buffer, so the
+/// per-expert token count never becomes a tensor extent.
+#[test]
+fn the_counts_scan_into_the_offsets_a_grouped_buffer_needs() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    let offsets = assignment.bincount::<3>()?.cumsum(axis!(0))?;
+    assert_eq!(offsets.to_vec1::<i64>()?, vec![2, 3, 6]);
+    Ok(())
+}
+
+/// An index outside the range is refused, not dropped.
+///
+/// A dropped index leaves a count quietly low and every offset after it wrong
+/// by the same amount, which no consumer can distinguish from a genuinely
+/// empty bin.
+#[test]
+fn an_index_outside_the_range_is_refused() -> Result<()> {
+    let indices = Tensor::<s![3], B, i64>::from_slice(&[0, 3, 1], ())?;
+    assert!(
+        indices.bincount::<3>().is_err(),
+        "index 3 is outside 0..3 and was counted anyway"
+    );
+    let negative = Tensor::<s![2], B, i64>::from_slice(&[0, -1], ())?;
+    assert!(negative.bincount::<3>().is_err());
+    Ok(())
+}

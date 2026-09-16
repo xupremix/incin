@@ -7,8 +7,9 @@ use crate::err::Result;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta, NarrowAttributes,
-    NoAttributes, OneHotAttributes, ScatterAttributes, SliceAttributes, UnfoldAttributes, op,
+    AxisAttributes, BincountAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta,
+    NarrowAttributes, NoAttributes, OneHotAttributes, ScatterAttributes, SliceAttributes,
+    UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -16,7 +17,9 @@ use crate::exec::request::TensorHandle;
 use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{AppendDim, ConstDim, Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
+use crate::shapes::{
+    AppendDim, ConstDim, DimCons, Dyn, DynShape, Nil, Shape, ShapeBuf, ShapeValue,
+};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
@@ -643,6 +646,73 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 dispatch::execute_shaped::<op::OneHot, B, <S as AppendDim<ConstDim<N>>>::Output>(
                     &context,
                     OneHotAttributes { depth: N },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        crate::shapes::Dense::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::tensor::grad::NoGrad::init(()),
+        )
+    }
+
+    /// Counts how many times each of `N` slots appears in this index tensor.
+    ///
+    /// The result is the histogram, rank one and `N` wide, whatever geometry
+    /// addressed the indices: a `[T, K]` assignment of `T` tokens to `K`
+    /// experts each counts into the same `[N]` row. Running `cumsum` over it
+    /// gives the offsets that describe where each expert's rows begin in a
+    /// grouped buffer, which is how a router avoids making the per-expert
+    /// token count a tensor extent.
+    ///
+    /// An index outside `0..N` is refused rather than dropped. A dropped index
+    /// would leave a count that is quietly low, and every offset after it
+    /// wrong by the same amount. [`Self::one_hot`] beside this takes the other
+    /// answer, an all-`false` row, because ONNX `OneHot` specifies it and
+    /// because an encoding that names no slot is still a well-formed row; a
+    /// count has no such reading.
+    ///
+    /// The output is `i64` and carries no gradient: it is a function of which
+    /// slot each index names, not of a value the tape can perturb.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // Four tokens routed to experts 2, 0, 2 and 1 of 3.
+    /// let index = Cpu.tensor([2u32, 0, 2, 1]).unwrap();
+    /// assert_eq!(index.bincount::<3>().unwrap().to_vec1::<i64>().unwrap(), vec![1, 1, 2]);
+    /// ```
+    #[allow(clippy::type_complexity)]
+    pub fn bincount<const N: usize>(
+        &self,
+    ) -> Result<
+        crate::shapes::Dense<DimCons<ConstDim<N>, Nil>, B, i64, crate::tensor::grad::NoGrad, Local>,
+    >
+    where
+        DimCons<ConstDim<N>, Nil>: DynShape,
+        B: Execute<op::Bincount> + Capabilities,
+        <B as Execute<op::Bincount>>::Output: Into<B::Storage<i64>>,
+    {
+        let output_shape =
+            ShapeValue::<DimCons<ConstDim<N>, Nil>>::try_new(ShapeBuf::from_slice(&[N]))
+                .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        // Disabled rather than this tensor's own mode, the same reason
+        // `one_hot` gives: the result is `NoGrad` whatever the receiver was.
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
+        let inner = crate::exec::GradMode::Disabled
+            .restrict(|| {
+                dispatch::execute_shaped::<op::Bincount, B, DimCons<ConstDim<N>, Nil>>(
+                    &context,
+                    BincountAttributes { bins: N },
                     &[input],
                     &output_shape,
                 )

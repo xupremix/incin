@@ -116,6 +116,11 @@
    "kind": "method",
    "item": "Tensor::bce_with_logits_loss"
   },
+  "bincount": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=bincount",
+   "kind": "search",
+   "item": "bincount"
+  },
   "bmm": {
    "url": "https://docs.rs/incin-core/latest/incin_core/?search=bmm",
    "kind": "search",

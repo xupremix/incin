@@ -12,12 +12,12 @@ use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::shape_ops::{
-    broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage, flatten_storage,
-    gather_storage, index_select_storage, lerp_storage, masked_fill_storage, narrow_storage,
-    one_hot_storage, pad_storage, pixel_shuffle_storage, repeat_interleave_storage, repeat_storage,
-    scatter_add_storage, scatter_storage, slice_storage, squeeze_storage, stack_storage,
-    transpose_storage, tril_storage, triu_storage, unfold_storage, unsqueeze_storage,
-    where_storage,
+    bincount_storage, broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage,
+    flatten_storage, gather_storage, index_select_storage, lerp_storage, masked_fill_storage,
+    narrow_storage, one_hot_storage, pad_storage, pixel_shuffle_storage, repeat_interleave_storage,
+    repeat_storage, scatter_add_storage, scatter_storage, slice_storage, squeeze_storage,
+    stack_storage, transpose_storage, tril_storage, triu_storage, unfold_storage,
+    unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -438,6 +438,28 @@ impl<D: Device> Execute<op::OneHot> for CpuBackendImpl<D> {
         // through the f64 accessor, so every integer width lands exactly.
         let depth = request.operation.descriptor().attributes().depth;
         one_hot_storage(input, depth).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::Bincount> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Bincount, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Bincount;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        // No dtype guard, for the reason `one_hot`'s impl above states: the
+        // descriptor names operand zero an integer index before this row is
+        // consulted, and the kernel reads through the f64 accessor.
+        let bins = request.operation.descriptor().attributes().bins;
+        bincount_storage(input, bins).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 

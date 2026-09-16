@@ -1427,9 +1427,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
   Four of the eight operations that issue lists were already in the catalog
   with tensor methods and CPU executors: `log_softmax`, `logsumexp`, `one_hot`
-  and `scatter_add`. What is still missing after this change is `sort`,
-  `bincount`, and `nonzero`, whose output extent depends on its data and so
-  waits on the shape decision in #102.
+  and `scatter_add`.
+
+- **`bincount` counts how many indices land in each slot.** The second of the
+  routing primitives issue #103 asks for: `index.bincount::<N>()` returns the
+  `[N]` histogram as `i64`, and `cumsum` over it gives the offsets that say
+  where each expert's rows begin in a grouped buffer. That composition is why
+  the per-expert token count never has to become a tensor extent, and it is
+  covered as a test rather than only described.
+
+  The geometry that addressed the indices does not survive: a `[T, K]` top-k
+  assignment counts into the same row as a flat vector of the same indices.
+  The width is a const parameter, so the output shape stays static.
+
+  An index outside `0..N` is refused rather than dropped. Dropping one leaves
+  a count quietly low and every offset after it wrong by the same amount, and
+  nothing downstream can tell that from a genuinely empty bin. The row carries
+  no gradient and says so: perturbing an index does not move a count
+  continuously, it moves one count to another slot.
+
+  What issue #103 still lists is `sort` and `nonzero`. The second waits on the
+  shape decision in #102, since its output extent depends on its data.
 
 ## [0.1.0] - 2026-08-25
 

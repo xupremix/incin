@@ -430,6 +430,10 @@ fn carries_no_gradient(tuple: &AdvertisedTuple) -> bool {
             // Reads indices and writes an indicator. There is no dense input
             // to be sensitive to.
             | OperationKind::OneHot
+            // Reads the same indices and writes how many landed in each slot.
+            // Perturbing an index does not move a count continuously; it moves
+            // one count to another slot.
+            | OperationKind::Bincount
     )
 }
 

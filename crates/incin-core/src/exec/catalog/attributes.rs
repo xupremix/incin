@@ -265,6 +265,28 @@ impl AttributeContract for RepeatAttributes {
         Some(ShapeTransform::Repeat(&self.repeats))
     }
 }
+impl AttributeContract for BincountAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        _inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        // A zero-bin histogram has nowhere to count into, so every index in
+        // the operand would be out of range. `one_hot` refuses a zero depth
+        // for the same reason.
+        if self.bins == 0 {
+            return Err(invalid(
+                operation,
+                "bins",
+                "bincount needs at least one bin to count into",
+            ));
+        }
+        Ok(())
+    }
+    fn bins(&self) -> Option<usize> {
+        Some(self.bins)
+    }
+}
 impl AttributeContract for RepeatInterleaveAttributes {
     fn validate(
         &self,

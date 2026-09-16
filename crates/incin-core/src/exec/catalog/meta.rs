@@ -57,6 +57,7 @@ attributes! {
     FlattenAttributes { start_axis: usize, end_axis: usize }
     ScatterAttributes { axis: usize, duplicate_indices: DuplicateIndexRule }
     OneHotAttributes { depth: usize }
+    BincountAttributes { bins: usize }
     PadAttributes { padding: Vec<(usize, usize)>, value: f64 }
     DiagonalAttributes { offset: i64 }
     ChunkAttributes { chunks: usize, axis: usize }

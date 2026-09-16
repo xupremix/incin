@@ -366,6 +366,12 @@ pub trait AttributeContract {
     fn depth(&self) -> Option<usize> {
         None
     }
+    /// Histogram width, when this set carries one. Separate from `depth`:
+    /// one names the slots an index expands into, the other the slots indices
+    /// are counted into, and an operation carries one or the other.
+    fn bins(&self) -> Option<usize> {
+        None
+    }
     /// Shape-transform description, when applicable.
     fn shape_transform(&self) -> Option<ShapeTransform<'_>> {
         None

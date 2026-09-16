@@ -14,11 +14,11 @@
 use incin_core::backend_authoring::{Execute, op};
 use incin_core::exec::catalog::{
     AddmmAttributes, ArgsortAttributes, AttentionAttributes, AxisAttributes,
-    AxisVarianceAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes, DiagonalAttributes,
-    DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
-    GroupNormAttributes, IndexReductionAttributes, LerpAttributes, LinearAttributes,
-    LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
-    OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes,
+    AxisVarianceAttributes, BincountAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes,
+    DiagonalAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
+    FlattenAttributes, GroupNormAttributes, IndexReductionAttributes, LerpAttributes,
+    LinearAttributes, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
+    NormAttributes, OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes,
     RepeatInterleaveAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes,
     SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes, VarianceAttributes,
 };
@@ -717,6 +717,24 @@ typed_family!(
     &[Role::Index],
     encoding_at_zero,
     [OneHot]
+);
+
+// `bincount` reads the same integer operand and counts into the bins its
+// attributes name. The `Index` role fills it with zeros, which are in range
+// for any width of one or more; three instead of one for the reason above,
+// so a kernel sizing the histogram from an operand extent fails here.
+constant_attribute_shim!(
+    counting_three,
+    BincountAttributes,
+    BincountAttributes { bins: 3 }
+);
+
+typed_family!(
+    counting,
+    Operands::Unary,
+    &[Role::Index],
+    counting_three,
+    [Bincount]
 );
 
 // The two halves of the block compression. Each names the representation it

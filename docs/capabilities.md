@@ -50,6 +50,7 @@ run time.
 | `backward` | — | — | — | — |
 | `batch_norm` | `f32` | `f32` | — | — |
 | `bce_with_logits_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `bincount` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
 | `bmm` | `f32` | `f32` | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
@@ -358,6 +359,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | yes | native |
 | `scatter_add` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | yes | native |
 | `one_hot` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |
+| `bincount` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |
 | `pixel_shuffle` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 4 | yes | native |
 | `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |
 | `logical_and` | `bool` | `contiguous`, `strided` | any | no | native |

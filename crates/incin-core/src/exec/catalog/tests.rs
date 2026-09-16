@@ -1094,6 +1094,7 @@ fn every_tensor_returning_row_declares_an_inference_source() {
                     | OperationKind::Scatter
                     | OperationKind::IndexSelect
                     | OperationKind::OneHot
+                    | OperationKind::Bincount
                     | OperationKind::EmbeddingExact
                     | OperationKind::Dot
                     | OperationKind::Outer
