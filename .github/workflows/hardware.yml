@@ -90,8 +90,8 @@ jobs:
           # ["self-hosted","linux","cuda"]. Unset means no such runner is
           # registered, which is the repository's current state.
           if [ -z "${CUDA_RUNNER:-}" ]; then
-            if [ "$REQUESTED" = "cuda" ]; then
-              echo "::error::job=cuda was requested but the HARDWARE_CUDA_RUNNER variable is unset, so no GPU runner is registered"
+            if [ "$REQUESTED" = "cuda" ] || [ "$REQUESTED" = "dist2-network" ] || [ "$REQUESTED" = "multinode" ]; then
+              echo "::error::job=$REQUESTED was requested but the HARDWARE_CUDA_RUNNER variable is unset, so no GPU runner is registered"
               exit 1
             fi
             cuda=false
