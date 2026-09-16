@@ -415,10 +415,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Gathers values along `dim` specified by `index`.
-    pub fn gather<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    pub fn gather<
+        A,
+        S2: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        L2: Layout<S2>,
+    >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
     ) -> Result<crate::shapes::Dense<S2, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
@@ -458,11 +464,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         KInt: crate::tensor::dtype::DType,
         G2: RequiresGrad,
         G3: RequiresGrad,
+        L2: Layout<S2>,
+        L3: Layout<S3>,
     >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
-        src: &Tensor<S3, B, K, G3>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
+        src: &Tensor<S3, B, K, G3, Local, L3>,
     ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
@@ -536,11 +544,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         KInt: crate::tensor::dtype::DType,
         G2: RequiresGrad,
         G3: RequiresGrad,
+        L2: Layout<S2>,
+        L3: Layout<S3>,
     >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
-        src: &Tensor<S3, B, K, G3>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
+        src: &Tensor<S3, B, K, G3, Local, L3>,
     ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
@@ -728,10 +738,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Selects slices along `dim` given 1D `index`.
-    pub fn index_select<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    pub fn index_select<
+        A,
+        S2: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        L2: Layout<S2>,
+    >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
     ) -> Result<crate::shapes::Dense<A::Output, B, K, G, Local>>
     where
         A: ReplaceAxisSelector<S>,

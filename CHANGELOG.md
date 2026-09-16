@@ -1550,6 +1550,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   initialisation, and `sample` is a distribution-authoring call that needs a
   device field.
 
+- **`gather`, `scatter`, `scatter_add` and `index_select` refused the indices
+  the library's own sorting operations return.** Each typed its index operand,
+  and the source operand of the two scatters, with the default layout
+  parameter, which is `Dyn`: the layout that claims nothing. `sort`, `argsort`
+  and `topk` return a proven row-major result. A method that accepts only an
+  unproven layout rejects a proven one, so the permutation `sort` produces could
+  not be handed to the one method that applies it, and the indices `topk`
+  produces could not be gathered by. Grouping tokens by expert, the composition
+  issue #103 is built around, needs exactly that hand-off.
+
+  Each parameter is now generic over its layout, as `masked_fill`'s mask in the
+  same file already was. No kernel sees anything new: `Dyn` already admitted a
+  tensor of any layout at run time, and a row-major tensor is a stronger claim
+  than that rather than a different one, so the change is only in what the type
+  lets through. None of the four is called with an explicit turbofish anywhere
+  in the workspace, so an inferred call is unaffected.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

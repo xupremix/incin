@@ -278,3 +278,63 @@ fn it_refuses_an_axis_it_does_not_have() -> Result<()> {
     assert!(x.sort(1, false).is_err());
     Ok(())
 }
+
+/// The permutation `sort` returns reorders rows directly.
+///
+/// `sort`, `argsort` and `topk` return proven row-major indices, and the
+/// operations that consume an index used to accept only the layout that claims
+/// nothing. So the grouping this file builds up to did not type-check: the
+/// permutation existed and could not be handed to the one method that applies
+/// it. A row-major tensor is a stronger claim than an unproven one, never a
+/// weaker one, so accepting it admits nothing the kernel was not already given.
+#[test]
+fn the_permutation_carries_the_token_rows_into_expert_order() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    let rows = Tensor::<s![6, 2], B>::from_slice(
+        &[0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5],
+        (),
+    )?;
+
+    let (_, order) = assignment.sort(0, false)?;
+    let grouped = rows.index_select(axis!(0), &order)?;
+
+    // Tokens 1 and 5 went to expert 0, token 3 to expert 1, and 0, 2, 4 to
+    // expert 2, each block in arrival order.
+    assert_eq!(
+        grouped.to_vec1::<f32>()?,
+        vec![1.0, 1.5, 5.0, 5.5, 3.0, 3.5, 0.0, 0.5, 2.0, 2.5, 4.0, 4.5]
+    );
+    Ok(())
+}
+
+/// `topk`'s indices gather the values they name.
+///
+/// Gathering by the indices a top-k selection returned is the reason those
+/// indices exist, and it did not compile for the same reason as above.
+#[test]
+fn topk_indices_gather_the_values_they_name() -> Result<()> {
+    let logits = Tensor::<s![2, 3], B>::from_slice(&[0.1, 0.9, 0.5, 0.7, 0.2, 0.8], ())?;
+
+    let (values, indices) = logits.topk(2, axis!(1), true)?;
+    let gathered = logits.gather(axis!(1), &indices)?;
+
+    assert_eq!(gathered.to_vec1::<f32>()?, values.to_vec1::<f32>()?);
+    Ok(())
+}
+
+/// Expert outputs accumulate back through the same permutation.
+///
+/// The combine step of a router: each token's rows come back to its own
+/// position, and `scatter_add` is the form that sums rather than overwrites.
+#[test]
+fn scatter_add_takes_an_index_a_sort_produced() -> Result<()> {
+    let keys = Tensor::<s![4], B>::from_slice(&[3.0, 1.0, 2.0, 0.0], ())?;
+    let (sorted, order) = keys.sort(0, false)?;
+
+    let restored = Tensor::<s![4], B>::zeros(())?.scatter_add(axis!(0), &order, &sorted)?;
+
+    // Scattering the sorted keys back through their own permutation puts each
+    // one at the position it was read from.
+    assert_eq!(restored.to_vec1::<f32>()?, keys.to_vec1::<f32>()?);
+    Ok(())
+}
