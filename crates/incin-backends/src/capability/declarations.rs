@@ -86,12 +86,7 @@ macro_rules! cpu_descriptor_operations {
                 // reason `sum_dim` and `sum_keepdim` both are: whether the
                 // reduced axis survives is the caller's choice, not a property
                 // the row can decide for them.
-                LogSumExpDim, LogSumExpKeepDim,
-                // `topk` is here rather than with the other index reductions
-                // because its value buffer is built as f32 whatever the operand
-                // held. f32 is the only operand dtype whose result it labels
-                // correctly, and this group is the f32-only one.
-                TopK
+                LogSumExpDim, LogSumExpKeepDim
             ],
             spatial = [
                 Conv2dExact, Conv1dExact, ConvTranspose2d,
@@ -135,11 +130,16 @@ macro_rules! cpu_descriptor_operations {
             // constraint the row cannot state.
             embedding = [EmbeddingExact],
             native_tensor = [
-                // `sort` sits with `argsort` rather than with `topk` in the
-                // f32-only group above: its value buffer is built from the
-                // operand's own buffer, so it comes back in the dtype it was
-                // read in rather than relabelled.
-                ArgMax, ArgMin, Argsort, Sort, Cumsum,
+                // The order statistics sit here rather than in the f32-only
+                // reduction group above because each builds its value buffer
+                // from the operand's own, so a result comes back in the dtype
+                // it was read in rather than relabelled. `topk` was in that
+                // group, for a reason its kernel stopped giving when the fixed
+                // f32 buffer became the operand's: the row stayed behind and
+                // advertised one dtype for a kernel that handles eight, which
+                // is why CUDA already declared four of them where CPU declared
+                // one.
+                ArgMax, ArgMin, Argsort, Sort, TopK, Cumsum,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,

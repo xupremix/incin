@@ -187,7 +187,7 @@ run time.
 | `tensor_to_bytes` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `to_device` | — | — | — | — |
 | `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
-| `topk` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `topk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — |
 | `transpose_view` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — |
 | `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
@@ -314,7 +314,6 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `prod_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `logsumexp_dim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `logsumexp_keepdim` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
-| `topk` | `f32` | `contiguous`, `strided` | 1+ | no | native |
 | `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `conv1d` | `f32` | `contiguous` | 1–3 | yes | native |
 | `conv_transpose2d` | `f32` | `contiguous` | 1–4 | yes | native |
@@ -332,6 +331,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `argmin` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | no | native |
 | `argsort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | no | native |
 | `sort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | no | native |
+| `topk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | no | native |
 | `cumsum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | 1+ | yes | native |
 | `maximum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |
 | `minimum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous`, `strided` | any | yes | native |

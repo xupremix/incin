@@ -1477,6 +1477,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   waits on the shape decision in #102 since its output extent depends on its
   data.
 
+### Fixed
+
+- **`topk` advertised one dtype on CPU for a kernel that handles eight.** The
+  row sat in the f32-only reduction group, and the comment holding it there
+  said its value buffer was built as f32 whatever the operand held. That was
+  true once. The kernel stopped doing it when the index reductions were made
+  to produce the dtype they were asked for: the fixed `CpuBuffer::F32` became
+  the operand's own buffer, so an f64 or f16 operand no longer comes back
+  relabelled and narrowed. The capability row stayed behind, and the reason
+  written beside it had outlived the code it described.
+
+  A user asking for the top `k` of an f64 tensor was refused at admission by a
+  backend whose kernel would have answered correctly. CUDA had already
+  declared `bf16`, `f16`, `f32` and `f64` where CPU declared `f32` alone,
+  which is the disagreement that makes the row rather than the kernel the
+  thing that was wrong.
+
+  `topk` now sits with `argsort` and `sort`, whose value buffers are built the
+  same way, over the same eight CPU dtypes. The conformance oracle poses it
+  over every one of them, and a test pins the value dtype rather than only
+  that the call was admitted, since admission is what changed.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

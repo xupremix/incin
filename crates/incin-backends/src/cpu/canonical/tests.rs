@@ -1128,3 +1128,39 @@ fn sort_returns_the_values_beside_a_stable_permutation() {
         "expected an indexed shape refusal, got {error:?}"
     );
 }
+
+#[test]
+fn topk_returns_its_values_in_the_dtype_it_read_them_in() {
+    use incin_core::exec::catalog::TopKAttributes;
+    use incin_core::shapes::{ShapeBuf, ShapeValue};
+    // The row advertised `f32` alone until this test's subject changed: the
+    // kernel used to build a fixed `CpuBuffer::F32` whatever it read, so an
+    // f64 operand came back relabelled and narrowed. It now builds from the
+    // operand's own buffer, which is what lets the row claim the same eight
+    // dtypes `argsort` and `sort` beside it do.
+    let input = CpuStorage::try_from_contiguous(CpuBuffer::F64(vec![3.0, 1.0, 4.0, 1.5]), vec![4])
+        .expect("test storage must be well formed");
+    let context = context();
+    let good = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap();
+    let (values, _indices) = dispatch::execute_shaped_n::<op::TopK, TestBackend, _>(
+        &context,
+        TopKAttributes {
+            k: 2,
+            axis: 0,
+            largest: true,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[TensorHandle::from_storage::<TestBackend, f64, Local>(
+            &input,
+        )],
+        &(good.clone(), good),
+    )
+    .expect("an f64 operand is one of the dtypes the row advertises");
+    let values: CpuStorage = values;
+    assert_eq!(
+        values.buffer.dtype_id(),
+        DTypeId::F64,
+        "the values must keep the operand's dtype, not be relabelled f32"
+    );
+    assert!(matches!(&*values.buffer, CpuBuffer::F64(held) if held == &vec![4.0, 3.0]));
+}
