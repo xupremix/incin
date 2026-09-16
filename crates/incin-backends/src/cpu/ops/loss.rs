@@ -18,11 +18,6 @@
 //! `l1_loss` (mean absolute error) and `bce_with_logits_loss` (numerically-stable
 //! binary cross-entropy) are both real, composed implementations landed in
 //! Phase 4 Plan 04-02. `l1_loss` composes from `sub`/`abs`/`mean_all`/`sum_all`;
-//! `bce_with_logits_loss` composes from the numerically-stable
-//! `max(x,0) - x*z + log(1+exp(-|x|))` formula (`relu`/`mul`/`sub`/`abs`/`neg`/
-//! `exp`/`add_scalar_float`/`log`/`add`/`mean_all`/`sum_all`). Both inherit
-//! correct backward by composition with zero new tape entries of their own,
-//! exactly like `mse_loss`/`cross_entropy_loss` above.
 
 use crate::cpu::storage::{CpuBuffer, CpuStorage};
 use incin_core::error::{ConversionFailure, Error, Result};
@@ -65,7 +60,36 @@ pub(crate) fn bce_with_logits_loss_storage(
     target: &CpuStorage,
     reduction: Reduction,
 ) -> Result<CpuStorage> {
-    let max_x_0 = crate::cpu::ops::elementwise::canonical_relu(pred)?;
+    let max_x_0 = incin_core::exec::GradMode::Disabled
+        .restrict(|| crate::cpu::ops::elementwise::canonical_relu(pred))?;
+    crate::cpu::tape::push_with(|| {
+        let saved = pred.clone();
+        crate::cpu::tape::TapeEntry {
+            output_id: max_x_0.id,
+            input_ids: vec![pred.id],
+            backward: Box::new(move |grad_out: &CpuStorage| {
+                let total = crate::cpu::stride::checked_numel(&grad_out.shape)?;
+                let mut values = Vec::with_capacity(total);
+                let mut index = vec![0; grad_out.shape.len()];
+                for _ in 0..total {
+                    let x = saved.get(&index);
+                    let slope = if x == 0.0 {
+                        0.5
+                    } else if x > 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    values.push(grad_out.get(&index) * slope);
+                    crate::cpu::storage::increment_index(&mut index, &grad_out.shape);
+                }
+                Ok(vec![CpuStorage::from_contiguous(
+                    grad_out.buffer.from_f64_values(values)?,
+                    &grad_out.shape,
+                )])
+            }),
+        }
+    });
     let x_times_z = crate::cpu::ops::elementwise::mul_storage(pred, target)?;
     let term1 = crate::cpu::ops::elementwise::sub_storage(&max_x_0, &x_times_z)?;
     let abs_x = crate::cpu::ops::elementwise::canonical_abs(pred)?;
@@ -426,6 +450,55 @@ mod tests {
             (v - expected).abs() < 1e-2,
             "bce x=-50,z=1: got {v:.4}, expected {expected:.4}"
         );
+    }
+
+    #[test]
+    fn bce_with_logits_zero_logit_backward_matches_sigmoid_minus_target() {
+        for (reduction, scale) in [(Reduction::Sum, 1.0), (Reduction::Mean, 1.0 / 3.0)] {
+            let p = matrix(vec![0.0, 0.0, 0.0], 1, 3);
+            let z = matrix(vec![0.0, 1.0, 0.25], 1, 3);
+            let out = bce_with_logits_loss_storage(&p, &z, reduction).unwrap();
+            let grads = tape::backward(&out).unwrap();
+            let got = f32_vec(grads.get(p.id).expect("pred should have a gradient"));
+            for (actual, expected) in got.into_iter().zip([0.5, -0.5, 0.25]) {
+                assert!(
+                    (actual - expected * scale).abs() < 1e-6,
+                    "{reduction:?}: got {actual}, expected {}",
+                    expected * scale
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bce_with_logits_negative_tail_keeps_small_gradient() {
+        let p = matrix(vec![-20.0], 1, 1);
+        let z = matrix(vec![0.0], 1, 1);
+        let out = bce_with_logits_loss_storage(&p, &z, Reduction::Sum).unwrap();
+        let grads = tape::backward(&out).unwrap();
+        let actual = grads.get(p.id).unwrap().get(&[0, 0]);
+        let expected = (-20.0_f64).exp() / (1.0 + (-20.0_f64).exp());
+        assert!((actual / expected - 1.0).abs() < 1e-6, "got {actual}");
+    }
+
+    #[test]
+    fn bce_with_logits_negative_infinity_preserves_infinite_loss() {
+        let p = matrix(vec![f32::NEG_INFINITY], 1, 1);
+        let z = matrix(vec![1.0], 1, 1);
+        let out = bce_with_logits_loss_storage(&p, &z, Reduction::Sum).unwrap();
+        assert_eq!(out.get(&[]), f64::INFINITY);
+    }
+
+    #[test]
+    fn bce_with_logits_zero_logit_gradcheck() {
+        let p = matrix(vec![0.0, 0.0, 0.0], 1, 3);
+        let z = matrix(vec![0.0, 1.0, 0.25], 1, 3);
+        let max_rel_err = gradcheck(
+            |inputs| bce_with_logits_loss_storage(&inputs[0], &z, Reduction::Mean).unwrap(),
+            &[p],
+            F32_STEP,
+        );
+        assert!(max_rel_err < GRAD_TOL, "got {max_rel_err}");
     }
 
     #[test]
