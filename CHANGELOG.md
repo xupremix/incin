@@ -1499,6 +1499,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   over every one of them, and a test pins the value dtype rather than only
   that the call was admitted, since admission is what changed.
 
+- **The API reference showed no example for `add_scalar`, `zeros` or `sum`.**
+  `tools/build-api-examples.py` writes a worked call per operation from its
+  catalog entry, compiles them all, and drops whatever rustc rejects. Fourteen
+  were being dropped for reasons in the generator rather than in the API, so
+  the reference was silently blank for operations a reader is most likely to
+  look up first.
+
+  Three causes. The creation family read its method name out of the catalog's
+  source mapping, and `Descriptor<op::Zeros>` partitions on the first `::`
+  into `Zeros>`, so every one of them emitted `Cpu.Zeros>(..)`, which does not
+  parse; those examples also annotated the result `Dense<..>`, claiming a
+  layout the constructor does not prove. The axis reductions used the
+  catalog's exact identity as the method, but `sum_dim` is spelled that way to
+  keep it apart from `sum_all` and the method a caller types is `sum`. The
+  order statistics were handed the one-axis call, which fits `argmax` and
+  fits none of `topk`, `argsort` and `sort`.
+
+  Each name is now the operation's own spelling where the source mapping is
+  not a method path, checked against the public-API baseline rather than
+  guessed: the `Execute<op::SumDim>` bound sits on `Tensor::sum`. Coverage
+  goes from 59 operations to 73. `prod_dim` still has none, correctly, because
+  it has no tensor method at all.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

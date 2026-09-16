@@ -41,6 +41,13 @@ fn example_acosh() -> Result<()> {
 }
 
 #[test]
+fn example_add_scalar() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let y = t.add_scalar(2.0)?;
+    Ok(())
+}
+
+#[test]
 fn example_argmax() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let positions = t.argmax(axis!(0))?;
@@ -51,6 +58,13 @@ fn example_argmax() -> Result<()> {
 fn example_argmin() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let positions = t.argmin(axis!(0))?;
+    Ok(())
+}
+
+#[test]
+fn example_argsort() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let order = t.argsort(1, false)?;
     Ok(())
 }
 
@@ -198,6 +212,13 @@ fn example_log2() -> Result<()> {
 }
 
 #[test]
+fn example_logsumexp_dim() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let reduced = t.logsumexp(axis!(0))?;
+    Ok(())
+}
+
+#[test]
 fn example_logsumexp_keepdim() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let reduced = t.logsumexp_keepdim(axis!(0))?;
@@ -216,6 +237,13 @@ fn example_matmul() -> Result<()> {
 fn example_max_all() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let total = t.max_all()?;
+    Ok(())
+}
+
+#[test]
+fn example_max_dim() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let reduced = t.max(axis!(0))?;
     Ok(())
 }
 
@@ -242,6 +270,13 @@ fn example_mean_all() -> Result<()> {
 }
 
 #[test]
+fn example_mean_dim() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let reduced = t.mean(axis!(0))?;
+    Ok(())
+}
+
+#[test]
 fn example_mean_keepdim() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let reduced = t.mean_keepdim(axis!(0))?;
@@ -252,6 +287,13 @@ fn example_mean_keepdim() -> Result<()> {
 fn example_min_all() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let total = t.min_all()?;
+    Ok(())
+}
+
+#[test]
+fn example_min_dim() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let reduced = t.min(axis!(0))?;
     Ok(())
 }
 
@@ -286,9 +328,22 @@ fn example_mse_loss() -> Result<()> {
 }
 
 #[test]
+fn example_mul_scalar() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let y = t.mul_scalar(2.0)?;
+    Ok(())
+}
+
+#[test]
 fn example_neg() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.neg()?;
+    Ok(())
+}
+
+#[test]
+fn example_ones() -> Result<()> {
+    let t = Cpu.ones(shape![2, 3])?;
     Ok(())
 }
 
@@ -303,6 +358,18 @@ fn example_powf() -> Result<()> {
 fn example_prod_all() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let total = t.prod_all()?;
+    Ok(())
+}
+
+#[test]
+fn example_rand() -> Result<()> {
+    let t = Cpu.rand(shape![2, 3])?;
+    Ok(())
+}
+
+#[test]
+fn example_randn() -> Result<()> {
+    let t = Cpu.randn(shape![2, 3])?;
     Ok(())
 }
 
@@ -371,6 +438,13 @@ fn example_sinh() -> Result<()> {
 }
 
 #[test]
+fn example_sort() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let (values, order) = t.sort(1, false)?;
+    Ok(())
+}
+
+#[test]
 fn example_sqrt() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.sqrt()?;
@@ -395,6 +469,13 @@ fn example_sub_scalar() -> Result<()> {
 fn example_sum_all() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let total = t.sum_all()?;
+    Ok(())
+}
+
+#[test]
+fn example_sum_dim() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let reduced = t.sum(axis!(0))?;
     Ok(())
 }
 
@@ -427,8 +508,21 @@ fn example_tanh() -> Result<()> {
 }
 
 #[test]
+fn example_topk() -> Result<()> {
+    let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+    let (values, indices) = t.topk(2, axis!(1), true)?;
+    Ok(())
+}
+
+#[test]
 fn example_trunc() -> Result<()> {
     let t = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
     let y = t.trunc()?;
+    Ok(())
+}
+
+#[test]
+fn example_zeros() -> Result<()> {
+    let t = Cpu.zeros(shape![2, 3])?;
     Ok(())
 }

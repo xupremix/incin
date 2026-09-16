@@ -68,13 +68,20 @@ def example_for(op: dict) -> str | None:
     family, kind = catalog.get("family"), catalog.get("kind")
     attrs = catalog.get("attrs")
     name = method(catalog.get("api"))
+    # The operation's own spelling, which is what a caller types wherever the
+    # catalog's source mapping is not a method path. `Descriptor<op::Zeros>`
+    # partitions on the first `::` into a name of `Zeros>`, so every creation
+    # example read `Cpu.Zeros>(..)` and was dropped for not parsing; and where
+    # the mapping names a legacy entry point (`::add_scalar_float`) the
+    # spelling is the method that still exists.
+    spelling = op.get("name") or name
     if not name:
         return None
 
     if family == "UnaryFloat" and attrs == "NoAttributes":
         return f"{T23}\nlet y = t.{name}()?;"
     if family == "UnaryFloat" and attrs == "ScalarAttributes":
-        return f"{T23}\nlet y = t.{name}(2.0)?;"
+        return f"{T23}\nlet y = t.{spelling}(2.0)?;"
     if family == "BinaryBroadcast" and attrs == "NoAttributes":
         return f"{A23}\n{U23}\nlet y = a.{name}(&b)?;"
     if family == "Comparison":
@@ -86,7 +93,26 @@ def example_for(op: dict) -> str | None:
     if family == "Reduction" and attrs == "NoAttributes":
         return f"{T23}\nlet total = t.{name}()?;"
     if family == "Reduction" and attrs == "AxisAttributes":
-        return f"{T23}\nlet reduced = t.{name}(axis!(0))?;"
+        # The catalog spells the exact identity, `sum_dim`, to keep it apart
+        # from `sum_all`; the method a caller types is `sum`, because the axis
+        # argument is what already distinguishes them. Checked against the
+        # public-API baseline, where the `Execute<op::SumDim>` bound sits on
+        # `Tensor::sum`. `prod_dim` has no tensor method at all and so keeps
+        # having no example, which is the honest result rather than a broken
+        # one.
+        axis_method = spelling[: -len("_dim")] if spelling.endswith("_dim") else spelling
+        return f"{T23}\nlet reduced = t.{axis_method}(axis!(0))?;"
+    # The order statistics are `IndexReduction` too, but none of them is the
+    # one-axis-argument call below: `argsort` and `sort` take a plain `usize`
+    # beside a direction, and `topk` takes a width first. Each generated the
+    # generic form and was dropped by the compile step, so the reference showed
+    # nothing for the family's larger half.
+    if name == "topk":
+        return f"{T23}\nlet (values, indices) = t.topk(2, axis!(1), true)?;"
+    if name == "argsort":
+        return f"{T23}\nlet order = t.argsort(1, false)?;"
+    if name == "sort":
+        return f"{T23}\nlet (values, order) = t.sort(1, false)?;"
     if family == "IndexReduction":
         return f"{T23}\nlet positions = t.{name}(axis!(0))?;"
     if family == "Reduction" and attrs == "AxisVarianceAttributes":
@@ -104,8 +130,12 @@ def example_for(op: dict) -> str | None:
                 "let b = Tensor::<s![3, 2], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;\n"
                 "let product = a.matmul(&b)?;")
     if family == "Creation" and kind in {"Fill", "Random"}:
-        # The target API takes the shape as an argument, not a turbofish.
-        return f"let t: Dense<s![2, 3], B> = Cpu.{name}(shape![2, 3])?;"
+        # The target API takes the shape as an argument, not a turbofish, and
+        # the shape argument is what fixes the type, so there is nothing left
+        # for an annotation to say. The `Dense<..>` one that used to be here
+        # also claimed a layout the constructor does not prove, which is what
+        # kept every example in this family from compiling.
+        return f"let t = Cpu.{spelling}(shape![2, 3])?;"
     return None
 
 
