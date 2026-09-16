@@ -76,15 +76,20 @@ impl<
     /// let target = Cpu.tensor([0i64, 0]).unwrap();
     /// let loss = pred.cross_entropy_loss(&target).unwrap();
     /// ```
-    pub fn cross_entropy_loss<S2: Shape, KT: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    pub fn cross_entropy_loss<
+        S2: Shape,
+        KT: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        L2: crate::shapes::Layout<S2>,
+    >(
         &self,
-        target: &Tensor<S2, B, KT, G2>,
+        target: &Tensor<S2, B, KT, G2, Local, L2>,
     ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::CrossEntropyLoss>,
         <B as Execute<op::CrossEntropyLoss>>::Output: Into<B::Storage<K>>,
     {
-        self.cross_entropy_loss_with::<Mean, S2, KT, G2>(target)
+        self.cross_entropy_loss_with::<Mean, S2, KT, G2, L2>(target)
     }
 
     /// `cross_entropy_loss_with`.
@@ -93,9 +98,10 @@ impl<
         S2: Shape,
         KT: crate::tensor::dtype::DType,
         G2: RequiresGrad,
+        L2: crate::shapes::Layout<S2>,
     >(
         &self,
-        target: &Tensor<S2, B, KT, G2>,
+        target: &Tensor<S2, B, KT, G2, Local, L2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + CrossEntropyReductionShape<S>,
@@ -146,21 +152,21 @@ impl<
     /// let target = Cpu.zeros(shape![2]).unwrap();
     /// let loss = pred.mse_loss(&target).unwrap();
     /// ```
-    pub fn mse_loss<S2: Shape, G2: RequiresGrad>(
+    pub fn mse_loss<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
-        target: &Tensor<S2, B, K, G2>,
+        target: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::MseLoss> + crate::exec::Capabilities,
         <B as Execute<op::MseLoss>>::Output: Into<B::Storage<K>>,
     {
-        self.mse_loss_with::<Mean, S2, G2>(target)
+        self.mse_loss_with::<Mean, S2, G2, L2>(target)
     }
 
     /// `mse_loss_with`.
-    pub fn mse_loss_with<R, S2: Shape, G2: RequiresGrad>(
+    pub fn mse_loss_with<R, S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
-        target: &Tensor<S2, B, K, G2>,
+        target: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + MseReductionShape<S>,
@@ -188,21 +194,21 @@ impl<
     }
 
     /// `l1_loss`.
-    pub fn l1_loss<S2: Shape, G2: RequiresGrad>(
+    pub fn l1_loss<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
-        target: &Tensor<S2, B, K, G2>,
+        target: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::L1Loss> + crate::exec::Capabilities,
         <B as Execute<op::L1Loss>>::Output: Into<B::Storage<K>>,
     {
-        self.l1_loss_with::<Mean, S2, G2>(target)
+        self.l1_loss_with::<Mean, S2, G2, L2>(target)
     }
 
     /// `l1_loss_with`.
-    pub fn l1_loss_with<R, S2: Shape, G2: RequiresGrad>(
+    pub fn l1_loss_with<R, S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
-        target: &Tensor<S2, B, K, G2>,
+        target: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + L1ReductionShape<S>,
@@ -230,21 +236,26 @@ impl<
     }
 
     /// `bce_with_logits_loss`.
-    pub fn bce_with_logits_loss<S2: Shape, G2: RequiresGrad>(
+    pub fn bce_with_logits_loss<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
-        target: &Tensor<S2, B, K, G2>,
+        target: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<crate::shapes::Nil, B, K, G>>
     where
         B: Execute<op::BceWithLogitsLoss> + crate::exec::Capabilities,
         <B as Execute<op::BceWithLogitsLoss>>::Output: Into<B::Storage<K>>,
     {
-        self.bce_with_logits_loss_with::<Mean, S2, G2>(target)
+        self.bce_with_logits_loss_with::<Mean, S2, G2, L2>(target)
     }
 
     /// `bce_with_logits_loss_with`.
-    pub fn bce_with_logits_loss_with<R, S2: Shape, G2: RequiresGrad>(
+    pub fn bce_with_logits_loss_with<
+        R,
+        S2: Shape,
+        G2: RequiresGrad,
+        L2: crate::shapes::Layout<S2>,
+    >(
         &self,
-        target: &Tensor<S2, B, K, G2>,
+        target: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<R::Output, B, K, G>>
     where
         R: ReductionMode + BceReductionShape<S>,

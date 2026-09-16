@@ -710,6 +710,61 @@ fn a_loss_result_is_dense() {
     );
 }
 
+/// The loss methods accept a proven target, as their modules already did.
+///
+/// `a_loss_result_is_dense` above freed the module path, and the tensor method
+/// each module sits beside was left behind. `pred.mse_loss(&target)` took its
+/// prediction at any layout and its target only at the one that claims nothing,
+/// so a proven target was refused by the method and accepted by `MSELoss`,
+/// and a `softmax` output could not be the target of a distillation loss
+/// written against the method.
+///
+/// All four are called here, each through its convenience form, which delegates
+/// to the `_with` form, so both signatures are exercised by one call.
+#[test]
+fn a_loss_method_accepts_a_proven_target() {
+    use incin_core::prelude::*;
+
+    let prediction = incin_core::prelude::Tensor::<s![4], CpuBackendImpl>::zeros(()).unwrap();
+    let proven = incin_core::prelude::Tensor::<s![4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+
+    // Zero against one: the mean squared and mean absolute error are both one.
+    assert_eq!(
+        prediction
+            .mse_loss(&proven)
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap(),
+        vec![1.0]
+    );
+    assert_eq!(
+        prediction
+            .l1_loss(&proven)
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap(),
+        vec![1.0]
+    );
+    assert!(prediction.bce_with_logits_loss(&proven).is_ok());
+
+    // Cross-entropy reads its target as class indices rather than values.
+    let logits = incin_core::prelude::Tensor::<s![2, 3], CpuBackendImpl>::zeros(()).unwrap();
+    let classes = incin_core::prelude::Tensor::<s![2], CpuBackendImpl, i64>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+    // Uniform logits over three classes cost ln(3) whichever class is right.
+    let loss = logits
+        .cross_entropy_loss(&classes)
+        .unwrap()
+        .to_vec1::<f32>()
+        .unwrap()[0];
+    assert!((loss - 3.0f32.ln()).abs() < 1e-5, "got {loss}");
+}
+
 /// A layout is a *request* at construction, and the request can be refused.
 ///
 /// `FreshLayout::strides` is what the creation path allocates with, so a

@@ -1567,6 +1567,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   lets through. None of the four is called with an explicit turbofish anywhere
   in the workspace, so an inferred call is unaffected.
 
+- **`mse_loss`, `l1_loss`, `bce_with_logits_loss` and `cross_entropy_loss`
+  refused a proven target while accepting a proven prediction.** Their receiver
+  was generic over its layout and their `target` was pinned to `Dyn`, so the
+  same method took a row-major tensor on one side and rejected it on the other.
+  The target of a distillation loss is typically a `softmax` output, which is
+  row-major, and so could not be written against these methods at all.
+
+  This is the surface an earlier fix stopped short of. That change freed the
+  module path, `MSELoss::forward` and its siblings, and widened the shared
+  helper every loss method calls, which already took both operands at any
+  layout; the eight public signatures in front of that helper kept the old
+  bound. They are generic over the target's layout now, the helper's `_, _`
+  inference reaches the new parameter unchanged, and nothing else in the
+  workspace needed editing.
+
+  **Breaking** for a caller who names the `_with` forms' generics explicitly:
+  `mse_loss_with::<R, S2, G2>` is now `mse_loss_with::<R, S2, G2, L2>`, and the
+  same for the other three. The reduction mode cannot be inferred, so a direct
+  call to a `_with` form has to write the turbofish, and `_` is enough for the
+  new position. The only such calls in the workspace were the four convenience
+  methods delegating to their own `_with` form, and the loss modules, which is
+  how a reduction is usually chosen, are unaffected.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified
