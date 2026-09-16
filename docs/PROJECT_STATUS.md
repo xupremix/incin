@@ -4,13 +4,16 @@ This is the concise current-state report for the repository. Historical
 foundation evidence remains in `audit-evidence/` and the foundation documents;
 it is not repeated here as if it were a current API description.
 
-## Current verified surface
+## Implemented surface and evidence
+
+The references below identify implementation and test coverage; they do not
+claim that every named test has run on the reader's current checkout.
 
 | Area | Current status | Evidence or boundary |
 |---|---|---|
 | Core tensor execution | Stable CPU tensor methods use exact operation descriptors, validated metadata, and canonical dispatch. | Generated capability and operation-semantics documents; focused and workspace tests. |
 | CPU backend | Backend-executable catalog operations have canonical CPU executors. | `audit-evidence/FND-005/cpu-migration-status.md`; accelerator hardware is not implied. |
-| Shapes and invariant types | Static, mixed, and dynamic shapes use checked construction. State paths reject empty or dotted components. | Core state tests and macro compile-fail test. |
+| Shapes and invariant types | Static, mixed, and dynamic shapes use checked construction. State paths allow an empty root; `try_child` rejects empty or dotted components. | `docs/INVARIANT_TYPES.md`; core state tests and macro compile-fail test. |
 | Autograd and optimizers | Forward, backward, typed gradients, AdamW updates, rollback, and optimizer state restore are supported on CPU. | `crates/incin/tests/optim_tests.rs` and `transformer_block.rs`. |
 | Neural-network layers | Linear, normalization, recurrent, convolutional, activation, loss, and container layers are available at their documented feature tiers. | Layer tests and rustdoc examples. |
 | Transformer layers | `MultiHeadAttention` (grouped-query, rotary), `FeedForward`, and the encoder/decoder layer pair compose into a decoder-only model that trains on CPU. The earlier hand-composed block remains as the oracle they are checked against. | `crates/incin/tests/gpt_decoder_model.rs`, `transformer_layers.rs`, and `transformer_block.rs`; compile benchmark includes the last. |
@@ -22,20 +25,19 @@ it is not repeated here as if it were a current API description.
 
 ## Feature boundaries
 
-- CPU is the verified execution backend in this environment, and the complete
-   one: all 164 backend-executable catalog operations have CPU executors.
- - CUDA, WGPU, and Metal are previews advertising 159, 64, and 31 operations
-   respectively (counted from the generated matrix, not maintained here).
-   Each covers arithmetic, reductions, `matmul`, and convolution/pooling;
-   WGPU adds the unary activations, `softmax`, and `rms_norm`, and CUDA adds
-   the rest of the normalization family through `batch_norm`, and — unlike
-   the other two previews — the loss functions, `embedding`, and `dropout`,
-   all with training rows. These are advertisement counts rather than verified
-  capability: the Metal shader and MPS infrastructure from MTL-001/002/003
-  is complete and the gap is operation coverage on top of it, and neither
-  CUDA nor Metal has an execution runner in CI. `docs/capabilities.md` is
-  generated from the registrations and is authoritative per operation,
-  including its `Training` column.
+- CPU has executors for every backend-executable catalog operation. The current
+  counts are generated in `docs/operation-coverage.md` and
+  `audit-evidence/FND-005/cpu-migration-status.md`; completeness does not mean
+  every dtype, layout, or training combination is supported.
+- CUDA, WGPU, and Metal are previews with different operation subsets.
+  `docs/capabilities.md` is generated from the registrations and records the
+  exact dtype, layout, rank, and training restrictions. These are capability
+  declarations, not evidence of hardware execution. In particular, Metal's
+  spatial capability group is empty: convolution and pooling are not supported
+  merely because shader and MPS infrastructure exists. The scheduled/manual
+  hardware matrix configures Metal execution on macOS runners. CUDA execution
+  requires `HARDWARE_CUDA_RUNNER`; scheduled CUDA jobs skip when it is unset.
+  Workflow configuration alone does not establish successful hardware execution.
 - Building the workspace does not require `protoc`. The ONNX protobuf module is
   checked in and regenerated with `cargo xtask onnx`.
 - `incin::test_utils` gates deterministic fault injection only. The shape-only

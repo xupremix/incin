@@ -160,9 +160,10 @@ let both = a.eq(&b)?.logical_and(&a.eq(&b)?)?;
 # Ok::<(), incin::Error>(())
 ```
 
-The checked methods `try_add`, `try_sub`, `try_mul`, and `try_div` require the
-two operands' shape types to match exactly (`ShapeEq`). `+`, `-`, `*`, and `/`
-are also overloaded in every owned and referenced combination. They broadcast
+The checked methods `try_add`, `try_sub`, `try_mul`, and `try_div` broadcast
+compatible shapes; use `add_exact`, `sub_exact`, `mul_exact`, and `div_exact`
+when the operands must match (`ShapeEq`). `+`, `-`, `*`, and `/` are also
+overloaded in every owned and referenced combination. They broadcast
 between compatible shapes and return a tensor directly. Operator syntax is the
 convenience boundary: a dynamic shape or backend failure panics with a short,
 fixed operator-only message. Use the named methods whenever the failure must
@@ -208,6 +209,99 @@ let mean = x.mean_all()?;
 `to_shape` re-asserts a shape **type** over the *same* dims and fails if they
 disagree. Use `to_shape` to recover a static type from a `Dyn` tensor, and
 `reshape` to actually change the layout.
+
+## Sorting, counting, and repeating
+
+These CPU examples group rows by an integer assignment without making each
+bin's population a tensor extent.
+
+### Stable sorting and reusable indices
+
+`sort(dim, descending)` returns `(values, indices)`, preserving the input
+shape in both outputs. Values retain the input dtype; indices are `u32`
+positions within the selected axis. Equal keys keep their input order in
+both ascending and descending sorts. `argsort` returns just the indices.
+Both methods currently take an unsigned `usize` axis, not `axis!(...)` or a
+negative axis. Their outputs are dense row-major and `NoGrad`, even when the
+input tracks gradients.
+
+```rust
+use incin::prelude::*;
+
+let assignment = Cpu.tensor([2_i64, 0, 2, 1, 2, 0])?;
+let rows = Cpu.tensor([
+    [0.0_f32, 0.5], [1.0, 1.5], [2.0, 2.5],
+    [3.0, 3.5], [4.0, 4.5], [5.0, 5.5],
+])?;
+let (experts, order) = assignment.sort(0, false)?;
+let grouped = rows.index_select(axis!(0), &order)?;
+assert_eq!(experts.to_vec1::<i64>()?, vec![0, 0, 1, 2, 2, 2]);
+assert_eq!(order.to_vec1::<u32>()?, vec![1, 5, 3, 0, 2, 4]);
+assert_eq!(grouped.to_vec1::<f32>()?,
+    vec![1.0, 1.5, 5.0, 5.5, 3.0, 3.5, 0.0, 0.5, 2.0, 2.5, 4.0, 4.5]);
+# Ok::<(), incin::Error>(())
+```
+
+`index_select` accepts the proven layout of `order` directly; no layout
+erasure or host readback is needed to apply the permutation. Likewise,
+`gather` accepts the indices returned by `topk`:
+
+```rust
+use incin::prelude::*;
+
+let logits = Cpu.tensor([[0.1_f32, 0.9, 0.5], [0.7, 0.2, 0.8]])?;
+let (values, indices) = logits.topk(2, axis!(1), true)?;
+let gathered = logits.gather(axis!(1), &indices)?;
+assert_eq!(gathered.to_vec1::<f32>()?, values.to_vec1::<f32>()?);
+# Ok::<(), incin::Error>(())
+```
+
+### Fixed-width histograms
+
+`bincount::<N>()` counts every integer index in the input, regardless of its
+shape, into a rank-one, `N`-wide `i64`, `NoGrad` tensor. `N` is an exact,
+positive bin count, not a minimum length: negative indices and indices at
+least `N` return errors rather than extending the result or being ignored.
+Unused bins contain zero.
+
+```rust
+use incin::prelude::*;
+
+let assignment = Cpu.tensor([[2_i64, 0], [2, 1], [2, 0]])?;
+let counts = assignment.bincount::<3>()?;
+let ends = counts.cumsum(axis!(0))?;
+assert_eq!(counts.to_vec1::<i64>()?, vec![2, 1, 3]);
+assert_eq!(ends.to_vec1::<i64>()?, vec![2, 3, 6]);
+# Ok::<(), incin::Error>(())
+```
+
+The inclusive cumulative counts are exclusive **end offsets** for the sorted
+buffer: the bins occupy `0..2`, `2..3`, and `3..6`. Start offsets are zero
+followed by the preceding end offsets, not the cumulative counts themselves.
+
+### Repeating each element instead of tiling
+
+`repeat_interleave(repeats, dim)` uses one positive `usize` repeat count for
+every element along a signed `isize` axis. Negative axes count from the end;
+zero repeats and out-of-range axes return errors. Unlike `repeat`, which
+tiles an entire axis, it places copies of each element next to each other:
+
+```rust
+use incin::prelude::*;
+
+let x = Cpu.tensor([1.0_f32, 2.0, 3.0])?;
+assert_eq!(x.repeat_interleave(2, -1)?.to_vec1::<f32>()?,
+    vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0]);
+assert_eq!(x.repeat(&[2])?.to_vec1::<f32>()?,
+    vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0]);
+# Ok::<(), incin::Error>(())
+```
+
+The selected extent is multiplied by `repeats`; other extents are unchanged.
+The result has shape type `Dyn` and retains the input dtype and gradient
+mode. For gradient-tracking floating-point inputs, backward sums the
+contributions from each element's copies. Per-element repeat-count tensors
+are not an argument to this method.
 
 ## Reading values back to the host
 

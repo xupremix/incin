@@ -102,11 +102,14 @@ let activations: Tensor<s![2, 3], _, f16, NoGrad> = half.zeros(shape![2, 3])?;
 # Ok::<(), incin::Error>(())
 ```
 
-The method returns a `Result` because no backend implements every dtype on
-every device, and the check runs once, when the target is rebound, rather than
-on each allocation from it. What it cannot do is fail later: `K` is a type
-parameter here, so the tensor carries `f16` in its own type, and an operation
-with no `f16` kernel is a compile error rather than a `Result` at run time.
+Rebinding calls the backend's `SupportsDType<K>::resolve_dtype` for the
+selected device and returns a `Result`. This establishes dtype support, not
+support for every operation using that dtype. Allocations and operations
+still validate their own requests and can fail later. The tensor carries
+`f16` in its type, but that alone does not turn a missing `f16` kernel into a
+compile error: CPU `f16` allocation is supported while CPU `f16` matmul is
+refused at runtime. Missing trait implementations can instead make an
+operation unavailable at compile time.
 
 That is the same trade the device sections above describe, one axis over.
 `.dtype::<K>()` is to `.dtype_dynamic(descriptor)` what `Cuda::new(0)` is to
@@ -136,8 +139,10 @@ let tensor: Tensor<Dyn, _, Dyn, NoGrad> = f64_target.ones([4, 4])?;
 # Ok::<(), incin::Error>(())
 ```
 
-Before allocating, `dtype_dynamic` validates that the physical device backend
-advertises hardware/kernel capability for the requested format.
+Like static rebinding, `dtype_dynamic` calls `SupportsDType::resolve_dtype`,
+using the supplied descriptor. It does not probe every kernel or guarantee
+that the requested accelerator is available; allocation and dispatch remain
+fallible.
 
 ## Data ingestion and dtype preservation
 
@@ -262,7 +267,14 @@ assert_eq!(gathered.dims().as_ref(), &[4, 8, 16]);
 # Ok::<(), incin::Error>(())
 ```
 
-Axis-preserving operations use the same selectors:
+`sort` and `argsort` are exceptions to this selector vocabulary: they take
+an unsigned `usize` axis and a `descending` flag. `repeat_interleave` takes a
+repeat count followed by a signed `isize` axis. See
+[sorting, counting, and repeating](./tensors.md#sorting-counting-and-repeating)
+for complete examples, including passing sorting indices directly to
+`index_select` and `topk` indices to `gather`.
+
+Axis-preserving operations such as `cumsum` and `softmax` use the selectors:
 
 ```rust,no_run
 use incin::prelude::*;

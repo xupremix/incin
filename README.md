@@ -69,8 +69,8 @@ frameworks check shapes when the kernel launches; by then you've already paid
 for the queue, the data load, and three minutes of your life. Incin moves that
 check to the type system, which means:
 
-- **If it compiles, the shapes agree.** Not "probably agree": the compiler
-  proved it.
+- **Static shape compatibility is checked at compile time.** Dimensions left
+  dynamic are validated at runtime before execution.
 - **Dynamic shapes are still first-class.** Real models have runtime batch
   sizes and sequence lengths. `Tensor<Dyn, B>` composes with static shapes in
   the same program, and every dynamic transition is checked before a kernel
@@ -78,14 +78,16 @@ check to the type system, which means:
 - **Every operation is declared once**, in a canonical catalog with generated
   semantics docs and conformance vectors. No drift between what the docs claim
   and what a backend does.
-- **No silent fallbacks.** If a backend can't run an operation, you get a type
-  error naming the gap, never a quiet transfer to another device.
+- **No silent fallbacks.** Missing executor implementations are compile errors;
+  unsupported runtime capability combinations return typed errors. Transfers
+  require an explicit fallback policy.
 
 Under the hood there's an autograd tape, AdamW/SGD, conv/pool/norm/loss layers,
 safetensors checkpoints, ONNX import for supported graphs, and CPU executors for
-all 164 backend-executable catalog operations, checked against generated
+all backend-executable catalog operations, checked against generated
 conformance vectors, with finite-difference gradchecks over the differentiable
-kernels. The full honest status, including what's *not* done, lives in
+kernels. Current operation counts live in the generated
+[coverage inventory](docs/operation-coverage.md). The full honest status, including what's *not* done, lives in
 [what's not finished](https://xupremix.github.io/incin/#/whats_not_finished).
 
 ## Quick start
@@ -146,6 +148,9 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+Rust arithmetic operators panic on recoverable failures; use named methods
+such as `a.try_add(&b)?` when errors must propagate through `Result`.
 
 More in [the Book's quickstart](https://xupremix.github.io/incin/#/quickstart),
 including slicing with `i![]`, ONNX import via `import_model!`, and Hugging Face
