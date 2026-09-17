@@ -399,8 +399,12 @@ pub mod experimental {
 }
 
 #[cfg(feature = "backend-authoring")]
+mod backend_authoring_macros;
+
+#[cfg(feature = "backend-authoring")]
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
+    pub use crate::{declare_capabilities, declare_executors};
     pub use incin_core::backend_authoring::{
         Alignment, AttributeContract, AutogradBackend, Backend, Capabilities, CapabilityQuery,
         CapabilityRegistry, DescriptorError, Execute, ExecuteOutput, ExecutionContext,

@@ -4,7 +4,9 @@ Feature `backend-authoring`. This chapter is for someone adding a new device
 to Incin, not for someone using it.
 
 The backend authoring contract is the descriptor executor. Implement one
-`Execute<Descriptor<op::X>>` instance for each operation the backend advertises.
+`Execute<op::X>` implementation for each built-in operation the backend
+advertises. `op::X` is the operation type; `Descriptor<op::X>` carries its
+attributes and inferred output metadata.
 Backend authors do not implement historical operation-family traits: reusable
 backend helpers are ordinary functions behind each descriptor executor.
 
@@ -52,14 +54,38 @@ write.
 
 ## Capabilities: claim only what you run
 
+This handwritten example admits only F32 matrix multiplication. A real backend
+must also check any layout, rank, training, or math-mode restrictions it has.
+
 ```rust,ignore
+use incin::backend_authoring::{
+    Capabilities, CapabilityQuery, OperationIdentity, SupportLevel, UnsupportedReason,
+};
+use incin::prelude::{DTypeId, OperationKind};
+
 impl Capabilities for MyBackend {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
-        match query.operation {
-            OperationKind::MatMul if query.dtype == DTypeId::F32.descriptor() => SupportLevel::Native,
-            operation => SupportLevel::Unsupported(
-                UnsupportedReason::Operation { operation },
-            ),
+        match &query.operation {
+            OperationIdentity::Builtin(OperationKind::MatMul) => {
+                if query.dtype == DTypeId::F32.descriptor() {
+                    SupportLevel::Native
+                } else {
+                    SupportLevel::Unsupported(UnsupportedReason::DType {
+                        operation: OperationKind::MatMul,
+                        dtype: query.dtype,
+                    })
+                }
+            }
+            OperationIdentity::Builtin(operation) => {
+                SupportLevel::Unsupported(UnsupportedReason::Operation {
+                    operation: *operation,
+                })
+            }
+            OperationIdentity::Custom(operation) => {
+                SupportLevel::Unsupported(UnsupportedReason::CustomOperation {
+                    operation: operation.clone(),
+                })
+            }
         }
     }
 }
@@ -77,15 +103,112 @@ execution context with `FallbackPolicy::AllowComposition` (the default) or
 and execution failures, and occurs before `Execute<O>::execute` is called.
 
 The rule the whole design rests on: **an advertised operation must execute.**
-The CPU backend makes this mechanical: the same declaration that generates
-its capability rows generates a compile-time obligation that each has an
-`Execute` impl, so advertising something unimplemented does not build. Copy
-that pattern if you can; the alternative is a capability table that is
-documentation rather than a contract.
+For built-ins, `declare_capabilities!` generates both `Capabilities::support`
+routing and a compile-time `Execute<op::X>` obligation for every listed entry,
+even without a dispatch call. This checks that an executor exists, not that its
+kernel honors every advertised constraint; capability-matrix tests still matter.
+
+## Declaring executors and built-in capabilities
+
+Import `declare_executors!` and `declare_capabilities!` from
+`incin::backend_authoring` with the `backend-authoring` feature enabled.
+`declare_executors!` accepts built-in or custom operation types. Each entry
+names an exact `Output: ExecuteOutput` and a handler path. The generated
+implementation passes `&self` and the original validated
+`ExecutionRequest<'_, O, Self>` by value to the handler and returns its
+`Result<Output, BackendError>` unchanged. It does not convert scalar, vector,
+or tuple outputs into storage, or wrap errors.
+
+The companion `declare_capabilities!` accepts only built-in
+`CanonicalOperation` types. It routes queries by `CanonicalOperation::ID` to
+handlers taking `(&Backend, &CapabilityQuery)` and returning `SupportLevel`
+unchanged. Unlisted built-ins return `UnsupportedReason::Operation`; custom
+queries return `UnsupportedReason::CustomOperation`. This does not reject
+custom execution: canonical dispatch uses the `Execute` hooks for that, as
+explained below. Execution policy still applies after admission.
+
+Both macros require a concrete backend type. A specialization such as
+`MyBackend<Cpu>` is accepted; generic impl parameters and `where` clauses are
+not. Use handwritten implementations when those are needed.
+
+This runnable example demonstrates routing and an exact non-storage output.
+It returns the requested shape, not an allocated zero tensor; it is an
+executor-contract example rather than a tensor backend.
+
+```rust
+use incin::backend_authoring::{
+    declare_capabilities, declare_executors, execute, CapabilityQuery,
+    ExecutionContext, ExecutionRequest, ShapeBuf, StorageBackend, SupportLevel,
+    TensorMeta,
+    operations::{op, CreationAttributes},
+};
+use incin::prelude::{BackendError, Cpu, DType, DTypeId, DeviceId};
+
+struct ShapeBackend;
+
+impl StorageBackend for ShapeBackend {
+    const BACKEND_NAME: &'static str = "shape-example";
+    type Storage<K: DType> = TensorMeta;
+    type Device = Cpu;
+
+    fn metadata<K: DType>(storage: &TensorMeta) -> &TensorMeta {
+        storage
+    }
+}
+
+fn zeros_shape(
+    _: &ShapeBackend,
+    request: ExecutionRequest<'_, op::Zeros, ShapeBackend>,
+) -> Result<ShapeBuf, BackendError> {
+    Ok(ShapeBuf::from_slice(
+        &request.operation.descriptor().attributes().shape,
+    ))
+}
+
+fn support(_: &ShapeBackend, _: &CapabilityQuery) -> SupportLevel {
+    SupportLevel::Native
+}
+
+declare_executors! {
+    for ShapeBackend {
+        op::Zeros => ShapeBuf = zeros_shape;
+    }
+}
+
+declare_capabilities! {
+    for ShapeBackend {
+        op::Zeros => support;
+    }
+}
+
+let context = ExecutionContext::new(ShapeBackend);
+let shape = execute::<op::Zeros, _>(
+    &context,
+    CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    },
+    &[],
+)?;
+assert_eq!(shape, ShapeBuf::from_slice(&[2, 3]));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The macro rustdoc examples in
+`crates/incin/src/backend_authoring_macros.rs` and this chapter are included
+in `cargo test -p incin --features backend-authoring --doc`.
 
 ## Writing an executor
 
+For kernels that need handwritten implementations, the request and output
+contract is the same. This skeleton leaves the storage type and kernel to the
+backend author.
+
 ```rust,ignore
+use incin::backend_authoring::{Execute, ExecutionRequest, operations::op};
+use incin::prelude::{BackendError, OperationKind};
+
 impl Execute<op::Add> for MyBackend {
     type Output = MyStorage;
 
@@ -94,21 +217,21 @@ impl Execute<op::Add> for MyBackend {
         request: ExecutionRequest<'_, op::Add, Self>,
     ) -> Result<MyStorage, BackendError> {
         let [lhs, rhs] = request.inputs else {
-            return Err(invalid(OperationKind::Add, "add expects two operands"));
+            return Err(BackendError::InvalidInput {
+                operation: OperationKind::Add,
+                reason: "add expects two operands",
+            });
         };
-        // `request.operation` is `Validated` - its output shape was derived
-        // and checked before you were reached. Read it rather than
-        // re-deriving it.
-        let out_shape = request.operation.descriptor().output_shape();
+        let outputs = request.operation.descriptor().outputs();
         todo!("run the kernel")
     }
 }
 ```
 
 The backend executor receives a validated descriptor and checked tensor
-handles. Shape-typed callers use `exec::dispatch::execute_shaped` before this
-boundary; the executor itself reads the validated output metadata rather than
-re-deriving a shape from the Rust type. The output associated type is not fixed
+handles. Shape-typed callers use `incin::backend_authoring::execute_shaped`
+before this boundary; the executor itself reads the validated output metadata
+rather than re-deriving a shape from the Rust type. The output associated type is not fixed
 to storage: readback can return an `f64` or a vector, and multi-output
 operations can return a tuple.
 
@@ -127,7 +250,7 @@ registration tests execute the boundary cases of every registered rule, which
 is how it found rows advertising ranks their kernels refused and dtypes their
 kernels silently narrowed.
 
-Two executable downstream fixtures show the contract in context:
+Executable fixtures show the contract in context:
 `crates/incin-core/tests/custom_operation.rs` implements a custom operation,
 `crates/incin-core/tests/custom_training.rs` trains one end to end -- forward
 kernel, recorded backward recipe, standard backward pass, finite-difference
@@ -140,11 +263,20 @@ pseudocode.
 ## Custom operations
 
 A custom operation supplies an `Operation` identity, serializable attributes,
-and output inference. A backend opts into that identity through
-`Capabilities` and implements `Execute<YourOperation>` with an
-`ExecutionRequest`. The downstream fixture demonstrates descriptor creation,
-attribute validation, capability admission, and execution against the public
-authoring traits. A custom operation trains by implementing
+and output inference. A backend opts into that identity by implementing
+`Execute<YourOperation>`, either by hand or with `declare_executors!`.
+Custom admission uses `Execute::supports_custom` for metadata-based queries
+and `Execute::supports_custom_operation` when no input or usable output
+metadata is available. Both hooks default to `SupportLevel::Native`; custom
+admission does not use `Capabilities::support`.
+
+The executor macro retains those defaults. For restricted custom admission,
+write the `Execute` implementation by hand and override the relevant hooks;
+do not put a custom operation in `declare_capabilities!`. The downstream
+fixture demonstrates descriptor creation, attribute validation, admission,
+and execution against the public authoring traits.
+
+A custom operation trains by implementing
 `DifferentiableOp`: a forward kernel plus a backward rule over one
 backend's storage, with the blanket `Execute` building the node, deriving
 its identities, and recording (`crates/incin-core/tests/custom_training.rs`
