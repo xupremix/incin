@@ -104,6 +104,40 @@ key order.
 
 Single-file `.safetensors` behavior is unchanged.
 
+## GGUF export
+
+`incin_core::io::GgufExporter` writes GGUF v3 from F32 module state.
+F32 passthrough, Q8_0, and Q4_0 export through
+`QuantScheme::W4A16_Q4_0` are implemented. This is an export format,
+not a claim of Q4_0 tensor operations or W4A16 inference support. The exporter
+rejects non-F32 state and still rejects `QuantScheme::F16` and
+`QuantScheme::W4A16_Q4_K_M` as unimplemented conversions.
+
+Both block schemes share one eligibility rule: a tensor is quantized only when
+its element count is positive and its **last (fastest-varying) dimension is a
+multiple of 32**, matching the row width GGUF readers validate (`ne[0]`). A
+tensor whose row width does not qualify stays F32, even when its total element
+count is a multiple of 32: `[8, 4]` has 32 elements but rows of width 4, so it
+stays F32, while `[4, 32]` quantizes. Q4_0 blocks follow the reference
+`quantize_row_q4_0_ref` layout: the scale is the first value with strictly the
+greatest magnitude divided by -8, stored as F16, followed by 16 bytes of packed
+4-bit values in [-8, 7]. A block of all zeros encodes scale `-0.0` and nibble
+`0x8`. Tensors containing non-finite values, scales that overflow F16, or
+nonzero blocks whose scale rounds to F16 zero fall back to F32 whole-tensor.
+F32 payloads and F16 scales serialize little-endian.
+
+A quantized export can therefore contain mixed tensor headers: Q4_0
+(`ggml_type = 2`) or Q8_0 (`ggml_type = 8`) for converted payloads, and F32
+(`ggml_type = 0`) for fallback payloads. `general.file_type` records the
+requested scheme, not the dtype of every tensor. Every tensor starts on a
+32-byte boundary and the payload is padded to the same alignment after the
+last tensor. Tensors support at most four dimensions; scalar state serializes
+as rank one with dimension `[1]`. Verify the tensor listing
+with `cargo incin inspect model.gguf`; the CLI shows at most 20 tensors.
+Use `incin_core::io::inspect_file` for the full list. Inspection reads header
+dtypes; it does not validate quantization accuracy or prove compatibility
+with a downstream inference runtime.
+
 ## ONNX
 
 `incin::experimental::model!("model.onnx", Name)` and `import_model!` expand
