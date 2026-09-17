@@ -690,14 +690,21 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// slot each index names, not of a value the tape can perturb.
     ///
     /// # Examples
+    ///
+    /// Counts include every index in a multidimensional input; unused slots
+    /// remain zero.
+    ///
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # use incin_backends::prelude::*;
     /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// // Four tokens routed to experts 2, 0, 2 and 1 of 3.
-    /// let index = Cpu.tensor([2u32, 0, 2, 1]).unwrap();
-    /// assert_eq!(index.bincount::<3>().unwrap().to_vec1::<i64>().unwrap(), vec![1, 1, 2]);
+    /// # fn main() -> Result<()> {
+    /// let index = Cpu.tensor([[2u32, 0], [2, 1]])?;
+    /// let counts = index.bincount::<4>()?;
+    /// assert_eq!(counts.to_vec1::<i64>()?, vec![1, 1, 2, 0]);
+    /// # Ok(())
+    /// # }
     /// ```
     #[allow(clippy::type_complexity)]
     pub fn bincount<const N: usize>(

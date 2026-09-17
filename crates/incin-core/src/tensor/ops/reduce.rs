@@ -931,6 +931,23 @@ where
     }
 
     /// Sorts the elements of the tensor along the given dimension and returns the sorted indices.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let values = Cpu.tensor([30.0f32, 10.0, 20.0])?;
+    /// let ascending = values.argsort(0, false)?;
+    /// let descending = values.argsort(0, true)?;
+    /// assert_eq!(ascending.to_vec1::<u32>()?, vec![1, 2, 0]);
+    /// assert_eq!(descending.to_vec1::<u32>()?, vec![0, 2, 1]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn argsort(
         &self,
         dim: usize,
@@ -993,17 +1010,25 @@ where
     /// and widening it is a change to the profile rather than to this method.
     ///
     /// # Examples
+    ///
+    /// Sorting token assignments groups expert IDs while preserving the original
+    /// order of tokens assigned to the same expert in either direction.
+    ///
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # use incin_backends::prelude::*;
     /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// // Four tokens routed to experts 2, 0, 2 and 1.
-    /// let assignment = Cpu.tensor([2.0f32, 0.0, 2.0, 1.0]).unwrap();
-    /// let (experts, order) = assignment.sort(0, false).unwrap();
-    /// assert_eq!(experts.to_vec1::<f32>().unwrap(), vec![0.0, 1.0, 2.0, 2.0]);
-    /// // The two tokens sharing expert 2 keep the order they arrived in.
-    /// assert_eq!(order.to_vec1::<u32>().unwrap(), vec![1, 3, 0, 2]);
+    /// # fn main() -> Result<()> {
+    /// let assignment = Cpu.tensor([2.0f32, 0.0, 2.0, 1.0])?;
+    /// let (experts, order) = assignment.sort(0, false)?;
+    /// assert_eq!(experts.to_vec1::<f32>()?, vec![0.0, 1.0, 2.0, 2.0]);
+    /// assert_eq!(order.to_vec1::<u32>()?, vec![1, 3, 0, 2]);
+    /// let (experts, order) = assignment.sort(0, true)?;
+    /// assert_eq!(experts.to_vec1::<f32>()?, vec![2.0, 2.0, 1.0, 0.0]);
+    /// assert_eq!(order.to_vec1::<u32>()?, vec![0, 2, 3, 1]);
+    /// # Ok(())
+    /// # }
     /// ```
     #[allow(clippy::type_complexity)]
     pub fn sort(
