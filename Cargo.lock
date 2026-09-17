@@ -1931,6 +1931,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "bytes",
+ "candle-core",
  "ggml-quants",
  "half",
  "incin-backends",

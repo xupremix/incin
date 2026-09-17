@@ -244,6 +244,38 @@ fn test_gguf_q4_0_mixed_f32_offsets_and_alignment() {
         assert!(bytes[start + len..end].iter().all(|&byte| byte == 0));
     }
     assert_eq!(bytes.len(), data_start + 128 + 64);
+
+    use candle_core::Device;
+    use candle_core::quantized::{GgmlDType, gguf_file::Content};
+
+    let mut reader = Cursor::new(&bytes);
+    let content = Content::read(&mut reader).unwrap();
+    assert_eq!(content.tensor_infos.len(), 4);
+    assert_eq!(snapshot.len(), 4);
+    for (name, value) in snapshot.iter() {
+        let name = name.as_str();
+        let (expected_shape, expected_dtype) = if name.ends_with("weight") {
+            (&[3, 32][..], GgmlDType::Q4_0)
+        } else {
+            (&[3][..], GgmlDType::F32)
+        };
+        let tensor_info = content.tensor_infos.get(name).unwrap();
+        assert_eq!(tensor_info.shape.dims(), expected_shape, "{name}");
+        assert_eq!(tensor_info.ggml_dtype, expected_dtype, "{name}");
+        let tensor = content.tensor(&mut reader, name, &Device::Cpu).unwrap();
+        assert_eq!(tensor.shape().dims(), expected_shape, "{name}");
+        assert_eq!(tensor.dtype(), expected_dtype, "{name}");
+        let dequantized = tensor.dequantize(&Device::Cpu).unwrap();
+        assert_eq!(dequantized.dims(), value.shape().dims(), "{name}");
+        assert_eq!(dequantized.dtype(), candle_core::DType::F32, "{name}");
+        let actual = dequantized.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let expected: Vec<f32> = value
+            .bytes()
+            .chunks_exact(4)
+            .map(|bytes| f32::from_ne_bytes(bytes.try_into().unwrap()))
+            .collect();
+        assert_eq!(actual, expected, "{name}");
+    }
 }
 
 #[test]

@@ -107,7 +107,7 @@ Single-file `.safetensors` behavior is unchanged.
 ## GGUF export
 
 `incin_core::io::GgufExporter` writes GGUF v3 from F32 module state.
-F32 passthrough, Q8_0, and Q4_0 export through
+F32 passthrough, `QuantScheme::Q8_0`, and Q4_0 export through
 `QuantScheme::W4A16_Q4_0` are implemented. This is an export format,
 not a claim of Q4_0 tensor operations or W4A16 inference support. The exporter
 rejects non-F32 state and still rejects `QuantScheme::F16` and
@@ -121,10 +121,11 @@ count is a multiple of 32: `[8, 4]` has 32 elements but rows of width 4, so it
 stays F32, while `[4, 32]` quantizes. Q4_0 blocks follow the reference
 `quantize_row_q4_0_ref` layout: the scale is the first value with strictly the
 greatest magnitude divided by -8, stored as F16, followed by 16 bytes of packed
-4-bit values in [-8, 7]. A block of all zeros encodes scale `-0.0` and nibble
-`0x8`. Tensors containing non-finite values, scales that overflow F16, or
-nonzero blocks whose scale rounds to F16 zero fall back to F32 whole-tensor.
-F32 payloads and F16 scales serialize little-endian.
+nibbles in [0, 15], decoded by subtracting 8 before multiplying by the scale.
+A block of all zeros encodes scale `-0.0` and nibble `0x8`. For Q4_0,
+tensors containing non-finite values, scales that overflow F16, nonzero blocks
+whose scale rounds to F16 zero, or non-finite reciprocal scales fall back to
+F32 whole-tensor. F32 payloads and Q4_0 scales serialize little-endian.
 
 A quantized export can therefore contain mixed tensor headers: Q4_0
 (`ggml_type = 2`) or Q8_0 (`ggml_type = 8`) for converted payloads, and F32
