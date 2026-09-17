@@ -279,6 +279,75 @@ fn test_gguf_q4_0_mixed_f32_offsets_and_alignment() {
 }
 
 #[test]
+fn test_gguf_q4_0_payload_matches_independent_candle_writer() {
+    use candle_core::quantized::{GgmlDType, QTensor, gguf_file};
+    use candle_core::{Device, Tensor};
+
+    let dir = tempdir().unwrap();
+    let candle_path = dir.path().join("candle.gguf");
+    let incin_path = dir.path().join("incin.gguf");
+    let mut weights = Vec::with_capacity(8 * 32);
+    for first in [-8.0, 8.0] {
+        let mut block = [0.25; 32];
+        block[0] = first;
+        block[1] = -first;
+        weights.extend(block);
+    }
+    for sign in [-1.0, 1.0] {
+        for perturbation in [-0.0001, 0.0, 0.0001] {
+            let mut block: [f32; 32] =
+                std::array::from_fn(|index| sign * ((index % 16) as f32 - 7.5 + perturbation));
+            block[0] = sign * -8.0;
+            weights.extend(block);
+        }
+    }
+    assert_eq!(weights.len(), 8 * 32);
+    assert!(
+        weights
+            .iter()
+            .all(|value| value.is_finite() && *value != 0.0)
+    );
+    let source = Tensor::from_slice(&weights, (8, 32), &Device::Cpu).unwrap();
+    let quantized = QTensor::quantize(&source, GgmlDType::Q4_0).unwrap();
+    let bias_source = Tensor::from_slice(&[0.0f32; 8], 8, &Device::Cpu).unwrap();
+    let bias = QTensor::quantize(&bias_source, GgmlDType::F32).unwrap();
+    gguf_file::write(
+        &mut std::fs::File::create(&candle_path).unwrap(),
+        &[],
+        &[("bias", &bias), ("weight", &quantized)],
+    )
+    .unwrap();
+
+    let mut layer = Linear::<s![32, 8], CpuBackendImpl>::build(()).unwrap();
+    set_export_weights(&mut layer, &weights);
+    GgufExporter::<CpuBackendImpl, _>::from_module(&layer)
+        .with_quantization(QuantScheme::W4A16_Q4_0)
+        .save(&incin_path)
+        .unwrap();
+
+    let mut payloads = Vec::new();
+    for path in [&candle_path, &incin_path] {
+        let bytes = std::fs::read(path).unwrap();
+        let mut reader = Cursor::new(&bytes);
+        let content = gguf_file::Content::read(&mut reader).unwrap();
+        assert_eq!(content.tensor_infos.len(), 2);
+        let info = content.tensor_infos.get("weight").unwrap();
+        assert_eq!(info.ggml_dtype, GgmlDType::Q4_0);
+        assert_eq!(info.shape.dims(), &[8, 32]);
+        assert!(info.offset > 0);
+        let start = usize::try_from(content.tensor_data_offset + info.offset).unwrap();
+        let len =
+            info.shape.elem_count() / info.ggml_dtype.block_size() * info.ggml_dtype.type_size();
+        assert_eq!(len, 8 * 18);
+        payloads.push(bytes[start..start + len].to_vec());
+        let tensor = content.tensor(&mut reader, "weight", &Device::Cpu).unwrap();
+        assert_eq!(tensor.dtype(), GgmlDType::Q4_0);
+        assert_eq!(tensor.shape().dims(), &[8, 32]);
+    }
+    assert_eq!(payloads[0], payloads[1]);
+}
+
+#[test]
 fn test_gguf_q4_0_empty_tensors_stay_f32() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("empty.gguf");
