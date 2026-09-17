@@ -6,17 +6,259 @@
 //! recomputes the expectation in `usize` would wrap in exactly the same way and
 //! agree with the bug.
 //!
-//! Randomized cases use a fixed-seed xorshift generator rather than a
-//! `proptest` dependency. Every failure is reproducible from the case index
-//! printed in the assertion message, and the generator deliberately biases
-//! toward the values that break unchecked code: 0, 1, `usize::MAX`, and factors
-//! near `2^32`.
+//! Fixed-seed xorshift cases retain reproducible case indices. Bounded
+//! `proptest` cases add shrinking and default failure persistence. Both bias
+//! toward arithmetic boundaries without allocating tensor data.
 
 use incin_core::prelude::{
     INLINE_RANK, OperationKind, RankExpectation, ShapeBuf, ShapeError, StrideBuf,
 };
 
+use proptest::prelude::*;
+
 const OP: OperationKind = OperationKind::Storage;
+const MAX_PROPERTY_RANK: usize = 16;
+
+fn axis_value() -> impl Strategy<Value = usize> {
+    let half_width = 1usize << (usize::BITS / 2);
+    prop_oneof![
+        1 => Just(0),
+        1 => Just(1),
+        1 => Just(usize::MAX),
+        1 => Just(usize::MAX - 1),
+        1 => Just(half_width - 1),
+        1 => Just(half_width),
+        1 => Just(half_width + 1),
+        4 => 0usize..=64,
+        2 => any::<usize>(),
+    ]
+}
+
+fn shape_dims() -> impl Strategy<Value = Vec<usize>> {
+    prop_oneof![
+        4 => proptest::collection::vec(axis_value(), 0..=MAX_PROPERTY_RANK),
+        1 => proptest::collection::vec(axis_value(), INLINE_RANK - 1),
+        1 => proptest::collection::vec(axis_value(), INLINE_RANK),
+        1 => proptest::collection::vec(axis_value(), INLINE_RANK + 1),
+        1 => (2usize..=64).prop_map(|factor| vec![usize::MAX / factor, factor]),
+        1 => (2usize..=64).prop_map(|factor| vec![usize::MAX / factor + 1, factor]),
+        1 => Just(vec![usize::MAX, usize::MAX, 0]),
+        1 => Just(vec![1; MAX_PROPERTY_RANK]),
+    ]
+}
+
+fn shape_and_strides() -> impl Strategy<Value = (Vec<usize>, Vec<usize>)> {
+    shape_dims().prop_flat_map(|dims| {
+        let rank = dims.len();
+        (Just(dims), proptest::collection::vec(axis_value(), rank))
+    })
+}
+
+fn reference_usize(value: Option<u128>) -> Option<usize> {
+    value.and_then(|value| usize::try_from(value).ok())
+}
+
+fn expected_numel(dims: &[usize]) -> Result<usize, ShapeError> {
+    reference_usize(reference_numel(dims)).ok_or(ShapeError::ArithmeticOverflow {
+        operation: OP,
+        expression: "product of dimensions",
+    })
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 256,
+        max_shrink_iters: 4096,
+        ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn shrinking_numel_is_axis_order_independent(
+        dims in shape_dims(),
+        pivot in 0usize..MAX_PROPERTY_RANK,
+    ) {
+        let expected = expected_numel(&dims);
+        let mut permuted = dims.clone();
+        for pass in 0..3 {
+            let shape = ShapeBuf::from_slice(&permuted);
+            prop_assert_eq!(shape.numel(), expected.as_ref().ok().copied());
+            prop_assert_eq!(shape.checked_numel(OP), expected);
+            prop_assert_eq!(shape.is_empty_tensor(), dims.contains(&0));
+            if pass == 0 {
+                permuted.reverse();
+            } else if !permuted.is_empty() {
+                let rank = permuted.len();
+                permuted.rotate_left(pivot % rank);
+            }
+        }
+    }
+
+    #[test]
+    fn shrinking_byte_len_checks_count_before_element_size(
+        dims in shape_dims(),
+        element_size in axis_value(),
+    ) {
+        let expected = expected_numel(&dims).and_then(|numel| {
+            reference_usize((numel as u128).checked_mul(element_size as u128))
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OP,
+                    expression: "element count * element size",
+                })
+        });
+        prop_assert_eq!(ShapeBuf::from_slice(&dims).checked_byte_len(element_size, OP), expected);
+    }
+
+    #[test]
+    fn shrinking_product_and_byte_limits(factor in 2usize..=64) {
+        let limit = usize::MAX / factor;
+        for count in [limit - 1, limit, limit + 1] {
+            let product = reference_usize((count as u128).checked_mul(factor as u128));
+            let dims = ShapeBuf::from_slice(&[count, factor]);
+            prop_assert_eq!(dims.numel(), product);
+            let bytes = ShapeBuf::from_slice(&[count]).checked_byte_len(factor, OP);
+            prop_assert_eq!(bytes.as_ref().ok().copied(), product);
+            if product.is_none() {
+                prop_assert_eq!(bytes, Err(ShapeError::ArithmeticOverflow {
+                    operation: OP,
+                    expression: "element count * element size",
+                }));
+                prop_assert_eq!(dims.checked_byte_len(0, OP), Err(ShapeError::ArithmeticOverflow {
+                    operation: OP,
+                    expression: "product of dimensions",
+                }));
+            }
+            for zero_axis in 0..=2 {
+                let mut empty = vec![count, factor];
+                empty.insert(zero_axis, 0);
+                let empty = ShapeBuf::from_slice(&empty);
+                prop_assert_eq!(empty.checked_numel(OP), Ok(0));
+                prop_assert_eq!(empty.checked_byte_len(usize::MAX, OP), Ok(0));
+            }
+        }
+    }
+
+    #[test]
+    fn shrinking_contiguous_strides_match_checked_u128(dims in shape_dims()) {
+        let shape = ShapeBuf::from_slice(&dims);
+        let expected = reference_contiguous(&dims).and_then(|strides| {
+            strides.into_iter().map(|value| usize::try_from(value).ok()).collect::<Option<Vec<_>>>()
+        });
+        match (StrideBuf::contiguous_for(&shape, OP), expected) {
+            (Ok(strides), Some(expected)) => {
+                prop_assert_eq!(strides.strides(), expected.as_slice());
+                prop_assert_eq!(strides.len(), dims.len());
+                prop_assert_eq!(strides.is_inline(), dims.len() <= INLINE_RANK);
+                prop_assert!(strides.is_contiguous_for(&shape));
+                prop_assert_eq!(strides.checked_span(&shape, OP).ok(), shape.numel());
+            }
+            (Err(error), None) => {
+                prop_assert_eq!(error, ShapeError::ArithmeticOverflow {
+                    operation: OP,
+                    expression: "stride * trailing dimension",
+                });
+                prop_assert!(!StrideBuf::from_slice(&vec![1; dims.len()]).is_contiguous_for(&shape));
+            }
+            (actual, expected) => prop_assert!(false, "actual {actual:?}, expected {expected:?}"),
+        }
+    }
+
+    #[test]
+    fn shrinking_empty_layout_keeps_intermediate_stride_overflow(
+        leading in axis_value(),
+        factor in 2usize..=64,
+    ) {
+        let large = usize::MAX / factor + 1;
+        let shape = ShapeBuf::from_slice(&[leading, 0, large, factor]);
+        prop_assert_eq!(shape.numel(), Some(0));
+        prop_assert_eq!(StrideBuf::contiguous_for(&shape, OP), Err(ShapeError::ArithmeticOverflow {
+            operation: OP,
+            expression: "stride * trailing dimension",
+        }));
+        let trailing_zero = ShapeBuf::from_slice(&[leading, large, factor, 0]);
+        let strides = StrideBuf::contiguous_for(&trailing_zero, OP)?;
+        prop_assert_eq!(strides.strides(), &[0, 0, 0, 1]);
+        prop_assert_eq!(strides.checked_span(&trailing_zero, OP), Ok(0));
+    }
+
+    #[test]
+    fn shrinking_span_matches_checked_u128((dims, strides) in shape_and_strides()) {
+        let expected = reference_usize(reference_span(&dims, &strides));
+        let actual = StrideBuf::from_slice(&strides).checked_span(&ShapeBuf::from_slice(&dims), OP);
+        prop_assert_eq!(actual.as_ref().ok().copied(), expected);
+        if let Err(error) = actual {
+            prop_assert!(matches!(error, ShapeError::ArithmeticOverflow { operation: OP, .. }), "{error:?}");
+        }
+    }
+
+    #[test]
+    fn shrinking_span_rank_mismatch_precedes_empty_shortcut(
+        dims in shape_dims(),
+        stride_value in axis_value(),
+    ) {
+        let wrong_rank = if dims.len() == MAX_PROPERTY_RANK { dims.len() - 1 } else { dims.len() + 1 };
+        let strides = StrideBuf::from_slice(&vec![stride_value; wrong_rank]);
+        for shape in [ShapeBuf::from_slice(&dims), ShapeBuf::from_slice(&vec![0; dims.len()])] {
+            prop_assert_eq!(strides.checked_span(&shape, OP), Err(ShapeError::RankMismatch {
+                operation: OP,
+                expected: RankExpectation::SameAs { operand: "shape", rank: dims.len() },
+                actual: wrong_rank,
+            }));
+            prop_assert!(!strides.is_contiguous_for(&shape));
+        }
+    }
+
+    #[test]
+    fn shrinking_shape_and_stride_push_pop_collect(dims in shape_dims()) {
+        let bulk_shape = ShapeBuf::from_slice(&dims);
+        let bulk_strides = StrideBuf::from_slice(&dims);
+        let collected_shape: ShapeBuf = dims.iter().copied().collect();
+        let collected_strides: StrideBuf = dims.iter().copied().collect();
+        prop_assert_eq!(&bulk_shape, &collected_shape);
+        prop_assert_eq!(&bulk_strides, &collected_strides);
+        prop_assert_eq!(bulk_shape.is_inline(), dims.len() <= INLINE_RANK);
+        prop_assert_eq!(bulk_strides.is_inline(), dims.len() <= INLINE_RANK);
+        prop_assert_eq!(bulk_shape.clone().into_iter().collect::<Vec<_>>(), dims.clone());
+        let mut shape = ShapeBuf::scalar();
+        let mut strides = StrideBuf::EMPTY;
+        for (axis, &value) in dims.iter().enumerate() {
+            shape.push(value);
+            strides.push(value);
+            prop_assert_eq!(shape.dims(), &dims[..=axis]);
+            prop_assert_eq!(strides.strides(), &dims[..=axis]);
+            prop_assert_eq!(shape.is_inline(), axis < INLINE_RANK);
+            prop_assert_eq!(strides.is_inline(), axis < INLINE_RANK);
+        }
+        for (axis, &value) in dims.iter().enumerate().rev() {
+            prop_assert_eq!(shape.pop(), Some(value));
+            prop_assert_eq!(strides.pop(), Some(value));
+            prop_assert_eq!(&shape, &ShapeBuf::from_slice(&dims[..axis]));
+            prop_assert_eq!(&strides, &StrideBuf::from_slice(&dims[..axis]));
+            prop_assert_eq!(shape.rank(), axis);
+            prop_assert_eq!(strides.len(), axis);
+        }
+        prop_assert_eq!(shape.pop(), None);
+        prop_assert_eq!(strides.pop(), None);
+        for &value in &dims {
+            shape.push(value);
+            strides.push(value);
+        }
+        prop_assert_eq!(shape, bulk_shape);
+        prop_assert_eq!(strides, bulk_strides);
+    }
+
+    #[test]
+    fn shrinking_inline_boundary_is_eight(values in proptest::collection::vec(axis_value(), INLINE_RANK + 1)) {
+        prop_assert_eq!(INLINE_RANK, 8);
+        for rank in [INLINE_RANK - 1, INLINE_RANK, INLINE_RANK + 1] {
+            let shape = ShapeBuf::from_slice(&values[..rank]);
+            let strides: StrideBuf = values[..rank].iter().copied().collect();
+            prop_assert_eq!(shape.is_inline(), rank <= INLINE_RANK);
+            prop_assert_eq!(strides.is_inline(), rank <= INLINE_RANK);
+            prop_assert_eq!(shape.dims(), &values[..rank]);
+            prop_assert_eq!(strides.strides(), &values[..rank]);
+        }
+    }
+}
 
 // --- deterministic generator -------------------------------------------
 
