@@ -55,6 +55,58 @@ impl QuantScheme {
     }
 }
 
+fn encode_q4_0(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut encoded = Vec::with_capacity(bytes.len() / 128 * 18);
+    let mut values = [0.0f32; 32];
+    for block in bytes.chunks_exact(128) {
+        for (index, value) in values.iter_mut().enumerate() {
+            let offset = index * 4;
+            *value = f32::from_ne_bytes([
+                block[offset],
+                block[offset + 1],
+                block[offset + 2],
+                block[offset + 3],
+            ]);
+            if !value.is_finite() {
+                return None;
+            }
+        }
+        let mut amax = 0.0f32;
+        let mut max = 0.0f32;
+        for &value in &values {
+            let abs = value.abs();
+            if abs > amax {
+                amax = abs;
+                max = value;
+            }
+        }
+        let scale = max / -8.0;
+        let scale_half = half::f16::from_f32(scale);
+        if !scale_half.is_finite() || (amax != 0.0 && scale_half == half::f16::ZERO) {
+            return None;
+        }
+        let inverse_scale = if scale == 0.0 { 0.0 } else { 1.0 / scale };
+        if !inverse_scale.is_finite() {
+            return None;
+        }
+        encoded.extend_from_slice(&scale_half.to_le_bytes());
+        let quantize = |value: f32| (value * inverse_scale + 8.5).clamp(0.0, 15.0) as u8;
+        for index in 0..16 {
+            encoded.push(quantize(values[index]) | (quantize(values[index + 16]) << 4));
+        }
+    }
+    Some(encoded)
+}
+
+fn f32_bytes_to_little_endian(bytes: &[u8]) -> Vec<u8> {
+    bytes
+        .chunks_exact(4)
+        .flat_map(|chunk| {
+            f32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]).to_le_bytes()
+        })
+        .collect()
+}
+
 /// Key-Value metadata entry for GGUF headers.
 #[derive(Debug, Clone)]
 pub enum GgufValue {
@@ -216,16 +268,31 @@ where
     where
         B: SupportsDType<f32>,
     {
-        // Only F32 (passthrough) and Q8_0 (real block quantization) are
-        // actually backed by a working conversion right now. Refuse the
-        // rest rather than silently writing float bytes under a
-        // quantized `ggml_type` header, which would produce a `.gguf`
-        // file that lies about its own binary layout.
-        if !matches!(self.quant, QuantScheme::F32 | QuantScheme::Q8_0) {
+        // Only F32 (passthrough), Q8_0 and Q4_0 (real block quantization)
+        // are backed by working conversions. Refuse the rest rather than
+        // silently writing float bytes under a quantized `ggml_type`
+        // header, which would produce a `.gguf` file that lies about its
+        // own binary layout.
+        if !matches!(
+            self.quant,
+            QuantScheme::F32 | QuantScheme::Q8_0 | QuantScheme::W4A16_Q4_0
+        ) {
             return Err(Error::Msg(format!(
-                "GGUF export: quantization scheme {:?} is not yet implemented (only F32 and Q8_0 are supported)",
+                "GGUF export: quantization scheme {:?} is not yet implemented (only F32, Q8_0 and Q4_0 are supported)",
                 self.quant
             )));
+        }
+
+        let snapshot: StateSnapshot = crate::nn::collect_state::<B, _>(self.module)?;
+        for (_, value) in snapshot.iter() {
+            if value.shape().dims().len() > 4 {
+                return Err(Error::InvalidModuleState {
+                    operation: "GGUF export",
+                    reason: crate::err::ErrorMessage::new(
+                        "GGUF supports at most 4 tensor dimensions",
+                    ),
+                });
+            }
         }
 
         let mut file = BufWriter::new(File::create(path)?);
@@ -235,7 +302,6 @@ where
         // Version: 3
         file.write_all(&3u32.to_le_bytes())?;
 
-        let snapshot: StateSnapshot = crate::nn::collect_state::<B, _>(self.module)?;
         let tensor_count = u64::try_from(snapshot.len())
             .map_err(|_| Error::Msg("tensor count is too large for the GGUF format".into()))?;
 
@@ -278,14 +344,23 @@ where
             let numel = crate::shapes::ShapeBuf::from_slice(shape)
                 .checked_numel(crate::shapes::error::OperationKind::Storage)?;
 
-            // Q8_0 quantizes in blocks of 32 elements; tensors that don't
-            // divide evenly (e.g. 1D biases/norm weights) are kept at F32,
-            // matching how llama.cpp itself only quantizes eligible weight
-            // tensors and leaves the rest at full precision.
-            let can_quantize =
-                self.quant == QuantScheme::Q8_0 && numel > 0 && numel.is_multiple_of(32);
+            // GGUF identifies a tensor's rows by its last (fastest-varying)
+            // dimension, so block quantization needs a positive element
+            // count and a last dimension that is a multiple of 32; tensors
+            // that do not qualify stay F32.
+            let can_quantize = matches!(self.quant, QuantScheme::Q8_0 | QuantScheme::W4A16_Q4_0)
+                && numel > 0
+                && shape.last().is_some_and(|last| last.is_multiple_of(32));
 
-            let (bytes, ggml_type) = if can_quantize {
+            let (bytes, ggml_type) = if can_quantize && self.quant == QuantScheme::W4A16_Q4_0 {
+                match encode_q4_0(value.bytes()) {
+                    Some(encoded) => (encoded, QuantScheme::W4A16_Q4_0.ggml_type_id()),
+                    None => (
+                        f32_bytes_to_little_endian(value.bytes()),
+                        QuantScheme::F32.ggml_type_id(),
+                    ),
+                }
+            } else if can_quantize {
                 let storage = B::from_bytes::<f32>(
                     value.bytes(),
                     shape,
@@ -307,10 +382,11 @@ where
                     QuantScheme::Q8_0.ggml_type_id(),
                 )
             } else {
-                (value.bytes().to_vec(), QuantScheme::F32.ggml_type_id())
+                (
+                    f32_bytes_to_little_endian(value.bytes()),
+                    QuantScheme::F32.ggml_type_id(),
+                )
             };
-            let n_dims = u32::try_from(shape.len())
-                .map_err(|_| Error::Msg("tensor rank is too large for GGUF".into()))?;
 
             // GGUF stores dimensions in reverse (row-major contiguous first)
             let mut gguf_shape: Vec<u64> = shape
@@ -324,6 +400,8 @@ where
             if gguf_shape.is_empty() {
                 gguf_shape.push(1);
             }
+            let n_dims = u32::try_from(gguf_shape.len())
+                .map_err(|_| Error::Msg("tensor rank is too large for GGUF".into()))?;
 
             // Pad current payload to 32-byte alignment
             let padding = (alignment - (payload_bytes.len() % alignment)) % alignment;
@@ -357,6 +435,9 @@ where
             .map_err(|_| Error::Msg("GGUF header position does not fit this platform".into()))?;
         let header_padding = (alignment - (current_pos % alignment)) % alignment;
         file.write_all(&vec![0u8; header_padding])?;
+
+        let payload_padding = (alignment - (payload_bytes.len() % alignment)) % alignment;
+        payload_bytes.extend(core::iter::repeat_n(0u8, payload_padding));
 
         // 4. Write Tensor Binary Payload
         file.write_all(&payload_bytes)?;
