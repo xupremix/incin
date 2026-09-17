@@ -45,10 +45,11 @@
 
 use incin_core::backend_authoring::Backend;
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin_core::exec::{LossScaleState, LossScaling, RuntimePrecisionPolicy};
+use incin_core::exec::{LossScaleState, LossScaling, PrecisionChoice, RuntimePrecisionPolicy};
 use incin_core::optim::{Optimizer, ScaledOptimizer};
 use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
+use incin_core::tensor::dtype::{ConstDType, DTypeDescriptor, f16};
 
 /// The devices a [`DevicePreference::Fastest`] resolution tries, most capable
 /// first.
@@ -170,6 +171,17 @@ impl Plan {
         self.loss_scaling
     }
 
+    /// Creates fresh loss scaling state from this plan's effective policy (`UX-001`).
+    ///
+    /// [`TrainerBuilder::precision`] supplies the default; a later
+    /// [`TrainerBuilder::loss_scaling`] overrides it. Keep this state across
+    /// [`Trainer::fit_scaled`] calls to preserve dynamic growth and backoff.
+    /// This does not enable autocasting or change f32 parameter storage.
+    #[must_use]
+    pub fn loss_scale_state(&self) -> LossScaleState {
+        LossScaleState::new(self.loss_scaling)
+    }
+
     /// The runtime precision policy configured for this plan.
     #[must_use]
     pub fn precision(&self) -> RuntimePrecisionPolicy {
@@ -266,6 +278,19 @@ pub enum TrainError {
         /// How many devices the plan named.
         devices: usize,
     },
+    /// A mixed-f16 plan disabled loss scaling (`UX-001`, issue #2).
+    ///
+    /// The f16 active / exact-f32 accumulator contract requires scaling to
+    /// protect small gradients from underflow, with non-finite detection and
+    /// backoff handling overflow in dynamic mode. This is a planning safeguard,
+    /// not a claim that the trainer performs f16 computation or autocasting.
+    #[non_exhaustive]
+    UnsupportedPrecision {
+        /// The active dtype requested by the precision policy.
+        active_dtype: DTypeDescriptor,
+        /// The exact accumulator dtype requested by the precision policy.
+        accumulator: DTypeDescriptor,
+    },
     /// A forward pass, backward pass, or optimizer step failed.
     Step {
         /// The epoch the failure happened in, counting from zero.
@@ -297,6 +322,13 @@ impl core::fmt::Display for TrainError {
             Self::CollectivesUnavailable { devices } => write!(
                 f,
                 "a {devices}-device run needs collectives, which are not implemented yet (DST-005)"
+            ),
+            Self::UnsupportedPrecision {
+                active_dtype,
+                accumulator,
+            } => write!(
+                f,
+                "trainer plan requires loss scaling for active dtype {active_dtype:?} with exact accumulator {accumulator:?}"
             ),
             Self::Step {
                 epoch,
@@ -409,7 +441,10 @@ impl TrainerBuilder {
         self
     }
 
-    /// Configures the loss scaling policy for mixed-precision training.
+    /// Configures the effective loss scaling policy for mixed-precision training.
+    ///
+    /// Overrides the default from an earlier [`precision`](Self::precision) call.
+    /// Disabling scaling for a mixed-f16 plan is rejected at build time.
     #[must_use]
     pub fn loss_scaling(mut self, loss_scaling: LossScaling) -> Self {
         self.loss_scaling = loss_scaling;
@@ -417,6 +452,9 @@ impl TrainerBuilder {
     }
 
     /// Configures the runtime precision policy (e.g. AMP, mixed-bf16, fp32).
+    ///
+    /// Replaces any earlier loss scaling setting with this policy's default.
+    /// The policy remains inspectable; this does not enable module autocasting.
     #[must_use]
     pub fn precision(mut self, precision: RuntimePrecisionPolicy) -> Self {
         self.precision = precision;
@@ -437,7 +475,8 @@ impl TrainerBuilder {
     /// [`TrainError::NotCompiledIn`] or [`TrainError::DeviceUnavailable`] when
     /// the request cannot be satisfied, and [`TrainError::NoDeviceAvailable`]
     /// when a [`DevicePreference::Fastest`] resolution finds nothing. Never a
-    /// substituted device.
+    /// substituted device. [`TrainError::UnsupportedPrecision`] if an f16-active
+    /// policy with an exact-f32 accumulator has effective [`LossScaling::None`].
     pub fn build(self) -> Result<Plan, TrainError> {
         self.build_on(&HostMachine)
     }
@@ -451,6 +490,17 @@ impl TrainerBuilder {
     ///
     /// As [`build`](Self::build).
     pub fn build_on<M: Machine + ?Sized>(self, machine: &M) -> Result<Plan, TrainError> {
+        if self.precision.active_dtype() == Some(<f16 as ConstDType>::DESCRIPTOR)
+            && self.precision.accumulator()
+                == PrecisionChoice::Exact(<f32 as ConstDType>::DESCRIPTOR)
+            && self.loss_scaling == LossScaling::None
+        {
+            return Err(TrainError::UnsupportedPrecision {
+                active_dtype: <f16 as ConstDType>::DESCRIPTOR,
+                accumulator: <f32 as ConstDType>::DESCRIPTOR,
+            });
+        }
+
         let mut decisions = Vec::new();
         let devices = match &self.preference {
             DevicePreference::Exactly(requested) => {

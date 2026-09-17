@@ -101,9 +101,18 @@ path, and because the multi-device half of its plan surface does not execute.
 Writing the loop yourself (as [Training](./training.md) shows) is neither
 harder nor less supported.
 
-Precision is stored, not honored: a `RuntimePrecisionPolicy` on the plan is
-retained and inspectable, but `fit` still runs everything at the storage
-dtype and `fit_scaled` only scales the loss scalar — there is no autocast at
-module boundaries and no f32 master-weights contract. Expecting mixed-precision
-memory or throughput wins from the policy alone silently gets plain f32 plus
-loss scaling.
+Precision policy is retained and inspectable. `Plan::loss_scale_state()` derives
+fresh scaler state from the plan's effective loss scaling setting: `precision()`
+supplies the default, and a later `loss_scaling()` overrides it. Pass that state
+to `fit_scaled` and retain it across calls for dynamic growth and backoff. Plan
+construction rejects an f16-active policy with an exact-f32 accumulator and
+scaling disabled via `TrainError::UnsupportedPrecision`; bf16 does not require
+scaling. Scaling protects small f16 gradients from underflow, while dynamic
+backoff handles non-finite gradients by skipping the optimizer update.
+
+The trainer's f32 master-weights contract is limited but tested: existing f32
+`Linear` weights and biases stay f32 through a step under a mixed-bf16 policy.
+This is not autocasting or a separate master-weight copy. `fit` is unchanged;
+`fit_scaled` scales the loss, checks for overflow, and unscales finite gradients.
+Neither adds autocast at module boundaries or bf16/f16 computation on CPU.
+Mixed-precision memory and throughput gains still require backend work.
