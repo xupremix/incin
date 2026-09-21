@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9f7e58cf4a02daaaacab4ad76fe30aab5c6268f635243f48c592a491cbae30bd # shrinks to spec = Spec { a: 1, b: 1, n: 1, first_float: F32, second_float: F32, an_int: I64, initializers: [([1, 1], F32)], steps: [Step { op: MatMulExact, sel: 233 }], outputs: [0] }

@@ -85,9 +85,20 @@ initializers, unknown rank, non-f32 initializers, control flow, custom domains,
 and unsupported node types produce macro-expansion compile diagnostics rather
 than fabricating unverified values.
 
-There is also an ONNX *exporter* (`incin_core::onnx_exporter`). Both directions
-should be understood as tooling for supported graph topologies rather than
-arbitrary model interoperability. Unsupported features fail closed at compile time.
+There is also an ONNX *exporter* (`incin_core::onnx_exporter`). It writes an
+intermediate `value_info` entry for every node output not already named by the
+graph's inputs, initializers, or outputs, so `OnnxImporter` — which performs
+no shape inference of its own and refuses any output it cannot look up —
+reconstructs a multi-node chain from the file instead of guessing. Structural
+round-trip properties (export then import preserves inputs, outputs,
+initializers, node wiring, attributes, and every value's shape and dtype) and
+fail-closed fuzz sweeps over malformed bytes live in
+`crates/incin-core/tests/onnx_roundtrip.rs` and
+`crates/incin-core/tests/onnx_fuzz.rs`. Both directions should be understood
+as tooling for supported graph topologies rather than arbitrary model
+interoperability: the macros fail closed at compile time, and the
+exporter/importer pair returns errors rather than writing or accepting
+unverified values.
 
 ## The preview `Trainer`
 

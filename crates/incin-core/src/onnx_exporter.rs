@@ -19,29 +19,46 @@ impl<'a> OnnxExporter<'a> {
     }
 }
 
-/// `export_to_onnx`.
+/// Encodes `graph` as an ONNX file at `path`.
+///
+/// Fail-closed on two classes of input a deserialized [`Graph`] can carry but a
+/// graph built through [`Graph::add_value`] never does: a value id referenced
+/// by `inputs`/`outputs`/`initializers` or produced as a node output that has
+/// no matching entry in `values` (indexing would panic - issue #48's parser
+/// bound applies to writers too), and a dimension too large for ONNX's `int64`
+/// dimension type (`as`-casting it would mint a negative dimension that looks
+/// like a different, plausible shape to every reader of the file).
+///
+/// It also emits a `value_info` entry for every tensor the graph's inputs,
+/// outputs, and initializers do not already describe: the importer performs
+/// no shape inference, so a node output absent from all three sections would
+/// otherwise be unimportable from this crate's own file.
 pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     let mut onnx_graph = onnx::GraphProto::default();
     onnx_graph.name = Some(alloc::string::String::from("incin_graph"));
 
     // Add inputs
     for &in_id in &graph.inputs {
-        let val = &graph.values[&in_id];
+        let val = value_or_err(graph, in_id, "graph input")?;
         onnx_graph.input.push(value_to_value_info(val)?);
     }
 
     // Add outputs
     for &out_id in &graph.outputs {
-        let val = &graph.values[&out_id];
+        let val = value_or_err(graph, out_id, "graph output")?;
         onnx_graph.output.push(value_to_value_info(val)?);
     }
 
     // Initializers
     for (id, bytes) in &graph.initializers {
-        let val = &graph.values[id];
+        let val = value_or_err(graph, *id, "initializer")?;
         let mut tensor = onnx::TensorProto::default();
         tensor.name = Some(val.id.to_string());
-        tensor.dims = val.shape.iter().map(|&x| x as i64).collect();
+        tensor.dims = val
+            .shape
+            .iter()
+            .map(|&x| dim_to_onnx(x))
+            .collect::<anyhow::Result<Vec<_>>>()?;
         tensor.data_type = Some(dtype_to_onnx(
             val.dtype
                 .builtin_id()
@@ -94,6 +111,28 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
         onnx_graph.node.push(n);
     }
 
+    // Intermediate tensors. `import_from_onnx` refuses a node output whose
+    // shape and dtype are not written down somewhere in the file rather than
+    // inferring them, so a file listing only graph inputs, initializers, and
+    // outputs would lose every value on a chain between two nodes - the
+    // round trip this exporter's own importer is meant to reverse.
+    let mut described: std::collections::BTreeSet<usize> = graph
+        .inputs
+        .iter()
+        .chain(&graph.outputs)
+        .copied()
+        .chain(graph.initializers.keys().copied())
+        .collect();
+    for node in &graph.nodes {
+        for &out_id in &node.outputs {
+            if !described.insert(out_id) {
+                continue;
+            }
+            let val = value_or_err(graph, out_id, "node output")?;
+            onnx_graph.value_info.push(value_to_value_info(val)?);
+        }
+    }
+
     let mut model = onnx::ModelProto::default();
     model.ir_version = Some(8);
     let mut opset = onnx::OperatorSetIdProto::default();
@@ -107,6 +146,34 @@ pub fn export_to_onnx(graph: &Graph, path: &Path) -> anyhow::Result<()> {
     std::fs::write(path, buf)?;
 
     Ok(())
+}
+
+/// Looks up a value an export section references. A [`Graph`] assembled via
+/// [`Graph::add_value`] cannot carry a dangling id, but `Graph`'s fields are
+/// public and its `Deserialize` impl accepts any wiring, so the exporter
+/// refuses the broken graph instead of indexing into `values` and panicking
+/// on the caller's behalf.
+fn value_or_err<'a>(
+    graph: &'a Graph,
+    id: usize,
+    role: &str,
+) -> anyhow::Result<&'a crate::graph::Value> {
+    graph
+        .values
+        .get(&id)
+        .ok_or_else(|| anyhow::anyhow!("{role} {id} has no matching entry in graph.values"))
+}
+
+/// Projects one graph dimension into ONNX's `int64` dimension type.
+///
+/// `as`-casting would wrap a dimension above `i64::MAX` into a negative
+/// number; the importer refuses negative dimensions (see
+/// `import_from_onnx`), so the wrap would only defer the failure to a
+/// reader holding a file whose bytes no longer describe the graph that was
+/// handed to this function.
+fn dim_to_onnx(dim: usize) -> anyhow::Result<i64> {
+    i64::try_from(dim)
+        .map_err(|_| anyhow::anyhow!("dimension {dim} does not fit the ONNX int64 dimension type"))
 }
 
 /// `dtype_to_onnx`.
@@ -144,7 +211,7 @@ fn value_to_value_info(val: &crate::graph::Value) -> anyhow::Result<onnx::ValueI
     for &d in &val.shape {
         let mut dim = onnx::tensor_shape_proto::Dimension::default();
         dim.value = Some(onnx::tensor_shape_proto::dimension::Value::DimValue(
-            d as i64,
+            dim_to_onnx(d)?,
         ));
         shape.dim.push(dim);
     }
@@ -175,8 +242,9 @@ impl<'a> OnnxImporter<'a> {
     }
 }
 
-/// Reconstructs a [`Graph`] from an ONNX file, reversing the three sections
-/// [`export_to_onnx`] writes: inputs, initializers, and nodes.
+/// Reconstructs a [`Graph`] from an ONNX file, reversing the five sections
+/// [`export_to_onnx`] writes: inputs, outputs, initializers, `value_info`
+/// (one entry per tensor the file must describe), and nodes.
 ///
 /// This is a structural round trip, not a re-derivation of typed
 /// descriptors: a node's attributes are copied through as the generic
@@ -228,13 +296,26 @@ pub fn import_from_onnx(path: &Path) -> anyhow::Result<Graph> {
                 .data_type
                 .ok_or_else(|| anyhow::anyhow!("initializer {name} has no data_type"))?,
         )?;
-        let shape: Vec<usize> = tensor.dims.iter().map(|&d| d as usize).collect();
+        let mut shape = Vec::with_capacity(tensor.dims.len());
+        for &dim in &tensor.dims {
+            shape.push(usize::try_from(dim).map_err(|_| {
+                anyhow::anyhow!(
+                    "initializer {name} declares negative dimension {dim}; negative ONNX \
+                     dimensions are refused rather than widened into huge extents"
+                )
+            })?);
+        }
         let raw = tensor.raw_data.clone().ok_or_else(|| {
             anyhow::anyhow!(
                 "initializer {name} has no raw_data; only the raw-bytes tensor \
                  encoding `export_to_onnx` itself writes is supported"
             )
         })?;
+        // Initializers feed the shape lookup too: `operation_from_onnx`
+        // disambiguates rank-sensitive ops (`MatMul`, `Conv`) by the first
+        // operand's rank, and that operand is frequently a weight rather
+        // than a graph input or `value_info` entry.
+        shapes.insert(name.clone(), (shape.clone(), dtype));
         let id = graph.add_value(shape, dtype, Some(name.clone()));
         graph.initializers.insert(id, raw);
         ids.insert(name, id);
@@ -400,6 +481,10 @@ fn operation_from_onnx(
         "Tanh" => K::Tanh,
         "Sigmoid" => K::Sigmoid,
         "Softmax" => K::Softmax,
+        // `onnx_name` projects `LogSoftmax` onto this name (a rename, not a
+        // lowering), so the inverse has to accept it back or every exported
+        // `LogSoftmax` would be a one-way trip through the file format.
+        "LogSoftmax" => K::LogSoftmax,
         "Reshape" => K::ReshapeExact,
         "Transpose" => K::TransposeExact,
         "Concat" => K::ConcatExact,
