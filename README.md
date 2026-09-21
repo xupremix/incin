@@ -152,9 +152,13 @@ fn main() -> Result<()> {
 Rust arithmetic operators panic on recoverable failures; use named methods
 such as `a.try_add(&b)?` when errors must propagate through `Result`.
 
-More in [the Book's quickstart](https://xupremix.github.io/incin/#/quickstart),
-including slicing with `i![]`, ONNX import via `import_model!`, and Hugging Face
-downloads through the `data-hub` feature.
+More in [the Book](https://xupremix.github.io/incin/): the
+[quickstart](https://xupremix.github.io/incin/#/quickstart) for a full training
+step, [`i![]` slicing in the macro reference](https://xupremix.github.io/incin/#/macros),
+ONNX import via `import_model!` in
+[Saving and loading](https://xupremix.github.io/incin/#/saving_loading), and
+Hugging Face downloads through the `data-hub` feature in
+[Installation](https://xupremix.github.io/incin/#/installation).
 
 ## The tooling *is* the feature
 

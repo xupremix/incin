@@ -17,6 +17,7 @@ divide cleanly by what they *make*: a type, a value, or an item.
 | `best_device!()` | a device **type** | [Backends](./backends.md), below |
 | `mesh!`, `placement!`, `parallel!` | distributed **types** | [Experimental](./experimental.md) |
 | `model!`, `import_model!` | a **module** from an ONNX file | [Saving and loading](./saving_loading.md) |
+| `declare_executors!`, `declare_capabilities!` | backend **impl blocks** for executor and capability routing | [Backend authoring](./backend_authoring.md) |
 
 ## `dim!`: named dimensions
 
