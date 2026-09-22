@@ -287,21 +287,30 @@ macro_rules! cuda_descriptor_operations {
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
-                TopK
+                TopK, LogSumExpDim, LogSumExpKeepDim
             ],
             spatial = [
                 Conv2dExact, Conv1dExact, ConvTranspose2d,
                 MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact
             ],
             matmul = [MatMulExact],
-            normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
-            embedding = [EmbeddingExact],
+            normalization = [Softmax, LogSoftmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
+            // `OneHot`/`Bincount`/`ScatterAdd` ride this group because their
+            // index operand is an integer dtype their value operand is not:
+            // the union of integer index dtypes and f32 weights is exactly
+            // the admission `embedding`'s comment already documents, and all
+            // three take no view-incompatible path their `elementwise_layouts`
+            // would mis-describe. `ScatterAdd`'s index stays off the tape the
+            // way `EmbeddingExact`'s does; its f64-accumulated value operands
+            // and dropped out-of-range writes live in the executor.
+            embedding = [EmbeddingExact, OneHot, Bincount, ScatterAdd],
             native_tensor = [
-                ArgMax, ArgMin, Argsort, Cumsum,
+                ArgMax, ArgMin, Argsort, Cumsum, Sort,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
-                ConcatExact, Gather, Scatter, IndexSelect, Repeat, Pad, Unfold,
+                ConcatExact, Gather, Scatter, IndexSelect, Repeat, RepeatInterleave,
+                Pad, Unfold,
                 PixelShuffle,
                 ToDType
             ],

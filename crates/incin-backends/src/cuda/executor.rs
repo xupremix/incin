@@ -8,7 +8,7 @@
 use alloc::sync::Arc;
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
 use incin_core::error::BackendError;
-use incin_core::exec::catalog::LossReduction;
+use incin_core::exec::catalog::{DuplicateIndexRule, LossReduction};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
 use incin_core::shapes::OperationKind;
 use incin_core::tensor::device::{Device, DeviceId, DeviceKind};
@@ -2662,6 +2662,177 @@ impl<D: Device> Execute<op::Argsort> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
         CudaBackendImpl::<D>::argsort::<i64>(input, attrs.axis, attrs.descending)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Sort> for CudaBackendImpl<D> {
+    type Output = (CudaStorage, CudaStorage);
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Sort, Self>,
+    ) -> Result<(CudaStorage, CudaStorage), BackendError> {
+        let operation = OperationKind::Sort;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "sort expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        let dim_len = *input
+            .shape
+            .get(attrs.axis)
+            .ok_or_else(|| invalid(operation, "sort axis is outside the operand's rank"))?;
+        // `topk` with `k = axis length` IS the sort: it returns every value
+        // ordered plus the permutation, exactly the pair `Sort` owes, so no
+        // gather (and no tape entry - `Sort`'s row is training=false) is
+        // needed. `descending` maps to `largest`. Indices are physically
+        // i64, the same convention `Execute<op::Argsort>` and
+        // `Execute<op::TopK>` above already use: the frontend's requested
+        // `index_dtype` is what dispatch would have validated on input
+        // handles only, and no existing CUDA row post-checks its output
+        // index tag.
+        CudaBackendImpl::<D>::topk::<i64>(input, dim_len, attrs.axis, attrs.descending)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::LogSoftmax> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSoftmax, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::LogSoftmax;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "log_softmax expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        crate::cuda::backend::elementwise::cuda_log_softmax::<D>(input, axis)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::LogSumExpKeepDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSumExpKeepDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::LogSumExpKeepDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "logsumexp_keepdim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<D>(input, axis)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::LogSumExpDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSumExpDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::LogSumExpDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "logsumexp_dim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+        // Keepdim composition first, then squeeze through `squeeze` (a
+        // tape-tracked `reshape` wrapper) rather than a bare reshape, so the
+        // chain's gradient arrives with the squeezed shape - the same reason
+        // CPU routes through `squeeze_storage`.
+        let kept = crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<D>(input, axis)
+            .map_err(wrap)?;
+        CudaBackendImpl::<D>::squeeze::<f32>(&kept, axis).map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::RepeatInterleave> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RepeatInterleave, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::RepeatInterleave;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "repeat_interleave expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::repeat_interleave::<f32>(input, attrs.repeats, attrs.axis)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::OneHot> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::OneHot, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::OneHot;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "one_hot expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        // No dtype guard here: the descriptor's per-operand contract names
+        // operand zero an integer index before this row is consulted (CPU's
+        // impl says the same); the launcher still refuses anything that is
+        // not physically i64, the only integer storage CUDA can create.
+        let depth = request.operation.descriptor().attributes().depth;
+        CudaBackendImpl::<D>::one_hot::<i64>(input, depth)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Bincount> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Bincount, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Bincount;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "bincount expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let bins = request.operation.descriptor().attributes().bins;
+        CudaBackendImpl::<D>::bincount::<i64>(input, bins)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::ScatterAdd> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ScatterAdd, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::ScatterAdd;
+        let [input, index, source] = request.inputs else {
+            return Err(invalid(operation, "scatter_add expects 3 inputs"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let index = downcast(index, operation, "index is not CUDA storage")?;
+        let source = downcast(source, operation, "source is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        // The mirror of CPU's guard: summing is the operation rather than a
+        // mode of it, and a caller who asked for last-write-wins on this
+        // descriptor has asked for `scatter` and should be told so.
+        if attrs.duplicate_indices != DuplicateIndexRule::Accumulate {
+            return Err(invalid(
+                operation,
+                "scatter_add accumulates duplicate indices and implements no other rule; \
+                 use scatter for last-write-wins",
+            ));
+        }
+        CudaBackendImpl::<D>::scatter_add::<f32>(input, attrs.axis, index, source)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }

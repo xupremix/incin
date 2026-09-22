@@ -743,6 +743,45 @@ pub(crate) fn cuda_log_softmax<D: Device>(input: &CudaStorage, axis: usize) -> R
     )
 }
 
+/// `logsumexp(x, dim) = max + log(sum_keepdim(exp(x - max), dim))`, the same
+/// composition and the same primitives as CPU's `logsumexp_keepdim`: the
+/// shift by the axis maximum is what keeps router-sized logits from
+/// overflowing, and every step other than `max_keepdim` pushes its own tape
+/// entry. `max_keepdim` pushing none is exactly right here (and is why this
+/// is not just `cuda_log_softmax` plus a max): softmax's gradient is
+/// invariant to the shift, so the cotangent that would flow back through
+/// the stabilizing max cancels between the `sub`'s right operand and the
+/// final `add`'s left operand, and untracked leaves give that cancellation
+/// for free - `log(sum(exp(x - max))) + max` has gradient `softmax(x)`
+/// through the remaining chain alone. The axis-out-of-range message mirrors
+/// CPU's `logsumexp_keepdim` verbatim.
+pub(crate) fn cuda_logsumexp_keepdim<D: Device>(
+    input: &CudaStorage,
+    axis: usize,
+) -> Result<CudaStorage> {
+    if axis >= input.shape.len() {
+        return Err(incin_core::error::Error::ShapeMismatch {
+            op: "logsumexp_keepdim",
+            expected: input.shape.to_vec(),
+            got: vec![axis],
+            msg: format!(
+                "logsumexp_keepdim: axis {axis} out of range for shape {:?}",
+                input.shape
+            ),
+        });
+    }
+    let max_val = CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)?;
+    let shifted = cuda_sub_storage(input, &max_val, crate::kernel::KernelSpecialization::NONE)?;
+    let exp_vals = cuda_exp_storage(&shifted, crate::kernel::KernelSpecialization::NONE)?;
+    let sum_val = CudaBackendImpl::<D>::sum_keepdim::<f32>(&exp_vals, axis)?;
+    let log_sum = cuda_log_storage(&sum_val, crate::kernel::KernelSpecialization::NONE)?;
+    cuda_add_storage(
+        &max_val,
+        &log_sum,
+        crate::kernel::KernelSpecialization::NONE,
+    )
+}
+
 #[allow(clippy::extra_unused_type_parameters)]
 impl<D: Device> CudaBackendImpl<D> {
     pub(crate) fn relu<K: DType>(t: &CudaStorage) -> Result<CudaStorage> {

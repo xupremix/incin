@@ -1293,3 +1293,455 @@ fn f64_exp_trains_on_cuda() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// The eight rows CUDA was missing against CPU: `LogSoftmax`,
+// `LogSumExpDim`/`LogSumExpKeepDim`, `Sort`, `RepeatInterleave`, `OneHot`,
+// `Bincount`, `ScatterAdd` (issues #86/#87/#88/#84). The first test runs
+// everywhere - it answers the capability query, not the device. The rest are
+// `#[ignore]`d like every other hardware test above.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_eight_new_cuda_rows_admit_their_canonical_invocations() {
+    use incin_core::exec::{
+        CapabilityQuery, LayoutClass, MathMode, OperationIdentity, SupportLevel, UnsupportedReason,
+    };
+    use incin_core::shapes::OperationKind;
+    use incin_core::tensor::device::DeviceKind;
+
+    // (operation, operand dtype, training mode) tuples a real invocation
+    // sends: the value operand's dtype for the float ops, the index
+    // operand's dtype for the three integer-indexed ones. Rank 2 clears
+    // every row's floor; Contiguous is admitted by all four groups.
+    let admitted: &[(OperationKind, DTypeId, bool)] = &[
+        (OperationKind::LogSoftmax, DTypeId::F32, true),
+        (OperationKind::LogSumExpDim, DTypeId::F32, true),
+        (OperationKind::LogSumExpKeepDim, DTypeId::F32, true),
+        (OperationKind::Sort, DTypeId::F32, false),
+        (OperationKind::RepeatInterleave, DTypeId::F32, true),
+        (OperationKind::OneHot, DTypeId::I64, true),
+        (OperationKind::Bincount, DTypeId::I64, true),
+        (OperationKind::ScatterAdd, DTypeId::I64, true),
+        (OperationKind::ScatterAdd, DTypeId::F32, true),
+    ];
+    for &(operation, dtype, training) in admitted {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank: 2,
+            training,
+            math_mode: MathMode::Precise,
+        };
+        let level = crate::capability::support(DeviceKind::Cuda, &query);
+        assert!(
+            !matches!(level, SupportLevel::Unsupported(_)),
+            "{operation:?} must admit a {dtype:?} operand with training={training}, got {level:?}"
+        );
+    }
+
+    // `Sort` promises evaluation only - the same contract `Argsort` and
+    // `TopK` already answer - so a training-mode query is refused by name
+    // rather than silently running a gradient-less forward.
+    let sort_training = CapabilityQuery {
+        operation: OperationIdentity::Builtin(OperationKind::Sort),
+        dtype: DTypeId::F32.descriptor(),
+        layout: LayoutClass::Contiguous,
+        rank: 2,
+        training: true,
+        math_mode: MathMode::Precise,
+    };
+    assert!(
+        matches!(
+            crate::capability::support(DeviceKind::Cuda, &sort_training),
+            SupportLevel::Unsupported(UnsupportedReason::Training { .. })
+        ),
+        "Sort's row is training=false and must refuse a training-mode query"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn log_softmax_matches_the_shifted_definition() {
+    let values = [1.0f32, 2.0, 3.0, 0.5, -1.0, 2.5];
+    let t = cuda_f32(&[2, 3], values.to_vec());
+    let out = crate::cuda::backend::elementwise::cuda_log_softmax::<Cuda>(&t, 1).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    let got = download_f32_host(&out).unwrap();
+    for row in 0..2 {
+        let xs = &[[1.0f64, 2.0, 3.0], [0.5, -1.0, 2.5]][row];
+        let max = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let sum: f64 = xs.iter().map(|x| (x - max).exp()).sum();
+        for (col, x) in xs.iter().enumerate() {
+            let want = x - max - sum.ln();
+            assert!(
+                (f64::from(got[row * 3 + col]) - want).abs() < 1e-5,
+                "log_softmax[{row},{col}]: got {}, want {want}",
+                got[row * 3 + col]
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn log_sum_exp_keeps_the_axis_and_the_dim_form_squeezes_it() {
+    use incin_core::exec::catalog::AxisAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 0.5, -1.0, 2.5]);
+    let kept = crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<Cuda>(&t, 1).unwrap();
+    assert_eq!(kept.shape, vec![2, 1]);
+    let got = download_f32_host(&kept).unwrap();
+    for (row, xs) in [[1.0f64, 2.0, 3.0], [0.5, -1.0, 2.5]].iter().enumerate() {
+        let max = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let sum: f64 = xs.iter().map(|x| (x - max).exp()).sum();
+        let want = max + sum.ln();
+        assert!(
+            (f64::from(got[row]) - want).abs() < 1e-5,
+            "logsumexp_keepdim[{row}]: got {}, want {want}",
+            got[row]
+        );
+    }
+
+    // The Dim form travels dispatch and comes back squeezed, with the same
+    // values: the composition's tail is `squeeze` (a tape-tracked reshape).
+    let context = ExecutionContext::new(B::new());
+    let handle = TensorHandle::from_storage::<B, f32, _>(&t);
+    let squeezed =
+        dispatch::execute::<op::LogSumExpDim, _>(&context, AxisAttributes { axis: 1 }, &[handle])
+            .expect("logsumexp_dim executes on CUDA");
+    assert_eq!(squeezed.shape, vec![2]);
+    let squeezed_vals = download_f32_host(&squeezed).unwrap();
+    for (keep, dim) in got.iter().zip(squeezed_vals.iter()) {
+        assert!(
+            (keep - dim).abs() < 1e-6,
+            "squeeze changed the value: {keep} vs {dim}"
+        );
+    }
+
+    // The axis-out-of-range refusal carries CPU's op name and wording.
+    let error = crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<Cuda>(&t, 5)
+        .expect_err("axis 5 is outside a rank-2 operand");
+    assert!(
+        error
+            .to_string()
+            .contains("logsumexp_keepdim: axis 5 out of range"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn log_sum_exp_backpropagates_the_row_softmax() {
+    // d/dx logsumexp(x) = softmax(x). The stabilizing `max` pushes no tape
+    // entry, so this also proves the shift's cotangent cancels for free:
+    // a missing cancellation would skew the sum away from 1.0.
+    let t = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+    let t_id = t.id;
+    let out = crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<Cuda>(&t, 0).unwrap();
+    assert_eq!(out.shape, vec![1]);
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad = download_f32_host(grads.get(t_id).unwrap()).unwrap();
+    let expected = [0.090_030_57f64, 0.244_728_47, 0.665_240_96];
+    assert_eq!(grad.len(), 3);
+    let total: f64 = grad.iter().map(|&v| f64::from(v)).sum();
+    for (i, (got, want)) in grad.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (f64::from(*got) - want).abs() < 1e-5,
+            "logsumexp grad[{i}]: got {got}, want {want}"
+        );
+    }
+    assert!(
+        (total - 1.0).abs() < 1e-5,
+        "softmax gradients must sum to 1, got {total}"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn sort_orders_each_axis_slice_and_returns_a_replaying_permutation() {
+    use incin_core::exec::catalog::ArgsortAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let input = [3.0f32, 1.0, 2.0, 6.0, 4.0, 5.0];
+    let t = cuda_f32(&[2, 3], input.to_vec());
+    let handle = TensorHandle::from_storage::<B, f32, _>(&t);
+    // index_dtype is what the frontend sends; the CUDA row returns i64
+    // indices physically, the same convention Argsort/TopK already use.
+    let (values, indices) = dispatch::execute::<op::Sort, _>(
+        &context,
+        ArgsortAttributes {
+            axis: 1,
+            descending: false,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[handle],
+    )
+    .expect("sort executes on CUDA");
+    assert_eq!(values.shape, vec![2, 3]);
+    assert_eq!(indices.shape, vec![2, 3]);
+    assert_eq!(
+        download_f32_host(&values).unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    );
+    let index_bytes = indices
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*indices.buffer.data)
+        .unwrap();
+    let index_values: Vec<i64> = bytemuck::cast_slice::<u8, i64>(&index_bytes).to_vec();
+    assert_eq!(index_values, vec![1, 2, 0, 1, 2, 0]);
+    // The permutation replays to the sorted values.
+    let sorted = download_f32_host(&values).unwrap();
+    for (flat, &position) in index_values.iter().enumerate() {
+        assert_eq!(
+            input[flat / 3 * 3 + position as usize],
+            sorted[flat],
+            "indices must reorder the input into the sorted values at {flat}"
+        );
+    }
+
+    // Descending flips both outputs.
+    let handle = TensorHandle::from_storage::<B, f32, _>(&t);
+    let (values, indices) = dispatch::execute::<op::Sort, _>(
+        &context,
+        ArgsortAttributes {
+            axis: 1,
+            descending: true,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[handle],
+    )
+    .expect("descending sort executes on CUDA");
+    assert_eq!(
+        download_f32_host(&values).unwrap(),
+        vec![3.0, 2.0, 1.0, 6.0, 5.0, 4.0]
+    );
+    let index_bytes = indices
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*indices.buffer.data)
+        .unwrap();
+    let index_values: Vec<i64> = bytemuck::cast_slice::<u8, i64>(&index_bytes).to_vec();
+    assert_eq!(index_values, vec![0, 2, 1, 0, 2, 1]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn repeat_interleave_places_copies_adjacently() {
+    let t = cuda_f32(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+    let axis1 = B::repeat_interleave::<f32>(&t, 2, 1).unwrap();
+    assert_eq!(axis1.shape, vec![2, 4]);
+    assert_eq!(
+        download_f32_host(&axis1).unwrap(),
+        vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0]
+    );
+    let axis0 = B::repeat_interleave::<f32>(&t, 3, 0).unwrap();
+    assert_eq!(axis0.shape, vec![6, 2]);
+    assert_eq!(
+        download_f32_host(&axis0).unwrap(),
+        vec![1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0]
+    );
+    // Fail-closed guards carry CPU's reasons even though the descriptor
+    // refuses both shapes of mistake first.
+    assert!(matches!(
+        B::repeat_interleave::<f32>(&t, 0, 1),
+        Err(Error::Backend(
+            incin_core::error::BackendError::InvalidInput {
+                reason: "repeat_interleave needs at least one repeat per element",
+                ..
+            }
+        ))
+    ));
+    assert!(matches!(
+        B::repeat_interleave::<f32>(&t, 2, 2),
+        Err(Error::Backend(
+            incin_core::error::BackendError::InvalidInput {
+                reason: "repeat_interleave axis is outside the operand's rank",
+                ..
+            }
+        ))
+    ));
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn repeat_interleave_backward_sums_each_group_in_order() {
+    let t = cuda_f32(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+    let t_id = t.id;
+    let out = B::repeat_interleave::<f32>(&t, 2, 1).unwrap();
+    let seed = cuda_f32(&[2, 4], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    let grad = download_f32_host(grads.get(t_id).unwrap()).unwrap();
+    // Each source element sits under two adjacent outputs; the group-sum is
+    // (1+2, 3+4, 5+6, 7+8).
+    assert_eq!(grad, vec![3.0, 7.0, 11.0, 15.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn repeat_interleave_reads_through_a_strided_view() {
+    // The row admits Strided operands, so the kernel must decode logical
+    // coordinates and read through the view's physical strides - a flat
+    // linearization would silently gather the wrong elements here.
+    let base = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let view = B::transpose_view::<f32>(&base, 0, 1).unwrap();
+    assert_eq!(view.shape, vec![3, 2]);
+    let out = B::repeat_interleave::<f32>(&view, 2, 1).unwrap();
+    assert_eq!(out.shape, vec![3, 4]);
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![1.0, 1.0, 4.0, 4.0, 2.0, 2.0, 5.0, 5.0, 3.0, 3.0, 6.0, 6.0]
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn one_hot_writes_bool_rows_and_pads_out_of_range_targets() {
+    let bytes: Vec<u8> = [0i64, 2, -1, 7]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let t = crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::I64.into(), 0, &bytes).unwrap();
+    let out = B::one_hot::<i64>(&t, 4).unwrap();
+    assert_eq!(out.shape, vec![4, 4]);
+    assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
+    let got = out
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*out.buffer.data)
+        .unwrap();
+    // 0 -> slot 0; 2 -> slot 2; -1 and 7 -> all-false rows (ONNX padding),
+    // not an error.
+    assert_eq!(got, vec![1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+    // A scalar target encodes as a single row.
+    let scalar_bytes: Vec<u8> = 2i64.to_le_bytes().to_vec();
+    let scalar =
+        crate::cuda::backend::cuda_from_bytes(&[], DTypeId::I64.into(), 0, &scalar_bytes).unwrap();
+    let row = B::one_hot::<i64>(&scalar, 3).unwrap();
+    assert_eq!(row.shape, vec![3]);
+    let got = row
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*row.buffer.data)
+        .unwrap();
+    assert_eq!(got, vec![0, 0, 1]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn bincount_counts_each_bin_and_refuses_a_target_outside_them() {
+    let bytes: Vec<u8> = [0i64, 1, 1, 0]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let t = crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::I64.into(), 0, &bytes).unwrap();
+    let out = B::bincount::<i64>(&t, 3).unwrap();
+    assert_eq!(out.shape, vec![3]);
+    assert_eq!(out.dtype(), DTypeId::I64.descriptor());
+    let got = out
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*out.buffer.data)
+        .unwrap();
+    assert_eq!(bytemuck::cast_slice::<u8, i64>(&got), &[2i64, 2, 0]);
+
+    // An index outside the bins is CPU's error, not a silently low count.
+    let bad_bytes: Vec<u8> = [0i64, 3].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let bad =
+        crate::cuda::backend::cuda_from_bytes(&[2], DTypeId::I64.into(), 0, &bad_bytes).unwrap();
+    assert!(matches!(
+        B::bincount::<i64>(&bad, 3),
+        Err(Error::Backend(
+            incin_core::error::BackendError::InvalidInput {
+                reason: "bincount index is not a whole number inside the bin range",
+                ..
+            }
+        ))
+    ));
+    // Zero bins is refused before anything allocates, with CPU's reason.
+    assert!(matches!(
+        B::bincount::<i64>(&t, 0),
+        Err(Error::Backend(
+            incin_core::error::BackendError::InvalidInput {
+                reason: "bincount needs at least one bin to count into",
+                ..
+            }
+        ))
+    ));
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn scatter_add_accumulates_in_order_and_drops_out_of_range_targets() {
+    let t = cuda_f32(&[3], vec![0.0, 0.0, 0.0]);
+    let index_bytes: Vec<u8> = [0i64, 0, 2, 9]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let index =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::I64.into(), 0, &index_bytes).unwrap();
+    let src = cuda_f32(&[4], vec![1.0, 2.0, 4.0, 100.0]);
+    let out = B::scatter_add::<f32>(&t, 0, &index, &src).unwrap();
+    assert_eq!(out.shape, vec![3]);
+    // Duplicate destinations sum (1+2 at slot 0); target 9 is outside a
+    // length-3 axis and is dropped rather than clamped, so the 100 never
+    // lands anywhere.
+    assert_eq!(download_f32_host(&out).unwrap(), vec![3.0, 0.0, 4.0]);
+
+    // Backward under a ones seed: the input's cotangent passes through
+    // untouched, the source receives the cotangent at each surviving write
+    // and zero at the dropped one, and the index stays off the tape.
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad_t = download_f32_host(grads.get(t.id).unwrap()).unwrap();
+    assert_eq!(grad_t, vec![1.0, 1.0, 1.0]);
+    let grad_src = download_f32_host(grads.get(src.id).unwrap()).unwrap();
+    assert_eq!(grad_src, vec![1.0, 1.0, 1.0, 0.0]);
+    assert!(
+        grads.get(index.id).is_none(),
+        "the integer index operand must stay off the tape, as on CPU"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn scatter_add_refuses_last_write_wins_with_the_cpus_wording() {
+    use incin_core::exec::catalog::{DuplicateIndexRule, ScatterAttributes};
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let t = cuda_f32(&[2], vec![0.0, 0.0]);
+    let index_bytes: Vec<u8> = [0i64, 0].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let index =
+        crate::cuda::backend::cuda_from_bytes(&[2], DTypeId::I64.into(), 0, &index_bytes).unwrap();
+    let src = cuda_f32(&[2], vec![1.0, 2.0]);
+    let handles = [
+        TensorHandle::from_storage::<B, f32, _>(&t),
+        TensorHandle::from_storage::<B, i64, _>(&index),
+        TensorHandle::from_storage::<B, f32, _>(&src),
+    ];
+    let error = dispatch::execute::<op::ScatterAdd, _>(
+        &context,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+        &handles,
+    )
+    .expect_err("last-write-wins is not a scatter_add rule");
+    let rendered = format!("{error:?}");
+    assert!(
+        rendered.contains("scatter_add accumulates duplicate indices and implements no other rule")
+            && rendered.contains("use scatter for last-write-wins"),
+        "refusal must carry CPU's wording, got {rendered}"
+    );
+}

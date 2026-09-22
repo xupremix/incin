@@ -50,7 +50,7 @@ run time.
 | `backward` | — | — | — | — |
 | `batch_norm` | `f32` | `f32` | — | — |
 | `bce_with_logits_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `bincount` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
+| `bincount` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `u8`, `u32`, `i64`, `f32` | — | — |
 | `bmm` | `f32` | `f32` | — | — |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
@@ -104,12 +104,12 @@ run time.
 | `log` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `log10` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `log2` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `log_softmax` | `f32` | — | — | — |
+| `log_softmax` | `f32` | `f32` | — | — |
 | `logical_and` | `bool` | `bool` | — | — |
 | `logical_not` | `bool` | `bool` | — | — |
 | `logical_or` | `bool` | `bool` | — | — |
-| `logsumexp_dim` | `f32` | — | — | — |
-| `logsumexp_keepdim` | `f32` | — | — | — |
+| `logsumexp_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `logsumexp_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `lstm` | — | — | — | — |
 | `masked_fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32`, `bool` | — | — |
 | `matmul` | `f32` | `f32` | `f32` | `f32` |
@@ -132,7 +132,7 @@ run time.
 | `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — |
 | `neg` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `norm` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `one_hot` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
+| `one_hot` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `u8`, `u32`, `i64`, `f32` | — | — |
 | `ones` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `outer` | `f32` | `f32` | — | — |
 | `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
@@ -147,7 +147,7 @@ run time.
 | `relu` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `remainder` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `repeat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
-| `repeat_interleave` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
+| `repeat_interleave` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `require_grad` | — | — | — | — |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `i64`, `bf16`, `f16`, `f32`, `f64` |
 | `rms_norm` | `f32` | `f32` | `f32` | — |
@@ -157,7 +157,7 @@ run time.
 | `sample` | — | — | — | — |
 | `scaled_dot_product_attention` | `f32` | `f32` | — | — |
 | `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
-| `scatter_add` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
+| `scatter_add` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `u8`, `u32`, `i64`, `f32` | — | — |
 | `sgd_step` | — | — | — | — |
 | `sigmoid` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `sign` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
@@ -165,7 +165,7 @@ run time.
 | `sinh` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `softmax` | `f32` | `f32` | `f32` | — |
-| `sort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
+| `sort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `split` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `sqrt` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
@@ -518,6 +518,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `min_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `prod_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `topk` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | no | native |
+| `logsumexp_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `logsumexp_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `conv1d` | `f32` | `contiguous` | 1–3 | yes | native |
 | `conv_transpose2d` | `f32` | `contiguous` | 1–4 | yes | native |
@@ -525,15 +527,20 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `adaptive_avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `log_softmax` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `layer_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `batch_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `rms_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `group_norm` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
 | `embedding` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | 1+ | yes | native |
+| `one_hot` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | any | yes | native |
+| `bincount` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | any | yes | native |
+| `scatter_add` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `argmax` | `f32` | `contiguous` | any | no | native |
 | `argmin` | `f32` | `contiguous` | any | no | native |
 | `argsort` | `f32` | `contiguous` | 1+ | no | native |
 | `cumsum` | `f32` | `contiguous` | 1+ | yes | native |
+| `sort` | `f32` | `contiguous` | 1+ | no | native |
 | `maximum` | `f32` | `contiguous` | any | yes | native |
 | `minimum` | `f32` | `contiguous` | any | yes | native |
 | `abs_diff` | `f32` | `contiguous` | any | yes | native |
@@ -557,6 +564,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `scatter` | `f32` | `contiguous` | 1+ | yes | native |
 | `index_select` | `f32` | `contiguous` | 1+ | yes | native |
 | `repeat` | `f32` | `contiguous` | any | yes | native |
+| `repeat_interleave` | `f32` | `contiguous` | 1+ | yes | native |
 | `pad` | `f32` | `contiguous` | any | yes | native |
 | `unfold` | `f32` | `contiguous` | 1+ | yes | native |
 | `pixel_shuffle` | `f32` | `contiguous` | 4 | yes | native |

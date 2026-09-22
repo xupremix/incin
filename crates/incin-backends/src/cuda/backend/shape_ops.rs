@@ -648,6 +648,82 @@ impl<D: Device> CudaBackendImpl<D> {
         Ok(out)
     }
 
+    /// `repeat_interleave`: adjacent copies along `axis` (CPU's combine.rs
+    /// rule: the source coordinate divides where tiling would take a
+    /// remainder). The backward is a group-sum over each element's
+    /// `repeats` output copies, computed in the kernel in the same
+    /// `r`-ascending order CPU's row-major accumulation visits them -
+    /// deliberately NOT `unbroadcast`, which cannot express a non-axis
+    /// group reduction and is why `repeat`'s own backward is unsound for
+    /// factors greater than one (pre-existing, unrelated to this op).
+    pub(crate) fn repeat_interleave<K: DType>(
+        t: &CudaStorage,
+        repeats: usize,
+        axis: usize,
+    ) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_repeat_interleave(t, repeats, axis)?;
+        let original_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        push_unary_tape_entry(t_id, out_id, move |grad_out| {
+            crate::cuda::ops::shape::launch_repeat_interleave_backward(
+                grad_out,
+                repeats,
+                axis,
+                &original_shape,
+            )
+        });
+        Ok(out)
+    }
+
+    /// `one_hot`: Bool rows of `depth`; no tape entry, matching CPU - the
+    /// output is a Boolean function of which slot an integer names, so
+    /// there is no cotangent to route. The descriptor already refused a
+    /// non-integer operand and a zero depth before this runs.
+    pub(crate) fn one_hot<K: DType>(t: &CudaStorage, depth: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::shape::launch_one_hot(t, depth)
+    }
+
+    /// `bincount`: i64 counts per bin; no tape entry, matching CPU. The
+    /// descriptor refused a zero bin count and a non-integer operand
+    /// before this runs; the launcher re-checks both fail-closed.
+    pub(crate) fn bincount<K: DType>(t: &CudaStorage, bins: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::shape::launch_bincount(t, bins)
+    }
+
+    /// Deterministic `scatter_add` forward: the ordered two-pass kernel
+    /// accumulates in `j` row-major order with one f64 rounding, bitwise
+    /// matching CPU. The tape mirrors CPU's `scatter_add_storage`: the
+    /// input's cotangent is the output's untouched, the source's is the
+    /// output cotangent gathered at each recorded destination (zero where
+    /// the forward dropped an out-of-range write), and the integer index
+    /// operand stays off the tape. The scratch pair travels into the
+    /// closure so backward needs no host round-trip.
+    pub(crate) fn scatter_add<K: DType>(
+        t: &CudaStorage,
+        axis: usize,
+        index: &CudaStorage,
+        source: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        let (out, scratch) =
+            crate::cuda::ops::shape::launch_scatter_add_ordered(t, axis, index, source)?;
+        let source_shape = source.shape.clone();
+        let (t_id, src_id, out_id) = (t.id, source.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, src_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grad_t = grad_out.clone().with_fresh_autograd_identity();
+                let grad_src = crate::cuda::ops::shape::launch_scatter_add_backward_src(
+                    grad_out,
+                    &scratch,
+                    &source_shape,
+                )?;
+                Ok(vec![grad_t, grad_src])
+            }),
+        });
+        Ok(out)
+    }
+
     pub(crate) fn tril<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {
         let out = crate::cuda::ops::shape::launch_tril(t, diagonal as i32)?;
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
