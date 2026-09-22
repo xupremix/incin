@@ -185,6 +185,14 @@ fn add_cuda_storage(a: &CudaStorage, b: &CudaStorage) -> Result<CudaStorage> {
     crate::cuda::ops::elementwise::launch_binary_op("add", "a + b", a, b, &a.shape)
 }
 
+/// Un-broadcast `grad` to `target_shape` for backward.
+///
+/// Semantics (fail-closed, shared with CPU and WGPU): on success the
+/// result's shape equals `target_shape`, so it can always be accumulated
+/// into the target. A compatible grad of lower rank than the target - a
+/// scalar seed, e.g. `[] -> [1]` - expands (a scalar broadcasts to any
+/// shape); a grad that does not broadcast into the target refuses with a
+/// named `ShapeMismatch`. Never panics on rank-deficient input.
 pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
     if grad.shape == target_shape {
         return Ok(grad.clone());
@@ -198,10 +206,18 @@ pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<
         result = sum_dim_squeeze(&result, 0)?;
     }
 
-    // Reduce keepdim dims
-    for (i, &t_dim) in target_shape.iter().enumerate() {
-        if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i)?;
+    // Reduce keepdim dims. Only when the ranks agree after the leading
+    // squeeze (grad rank >= target rank): that squeeze right-aligns the
+    // axes, so indexing `result.shape[i]` against `target_shape[i]` is
+    // sound only at equal rank. When the target outranks the grad - the
+    // scalar-seed case, e.g. `[] -> [1]` - there is no aligned axis to
+    // reduce; the tail expands the smaller grad instead of indexing past
+    // it (the latent cross-backend panic this guards).
+    if result.shape.len() == target_shape.len() {
+        for (i, &t_dim) in target_shape.iter().enumerate() {
+            if t_dim == 1 && result.shape[i] != 1 {
+                result = sum_dim_keepdim(&result, i)?;
+            }
         }
     }
 
@@ -213,10 +229,20 @@ pub(crate) fn unbroadcast(grad: &CudaStorage, target_shape: &[usize]) -> Result<
     // reaches here with fewer elements than its target, and the kernels
     // downstream do not broadcast scalars implicitly the way the CPU ones
     // do, so handing the scalar on produces a binary launch the iteration
-    // plan refuses. `broadcast_shape` checks compatibility first, because
-    // `launch_broadcast` assumes a legal target and would otherwise read out
-    // of bounds on a genuinely incompatible shape.
-    crate::layout::broadcast_shape(&result.shape, target_shape)?;
+    // plan refuses. `broadcast_shape` must resolve *to* the target, not
+    // merely be mutual: `launch_broadcast` assumes a legal right-aligned
+    // target and would otherwise read out of bounds on a shape like
+    // `[4] -> [2,1]`. Mirrors the WGPU tail (`wgpu/tape.rs`) and the CPU
+    // tail (`cpu/tape.rs`).
+    let resolved = crate::layout::broadcast_shape(&result.shape, target_shape)?;
+    if resolved.as_slice() != target_shape {
+        return Err(Error::ShapeMismatch {
+            op: "autograd unbroadcast",
+            expected: target_shape.to_vec(),
+            got: result.shape.to_vec(),
+            msg: "the reduced gradient does not broadcast into the target shape".into(),
+        });
+    }
     crate::cuda::ops::shape::launch_broadcast(&result, target_shape)
 }
 

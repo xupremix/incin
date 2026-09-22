@@ -861,6 +861,36 @@ fn l1_loss_trains_through_scalar_reduction_on_cuda() {
 
 #[test]
 #[ignore = "requires CUDA hardware"]
+fn unbroadcast_scalar_seed_for_size_one_target_materializes() {
+    // Regression for the latent cross-backend panic: a size-1 target
+    // dimension at an index >= the grad's rank (here the whole target)
+    // used to index past the reduced grad in the keepdim loop at
+    // `result.shape[i]`. A scalar broadcasts to any shape, so `[] -> [1]`
+    // expands to `[v]` - the same materialization #121 pinned for a `[3]`
+    // target, now shared by all three backends' tape tails.
+    let grad = cuda_f32(&[], vec![2.0]);
+    let result = crate::cuda::tape::unbroadcast(&grad, &[1])
+        .expect("a compatible scalar seed for a size-1 target expands");
+    assert_eq!(result.shape, vec![1]);
+    assert_eq!(download_f32_host(&result).unwrap(), vec![2.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused() {
+    // Mutually-broadcastable is not enough: `[4]` and `[2,1]` resolve
+    // together to `[2,4]`, but `[4]` does not broadcast *into* `[2,1]`.
+    // Pre-fix this indexed past the grad in the keepdim loop and panicked;
+    // it must refuse by name instead (mirrors the CPU/WGPU tests).
+    let grad = cuda_f32(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+    assert!(matches!(
+        crate::cuda::tape::unbroadcast(&grad, &[2, 1]),
+        Err(Error::ShapeMismatch { .. })
+    ));
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
 fn cross_entropy_loss_trains_through_gather_on_cuda() {
     // The executor used to call the raw gather launch, which runs the kernel
     // but records no tape entry: forward matched, backward reached nothing,

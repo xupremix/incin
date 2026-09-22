@@ -393,16 +393,18 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> Result<CpuStorage> {
 /// `target_shape` has size 1 but `grad`'s corresponding axis is `>1`.
 ///
 /// A no-op (returns a clone) when `grad.shape.dims() == target_shape`.
+///
+/// Semantics (fail-closed, shared with the CUDA/WGPU tails): on success the
+/// result's shape equals `target_shape`, so it can always be accumulated
+/// into the target. A compatible grad of *lower* rank than the target - a
+/// scalar seed for `[1]` or `[3]`, the `[] -> [1]` case that used to panic
+/// in the keepdim loop - is expanded rather than reduced, because a scalar
+/// broadcasts to any shape under broadcast rules. A grad that does not
+/// broadcast *into* the target refuses with a named `ShapeMismatch`; the
+/// function never panics on rank-deficient input.
 pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<CpuStorage> {
     if grad.shape.dims() == target_shape {
         return Ok(grad.clone());
-    }
-
-    // A target rank above the grad rank can never be a broadcast of it;
-    // refuse before indexing into result.shape below (avoids a panic for
-    // direct custom-autograd callers).
-    if target_shape.len() > grad.shape.len() {
-        crate::layout::broadcast_shape(grad.shape.dims(), target_shape)?;
     }
 
     let ndim_diff = grad.shape.len().saturating_sub(target_shape.len());
@@ -415,10 +417,19 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
     }
 
     // Sum (with keepdim) over any axis where target_shape has size 1 but
-    // result's corresponding axis is >1.
-    for (i, &t_dim) in target_shape.iter().enumerate() {
-        if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i)?;
+    // result's corresponding axis is >1. Only when the ranks agree after
+    // the leading squeeze (grad rank >= target rank): that squeeze is what
+    // right-aligns the axes, so indexing `result.shape[i]` against
+    // `target_shape[i]` is sound only at equal rank. When the target
+    // outranks the grad - the scalar-seed case, e.g. `[] -> [1]` - there is
+    // no aligned axis to reduce; the tail below expands the smaller grad to
+    // the target shape instead of indexing past the reduced grad (the
+    // latent cross-backend panic this guards).
+    if result.shape.len() == target_shape.len() {
+        for (i, &t_dim) in target_shape.iter().enumerate() {
+            if t_dim == 1 && result.shape[i] != 1 {
+                result = sum_dim_keepdim(&result, i)?;
+            }
         }
     }
 
@@ -426,15 +437,27 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
         return Ok(result);
     }
 
-    // Refuse a genuinely incompatible shape rather than handing a wrong-shaped
-    // gradient on: `broadcast_shape` checks compatibility first, mirroring the
-    // CUDA/WGPU tails (`cuda/tape.rs`, `wgpu/tape.rs`). Unlike those backends,
-    // nothing is materialized here -- the CPU kernels broadcast a scalar or
-    // size-1 operand implicitly, so the reduced storage is already what the
-    // next consumer reads. See #121 for the scalar-seed shape the
-    // accelerator tails expand.
-    crate::layout::broadcast_shape(result.shape.dims(), target_shape)?;
-    Ok(result)
+    // Fail-closed tail: the reduced grad must broadcast *into* the target
+    // (resolved shape equal to the target, not merely mutually
+    // broadcastable), or refuse with a named error rather than hand a
+    // wrong-shaped gradient on to accumulation. A compatible smaller grad -
+    // notably a scalar seed for a size-1 or size-3 target - then expands to
+    // exactly the target shape: `TapeStorage::accumulate` requires grads
+    // shape-matched to their target, and a scalar broadcasts to any shape.
+    // CPU expands metadata-only via `broadcast_as` (stride-0 views); the
+    // CUDA/WGPU tails materialize buffers (`cuda/tape.rs`, `wgpu/tape.rs`).
+    // All three backends agree on the resulting shape - see #121, which
+    // first pinned the accelerator half of this contract.
+    let resolved = crate::layout::broadcast_shape(result.shape.dims(), target_shape)?;
+    if resolved.as_slice() != target_shape {
+        return Err(incin_core::error::Error::ShapeMismatch {
+            op: "autograd unbroadcast",
+            expected: target_shape.to_vec(),
+            got: result.shape.dims().to_vec(),
+            msg: "the reduced gradient does not broadcast into the target shape".into(),
+        });
+    }
+    result.broadcast_as(target_shape)
 }
 
 /// Sum-reduce `storage` over `axis`, removing that axis from the shape
@@ -652,17 +675,50 @@ mod tests {
     }
 
     #[test]
-    /// `unbroadcast_scalar_seed_is_kept_for_implicit_broadcast`.
-    fn unbroadcast_scalar_seed_is_kept_for_implicit_broadcast() {
-        // The CPU side of #121: a scalar seed for a `[3]` target stays a
-        // scalar after the compatibility check, because the CPU kernels
-        // broadcast a scalar operand implicitly. The CUDA/WGPU tails
-        // materialize here instead; pin the CPU half so the split cannot
-        // drift silently.
+    /// `unbroadcast_scalar_seed_materializes_to_full_width`.
+    fn unbroadcast_scalar_seed_materializes_to_full_width() {
+        // #121 pinned two halves of this contract: the CUDA/WGPU tails
+        // materialized a scalar seed for a `[3]` target, while CPU kept the
+        // scalar for its kernels' implicit broadcast. The unbroadcast fix
+        // (size-1 target panic) unified the three backends on the
+        // accumulator's own requirement - the result's shape equals the
+        // target, so it is always accumulable - so CPU materializes here
+        // too, metadata-only via `broadcast_as`.
         let grad = scalar(2.0);
-        let result = unbroadcast(&grad, &[3]).unwrap();
-        assert_eq!(result.shape, Vec::<usize>::new());
-        assert_eq!(result.get(&[]), 2.0);
+        let result = unbroadcast(&grad, &[3]).expect("a compatible scalar seed expands");
+        assert_eq!(result.shape, vec![3]);
+        assert_eq!(result.get(&[0]), 2.0);
+        assert_eq!(result.get(&[1]), 2.0);
+        assert_eq!(result.get(&[2]), 2.0);
+    }
+
+    #[test]
+    /// `unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused`.
+    fn unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused() {
+        // Mutually-broadcastable is not enough: `[4]` and `[2,1]` resolve
+        // together to `[2,4]`, but `[4]` does not broadcast *into* `[2,1]`
+        // (a 4 cannot shrink onto a 1). Pre-fix this indexed past the grad
+        // in the keepdim loop and panicked; it must refuse by name instead.
+        let grad = vector(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(matches!(
+            unbroadcast(&grad, &[2, 1]),
+            Err(incin_core::error::Error::ShapeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_for_size_one_target_materializes`.
+    fn unbroadcast_scalar_seed_for_size_one_target_materializes() {
+        // Regression for the latent cross-backend panic: a size-1 target
+        // dimension at an index >= the grad's rank (here the whole target)
+        // used to index past the reduced grad in the keepdim loop. A scalar
+        // broadcasts to any shape under broadcast rules, so `[] -> [1]`
+        // expands to `[v]`, matching the #121 tail's `[3]` behavior.
+        let grad = scalar(2.0);
+        let result =
+            unbroadcast(&grad, &[1]).expect("a compatible scalar seed for a size-1 target expands");
+        assert_eq!(result.shape, vec![1]);
+        assert_eq!(result.get(&[0]), 2.0);
     }
 
     // --- tape accumulation tests (CPUBACK-05) ---
