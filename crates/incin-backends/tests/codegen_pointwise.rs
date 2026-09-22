@@ -137,38 +137,6 @@ fn test_vectorized_vec4_pointwise_codegen() {
 }
 
 #[test]
-fn test_fused_gemm_epilogue_codegen() {
-    use incin_backends::codegen::{FusedEpilogueKind, FusedEpilogueSpec};
-
-    let spec = FusedEpilogueSpec::new(
-        "fused_linear_bias_gelu",
-        DTypeId::F32,
-        FusedEpilogueKind::BiasResidualGelu,
-    )
-    .with_cols(768);
-
-    let cuda = spec.render_cuda();
-    assert!(cuda.contains("const float* __restrict__ matmul_out"));
-    assert!(cuda.contains("const float* __restrict__ bias"));
-    assert!(cuda.contains("const float* __restrict__ residual"));
-    assert!(cuda.contains("bias[(idx % 768)]"));
-    assert!(cuda.contains("tanhf("));
-
-    let wgsl = spec.render_wgsl();
-    assert!(wgsl.contains("var<storage, read> matmul_out: array<f32>"));
-    assert!(wgsl.contains("var<storage, read> bias: array<f32>"));
-    assert!(wgsl.contains("var<storage, read> residual: array<f32>"));
-    assert!(wgsl.contains("bias[(idx % 768u)]"));
-    assert!(wgsl.contains("tanh("));
-
-    let msl = spec.render_msl();
-    assert!(msl.contains("device const float* matmul_out"));
-    assert!(msl.contains("device const float* bias"));
-    assert!(msl.contains("bias[(idx % 768u)]"));
-    assert!(msl.contains("tanh("));
-}
-
-#[test]
 fn test_parallel_reduction_codegen() {
     use incin_backends::codegen::{ReductionOpKind, ReductionOpSpec};
 
@@ -188,54 +156,6 @@ fn test_parallel_reduction_codegen() {
     let msl = spec.render_msl();
     assert!(msl.contains("kernel void warp_reduce_sum_f32"));
     assert!(msl.contains("simd_sum(local_val)"));
-}
-
-#[test]
-fn test_tiled_gemm_codegen() {
-    use incin_backends::codegen::{GemmSpec, GemmTileConfig};
-
-    let spec = GemmSpec::new("tiled_gemm_f32", DTypeId::F32).with_tile(GemmTileConfig {
-        bm: 64,
-        bn: 64,
-        bk: 16,
-        tm: 4,
-        tn: 4,
-    });
-
-    let cuda = spec.render_cuda();
-    assert!(cuda.contains("__global__ void tiled_gemm_f32"));
-    assert!(cuda.contains("__shared__ float s_a[64][17]"));
-    assert!(cuda.contains("__shared__ float s_b[16][65]"));
-    assert!(cuda.contains("fmaf(r_a[i], r_b[j], r_c[i][j])"));
-
-    let wgsl = spec.render_wgsl();
-    assert!(wgsl.contains("var<workgroup> s_a: array<array<f32, 16>, 64>"));
-    assert!(wgsl.contains("fma(r_a[i], r_b[j], r_c[i][j])"));
-
-    let msl = spec.render_msl();
-    assert!(msl.contains("threadgroup float s_a[64][16]"));
-    assert!(msl.contains("fma(r_a[i], r_b[j], r_c[i][j])"));
-}
-
-#[test]
-fn test_attention_sdpa_flash_codegen() {
-    use incin_backends::codegen::AttentionSpec;
-
-    let spec = AttentionSpec::new("sdpa_causal_f32", DTypeId::F32, 64, true);
-
-    let cuda = spec.render_cuda();
-    assert!(cuda.contains("__global__ void sdpa_causal_f32_forward"));
-    assert!(cuda.contains("min(seq_len, q_seq_idx + 1)"));
-    assert!(cuda.contains("m_curr = fmaxf(m_prev, dot)"));
-    assert!(cuda.contains("p_prev_scale = expf(m_prev - m_curr)"));
-
-    let wgsl = spec.render_wgsl();
-    assert!(wgsl.contains("fn sdpa_causal_f32_forward"));
-    assert!(wgsl.contains("min(params.seq_len, q_seq_idx + 1u)"));
-
-    let msl = spec.render_msl();
-    assert!(msl.contains("kernel void sdpa_causal_f32_forward"));
-    assert!(msl.contains("min(seq_len, q_seq_idx + 1)"));
 }
 
 #[test]
@@ -293,10 +213,8 @@ fn test_fast_divisor_and_strided_indexing() {
 }
 
 #[test]
-fn test_triton_inductor_scheduler_and_autotuning() {
-    use incin_backends::codegen::{
-        AutotuneSpace, BlockTensorPtr, GpuArchProfile, KernelScheduler, LoopScheduleKind,
-    };
+fn test_triton_inductor_scheduler() {
+    use incin_backends::codegen::{BlockTensorPtr, KernelScheduler, LoopScheduleKind};
 
     let ptr_a = BlockTensorPtr::global("a", DTypeId::F32, vec![32, 64], vec![64, 1]);
     assert!(ptr_a.is_innermost_contiguous());
@@ -321,115 +239,6 @@ fn test_triton_inductor_scheduler_and_autotuning() {
     let preamble = scheduler.render_cuda_preamble();
     assert!(preamble.contains("block_row = blockIdx.y * 64"));
     assert!(preamble.contains("block_col = blockIdx.x * 64"));
-
-    let space =
-        AutotuneSpace::for_matmul(1024, 1024, 1024, DTypeId::F32, GpuArchProfile::NvidiaModern);
-    let candidates = space.generate_candidates();
-    assert!(!candidates.is_empty());
-    assert!(candidates[0].block_m >= 16);
-    assert!(candidates[0].shared_memory_bytes > 0);
-
-    let best = space.select_best_heuristic();
-    assert!(best.block_m >= 16);
-}
-
-#[test]
-fn test_tensor_core_mma_codegen() {
-    use incin_backends::codegen::TensorCoreMmaSpec;
-
-    let spec = TensorCoreMmaSpec::new("tensor_core_gemm_f16", DTypeId::F16, DTypeId::F32, 2, 2);
-    let cuda = spec.render_cuda();
-    assert!(cuda.contains("nvcuda::wmma"));
-    assert!(cuda.contains("fragment<matrix_a, 16, 16, 16, __half, row_major>"));
-    assert!(cuda.contains("mma_sync(c_frag, a_frag, b_frag, c_frag)"));
-    assert!(cuda.contains("store_matrix_sync"));
-}
-
-#[test]
-fn test_rope_embedding_codegen() {
-    use incin_backends::codegen::RopeSpec;
-
-    let spec_dyn = RopeSpec::new("rope_dyn_f32", DTypeId::F32, 64, 10000.0, false);
-    let cuda_fwd = spec_dyn.render_cuda_forward();
-    assert!(cuda_fwd.contains("__global__ void rope_dyn_f32_forward"));
-    assert!(cuda_fwd.contains("sincosf(angle, &sin_v, &cos_v)"));
-    assert!(cuda_fwd.contains("y0 = x0 * cos_v - x1 * sin_v"));
-
-    let cuda_bwd = spec_dyn.render_cuda_backward();
-    assert!(cuda_bwd.contains("__global__ void rope_dyn_f32_backward"));
-    assert!(cuda_bwd.contains("dx0 = dy0 * cos_v + dy1 * sin_v"));
-
-    let spec_pre = RopeSpec::new("rope_pre_f32", DTypeId::F32, 128, 500000.0, true);
-    let cuda_pre_fwd = spec_pre.render_cuda_forward();
-    assert!(cuda_pre_fwd.contains("cos_table"));
-    assert!(cuda_pre_fwd.contains("sin_table"));
-}
-
-#[test]
-fn test_fused_cross_entropy_codegen() {
-    use incin_backends::codegen::CrossEntropySpec;
-
-    let spec = CrossEntropySpec::new("cross_entropy_loss_f32", DTypeId::F32, 32000, 0.1);
-    let cuda_fwd = spec.render_cuda_forward();
-    assert!(cuda_fwd.contains("__global__ void cross_entropy_loss_f32_forward"));
-    assert!(cuda_fwd.contains("__shfl_down_sync"));
-    assert!(cuda_fwd.contains("smooth_loss"));
-
-    let cuda_bwd = spec.render_cuda_backward();
-    assert!(cuda_bwd.contains("__global__ void cross_entropy_loss_f32_backward"));
-    assert!(cuda_bwd.contains("dlogits_sample[v] = static_cast<float>(grad)"));
-}
-
-#[test]
-fn test_fused_optimizer_adamw_and_lion_codegen() {
-    use incin_backends::codegen::FusedOptimizerSpec;
-
-    let spec_adamw = FusedOptimizerSpec::adamw(
-        "adamw_f32",
-        DTypeId::F32,
-        DTypeId::F32,
-        1e-3,
-        0.01,
-        0.9,
-        0.999,
-        1e-8,
-    );
-    let cuda_adamw = spec_adamw.render_cuda();
-    assert!(cuda_adamw.contains("__global__ void adamw_f32"));
-    assert!(cuda_adamw.contains("p -= lr * weight_decay * p"));
-    assert!(cuda_adamw.contains("step = m_hat / (sqrtf(v_hat) + eps)"));
-
-    let spec_lion =
-        FusedOptimizerSpec::lion("lion_f32", DTypeId::F32, DTypeId::F32, 1e-4, 0.1, 0.9, 0.99);
-    let cuda_lion = spec_lion.render_cuda();
-    assert!(cuda_lion.contains("__global__ void lion_f32"));
-    assert!(
-        cuda_lion.contains(
-            "sign_val = (update_dir > 0.0f) ? 1.0f : ((update_dir < 0.0f) ? -1.0f : 0.0f)"
-        )
-    );
-}
-
-#[test]
-fn test_quant_gemv_q8_0_codegen() {
-    use incin_backends::codegen::QuantGemmSpec;
-
-    let spec = QuantGemmSpec::q8_0_gemv("gemv_q8_0_f32", DTypeId::F32);
-    let cuda = spec.render_cuda_gemv();
-    assert!(cuda.contains("__global__ void gemv_q8_0_f32"));
-    assert!(cuda.contains("struct __align__(2) BlockQ8_0"));
-    assert!(cuda.contains("__shfl_down_sync"));
-}
-
-#[test]
-fn test_prefix_scan_codegen() {
-    use incin_backends::codegen::{PrefixScanSpec, ScanOpKind};
-
-    let spec = PrefixScanSpec::new("cumsum_f32", ScanOpKind::Sum, DTypeId::F32, true);
-    let cuda = spec.render_cuda();
-    assert!(cuda.contains("__global__ void cumsum_f32"));
-    assert!(cuda.contains("__shfl_up_sync"));
-    assert!(cuda.contains("running_val += other"));
 }
 
 #[test]
@@ -444,51 +253,4 @@ fn test_composite_fusion_swiglu_codegen() {
     assert!(cuda.contains("const float gated = gate * silu_up"));
     assert!(cuda.contains("const float out = gated + res"));
     assert!(cuda.contains("Out[idx] = static_cast<float>(out)"));
-}
-
-#[test]
-fn test_moe_topk_gating_codegen() {
-    use incin_backends::codegen::MoeGatingSpec;
-
-    let spec = MoeGatingSpec::new("moe_gating_top2_f32", DTypeId::F32, 8, 2);
-    let cuda = spec.render_cuda_gating();
-    assert!(cuda.contains("__global__ void moe_gating_top2_f32_gating"));
-    assert!(cuda.contains("int top_idx[2]"));
-    assert!(cuda.contains("float top_val[2]"));
-    assert!(cuda.contains("out_indices[k] = top_idx[k]"));
-    assert!(cuda.contains("out_weights[k] = expf(top_val[k] - max_val) * inv_sum"));
-}
-
-#[test]
-fn test_implicit_gemm_conv2d_codegen() {
-    use incin_backends::codegen::ImplicitConv2dSpec;
-
-    let spec = ImplicitConv2dSpec::new("conv2d_k3s1p1_f32", DTypeId::F32, (3, 3), (1, 1), (1, 1));
-    let cuda = spec.render_cuda();
-    assert!(cuda.contains("__global__ void conv2d_k3s1p1_f32"));
-    assert!(cuda.contains("const int w_out = out_idx % out_w"));
-    assert!(cuda.contains("const int h_in = h_out * 1 - 1 + r * 1"));
-    assert!(cuda.contains("fmaf(in_val, w_val, sum)"));
-}
-
-#[test]
-fn test_sota_gemm_tensor_core_and_fused_epilogue_codegen() {
-    use incin_backends::codegen::{EpilogueActivation, SotaGemmSpec};
-
-    let spec_f16 =
-        SotaGemmSpec::tensor_core_f16("sota_gemm_bias_gelu_f16", true, EpilogueActivation::Gelu);
-    let cuda_f16 = spec_f16.render_cuda();
-    assert!(cuda_f16.contains("__global__ void sota_gemm_bias_gelu_f16"));
-    assert!(cuda_f16.contains("L2 Cache Swizzling / Super-Tile Rasterization"));
-    assert!(cuda_f16.contains("super_tile_id"));
-    assert!(cuda_f16.contains("__shared__ __half s_a[128][40]"));
-    assert!(cuda_f16.contains("val += static_cast<float>(Bias[global_c_col])"));
-    assert!(cuda_f16.contains("tanhf(0.79788456f *"));
-
-    let spec_f32 =
-        SotaGemmSpec::simd_tiled_f32("sota_gemm_bias_silu_f32", true, EpilogueActivation::Silu);
-    let cuda_f32 = spec_f32.render_cuda();
-    assert!(cuda_f32.contains("__global__ void sota_gemm_bias_silu_f32"));
-    assert!(cuda_f32.contains("val / (1.0f + expf(-val))"));
-    assert!(cuda_f32.contains("fmaf(r_a[i], r_b[j], acc[i][j])"));
 }

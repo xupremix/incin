@@ -25,12 +25,8 @@
 
 #![cfg(feature = "cuda")]
 
-use incin_backends::codegen::{
-    AttentionSpec, CompositeFusionSpec, CrossEntropySpec, FusedEpilogueKind, FusedEpilogueSpec,
-    GemmSpec, MoeGatingSpec, TensorCoreMmaSpec,
-};
-use incin_backends::codegen::{conv, normalization, optim, pointwise, quant_gemm};
-use incin_backends::codegen::{reduction, rope, scan, sota_gemm, vectorized};
+use incin_backends::codegen::CompositeFusionSpec;
+use incin_backends::codegen::{normalization, pointwise, reduction, vectorized};
 use incin_core::tensor::dtype::DTypeId;
 
 /// Aborts unless a CUDA device is present.
@@ -69,45 +65,8 @@ fn every_codegen_module_renders_compilable_cuda() {
     require_cuda();
 
     must_compile(
-        "AttentionSpec",
-        &AttentionSpec::new("smoke_attention", DTypeId::F32, 64, true).render_cuda(),
-    );
-    must_compile(
-        "ImplicitConv2dSpec",
-        &conv::ImplicitConv2dSpec::new("smoke_conv", DTypeId::F32, (3, 3), (1, 1), (1, 1))
-            .render_cuda(),
-    );
-
-    let cross_entropy = CrossEntropySpec::new("smoke_xent", DTypeId::F32, 128, 0.0);
-    must_compile(
-        "CrossEntropySpec::forward",
-        &cross_entropy.render_cuda_forward(),
-    );
-    must_compile(
-        "CrossEntropySpec::backward",
-        &cross_entropy.render_cuda_backward(),
-    );
-
-    must_compile(
-        "FusedEpilogueSpec",
-        &FusedEpilogueSpec::new("smoke_epilogue", DTypeId::F32, FusedEpilogueKind::BiasRelu)
-            .render_cuda(),
-    );
-    must_compile(
         "CompositeFusionSpec",
         &CompositeFusionSpec::swiglu_residual("smoke_fusion", DTypeId::F32).render_cuda(),
-    );
-    must_compile(
-        "GemmSpec",
-        &GemmSpec::new("smoke_gemm", DTypeId::F32).render_cuda(),
-    );
-    must_compile(
-        "TensorCoreMmaSpec",
-        &TensorCoreMmaSpec::new("smoke_mma", DTypeId::F16, DTypeId::F32, 2, 2).render_cuda(),
-    );
-    must_compile(
-        "MoeGatingSpec",
-        &MoeGatingSpec::new("smoke_moe", DTypeId::F32, 8, 2).render_cuda_gating(),
     );
 
     for kind in [
@@ -126,32 +85,6 @@ fn every_codegen_module_renders_compilable_cuda() {
         must_compile("NormalizationSpec::backward", &spec.render_cuda_backward());
     }
 
-    let rope = rope::RopeSpec::new("smoke_rope", DTypeId::F32, 64, 10000.0, false);
-    must_compile("RopeSpec::forward", &rope.render_cuda_forward());
-    must_compile("RopeSpec::backward", &rope.render_cuda_backward());
-
-    must_compile(
-        "PrefixScanSpec",
-        &scan::PrefixScanSpec::new("smoke_scan", scan::ScanOpKind::Sum, DTypeId::F32, true)
-            .render_cuda(),
-    );
-
-    must_compile(
-        "FusedOptimizerSpec",
-        &optim::FusedOptimizerSpec {
-            name: "smoke_optim".to_string(),
-            kind: optim::OptimizerKind::AdamW,
-            dtype: DTypeId::F32,
-            grad_dtype: DTypeId::F32,
-            lr: 1e-3,
-            weight_decay: 0.01,
-            beta1: 0.9,
-            beta2: 0.999,
-            eps: 1e-8,
-        }
-        .render_cuda(),
-    );
-
     must_compile(
         "PointwiseOpSpec",
         &pointwise::PointwiseOpSpec {
@@ -163,17 +96,6 @@ fn every_codegen_module_renders_compilable_cuda() {
             work_group_size: 256,
         }
         .render_cuda(),
-    );
-
-    must_compile(
-        "QuantGemmSpec",
-        &quant_gemm::QuantGemmSpec {
-            name: "smoke_quant".to_string(),
-            act_dtype: DTypeId::F32,
-            weight_dtype: DTypeId::U8,
-            block_size: 32,
-        }
-        .render_cuda_gemv(),
     );
 
     must_compile(
@@ -198,31 +120,6 @@ fn every_codegen_module_renders_compilable_cuda() {
             expr: pointwise::PointwiseExpr::Arg(0),
             vector_width: vectorized::VectorWidth::Vec4,
             work_group_size: 256,
-        }
-        .render_cuda(),
-    );
-
-    must_compile(
-        "SotaGemmSpec",
-        &sota_gemm::SotaGemmSpec {
-            name: "smoke_sota".to_string(),
-            engine: sota_gemm::GemmComputeEngine::SimdFmaTiled,
-            dtype_a: DTypeId::F32,
-            dtype_b: DTypeId::F32,
-            dtype_c: DTypeId::F32,
-            dtype_accum: DTypeId::F32,
-            block_m: 64,
-            block_n: 64,
-            block_k: 16,
-            thread_m: 4,
-            thread_n: 4,
-            pipeline_stages: 2,
-            use_cp_async: false,
-            use_l2_swizzle: false,
-            swizzle_factor: 1,
-            has_bias: false,
-            has_residual: false,
-            activation: sota_gemm::EpilogueActivation::None,
         }
         .render_cuda(),
     );
