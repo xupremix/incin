@@ -100,6 +100,16 @@ pub struct Feature {
 
 impl Feature {
     /// Creates a feature observation for a report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::doctor::Feature;
+    ///
+    /// let feature = Feature::new("cpu", true);
+    /// assert_eq!(feature.name, "cpu");
+    /// assert!(feature.enabled);
+    /// ```
     #[must_use]
     pub fn new(name: &str, enabled: bool) -> Self {
         Self {
@@ -120,6 +130,16 @@ pub struct IsaFeature {
 
 impl IsaFeature {
     /// Creates an instruction-set observation for a report.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::doctor::IsaFeature;
+    ///
+    /// let isa = IsaFeature::new("avx2", false);
+    /// assert_eq!(isa.name, "avx2");
+    /// assert!(!isa.available, "the kernels that branch take the scalar path");
+    /// ```
     #[must_use]
     pub fn new(name: &str, available: bool) -> Self {
         Self {
@@ -172,6 +192,18 @@ pub struct Cache {
 
 impl Cache {
     /// Creates a cache observation from an optional path and state.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::path::PathBuf;
+    /// use incin::doctor::{Cache, CacheState};
+    ///
+    /// let cache = Cache::new("hub", Some(PathBuf::from("/tmp/hub")), CacheState::Absent);
+    /// assert_eq!(cache.path.as_deref(), Some("/tmp/hub"));
+    /// assert_eq!(cache.state, CacheState::Absent);
+    /// assert_eq!(cache.detail, None);
+    /// ```
     #[must_use]
     pub fn new(name: &str, path: Option<PathBuf>, state: CacheState) -> Self {
         Self {
@@ -183,6 +215,16 @@ impl Cache {
     }
 
     /// Adds a human-readable explanation to the observation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::doctor::{Cache, CacheState};
+    ///
+    /// let cache = Cache::new("telemetry-runs", None, CacheState::NotCompiled)
+    ///     .with_detail("enable the telemetry feature");
+    /// assert_eq!(cache.detail.as_deref(), Some("enable the telemetry feature"));
+    /// ```
     #[must_use]
     pub fn with_detail(mut self, detail: &str) -> Self {
         self.detail = Some(detail.to_string());
@@ -346,6 +388,30 @@ impl Report {
     ///
     /// Pure given the host: the same answers produce the same report, which is
     /// what makes a golden test of the rendered output meaningful.
+    ///
+    /// # Examples
+    ///
+    /// Two gatherings that see the same host answers are equal: the report
+    /// depends on nothing but the [`Host`] answers, not on ambient state.
+    ///
+    /// ```rust
+    /// use incin::doctor::{Cache, Feature, Host, IsaFeature, Report};
+    /// # struct FakeHost;
+    /// # impl Host for FakeHost {
+    /// #     fn incin_version(&self) -> String { String::from("0.1.0") }
+    /// #     fn rustc_version(&self) -> Option<String> { Some(String::from("rustc 1.0.0")) }
+    /// #     fn features(&self) -> Vec<Feature> { vec![Feature::new("cpu", true)] }
+    /// #     fn cpu_isa(&self) -> Vec<IsaFeature> { vec![IsaFeature::new("avx2", true)] }
+    /// #     fn compiled_in(&self, kind: incin::DeviceKind) -> bool {
+    /// #         kind == incin::DeviceKind::Cpu
+    /// #     }
+    /// #     fn probe(&self, _kind: incin::DeviceKind) -> Option<incin::DeviceId> { None }
+    /// #     fn caches(&self) -> Vec<Cache> { vec![] }
+    /// # }
+    /// let first = Report::gather(&FakeHost);
+    /// let second = Report::gather(&FakeHost);
+    /// assert_eq!(first, second);
+    /// ```
     #[must_use]
     pub fn gather(host: &dyn Host) -> Self {
         let toolchain = Toolchain {
@@ -409,6 +475,41 @@ impl Report {
     /// Warnings do not fail: a build with CUDA compiled in and no GPU attached
     /// is a normal laptop, and a doctor that exits non-zero on it is a doctor
     /// people stop running.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::doctor::{
+    ///     EXIT_FINDINGS, EXIT_OK, Finding, Report, SCHEMA_VERSION, Severity, Toolchain,
+    /// };
+    /// # fn finding(severity: Severity) -> Finding {
+    /// #     Finding {
+    /// #         severity,
+    /// #         code: String::from("example"),
+    /// #         message: String::from("example"),
+    /// #         remedy: None,
+    /// #     }
+    /// # }
+    /// # fn report(findings: Vec<Finding>) -> Report {
+    /// #     Report {
+    /// #         schema_version: SCHEMA_VERSION,
+    /// #         toolchain: Toolchain {
+    /// #             incin: String::from("0.1.0"),
+    /// #             rustc: None,
+    /// #         },
+    /// #         features: vec![],
+    /// #         cpu_isa: vec![],
+    /// #         devices: vec![],
+    /// #         caches: vec![],
+    /// #         probes: vec![],
+    /// #         findings,
+    /// #     }
+    /// # }
+    /// let warned = report(vec![finding(Severity::Warning)]);
+    /// assert_eq!(warned.exit_code(), EXIT_OK);
+    /// let broken = report(vec![finding(Severity::Error)]);
+    /// assert_eq!(broken.exit_code(), EXIT_FINDINGS);
+    /// ```
     #[must_use]
     pub fn exit_code(&self) -> i32 {
         if self
@@ -428,6 +529,29 @@ impl Report {
     /// section order, with no column padding. Padding is what makes a text
     /// report unstable - a single long path shifts every other line - and the
     /// format is the part sec. 2.3 asks to be stable.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::doctor::{Report, SCHEMA_VERSION, Toolchain};
+    /// # let report = Report {
+    /// #     schema_version: SCHEMA_VERSION,
+    /// #     toolchain: Toolchain {
+    /// #         incin: String::from("0.1.0"),
+    /// #         rustc: None,
+    /// #     },
+    /// #     features: vec![],
+    /// #     cpu_isa: vec![],
+    /// #     devices: vec![],
+    /// #     caches: vec![],
+    /// #     probes: vec![],
+    /// #     findings: vec![],
+    /// # };
+    /// let text = report.to_text();
+    /// assert!(text.starts_with("[toolchain]\nincin: 0.1.0\nrustc: unknown\n"));
+    /// assert!(text.contains("\n[probes]\nnone: no device answered\n"));
+    /// assert!(text.ends_with("\n[findings]\nnone\n"));
+    /// ```
     #[must_use]
     pub fn to_text(&self) -> String {
         self.to_text_with_update(None)
@@ -555,6 +679,28 @@ impl Report {
     ///
     /// Only if the report cannot be serialized, which cannot happen for the
     /// types above; the signature keeps the `unwrap` out of the library.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::doctor::{Report, SCHEMA_VERSION, Toolchain};
+    /// # let report = Report {
+    /// #     schema_version: SCHEMA_VERSION,
+    /// #     toolchain: Toolchain {
+    /// #         incin: String::from("0.1.0"),
+    /// #         rustc: None,
+    /// #     },
+    /// #     features: vec![],
+    /// #     cpu_isa: vec![],
+    /// #     devices: vec![],
+    /// #     caches: vec![],
+    /// #     probes: vec![],
+    /// #     findings: vec![],
+    /// # };
+    /// let json = report.to_json().expect("a Report always serializes");
+    /// assert!(json.contains("\"schema_version\""));
+    /// assert!(json.contains("\"findings\": []"));
+    /// ```
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         self.to_json_with_update(None)
     }
@@ -795,6 +941,17 @@ fn detected_isa() -> Vec<IsaFeature> {
 ///
 /// Public so the read-only contract can be asserted directly: pointing this at
 /// a path that does not exist must leave it not existing.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use incin::doctor::{CacheState, cache_state};
+///
+/// let missing = Path::new("/nonexistent/incin-doctor-doctest");
+/// assert_eq!(cache_state(missing), CacheState::Absent);
+/// assert!(!missing.exists(), "the probe never creates the path");
+/// ```
 #[must_use]
 pub fn cache_state(path: &Path) -> CacheState {
     match std::fs::metadata(path) {
@@ -899,6 +1056,16 @@ pub const EXIT_USAGE: i32 = 2;
 /// anything that contained the right substring, which turned a typo into a
 /// silent behaviour change; an unrecognized flag here is an error naming the
 /// ones that exist.
+///
+/// # Examples
+///
+/// ```rust
+/// use incin::doctor::{run, EXIT_USAGE};
+///
+/// let (output, code) = run(&[String::from("--bogus")]);
+/// assert_eq!(code, EXIT_USAGE);
+/// assert!(output.contains("unknown argument `--bogus`"));
+/// ```
 #[must_use]
 pub fn run(args: &[String]) -> (String, i32) {
     let mut json = false;
