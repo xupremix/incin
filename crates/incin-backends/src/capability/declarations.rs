@@ -438,10 +438,16 @@ macro_rules! wgpu_descriptor_operations {
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
-            // No canonical executor was written for this backend beyond the
-            // groups above, so it advertises none. An empty group is a truthful
-            // claim; a copied one would not be.
-            normalization = [],
+            // The whole normalization family WGPU can answer by rewriting into
+            // taped primitives: `softmax` (already had an Execute impl via the
+            // axis macro), `rms_norm` (mul/mean/sqrt/div), `layer_norm` (add
+            // the mean-center step and an optional affine bias), `group_norm`
+            // (reshape to runs, same statistical path, reshape back) and
+            // inference-mode `batch_norm` (running statistics only — training
+            // mode is refused by name in the executor because there is no
+            // batch-statistics kernel here). `LogSoftmax` stays out: no
+            // WGPU Execute impl exists for it yet.
+            normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
             embedding = [],
             // Advertised now that each has an executor and a gradient path.
             // The comparison and logical modes of the same shader stay
@@ -460,12 +466,18 @@ macro_rules! wgpu_descriptor_operations {
             // elements silently rather than fail. It can be advertised once
             // those shaders take strides, which is the same work the CUDA
             // strided kernels already do.
-            native_tensor = [Maximum, Minimum, AbsDiff, TransposeExact],
-            // `rms_norm` only, not the whole normalization family: it is the
-            // one member WGPU can answer, by rewriting into `mul`,
-            // `mean_keepdim`, `add_scalar`, `sqrt` and `div`. `layer_norm`,
-            // `batch_norm`, `group_norm` and `instance_norm` have no WGPU
-            // path, and a family row would claim all five.
+            native_tensor = [
+                Maximum, Minimum, AbsDiff, TransposeExact,
+                // Structural windows and joins, each with a `shape.wgsl`
+                // slice/paste path and a tape entry: `narrow`/`slice` are one
+                // mode-0 launch forward and one mode-1 paste backward;
+                // `concat`/`stack` are one zeroed buffer plus one paste per
+                // operand; `tril`/`triu` mask rank 1–2 storage host-side the
+                // way CPU's `triangular_storage` does.
+                Narrow, SliceExact, ConcatExact, StackExact, Tril, Triu,
+            ],
+            // Boolean result representation is still unsettled (see below), so
+            // no logical rows yet.
             logical = [],
             // All three rewrite into `reshape` rather than running a kernel of
             // their own: the elements are already in the right order and only
@@ -473,11 +485,26 @@ macro_rules! wgpu_descriptor_operations {
             // backward is `reshape`'s, which is what makes their `training`
             // claim true without new hand-derived math.
             composed_tensor = [FlattenExact, SqueezeExact, UnsqueezeExact],
-            composed_matmul = [],
-            composed_matmul_bias = [],
+            // `bmm` is matmul under its own name; `addmm` is matmul plus two
+            // scalar scales and an add; `dot` is mul + all-sum; each is CPU's
+            // composition on taped primitives. `Linear` rides its own bias
+            // group because the rank-one input/bias path needs the wider rank
+            // bound that group carries.
+            composed_matmul = [BatchedMatMul, Addmm, Dot],
+            composed_matmul_bias = [Linear],
             quantizing = [],
             quantized = [],
-            composed_reduction = [],
+            // Losses and moments composed from sub/mul/abs and an all- or
+            // axis-reduce, exactly CPU's recipes, so each inherits this
+            // backend's f32-only contiguous reduction claim honestly.
+            // `CrossEntropyLoss` stays unadvertised: it needs an integer
+            // class-target gather this backend has no path for.
+            composed_reduction = [
+                MseLoss, L1Loss,
+                VarianceAll, VarianceDim, VarianceKeepDim,
+                StdAll, StdDim, StdKeepDim,
+                Norm,
+            ],
             composed_reduction_indexed = []
         }
     };

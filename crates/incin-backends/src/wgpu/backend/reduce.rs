@@ -455,6 +455,145 @@ impl<D: Device> WgpuBackendImpl<D> {
         });
         Ok(out)
     }
+
+    /// Bessel (or population) scale for a variance over `count` samples:
+    /// `1 / (count - 1)` when `unbiased` and `count > 1`, else `1 / count`,
+    /// and `0` when the divisor would be non-positive. Same table CPU's
+    /// `variance_scale` uses.
+    fn variance_scale(count: usize, unbiased: bool) -> f64 {
+        let count = count as f64;
+        let divisor = if unbiased {
+            if count <= 1.0 { 0.0 } else { count - 1.0 }
+        } else {
+            count
+        };
+        if divisor > 0.0 { 1.0 / divisor } else { 0.0 }
+    }
+
+    /// Scale a pre-reduced squared-deviation sum by
+    /// [`variance_scale`](Self::variance_scale), optionally square-rooting.
+    /// The mean/center/square/reduce steps live in each wrapper so all six
+    /// stay readable against CPU's `variance_executors!` line by line.
+    fn variance_scale_sum<K: DType>(
+        summed: &<Self as StorageBackend>::Storage<K>,
+        count: usize,
+        unbiased: bool,
+        square_root: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let scaled = Self::mul_scalar_float::<K>(summed, Self::variance_scale(count, unbiased))?;
+        if square_root {
+            Self::sqrt::<K>(&scaled)
+        } else {
+            Ok(scaled)
+        }
+    }
+
+    /// `var_all`: population/Bessel variance over every element.
+    pub(crate) fn variance_all<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        unbiased: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mean = Self::mean_all::<K>(t)?;
+        let count = num_elements(&t.shape)?;
+        let centered = Self::sub::<K>(t, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let summed = Self::sum_all::<K>(&squared)?;
+        Self::variance_scale_sum::<K>(&summed, count, unbiased, false)
+    }
+
+    /// `std_all`: [`variance_all`](Self::variance_all) then a square root.
+    pub(crate) fn std_all<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        unbiased: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mean = Self::mean_all::<K>(t)?;
+        let count = num_elements(&t.shape)?;
+        let centered = Self::sub::<K>(t, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let summed = Self::sum_all::<K>(&squared)?;
+        Self::variance_scale_sum::<K>(&summed, count, unbiased, true)
+    }
+
+    /// `var_dim`: variance along `dim`, dropping the axis.
+    pub(crate) fn variance_dim<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+        unbiased: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mean = Self::mean_keepdim::<K>(t, dim)?;
+        let count = t.shape.get(dim).copied().unwrap_or(0);
+        let centered = Self::sub::<K>(t, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let summed = Self::sum_dim::<K>(&squared, dim)?;
+        Self::variance_scale_sum::<K>(&summed, count, unbiased, false)
+    }
+
+    /// `std_dim`: [`variance_dim`](Self::variance_dim) then a square root.
+    pub(crate) fn std_dim<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+        unbiased: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mean = Self::mean_keepdim::<K>(t, dim)?;
+        let count = t.shape.get(dim).copied().unwrap_or(0);
+        let centered = Self::sub::<K>(t, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let summed = Self::sum_dim::<K>(&squared, dim)?;
+        Self::variance_scale_sum::<K>(&summed, count, unbiased, true)
+    }
+
+    /// `var_keepdim`: variance along `dim`, keeping a unit axis.
+    pub(crate) fn variance_keepdim<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+        unbiased: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mean = Self::mean_keepdim::<K>(t, dim)?;
+        let count = t.shape.get(dim).copied().unwrap_or(0);
+        let centered = Self::sub::<K>(t, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let summed = Self::sum_keepdim::<K>(&squared, dim)?;
+        Self::variance_scale_sum::<K>(&summed, count, unbiased, false)
+    }
+
+    /// `std_keepdim`: [`variance_keepdim`](Self::variance_keepdim) then a
+    /// square root.
+    pub(crate) fn std_keepdim<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+        unbiased: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let mean = Self::mean_keepdim::<K>(t, dim)?;
+        let count = t.shape.get(dim).copied().unwrap_or(0);
+        let centered = Self::sub::<K>(t, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let summed = Self::sum_keepdim::<K>(&squared, dim)?;
+        Self::variance_scale_sum::<K>(&summed, count, unbiased, true)
+    }
+
+    /// `norm(order)`: the p-norm over every element. Order 1 and 2 take the
+    /// dedicated abs-sum / Euclidean paths CPU takes (same tolerance-free
+    /// special cases); any other positive order is `sum(|x|^p)^(1/p)`.
+    pub(crate) fn norm<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        order: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        const NORM_ORDER_TOLERANCE: f64 = 1e-6;
+        if (order - 1.0).abs() < NORM_ORDER_TOLERANCE {
+            let magnitude = Self::abs::<K>(t)?;
+            return Self::sum_all::<K>(&magnitude);
+        }
+        if (order - 2.0).abs() < NORM_ORDER_TOLERANCE {
+            let squared = Self::mul::<K>(t, t)?;
+            let summed = Self::sum_all::<K>(&squared)?;
+            return Self::sqrt::<K>(&summed);
+        }
+        let magnitude = Self::abs::<K>(t)?;
+        let raised = Self::powf::<K>(&magnitude, order)?;
+        let summed = Self::sum_all::<K>(&raised)?;
+        Self::powf::<K>(&summed, 1.0 / order)
+    }
+
     /// `max_dim`.
     pub(crate) fn max_dim<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
