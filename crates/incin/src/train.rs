@@ -45,7 +45,9 @@
 
 use incin_core::backend_authoring::Backend;
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, VariableBackend};
-use incin_core::exec::{LossScaleState, LossScaling, PrecisionChoice, RuntimePrecisionPolicy};
+use incin_core::exec::{
+    ExecutionPolicy, LossScaleState, LossScaling, PrecisionChoice, RuntimePrecisionPolicy,
+};
 use incin_core::optim::{Optimizer, ScaledOptimizer};
 use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
@@ -183,6 +185,9 @@ impl Plan {
     }
 
     /// The runtime precision policy configured for this plan.
+    ///
+    /// `fit` and `fit_scaled` make it the ambient precision for the duration
+    /// of the run; nothing else enforces it.
     #[must_use]
     pub fn precision(&self) -> RuntimePrecisionPolicy {
         self.precision
@@ -681,6 +686,12 @@ impl Trainer {
     /// differentiate. It is a closure rather than a trait method because the
     /// loss is the one part of a training step that is genuinely the caller's.
     ///
+    /// Each step runs inside an [`ExecutionPolicy`] scope holding this plan's
+    /// [`RuntimePrecisionPolicy`], so every `ExecutionContext` the step builds
+    /// carries the plan's precision and the caller's ambient policy is
+    /// restored when this returns, errors included. The scope casts nothing:
+    /// autocasting from an allowlist is not implemented.
+    ///
     /// # Errors
     ///
     /// [`TrainError::CollectivesUnavailable`] if the plan names more than one
@@ -710,23 +721,27 @@ impl Trainer {
             });
         }
 
-        let mut batches = 0;
-        let mut final_loss = None;
-        for epoch in 0..self.plan.epochs {
-            for (batch, item) in data.clone().into_iter().enumerate() {
-                let value = at(epoch, batch, loss(model, item))?;
-                let grads = at(epoch, batch, value.backward())?;
-                at(epoch, batch, optimizer.step(&grads))?;
-                final_loss = Some(at(epoch, batch, value.to_scalar::<f32>())?);
-                batches += 1;
-            }
-        }
+        ExecutionPolicy::current()
+            .with_precision(self.plan.precision)
+            .scope(|| {
+                let mut batches = 0;
+                let mut final_loss = None;
+                for epoch in 0..self.plan.epochs {
+                    for (batch, item) in data.clone().into_iter().enumerate() {
+                        let value = at(epoch, batch, loss(model, item))?;
+                        let grads = at(epoch, batch, value.backward())?;
+                        at(epoch, batch, optimizer.step(&grads))?;
+                        final_loss = Some(at(epoch, batch, value.to_scalar::<f32>())?);
+                        batches += 1;
+                    }
+                }
 
-        Ok(FitOutcome {
-            epochs: self.plan.epochs,
-            batches,
-            final_loss,
-        })
+                Ok(FitOutcome {
+                    epochs: self.plan.epochs,
+                    batches,
+                    final_loss,
+                })
+            })
     }
 
     /// Runs the training loop with mixed-precision loss scaling.
@@ -734,6 +749,9 @@ impl Trainer {
     /// Scales the computed loss before the backward pass, checks gradients for
     /// non-finite overflow (NaN/Inf), unscales gradients in-place, and steps
     /// the optimizer.
+    ///
+    /// The loop body runs under the same plan-precision [`ExecutionPolicy`]
+    /// scope as [`fit`](Self::fit).
     ///
     /// # Errors
     ///
@@ -770,35 +788,40 @@ impl Trainer {
             });
         }
 
-        let mut batches = 0;
-        let mut final_loss = None;
-        for epoch in 0..self.plan.epochs {
-            for (batch, item) in data.clone().into_iter().enumerate() {
-                let unscaled_loss_tensor = at(epoch, batch, loss(model, item))?;
-                let current_scale = scaler.scale();
-                let loss_for_backward = if (current_scale - 1.0).abs() > f32::EPSILON {
-                    at(
-                        epoch,
-                        batch,
-                        unscaled_loss_tensor
-                            .mul_scalar(current_scale as f64)
-                            .map(|scaled| scaled.forget_layout()),
-                    )?
-                } else {
-                    unscaled_loss_tensor.clone()
-                };
-                let mut grads = at(epoch, batch, loss_for_backward.backward())?;
-                let _stepped = at(epoch, batch, optimizer.step_scaled(&mut grads, scaler))?;
-                final_loss = Some(at(epoch, batch, unscaled_loss_tensor.to_scalar::<f32>())?);
-                batches += 1;
-            }
-        }
+        ExecutionPolicy::current()
+            .with_precision(self.plan.precision)
+            .scope(|| {
+                let mut batches = 0;
+                let mut final_loss = None;
+                for epoch in 0..self.plan.epochs {
+                    for (batch, item) in data.clone().into_iter().enumerate() {
+                        let unscaled_loss_tensor = at(epoch, batch, loss(model, item))?;
+                        let current_scale = scaler.scale();
+                        let loss_for_backward = if (current_scale - 1.0).abs() > f32::EPSILON {
+                            at(
+                                epoch,
+                                batch,
+                                unscaled_loss_tensor
+                                    .mul_scalar(current_scale as f64)
+                                    .map(|scaled| scaled.forget_layout()),
+                            )?
+                        } else {
+                            unscaled_loss_tensor.clone()
+                        };
+                        let mut grads = at(epoch, batch, loss_for_backward.backward())?;
+                        let _stepped = at(epoch, batch, optimizer.step_scaled(&mut grads, scaler))?;
+                        final_loss =
+                            Some(at(epoch, batch, unscaled_loss_tensor.to_scalar::<f32>())?);
+                        batches += 1;
+                    }
+                }
 
-        Ok(FitOutcome {
-            epochs: self.plan.epochs,
-            batches,
-            final_loss,
-        })
+                Ok(FitOutcome {
+                    epochs: self.plan.epochs,
+                    batches,
+                    final_loss,
+                })
+            })
     }
 }
 

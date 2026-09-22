@@ -18,6 +18,20 @@
 //!   metadata, so it cannot fabricate any.
 //! - **Capture keeps the same descriptor.** The value handed to the backend is
 //!   the value a compiler would record.
+//!
+//! # What admission reads off the policy
+//!
+//! Admission (`admit_invocation`) reads `training`, `fallback`, and `math_mode`
+//! from the [`ExecutionContext`] the caller passes. It does not call
+//! [`ExecutionPolicy::current`](crate::exec::ExecutionPolicy::current) and does
+//! not branch on the policy's `precision` axis. The axis still reaches dispatch,
+//! because every eager operation builds its context with
+//! [`ExecutionContext::from_scope`], which copies the ambient policy once - so a
+//! scoped precision (the trainer's `fit` installs one) is what those contexts
+//! carry into [`ExecutionRequest::context`](crate::tensor::backend::ExecutionRequest::context).
+//! Acting on it - casting operands
+//! through an allowlist - is a later slice of issue #2; until then the axis is
+//! carried and inspectable, not enforced.
 
 use alloc::vec::Vec;
 use core::fmt;

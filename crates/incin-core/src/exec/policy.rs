@@ -303,6 +303,16 @@ pub struct ExecutionPolicy {
     /// NaN handling policy in force.
     pub nan_policy: NanPolicy,
     /// Runtime precision policy in force.
+    ///
+    /// Copied by [`ExecutionContext::from_scope`] from the ambient scope, so a
+    /// scope (the trainer's `fit` installs one) makes every eagerly built
+    /// context carry the plan's precision to
+    /// [`ExecutionRequest::context`](crate::tensor::backend::ExecutionRequest::context).
+    /// [`dispatch`](crate::exec::dispatch) admission itself does not branch on
+    /// this axis - no code path casts operands from it yet; that is the
+    /// autocast slice of issue #2.
+    ///
+    /// [`ExecutionContext::from_scope`]: crate::exec::ExecutionContext::from_scope
     pub precision: crate::exec::RuntimePrecisionPolicy,
 }
 

@@ -5,7 +5,9 @@
 use incin::experimental::training::{TrainError, Trainer};
 use incin::prelude::*;
 use incin_core::backend_authoring::StorageBackend;
-use incin_core::exec::{PrecisionChoice, RuntimePrecisionPolicy};
+use incin_core::exec::{
+    ExecutionContext, ExecutionPolicy, PrecisionChoice, RuntimePrecisionPolicy,
+};
 use incin_core::tensor::dtype::{ConstDType, f16};
 
 type Backend = DefaultBackend;
@@ -243,6 +245,140 @@ fn fp32_fit_reduces_loss() -> TestResult {
     assert!(
         after < before * 0.01,
         "loss did not decrease: {before} -> {after}"
+    );
+    Ok(())
+}
+
+/// `UX-001`, issue #2: a fit step runs with the plan's precision ambient and
+/// hands that precision to every `ExecutionContext` built during the step.
+/// Outside the call the caller's policy is back, unchanged.
+#[test]
+fn fit_step_runs_under_the_plan_precision_scope() -> TestResult {
+    let policy = RuntimePrecisionPolicy::mixed_bf16();
+    let trainer = Trainer::new(
+        Trainer::plan()
+            .devices(DeviceSet::cpu())
+            .precision(policy)
+            .build()?,
+    );
+    let ambient = ExecutionPolicy::current();
+    let during = ambient.with_precision(policy);
+
+    let mut model = Linear::<Dyn, Backend>::build((2, 2))?;
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.05)?;
+    let input = Tensor::<Dyn, Backend>::ones(vec![1, 2])?;
+    let outcome = trainer.fit(&mut model, &mut optimizer, [input], |model, input| {
+        assert_eq!(
+            ExecutionPolicy::current(),
+            during,
+            "the step must run under the plan's precision scope"
+        );
+        let context = ExecutionContext::from_scope(Backend::default());
+        assert_eq!(
+            context.precision_policy(),
+            policy,
+            "contexts built during the step must carry the plan's precision"
+        );
+        Ok(model.forward(input)?.sum_all()?.forget_layout())
+    })?;
+    assert_eq!(outcome.batches, 1);
+    assert_eq!(
+        ExecutionPolicy::current(),
+        ambient,
+        "fit must restore the caller's ambient policy"
+    );
+    Ok(())
+}
+
+/// `UX-001`, issue #2: a failing step unwinds through `?` and the `scope`
+/// restore guard, so the enclosing policy survives an error the same way it
+/// survives a successful return. The outer scope, not the default, is what
+/// must be observable afterwards.
+#[test]
+fn a_failed_fit_step_restores_the_enclosing_precision_scope() -> TestResult {
+    let plan_policy = RuntimePrecisionPolicy::fp32();
+    let trainer = Trainer::new(
+        Trainer::plan()
+            .devices(DeviceSet::cpu())
+            .precision(plan_policy)
+            .build()?,
+    );
+    let ambient = ExecutionPolicy::current();
+    let outer = ambient.with_precision(RuntimePrecisionPolicy::fp64());
+
+    let mut model = Linear::<Dyn, Backend>::build((2, 2))?;
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.05)?;
+    let input = Tensor::<Dyn, Backend>::ones(vec![1, 2])?;
+
+    let (result, after_failure) = outer.scope(|| {
+        assert_eq!(ExecutionPolicy::current(), outer);
+        let result = trainer.fit(&mut model, &mut optimizer, [input], |model, input| {
+            assert_eq!(
+                ExecutionPolicy::current(),
+                outer.with_precision(plan_policy),
+                "fit's scope overrides only the precision axis of the enclosing scope"
+            );
+            let wrong = Tensor::<Dyn, Backend>::zeros(vec![7, 7])?;
+            model.forward(input)?.mse_loss(&wrong)
+        });
+        let observed = ExecutionPolicy::current();
+        (result, observed)
+    });
+
+    assert_eq!(
+        after_failure, outer,
+        "a failed fit must restore the enclosing scope before returning"
+    );
+    let error = result.expect_err("the mismatched target must fail the step");
+    assert!(
+        matches!(error, TrainError::Step { .. }),
+        "expected a step failure, got {error:?}"
+    );
+    assert_eq!(
+        ExecutionPolicy::current(),
+        ambient,
+        "leaving the outer scope restores the ambient policy"
+    );
+    Ok(())
+}
+
+/// `UX-001`, issue #2: `fit_scaled` installs the same plan-precision scope as
+/// `fit` around its scaled loop.
+#[test]
+fn fit_scaled_step_runs_under_the_plan_precision_scope() -> TestResult {
+    let policy = RuntimePrecisionPolicy::mixed_bf16();
+    let trainer = Trainer::new(
+        Trainer::plan()
+            .devices(DeviceSet::cpu())
+            .precision(policy)
+            .build()?,
+    );
+    let ambient = ExecutionPolicy::current();
+    let during = ambient.with_precision(policy);
+
+    let mut scaler = trainer.report().loss_scale_state();
+    let mut model = Linear::<Dyn, Backend>::build((2, 2))?;
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.05)?;
+    let input = Tensor::<Dyn, Backend>::ones(vec![1, 2])?;
+    let outcome = trainer.fit_scaled(
+        &mut model,
+        &mut optimizer,
+        &mut scaler,
+        [input],
+        |model, input| {
+            assert_eq!(
+                ExecutionPolicy::current(),
+                during,
+                "the scaled step must run under the plan's precision scope"
+            );
+            Ok(model.forward(input)?.sum_all()?.forget_layout())
+        },
+    )?;
+    assert_eq!(outcome.batches, 1);
+    assert_eq!(
+        ExecutionPolicy::current(),
+        ambient,
+        "fit_scaled must restore the caller's ambient policy"
     );
     Ok(())
 }
