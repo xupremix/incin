@@ -36,6 +36,14 @@ cargo-deny) rather than runtime guarantees.
 | Compiled-plan artifacts | local snapshot files | magic, format version, and Adler-32 framing before decode |
 | Rendezvous and collectives | TCP peers named by the launcher | see [`distributed-security.md`](distributed-security.md); untrusted unless the launcher already authenticated every rank |
 
+The `ResourceLimits` bound on the ONNX row applies to the `import_model!` /
+initializer-loading path. The public runtime API `OnnxImporter::import`
+(`import_from_onnx` in `crates/incin-core/src/onnx_exporter.rs`) is **not**
+covered by it: it reads the entire file with an unbounded `std::fs::read` and
+relies on prost's decode recursion cap plus fail-closed reconstruction
+refusals (negative dims, missing shapes, unsupported ops) instead. Applying
+`ResourceLimits` to that path would be new work, not current behavior.
+
 ## Invariants enforced before unsafe code
 
 Every path above ends in typed errors (`docs/ERROR_CONTRACT.md`) before it
@@ -61,5 +69,10 @@ Stated plainly so nobody assumes otherwise:
 - hardware-specific execution paths (CUDA, NCCL, NEON, WASM) have compile
   checks and invariant audits but not continuous dynamic sanitizer coverage on
   this infrastructure;
-- fuzzing coverage for parsers is planned (#48), not present; parser bounds
-  today are the static `ResourceLimits` checks cited above.
+- fuzzing coverage for parsers is partial: the ONNX importer/exporter now has
+  CI-stable `proptest` round-trip and fail-closed byte/truncation/corruption
+  coverage (`crates/incin-core/tests/onnx_roundtrip.rs`,
+  `crates/incin-core/tests/onnx_fuzz.rs`, #48); cargo-fuzz targets for GGUF
+  and the state envelope, and longer-running fuzzing campaigns, remain
+  planned. Parser bounds today are the static `ResourceLimits` checks cited
+  above plus prost's decode recursion cap on the ONNX path.
