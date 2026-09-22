@@ -293,9 +293,10 @@ pub mod experimental {
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
             CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
             ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
-            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
-            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
-            WeightPrepacker,
+            FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal, LivenessInterval,
+            LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups, ReproducibilityManifest,
+            SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable, WeightPrepacker,
+            fusion_pattern_kind,
         };
         /// Minimal graph and descriptor-building types for the preview CPU
         /// evaluator. These remain experimental with the rest of this module.

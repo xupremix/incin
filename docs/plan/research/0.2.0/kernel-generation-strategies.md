@@ -5,6 +5,12 @@ an external survey (Triton, CubeCL, CUTLASS/CuTe, Thunderkittens, TVM, Halide,
 Mirage, Inductor, KernelBench). Question: how should incin grow custom kernels
 beyond hand-written CUDA templates + NVRTC?
 
+> **Status (2026-09-22):** Strategy 1 is implemented — `0bd705a4` landed the
+> legality-checked pointwise fuser (#112 step 2: elementwise-class table,
+> exclusivity, benefit gate, SavedTensorSet refusal, `PointwiseChain` lowering
+> through `lower_scalar` into `kernel::scalar`). Strategies 2–4 remain parked:
+> CubeCL (#85 epilogues go cuBLASLt first), #111 triage still open.
+
 ## Ranked strategies
 
 1. **Extend the raw-kernel template path with a legality-checked fuser

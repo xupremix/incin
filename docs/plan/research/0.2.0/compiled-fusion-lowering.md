@@ -1,5 +1,12 @@
 compiled graphs: everything but fusion, and CMP-005 is missing from the ledger
 
+> **Status (2026-09-22):** Landed as #112 step 2 in `0bd705a4` — the
+> recommendation below was followed (exclusive-consumption proof, fused
+> pointwise chain as one `KernelDefinition`, fused-vs-unfused output *and*
+> gradient gates), with the saved-for-backward risk handled by an explicit
+> `SavedTensorSet` refusal rather than a pass that avoids it only by refusing
+> everything. The ledger recommendation stayed as written (no revival).
+
 Finding: `crates/incin-core/src/compiled/` is a complete capture-plan-execute
 pipeline with one hole, and the hole is documented and deliberate.
 
