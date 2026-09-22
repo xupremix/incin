@@ -108,6 +108,9 @@ macro_rules! incin_operation_catalog {
             (ScatterAdd, "scatter_add", Storage, Indexing, ScatterAttributes, 3, 3, "::scatter_add"),
             (OneHot, "one_hot", Storage, Indexing, OneHotAttributes, 1, 1, "::one_hot"),
             (Bincount, "bincount", Storage, Indexing, BincountAttributes, 1, 1, "::bincount"),
+            // The output extent is the count of non-zero elements, which no
+            // metadata inference can know before the values are read (#102).
+            (NonZero, "nonzero", Storage, Indexing, NoAttributes, 1, 1, "Tensor::nonzero"),
             (IndexSelect, "index_select", Storage, Indexing, AxisAttributes, 2, 2, "::index_select"),
             (MaskedFill, "masked_fill", Pointwise, Selection, ScalarAttributes, 2, 2, "::masked_fill"),
             (UnsqueezeExact, "unsqueeze", Storage, Shape, AxisAttributes, 1, 1, "::unsqueeze"),
@@ -121,6 +124,9 @@ macro_rules! incin_operation_catalog {
             (Split, "split", Storage, Shape, SplitAttributes, 1, 1, "Tensor::split"),
             (Addmm, "addmm", Reduction, MatMul, AddmmAttributes, 3, 3, "::addmm"),
             (BatchedMatMul, "bmm", Reduction, MatMul, NoAttributes, 2, 2, "::bmm"),
+            // Per-expert matmul over disjoint row ranges: lhs `[T, K]`, stacked
+            // rhs `[E, K, N]`, and i64 offsets `[E+1]` tiling `[0, T)` (#103).
+            (GroupedMatMul, "grouped_matmul", Reduction, MatMul, NoAttributes, 3, 3, "::grouped_matmul"),
             (ScaledDotProductAttention, "scaled_dot_product_attention", Reduction, Attention, AttentionAttributes, 3, 4, "::scaled_dot_product_attention"),
             (Unfold, "unfold", Storage, Shape, UnfoldAttributes, 1, 1, "::unfold"),
             (PixelShuffle, "pixel_shuffle", Storage, Shape, PixelShuffleAttributes, 1, 1, "::pixel_shuffle"),

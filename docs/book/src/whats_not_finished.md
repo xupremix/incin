@@ -27,10 +27,16 @@ of repeating a number that won't.
   their own input only. A layer that also attends to an encoder's output
   takes two tensors, and `Module` is parameterized by one input, so that is
   a separate module rather than a configuration of the existing one.
-- **Attention is composed, not fused.** The layers run on any backend that
-  advertises the operations they use, rather than on the subset with an
-  attention kernel. There is no fused kernel and no KV cache underneath
-  them yet.
+- **Attention still has no online-softmax/flash kernel.** Evaluation and
+  zero-dropout inference route through the catalog's composed
+  `scaled_dot_product_attention` row (a single descriptor dispatch; the CPU
+  backend materializes scores the same way the old hand-composed path did).
+  Training with attention-weight dropout keeps the manual score/softmax chain
+  because the fused row has no dropout operand. A typed [`KvCache`] handles
+  incremental decode (`MultiHeadAttention::forward_with_cache`); what remains
+  for #104 is a true flash-style kernel with block-sparse causal skipping.
+
+[`KvCache`]: https://docs.rs/incin/latest/incin/nn/struct.KvCache.html
 
 ## Facade gaps (the functionality exists, but not through `incin`)
 

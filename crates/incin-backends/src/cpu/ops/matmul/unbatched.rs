@@ -28,7 +28,11 @@ pub(crate) fn matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStora
 }
 
 /// The unbatched forward computation on its own, with no tape recording.
-fn matmul_forward(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+///
+/// `pub(crate)` so `grouped` can drive each expert's `[rows, K] @ [K, N]`
+/// slice without pushing a tape entry per expert - the grouped kernel composes
+/// one entry covering the whole tile instead.
+pub(crate) fn matmul_forward(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
     if lhs.shape.len() != 2 || rhs.shape.len() != 2 || lhs.shape[1] != rhs.shape[0] {
         return Err(Error::ShapeMismatch {
             op: "matmul",

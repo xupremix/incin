@@ -428,6 +428,15 @@ impl_wgpu_reduction_dim![
     (Softmax, |input, axis| {
         WgpuBackendImpl::<D>::softmax::<f32>(input, axis)
     }),
+    // Same request shape, same tape-honest composition, batch-C #91 gap.
+    (LogSoftmax, |input, axis| {
+        WgpuBackendImpl::<D>::log_softmax::<f32>(input, axis)
+    }),
+    (Cumsum, WgpuBackendImpl::<D>::cumsum::<f32>),
+    (LogSumExpDim, WgpuBackendImpl::<D>::logsumexp_dim::<f32>),
+    (LogSumExpKeepDim, |input, axis| {
+        WgpuBackendImpl::<D>::logsumexp_keepdim::<f32>(input, axis)
+    }),
     // Also not reductions: both are views that add or drop a unit axis, and
     // both read the same `axis` attribute the reductions do.
     (SqueezeExact, |input, axis| {
@@ -743,6 +752,244 @@ impl<D: Device> Execute<op::Dot> for WgpuBackendImpl<D> {
     }
 }
 
+impl<D: Device> Execute<op::Outer> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Outer, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Outer;
+        let [lhs, rhs] = request.inputs else {
+            return Err(invalid(operation, "outer expects exactly 2 inputs"));
+        };
+        let lhs = lhs
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "lhs is not WGPU storage"))?;
+        let rhs = rhs
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "rhs is not WGPU storage"))?;
+        WgpuBackendImpl::<D>::outer::<f32>(lhs, rhs).map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::InstanceNorm> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::InstanceNorm, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::InstanceNorm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "instance norm expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        WgpuBackendImpl::<D>::instance_norm::<f32>(input, epsilon)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Dropout> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Dropout, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Dropout;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "dropout expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::dropout::<f32>(input, attributes.probability, attributes.training)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::BroadcastLeft> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::BroadcastLeft, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::BroadcastLeft;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "broadcast_left expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let target = &request.operation.descriptor().attributes().shape;
+        WgpuBackendImpl::<D>::broadcast_left::<f32>(input, target)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Pad> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Pad, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Pad;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "pad expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::pad::<f32>(input, &attributes.padding, attributes.value)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Repeat> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Repeat, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Repeat;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "repeat expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let repeats = &request.operation.descriptor().attributes().repeats;
+        WgpuBackendImpl::<D>::repeat::<f32>(input, repeats)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::RepeatInterleave> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RepeatInterleave, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::RepeatInterleave;
+        let [input] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "repeat_interleave expects exactly 1 input",
+            ));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::repeat_interleave::<f32>(input, attributes.repeats, attributes.axis)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Chunk> for WgpuBackendImpl<D> {
+    type Output = alloc::vec::Vec<WgpuStorage>;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Chunk, Self>,
+    ) -> Result<alloc::vec::Vec<WgpuStorage>, BackendError> {
+        let operation = OperationKind::Chunk;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "chunk expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        let extent = *input
+            .shape
+            .get(attributes.axis)
+            .ok_or_else(|| invalid(operation, "chunk axis is outside the operand rank"))?;
+        let piece = extent.div_ceil(attributes.chunks.max(1));
+        WgpuBackendImpl::<D>::consecutive_pieces::<f32>(input, attributes.axis, piece)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Split> for WgpuBackendImpl<D> {
+    type Output = alloc::vec::Vec<WgpuStorage>;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Split, Self>,
+    ) -> Result<alloc::vec::Vec<WgpuStorage>, BackendError> {
+        let operation = OperationKind::Split;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "split expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::consecutive_pieces::<f32>(
+            input,
+            attributes.axis,
+            attributes.split_size,
+        )
+        .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::ScaledDotProductAttention> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ScaledDotProductAttention, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::ScaledDotProductAttention;
+        let attributes = request.operation.descriptor().attributes();
+        let (q, k, v, mask) = match request.inputs {
+            [q, k, v] => (q, k, v, None),
+            [q, k, v, mask] => (q, k, v, Some(mask)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "scaled dot product attention expects q, k, v and an optional mask",
+                ));
+            }
+        };
+        if mask.is_some() != attributes.has_mask {
+            return Err(invalid(
+                operation,
+                "the has_mask attribute disagrees with the operand count",
+            ));
+        }
+        let q = q
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "q is not WGPU storage"))?;
+        let k = k
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "k is not WGPU storage"))?;
+        let v = v
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "v is not WGPU storage"))?;
+        let mask = mask
+            .map(|mask| {
+                mask.downcast_ref::<WgpuStorage>()
+                    .ok_or_else(|| invalid(operation, "mask is not WGPU storage"))
+            })
+            .transpose()?;
+        WgpuBackendImpl::<D>::scaled_dot_product_attention::<f32>(q, k, v, mask, attributes.scale)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
 impl<D: Device> Execute<op::BatchedMatMul> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
 
@@ -982,7 +1229,11 @@ macro_rules! impl_wgpu_loss {
     )*};
 }
 
-impl_wgpu_loss![(MseLoss, mse_loss), (L1Loss, l1_loss)];
+impl_wgpu_loss![
+    (MseLoss, mse_loss),
+    (L1Loss, l1_loss),
+    (BceWithLogitsLoss, bce_with_logits_loss)
+];
 
 macro_rules! impl_wgpu_variance_all {
     ($(($op:ident, $unbiased:literal, $square_root:literal)),* $(,)?) => {$(

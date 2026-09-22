@@ -610,6 +610,35 @@ impl<D: Device> WgpuBackendImpl<D> {
         });
         Ok(out)
     }
+
+    /// `log_softmax(x, axis) = (x - max) - log(sum_keepdim(exp(x - max), axis))`.
+    ///
+    /// CPU's numerically-stable kernel (`cpu::ops::elementwise::log_softmax`),
+    /// composed entirely from taped primitives so the backward is their
+    /// replay. The final `exp` of `softmax` is deliberately not applied —
+    /// that round trip loses the tail entries far below the row maximum.
+    pub(crate) fn log_softmax<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        axis: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if axis >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "log_softmax",
+                expected: t.shape.to_vec(),
+                got: alloc::vec![axis],
+                msg: alloc::format!(
+                    "log_softmax: axis {axis} out of range for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let max = Self::max_keepdim::<K>(t, axis)?;
+        let diff = Self::sub::<K>(t, &max)?;
+        let exp_diff = Self::exp::<K>(&diff)?;
+        let sum_exp = Self::sum_keepdim::<K>(&exp_diff, axis)?;
+        let log_sum_exp = Self::log::<K>(&sum_exp)?;
+        Self::sub::<K>(&diff, &log_sum_exp)
+    }
     /// `swish`.
     pub(crate) fn swish<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,

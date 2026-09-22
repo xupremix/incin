@@ -495,6 +495,22 @@ pub enum Error {
         reason: ErrorMessage,
     },
 
+    #[error("{operation}: KV cache capacity {capacity} exceeded: requested {requested}")]
+    /// A typed preallocated key/value cache would write past its capacity.
+    ///
+    /// The cache reserves its full extent when it is built (issue #104), so
+    /// overflow is a caller contract failure rather than a reallocation: the
+    /// shape that was promised cannot grow at run time. `requested` is the
+    /// total sequence length the append would have produced.
+    CacheCapacityExceeded {
+        /// Operation that attempted the append.
+        operation: &'static str,
+        /// Total length the append would have required.
+        requested: usize,
+        /// Preallocated capacity of the cache.
+        capacity: usize,
+    },
+
     #[error("{operation}: resource '{resource}' value {actual} exceeds limit {limit}")]
     /// Untrusted input exceeded a configured resource bound.
     ResourceLimit {

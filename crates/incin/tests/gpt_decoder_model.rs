@@ -39,8 +39,8 @@ const SEQ: usize = 4;
 #[module(no_stats, no_shape_info)]
 struct TinyGpt {
     tokens: Embedding<Dyn, Cpu>,
-    block0: TransformerDecoderLayer<Cpu>,
-    block1: TransformerDecoderLayer<Cpu>,
+    block0: TransformerDecoderLayer<D_MODEL, HEADS, KV_HEADS, D_FF, Cpu>,
+    block1: TransformerDecoderLayer<D_MODEL, HEADS, KV_HEADS, D_FF, Cpu>,
     norm: LayerNorm<Dyn, Cpu>,
     head: Linear<Dyn, Cpu>,
 }
@@ -55,8 +55,16 @@ impl TinyGpt {
             .with_attention(AttentionConfig::default().with_rotary(10_000.0, 64));
         Ok(Self {
             tokens: Embedding::<Dyn, Cpu>::build((VOCAB, D_MODEL))?,
-            block0: TransformerDecoderLayer::build(D_MODEL, HEADS, KV_HEADS, D_FF, config, (), ())?,
-            block1: TransformerDecoderLayer::build(D_MODEL, HEADS, KV_HEADS, D_FF, config, (), ())?,
+            block0: TransformerDecoderLayer::<D_MODEL, HEADS, KV_HEADS, D_FF, Cpu>::build(
+                config,
+                (),
+                (),
+            )?,
+            block1: TransformerDecoderLayer::<D_MODEL, HEADS, KV_HEADS, D_FF, Cpu>::build(
+                config,
+                (),
+                (),
+            )?,
             norm: LayerNorm::<Dyn, Cpu>::build((D_MODEL, 1e-5f32))?,
             head: Linear::<Dyn, Cpu>::build((D_MODEL, VOCAB))?,
         })

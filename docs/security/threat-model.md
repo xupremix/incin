@@ -69,10 +69,13 @@ Stated plainly so nobody assumes otherwise:
 - hardware-specific execution paths (CUDA, NCCL, NEON, WASM) have compile
   checks and invariant audits but not continuous dynamic sanitizer coverage on
   this infrastructure;
-- fuzzing coverage for parsers is partial: the ONNX importer/exporter now has
-  CI-stable `proptest` round-trip and fail-closed byte/truncation/corruption
-  coverage (`crates/incin-core/tests/onnx_roundtrip.rs`,
-  `crates/incin-core/tests/onnx_fuzz.rs`, #48); cargo-fuzz targets for GGUF
-  and the state envelope, and longer-running fuzzing campaigns, remain
-  planned. Parser bounds today are the static `ResourceLimits` checks cited
-  above plus prost's decode recursion cap on the ONNX path.
+- fuzzing coverage for parsers spans all three adversarial formats: the ONNX
+  importer/exporter has CI-stable `proptest` round-trip and fail-closed
+  byte/truncation/corruption coverage (`crates/incin-core/tests/onnx_roundtrip.rs`,
+  `crates/incin-core/tests/onnx_fuzz.rs`), and cargo-fuzz targets drive the
+  ONNX importer, the state-loader envelope, and the GGUF reader through their
+  file-path entry points under a fixed-budget scheduled campaign
+  (`fuzz/`, `.github/workflows/fuzz.yml`, #48). Longer-running campaigns
+  beyond the scheduled budget remain open. Parser bounds today are the static
+  `ResourceLimits` checks cited above plus prost's decode recursion cap on the
+  ONNX path.

@@ -1115,7 +1115,27 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let mask = downcast(mask, operation, "mask is not CUDA storage")?;
         let value = request.operation.descriptor().attributes().value;
-        let out = crate::cuda::ops::select::launch_masked_fill(input, mask, value)
+        // #100's public API admits masks that broadcast into the input
+        // (rank-deficit or size-1 axes); the launcher itself stays strict
+        // about one shared shape, so the mask is materialized to the input's
+        // geometry here - the same pre-broadcast `Execute<WhereCond>` has
+        // always done for its mask (`launch_broadcast`, non-tape-recording:
+        // a `bool` mask has nowhere to send a gradient).
+        let mask = if mask.shape == input.shape {
+            mask.clone()
+        } else {
+            let broadcasted = crate::layout::broadcast_shape(&mask.shape, &input.shape)
+                .map_err(|e| kernel_error("Cuda", operation, e))?;
+            if broadcasted != input.shape {
+                return Err(invalid(
+                    operation,
+                    "mask shape must broadcast to input shape without enlarging it",
+                ));
+            }
+            crate::cuda::ops::shape::launch_broadcast(mask, &input.shape)
+                .map_err(|e| kernel_error("Cuda", operation, e))?
+        };
+        let out = crate::cuda::ops::select::launch_masked_fill(input, &mask, value)
             .map_err(|e| kernel_error("Cuda", operation, e))?;
         let mask_capture = mask.clone();
         let (input_id, out_id) = (input.id, out.id);

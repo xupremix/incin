@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<O>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**167 of 167 backend-executable operations migrated**, out of 177 catalog operations in total.
+**169 of 169 backend-executable operations migrated**, out of 179 catalog operations in total.
 
 ## Backend-executable operations
 
@@ -105,6 +105,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `scatter_add` | `Kernel` | yes | `::scatter_add` |
 | `one_hot` | `Kernel` | yes | `::one_hot` |
 | `bincount` | `Kernel` | yes | `::bincount` |
+| `nonzero` | `Kernel` | yes | `Tensor::nonzero` |
 | `index_select` | `Kernel` | yes | `::index_select` |
 | `masked_fill` | `Kernel` | yes | `::masked_fill` |
 | `unsqueeze` | `Kernel` | yes | `::unsqueeze` |
@@ -118,6 +119,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `split` | `Kernel` | yes | `Tensor::split` |
 | `addmm` | `Kernel` | yes | `::addmm` |
 | `bmm` | `Kernel` | yes | `::bmm` |
+| `grouped_matmul` | `Kernel` | yes | `::grouped_matmul` |
 | `scaled_dot_product_attention` | `Kernel` | yes | `::scaled_dot_product_attention` |
 | `unfold` | `Kernel` | yes | `::unfold` |
 | `pixel_shuffle` | `Kernel` | yes | `::pixel_shuffle` |

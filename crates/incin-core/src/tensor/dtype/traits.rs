@@ -56,16 +56,35 @@ pub trait ConstDType: DType<Arg = ()> {
 /// All current Incin built-in dtypes (`f32`, `f64`, `f16`, `bf16`, `u8`,
 /// `u32`, `i64`, `Q8_0`) implement this.
 ///
-/// Subsystems that still use the closed built-in `DTypeId` vocabulary
-/// (distributed plans, capability registry, operation catalog, serialization,
-/// backend kernel tables) should require `K: BuiltinDType` rather than
-/// requiring every `ConstDType` to have a built-in ID. This makes the
-/// temporary limitation explicit in the type system.
+/// # Where this bound is (and is not) required
 ///
-/// # Design boundary
+/// Most of the runtime stack accepts arbitrary [`DTypeDescriptor`]s through
+/// [`DTypeRegistry`]; you do **not** need this trait to register or use a
+/// custom dtype from outside the workspace. Storage, tensor construction,
+/// shape lowering, capability queries, the operation catalog, and
+/// storage/serialization are descriptor-driven, and external custom dtypes
+/// round-trip through `serde` without implementing `BuiltinDType`.
 ///
-/// A future phase will migrate those subsystems to accept arbitrary descriptors.
-/// Until then, `BuiltinDType` is the honest narrow bound.
+/// The bound remains on the parts of the system that still carry the closed
+/// built-in `DTypeId` vocabulary as a `const`:
+///
+/// - distributed collective descriptors and plan digests
+///   (`crates/incin-core/src/dist/plan/`), which fingerprint a plan by
+///   `DTypeId`;
+/// - the kernel table lookup in `incin-backends`, which resolves a
+///   `builtin_id()` for fast-path dispatch;
+/// - the `safetensors` fast path in `crates/incin-core/src/serialize.rs`,
+///   which matches a closed set of builtin IDs before falling back to the
+///   descriptor path.
+///
+/// Requiring `BuiltinDType` at those sites makes the narrow vocabulary
+/// explicit in the type system instead of an implicit assumption. Custom
+/// dtypes continue through the descriptor-driven paths beside them
+/// (state/postcard serialization, registry-backed dtype descriptors,
+/// descriptor-keyed capability and catalog layers).
+///
+/// See issue #96 and `PROPOSALS.md` (TensorElement seal decision) for the
+/// record of which surfaces stay closed and why.
 pub trait BuiltinDType: ConstDType {
     /// The built-in `DTypeId` for this dtype.
     const DTYPE: DTypeId;

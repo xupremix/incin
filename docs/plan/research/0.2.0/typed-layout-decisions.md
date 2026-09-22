@@ -169,12 +169,19 @@ The rule that emerged, and it is forced rather than chosen:
 
 - **Shape-preserving** operations carry the operand's `L`.
 - **Shape-changing** operations state theirs, as `Dyn`, because a layout
-  describes one geometry and cannot be carried to another.
+  describes one geometry and cannot be carried to another — except where the
+  operation itself guarantees a fresh packed result. `transpose` is the one
+  that does: [#113](https://github.com/xupremix/incin/issues/113) settled that
+  every backend materialises it, so it now states `RowMajor`, while `reshape`,
+  `narrow`, `flatten` and `transpose_view` stay `Dyn` because a view really
+  has no packed proof to state.
 
-The second could state `RowMajor` -- every such result is a fresh allocation --
-and that remains the more valuable end state. It is blocked on #113, not on
-migration cost: CPU `transpose` returns a view where CUDA's returns a copy, so
-the claim would be false on one backend.
+The rest could state `RowMajor` only where the result is a fresh allocation,
+and most of what remains is genuinely a view or view-or-copy, so `Dyn` is the
+accurate answer rather than a placeholder waiting on a decision. The decision
+this paragraph used to be blocked on — CPU returned a view where CUDA returned
+a copy, so the claim would be false on one backend — was resolved in #113's
+favour of materialising everywhere.
 
 ### Things the completion surfaced
 
@@ -518,6 +525,18 @@ has to show the strided reduction kernel writes a dense result before the claim
 stands again. A claim that rests on a refusal has to pin the refusal.
 
 ## The backends disagree about whether `transpose` copies
+
+**Settled in [#113](https://github.com/xupremix/incin/issues/113): the
+materialise-everywhere side won.** CPU's `TransposeExact` now copies into a
+fresh row-major buffer (its tape entry materialises the backward too), CUDA
+and WGPU already did, the generated operation contract's layout rule for
+`transpose` reads `FreshContiguous`, and the public `transpose` states
+`RowMajor`. The view half lives on the separately named `transpose_view`,
+which is advertised only on backends that can serve a genuine view — WGPU
+deliberately refuses it until its pointwise shaders take strides. The
+measurement in issue #113's thread — view and copy cost about the same at the
+cache level, with the crossover at roughly four consumers — is what decided
+it; the disagreement recorded below is kept as the history of the finding.
 
 Found by writing the conformance test that was supposed to *back* a type claim,
 before making it. It refuted the claim instead.

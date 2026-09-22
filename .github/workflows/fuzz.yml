@@ -1,0 +1,65 @@
+# Fixed-budget cargo-fuzz campaigns for the three adversarial parsers
+# (issue #48). Scheduled rather than per-PR: each run compiles the sanitizer
+# graph and spends a bounded budget per target, which is acceptance's "run
+# clean for a fixed budget in CI or a scheduled job".
+name: Fuzz
+
+on:
+  schedule:
+    # Nightly 03:47 UTC, off the hour so it does not contend with ci.yml's
+    # 02:00 deep-soundness slot.
+    - cron: '47 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned so a cargo-fuzz release cannot silently change the campaign.
+  CARGO_FUZZ_VERSION: 0.13.2
+  # Must match fuzz/rust-toolchain.toml; installed explicitly so rustup does
+  # not resolve it mid-run.
+  FUZZ_NIGHTLY: nightly-2026-07-28
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-fuzz:
+    name: cargo-fuzz fixed budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Cache Cargo modules
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+          fuzz/target
+        key: ${{ runner.os }}-fuzz-${{ hashFiles('**/Cargo.lock', 'fuzz/Cargo.toml') }}
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+    # cargo-fuzz builds the targets with the toolchain named in
+    # fuzz/rust-toolchain.toml; rust-src feeds `-Z build-std`.
+    - name: Install pinned fuzz nightly
+      run: rustup toolchain install "${FUZZ_NIGHTLY}" --profile minimal --component rust-src
+
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz --version "${CARGO_FUZZ_VERSION}" --locked
+
+    - name: Fuzz the ONNX parser
+      run: cargo +"${FUZZ_NIGHTLY}" fuzz run onnx_parser -- -max_total_time=60 -max_len=65536
+
+    - name: Fuzz the state envelope
+      run: cargo +"${FUZZ_NIGHTLY}" fuzz run state_envelope -- -max_total_time=60 -max_len=65536
+
+    - name: Fuzz the GGUF reader
+      run: cargo +"${FUZZ_NIGHTLY}" fuzz run gguf_reader -- -max_total_time=60 -max_len=65536

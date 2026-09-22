@@ -297,12 +297,26 @@ pub(super) const fn entry(
     max_arity: usize,
     legacy_source: &'static str,
 ) -> OperationCatalogEntry {
-    let (mut broadcasting, dtype, mut output, mut empty, numeric, mut gradient, layout) =
+    let (mut broadcasting, dtype, mut output, mut empty, numeric, mut gradient, mut layout) =
         profile_semantics(profile);
+    // The `Shape` profile's default is `ViewWhenPossible`, which each member
+    // earns for itself. `transpose` is the one that no longer does: issue #113
+    // settled that every backend advertising `TransposeExact` materialises a
+    // fresh dense result, so the generated operation contract has to say
+    // `FreshContiguous` here or a backend could return a view again with the
+    // catalog's blessing. `transpose_view` keeps the profile default and
+    // states the view half under its own name.
+    if matches!(operation, OperationKind::TransposeExact) {
+        layout = LayoutRule::FreshContiguous;
+    }
     let accepted_ranks = match operation {
         OperationKind::MatMulExact | OperationKind::QuantizedMatMul => 2..=usize::MAX,
         OperationKind::Dot | OperationKind::Outer => 1..=1,
         OperationKind::BatchedMatMul | OperationKind::Addmm => 2..=3,
+        // Per-operand ranks are tighter and live in `operand_ranks`; this
+        // window is the loosest bound the three operands jointly admit
+        // (lhs rank 2, stacked rhs rank 3, offsets rank 1).
+        OperationKind::GroupedMatMul => 1..=3,
         OperationKind::Rnn | OperationKind::Lstm => 2..=3,
         OperationKind::Conv1dExact => 2..=3,
         OperationKind::Conv2dExact
@@ -391,6 +405,16 @@ pub(super) const fn entry(
             | OperationKind::TensorToBytes
     ) {
         output = OutputRule::HostValue;
+    } else if matches!(operation, OperationKind::NonZero) {
+        // The number of matching positions is a property of the values, not
+        // of the metadata the descriptor can see (#102). No shape inference
+        // can name the result before the kernel has read the operand.
+        output = OutputRule::DataDependent;
+    } else if matches!(operation, OperationKind::GroupedMatMul) {
+        // The generic `MatMul` rule broadcasts the stacked rhs's expert axis
+        // into the result; this operation drops it, writing one `[T, N]`
+        // buffer whose rows are addressed by the offsets operand instead.
+        output = OutputRule::TypedInference;
     }
     if matches!(
         operation,
@@ -427,6 +451,10 @@ pub(super) const fn entry(
             // state: the output is not a function of a value the tape could
             // perturb, it is a function of which slot the index names.
             | OperationKind::OneHot
+            // The coordinate rows `nonzero` returns are addresses, not
+            // values: which positions are non-zero is a discrete property
+            // the tape cannot perturb, the same reason `OneHot` sits here.
+            | OperationKind::NonZero
     ) {
         gradient = GradientRule::None;
     } else if matches!(operation, OperationKind::ToDevice) {

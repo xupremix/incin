@@ -71,8 +71,7 @@ fn max_abs_diff(a: &[f32], b: &[f32]) -> f32 {
 #[test]
 fn a_single_head_module_reproduces_attention_composed_by_hand() -> Result<()> {
     let width = 8;
-    let attention =
-        MultiHeadAttention::<Cpu>::build(width, 1, 1, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 1, 1, Cpu>::build(AttentionConfig::default(), (), ())?;
     let x = ramp(vec![1, 4, width])?;
 
     let from_module = attention.forward(x.clone())?;
@@ -107,8 +106,7 @@ fn every_head_reads_its_own_block_of_the_projection() -> Result<()> {
     let width = 8;
     let heads = 2;
     let head_dim = width / heads;
-    let attention =
-        MultiHeadAttention::<Cpu>::build(width, heads, heads, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
     let x = ramp(vec![1, 5, width])?;
 
     let from_module = attention.forward(x.clone())?;
@@ -153,14 +151,7 @@ fn grouped_query_attention_pairs_each_head_with_its_group() -> Result<()> {
     let kv_heads = 2;
     let head_dim = width / heads;
     let group = heads / kv_heads;
-    let attention = MultiHeadAttention::<Cpu>::build(
-        width,
-        heads,
-        kv_heads,
-        AttentionConfig::default(),
-        (),
-        (),
-    )?;
+    let attention = MultiHeadAttention::<8, 4, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
     assert_eq!(attention.heads_per_group(), group);
 
     let x = ramp(vec![1, 5, width])?;
@@ -203,7 +194,7 @@ fn grouped_query_attention_pairs_each_head_with_its_group() -> Result<()> {
 /// Multi-query attention is the same module with one key/value head.
 #[test]
 fn one_key_value_head_is_multi_query_attention() -> Result<()> {
-    let attention = MultiHeadAttention::<Cpu>::build(8, 4, 1, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 4, 1, Cpu>::build(AttentionConfig::default(), (), ())?;
     assert_eq!(attention.heads_per_group(), 4);
     let out = attention.forward(ramp(vec![2, 3, 8])?)?;
     assert_eq!(out.dims().dims(), &[2, 3, 8]);
@@ -219,8 +210,7 @@ fn one_key_value_head_is_multi_query_attention() -> Result<()> {
 fn a_causal_module_cannot_see_a_later_token() -> Result<()> {
     let width = 8;
     let seq = 5;
-    let attention =
-        MultiHeadAttention::<Cpu>::build(width, 2, 2, AttentionConfig::causal(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::causal(), (), ())?;
 
     let base = ramp(vec![1, seq, width])?;
     let mut disturbed_values = base.to_vec1::<f32>()?;
@@ -252,8 +242,7 @@ fn a_causal_module_cannot_see_a_later_token() -> Result<()> {
 fn a_non_causal_module_does_see_a_later_token() -> Result<()> {
     let width = 8;
     let seq = 5;
-    let attention =
-        MultiHeadAttention::<Cpu>::build(width, 2, 2, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
 
     let base = ramp(vec![1, seq, width])?;
     let mut disturbed_values = base.to_vec1::<f32>()?;
@@ -283,7 +272,7 @@ fn rotary_positions_make_scores_depend_only_on_distance() -> Result<()> {
     let width = 8;
     let seq = 6;
     let config = AttentionConfig::default().with_rotary(10_000.0, 64);
-    let attention = MultiHeadAttention::<Cpu>::build(width, 1, 1, config, (), ())?;
+    let attention = MultiHeadAttention::<8, 1, 1, Cpu>::build(config, (), ())?;
     assert!(attention.rotary_cos.is_some(), "tables were not built");
     assert!(attention.rotary_sin.is_some(), "tables were not built");
 
@@ -358,7 +347,7 @@ fn rotary_positions_make_scores_depend_only_on_distance() -> Result<()> {
 #[test]
 fn a_sequence_longer_than_the_rotary_tables_is_refused() -> Result<()> {
     let config = AttentionConfig::default().with_rotary(10_000.0, 4);
-    let attention = MultiHeadAttention::<Cpu>::build(8, 2, 2, config, (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(config, (), ())?;
     let error = attention
         .forward(ramp(vec![1, 9, 8])?)
         .expect_err("a sequence past the table extent must be refused");
@@ -370,29 +359,17 @@ fn a_sequence_longer_than_the_rotary_tables_is_refused() -> Result<()> {
     Ok(())
 }
 
+/// The one head invariant that cannot be const-proven: rotary needs an even
+/// head width (the rotation pairs dimensions), and the table extent depends on
+/// the runtime config.
+///
+/// The two divisibility invariants are compile-time now (issue #101): a
+/// mismatched `D_MODEL % N_HEADS` or `N_HEADS % N_KV_HEADS` never compiles,
+/// covered by the compile-fail fixtures `attention_d_model_head_mismatch` and
+/// `attention_head_kv_mismatch` rather than a runtime case here.
 #[test]
-fn the_head_configuration_is_checked_when_the_module_is_built() -> Result<()> {
-    let indivisible =
-        MultiHeadAttention::<Cpu>::build(10, 4, 2, AttentionConfig::default(), (), ())
-            .err()
-            .expect("10 is not divisible by 4");
-    assert!(
-        indivisible.to_string().contains("10") && indivisible.to_string().contains('4'),
-        "the error should name d_model and n_heads, said: {indivisible}"
-    );
-
-    let bad_group = MultiHeadAttention::<Cpu>::build(8, 4, 3, AttentionConfig::default(), (), ())
-        .err()
-        .expect("4 query heads cannot be split into 3 groups");
-    assert!(
-        bad_group.to_string().contains('3'),
-        "the error should name n_kv_heads, said: {bad_group}"
-    );
-
-    let odd_head_dim = MultiHeadAttention::<Cpu>::build(
-        12,
-        4,
-        4,
+fn an_odd_rotary_head_dim_is_refused_when_the_module_is_built() -> Result<()> {
+    let odd_head_dim = MultiHeadAttention::<12, 4, 4, Cpu>::build(
         AttentionConfig::default().with_rotary(10_000.0, 16),
         (),
         (),
@@ -408,7 +385,7 @@ fn the_head_configuration_is_checked_when_the_module_is_built() -> Result<()> {
 
 #[test]
 fn a_rank_two_input_is_refused_with_its_rank_named() -> Result<()> {
-    let attention = MultiHeadAttention::<Cpu>::build(8, 2, 2, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
     let error = attention
         .forward(ramp(vec![4, 8])?)
         .expect_err("attention takes [batch, seq, d_model]");
@@ -423,10 +400,7 @@ fn a_rank_two_input_is_refused_with_its_rank_named() -> Result<()> {
 #[test]
 fn attention_trains_and_every_projection_receives_a_gradient() -> Result<()> {
     let width = 8;
-    let attention = MultiHeadAttention::<Cpu>::build(
-        width,
-        2,
-        2,
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(
         AttentionConfig::causal().with_rotary(10_000.0, 32),
         (),
         (),
@@ -474,7 +448,7 @@ fn attention_trains_and_every_projection_receives_a_gradient() -> Result<()> {
 fn state_round_trips_including_the_rotary_tables() -> Result<()> {
     let width = 8;
     let config = AttentionConfig::causal().with_rotary(10_000.0, 32);
-    let attention = MultiHeadAttention::<Cpu>::build(width, 2, 2, config, (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(config, (), ())?;
     let snapshot = collect_state::<Cpu, _>(&attention)?;
 
     // Four weights, four biases, two rotary tables.
@@ -485,7 +459,7 @@ fn state_round_trips_including_the_rotary_tables() -> Result<()> {
         snapshot.len()
     );
 
-    let mut restored = MultiHeadAttention::<Cpu>::build(width, 2, 2, config, (), ())?;
+    let mut restored = MultiHeadAttention::<8, 2, 2, Cpu>::build(config, (), ())?;
     load_state::<Cpu, _>(&mut restored, &snapshot)?;
     assert_eq!(collect_state::<Cpu, _>(&restored)?, snapshot);
 
@@ -505,7 +479,7 @@ fn state_round_trips_including_the_rotary_tables() -> Result<()> {
 fn dropout_is_applied_in_training_and_not_in_evaluation() -> Result<()> {
     let width = 8;
     let config = AttentionConfig::default().with_dropout(0.9);
-    let mut attention = MultiHeadAttention::<Cpu>::build(width, 2, 2, config, (), ())?;
+    let mut attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(config, (), ())?;
 
     let x = ramp(vec![1, 6, width])?;
     incin::nn::TrainMode::set_training(&mut attention, true);
@@ -536,8 +510,7 @@ fn dropout_is_applied_in_training_and_not_in_evaluation() -> Result<()> {
 #[test]
 fn a_frozen_module_computes_the_same_values() -> Result<()> {
     let width = 8;
-    let attention =
-        MultiHeadAttention::<Cpu>::build(width, 2, 2, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
     let x = ramp(vec![1, 4, width])?;
     let before = attention.clone().forward(x.clone())?.to_vec1::<f32>()?;
     let frozen = attention.freeze();
@@ -553,8 +526,7 @@ fn a_frozen_module_computes_the_same_values() -> Result<()> {
 #[test]
 fn batch_rows_are_independent() -> Result<()> {
     let width = 8;
-    let attention =
-        MultiHeadAttention::<Cpu>::build(width, 2, 2, AttentionConfig::causal(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::causal(), (), ())?;
 
     let first = ramp(vec![1, 4, width])?;
     let second = ramp(vec![1, 4, width])?
@@ -576,7 +548,7 @@ fn batch_rows_are_independent() -> Result<()> {
 /// `PositionEncoding::None` builds no tables, so nothing needless is saved.
 #[test]
 fn without_rotary_no_tables_are_allocated() -> Result<()> {
-    let attention = MultiHeadAttention::<Cpu>::build(8, 2, 2, AttentionConfig::default(), (), ())?;
+    let attention = MultiHeadAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
     assert_eq!(attention.config.position, PositionEncoding::None);
     assert!(attention.rotary_cos.is_none());
     assert!(attention.rotary_sin.is_none());

@@ -814,6 +814,89 @@ fn masked_fill_backward_passes_through_only_unmasked_positions() {
 }
 
 #[test]
+/// `masked_fill_storage_broadcasts_a_rank_deficit_mask_both_ways`.
+///
+/// #100: the public `masked_fill` pin admits a mask that broadcasts *into*
+/// the input, so the storage kernel must right-align the mask's coordinates
+/// in the forward read and again in the backward read - a rank-1 mask over a
+/// rank-2 input, applied to every row. The equal-shape test above covers the
+/// fast path; this covers the aligned one.
+fn masked_fill_storage_broadcasts_a_rank_deficit_mask_both_ways() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0, 1]), vec![3]);
+    let out = masked_fill_storage(&t, &mask, 0.0).unwrap();
+    // Mask `[true, false, true]`: columns 0 and 2 overwritten on both rows.
+    assert_eq!(f32_vec(&out), vec![0.0, 2.0, 0.0, 0.0, 5.0, 0.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Positions the broadcast mask covers receive nothing; the rest pass
+    // the cotangent through, identically on both rows.
+    assert_eq!(f32_vec(g), vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0]);
+}
+
+#[test]
+/// `where_storage_folds_a_rank_deficit_mask_into_the_output_geometry`.
+///
+/// #100: the output shape is `broadcast(mask, broadcast(true, false))`, so a
+/// rank-1 mask selects over both rows, and the backward pass unbroadcasts the
+/// cotangents back onto each operand's own shape.
+fn where_storage_folds_a_rank_deficit_mask_into_the_output_geometry() {
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0, 1]), vec![3]);
+    let on_true = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+    let on_false = matrix(vec![-1.0; 6], 2, 3);
+    let out = where_storage(&mask, &on_true, &on_false).unwrap();
+    assert_eq!(f32_vec(&out), vec![1.0, -1.0, 3.0, 4.0, -1.0, 6.0]);
+    let grads = tape::backward(&out).unwrap();
+    assert_eq!(
+        f32_vec(grads.get(on_true.id).unwrap()),
+        vec![1.0, 0.0, 1.0, 1.0, 0.0, 1.0]
+    );
+    assert_eq!(
+        f32_vec(grads.get(on_false.id).unwrap()),
+        vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0]
+    );
+}
+
+#[test]
+/// `masked_fill_storage_rejects_a_mask_that_does_not_broadcast`.
+///
+/// Fail-closed companion to #100: a mask with an axis the input cannot meet
+/// never reaches the element loop - `admit_broadcast_operand` refuses it
+/// with the same sentence `validated.rs` uses.
+fn masked_fill_storage_rejects_a_mask_that_does_not_broadcast() {
+    let t = matrix(vec![1.0; 6], 2, 3);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1; 8]), vec![2, 4]);
+    let err = masked_fill_storage(&t, &mask, 0.0).unwrap_err();
+    let text = format!("{err}");
+    assert!(
+        text.contains("mask must broadcast to the input shape"),
+        "unexpected error: {text}"
+    );
+}
+
+#[test]
+/// `masked_fill_broadcast_mask_gradcheck_matches_finite_differences`.
+///
+/// #100's gradient story at f32 precision: with a rank-deficit mask the
+/// forward zeroes the masked columns of both rows, so the analytic gradient
+/// must agree with central differences on the perturbed *input* - which is
+/// exactly what a misaligned mask read in either direction would break.
+fn masked_fill_broadcast_mask_gradcheck_matches_finite_differences() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    let t = matrix(vec![0.5, -1.0, 2.0, 1.5], 2, 2);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0]), vec![2]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = masked_fill_storage(&inputs[0], &mask, 9.0).unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let err = gradcheck(op, &[t], F32_STEP);
+    assert!(
+        err < GRAD_TOL,
+        "masked_fill broadcast-mask gradcheck too high: {err}"
+    );
+}
+
+#[test]
 /// `index_select_backward_accumulates_repeated_selections`.
 fn index_select_backward_accumulates_repeated_selections() {
     // Rows of the input selected by index [2, 0, 2]: row 2 is chosen twice,

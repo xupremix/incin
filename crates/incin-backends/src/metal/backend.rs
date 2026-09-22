@@ -312,7 +312,7 @@ impl<D: Device> MetalBackendImpl<D> {
 /// seed, e.g. `[] -> [1]` - expands (a scalar broadcasts to any shape); a
 /// grad that does not broadcast into the target refuses with a named
 /// `ShapeMismatch`. Never panics on rank-deficient input.
-fn unbroadcast(grad: &MetalStorage, target_shape: &[usize]) -> Result<MetalStorage> {
+pub(super) fn unbroadcast(grad: &MetalStorage, target_shape: &[usize]) -> Result<MetalStorage> {
     if grad.shape() == target_shape {
         return Ok(grad.clone());
     }
@@ -392,7 +392,7 @@ fn broadcast_metal(t: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
     binary_op_metal(t, &zeros, "broadcast_as", |x, _| x)
 }
 
-fn binary_op_metal(
+pub(super) fn binary_op_metal(
     lhs: &MetalStorage,
     rhs: &MetalStorage,
     op_name: &'static str,
@@ -476,7 +476,7 @@ fn binary_op_metal(
     }
 }
 
-fn unary_op_metal(t: &MetalStorage, f: impl Fn(f32) -> f32) -> Result<MetalStorage> {
+pub(super) fn unary_op_metal(t: &MetalStorage, f: impl Fn(f32) -> f32) -> Result<MetalStorage> {
     let bytes = t.as_bytes()?;
     let slice: &[f32] = bytemuck::cast_slice(bytes);
     let out_data: Vec<f32> = slice.iter().map(|&x| f(x)).collect();
@@ -491,7 +491,7 @@ fn unary_op_metal(t: &MetalStorage, f: impl Fn(f32) -> f32) -> Result<MetalStora
     MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
 }
 
-fn scalar_op_metal(
+pub(super) fn scalar_op_metal(
     t: &MetalStorage,
     scalar: f64,
     f: impl Fn(f32, f32) -> f32,
@@ -834,18 +834,13 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-// ───  ───────────────────────────────────────────────────────────────
+// ─── Scalar arithmetic ─────────────────────────────────────────────────────
+//
+// The Batch-A elementwise surface (unaries, `powf`/`clamp`, `sub`/`div`
+// scalars, `atan2`/`fmod`/`remainder`) lives in `super::pointwise`. Only the
+// two scalars `dispatch_unary!` routes by name stay here.
 
 impl<D: Device> MetalBackendImpl<D> {
-    crate::unsupported::unsupported_float_ops! {
-        unary:
-            sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
-            atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt, trunc, frac;
-        exponent: powf;
-        bounds: clamp;
-        binary: atan2, fmod, remainder;
-    }
-
     pub(crate) fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,

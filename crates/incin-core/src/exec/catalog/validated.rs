@@ -319,11 +319,21 @@ where
                     inputs.first().and_then(|input| input.shape.as_deref()),
                     inputs.get(1).and_then(|input| input.shape.as_deref()),
                 ) {
-                    if value != mask {
+                    // #100 relaxed this from equality to the shared broadcast
+                    // rule: the mask may be rank-deficit or carry size-1 axes
+                    // as long as it broadcasts *into* the input. Resolving the
+                    // pair must land back on the input's own extents - any
+                    // axis on which the mask would enlarge the input, or fail
+                    // to agree with it, is refused here rather than reaching a
+                    // backend whose kernels index the input's geometry.
+                    let resolves_to_input =
+                        crate::shapes::broadcast::broadcast_dim_slices(value, mask)
+                            .is_ok_and(|resolved| resolved == value);
+                    if !resolves_to_input {
                         return Err(invalid(
                             O::ID,
                             "mask",
-                            "masked_fill currently requires mask and value shapes to match",
+                            "mask must broadcast to the input shape",
                         ));
                     }
                 }

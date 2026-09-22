@@ -175,6 +175,7 @@ pub use incin::DTypeDescriptor
 pub use incin::DTypeId
 pub use incin::DTypeKey
 pub use incin::DTypeKind
+pub use incin::DTypeRegistry
 pub use incin::Device
 pub use incin::DeviceId
 pub use incin::DeviceKind
@@ -304,6 +305,7 @@ pub use incin::nn::GRU
 pub use incin::nn::GRUCell
 pub use incin::nn::GruShape
 pub use incin::nn::Init
+pub use incin::nn::KvCache
 pub use incin::nn::L1Loss
 pub use incin::nn::L1ReductionShape
 pub use incin::nn::L1Shape
@@ -389,6 +391,8 @@ pub use incin::prelude::Accuracy
 pub use incin::prelude::Adam
 pub use incin::prelude::AdamW
 pub use incin::prelude::AppendDim
+pub use incin::prelude::AttentionConfig
+pub use incin::prelude::AttentionDirection
 pub use incin::prelude::AvgPool2d
 pub use incin::prelude::Axis
 pub use incin::prelude::AxisIdentity
@@ -397,12 +401,14 @@ pub use incin::prelude::AxisSet
 pub use incin::prelude::BCEWithLogitsLoss
 pub use incin::prelude::BackendError
 pub use incin::prelude::BackwardError
+pub use incin::prelude::Bidirectional
 pub use incin::prelude::BoolDType
 pub use incin::prelude::BroadcastDim
 pub use incin::prelude::BroadcastExtent
 pub use incin::prelude::BroadcastShape
 pub use incin::prelude::Buffer
 pub use incin::prelude::BuiltinDType
+pub use incin::prelude::Causal
 pub use incin::prelude::ConcatShape
 pub use incin::prelude::ConfusionMatrix
 pub use incin::prelude::ConstDType
@@ -419,6 +425,7 @@ pub use incin::prelude::DTypeDescriptor
 pub use incin::prelude::DTypeId
 pub use incin::prelude::DTypeKey
 pub use incin::prelude::DTypeKind
+pub use incin::prelude::DTypeRegistry
 pub use incin::prelude::Device
 pub use incin::prelude::DeviceId
 pub use incin::prelude::DeviceKind
@@ -434,6 +441,8 @@ pub use incin::prelude::EngineSpec
 pub use incin::prelude::Error
 pub use incin::prelude::ErrorMessage
 pub use incin::prelude::F1Score
+pub use incin::prelude::FeedForward
+pub use incin::prelude::FeedForwardKind
 pub use incin::prelude::Flatten
 pub use incin::prelude::FlattenAxes
 pub use incin::prelude::FloatDType
@@ -467,14 +476,17 @@ pub use incin::prelude::Mean
 pub use incin::prelude::Metric
 pub use incin::prelude::ModelExt
 pub use incin::prelude::Module
+pub use incin::prelude::MultiHeadAttention
 pub use incin::prelude::NamedDim
 pub use incin::prelude::Native
 pub use incin::prelude::NoGrad
 pub use incin::prelude::NonFiniteSite
 pub use incin::prelude::NoneReduction
+pub use incin::prelude::NormPlacement
 pub use incin::prelude::Optimizer
 pub use incin::prelude::ParameterGroup
 pub use incin::prelude::PlainDType
+pub use incin::prelude::PositionEncoding
 pub use incin::prelude::Precision
 pub use incin::prelude::PrecisionSpec
 pub use incin::prelude::Q8_0
@@ -517,6 +529,10 @@ pub use incin::prelude::TensorElement
 pub use incin::prelude::TensorTarget
 pub use incin::prelude::ToDevice
 pub use incin::prelude::TrainMode
+pub use incin::prelude::TransformerConfig
+pub use incin::prelude::TransformerDecoderLayer
+pub use incin::prelude::TransformerEncoderLayer
+pub use incin::prelude::TransformerLayer
 pub use incin::prelude::TryReshape
 pub use incin::prelude::axis
 pub use incin::prelude::bf16

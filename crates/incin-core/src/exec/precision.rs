@@ -4,7 +4,7 @@ use crate::err::{Error, Result};
 use crate::exec::{LayoutClass, MathMode};
 use crate::shapes::Dyn;
 use crate::shapes::error::OperationKind;
-use crate::tensor::dtype::{BuiltinDType, ConstDType, DType, DTypeDescriptor, FloatDType};
+use crate::tensor::dtype::{ConstDType, DType, DTypeDescriptor, FloatDType};
 use crate::tensor::dtype::{bf16, f16};
 
 /// Role of precision choice being queried (compute or accumulator).
@@ -685,41 +685,41 @@ pub mod precision {
     }
 
     /// Exact precision policy marker for floating dtype `K`.
-    pub struct Exact<K: BuiltinDType + FloatDType>(core::marker::PhantomData<K>);
+    pub struct Exact<K: ConstDType + FloatDType>(core::marker::PhantomData<K>);
 
-    impl<K: BuiltinDType + FloatDType> Clone for Exact<K> {
+    impl<K: ConstDType + FloatDType> Clone for Exact<K> {
         fn clone(&self) -> Self {
             *self
         }
     }
 
-    impl<K: BuiltinDType + FloatDType> Copy for Exact<K> {}
+    impl<K: ConstDType + FloatDType> Copy for Exact<K> {}
 
-    impl<K: BuiltinDType + FloatDType> core::fmt::Debug for Exact<K> {
+    impl<K: ConstDType + FloatDType> core::fmt::Debug for Exact<K> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.debug_struct("Exact").finish()
         }
     }
 
-    impl<K: BuiltinDType + FloatDType> core::default::Default for Exact<K> {
+    impl<K: ConstDType + FloatDType> core::default::Default for Exact<K> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<K: BuiltinDType + FloatDType> PartialEq for Exact<K> {
+    impl<K: ConstDType + FloatDType> PartialEq for Exact<K> {
         fn eq(&self, _other: &Self) -> bool {
             true
         }
     }
 
-    impl<K: BuiltinDType + FloatDType> Eq for Exact<K> {}
+    impl<K: ConstDType + FloatDType> Eq for Exact<K> {}
 
-    impl<K: BuiltinDType + FloatDType> core::hash::Hash for Exact<K> {
+    impl<K: ConstDType + FloatDType> core::hash::Hash for Exact<K> {
         fn hash<H: core::hash::Hasher>(&self, _state: &mut H) {}
     }
 
-    impl<K: BuiltinDType + FloatDType> Exact<K> {
+    impl<K: ConstDType + FloatDType> Exact<K> {
         /// Creates a new `Exact<K>` policy marker.
         #[must_use]
         pub const fn new() -> Self {
@@ -727,7 +727,7 @@ pub mod precision {
         }
     }
 
-    impl<K: BuiltinDType + FloatDType> PrecisionSpec for Exact<K> {
+    impl<K: ConstDType + FloatDType> PrecisionSpec for Exact<K> {
         type Field = ();
         type GeneratedDType = K;
         type ParameterDType = K;

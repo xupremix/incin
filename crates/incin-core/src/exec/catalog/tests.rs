@@ -354,6 +354,7 @@ fn every_typed_output_rule_is_fail_closed_or_exactly_inferred() {
                 | OperationKind::SgdStep
                 | OperationKind::AdamStep
                 | OperationKind::AdamWStep
+                | OperationKind::GroupedMatMul
         );
         assert!(
             inferred || *row.output_arity.end() == 0,
@@ -1106,6 +1107,7 @@ fn every_tensor_returning_row_declares_an_inference_source() {
                     | OperationKind::SgdStep
                     | OperationKind::AdamStep
                     | OperationKind::AdamWStep
+                    | OperationKind::GroupedMatMul
             ),
             OutputRule::HostValue => false,
             _ => true,

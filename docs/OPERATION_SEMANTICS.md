@@ -4,13 +4,13 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 177
-Backend-executable operations: 167
+Canonical operations: 179
+Backend-executable operations: 169
 Non-backend execution sites: 10
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 149 |
+| `Kernel` | 151 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -18,6 +18,16 @@ Non-backend execution sites: 10
 | `DeviceTransfer` | 1 |
 | `GraphState` | 3 |
 
+
+## Ordering contracts
+
+### `sort`, `argsort`, and `topk` tie-breaking
+
+All three are **stable**: equal keys keep the order they arrived in, on every axis and in both directions. The CPU kernel calls Rust's stable `sort_by`, so a descending sort does not reverse a run of equal keys relative to the input - position `i` of a tie group is still the element the input's position `i` named. `argsort`'s permutation and `sort`'s dual output are therefore the same reordering, and `topk`'s indices within a boundary tie are the earliest arrivals. This is the same stability PyTorch documents for `torch.sort` and `torch.argsort`, and it is what lets a router group the same assignment the same way twice.
+
+### `scatter_add` determinism
+
+Duplicate destinations accumulate in **row-major order of `index`**, not in an atomic or race-dependent order. Floating-point addition is not associative, so that order is part of the contract rather than an implementation detail; it is why the catalog row claims determinism and why a backend summing with atomics could not advertise this operation.
 | `tensor_from_data` | `Descriptor<op::TensorFromData>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `TensorArgsData` |
 | `tensor_from_bytes` | `Descriptor<op::TensorFromBytes>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `Descriptor<op::TensorToBytes>` | `NoAttributes` | `HostReadback` | 1-1 / 0-0 | 0-18446744073709551615 | `None` | `TypedContract` / `HostValue` | `Allowed` / `NotApplicable` | `None` | yes | `PreserveOrMaterialize` | `Tensor::to_bytes` |
@@ -96,7 +106,7 @@ Non-backend execution sites: 10
 | `logical_or` | `Descriptor<op::LogicalOr>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `Boolean` / `Broadcast` | `Allowed` / `NotApplicable` | `None` | yes | `FreshContiguous` | `::logical_or` |
 | `logical_not` | `Descriptor<op::LogicalNot>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `Numpy` | `Boolean` / `Broadcast` | `Allowed` / `NotApplicable` | `None` | yes | `FreshContiguous` | `::logical_not` |
 | `reshape` | `Descriptor<op::ReshapeExact>` | `ShapeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::reshape` |
-| `transpose` | `Descriptor<op::TransposeExact>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose` |
+| `transpose` | `Descriptor<op::TransposeExact>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `FreshContiguous` | `::transpose` |
 | `transpose_view` | `Descriptor<op::TransposeView>` | `TransposeAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::transpose_view` |
 | `matmul` | `Descriptor<op::MatMulExact>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-18446744073709551615 | `TypedContract` | `Floating` / `MatMul` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::matmul` |
 | `dot` | `Descriptor<op::Dot>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 1-1 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::dot` |
@@ -114,6 +124,7 @@ Non-backend execution sites: 10
 | `scatter_add` | `Descriptor<op::ScatterAdd>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::scatter_add` |
 | `one_hot` | `Descriptor<op::OneHot>` | `OneHotAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `None` | yes | `FreshContiguous` | `::one_hot` |
 | `bincount` | `Descriptor<op::Bincount>` | `BincountAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::bincount` |
+| `nonzero` | `Descriptor<op::NonZero>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `DataDependent` | `TypedContract` / `CheckedInteger` | `None` | yes | `FreshContiguous` | `Tensor::nonzero` |
 | `index_select` | `Descriptor<op::IndexSelect>` | `AxisAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::index_select` |
 | `masked_fill` | `Descriptor<op::MaskedFill>` | `ScalarAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `TypedContract` / `Preserve` | `Allowed` / `TypedContract` | `Piecewise` | yes | `FreshContiguous` | `::masked_fill` |
 | `unsqueeze` | `Descriptor<op::UnsqueezeExact>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unsqueeze` |
@@ -127,6 +138,7 @@ Non-backend execution sites: 10
 | `split` | `Descriptor<op::Split>` | `SplitAttributes` | `Kernel` | 1-1 / 0-many | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `Tensor::split` |
 | `addmm` | `Descriptor<op::Addmm>` | `AddmmAttributes` | `Kernel` | 3-3 / 1-1 | 2-3 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::addmm` |
 | `bmm` | `Descriptor<op::BatchedMatMul>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-3 | `TypedContract` | `Floating` / `MatMul` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::bmm` |
+| `grouped_matmul` | `Descriptor<op::GroupedMatMul>` | `NoAttributes` | `Kernel` | 3-3 / 1-1 | 1-3 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::grouped_matmul` |
 | `scaled_dot_product_attention` | `Descriptor<op::ScaledDotProductAttention>` | `AttentionAttributes` | `Kernel` | 3-4 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Floating` / `TypedInference` | `TypedContract` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::scaled_dot_product_attention` |
 | `unfold` | `Descriptor<op::Unfold>` | `UnfoldAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unfold` |
 | `pixel_shuffle` | `Descriptor<op::PixelShuffle>` | `PixelShuffleAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::pixel_shuffle` |

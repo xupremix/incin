@@ -9,7 +9,7 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::shapes::Layout;
 use crate::shapes::idx::StaticCursor;
-use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue, SwapAxes};
+use crate::shapes::{DynShape, RowMajor, Shape, ShapeBuf, ShapeValue, SwapAxes};
 use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
 use crate::tensor::ops::manipulation::selectors::AxisPairSelector;
@@ -23,7 +23,27 @@ impl<
 > Tensor<S, B, K, G, Local, TLayout>
 {
     /// Transposes two axis selectors while preserving the strongest available
-    /// output shape proof.
+    /// output shape proof, materialising a fresh dense result.
+    ///
+    /// #113 settled the split-brain this used to be: CPU returned a view while
+    /// CUDA returned a copy, so no type could honestly describe the result.
+    /// Every backend that advertises `transpose` now copies into a fresh
+    /// row-major buffer -- dense, contiguous, elements in the order the new
+    /// shape claims -- and the result therefore states [`RowMajor`]. That is
+    /// what makes `reshape_view` reachable at the end of the chain below,
+    /// where a view would have to be re-proven first.
+    ///
+    /// The no-copy half is the separate, explicitly named
+    /// [`transpose_view`](Self::transpose_view): same elements, permuted
+    /// strides over the same buffer, layout `Dyn`. Neither is universally
+    /// faster -- measured on a GTX 1650 the view wins for a single consumer
+    /// and loses from about four reads -- so the choice of which one to call
+    /// stays the caller's.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the axes are out of range for the runtime rank,
+    /// or when the backend refuses the operation.
     ///
     /// # Examples
     /// ```rust
@@ -31,20 +51,26 @@ impl<
     /// # use incin_backends::prelude::*;
     /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
-    /// let swapped = t.transpose(0isize, 1isize).unwrap();
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])
+    ///     .unwrap()
+    ///     .into_shape::<s![2, 2]>()
+    ///     .unwrap();
+    /// let swapped = t.transpose(axis!(0), axis!(1)).unwrap();
     /// assert_eq!(swapped.dims().dims(), &[2, 2]);
     /// assert_eq!(
     ///     swapped.to_vec1::<f32>().unwrap(),
     ///     vec![1.0, 3.0, 2.0, 4.0]
     /// );
+    /// // The result proved it is dense, so the view-only path accepts it.
+    /// let flat = swapped.reshape_view::<s![4]>().unwrap();
+    /// assert_eq!(flat.dims().dims(), &[4]);
     /// ```
     #[allow(clippy::type_complexity)]
     pub fn transpose<Lx, Rx>(
         &self,
         left: Lx,
         right: Rx,
-    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G>>
+    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G, Local, RowMajor>>
     where
         (): AxisPairSelector<S, Lx, Rx>,
         B: Execute<op::TransposeExact> + Capabilities,
@@ -83,9 +109,11 @@ impl<
 
     /// Transposes two axes without copying, when the backend can.
     ///
-    /// The counterpart to [`transpose_structural`](Self::transpose_structural),
-    /// which materialises: this permutes the shape and strides over the same
-    /// buffer and does no work on the device.
+    /// The counterpart to [`transpose`](Self::transpose), which materialises:
+    /// this permutes the shape and strides over the same buffer and does no
+    /// work on the device. [`transpose_structural`](Self::transpose_structural)
+    /// materialises too -- both go through `TransposeExact`, the operation
+    /// issue #113 settled as the copying one on every backend.
     ///
     /// Neither is universally faster, which is why both exist. Measured on a
     /// GTX 1650 for a transpose followed by pointwise consumption, the view

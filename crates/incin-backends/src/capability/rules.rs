@@ -377,6 +377,14 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // weight and refuses a left operand with fewer than two axes.
         OperationKind::QuantizedMatMul => 2,
         OperationKind::BatchedMatMul => 3,
+        // The offsets operand is a flat rank-one tile of the activation's row
+        // range; the activation itself is rank two and the stacked rhs rank
+        // three, so one is the loosest bound the row can state across all
+        // three, the same trick the convolution biases use.
+        OperationKind::GroupedMatMul => 1,
+        // Coordinate rows need at least one axis to address: a scalar has no
+        // positions for a `[count, rank]` result to name.
+        OperationKind::NonZero => 1,
         OperationKind::Softmax
         | OperationKind::LogSoftmax
         | OperationKind::LayerNorm
@@ -494,6 +502,9 @@ pub(super) const fn descriptor_training(operation: OperationKind) -> bool {
             | OperationKind::Floor
             | OperationKind::Ceil
             | OperationKind::Round
+            // The coordinate rows are addresses, not values: no gradient is
+            // defined for which positions were non-zero.
+            | OperationKind::NonZero
     )
 }
 
@@ -560,6 +571,9 @@ pub(super) const fn descriptor_max_rank(operation: OperationKind) -> usize {
         // `pixel_shuffle` reads a four-axis (N, C, H, W) layout by name; no
         // other rank has an interpretation for it.
         OperationKind::PixelShuffle | OperationKind::InstanceNorm => 4,
+        // The stacked rhs is rank three; the activation and offsets are lower
+        // and already covered by `descriptor_min_rank`.
+        OperationKind::GroupedMatMul => 3,
         _ => usize::MAX,
     }
 }

@@ -9,6 +9,7 @@ pub mod concat;
 pub mod indexing;
 pub mod interop;
 pub mod reshape;
+pub mod routing;
 pub mod selectors;
 pub mod transfer;
 pub mod transpose;

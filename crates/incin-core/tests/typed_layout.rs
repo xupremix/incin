@@ -281,11 +281,12 @@ fn shape_changing_operations_produce_dense_results() {
     assert_dense("mean", &t.mean(ForwardAxis::<Here>::default()).unwrap());
     assert_dense("neg", &t.neg().unwrap());
 
-    // `transpose` does *not*, on this backend. It returns a view: shape
-    // [4, 3] over strides [1, 4], sharing the original buffer. Asserted rather
-    // than assumed, because the CUDA backend materialises the same operation
-    // into a fresh contiguous buffer -- the two disagree, and a type claiming
-    // `RowMajor` for a transpose would be false on exactly one of them.
+    // `transpose` materialises on every backend now -- that was issue #113,
+    // and it is what lets the result state `RowMajor` in its type. The view
+    // half lives under `transpose_view`, asserted separately below. Strides
+    // [3, 1] are row-major for shape [4, 3]; the old view strides were [1, 4],
+    // so this assertion is the one that fails if a backend quietly goes back
+    // to sharing the buffer.
     let transposed = t
         .transpose_structural::<Here, incin_core::shapes::idx::Next<Here>>()
         .unwrap();
@@ -295,8 +296,26 @@ fn shape_changing_operations_produce_dense_results() {
     assert_eq!(meta.shape().as_ref(), &[4, 3]);
     assert_eq!(
         meta.strides().as_ref(),
-        &[1, 4],
-        "CPU transpose is a view; if this becomes [3, 1] it started copying"
+        &[3, 1],
+        "CPU transpose materialises a dense row-major result; [1, 4] would mean it viewed again"
+    );
+
+    // The public method makes the same claim at the type level: the result is
+    // `RowMajor`, so it satisfies bounds a `Dyn` result could not.
+    let public: incin_core::shapes::Dense<s![4, 3], CpuBackendImpl> = t
+        .transpose(
+            ForwardAxis::<Here>::default(),
+            ForwardAxis::<incin_core::shapes::idx::Next<Here>>::default(),
+        )
+        .expect("a 3x4 tensor transposes to 4x3");
+    let public_meta =
+        <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::metadata::<f32>(
+            public.inner(),
+        );
+    assert_eq!(
+        public_meta.strides().as_ref(),
+        &[3, 1],
+        "the public transpose must keep the RowMajor claim true"
     );
 }
 
@@ -345,9 +364,15 @@ fn the_two_transposes_are_genuinely_different_operations() {
     let copy_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(copied.inner());
 
     assert_eq!(view_meta.shape().as_ref(), copy_meta.shape().as_ref());
-    // On CPU both are currently views, so the strides agree today. The shapes
-    // must always agree; the strides are what #113 is about.
+    // Same shape, different memory order: the view permutes the original's
+    // strides to [1, 4], the copy lands row-major at [3, 1]. The strides are
+    // what #113 was about, and they must stay different.
     assert_eq!(view_meta.strides().as_ref(), &[1, 4]);
+    assert_eq!(
+        copy_meta.strides().as_ref(),
+        &[3, 1],
+        "the materialising half must not share the buffer with the view"
+    );
 }
 
 /// A constructor hands back the proof directly, with no runtime promotion.

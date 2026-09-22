@@ -5,8 +5,7 @@
 //! (`log_softmax`, `logsumexp`, `one_hot`, `scatter_add`); this file covers
 //! the ones that arrived since. `repeat_interleave` expands a token once per
 //! expert it was routed to, `bincount` counts how many landed on each, and
-//! `sort` groups them. Only `nonzero` is still missing, and it waits on the
-//! shape decision in #102.
+//! `sort` groups them. `nonzero` and `grouped_matmul` completed the set (#103).
 //!
 //! The kernels are gradchecked inside `incin-backends`. What is pinned here is
 //! the public surface: the operation dispatches under an active `GradMode`,
@@ -336,5 +335,166 @@ fn scatter_add_takes_an_index_a_sort_produced() -> Result<()> {
     // Scattering the sorted keys back through their own permutation puts each
     // one at the position it was read from.
     assert_eq!(restored.to_vec1::<f32>()?, keys.to_vec1::<f32>()?);
+    Ok(())
+}
+
+/// `scatter_add` accumulates in a fixed order, so the low bits are stable.
+///
+/// Floating-point addition is not associative: if two runs of the same
+/// computation summed the same contributions in different orders, the results
+/// could differ in the last bit. The kernel sums in row-major order of the
+/// index operand, which is part of the contract (see
+/// `docs/OPERATION_SEMANTICS.md`), and this pins it from the public surface.
+#[test]
+fn scatter_add_is_bit_stable_across_runs() -> Result<()> {
+    let target = Tensor::<s![4], B>::from_slice(&[0.1f32, 0.2, 0.3, 0.4], ())?;
+    // Three writes to the same destination with values that do not sum
+    // exactly in f32, so a different order would change a low bit.
+    let index = Tensor::<s![3], B, i64>::from_slice(&[1, 1, 1], ())?;
+    let source = Tensor::<s![3], B>::from_slice(&[1.0e-8f32, 1.0, 1.0e8], ())?;
+
+    let first = target.scatter_add(axis!(0), &index, &source)?;
+    let second = target.scatter_add(axis!(0), &index, &source)?;
+    assert_eq!(
+        first.to_vec1::<f32>()?,
+        second.to_vec1::<f32>()?,
+        "the same inputs produced different low bits across runs"
+    );
+
+    // And the sum matches the documented row-major order: 0.2 + 1e-8 + 1.0 + 1e8.
+    let mut expected = 0.2f64;
+    for value in [1.0e-8f32, 1.0f32, 1.0e8f32] {
+        expected += f64::from(value);
+    }
+    let got = f64::from(first.to_vec1::<f32>()?[1]);
+    assert!(
+        (got - expected).abs() < 2.0,
+        "got {got}, expected ~{expected} in row-major index order"
+    );
+    Ok(())
+}
+
+/// `nonzero` returns one coordinate row per non-zero element.
+///
+/// The count is data-dependent, so the result shape is `Dyn` and is read
+/// back from the storage the kernel produced rather than pre-asserted.
+#[test]
+fn nonzero_returns_one_coordinate_row_per_nonzero_element() -> Result<()> {
+    let mask = Tensor::<s![2, 3], B>::from_slice(&[1.0f32, 0.0, 2.0, 0.0, 0.0, 3.0], ())?;
+    let coordinates = mask.nonzero()?;
+
+    assert_eq!(coordinates.dims().as_ref(), &[3, 2]);
+    // Row-major: [0,0], [0,2], [1,2].
+    assert_eq!(
+        coordinates.to_vec1::<i64>()?,
+        vec![0, 0, 0, 2, 1, 2]
+    );
+    Ok(())
+}
+
+/// An all-zero input yields the empty `[0, rank]` result, not an error.
+#[test]
+fn nonzero_of_an_empty_selection_is_an_empty_result() -> Result<()> {
+    let zeros = Tensor::<s![4], B>::zeros(())?;
+    let coordinates = zeros.nonzero()?;
+    assert_eq!(coordinates.dims().as_ref(), &[0, 1]);
+    Ok(())
+}
+
+/// `grouped_matmul` multiplies each expert's row block by its own weight.
+///
+/// The geometry is checkable by hand: two tokens, two experts, expert 0 owns
+/// both rows and expert 1 owns none, so the result is just `lhs @ rhs[0]`.
+#[test]
+fn grouped_matmul_applies_each_experts_weight_to_its_own_rows() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    let rhs = Tensor::<s![2, 2, 2], B>::from_slice(
+        &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        (),
+    )?;
+    let offsets = Tensor::<s![3], B, i64>::from_slice(&[0, 2, 2], ())?;
+
+    let out = lhs.grouped_matmul(&rhs, &offsets)?;
+    assert_eq!(out.dims().as_ref(), &[2, 2]);
+    // Expert 0's weights apply to both rows; expert 1 owns none.
+    assert_eq!(out.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 4.0]);
+    Ok(())
+}
+
+/// An expert with an empty span contributes nothing rather than erroring.
+///
+/// This is the empty-expert case a router produces when no token lands on an
+/// expert; the offsets still tile `[0, T)` and the result is unchanged.
+#[test]
+fn an_empty_expert_span_is_skipped_not_refused() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    // Expert 1 is empty (offsets 1..1); expert 0 owns both rows.
+    let rhs = Tensor::<s![3, 2, 2], B>::from_slice(
+        &[
+            1.0f32, 2.0, 3.0, 4.0, // expert 0
+            5.0, 6.0, 7.0, 8.0, // expert 1 (empty span)
+            9.0, 10.0, 11.0, 12.0, // expert 2 (empty span)
+        ],
+        (),
+    )?;
+    let offsets = Tensor::<s![4], B, i64>::from_slice(&[0, 2, 2, 2], ())?;
+
+    let out = lhs.grouped_matmul(&rhs, &offsets)?;
+    assert_eq!(out.dims().as_ref(), &[2, 2]);
+    assert_eq!(out.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 4.0]);
+    Ok(())
+}
+
+/// The gradient reaches `lhs` and `rhs` through the composed tape entry.
+///
+/// `offsets` is an integer tile with no cotangent, so only the two matrices
+/// receive gradients - the same exclusion `scatter_add` applies to its index.
+#[test]
+fn the_gradient_reaches_both_matrices_and_not_the_offsets() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    let rhs =
+        Tensor::<s![2, 2, 2], B, f32, Grad>::from_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], ())?;
+    let offsets = Tensor::<s![3], B, i64>::from_slice(&[0, 1, 2], ())?;
+
+    let out = lhs.grouped_matmul(&rhs, &offsets)?;
+    // Row 0 uses expert 0, row 1 uses expert 1.
+    assert_eq!(
+        out.to_vec1::<f32>()?,
+        vec![1.0, 2.0, 7.0, 8.0],
+        "each row should use its own expert's weights"
+    );
+
+    let loss = out.sum_all()?;
+    let grads = loss.backward()?;
+    // d(sum)/d(lhs) = row 0 from expert 0's weights, row 1 from expert 1's.
+    assert_eq!(
+        grads.require(&lhs)?.to_vec1::<f32>()?,
+        vec![1.0 + 2.0, 3.0 + 4.0, 5.0 + 6.0, 7.0 + 8.0]
+    );
+    // d(sum)/d(rhs[e]) = lhs_rows^T @ ones for that expert's rows.
+    // Expert 0 got lhs row [1,0]; expert 1 got lhs row [0,1].
+    assert_eq!(
+        grads.require(&rhs)?.to_vec1::<f32>()?,
+        vec![1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0]
+    );
+    Ok(())
+}
+
+/// Offsets that do not tile `[0, T)` are refused rather than producing a
+/// tensor that silently drops or duplicates rows.
+#[test]
+fn offsets_that_do_not_tile_the_rows_are_refused() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    let rhs = Tensor::<s![2, 2, 2], B>::from_slice(
+        &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        (),
+    )?;
+    // Final offset is 1, not 2: expert rows do not cover the activation.
+    let bad = Tensor::<s![3], B, i64>::from_slice(&[0, 1, 1], ())?;
+    assert!(lhs.grouped_matmul(&rhs, &bad).is_err());
+
+    // Decreasing offsets name overlapping spans rather than a partition.
+    let decreasing = Tensor::<s![3], B, i64>::from_slice(&[0, 2, 1], ())?;
+    assert!(lhs.grouped_matmul(&rhs, &decreasing).is_err());
     Ok(())
 }

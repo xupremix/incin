@@ -6,20 +6,35 @@ made of, so building one is composition rather than reassembly from `matmul`,
 
 | Module | What it is |
 |---|---|
-| `MultiHeadAttention` | Four projections, optional rotary positions, optional causal mask. Grouped-query and multi-query attention are the `n_kv_heads` argument, not separate modules. |
+| `MultiHeadAttention` | Four projections, optional rotary positions, optional causal mask. Grouped-query and multi-query attention are the `N_KV_HEADS` const parameter, not separate modules. |
 | `FeedForward` | The position-wise half: `Relu`, `Gelu`, or the gated `SwiGlu`. |
 | `TransformerEncoderLayer` | Self-attention and feed-forward, each behind a residual and a `LayerNorm`. Every position sees every other. |
 | `TransformerDecoderLayer` | The same layer, masked: a position sees only itself and its predecessors. |
 
 ## The direction is a type, not a flag
 
-The two layers are one struct with a direction marker:
+The two layers are one struct with a direction marker, and their widths are
+const parameters (issue #101):
 
 ```rust,ignore
-pub type TransformerEncoderLayer<B, K = f32, Train = Trainable> =
-    TransformerLayer<Bidirectional, B, K, Train>;
-pub type TransformerDecoderLayer<B, K = f32, Train = Trainable> =
-    TransformerLayer<Causal, B, K, Train>;
+pub type TransformerEncoderLayer<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K = f32,
+    Train = Trainable,
+> = TransformerLayer<Bidirectional, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>;
+pub type TransformerDecoderLayer<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K = f32,
+    Train = Trainable,
+> = TransformerLayer<Causal, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>;
 ```
 
 An encoder layer and a decoder-only layer differ in exactly one bit, so two
@@ -58,40 +73,69 @@ table is. The cosine and sine tables are `Buffer`s rather than `Param`s: they
 round-trip through a checkpoint and receive no gradient, which the test
 asserts directly.
 
-## Grouped-query attention is an argument
+## Grouped-query attention is a const parameter
 
 ```rust,ignore
 // Eight query heads over two key/value heads: grouped-query attention.
-// n_kv_heads == n_heads is ordinary multi-head; n_kv_heads == 1 is multi-query.
-MultiHeadAttention::<Cpu>::build(512, 8, 2, AttentionConfig::causal(), (), ())?
+// N_KV_HEADS == N_HEADS is ordinary multi-head; N_KV_HEADS == 1 is multi-query.
+MultiHeadAttention::<512, 8, 2, Cpu>::build(AttentionConfig::causal(), (), ())?
 ```
 
-Key and value project to `n_kv_heads * head_dim` rather than to `d_model`,
+Key and value project to `N_KV_HEADS * head_dim` rather than to `D_MODEL`,
 which is the point: with two key/value heads out of eight, those projections
 and the cache they will feed are a quarter the size.
 
-## Shapes are dynamic here
+## Head configuration is compile-time (issue #101)
 
-Both layers are written against `Dyn` rather than a static shape, and their
-head counts are runtime fields rather than const parameters. The reason is the
-causal mask: masking needs the `[T, T]` mask and the `[B, H, T, T]` scores to
-meet, and shape equality is reflexive only, so that pairing cannot be stated
-through the typed path today. The layers work around it internally; a caller
-building a mask by hand still has to broadcast it explicitly to the full score
-shape before combining it with the scores.
+`D_MODEL`, `N_HEADS`, `N_KV_HEADS` and `D_FF` are const parameters, so both
+head invariants — `D_MODEL` divisible by `N_HEADS`, and `N_HEADS` divisible by
+`N_KV_HEADS` — are `const { assert!(..) }` inside `build`: a mismatched
+configuration fails at compile time at the construction site, named in the
+error ("d_model must be divisible by n_heads", "n_heads must be divisible by
+n_kv_heads"). The compile-fail fixtures
+`crates/incin-core/tests/compile_fail/attention_d_model_head_mismatch.rs` and
+`attention_head_kv_mismatch.rs` pin that, so a regression to a runtime check
+breaks the compile baseline.
 
-The two invariants a const parameterization would have proved at compile time
-are checked in `build` instead, and reported with the offending numbers named:
-`d_model` must divide evenly into `n_heads`, and `n_heads` into `n_kv_heads`.
+The tensor *shapes* are the part that stays dynamic: both layers are written
+against `Dyn`, because the causal mask needs the `[T, T]` mask and the
+`[B, H, T, T]` scores to meet and that pairing still runs through `Dyn`. The
+one head property that cannot be const-proven — rotary needs an even head
+width, and the table extent depends on the runtime config — remains a build
+error naming the odd `head_dim`.
+
+## Cached decode (issue #104)
+
+`MultiHeadAttention::forward_with_cache` runs one generation step against a
+caller-owned `KvCache` — a preallocated `[batch, kv_heads, capacity,
+head_dim]` buffer whose type fixes the capacity:
+
+```rust,ignore
+let mut cache = KvCache::<s![1, 2, 256, 64], Cpu, f32>::new(())?;
+for token in prompt_and_samples {
+    let step = embed(token); // [1, 1, d_model], NoGrad
+    let logits = model.attention.forward_with_cache(step, &mut cache)?;
+}
+```
+
+Each call projects only the new tokens, rotates keys and queries at their
+absolute positions (`cache.len() ..`), appends the rotated keys/values, and
+attends against the full stored prefix with a causal mask sliced to this
+chunk. The cache is **not** module state: generation owns it, passes `&mut`,
+and `reset()` starts the next sequence without reallocating. An append that
+would pass capacity fails with `Error::CacheCapacityExceeded` rather than
+growing the buffer.
 
 ## What these layers are not
 
 - **Not cross-attending.** They attend to their own input only. A layer that
   also attends to an encoder's output takes two tensors, and `Module` is
   parameterized by one input.
-- **Not fused.** Every module composes catalog operations, so it runs on any
-  backend advertising them rather than on the subset that has an attention
-  kernel. A fused path can be selected underneath the same surface later.
+- **Not a flash kernel.** Evaluation and zero-dropout inference dispatch the
+  catalog's `scaled_dot_product_attention` row (one descriptor instead of the
+  composed score/softmax/attend chain); training with attention dropout still
+  runs the manual path because the fused row has no dropout operand. See
+  [What is not finished](./whats_not_finished.md) for what remains of #104.
 - **Not GPU-verified.** Training anything in this chapter is CPU-only right
   now; see [What is not finished](./whats_not_finished.md).
 

@@ -128,7 +128,14 @@ macro_rules! cpu_descriptor_operations {
             // or a non-integer index before this row is ever consulted, and
             // `cpu::canonical`'s `f32_only` enforces the real, tighter weight
             // constraint the row cannot state.
-            embedding = [EmbeddingExact],
+            //
+            // `grouped_matmul` joins for the same mixed-operand reason: an i64
+            // offsets tile beside two f32 matrices, one row cannot state the
+            // split, and the union is what `dispatch::execute` checks every
+            // operand against. The descriptor refuses a non-integer offsets
+            // operand and a non-float matrix before this row is consulted, and
+            // the executor re-checks the f32 constraint the row cannot carry.
+            embedding = [EmbeddingExact, GroupedMatMul],
             native_tensor = [
                 // The order statistics sit here rather than in the f32-only
                 // reduction group above because each builds its value buffer
@@ -161,6 +168,13 @@ macro_rules! cpu_descriptor_operations {
                 // count is an attribute. The same union the `one_hot` note
                 // above explains, for the same reason.
                 Bincount,
+                // The operand is read through the same stride-aware f64
+                // accessor as `bincount`/`one_hot` (any non-quantized dtype
+                // in, i64 coordinate rows out), and the result's extent is
+                // the count of non-zero positions — a property of the values
+                // no metadata inference can name (#102). Same rule shape as
+                // the histogram beside it.
+                NonZero,
                 PixelShuffle,
                 // `to_dtype` reads through the same stride-aware accessor and
                 // writes a fresh contiguous buffer, which is this group's shape
@@ -398,7 +412,10 @@ macro_rules! wgpu_descriptor_operations {
                 Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
                 Atanh, Erf, Rsqrt, Trunc, Frac,
                 AddScalar, MulScalar, SubScalar, DivScalar, Powf, Clamp,
-                Atan2, Fmod, Remainder
+                Atan2, Fmod, Remainder,
+                // Batch-C host composite: keep-mask (LCG) + scale; identity
+                // when eval or p<=0, zero when p>=1 — CPU's recipe.
+                Dropout
             ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
@@ -434,7 +451,10 @@ macro_rules! wgpu_descriptor_operations {
             reduction = [
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
-                MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim
+                MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
+                // Batch-C: host stable recipes over already-taped primitives
+                // (max → sub → exp → sum/keepdim → log → add/squeeze).
+                LogSumExpDim, LogSumExpKeepDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
             matmul = [MatMulExact],
@@ -445,9 +465,10 @@ macro_rules! wgpu_descriptor_operations {
             // (reshape to runs, same statistical path, reshape back) and
             // inference-mode `batch_norm` (running statistics only — training
             // mode is refused by name in the executor because there is no
-            // batch-statistics kernel here). `LogSoftmax` stays out: no
-            // WGPU Execute impl exists for it yet.
-            normalization = [Softmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
+            // batch-statistics kernel here). `LogSoftmax` joins in batch C:
+            // the stable max/sub/exp/sum/log chain over the same axis-macro
+            // request shape Softmax already rides.
+            normalization = [Softmax, LogSoftmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
             embedding = [],
             // Advertised now that each has an executor and a gradient path.
             // The comparison and logical modes of the same shader stay
@@ -475,6 +496,11 @@ macro_rules! wgpu_descriptor_operations {
                 // operand; `tril`/`triu` mask rank 1–2 storage host-side the
                 // way CPU's `triangular_storage` does.
                 Narrow, SliceExact, ConcatExact, StackExact, Tril, Triu,
+                // Batch-C host walks: pad fills the outside window and extracts
+                // it on the backward; repeat tiles by modulo; repeat_interleave
+                // copies contiguous blocks; cumsum is a host scan whose reverse
+                // suffix-sum is its gradient. Each carries its own tape entry.
+                Pad, Repeat, RepeatInterleave, Cumsum,
             ],
             // Boolean result representation is still unsettled (see below), so
             // no logical rows yet.
@@ -484,13 +510,25 @@ macro_rules! wgpu_descriptor_operations {
             // the shape changes. They push no tape entry of their own, so the
             // backward is `reshape`'s, which is what makes their `training`
             // claim true without new hand-derived math.
-            composed_tensor = [FlattenExact, SqueezeExact, UnsqueezeExact],
+            // `broadcast_left` prepends the target prefix and reuses
+            // `broadcast_storage`; `chunk`/`split` are sequences of `narrow`
+            // (the first multi-output WGPU rows, matching CPU's Vec output).
+            composed_tensor = [
+                FlattenExact, SqueezeExact, UnsqueezeExact,
+                BroadcastLeft, Chunk, Split
+            ],
             // `bmm` is matmul under its own name; `addmm` is matmul plus two
             // scalar scales and an add; `dot` is mul + all-sum; each is CPU's
             // composition on taped primitives. `Linear` rides its own bias
             // group because the rank-one input/bias path needs the wider rank
-            // bound that group carries.
-            composed_matmul = [BatchedMatMul, Addmm, Dot],
+            // bound that group carries. Batch C adds `outer` (two unsqueezes
+            // and a broadcast multiply) and `scaled_dot_product_attention`
+            // (transpose-k, matmul, scale, optional additive mask, softmax on
+            // the last axis, matmul with v) — both pure taped compositions.
+            composed_matmul = [
+                BatchedMatMul, Addmm, Dot,
+                Outer, ScaledDotProductAttention
+            ],
             composed_matmul_bias = [Linear],
             quantizing = [],
             quantized = [],
@@ -499,11 +537,15 @@ macro_rules! wgpu_descriptor_operations {
             // backend's f32-only contiguous reduction claim honestly.
             // `CrossEntropyLoss` stays unadvertised: it needs an integer
             // class-target gather this backend has no path for.
+            // Batch C adds `bce_with_logits_loss` (max(x,0) - x*z + softplus
+            // with the custom 0.5 slope at the kink) and `instance_norm`
+            // (group_norm with one group per channel).
             composed_reduction = [
-                MseLoss, L1Loss,
+                MseLoss, L1Loss, BceWithLogitsLoss,
                 VarianceAll, VarianceDim, VarianceKeepDim,
                 StdAll, StdDim, StdKeepDim,
                 Norm,
+                InstanceNorm,
             ],
             composed_reduction_indexed = []
         }

@@ -87,6 +87,11 @@ fn transpose_2d_swaps_shape() {
     let t = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let out = B::transpose::<f32>(&t, 0, 1).unwrap();
     assert_eq!(out.shape, vec![3, 2]);
+    assert_eq!(
+        out.strides().as_ref(),
+        &[2, 1],
+        "TransposeExact materialises dense row-major on every backend (issue #113)"
+    );
 }
 
 #[test]

@@ -174,6 +174,30 @@ checked it on load. It does now, against `CHECKPOINT_MANIFEST_VERSION`.
 → 0.12, `safetensors` 0.4 → 0.8, `pollster` 0.3 → 1.0, and `criterion` 0.5 →
 0.8. These are internal; the facade API is unaffected.
 
+### `where_cond` and `masked_fill` masks now broadcast (#100)
+
+Both operations traded their `ShapeEq` bound for a directional
+`BroadcastShape` pin: the mask broadcasts *into* the data, and the `Output`
+keeps the data's own shape type - `where_cond` requires
+`S: BroadcastShape<S2, Output = S2>` (output is the data's `S2`), and
+`masked_fill` requires `S: BroadcastShape<S2, Output = S>` (output is the
+input's `S`). The pin's direction is the contract: a mask that would *enlarge*
+the data has no matching `Output` impl and cannot compile when typed, and
+`Dyn` operands are refused at run time (`mask must broadcast to the input
+shape` for `masked_fill`; the broadcast output rule for `where_cond`).
+Runtime-axis (`usize`) shapes are a known edge: for two equal `usize`-axis
+types the per-axis output normalizes to `BroadcastExtent<usize, usize>`, which
+is not the original type, so such pairs may fail the pin where `ShapeEq`
+accepted them; spell those axes with `Dyn` or a const extent instead.
+
+What this unlocks downstream: #101 (causal `[T, T]` masks over
+`[B, H, T, T]` scores without an explicit `broadcast_to`) and #102 (rank-deficit
+masks in the transformer book layers) can now be written against the public
+API. Coverage: `crates/incin/tests/broadcast_mask_ops.rs` (typed size-1 and
+rank-deficit masks, `Dyn` rejection messages, backward splits) and the CPU
+storage-level forward/backward/gradcheck tests in
+`crates/incin-backends/src/cpu/ops/shape_ops/tests.rs`.
+
 ### Minimum supported Rust version
 
 `rust-version = "1.88"`, verified by a CI job pinned to exactly that toolchain

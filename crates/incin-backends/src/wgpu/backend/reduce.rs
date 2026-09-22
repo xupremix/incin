@@ -647,4 +647,151 @@ impl<D: Device> WgpuBackendImpl<D> {
         push_extremum_dim_tape_entry(t, &out, dim, false);
         Ok(out)
     }
+
+    /// `logsumexp(x, dim) = max + log(sum_keepdim(exp(x - max), dim))`.
+    ///
+    /// CPU's recipe (`cpu::ops::reduce::logsumexp`): shift by the axis
+    /// maximum so every exponential lands in `(0, 1]`, sum, log, shift back.
+    /// Each step is already a taped primitive, so this writes no backward of
+    /// its own — the composite's gradient is the replay of those entries,
+    /// which is what makes `training = true` on the capability row honest.
+    pub(crate) fn logsumexp_keepdim<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "logsumexp_keepdim",
+                expected: t.shape.to_vec(),
+                got: alloc::vec![dim],
+                msg: alloc::format!(
+                    "logsumexp_keepdim: axis {dim} out of range for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        let max = Self::max_keepdim::<K>(t, dim)?;
+        let shifted = Self::sub::<K>(t, &max)?;
+        let exp_shifted = Self::exp::<K>(&shifted)?;
+        let sum_exp = Self::sum_keepdim::<K>(&exp_shifted, dim)?;
+        let log_sum = Self::log::<K>(&sum_exp)?;
+        Self::add::<K>(&max, &log_sum)
+    }
+
+    /// [`logsumexp_keepdim`](Self::logsumexp_keepdim) with the reduced axis
+    /// removed, through `squeeze` so the chain keeps its tape continuity.
+    pub(crate) fn logsumexp_dim<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "logsumexp_dim",
+                expected: t.shape.to_vec(),
+                got: alloc::vec![dim],
+                msg: alloc::format!(
+                    "logsumexp_dim: axis {dim} out of range for shape {:?}",
+                    t.shape
+                ),
+            });
+        }
+        Self::squeeze::<K>(&Self::logsumexp_keepdim::<K>(t, dim)?, dim)
+    }
+
+    /// `cumsum(x, dim)`: host-side prefix scan along `dim`, mirrored from
+    /// `cpu::ops::reduce::cumsum`. The Jacobian is lower-triangular ones, so
+    /// the backward is the suffix sum (`reverse_cumsum`) of the cotangent —
+    /// every input position receives `sum_{k >= d} grad_out[k]`.
+    pub(crate) fn cumsum<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if dim >= t.shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "cumsum",
+                expected: t.shape.to_vec(),
+                got: alloc::vec![dim],
+                msg: alloc::format!("cumsum: axis {dim} out of range for shape {:?}", t.shape),
+            });
+        }
+        let shape = t.shape.to_vec();
+        let total = num_elements(&shape)?;
+        let dim_len = shape[dim];
+        let strides = contiguous_strides(&shape);
+        let data = t.buffer.to_vec::<f32>()?;
+        let mut out_data = alloc::vec![0.0f32; total];
+        let mut idx = alloc::vec![0usize; shape.len()];
+        for _ in 0..total {
+            if idx[dim] == 0 {
+                let mut current = 0.0f32;
+                for step in 0..dim_len {
+                    let mut step_idx = idx.clone();
+                    step_idx[dim] = step;
+                    let flat: usize = step_idx
+                        .iter()
+                        .zip(strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    current += data[flat];
+                    out_data[flat] = current;
+                }
+            }
+            increment_index(&mut idx, &shape);
+        }
+        let out = WgpuStorage::new(WgpuBuffer::from_slice(&out_data), shape.clone());
+
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut rev = alloc::vec![0.0f32; total];
+                let mut idx = alloc::vec![0usize; shape.len()];
+                for _ in 0..total {
+                    if idx[dim] == 0 {
+                        let mut current = 0.0f32;
+                        for step in (0..dim_len).rev() {
+                            let mut step_idx = idx.clone();
+                            step_idx[dim] = step;
+                            let flat: usize = step_idx
+                                .iter()
+                                .zip(strides.iter())
+                                .map(|(&i, &s)| i * s)
+                                .sum();
+                            current += grad_data[flat];
+                            rev[flat] = current;
+                        }
+                    }
+                    increment_index(&mut idx, &shape);
+                }
+                Ok(alloc::vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&rev),
+                    shape.clone()
+                )])
+            }),
+        });
+        Ok(out)
+    }
+}
+
+/// Row-major contiguous strides for `shape`.
+fn contiguous_strides(shape: &[usize]) -> alloc::vec::Vec<usize> {
+    let rank = shape.len();
+    let mut strides = alloc::vec![1usize; rank];
+    for i in (0..rank.saturating_sub(1)).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
+}
+
+/// Odometer increment over `shape`, wrapping like CPU's `increment_index`.
+fn increment_index(idx: &mut [usize], shape: &[usize]) {
+    for axis in (0..shape.len()).rev() {
+        idx[axis] += 1;
+        if idx[axis] < shape[axis] {
+            return;
+        }
+        idx[axis] = 0;
+    }
 }

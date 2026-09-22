@@ -74,16 +74,13 @@ fn cuda_comparisons_feed_logical_connectives() -> Result<()> {
     Ok(())
 }
 
-// The lower-rank-mask broadcast `incin_backends::cuda::ops::select`'s
-// `launch_broadcast_bool_mask` exists for is exercised directly at the
-// storage level by
+// Lower-rank and size-1 masks now reach the public API directly: #100
+// replaced `ShapeEq` with a directional `BroadcastShape` pin on
+// `where_cond`/`masked_fill` (`tensor/ops/manipulation/indexing.rs`), so a
+// statically lower-rank mask names fine against data of another shape (and a
+// `Dyn` mask admits the same rule at run time). CPU-side coverage of that
+// contract lives in `crates/incin/tests/broadcast_mask_ops.rs`; the CUDA
+// storage-level broadcast is exercised directly by
 // `cuda::backend::tests::where_cond_broadcasts_a_lower_rank_mask_before_selecting`
-// in `incin-backends`, not here: the static-shape `Tensor::where_cond` above
-// requires `S: ShapeEq<S2>` (`tensor/ops/index.rs`), which only holds when
-// the mask's shape type and the data's are the *same* type (`impl<S>
-// ShapeEq<S> for S` is the only impl) - so a statically lower-rank mask
-// cannot even be named at this call site. Reaching that broadcast through
-// the public API would need a `Dyn`-shaped mask, where `ShapeEq` is
-// trivially satisfied by `Dyn: ShapeEq<Dyn>` regardless of the two tensors'
-// actual runtime shapes; out of scope here, since the descriptor/backend
-// composition it would exercise is already covered.
+// in `incin-backends`. Out of scope here: this file's job remains proving
+// the comparison-mask chain resolves for CUDA on real hardware.

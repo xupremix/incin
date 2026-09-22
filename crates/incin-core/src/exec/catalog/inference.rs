@@ -800,6 +800,33 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
+            // `lhs [T, K]` against stacked `rhs [E, K, N]` writes one
+            // `[T, N]` result: the expert axis is consumed by the offsets
+            // tile rather than broadcast into the geometry, which is the
+            // difference from the generic `MatMul` rule above.
+            OperationKind::GroupedMatMul => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                inputs.get(1).and_then(|input| input.shape.as_deref()),
+            ) {
+                (Some(lhs), Some(rhs)) if lhs.len() == 2 && rhs.len() == 3 => {
+                    if lhs[1] != rhs[1] {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "grouped_matmul contracting dimensions differ",
+                        ));
+                    }
+                    Some(Some(ShapeBuf::from_slice(&[lhs[0], rhs[2]])))
+                }
+                (None, _) | (_, None) => Some(None),
+                _ => {
+                    return Err(invalid(
+                        operation,
+                        "rank",
+                        "grouped_matmul requires a rank-two lhs and a rank-three rhs",
+                    ));
+                }
+            },
             OperationKind::SgdStep => Some(inputs.first().and_then(|v| v.shape.clone())),
             OperationKind::AdamStep | OperationKind::AdamWStep => {
                 let source = match output_index {
@@ -830,6 +857,22 @@ pub(super) fn verify_outputs<A: AttributeContract>(
     let is_float = |dtype: DTypeDescriptor| dtype.is_float();
     let is_integer = |dtype: DTypeDescriptor| dtype.is_integer();
 
+    let index_input = match operation {
+        OperationKind::Gather
+        | OperationKind::Scatter
+        | OperationKind::ScatterAdd
+        | OperationKind::IndexSelect => Some(1),
+        // The index is the only operand, so it is operand zero rather than
+        // operand one the way the scatter family's is.
+        OperationKind::EmbeddingExact | OperationKind::OneHot | OperationKind::Bincount => Some(0),
+        OperationKind::CrossEntropyLoss => Some(1),
+        // The offsets operand tiles the row range and is an integer vector
+        // beside two float matrices, the same mixed-operand shape `embedding`
+        // has with its index and weight.
+        OperationKind::GroupedMatMul => Some(2),
+        _ => None,
+    };
+
     if matches!(
         row.profile,
         SemanticProfile::BinaryBroadcast
@@ -837,7 +880,14 @@ pub(super) fn verify_outputs<A: AttributeContract>(
             | SemanticProfile::Logical
             | SemanticProfile::MatMul
     ) {
-        for input in inputs.iter().skip(1) {
+        for (index, input) in inputs.iter().enumerate().skip(1) {
+            // The integer offsets operand of `grouped_matmul` is not a value
+            // operand and does not take the first operand's dtype; exempting
+            // it here is what the `index_input` slot below already does for
+            // the float requirement, applied to the same-dtype rule.
+            if Some(index) == index_input {
+                continue;
+            }
             if let (Some(expected), Some(actual)) = (first_dtype, input.dtype) {
                 if expected != actual {
                     return Err(invalid(
@@ -849,18 +899,6 @@ pub(super) fn verify_outputs<A: AttributeContract>(
             }
         }
     }
-
-    let index_input = match operation {
-        OperationKind::Gather
-        | OperationKind::Scatter
-        | OperationKind::ScatterAdd
-        | OperationKind::IndexSelect => Some(1),
-        // The index is the only operand, so it is operand zero rather than
-        // operand one the way the scatter family's is.
-        OperationKind::EmbeddingExact | OperationKind::OneHot | OperationKind::Bincount => Some(0),
-        OperationKind::CrossEntropyLoss => Some(1),
-        _ => None,
-    };
     let require_float = matches!(
         row.profile,
         SemanticProfile::UnaryFloat
@@ -1141,6 +1179,9 @@ fn expected_output<A: AttributeContract>(
         // indices still produces integers, and the width is the attribute's
         // rather than the operand's.
         OperationKind::Bincount => Some(DTypeId::I64.descriptor()),
+        // Coordinate rows are addresses, and this backend's index type is
+        // `i64` wherever an index tensor is produced.
+        OperationKind::NonZero => Some(DTypeId::I64.descriptor()),
         _ => attributes.declared_dtype().or(first_dtype),
     };
     Ok(ExpectedOutput {
@@ -1231,6 +1272,12 @@ pub(super) fn operand_ranks(
         (CrossEntropyLoss, 1) => exact(1),
         // `index_select` addresses one axis with a flat index vector.
         (IndexSelect, 1) => exact(1),
+        // `grouped_matmul`'s three operands are not interchangeable: the
+        // activation is a matrix, the rhs is a stack of expert matrices, and
+        // the offsets are a flat tile of the activation's row range.
+        (GroupedMatMul, 0) => exact(2),
+        (GroupedMatMul, 1) => exact(3),
+        (GroupedMatMul, 2) => exact(1),
         // Optimizer gradients and moment state mirror the parameter they
         // update, which the primary window already covers; the equal-shape
         // requirement is enforced separately in `validate`.

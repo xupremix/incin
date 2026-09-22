@@ -14,10 +14,10 @@ use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::shape_ops::{
     bincount_storage, broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage,
     flatten_storage, gather_storage, index_select_storage, lerp_storage, masked_fill_storage,
-    narrow_storage, one_hot_storage, pad_storage, pixel_shuffle_storage, repeat_interleave_storage,
-    repeat_storage, scatter_add_storage, scatter_storage, slice_storage, squeeze_storage,
-    stack_storage, transpose_storage, tril_storage, triu_storage, unfold_storage,
-    unsqueeze_storage, where_storage,
+    narrow_storage, nonzero_storage, one_hot_storage, pad_storage, pixel_shuffle_storage,
+    repeat_interleave_storage, repeat_storage, scatter_add_storage, scatter_storage,
+    slice_storage, squeeze_storage, stack_storage, transpose_exact_storage, transpose_storage,
+    tril_storage, triu_storage, unfold_storage, unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -136,18 +136,22 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        transpose_storage(input, attributes.first, attributes.second)
+        // Materialises: issue #113 settled that every backend advertising
+        // `TransposeExact` returns a dense row-major result, which is what
+        // lets the public `transpose` state `RowMajor` in its type.
+        transpose_exact_storage(input, attributes.first, attributes.second)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
 /// A transpose that is explicitly a view.
 ///
-/// Shares `transpose_storage` with `TransposeExact`, because on this backend
-/// that function already returns a view -- permuted metadata over the same
-/// buffer, no copy. The two operations are distinct in the catalog so a caller
-/// can *say* which behaviour they want: CUDA's `TransposeExact` materialises,
-/// and a caller who needs the no-copy path had no way to ask for it.
+/// Shares its storage-level primitive with `TransposeExact`'s former
+/// behaviour: `transpose_storage` permutes shape and strides over the same
+/// buffer and does no copy. The two operations are distinct in the catalog so
+/// a caller can *say* which behaviour they want: `TransposeExact` materialises
+/// on every backend (the settled half of issue #113), and a caller who needs
+/// the no-copy path asks for this one instead.
 ///
 /// Which one to reach for is a property of the consumer, not of the transpose.
 /// Measured on a GTX 1650, a materialised transpose loses to a strided read by
@@ -460,6 +464,30 @@ impl<D: Device> Execute<op::Bincount> for CpuBackendImpl<D> {
         // consulted, and the kernel reads through the f64 accessor.
         let bins = request.operation.descriptor().attributes().bins;
         bincount_storage(input, bins).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::NonZero> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::NonZero, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::NonZero;
+        // Training is refused by the capability row (`descriptor_training`
+        // returns false): the coordinates are addresses, so there is no
+        // cotangent to route and no reason to admit a training-mode query.
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        // No dtype guard: the kernel reads through the f64 accessor, so every
+        // non-quantized width lands exactly, the same division of labour
+        // `one_hot` documents above.
+        nonzero_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 

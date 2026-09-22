@@ -11,6 +11,7 @@ use incin_core::tensor::dtype::DTypeId;
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
+use crate::cpu::ops::matmul::grouped_matmul_impl;
 use crate::cpu::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
 use crate::cpu::ops::shape_ops::{
     addmm_storage, reshape_storage, transpose_storage, unsqueeze_storage,
@@ -295,6 +296,49 @@ impl<D: Device> Execute<op::BatchedMatMul> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         crate::cpu::ops::shape_ops::matmul_storage(lhs, rhs)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::GroupedMatMul> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupedMatMul, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::GroupedMatMul;
+        let [lhs, rhs, offsets] = ternary_operands(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        // The offsets operand is i64 by the descriptor's per-operand contract;
+        // the matrices must both be f32 (or both f64), which `writes_f32`
+        // inside the kernel re-checks because the capability row states the
+        // union of i64 and f32 and cannot carry the tighter split.
+        if offsets.metadata().dtype() != DTypeId::I64.descriptor() {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: offsets.metadata().dtype(),
+                },
+            ));
+        }
+        let lhs_dtype = lhs.metadata().dtype();
+        let rhs_dtype = rhs.metadata().dtype();
+        if !lhs_dtype.is_float() || lhs_dtype != rhs_dtype {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: lhs_dtype,
+                },
+            ));
+        }
+        grouped_matmul_impl(lhs, rhs, offsets)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

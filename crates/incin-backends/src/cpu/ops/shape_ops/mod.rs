@@ -51,11 +51,11 @@ pub(crate) use linalg::{
 };
 pub(crate) use norm::{group_norm_storage, instance_norm_storage};
 pub(crate) use select::{
-    bincount_storage, gather_storage, index_select_storage, masked_fill_storage, one_hot_storage,
-    scatter_add_storage, scatter_storage, where_storage,
+    bincount_storage, gather_storage, index_select_storage, masked_fill_storage, nonzero_storage,
+    one_hot_storage, scatter_add_storage, scatter_storage, where_storage,
 };
 pub(crate) use triangular::{diag_storage, tril_storage, triu_storage};
 pub(crate) use view::{
     broadcast_as_storage, broadcast_left_storage, flatten_storage, narrow_storage, reshape_storage,
-    slice_storage, squeeze_storage, transpose_storage, unsqueeze_storage,
+    slice_storage, squeeze_storage, transpose_exact_storage, transpose_storage, unsqueeze_storage,
 };

@@ -32,6 +32,17 @@ fn compile_fail() {
 /// macro emits.
 fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
+        // Issue #101: the two head invariants are const asserts inside
+        // `MultiHeadAttention::build`, so a mismatched configuration fails
+        // here rather than at runtime.
+        (
+            "attention_d_model_head_mismatch",
+            "d_model must be divisible by n_heads",
+        ),
+        (
+            "attention_head_kv_mismatch",
+            "n_heads must be divisible by n_kv_heads",
+        ),
         // Shape rules, all unsatisfied trait bounds.
         ("broadcast_static_mismatch", "E0277"),
         // A downstream layout cannot be minted by a constructor: `FreshDense` is sealed.

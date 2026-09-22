@@ -407,6 +407,12 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 {
     /// Fills elements where `mask` is true with `value`.
     ///
+    /// The mask broadcasts into the input (`S: BroadcastShape<S2, Output = S>`,
+    /// #100's directional pin): a rank-deficit or size-1 mask such as
+    /// `[1, 1, T, T]` against `[B, H, T, T]` data is admitted, while a mask
+    /// that would *enlarge* the input has no `Output = S` impl and cannot
+    /// compile. The result always keeps the input's shape type `S`.
+    ///
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
@@ -430,7 +436,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         value: Sc,
     ) -> Result<Tensor<S, B, K, G, Local, crate::shapes::RowMajor>>
     where
-        S: ShapeEq<S2>,
+        S: crate::shapes::broadcast::BroadcastShape<S2, Output = S>,
         B: Execute<op::MaskedFill>,
         <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
     {
@@ -1191,11 +1197,19 @@ pub(crate) fn execute_masked_fill_descriptor<
     value: f64,
 ) -> Result<Tensor<S, B, K, G1, Local, crate::shapes::RowMajor>>
 where
-    S: ShapeEq<S2>,
+    // #100's directional pin: the mask `S2` broadcasts *into* the input `S`,
+    // so the broadcast of the pair resolves to the input's own shape type and
+    // the output keeps `S`. `ShapeEq` stays for the exact-match ops (scatter,
+    // dot, lerp, `*_exact`); it was over-strict here and rejected the
+    // rank-deficit masks NumPy/PyTorch admit.
+    S: crate::shapes::broadcast::BroadcastShape<S2, Output = S>,
     B: Execute<op::MaskedFill>,
     <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
 {
-    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    // Forces the pinned broadcast pair's output to be a well-formed static
+    // shape before any storage is touched, mirroring `broadcast_to`'s use of
+    // the same constant (reshape.rs).
+    <<S as crate::shapes::broadcast::BroadcastShape<S2>>::Output as Shape>::STATIC_VALID;
     let h_input = TensorHandle::from_storage::<B, K, Local>(&input.inner);
     let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
     let shape_val = input._shape.clone();
@@ -1234,11 +1248,18 @@ pub(crate) fn execute_where_cond_descriptor<
     // one of three operands' layouts, none of which describes what was written.
 ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor>>
 where
-    S: ShapeEq<S2>,
+    // #100's directional pin: the mask `S` broadcasts *into* the data `S2`,
+    // so the broadcast of the trio resolves to the data's own shape type and
+    // the output keeps `S2`. The descriptor's `OutputRule::Broadcast` re-checks
+    // the same direction at runtime (its inferred shape must equal the `S2`
+    // the caller holds), which is what fails closed for `Dyn` operands.
+    S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
     B: Execute<op::WhereCond>,
     <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
 {
-    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    // Same well-formedness forcing `broadcast_to` applies to its pinned pair
+    // (#100), here over the data's output type.
+    <S2 as Shape>::STATIC_VALID;
     let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
     let h_true = TensorHandle::from_storage::<B, K, Local>(&on_true.inner);
     let h_false = TensorHandle::from_storage::<B, K, Local>(&on_false.inner);
@@ -1265,6 +1286,12 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, 
 {
     /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
     ///
+    /// The mask (`self`, shape `S`) broadcasts into the data operands (shape
+    /// `S2`): `S: BroadcastShape<S2, Output = S2>` is #100's directional pin,
+    /// so a causal `[T, T]` mask selects over `[B, H, T, T]` scores without an
+    /// explicit `broadcast_to`, and the result keeps the data's `S2` type. A
+    /// mask larger than the data has no matching `Output` and cannot compile.
+    ///
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
@@ -1283,7 +1310,7 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, 
         on_false: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor>>
     where
-        S: ShapeEq<S2>,
+        S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
         B: Execute<op::WhereCond>,
         <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {

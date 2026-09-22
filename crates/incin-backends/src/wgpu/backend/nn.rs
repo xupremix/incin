@@ -511,6 +511,134 @@ impl<D: Device> WgpuBackendImpl<D> {
             incin_core::tensor::reduction::Reduction::None => Ok(t),
         }
     }
+
+    /// `instance_norm(t, eps)` = `group_norm(t, channels, eps)`, the same
+    /// rewrite CPU's `instance_norm_storage` performs: one group per channel.
+    pub(crate) fn instance_norm<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        epsilon: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let channels = if t.shape.len() >= 2 { t.shape[1] } else { 1 };
+        Self::group_norm::<K>(t, channels, epsilon)
+    }
+
+    /// `bce_with_logits_loss(pred, target, reduction)`: CPU's stable recipe —
+    /// `relu(pred)` under `GradMode::Disabled` with a custom slope-0.5 tape
+    /// entry at `x == 0`, then `max(x,0) - x*z + log(1 + exp(-|x|))`.
+    pub(crate) fn bce_with_logits_loss<K: DType>(
+        pred: &<Self as StorageBackend>::Storage<K>,
+        target: &<Self as StorageBackend>::Storage<K>,
+        reduction: incin_core::tensor::reduction::Reduction,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        // The forward relu must not record its own step-style entry: CPU
+        // replaces it with a custom slope (0.5 at the kink). Running under
+        // `Disabled` silences the built-in push; the explicit `push_with`
+        // below re-records the real recipe under the ambient mode.
+        let max_x_0 = incin_core::exec::GradMode::Disabled.restrict(|| Self::relu::<K>(pred))?;
+        let pred_capture = pred.clone();
+        let shape = pred.shape.to_vec();
+        let (pred_id, out_id) = (pred.id, max_x_0.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![pred_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let input_data = pred_capture.buffer.to_vec::<f32>()?;
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut grad = alloc::vec![0.0f32; input_data.len()];
+                for (i, &x) in input_data.iter().enumerate() {
+                    let slope = if x == 0.0 {
+                        0.5
+                    } else if x > 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    grad[i] = grad_data[i] * slope;
+                }
+                Ok(alloc::vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grad),
+                    shape.clone()
+                )])
+            }),
+        });
+        let x_times_z = Self::mul::<K>(pred, target)?;
+        let term1 = Self::sub::<K>(&max_x_0, &x_times_z)?;
+        let abs_x = Self::abs::<K>(pred)?;
+        let neg_abs = Self::neg::<K>(&abs_x)?;
+        let exp_neg = Self::exp::<K>(&neg_abs)?;
+        let one_plus = Self::add_scalar_float::<K>(&exp_neg, 1.0)?;
+        let term2 = Self::log::<K>(&one_plus)?;
+        let loss = Self::add::<K>(&term1, &term2)?;
+        Self::reduce_loss::<K>(loss, reduction)
+    }
+
+    /// `dropout(t, p, training)`: identity when off, zero when `p >= 1`,
+    /// otherwise a host-LCG keep-mask (same LCG as `creation::rand`) scaled
+    /// by `1 / (1 - p)`. The mask is constant; the tape rides `mul` and
+    /// `mul_scalar_float`, so the gradient multiplies by the same mask.
+    pub(crate) fn dropout<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        probability: f64,
+        training: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if !training || probability <= 0.0 {
+            return Ok(WgpuStorage::new(t.buffer.clone(), t.shape.to_vec()));
+        }
+        if probability >= 1.0 {
+            return Self::mul_scalar_float::<K>(t, 0.0);
+        }
+        let n = num_elements(&t.shape)?;
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos();
+        let mut state = seed as u64;
+        let p = probability as f32;
+        let mask_data: alloc::vec::Vec<f32> = (0..n)
+            .map(|_| {
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let draw = ((state >> 33) as f32) / (u32::MAX as f32);
+                // `step(draw - p)`: keep when draw > p, matching CPU's
+                // `canonical_step` on the shifted draw.
+                if draw > p { 1.0 } else { 0.0 }
+            })
+            .collect();
+        let mask = WgpuStorage::new(WgpuBuffer::from_slice(&mask_data), t.shape.to_vec());
+        let kept = Self::mul::<K>(t, &mask)?;
+        Self::mul_scalar_float::<K>(&kept, 1.0 / (1.0 - probability))
+    }
+
+    /// `scaled_dot_product_attention(q, k, v, mask?, scale?)`: CPU's
+    /// composition — transpose k, matmul, scale, optional additive mask,
+    /// softmax on the last axis, matmul with v. Every step is taped.
+    pub(crate) fn scaled_dot_product_attention<K: DType>(
+        q: &<Self as StorageBackend>::Storage<K>,
+        k: &<Self as StorageBackend>::Storage<K>,
+        v: &<Self as StorageBackend>::Storage<K>,
+        mask: Option<&<Self as StorageBackend>::Storage<K>>,
+        scale: Option<f64>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let k_t = if k.shape.len() >= 2 {
+            let rank = k.shape.len();
+            Self::transpose::<K>(k, rank - 2, rank - 1)?
+        } else {
+            k.clone()
+        };
+        let scores = Self::matmul::<K>(q, &k_t)?;
+        let d_k = *q.shape.last().unwrap_or(&1) as f64;
+        let scaled =
+            Self::mul_scalar_float::<K>(&scores, scale.unwrap_or_else(|| 1.0 / d_k.sqrt()))?;
+        let masked = match mask {
+            Some(mask) => Self::add::<K>(&scaled, mask)?,
+            None => scaled,
+        };
+        let axis = scores.shape.len().saturating_sub(1);
+        let attention = Self::softmax::<K>(&masked, axis)?;
+        Self::matmul::<K>(&attention, v)
+    }
 }
 
 impl<D: Device> WgpuBackendImpl<D> {

@@ -12,7 +12,7 @@ use crate::shapes::{DynShape, Shape, ShapeValue};
 use crate::tensor::arg::TensorArgs;
 use crate::tensor::arg_into::ArgInto;
 use crate::tensor::device::Device;
-use crate::tensor::dtype::{BuiltinDType, DType, PlainDType};
+use crate::tensor::dtype::{DType, PlainDType};
 use crate::tensor::grad::RequiresGrad;
 
 /// Constructors, which allocate a packed row-major buffer.
@@ -125,7 +125,7 @@ where
     pub fn from_slice<A>(data: &[<K as PlainDType>::Elem], args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
-        K: PlainDType + BuiltinDType,
+        K: PlainDType,
         B: Execute<op::TensorFromData> + Capabilities,
         <B as Execute<op::TensorFromData>>::Output: Into<B::Storage<K>>,
     {

@@ -10,6 +10,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Typed KV cache and fused-attention path for incremental decode (#104).**
+  `incin::nn::KvCache` is a preallocated `[batch, kv_heads, capacity,
+  head_dim]` buffer (static rank-4 shape; `Dyn` is rejected at construction)
+  with `append`/`kv`/`reset`. Overflow raises the new
+  `Error::CacheCapacityExceeded`; geometry mismatches raise
+  `Error::InvalidModuleState`. `MultiHeadAttention::forward_with_cache` runs
+  one decode step against a caller-owned cache: absolute-position rotary,
+  append, then causal attention over the stored prefix, all under
+  `GradMode::Disabled` with a `NoGrad` result. Evaluation and zero-dropout
+  `forward` now dispatch the catalog's `scaled_dot_product_attention` row
+  (mask operand decoupled from q/k/v's gradient type); training with
+  attention-weight dropout keeps the manual path because the fused row has no
+  dropout operand. The CPU row still composes matmul/softmax internally — a
+  flash-style online-softmax kernel remains open on #104.
+
 - **The kernel IR can express the transcendental and rounding pointwise
   operations.** `IrUnaryOp` gains `Tan`, `Asin`, `Acos`, `Atan`, `Sinh`,
   `Cosh`, `Asinh`, `Acosh`, `Atanh`, `Erf` and the rounding family `Floor`,
@@ -168,6 +183,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the examples that never compiled are not re-proposed on every run.
 
 ### Changed
+
+- **`transpose` materialises on every backend and states `RowMajor` (#113).**
+  The split brain is settled: CPU's `TransposeExact` used to return a view
+  where CUDA returned a copy, so no type could honestly describe the result.
+  CPU now copies into a fresh dense row-major buffer (its backward
+  materialises the inverse the same way CUDA's does), CUDA and WGPU already
+  did, and the generated operation contract's layout rule for `transpose`
+  reads `FreshContiguous` rather than the `Shape` profile's default. The
+  public `transpose` therefore returns `Tensor<..., RowMajor>`, so
+  `reshape_view` is reachable straight after one; `transpose_structural` and
+  `transpose_runtime` keep their conservative `Dyn`. The no-copy half is
+  unchanged and explicitly named: `transpose_view` still permutes strides
+  over the same buffer and still returns `Dyn`, and WGPU still refuses to
+  advertise it until its pointwise shaders take strides. A CPU/WGPU parity
+  suite pins the same constants on both backends, and a compile-fail fixture
+  pins that a view result cannot satisfy `reshape_view`'s contiguity bound.
+
+- **Continuous fuzzing for the three adversarial parsers (#48).** The threat
+  model names malformed ONNX, state checkpoints and GGUF as adversarial
+  inputs; each now has a cargo-fuzz target under `fuzz/` driving the same
+  file-path entry points a caller uses (`OnnxImporter::import`,
+  `ModelExt::load(Format::Postcard, ..)`, `io::inspect_file`) with bounded
+  inputs, and `.github/workflows/fuzz.yml` runs all three for a fixed budget
+  on a schedule. The property suites already run under the normal workspace
+  test command.
 
 - **The library's own documentation now builds tensors from a target value.**
   `Tensor`'s rustdoc and the thirty method examples under `incin-core` used

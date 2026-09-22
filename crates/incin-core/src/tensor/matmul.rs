@@ -474,11 +474,12 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
         L2: Layout<S2>,
         L3: Layout<S3>,
         L4: Layout<S4>,
+        G2: RequiresGrad,
     >(
         q: &Tensor<S1, B, K, G1, Local, TLayout>,
         k: &Tensor<S2, B, K, G1, Local, L2>,
         v: &Tensor<S3, B, K, G1, Local, L3>,
-        mask: Option<&Tensor<S4, B, K, G1, Local, L4>>,
+        mask: Option<&Tensor<S4, B, K, G2, Local, L4>>,
         scale: Option<f64>,
     ) -> Result<Tensor<Dyn, B, K, G1>>
     where

@@ -91,6 +91,9 @@ pub fn operation_semantics_document() -> alloc::string::String {
         let _ = writeln!(out, "| `{:?}` | {} |", site, count);
     }
     out.push('\n');
+    out.push_str(
+        "\n## Ordering contracts\n\n### `sort`, `argsort`, and `topk` tie-breaking\n\nAll three are **stable**: equal keys keep the order they arrived in, on every axis and in both directions. The CPU kernel calls Rust's stable `sort_by`, so a descending sort does not reverse a run of equal keys relative to the input - position `i` of a tie group is still the element the input's position `i` named. `argsort`'s permutation and `sort`'s dual output are therefore the same reordering, and `topk`'s indices within a boundary tie are the earliest arrivals. This is the same stability PyTorch documents for `torch.sort` and `torch.argsort`, and it is what lets a router group the same assignment the same way twice.\n\n### `scatter_add` determinism\n\nDuplicate destinations accumulate in **row-major order of `index`**, not in an atomic or race-dependent order. Floating-point addition is not associative, so that order is part of the contract rather than an implementation detail; it is why the catalog row claims determinism and why a backend summing with atomics could not advertise this operation.\n",
+    );
     for row in OPERATION_CATALOG {
         let max_arity = if *row.input_arity.end() == usize::MAX {
             alloc::string::String::from("many")

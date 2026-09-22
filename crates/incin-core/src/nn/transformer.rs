@@ -33,10 +33,13 @@
 //! is therefore a separate module with a tuple input, not a configuration of
 //! this one.
 //!
-//! **Static shapes.** Like [`MultiHeadAttention`], these layers are written
-//! against [`Dyn`](crate::shapes::Dyn), because the causal mask needs the mask
-//! and the score tensor to meet and the typed API cannot express that shape
-//! pairing yet.
+//! **Static shapes.** Tensor shapes are [`Dyn`](crate::shapes::Dyn), because
+//! the causal mask needs the mask and the score tensor to meet and the typed
+//! API cannot express that shape pairing yet. The head and feed-forward
+//! counts are the opposite: `D_MODEL`, `N_HEADS`, `N_KV_HEADS` and `D_FF`
+//! are const parameters (issue #101), so a layer whose widths do not divide
+//! evenly fails at compile time inside [`build`](TransformerLayer::build)
+//! rather than being caught as a runtime configuration error.
 
 use crate::dist::Local;
 use crate::err::{Error, Result};
@@ -169,7 +172,9 @@ impl TransformerConfig {
 /// residual connection and a normalization.
 ///
 /// Reach for [`TransformerEncoderLayer`] or [`TransformerDecoderLayer`] rather
-/// than naming the direction parameter by hand.
+/// than naming the direction parameter by hand. The widths are const
+/// parameters (issue #101): a mismatched head configuration fails at compile
+/// time inside [`build`](Self::build).
 ///
 /// # Example
 ///
@@ -181,8 +186,11 @@ impl TransformerConfig {
 ///
 /// # fn main() -> Result<()> {
 /// // Eight query heads over two key/value heads, pre-norm, GELU feed-forward.
-/// let layer =
-///     TransformerDecoderLayer::<Cpu>::build(64, 8, 2, 256, TransformerConfig::default(), (), ())?;
+/// let layer = TransformerDecoderLayer::<64, 8, 2, 256, Cpu>::build(
+///     TransformerConfig::default(),
+///     (),
+///     (),
+/// )?;
 /// assert!(layer.config.attention.causal);
 ///
 /// let x = Tensor::<Dyn, Cpu>::zeros(vec![2, 16, 64])?.require_grad();
@@ -194,12 +202,16 @@ impl TransformerConfig {
 #[incin_macros::module(internal, no_stats, no_train_mode)]
 pub struct TransformerLayer<
     D: AttentionDirection,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
     B: crate::tensor::backend::VariableBackend,
     K: DType = f32,
     Train: TrainState = Trainable,
 > {
     /// Self-attention, masked or not according to `D`.
-    pub attention: MultiHeadAttention<B, K, Train>,
+    pub attention: MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>,
     /// Normalization for the attention sub-layer.
     pub attention_norm: LayerNorm<Dyn, B, K, Train>,
     /// The position-wise feed-forward.
@@ -222,14 +234,37 @@ pub struct TransformerLayer<
 }
 
 /// A layer whose positions all see each other.
-pub type TransformerEncoderLayer<B, K = f32, Train = Trainable> =
-    TransformerLayer<Bidirectional, B, K, Train>;
+pub type TransformerEncoderLayer<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K = f32,
+    Train = Trainable,
+> = TransformerLayer<Bidirectional, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>;
 
 /// A layer whose positions see only themselves and their predecessors.
-pub type TransformerDecoderLayer<B, K = f32, Train = Trainable> =
-    TransformerLayer<Causal, B, K, Train>;
+pub type TransformerDecoderLayer<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K = f32,
+    Train = Trainable,
+> = TransformerLayer<Causal, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>;
 
-impl<D, B, K, Train> crate::nn::TrainMode for TransformerLayer<D, B, K, Train>
+impl<
+    D,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K,
+    Train,
+> crate::nn::TrainMode for TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>
 where
     D: AttentionDirection,
     B: crate::tensor::backend::VariableBackend,
@@ -248,7 +283,16 @@ where
     }
 }
 
-impl<D, B, K, Train> crate::nn::ShapeInfo for TransformerLayer<D, B, K, Train>
+impl<
+    D,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K,
+    Train,
+> crate::nn::ShapeInfo for TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>
 where
     D: AttentionDirection,
     B: crate::tensor::backend::VariableBackend,
@@ -271,7 +315,16 @@ where
     }
 }
 
-impl<D, B, K, Train> TransformerLayer<D, B, K, Train>
+impl<
+    D,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K,
+    Train,
+> TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>
 where
     D: AttentionDirection,
     B: crate::tensor::backend::VariableBackend,
@@ -281,7 +334,7 @@ where
     /// The model width this layer consumes and produces.
     #[must_use]
     pub const fn d_model(&self) -> usize {
-        self.attention.d_model()
+        D_MODEL
     }
 
     /// Whether this layer's attention is masked. A property of `D`, not state.
@@ -291,7 +344,7 @@ where
     }
 
     /// Freezes every parameter in both sub-layers.
-    pub fn freeze(self) -> TransformerLayer<D, B, K, Frozen> {
+    pub fn freeze(self) -> TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Frozen> {
         TransformerLayer {
             attention: self.attention.freeze(),
             attention_norm: self.attention_norm.freeze(),
@@ -304,7 +357,9 @@ where
     }
 
     /// Unfreezes every parameter in both sub-layers.
-    pub fn unfreeze(self) -> TransformerLayer<D, B, K, Trainable> {
+    pub fn unfreeze(
+        self,
+    ) -> TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Trainable> {
         TransformerLayer {
             attention: self.attention.unfreeze(),
             attention_norm: self.attention_norm.unfreeze(),
@@ -317,7 +372,15 @@ where
     }
 }
 
-impl<D, B, K> TransformerLayer<D, B, K, Trainable>
+impl<
+    D,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K,
+> TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Trainable>
 where
     D: AttentionDirection,
     B: crate::tensor::backend::TensorBackend<K>
@@ -343,11 +406,11 @@ where
     /// `config.attention.causal` is ignored and replaced by `D::CAUSAL`: the
     /// direction marker owns masking, and the stored config is corrected so it
     /// cannot disagree with the type.
+    ///
+    /// The widths are const parameters (issue #101): the head invariants are
+    /// compile-time inside [`MultiHeadAttention::build`], so a layer whose
+    /// `D_MODEL`/`N_HEADS`/`N_KV_HEADS` do not divide evenly never compiles.
     pub fn build(
-        d_model: usize,
-        n_heads: usize,
-        n_kv_heads: usize,
-        d_ff: usize,
         config: TransformerConfig,
         dtype: <K as DType>::Arg,
         device: <B::Device as Device>::Arg,
@@ -355,29 +418,26 @@ where
         let mut config = config;
         config.attention.causal = D::CAUSAL;
 
-        let attention = MultiHeadAttention::build(
-            d_model,
-            n_heads,
-            n_kv_heads,
+        let attention = MultiHeadAttention::<D_MODEL, N_HEADS, N_KV_HEADS, B, K>::build(
             config.attention,
             dtype.clone(),
             device.clone(),
         )?;
         let attention_norm = LayerNorm::<Dyn, B, K, Trainable>::build_full(
-            d_model,
+            D_MODEL,
             dtype.clone(),
             device.clone(),
             config.eps,
         )?;
         let feed_forward = FeedForward::build(
-            d_model,
-            d_ff,
+            D_MODEL,
+            D_FF,
             config.feed_forward,
             dtype.clone(),
             device.clone(),
         )?;
         let feed_forward_norm =
-            LayerNorm::<Dyn, B, K, Trainable>::build_full(d_model, dtype, device, config.eps)?;
+            LayerNorm::<Dyn, B, K, Trainable>::build_full(D_MODEL, dtype, device, config.eps)?;
 
         Ok(Self {
             attention,
@@ -407,8 +467,19 @@ impl<K: DType, B> TransformerBackend<K> for B where
 {
 }
 
-impl<D, B, K, Train, G, L> Module<Tensor<Dyn, B, K, G, Local, L>>
-    for TransformerLayer<D, B, K, Train>
+impl<
+    D,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K,
+    Train,
+    G,
+    L,
+> Module<Tensor<Dyn, B, K, G, Local, L>>
+    for TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>
 where
     D: AttentionDirection,
     B: TransformerBackend<K> + crate::tensor::backend::SupportsDType<K>,
@@ -437,6 +508,7 @@ where
     <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ScaledDotProductAttention>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Relu>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Gelu>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Swish>>::Output: Into<B::Storage<K>>,
@@ -499,7 +571,16 @@ where
     }
 }
 
-impl<D, B, K, Train> TransformerLayer<D, B, K, Train>
+impl<
+    D,
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    const D_FF: usize,
+    B,
+    K,
+    Train,
+> TransformerLayer<D, D_MODEL, N_HEADS, N_KV_HEADS, D_FF, B, K, Train>
 where
     D: AttentionDirection,
     B: crate::tensor::backend::VariableBackend,

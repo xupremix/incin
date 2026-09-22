@@ -15,6 +15,10 @@
 //! | [`MaxPool2d`] | 2D Max Pooling |
 //! | [`AvgPool2d`] | 2D Average Pooling |
 //! | [`Embedding`] | Embedding lookup table |
+//! | [`MultiHeadAttention`] | Multi-head / grouped-query attention with rotary positions (issue #101) |
+//! | [`FeedForward`] | Position-wise feed-forward block, including gated SwiGLU |
+//! | [`TransformerEncoderLayer`] | Bidirectional self-attention + feed-forward with residuals and norms |
+//! | [`TransformerDecoderLayer`] | Causal (masked) self-attention + feed-forward with residuals and norms |
 //!
 //! ## Activations
 //!
@@ -42,6 +46,10 @@
 //! |--------|-------------|
 //! | [`RNNCell`] | Single Elman RNN step |
 //! | [`RNN`] | Multi-step sequence RNN |
+//! | [`GRUCell`] | Single gated recurrent unit step |
+//! | [`GRU`] | Multi-step sequence GRU layer |
+//! | [`LSTMCell`] | Single long short-term memory step |
+//! | [`LSTM`] | Multi-step sequence LSTM layer |
 //!
 //! ## Parameters & Buffers
 //!
@@ -73,6 +81,8 @@ pub mod flatten;
 pub mod gru;
 /// `init`.
 pub mod init;
+/// Typed preallocated key/value cache for incremental decoding (issue #104).
+pub mod kv_cache;
 /// `layer_norm`.
 pub mod layer_norm;
 /// `linear`.
@@ -125,6 +135,7 @@ pub use init::{
     kaiming_normal_with_a, kaiming_uniform, kaiming_uniform_with_a, normal, ones, rand, randn,
     uniform, xavier_normal, xavier_uniform, zeros,
 };
+pub use kv_cache::KvCache;
 pub use layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm};
 pub use linear::{Linear, LinearBuilder, LinearShape, linear};
 #[cfg(feature = "distributed")]

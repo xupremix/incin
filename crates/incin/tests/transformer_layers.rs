@@ -50,7 +50,7 @@ fn close(left: &[f32], right: &[f32], tolerance: f32) -> bool {
 #[test]
 fn attention_matches_the_hand_composed_block() -> Result<()> {
     let attention =
-        MultiHeadAttention::<Cpu>::build(D_MODEL, 1, 1, AttentionConfig::default(), (), ())?;
+        MultiHeadAttention::<D_MODEL, 1, 1, Cpu>::build(AttentionConfig::default(), (), ())?;
     let x = ramp(vec![1, SEQ, D_MODEL])?.require_grad();
 
     let query = attention.query.forward(x.clone())?;
@@ -76,11 +76,7 @@ fn attention_matches_the_hand_composed_block() -> Result<()> {
 /// The encoder layer is exactly pre-norm residual composition of its own parts.
 #[test]
 fn pre_norm_encoder_layer_matches_its_own_composition() -> Result<()> {
-    let layer = TransformerEncoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let layer = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         TransformerConfig::default(),
         (),
         (),
@@ -111,15 +107,11 @@ fn pre_norm_encoder_layer_matches_its_own_composition() -> Result<()> {
 #[test]
 fn post_norm_differs_from_pre_norm() -> Result<()> {
     let config = TransformerConfig::default();
-    let pre = TransformerEncoderLayer::<Cpu>::build(D_MODEL, 2, 2, D_FF, config, (), ())?;
+    let pre = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(config, (), ())?;
 
     // Same parameters, different placement: copy the pre-norm layer's state
     // into a post-norm layer so the only difference is where the norm sits.
-    let mut post = TransformerEncoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let mut post = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         config.with_norm(NormPlacement::Post),
         (),
         (),
@@ -144,11 +136,7 @@ fn post_norm_differs_from_pre_norm() -> Result<()> {
 /// a shape assertion on and fail here.
 #[test]
 fn the_decoder_layer_cannot_see_the_future() -> Result<()> {
-    let layer = TransformerDecoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let layer = TransformerDecoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         TransformerConfig::default(),
         (),
         (),
@@ -191,11 +179,7 @@ fn the_decoder_layer_cannot_see_the_future() -> Result<()> {
 /// expectation.
 #[test]
 fn the_encoder_layer_sees_the_whole_sequence() -> Result<()> {
-    let layer = TransformerEncoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let layer = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         TransformerConfig::default(),
         (),
         (),
@@ -233,22 +217,14 @@ fn the_encoder_layer_sees_the_whole_sequence() -> Result<()> {
 /// A gated feed-forward builds its gate; an ungated one does not.
 #[test]
 fn the_gate_exists_only_for_the_gated_kind() -> Result<()> {
-    let gelu = TransformerEncoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let gelu = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         TransformerConfig::default(),
         (),
         (),
     )?;
     assert!(gelu.feed_forward.gate.is_none());
 
-    let swiglu = TransformerEncoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let swiglu = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         TransformerConfig::default().with_feed_forward(FeedForwardKind::SwiGlu),
         (),
         (),
@@ -266,14 +242,14 @@ fn the_gate_exists_only_for_the_gated_kind() -> Result<()> {
 fn rotary_state_round_trips_and_takes_no_gradient() -> Result<()> {
     let config = TransformerConfig::default()
         .with_attention(AttentionConfig::default().with_rotary(10_000.0, 32));
-    let layer = TransformerDecoderLayer::<Cpu>::build(D_MODEL, 2, 2, D_FF, config, (), ())?;
+    let layer = TransformerDecoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(config, (), ())?;
     let cos = layer
         .attention
         .rotary_cos
         .as_ref()
         .expect("rotary was configured, so the table must exist");
 
-    let mut restored = TransformerDecoderLayer::<Cpu>::build(D_MODEL, 2, 2, D_FF, config, (), ())?;
+    let mut restored = TransformerDecoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(config, (), ())?;
     load_state(&mut restored, &collect_state(&layer)?)?;
 
     let before = cos.as_tensor()?.to_vec1::<f32>()?;
@@ -316,19 +292,20 @@ fn rotary_state_round_trips_and_takes_no_gradient() -> Result<()> {
 #[test]
 fn a_two_layer_decoder_stack_trains() -> Result<()> {
     let config = TransformerConfig::default().with_feed_forward(FeedForwardKind::SwiGlu);
-    let first = TransformerDecoderLayer::<Cpu>::build(D_MODEL, 2, 1, D_FF, config, (), ())?;
-    let second = TransformerDecoderLayer::<Cpu>::build(D_MODEL, 2, 1, D_FF, config, (), ())?;
+    let first = TransformerDecoderLayer::<D_MODEL, 2, 1, D_FF, Cpu>::build(config, (), ())?;
+    let second = TransformerDecoderLayer::<D_MODEL, 2, 1, D_FF, Cpu>::build(config, (), ())?;
 
     let x = ramp(vec![1, SEQ, D_MODEL])?;
     let target = ramp(vec![1, SEQ, D_MODEL])?
         .mul_scalar(0.25)?
         .forget_layout();
 
-    let loss_now =
-        |a: &TransformerDecoderLayer<Cpu>, b: &TransformerDecoderLayer<Cpu>| -> Result<f32> {
-            let hidden = a.forward(x.clone().require_grad())?;
-            Ok(b.forward(hidden)?.mse_loss(&target)?.to_vec1::<f32>()?[0])
-        };
+    let loss_now = |a: &TransformerDecoderLayer<D_MODEL, 2, 1, D_FF, Cpu>,
+                    b: &TransformerDecoderLayer<D_MODEL, 2, 1, D_FF, Cpu>|
+     -> Result<f32> {
+        let hidden = a.forward(x.clone().require_grad())?;
+        Ok(b.forward(hidden)?.mse_loss(&target)?.to_vec1::<f32>()?[0])
+    };
 
     let start = loss_now(&first, &second)?;
     let mut attention_optimizer = AdamW::<Cpu>::from_module(&first, 5e-2)?;
@@ -352,11 +329,7 @@ fn a_two_layer_decoder_stack_trains() -> Result<()> {
 /// a wrong answer from a reshape that happens to fit.
 #[test]
 fn a_non_sequence_input_is_rejected() -> Result<()> {
-    let layer = TransformerEncoderLayer::<Cpu>::build(
-        D_MODEL,
-        2,
-        2,
-        D_FF,
+    let layer = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
         TransformerConfig::default(),
         (),
         (),

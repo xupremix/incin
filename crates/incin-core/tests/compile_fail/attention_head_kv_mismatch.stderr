@@ -1,0 +1,35 @@
+error[E0080]: evaluation panicked: n_heads must be divisible by n_kv_heads
+ --> $RUST/core/src/panic.rs
+  |
+  |           $crate::panicking::panic_fmt($crate::const_format_args!($($t)+));
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `incin::nn::MultiHeadAttention::<8, 4, 3, incin_backends::cpu::CpuBackendImpl>::build::{constant#3}` failed here
+  |
+ ::: src/nn/attention.rs
+  |
+  | /             assert!(
+  | |                 N_HEADS.is_multiple_of(N_KV_HEADS),
+  | |                 "n_heads must be divisible by n_kv_heads"
+  | |             );
+  | |_____________- in this macro invocation
+
+note: erroneous constant encountered
+ --> src/nn/attention.rs
+  |
+  | /         const {
+  | |             assert!(
+  | |                 N_HEADS.is_multiple_of(N_KV_HEADS),
+  | |                 "n_heads must be divisible by n_kv_heads"
+  | |             );
+  | |         }
+  | |_________^
+
+note: the above error was encountered while instantiating `fn MultiHeadAttention::<8, 4, 3, CpuBackendImpl>::build`
+  --> tests/compile_fail/attention_head_kv_mismatch.rs:8:13
+   |
+ 8 |       let _ = incin::nn::MultiHeadAttention::<8, 4, 3, CpuBackendImpl>::build(
+   |  _____________^
+ 9 | |         incin::nn::AttentionConfig::default(),
+10 | |         (),
+11 | |         (),
+12 | |     );
+   | |_____^

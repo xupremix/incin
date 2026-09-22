@@ -1,0 +1,5 @@
+# cargo-fuzz builds with a pinned nightly; see fuzz/Cargo.toml.
+[toolchain]
+channel = "nightly-2026-07-28"
+components = ["rust-src"]
+profile = "minimal"

@@ -10,6 +10,9 @@ pub mod executor;
 /// module is always compiled (so tests are reachable) but every candidate
 /// resolves to the `Native` path because [`MPS_AVAILABLE`](mps::MPS_AVAILABLE) is `false`.
 pub mod mps;
+/// Elementwise unaries, scalars, clamp, and the three binary pointwise ops
+/// (#92 Batch A), with their tape recipes and host-side parity tests.
+pub mod pointwise;
 pub mod shaders;
 pub mod storage;
 // `pub(crate)`, matching cpu, cuda and wgpu. The thread-local itself is not
@@ -33,8 +36,8 @@ pub use tape::depth as tape_depth;
 /// Record a custom operation's backward recipe on this thread's tape.
 ///
 /// The Metal instantiation of the custom-training contract documented at
-/// `crate::cpu::tape_record`. Compile-checked; executed coverage waits on
-/// real Metal kernels (MTL-002/003).
+/// `crate::cpu::tape_record`. The shader/MPS infrastructure from
+/// MTL-001/002/003 is complete; operation coverage on top of it is #92.
 pub use tape::record as tape_record;
 /// Record a custom operation's backward recipe, building it only if kept.
 ///

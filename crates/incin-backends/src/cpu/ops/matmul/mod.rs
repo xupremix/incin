@@ -26,7 +26,8 @@
 //! ` block: Rust does not allow two separate `impl <..> for
 //! CpuBackendImpl<..>` blocks for the same trait+type across two files, so
 //! `ops/shape_ops/linalg.rs`'s single impl block calls into
-//! `matmul_impl`/`batched_matmul_impl` for its `matmul` method.
+//! `matmul_impl`/`batched_matmul_impl`/`grouped_matmul_impl` for its
+//! `matmul` method.
 //!
 //! Split by concern per `docs/CONVENTIONS.md`: `types` is `MatrixView`, the
 //! stride-view every kernel below reads through; `transpose` is the two
@@ -34,9 +35,11 @@
 //! batched entry point and its tape-free forward kernel; `unbatched` is
 //! the unbatched entry point and its own forward kernel (named `unbatched`
 //! rather than `core` to avoid shadowing the `core` crate under this
-//! module's own `use super::*;` globs); `gemm` is the actual `[m,k] @
-//! [k,n]` inner kernel, tried in decreasing order of specificity
-//! (blocked/BLAS, architecture SIMD, then the always-correct scalar path).
+//! module's own `use super::*;` globs); `grouped` is the expert-tiled form
+//! (#103) that reuses `matmul_forward` per expert and composes one tape
+//! entry over the whole tile; `gemm` is the actual `[m,k] @ [k,n]` inner
+//! kernel, tried in decreasing order of specificity (blocked/BLAS,
+//! architecture SIMD, then the always-correct scalar path).
 
 use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
@@ -48,6 +51,7 @@ use crate::iteration::{IterationPlan, OperandLayout};
 
 mod batched;
 mod gemm;
+mod grouped;
 #[cfg(test)]
 /// `tests`.
 mod tests;
@@ -56,6 +60,7 @@ mod types;
 mod unbatched;
 
 pub(crate) use batched::batched_matmul_impl;
+pub(crate) use grouped::grouped_matmul_impl;
 pub(crate) use transpose::transpose_last2;
 pub(crate) use unbatched::matmul_impl;
 
@@ -65,6 +70,9 @@ pub(crate) use unbatched::matmul_impl;
 use gemm::{gemm, gemm_f64, writes_f32};
 use transpose::transpose_2d;
 use types::MatrixView;
+// `matmul_forward` is reached by `grouped` for each expert's tape-free
+// slice; it stays private to this module so only the kernels below call it.
+pub(crate) use unbatched::matmul_forward;
 
 // Test-only: `scalar_gemm` is otherwise private to `gemm` (only `gemm`
 // itself calls it to pick a kernel) and reached only by `tests`, so a
