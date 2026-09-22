@@ -84,6 +84,13 @@ impl_wgpu_canonical![
     (Maximum, maximum),
     (Minimum, minimum),
     (AbsDiff, abs_diff),
+    // The three binary floats whose forward is a dedicated mode of
+    // `binary.wgsl` and whose backward is CPU's own recipe (the quotient rule
+    // for `atan2`, `record_modulus` for the two residues). Same request shape
+    // as the six above: two operands, no attributes.
+    (Atan2, atan2),
+    (Fmod, fmod),
+    (Remainder, remainder),
 ];
 
 impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
@@ -493,11 +500,90 @@ macro_rules! wgpu_unary_float_operations {
             (Tanh, tanh),
             (Sigmoid, sigmoid),
             (Swish, swish),
+            (Sign, sign),
+            (Floor, floor),
+            (Ceil, ceil),
+            (Round, round),
+            (Log2, log2),
+            (Log10, log10),
+            (Sin, sin),
+            (Cos, cos),
+            (Tan, tan),
+            (Asin, asin),
+            (Acos, acos),
+            (Atan, atan),
+            (Sinh, sinh),
+            (Cosh, cosh),
+            (Asinh, asinh),
+            (Acosh, acosh),
+            (Atanh, atanh),
+            (Erf, erf),
+            (Rsqrt, rsqrt),
+            (Trunc, trunc),
+            (Frac, frac),
         }
     };
 }
 
 wgpu_unary_float_operations!(impl_wgpu_unary_float);
+
+/// Executors for the one-operand, one-`f64`-attribute operations: the four
+/// scalar forms plus `powf`. Mirrors CUDA's `impl_cuda_scalar_tensor!` in
+/// arity and attribute read, so the two accelerator executors cannot drift
+/// on which attribute field they bind.
+macro_rules! impl_wgpu_scalar_tensor {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
+            type Output = WgpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<WgpuStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "operation expects exactly one operand"));
+                };
+                let input = input
+                    .downcast_ref::<WgpuStorage>()
+                    .ok_or_else(|| invalid(operation, "operand is not WGPU storage"))?;
+                let value = request.operation.descriptor().attributes().value;
+                WgpuBackendImpl::<D>::$method::<f32>(input, value)
+                    .map_err(|e| kernel_error("Wgpu", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_wgpu_scalar_tensor![
+    (AddScalar, add_scalar_float),
+    (SubScalar, sub_scalar_float),
+    (MulScalar, mul_scalar_float),
+    (DivScalar, div_scalar_float),
+    (Powf, powf),
+];
+
+/// One operand and an ordered `min`/`max` pair, so this fits neither the
+/// unary macro (no attributes) nor the scalar one (two bounds, not one).
+impl<D: Device> Execute<op::Clamp> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Clamp, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Clamp;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "clamp expects exactly one operand"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "operand is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::clamp::<f32>(input, attributes.min, attributes.max)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
 
 /// Every operation with a kernel here is reachable through canonical dispatch.
 ///

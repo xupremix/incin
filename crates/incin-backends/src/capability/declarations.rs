@@ -268,7 +268,13 @@ macro_rules! cuda_descriptor_operations {
                 Atan2, Fmod, Remainder,
                 Dropout
             ],
-            broadcast = [BroadcastAs],
+            // `ToDType` rides this group since #106(a): the cast kernel is
+            // dtype-parametric over the source, and `broadcast`'s
+            // `CUDA_BOOL_SAFE_STORAGE_DTYPES` is exactly that source set
+            // (f32/f64/f16/bf16/i64/bool) on contiguous layouts with both
+            // training arms. Capability admits the *input* dtype; the
+            // executor refuses targets outside {f32,f64,f16,bf16,i64}.
+            broadcast = [BroadcastAs, ToDType],
             reshape = [ReshapeExact],
             filling = [
                 TensorFromData, TensorFromBytes, Zeros, Ones, Full, Arange, Linspace,
@@ -287,13 +293,28 @@ macro_rules! cuda_descriptor_operations {
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
-                TopK, LogSumExpDim, LogSumExpKeepDim
+                TopK, LogSumExpDim, LogSumExpKeepDim,
+                // Issue #90: `matmul.cu` now exports one GEMM entry per
+                // float storage dtype, so `MatMulExact` needs this group's
+                // wider FLOAT_DTYPES row rather than the `matmul` group's
+                // f32-only one. The rule shapes are identical apart from
+                // that dtype set - Native, Contiguous, training, the same
+                // rank bounds - and a group is a rule shape, so this is
+                // where it honestly sits now. The coarse legacy `MatMul`
+                // row in `tables.rs` still states F32_ONLY and is outside
+                // this file's ownership scope.
+                MatMulExact
             ],
             spatial = [
                 Conv2dExact, Conv1dExact, ConvTranspose2d,
                 MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact
             ],
-            matmul = [MatMulExact],
+            // Empty since #90: `MatMulExact` moved to `reduction`, whose
+            // rule shape it matches exactly once `matmul` widened to
+            // FLOAT_DTYPES. The identities that remain f32-only
+            // (`ScaledDotProductAttention`/`Dot`/`Outer`) never sat here;
+            // they are in `composed_matmul` below, on purpose.
+            matmul = [],
             normalization = [Softmax, LogSoftmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
             // `OneHot`/`Bincount`/`ScatterAdd` ride this group because their
             // index operand is an integer dtype their value operand is not:
@@ -311,8 +332,7 @@ macro_rules! cuda_descriptor_operations {
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, RepeatInterleave,
                 Pad, Unfold,
-                PixelShuffle,
-                ToDType
+                PixelShuffle
             ],
             logical = [LogicalAnd, LogicalOr, LogicalNot],
             composed_tensor = [
@@ -321,10 +341,18 @@ macro_rules! cuda_descriptor_operations {
                 Chunk, Split
             ],
             composed_matmul = [
-                BatchedMatMul, Addmm, ScaledDotProductAttention,
+                // Nothing moved out with `MatMulExact` in #90: these three
+                // still inherit the unchanged f32-only `$matmul` argument
+                // (SDPA sits on f32-only `softmax`; `Dot`/`Outer` compose
+                // through mul + all-reduce under this group's dtype row).
+                ScaledDotProductAttention,
                 Dot, Outer
             ],
-            composed_matmul_bias = [Linear],
+            // Empty since #90: `Linear` moved to `composed_reduction`,
+            // whose rule shape it matches exactly once the product widened
+            // to FLOAT_DTYPES - same Composed kind, Contiguous layouts,
+            // rank bounds and training; only the dtype set differed.
+            composed_matmul_bias = [],
             quantizing = [Quantize],
             quantized = [Dequantize, QuantizedMatMul],
             composed_reduction = [
@@ -332,7 +360,13 @@ macro_rules! cuda_descriptor_operations {
                 InstanceNorm,
                 VarianceAll, VarianceDim, VarianceKeepDim,
                 StdAll, StdDim, StdKeepDim,
-                Norm
+                Norm,
+                // Issue #90: these three matched this group's rule shape
+                // exactly and only sat in the matmul groups while those
+                // groups carried the same dtype set. They now inherit
+                // FLOAT_DTYPES honestly: `bmm`/`addmm`/`linear` all
+                // rewrite into the widened `MatMulExact` kernel.
+                BatchedMatMul, Addmm, Linear
             ],
             composed_reduction_indexed = [CrossEntropyLoss]
         }
@@ -354,7 +388,17 @@ macro_rules! wgpu_descriptor_operations {
             elementwise = [
                 Add, Sub, Mul, Div,
                 Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
-                Tanh, Sigmoid, Swish
+                Tanh, Sigmoid, Swish,
+                // The twenty-one unary floats and the scalar/binary floats
+                // below each have a WGSL mode, an `Execute` impl and a tape
+                // recipe in `wgpu/backend/elementwise.rs`; they sat
+                // unadvertised until the gap in #91 was closed, exactly as
+                // the activations above once did.
+                Sign, Floor, Ceil, Round, Log2, Log10,
+                Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
+                Atanh, Erf, Rsqrt, Trunc, Frac,
+                AddScalar, MulScalar, SubScalar, DivScalar, Powf, Clamp,
+                Atan2, Fmod, Remainder
             ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],

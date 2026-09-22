@@ -328,16 +328,6 @@ fn push_unary_tape_entry(
 }
 
 impl<D: Device> WgpuBackendImpl<D> {
-    // No WGSL kernel exists for these yet. They are declared rather than
-    // inherited so the shader gap is visible from the backend that has it.
-    crate::unsupported::unsupported_float_ops! {
-        unary: sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
-               atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt, trunc, frac;
-        exponent: powf;
-        bounds: clamp;
-        binary: atan2, fmod, remainder;
-    }
-
     /// `add_scalar_float`.
     pub(crate) fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -358,6 +348,81 @@ impl<D: Device> WgpuBackendImpl<D> {
         // Gradient scales by the same constant.
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
             scalar_op::<K>(grad_out, scalar, 1)
+        });
+        Ok(out)
+    }
+    /// `sub_scalar_float`.
+    pub(crate) fn sub_scalar_float<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        scalar: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = scalar_op::<K>(t, scalar, 2)?;
+        // d(x - c)/dx = 1 everywhere.
+        push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
+        Ok(out)
+    }
+    /// `div_scalar_float`.
+    pub(crate) fn div_scalar_float<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        scalar: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = scalar_op::<K>(t, scalar, 3)?;
+        // d(x / c)/dx = 1/c, applied by the same division the forward used.
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            scalar_op::<K>(grad_out, scalar, 3)
+        });
+        Ok(out)
+    }
+    /// `powf(x, exponent)`, with the exponent carried as a scalar attribute.
+    ///
+    /// The backward is the textbook `p * x^(p-1)` evaluated at the captured
+    /// input, composed from two scalar dispatches and one multiply - the same
+    /// recipe CPU's `canonical_powf` runs, so both backends agree on the
+    /// point the derivative is evaluated at rather than only on its shape.
+    pub(crate) fn powf<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        exponent: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = scalar_op::<K>(t, exponent, 4)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let derivative = scalar_op::<K>(&t_capture, exponent - 1.0, 4)?;
+            let scaled = scalar_op::<K>(&derivative, exponent, 1)?;
+            binary_op::<K>(grad_out, &scaled, 2, "powf_grad")
+        });
+        Ok(out)
+    }
+    /// `clamp(x, min, max)`, with both bounds carried as attributes.
+    ///
+    /// The forward rides `scalar.wgsl`'s mode 5, which reads `params[2]` and
+    /// `params[3]` as the two bounds. The backward is a dedicated binary
+    /// mode (`clamp_grad`) rather than a comparison-and-select composition:
+    /// the comparison modes of `binary.wgsl` stay unadvertised because they
+    /// write 0.0/1.0 into an f32 buffer, and building the mask from them
+    /// here would reintroduce exactly the representation the capability row
+    /// refuses - as an internal step, not a claim, but still a second place
+    /// the boundary convention could drift from CPU's.
+    pub(crate) fn clamp<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        min: f64,
+        max: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let n = checked_u32(num_elements(&t.shape)?, "WGPU clamp element count")?;
+        let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
+        let params = [5u32, n, (min as f32).to_bits(), (max as f32).to_bits()];
+        dispatch::dispatch_scalar(&t.buffer, &out_buf, &params);
+        let out = WgpuStorage::new(out_buf, t.shape.to_vec());
+
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let n = checked_u32(
+                num_elements(&grad_out.shape)?,
+                "WGPU clamp_grad element count",
+            )?;
+            let out_buf = WgpuBuffer::new_zeros(grad_out.buffer.size);
+            let params = [21u32, n, (min as f32).to_bits(), (max as f32).to_bits()];
+            dispatch::dispatch_binary(&t_capture.buffer, &grad_out.buffer, &out_buf, &params);
+            Ok(WgpuStorage::new(out_buf, grad_out.shape.to_vec()))
         });
         Ok(out)
     }
@@ -562,5 +627,362 @@ impl<D: Device> WgpuBackendImpl<D> {
             binary_op::<K>(grad_out, &deriv, 2, "swish_grad")
         });
         Ok(out)
+    }
+
+    /// Push a tape entry whose backward is `grad_out * f'(x)` for a unary
+    /// whose derivative is a plain function of the input.
+    ///
+    /// Most of the twenty-one new unaries below have this shape: the
+    /// derivative is `unary_op(t, deriv_mode)` scaled by `grad_out`, with no
+    /// cross terms and no output capture. Writing the push once keeps the
+    /// four lines of boilerplate from being restated at each call site, where
+    /// a missed `t_capture` would silently produce a zero or stale gradient.
+    fn push_input_deriv_tape<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        out: &<Self as StorageBackend>::Storage<K>,
+        deriv_mode: u32,
+        name: &'static str,
+    ) {
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let deriv = unary_op::<K>(&t_capture, deriv_mode)?;
+            binary_op::<K>(grad_out, &deriv, 2, name)
+        });
+    }
+
+    /// `sign`. Training-false (flat almost everywhere): records a zero
+    /// gradient so a training graph containing one still walks.
+    pub(crate) fn sign<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 13)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| scalar_op::<K>(grad_out, 0.0, 1));
+        Ok(out)
+    }
+    /// `floor`. Training-false; zero gradient, as `sign`.
+    pub(crate) fn floor<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 14)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| scalar_op::<K>(grad_out, 0.0, 1));
+        Ok(out)
+    }
+    /// `ceil`. Training-false; zero gradient, as `sign`.
+    pub(crate) fn ceil<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 15)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| scalar_op::<K>(grad_out, 0.0, 1));
+        Ok(out)
+    }
+    /// `round`. Training-false; zero gradient, as `sign`.
+    pub(crate) fn round<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 16)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| scalar_op::<K>(grad_out, 0.0, 1));
+        Ok(out)
+    }
+    /// `log2`. Derivative `1/(x * ln 2)`.
+    pub(crate) fn log2<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 17)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let scaled = scalar_op::<K>(&t_capture, core::f64::consts::LN_2, 1)?;
+            binary_op::<K>(grad_out, &scaled, 3, "log2_grad")
+        });
+        Ok(out)
+    }
+    /// `log10`. Derivative `1/(x * ln 10)`.
+    pub(crate) fn log10<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 18)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let scaled = scalar_op::<K>(&t_capture, core::f64::consts::LN_10, 1)?;
+            binary_op::<K>(grad_out, &scaled, 3, "log10_grad")
+        });
+        Ok(out)
+    }
+    /// `sin`. Derivative `cos(x)` - a forward mode, no new backward math.
+    pub(crate) fn sin<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 19)?;
+        Self::push_input_deriv_tape::<K>(t, &out, 20, "sin_grad");
+        Ok(out)
+    }
+    /// `cos`. Derivative `-sin(x)`.
+    pub(crate) fn cos<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 20)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let sin_t = unary_op::<K>(&t_capture, 19)?;
+            let neg_sin = unary_op::<K>(&sin_t, 5)?;
+            binary_op::<K>(grad_out, &neg_sin, 2, "cos_grad")
+        });
+        Ok(out)
+    }
+    /// `tan`. Derivative `1 + tan^2(x) = 1 + out^2` (output-based).
+    pub(crate) fn tan<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 21)?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let out_sq = binary_op::<K>(&out_capture, &out_capture, 2, "tan_grad_sq")?;
+            let deriv = scalar_op::<K>(&out_sq, 1.0, 0)?;
+            binary_op::<K>(grad_out, &deriv, 2, "tan_grad")
+        });
+        Ok(out)
+    }
+    /// `asin`. Derivative `1 / sqrt(1 - x^2)`.
+    pub(crate) fn asin<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 22)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "asin_grad_sq")?;
+            let neg_sq = unary_op::<K>(&x_sq, 5)?;
+            let one_minus = scalar_op::<K>(&neg_sq, 1.0, 0)?;
+            let root = unary_op::<K>(&one_minus, 6)?;
+            binary_op::<K>(grad_out, &root, 3, "asin_grad")
+        });
+        Ok(out)
+    }
+    /// `acos`. Derivative `-1 / sqrt(1 - x^2)`.
+    pub(crate) fn acos<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 23)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "acos_grad_sq")?;
+            let neg_sq = unary_op::<K>(&x_sq, 5)?;
+            let one_minus = scalar_op::<K>(&neg_sq, 1.0, 0)?;
+            let root = unary_op::<K>(&one_minus, 6)?;
+            let ratio = binary_op::<K>(grad_out, &root, 3, "acos_grad_ratio")?;
+            unary_op::<K>(&ratio, 5)
+        });
+        Ok(out)
+    }
+    /// `atan`. Derivative `1 / (1 + x^2)`.
+    pub(crate) fn atan<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 24)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "atan_grad_sq")?;
+            let denom = scalar_op::<K>(&x_sq, 1.0, 0)?;
+            binary_op::<K>(grad_out, &denom, 3, "atan_grad")
+        });
+        Ok(out)
+    }
+    /// `sinh`. Derivative `cosh(x)` - a forward mode.
+    pub(crate) fn sinh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 25)?;
+        Self::push_input_deriv_tape::<K>(t, &out, 26, "sinh_grad");
+        Ok(out)
+    }
+    /// `cosh`. Derivative `sinh(x)` - a forward mode.
+    pub(crate) fn cosh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 26)?;
+        Self::push_input_deriv_tape::<K>(t, &out, 25, "cosh_grad");
+        Ok(out)
+    }
+    /// `asinh`. Derivative `1 / sqrt(x^2 + 1)`.
+    pub(crate) fn asinh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 27)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "asinh_grad_sq")?;
+            let denom = scalar_op::<K>(&x_sq, 1.0, 0)?;
+            let root = unary_op::<K>(&denom, 6)?;
+            binary_op::<K>(grad_out, &root, 3, "asinh_grad")
+        });
+        Ok(out)
+    }
+    /// `acosh`. Derivative `1 / sqrt(x^2 - 1)`.
+    pub(crate) fn acosh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 28)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "acosh_grad_sq")?;
+            let one = scalar_op::<K>(&x_sq, 1.0, 2)?;
+            let root = unary_op::<K>(&one, 6)?;
+            binary_op::<K>(grad_out, &root, 3, "acosh_grad")
+        });
+        Ok(out)
+    }
+    /// `atanh`. Derivative `1 / (1 - x^2)`.
+    pub(crate) fn atanh<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 29)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "atanh_grad_sq")?;
+            let neg_sq = unary_op::<K>(&x_sq, 5)?;
+            let denom = scalar_op::<K>(&neg_sq, 1.0, 0)?;
+            binary_op::<K>(grad_out, &denom, 3, "atanh_grad")
+        });
+        Ok(out)
+    }
+    /// `erf`. Derivative `(2 / sqrt(pi)) * exp(-x^2)`.
+    pub(crate) fn erf<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 30)?;
+        let t_capture = t.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let x_sq = binary_op::<K>(&t_capture, &t_capture, 2, "erf_grad_sq")?;
+            let neg_sq = unary_op::<K>(&x_sq, 5)?;
+            let pdf = unary_op::<K>(&neg_sq, 7)?;
+            let coeff = 2.0 / core::f64::consts::PI.sqrt();
+            let scaled = scalar_op::<K>(&pdf, coeff, 1)?;
+            binary_op::<K>(grad_out, &scaled, 2, "erf_grad")
+        });
+        Ok(out)
+    }
+    /// `rsqrt(x) = 1 / sqrt(x)`. Derivative `-0.5 / x^(3/2)`,
+    /// composed as `-0.5 * rsqrt(x)^3` from the output.
+    pub(crate) fn rsqrt<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 31)?;
+        let out_capture = out.clone();
+        push_unary_tape_entry(t.id, out.id, move |grad_out| {
+            let out_sq = binary_op::<K>(&out_capture, &out_capture, 2, "rsqrt_grad_sq")?;
+            let out_cu = binary_op::<K>(&out_sq, &out_capture, 2, "rsqrt_grad_cu")?;
+            let half = scalar_op::<K>(&out_cu, 0.5, 1)?;
+            let neg_half = unary_op::<K>(&half, 5)?;
+            binary_op::<K>(grad_out, &neg_half, 2, "rsqrt_grad")
+        });
+        Ok(out)
+    }
+    /// `trunc`. Training-true (the row is deliberately not flat-flagged, see
+    /// `descriptor_training`), and its derivative is zero wherever it
+    /// exists, so the entry records that zero rather than nothing - a
+    /// training row that records no node comes apart at this operation.
+    pub(crate) fn trunc<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 32)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| scalar_op::<K>(grad_out, 0.0, 1));
+        Ok(out)
+    }
+    /// `frac(x) = x - trunc(x)`. Derivative 1 wherever it exists; the
+    /// gradient passes straight through, matching CPU's `canonical_frac`.
+    pub(crate) fn frac<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = unary_op::<K>(t, 33)?;
+        push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
+        Ok(out)
+    }
+
+    /// `atan2(y, x)`, matching CPU's argument order (lhs is y, rhs is x).
+    ///
+    /// Forward is `binary.wgsl` mode 18. The backward is the quotient rule
+    /// CPU's `canonical_atan2` uses: `d/dy = g * x / (x^2 + y^2)` and
+    /// `d/dx = g * (-y) / (x^2 + y^2)`.
+    pub(crate) fn atan2<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = binary_op::<K>(lhs, rhs, 18, "atan2")?;
+        let (y_capture, x_capture) = (lhs.clone(), rhs.clone());
+        let (y_shape, x_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+        let (y_id, x_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![y_id, x_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let x_sq = binary_op::<K>(&x_capture, &x_capture, 2, "atan2_grad_x_sq")?;
+                let y_sq = binary_op::<K>(&y_capture, &y_capture, 2, "atan2_grad_y_sq")?;
+                let denom = binary_op::<K>(&x_sq, &y_sq, 0, "atan2_grad_denom")?;
+                let numer_y = binary_op::<K>(grad_out, &x_capture, 2, "atan2_grad_numer_y")?;
+                let grad_y = binary_op::<K>(&numer_y, &denom, 3, "atan2_grad_y")?;
+                let neg_y = unary_op::<K>(&y_capture, 5)?;
+                let numer_x = binary_op::<K>(grad_out, &neg_y, 2, "atan2_grad_numer_x")?;
+                let grad_x = binary_op::<K>(&numer_x, &denom, 3, "atan2_grad_x")?;
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(&grad_y, &y_shape)?,
+                    crate::wgpu::tape::unbroadcast(&grad_x, &x_shape)?,
+                ])
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `fmod(lhs, rhs)`, the truncated-division remainder CPU's
+    /// `canonical_fmod` computes as `a % b`.
+    ///
+    /// Both modulus operations share CPU's `record_modulus` backward: every
+    /// modulus has the form `r = a - b * q` with `q` locally constant, so
+    /// `dr/da = 1` and `dr/db = -q`, with `q` recovered as `(a - r) / b`
+    /// from the values themselves rather than recomputed with a rounding
+    /// rule that could drift from the forward.
+    pub(crate) fn fmod<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = binary_op::<K>(lhs, rhs, 19, "fmod")?;
+        Self::push_modulus_tape::<K>(lhs, rhs, &out);
+        Ok(out)
+    }
+
+    /// `remainder(lhs, rhs)`, the euclidean (least non-negative) residue
+    /// CPU's `canonical_remainder` computes as `a.rem_euclid(b)`. Same
+    /// backward as [`fmod`](Self::fmod); the two differ only in the forward
+    /// rounding convention, and `q` is recovered from the output so neither
+    /// recipe restates it.
+    pub(crate) fn remainder<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let out = binary_op::<K>(lhs, rhs, 20, "remainder")?;
+        Self::push_modulus_tape::<K>(lhs, rhs, &out);
+        Ok(out)
+    }
+
+    /// The shared `record_modulus` tape entry for `fmod`/`remainder`.
+    fn push_modulus_tape<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+        out: &<Self as StorageBackend>::Storage<K>,
+    ) {
+        let (lhs_capture, rhs_capture, out_capture) = (lhs.clone(), rhs.clone(), out.clone());
+        let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &WgpuStorage| {
+                let numerator = binary_op::<K>(&lhs_capture, &out_capture, 1, "mod_grad_num")?;
+                let quotient = binary_op::<K>(&numerator, &rhs_capture, 3, "mod_grad_q")?;
+                let neg_q = unary_op::<K>(&quotient, 5)?;
+                let grad_rhs = binary_op::<K>(grad_out, &neg_q, 2, "mod_grad_rhs")?;
+                Ok(vec![
+                    crate::wgpu::tape::unbroadcast(grad_out, &lhs_shape)?,
+                    crate::wgpu::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+                ])
+            }),
+        });
     }
 }

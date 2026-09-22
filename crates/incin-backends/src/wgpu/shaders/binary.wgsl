@@ -1,7 +1,8 @@
 // Binary elementwise operations: add, sub, mul, div
 // op_mode: 0=add, 1=sub, 2=mul, 3=div, 4=gelu_grad, 5=elu_grad, 6=mish_grad,
 //          7=cmp_eq, 8=cmp_ne, 9=cmp_lt, 10=cmp_le, 11=cmp_gt, 12=cmp_ge,
-//          13=logical_and, 14=logical_or, 15=maximum, 16=minimum, 17=abs_diff
+//          13=logical_and, 14=logical_or, 15=maximum, 16=minimum, 17=abs_diff,
+//          18=atan2, 19=fmod, 20=remainder, 21=clamp_grad
 
 @group(0) @binding(0) var<storage, read> lhs: array<f32>;
 @group(0) @binding(1) var<storage, read> rhs: array<f32>;
@@ -9,6 +10,7 @@
 @group(0) @binding(3) var<storage, read> params: array<u32>;
 
 // params[0] = op_mode, params[1] = n_elements
+// params[2] = f32 min bound, params[3] = f32 max bound (clamp_grad only)
 
 const SQRT_2_OVER_PI: f32 = 0.7978845608028654;
 const GELU_COEFF: f32 = 0.044715;
@@ -85,5 +87,29 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         out[idx] = min(lhs[idx], rhs[idx]);
     } else if op == 17u {
         out[idx] = abs(lhs[idx] - rhs[idx]);
+    } else if op == 18u {
+        out[idx] = atan2(lhs[idx], rhs[idx]);
+    } else if op == 19u {
+        // Truncated-division remainder, the same `%` CPU's `canonical_fmod`
+        // applies to f64. WGSL's `%` on floats is that same operator.
+        out[idx] = lhs[idx] % rhs[idx];
+    } else if op == 20u {
+        // Euclidean remainder: non-negative residue in [0, |rhs|).
+        let r = lhs[idx] % rhs[idx];
+        out[idx] = select(r, r + abs(rhs[idx]), r < 0.0);
+    } else {
+        // clamp_grad: lhs is the original input, rhs is grad_out, and
+        // params[2]/params[3] are the min/max bounds. The cotangent passes
+        // through the interior and stops at both clamped regions; on a
+        // boundary the subgradient convention keeps the cotangent, matching
+        // CPU's `canonical_clamp`.
+        let lo = bitcast<f32>(params[2]);
+        let hi = bitcast<f32>(params[3]);
+        let x = lhs[idx];
+        if (x < lo || x > hi) {
+            out[idx] = 0.0;
+        } else {
+            out[idx] = rhs[idx];
+        }
     }
 }
