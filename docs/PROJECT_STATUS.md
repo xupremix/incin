@@ -81,6 +81,47 @@ not claim one. The suites that do run on GitHub-hosted hardware every
 schedule - `wgpu-software` (lavapipe) and `metal` (Apple Silicon) - publish
 their artifacts whether they pass or fail.
 
+## Dated runs
+
+### 2026-09-22
+
+A single day of landed work closed several long-standing documentation and
+implementation gaps. Commits (oldest → newest):
+
+| Commit | What landed |
+|---|---|
+| `03ec488c` | #121 — WGPU unbroadcast scalar-seed materialization tests |
+| `1d75f82f` | unbroadcast rank-deficit fix across CPU/CUDA/WGPU |
+| `93e927b3` | #73 — doctests for `cargo incin doctor` |
+| `44040a1e` | #73 — doctests for the axis-reduction family |
+| `5fb11e0f` | threat-model + precision-policy research updates |
+| `823c0978` | Q4_K GGUF export (ggml two-level quantization) |
+| `61b7bcc5` | #84/#86/#87/#88 — eight-op CUDA capability gap |
+| `81d90a2e` | exec: seal rule-minted evidence, single-validate lowering |
+| `5b6821b9` | kernel-generation strategy survey (#111/#112/#85) |
+| `0bd705a4` | #112 step 2 — CMP-005 pointwise fuser |
+| `ee0f57c7` | Metal unbroadcast cross-backend rank-deficit semantics |
+| `98df2b6c` | #90/#106 — dtype-parametric CUDA matmul, kernelized cast |
+| `c9c0d035` | #91 Batch A — 24 runtime-verified WGPU pointwise ops |
+| `6db7a3e2` | re-export #112 fuser surface; date research notes |
+| `8e80361d` | #111 — delete 13 stranded codegen modules (~131 KB) |
+| `4023ceed` | #85 — cuBLASLt GEMM with fused epilogues |
+| `2dee3e2c` | #73 — close remaining doctest debt (47 examples) |
+
+Verification boundary for this batch:
+
+- **Runtime-verified:** CPU; WGPU Batch A on the local Vulkan adapter
+  (`c9c0d035`, `03ec488c`); the CPU-JIT half of the #112 fuser
+  (`0bd705a4`).
+- **Compile-gated (no device):** CUDA cuBLASLt value tests
+  (`4023ceed`, 6 `#[ignore]`d); CUDA dtype-parametric matmul numerics
+  (`98df2b6c`, 6 `#[ignore]`d); Metal unbroadcast (`ee0f57c7`,
+  host-side only); #112 NVRTC dispatch tail (`0bd705a4`,
+  `#[ignore]`d).
+- **Hardware runs:** `HARDWARE_CUDA_RUNNER` and
+  `HARDWARE_WGPU_RUNNER` both still unset as of 2026-09-22, so no dated
+  CUDA or native-WGPU hardware job executed; see Hardware runs above.
+
 ## Validation vocabulary
 
 - **Verified** means the named command ran successfully on the current tree.

@@ -14,10 +14,15 @@ of repeating a number that won't.
   `conv2d`/pooling; WGPU adds thirteen unary activations, and CUDA adds
   `softmax` and `rms_norm`, the normalization family through `batch_norm`
   with training rows, and the loss functions, `embedding`, and `dropout`.
-  WGPU and Metal still lack all of those. But no GPU execution runs in CI,
-  so the CUDA training path is a declared capability awaiting evidence
-  (issues #82 and #83), and verified training anything in this book's
-  [Building models](./building_models.md) chapter is CPU-only right now.
+  WGPU and Metal still lack all of those. Two narrower surfaces *are*
+  runtime-verified: CPU, and WGPU's #91 Batch A (24 pointwise/trig/scalar
+  operations plus `sin`/`clamp` backward, executed on the local Vulkan
+  adapter against CPU-twin references, `c9c0d035`). CUDA's cuBLASLt matmul
+  path (`4023ceed`) is compile-gated only — six host policy tests pass,
+  six value tests are `#[ignore]`d pending the #82 runner. No GPU execution
+  runs in CI, so the CUDA training path remains a declared capability
+  awaiting evidence (issues #82 and #83), and verified training in this
+  book's [Building models](./building_models.md) chapter is CPU-only.
 - **No cross-attention layer.** The encoder and decoder layers attend to
   their own input only. A layer that also attends to an encoder's output
   takes two tensors, and `Module` is parameterized by one input, so that is

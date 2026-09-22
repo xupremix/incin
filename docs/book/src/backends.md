@@ -70,6 +70,49 @@ a typed `UnsupportedReason` rather than doing something wrong silently, so
 you'll find out immediately rather than discover it three epochs in, but
 the fix is writing the kernel, not finding the right incantation.
 
+### The cuBLASLt matmul path (CUDA, #85)
+
+CUDA's `MatMulExact` dispatch tries cuBLASLt first for plain, epilogue-free
+requests and falls back to the NVRTC tiled kernel on any non-fit. The path
+forces `CUBLAS_COMPUTE_32F` rather than cudarc's safe wrapper, which would
+silently pick TF32 against the `MathMode::Precise` capability claim. A
+request fits only when both operands are `f32`, on the same device, rank 2,
+contiguous at offset zero (`4023ceed`, `cuda/ops/cublaslt.rs`). The coarse
+`MatMul` capability row moved `F32_ONLY` → `FLOAT_DTYPES` to match the exact
+row #90 widened, so a coarse row no longer under-advertises work the exact
+row already claims.
+
+Epilogue requests (bias plus optional ReLU/GELU) fail closed: there is no
+configuration in which an epilogue is requested and a kernel that omits it
+is allowed to run. The epilogue surface is therefore strictly narrower than
+the plain-product surface.
+
+**Verification status:** compile-gated. Six host-side dispatch-policy unit
+tests pass without hardware; six value tests are `#[ignore = "requires CUDA
+hardware"]` in `cuda/backend/tests.rs`. This box has no CUDA device, so the
+cuBLASLt numerics are compile-verified only — treat them as declared
+capability awaiting the #82 runner, not as runtime-proven results.
+
+### WGPU Batch A: 24 runtime-verified pointwise operations (#91)
+
+WGPU's first #91 gap-closure batch landed 24 operations, every one executed
+on the local Vulkan adapter against a CPU-twin reference: `sign`/`floor`/
+`ceil`/`round`, the full trig and inverse-trig families including
+hyperbolics, `erf`/`rsqrt`/`log2`/`log10`/`trunc`/`frac`, scalar forms of
+`add`/`sub`/`mul`/`div`, `powf`/`clamp`, and `atan2`/`fmod`/`remainder`,
+plus backward kernels for `sin` (cosine gradient) and `clamp` (masked
+gradient) (`c9c0d035`, `crates/incin-backends/tests/wgpu_pointwise_gap.rs`,
+579 lines). Advertised rows are `f32`-only and contiguous. The WGPU suite
+runs 653+ green.
+
+This is the one accelerator surface with real execution evidence in the
+tree today: CPU and the WGPU software adapter (lavapipe/Vulkan) both
+compute and are compared against host references. Skipped rows (the
+comparison and logical families) are blocked on a multi-dtype advertising
+policy, not on missing kernels — WGPU declares `f32` and nothing else across
+every capability row, so a comparison that the catalog types as `bool` cannot
+be honestly registered until the backend grows a bool dtype.
+
 ## Picking a backend at compile time
 
 ```rust,no_run

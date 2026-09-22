@@ -8,7 +8,9 @@ There are three different forms of fusion:
    operation's existing `Execute` implementation. It does not add a second
    public operation hierarchy.
 3. Combining several graph nodes belongs to compiler lowering and is outside
-   this API task.
+   this API task. The preview `compiled` pipeline does exactly this via
+   `FusionPass` and the pointwise fuser — see
+   [Lowering: from descriptor to kernel](./deep_lowering.md#fusion-legality-checked-pointwise-groups-cmp-005).
 
 The executable authoring contract is exercised in
 `crates/incin-core/tests/custom_operation.rs` and the downstream backend
