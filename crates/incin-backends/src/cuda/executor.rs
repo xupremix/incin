@@ -10,7 +10,7 @@ use incin_core::error::BackendError;
 use incin_core::exec::catalog::{DuplicateIndexRule, LossReduction};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
 use incin_core::shapes::OperationKind;
-use incin_core::tensor::device::{Device, DeviceId, DeviceKind};
+use incin_core::tensor::device::{Device, DeviceKind};
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 use incin_core::tensor::reduction::Reduction;
 
@@ -377,12 +377,17 @@ impl<D: Device> Execute<op::LayerNorm> for CudaBackendImpl<D> {
     }
 }
 
-/// Per-channel normalization by running statistics. Inference only, and
-/// refused rather than approximated for a training-mode request: the kernel
-/// this calls only reads precomputed `running_mean`/`running_variance`, it
-/// does not reduce the batch's own statistics the way CPU's second kernel
-/// does, so admitting `attributes.training` here would return a plausible
-/// wrong answer instead of an error.
+/// Per-channel normalization. Training mode delegates to the tape-tracked
+/// `CudaBackendImpl::batch_norm` (issue #123): that method reduces each
+/// channel's own batch statistics in the fused forward, saves them when
+/// the ambient grad mode records, and pushes one entry whose fused
+/// backward produces input, weight, and bias gradients from them -- the
+/// same composition CPU's second kernel performs, so a training-mode
+/// request no longer has to be refused. Inference mode keeps the
+/// dedicated `launch_batch_norm`, which reads only the precomputed
+/// `running_mean`/`running_variance` and records nothing: its statistics
+/// are constants with respect to the input, so there is no batch
+/// dependency to differentiate through.
 impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -391,13 +396,6 @@ impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
     ) -> Result<CudaStorage, BackendError> {
         let operation = OperationKind::BatchNorm;
         let attributes = request.operation.descriptor().attributes();
-        if attributes.training {
-            return Err(invalid(
-                operation,
-                "CUDA batch norm has no on-the-fly batch statistics kernel yet; only \
-                 inference mode, driven by a running mean and variance, is implemented",
-            ));
-        }
         let Some((input, optional)) = request.inputs.split_first() else {
             return Err(invalid(
                 operation,
@@ -415,6 +413,21 @@ impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
                 operation,
                 "batch norm was given more operands than its presence flags account for",
             ));
+        }
+        if attributes.training {
+            // Training normalizes by the batch's statistics, so the running
+            // pair is accepted for arity (the descriptor requires it when
+            // present) and ignored, exactly like CPU's training branch.
+            let input = downcast(input, operation, "input is not CUDA storage")?;
+            let weight = weight
+                .map(|value| downcast(value, operation, "weight is not CUDA storage"))
+                .transpose()?;
+            let bias = bias
+                .map(|value| downcast(value, operation, "bias is not CUDA storage"))
+                .transpose()?;
+            let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
+            return CudaBackendImpl::<D>::batch_norm::<f32>(input, weight, bias, epsilon)
+                .map_err(|e| kernel_error("Cuda", operation, e));
         }
         let (Some(running_mean), Some(running_variance)) = (running_mean, running_variance) else {
             return Err(invalid(
@@ -1030,10 +1043,12 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
         let mask_b = if mask.shape == out_shape {
             mask.clone()
         } else {
-            // The dedicated bool-mask broadcast, not the generic one: see
-            // `cuda::ops::select::launch_broadcast_bool_mask`'s doc and #122
-            // for whether that separation still earns its keep.
-            crate::cuda::ops::select::launch_broadcast_bool_mask(mask, &out_shape)
+            // Raw `launch_broadcast`, not the tape-recording `broadcast_as`:
+            // a `bool` mask has nowhere to send a gradient, the same reason
+            // `impl_cuda_cmp!` above calls the raw launch. Since #122 this
+            // is the width-parametric `shape_op` path every other broadcast
+            // takes - the dedicated `bool` launcher is gone.
+            crate::cuda::ops::shape::launch_broadcast(mask, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };
         let true_b = if on_true.shape == out_shape {
@@ -1122,11 +1137,12 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
 /// `LogicalAnd`/`LogicalOr`: both operands and the output are `bool`, unlike
 /// `where_cond`/`masked_fill`'s mixed `bool`+`f32`, so the capability row
 /// this answers to is `Bool`-only rather than a union - no `F32_AND_BOOL`
-/// reasoning needed. Broadcasting still goes through
-/// `cuda::ops::select::launch_broadcast_bool_mask`, the same dedicated path
-/// `impl_cuda_cmp!`/`Execute<op::WhereCond>` use. `shape_op` has since grown
-/// width-parametric entry points that move 1-byte elements correctly, which
-/// may make this dedicated path redundant -- see #122.
+/// reasoning needed. Broadcasting the two operands to one shape goes
+/// through `cuda::ops::shape::launch_broadcast` - the same raw,
+/// non-tape-recording path `impl_cuda_cmp!` and `Execute<op::WhereCond>`
+/// use. Since #122 that path moves these one-byte operands through
+/// `shape_op`'s width-parametric entry points directly; the dedicated
+/// `bool`-mask launcher it replaces was deleted as redundant.
 macro_rules! impl_cuda_logical_binary {
     ($(($op:ident, $func:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
@@ -1147,13 +1163,13 @@ macro_rules! impl_cuda_logical_binary {
                 let lhs_b = if lhs.shape == out_shape {
                     lhs.clone()
                 } else {
-                    crate::cuda::ops::select::launch_broadcast_bool_mask(lhs, &out_shape)
+                    crate::cuda::ops::shape::launch_broadcast(lhs, &out_shape)
                         .map_err(|e| kernel_error("Cuda", operation, e))?
                 };
                 let rhs_b = if rhs.shape == out_shape {
                     rhs.clone()
                 } else {
-                    crate::cuda::ops::select::launch_broadcast_bool_mask(rhs, &out_shape)
+                    crate::cuda::ops::shape::launch_broadcast(rhs, &out_shape)
                         .map_err(|e| kernel_error("Cuda", operation, e))?
                 };
                 crate::cuda::ops::logical::$func(&lhs_b, &rhs_b)
@@ -1780,12 +1796,7 @@ impl<D: Device> Execute<op::Dropout> for CudaBackendImpl<D> {
                 .map_err(wrap);
         }
 
-        let draw = Self::rand::<f32>(
-            &input.shape,
-            DTypeId::F32.descriptor(),
-            &DeviceId::cuda(input.buffer.device_id),
-        )
-        .map_err(wrap)?;
+        let draw = crate::cuda::ops::dropout::launch_dropout_mask(&input.shape).map_err(wrap)?;
         let shifted = crate::cuda::backend::elementwise::cuda_add_scalar_float(
             &draw,
             -attributes.probability,
@@ -2433,10 +2444,44 @@ pub(crate) fn cuda_bce_with_logits_loss_storage(
     target: &CudaStorage,
     reduction: incin_core::tensor::reduction::Reduction,
 ) -> Result<CudaStorage, incin_core::error::Error> {
-    let max_x_0 = crate::cuda::backend::elementwise::cuda_relu_storage(
-        pred,
-        crate::kernel::KernelSpecialization::NONE,
-    )?;
+    // Issue #84: CPU uses `canonical_relu` under `GradMode::Disabled` plus a
+    // hand-pushed tape entry whose slope is `0.5` at exactly zero, because
+    // the subgradient of `max(x, 0)` at `x = 0` is defined as `0.5` there
+    // (matching PyTorch and the CPU reference test
+    // `bce_with_logits_zero_logit_backward_matches_sigmoid_minus_target`).
+    // The stock `cuda_relu_storage` derivative (`x > 0.0f ? 1.0f : 0.0f`)
+    // answers `0` at zero, which would disagree with the CPU backend. The
+    // forward runs under `GradMode::Disabled` so relu records nothing, then
+    // the custom entry below is pushed with the CPU's slope table.
+    let max_x_0 = incin_core::exec::GradMode::Disabled.scope(|| {
+        crate::cuda::backend::elementwise::cuda_relu_storage(
+            pred,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+    })?;
+    {
+        let pred_id = pred.id;
+        let out_id = max_x_0.id;
+        let pred_capture = pred.clone();
+        crate::cuda::backend::elementwise::push_unary_tape_entry(
+            pred_id,
+            out_id,
+            move |grad_out| {
+                let deriv = crate::cuda::ops::elementwise::launch_unary_op(
+                    "bce_relu_grad",
+                    "x == 0.0f ? 0.5f : (x > 0.0f ? 1.0f : 0.0f)",
+                    &pred_capture,
+                )?;
+                crate::cuda::ops::elementwise::launch_binary_op(
+                    "mul",
+                    "a * b",
+                    grad_out,
+                    &deriv,
+                    &grad_out.shape,
+                )
+            },
+        );
+    }
     let x_times_z = crate::cuda::backend::elementwise::cuda_mul_storage(
         pred,
         target,

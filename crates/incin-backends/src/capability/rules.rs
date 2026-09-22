@@ -506,8 +506,9 @@ pub(super) const fn descriptor_training(operation: OperationKind) -> bool {
 /// launch. The operations listed here are exactly those routed through it:
 /// `broadcast_as` (`launch_broadcast`/`broadcast_storage`), the transpose /
 /// narrow materializations, the comparison broadcasts (`launch_broadcast`),
-/// and the `bool`-mask broadcasts (`launch_broadcast_bool_mask`) behind
-/// `where_cond`/`masked_fill`/the logicals. Everything else keeps its
+/// and the `bool`-mask broadcasts behind `where_cond`/`masked_fill`/the
+/// logicals (routed through `launch_broadcast` too since #122, when the
+/// dedicated `bool` launcher was deleted). Everything else keeps its
 /// descriptor bound: `concat` addresses outer/inner extents rather than a
 /// packed shape, and the fused or rewritten families never touch the shape
 /// kernel. CPU/Metal keep `descriptor_max_rank` (their host loops are

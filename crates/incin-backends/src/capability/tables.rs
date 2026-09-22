@@ -235,14 +235,18 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // backend has to fill.
         //
         // `layer_norm` and `batch_norm` are dedicated fused kernels (Welford
-        // reduction; precomputed-statistics affine transform), so `Native`.
-        // `layer_norm` pushes a real tape entry replaying the forward's saved
-        // statistics, so `training = true` is a verified claim there, proven
-        // against the CPU reference on hardware. `batch_norm` still pushes
-        // nothing, so its `false` stands: a caller inside a gradient-tracked
-        // context that reached it would get a silently missing gradient
-        // rather than an error, which is what `training` on that row exists
-        // to prevent.
+        // reduction; per-channel affine), so `Native`. `layer_norm` pushes a
+        // real tape entry replaying the forward's saved statistics, so
+        // `training = true` is a verified claim there, proven against the
+        // CPU reference on hardware. `batch_norm` claims the same since
+        // #123: its training forward saves per-channel *batch* statistics
+        // (never the running estimates) whenever the grad mode records, its
+        // fused backward replays them into input/weight/bias gradients, and
+        // `Execute<op::BatchNorm>` delegates `attributes.training` to that
+        // tape-tracked method - so a training query answered `no` here
+        // would understate what the executor now admits. The inference path
+        // (running statistics) is unchanged and records nothing, which is
+        // correct there: its statistics are constants w.r.t. the input.
         native_ranked(
             OperationKind::LayerNorm,
             F32_ONLY,
@@ -257,7 +261,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::BatchNorm),
             descriptor_max_rank(OperationKind::BatchNorm),
-            false,
+            true,
         ),
         // `softmax` and `rms_norm` are answered by rewriting into other
         // catalog operations (subtract-max, exp, sum, divide; square, mean,

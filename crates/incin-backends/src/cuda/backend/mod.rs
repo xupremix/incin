@@ -7,7 +7,7 @@
 //! structural/layout operations; `elementwise` is tape-tracked binary,
 //! unary, and scalar arithmetic; `creation` is zero-operand and generator
 //! operations; `reduce` is reductions; `nn` is pooling and convolution;
-//! `norm` is tape-tracked layer normalization; `contract` is the
+//! `norm` is tape-tracked layer and batch normalization; `contract` is the
 //! `StorageBackend`/`Backend`/`HostInterop` trait implementations;
 //! `autograd` is `AutogradBackend`/`VariableBackend`.
 

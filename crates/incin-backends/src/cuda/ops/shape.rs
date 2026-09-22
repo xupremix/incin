@@ -14,14 +14,14 @@ use incin_core::tensor::dtype::DTypeId;
 /// values (0=narrow, 2=transpose, 3=broadcast), same `aux` semantics (narrow
 /// start offsets, or transpose's per-output-dim source-dim map, offset by
 /// the output's padding amount so it indexes correctly into `multi_idx`).
-/// `pub(crate)` for `cuda::ops::select::launch_broadcast_bool_mask`, which
-/// reuses this to broadcast a `bool` mask through the exact same index
-/// arithmetic `shape_op`'s `op_mode == 3` uses, without going through
-/// `launch_broadcast` itself. That separation predates width-parametric
-/// `shape_op` entry points, which move 1-byte elements correctly today; see
-/// #122 for whether the dedicated mask path still earns its keep.
+///
+/// Private to this module since #122: the only out-of-module consumer was
+/// `select::launch_broadcast_bool_mask`, deleted once `shape_op`'s
+/// width-parametric entry points (`shape_op_8bit` and friends) let
+/// `launch_broadcast` below carry `bool` masks on the same path as every
+/// other dtype.
 #[cfg(feature = "cuda")]
-pub(crate) fn prepare_shape_params(
+fn prepare_shape_params(
     op_mode: u32,
     n_elements: u32,
     out_shape: &[usize],
@@ -271,6 +271,13 @@ pub(crate) fn launch_transpose_view(
 /// Broadcasts `t` to `target_shape`. Materializes (see `launch_narrow`'s doc
 /// for why). Caller must validate shape compatibility first - this function
 /// assumes `target_shape` is already a legal broadcast target of `t.shape`.
+///
+/// Every dtype the backend can store rides this one path, `bool` masks
+/// included: `launch_shape_op` picks the kernel entry point by element width
+/// (`shape_op_8bit` for one-byte elements), so there is no separate
+/// bool-broadcast launcher anymore (#122 deleted the last one,
+/// `select::launch_broadcast_bool_mask`, after `shape_op` grew those
+/// width-parametric entry points).
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_broadcast(t: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
     let launch_n = ShapeBuf::from_slice(target_shape).checked_numel(OperationKind::Broadcast)?;

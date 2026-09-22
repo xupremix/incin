@@ -159,35 +159,48 @@ fn where_cond_rejects_mismatched_shapes() {
     assert!(launch_where_cond(&mask, &on_true, &on_false).is_err());
 }
 
-/// `launch_where_cond` itself takes no broadcast responsibility (see its
-/// own doc): a lower-rank mask has to go through
-/// `launch_broadcast_bool_mask` first, the same composition
-/// `Execute<op::WhereCond>` performs.
+/// A `bool` mask broadcast rides the surviving width-parametric
+/// `shape_op_8bit` path (#122 deleted the dedicated `bool` launcher).
+/// `[3,1] -> [3,2]` must repeat each element *within* its row: a flat
+/// memcpy of the three input bytes into the six-byte output would instead
+/// produce the input repeated *across* rows, so the byte-for-byte
+/// assertion below is the case that catches it.
 #[test]
 #[ignore = "requires CUDA hardware"]
-fn broadcast_bool_mask_expands_a_lower_rank_mask() {
-    use crate::cuda::ops::select::launch_broadcast_bool_mask;
-    let mask = cuda_bool(&[3], vec![1, 0, 1]);
-    let out = launch_broadcast_bool_mask(&mask, &[2, 3]).unwrap();
-    assert_eq!(out.shape, vec![2, 3]);
+fn bool_mask_broadcast_repeats_within_rows_not_across_them() {
+    use crate::cuda::ops::shape::launch_broadcast;
+    let mask = cuda_bool(&[3, 1], vec![1, 0, 1]);
+    let out = launch_broadcast(&mask, &[3, 2]).unwrap();
+    assert_eq!(out.shape, vec![3, 2]);
     assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
+    assert_eq!(
+        crate::cuda::testing::download_bytes(&out),
+        vec![1, 1, 0, 0, 1, 1]
+    );
 }
 
 /// The composition `Execute<op::WhereCond>` performs when the mask
 /// arrives at a lower rank than the data it selects between - the exact
 /// case `where_cond`'s own descriptor permits (its output shape is the
-/// broadcast of all three operands, not just the two data ones).
+/// broadcast of all three operands, not just the two data ones). Since
+/// #122 that composition's mask broadcast is `shape::launch_broadcast`,
+/// the same path every other dtype takes.
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn where_cond_broadcasts_a_lower_rank_mask_before_selecting() {
-    use crate::cuda::ops::select::{launch_broadcast_bool_mask, launch_where_cond};
+    use crate::cuda::ops::select::launch_where_cond;
+    use crate::cuda::ops::shape::launch_broadcast;
     let mask = cuda_bool(&[3], vec![1, 0, 1]);
     let on_true = cuda_f32(&[2, 3], vec![1.0; 6]);
     let on_false = cuda_f32(&[2, 3], vec![0.0; 6]);
-    let mask_b = launch_broadcast_bool_mask(&mask, &[2, 3]).unwrap();
+    let mask_b = launch_broadcast(&mask, &[2, 3]).unwrap();
     let out = launch_where_cond(&mask_b, &on_true, &on_false).unwrap();
     assert_eq!(out.shape, vec![2, 3]);
     assert_eq!(out.dtype(), DTypeId::F32.descriptor());
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![1.0, 0.0, 1.0, 1.0, 0.0, 1.0]
+    );
 }
 
 #[test]
@@ -929,6 +942,435 @@ fn layer_norm_rejects_integer_storage() {
         crate::cuda::backend::cuda_from_bytes(&[2, 4], DTypeId::I64.into(), 0, &bytes).unwrap();
     let weight = cuda_f32(&[4], vec![1.0; 4]);
     assert!(B::layer_norm::<i64>(&input, &weight, None, 1e-5).is_err());
+}
+
+// ---------------------------------------------------------------------------
+// batch_norm training forward/backward (issue #123)
+// ---------------------------------------------------------------------------
+
+/// `[N, C, H] = [2, 2, 2]`: two channels, two spatial positions, four
+/// elements reduced into each channel's statistics -- small enough to
+/// check against the CPU reference element-wise, large enough that a
+/// permuted (batch, spatial) indexing would show.
+const BN_VALUES: [f32; 8] = [0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0];
+const BN_GOUT: [f32; 8] = [1.0, 0.5, -0.5, 2.0, -1.0, 1.0, 0.25, -0.75];
+const BN_WEIGHT: [f32; 2] = [2.0, 0.5];
+const BN_BIAS: [f32; 2] = [0.1, -0.2];
+const BN_EPS: f32 = 1e-5;
+
+fn bn_input() -> CudaStorage {
+    cuda_f32(&[2, 2, 2], BN_VALUES.to_vec())
+}
+
+fn bn_weight() -> CudaStorage {
+    cuda_f32(&[2], BN_WEIGHT.to_vec())
+}
+
+fn bn_bias() -> CudaStorage {
+    cuda_f32(&[2], BN_BIAS.to_vec())
+}
+
+/// CPU training forward plus its composed backward, on the same values the
+/// CUDA side runs: the reference the parity tests below compare against.
+/// Mirrors `cpu_layer_norm_grads` above for the output and dx; dw and db are
+/// summed in closed form here instead, because the CPU composition reshapes
+/// weight/bias into a broadcast copy with a fresh `TensorId` the tape never
+/// links back (its reshape is deliberately silent -- parameters are treated
+/// as fixed inputs there, which is also why `batch_norm_training_gradcheck`
+/// only covers the input path). The backward runs with the `BN_GOUT` seed
+/// every CUDA-side comparison uses too: under the default ones seed
+/// `dw = sum(xhat)` is identically ~0 (xhat is mean-centered), which would
+/// make the affine comparison noise-blind. `xhat` is reconstructed in f64
+/// from the raw fixture values and their per-channel statistics.
+#[cfg(feature = "cpu")]
+fn cpu_batch_norm_training_grads(
+    input: &[f32],
+    weight: &[f32],
+    bias: &[f32],
+) -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
+    let t = host_f32(&[2, 2, 2], input.to_vec());
+    let w = host_f32(&[2], weight.to_vec());
+    let b = host_f32(&[2], bias.to_vec());
+    let out =
+        crate::cpu::ops::norm::batch_norm_training_impl::<incin_core::tensor::device::Cpu, f32>(
+            &t,
+            Some(&w),
+            Some(&b),
+            BN_EPS,
+        )
+        .unwrap();
+    let seed = host_f32(&[2, 2, 2], BN_GOUT.to_vec());
+    let grads = crate::cpu::tape::backward_with(&out, &seed).unwrap();
+    let dx = host_values(grads.get(t.id).unwrap());
+    let out_values = host_values(&out);
+    // The affine gradients come from closed-form per-channel sums over the
+    // same [2, 2, 2] fixture: channel = (flat / spatial) % C, where spatial
+    // is the product of the axes after the channel one (H here, 2) --
+    // the same split `batch_norm_geometry` uses, not elements-per-channel.
+    let num_channels = weight.len();
+    let spatial: usize = t.shape[2..].iter().product();
+    let batch_elements = input.len() / num_channels;
+    let mut mean = vec![0f64; num_channels];
+    let mut variance = vec![0f64; num_channels];
+    for (flat, value) in input.iter().enumerate() {
+        mean[flat / spatial % num_channels] += f64::from(*value);
+    }
+    for channel in &mut mean {
+        *channel /= batch_elements as f64;
+    }
+    for (flat, value) in input.iter().enumerate() {
+        let centered = f64::from(*value) - mean[flat / spatial % num_channels];
+        variance[flat / spatial % num_channels] += centered * centered;
+    }
+    for channel in &mut variance {
+        *channel /= batch_elements as f64;
+    }
+    let mut dw = vec![0f64; num_channels];
+    let mut db = vec![0f64; num_channels];
+    for flat in 0..input.len() {
+        let channel = flat / spatial % num_channels;
+        let xhat = (f64::from(input[flat]) - mean[channel])
+            / (variance[channel] + f64::from(BN_EPS)).sqrt();
+        db[channel] += f64::from(BN_GOUT[flat]);
+        dw[channel] += f64::from(BN_GOUT[flat]) * xhat;
+    }
+    (out_values, dx, dw, db)
+}
+
+/// The affine reference in `cpu_batch_norm_training_grads` is closed-form
+/// code standing in for a tape path the CPU composition does not have, so
+/// it gets its own check: central finite differences of the CPU forward
+/// under the same `BN_GOUT` seed direction (loss = sum(out * g)). Runs on
+/// the host as a guard for every hardware test that leans on it.
+#[cfg(feature = "cpu")]
+#[test]
+fn batch_norm_affine_reference_matches_finite_differences() {
+    let forward_dot = |weight: &[f32], bias: &[f32]| -> f64 {
+        let t = host_f32(&[2, 2, 2], BN_VALUES.to_vec());
+        let w = host_f32(&[2], weight.to_vec());
+        let b = host_f32(&[2], bias.to_vec());
+        let out = crate::cpu::ops::norm::batch_norm_training_impl::<
+            incin_core::tensor::device::Cpu,
+            f32,
+        >(&t, Some(&w), Some(&b), BN_EPS)
+        .unwrap();
+        host_values(&out)
+            .iter()
+            .zip(BN_GOUT.iter())
+            .map(|(value, g)| value * f64::from(*g))
+            .sum()
+    };
+    let (_, _, dw, db) = cpu_batch_norm_training_grads(&BN_VALUES, &BN_WEIGHT, &BN_BIAS);
+    let step = 1e-3f64;
+    for channel in 0..BN_WEIGHT.len() {
+        let mut plus = BN_WEIGHT;
+        let mut minus = BN_WEIGHT;
+        plus[channel] += step as f32;
+        minus[channel] -= step as f32;
+        let numeric_dw =
+            (forward_dot(&plus, &BN_BIAS) - forward_dot(&minus, &BN_BIAS)) / (2.0 * step);
+        let denom = dw[channel].abs().max(numeric_dw.abs()).max(1e-6);
+        assert!(
+            (numeric_dw - dw[channel]).abs() / denom <= 1e-3,
+            "dw[{channel}]: analytic={} numeric={numeric_dw}",
+            dw[channel]
+        );
+
+        let mut plus = BN_BIAS;
+        let mut minus = BN_BIAS;
+        plus[channel] += step as f32;
+        minus[channel] -= step as f32;
+        let numeric_db =
+            (forward_dot(&BN_WEIGHT, &plus) - forward_dot(&BN_WEIGHT, &minus)) / (2.0 * step);
+        let denom = db[channel].abs().max(numeric_db.abs()).max(1e-6);
+        assert!(
+            (numeric_db - db[channel]).abs() / denom <= 1e-3,
+            "db[{channel}]: analytic={} numeric={numeric_db}",
+            db[channel]
+        );
+    }
+}
+
+/// Host-side admission for the row #123 flipped. The query alone would not
+/// have caught a stale `false` on the legacy row -- the typed normalization
+/// row beside it already claimed `training = true`, and `support` answers
+/// from the first rule that satisfies the query -- so this pins the legacy
+/// row's own flag as well.
+#[test]
+fn cuda_batch_norm_training_rows_admit_host_side() {
+    use incin_core::exec::{
+        CapabilityQuery, LayoutClass, MathMode, OperationIdentity, SupportLevel,
+    };
+    use incin_core::shapes::OperationKind;
+    use incin_core::tensor::device::DeviceKind;
+
+    let query = CapabilityQuery {
+        operation: OperationIdentity::Builtin(OperationKind::BatchNorm),
+        dtype: DTypeId::F32.descriptor(),
+        layout: LayoutClass::Contiguous,
+        rank: 3,
+        training: true,
+        math_mode: MathMode::Precise,
+    };
+    let level = crate::capability::support(DeviceKind::Cuda, &query);
+    assert!(
+        !matches!(level, SupportLevel::Unsupported(_)),
+        "a training-mode CUDA batch norm must be admitted since #123, got {level:?}"
+    );
+    let legacy = crate::capability::CUDA_CAPABILITIES
+        .iter()
+        .find(|rule| rule.operation == OperationKind::BatchNorm)
+        .expect("CUDA registers BatchNorm");
+    assert!(
+        legacy.training,
+        "the legacy CUDA BatchNorm row must claim training since #123"
+    );
+    assert_eq!(legacy.layouts, [LayoutClass::Contiguous]);
+}
+
+/// Shape and dtype parity against the CPU training composition, without a
+/// device: the backward's allocation plan is a pure function of the
+/// forward's operand shapes, and the precision policy that picks the
+/// gradient dtypes resolves on the host. Together they are what makes a
+/// gradient hand-off between backends line up.
+#[cfg(feature = "cpu")]
+#[test]
+fn batch_norm_training_backward_plan_matches_cpu_reference() {
+    use incin_core::exec::{LayoutClass, PrecisionRequest};
+
+    let t = host_f32(&[2, 2, 2], BN_VALUES.to_vec());
+    let w = host_f32(&[2], BN_WEIGHT.to_vec());
+    let b = host_f32(&[2], BN_BIAS.to_vec());
+    let out =
+        crate::cpu::ops::norm::batch_norm_training_impl::<incin_core::tensor::device::Cpu, f32>(
+            &t,
+            Some(&w),
+            Some(&b),
+            BN_EPS,
+        )
+        .unwrap();
+    let grads = crate::cpu::tape::backward(&out).unwrap();
+
+    let plan =
+        crate::cuda::ops::norm::batch_norm_grad_shapes(&t.shape, Some(&w.shape), Some(&b.shape));
+    // The input path is what the CPU composition's tape covers (gradcheck
+    // pins it), so its gradient's shape is a real cross-backend reference:
+    // dx must carry the input's shape, not the per-channel extent.
+    let dx_shape = grads.get(t.id).unwrap().shape.as_ref().to_vec();
+    assert_eq!(plan.input, dx_shape, "dx must take the input's shape");
+    // weight/bias pass through as the operand shapes themselves. For valid
+    // batch-norm operands those equal the channel extent, which is also why
+    // deriving them from the geometry would pass here -- the point pinned
+    // below is that the plan reads them off the operands at all (the unit
+    // test `batch_norm_grad_shapes_follow_the_forward_operands` covers the
+    // operand-free case where a geometry-derived answer would invent [C]).
+    assert_eq!(plan.weight, Some(w.shape.as_ref().to_vec()));
+    assert_eq!(plan.bias, Some(b.shape.as_ref().to_vec()));
+
+    // The backward allocates dx in storage dtype and dw/db in the policy's
+    // compute dtype; for the f32-only row both are f32, which is also the
+    // dtype the CPU tape hands back for the gradient it does produce.
+    let req = PrecisionRequest::new(
+        OperationKind::Normalization,
+        DTypeId::F32.into(),
+        DTypeId::F32.into(),
+        LayoutClass::Contiguous,
+        1,
+        false,
+        incin_core::exec::MathMode::Fast,
+    );
+    let policy = crate::cuda::backend::native_precision(&req).unwrap();
+    assert_eq!(policy.compute, DTypeId::F32.into());
+    let dx = grads.get(t.id).unwrap();
+    assert_eq!(
+        dx.dtype, policy.compute,
+        "the CUDA backward's gradient dtype must match the CPU reference's"
+    );
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn batch_norm_training_forward_matches_cpu_reference() {
+    // Regression guard for the stats-saving edit to the fused template: the
+    // two extra stores and the Welford reduction must not disturb the
+    // output values the inference form used to produce from running stats.
+    let (input, weight, bias) = (bn_input(), bn_weight(), bn_bias());
+    let out = B::batch_norm::<f32>(&input, Some(&weight), Some(&bias), BN_EPS).unwrap();
+    assert_eq!(out.shape, vec![2, 2, 2]);
+    let (expected, _, _, _) = cpu_batch_norm_training_grads(&BN_VALUES, &BN_WEIGHT, &BN_BIAS);
+    let got: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| *v as f64)
+        .collect();
+    assert_close(&got, &expected, 1e-5, "training forward");
+    // Draining here keeps this forward's entry off the next test's walk.
+    let _ = crate::cuda::tape::backward(&out);
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn batch_norm_backward_matches_cpu_reference() {
+    let (input, weight, bias) = (bn_input(), bn_weight(), bn_bias());
+    let (input_id, weight_id, bias_id) = (input.id, weight.id, bias.id);
+    let out = B::batch_norm::<f32>(&input, Some(&weight), Some(&bias), BN_EPS).unwrap();
+    let seed = cuda_f32(&[2, 2, 2], BN_GOUT.to_vec());
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    let read = |id: incin_core::exec::TensorId| {
+        let grad = grads
+            .get(id)
+            .expect("batch norm operand should have a gradient");
+        download_f32_host(grad)
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    let (_, expected_dx, expected_dw, expected_db) =
+        cpu_batch_norm_training_grads(&BN_VALUES, &BN_WEIGHT, &BN_BIAS);
+    // A Welford reduction on device against composed primitives on host:
+    // agreement to four digits, not bit-exact. The BN_GOUT seed (rather
+    // than the default ones) matters for dw -- under ones, sum(xhat) is
+    // ~0 by construction, so a wrong kernel could pass on noise. With a
+    // non-uniform seed the mean(gw) and mean(gw*xhat) terms of dx are all
+    // load-bearing too, which is how a wrong formula stops surviving a
+    // smoke test.
+    assert_close(&read(input_id), &expected_dx, 1e-4, "dx");
+    assert_close(&read(weight_id), &expected_dw, 1e-4, "dw");
+    assert_close(&read(bias_id), &expected_db, 1e-4, "db");
+    // And each gradient carries its operand's shape, the tape hand-off
+    // contract the host-side plan test above pins without a device.
+    assert_eq!(grads.get(input_id).unwrap().shape, vec![2, 2, 2]);
+    assert_eq!(grads.get(weight_id).unwrap().shape, vec![2]);
+    assert_eq!(grads.get(bias_id).unwrap().shape, vec![2]);
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn batch_norm_backward_replays_saved_statistics() {
+    // White-box proof that the backward reads the statistics the forward
+    // saved rather than recomputing them: the same launch with a perturbed
+    // mean must produce different gradients (a kernel recomputing its own
+    // statistics internally would be unaffected), and with the true
+    // statistics must match the CPU reference.
+    use crate::cuda::ops::norm::{launch_batch_norm_backward, launch_batch_norm_training};
+    let (input, weight, bias) = (bn_input(), bn_weight(), bn_bias());
+    let (_, stats) =
+        launch_batch_norm_training(&input, Some(&weight), Some(&bias), BN_EPS, true).unwrap();
+    let stats = stats.expect("recording forward keeps statistics");
+    let gout = cuda_f32(&[2, 2, 2], BN_GOUT.to_vec());
+    let grads = launch_batch_norm_backward(
+        &gout,
+        &input,
+        Some(&weight),
+        Some(&bias),
+        &stats.mean,
+        &stats.rstd,
+    )
+    .unwrap();
+    assert!(
+        grads.weight.is_some() && grads.bias.is_some(),
+        "a forward with weight and bias must produce both gradients"
+    );
+    let read = |storage: &CudaStorage| {
+        download_f32_host(storage)
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    let dx = read(&grads.input);
+    // Perturb the saved per-channel mean by 1.0 on both channels.
+    let true_mean = download_f32_host(&stats.mean).unwrap();
+    let bad_mean = cuda_f32(&[2], vec![true_mean[0] + 1.0, true_mean[1] + 1.0]);
+    let bad = launch_batch_norm_backward(
+        &gout,
+        &input,
+        Some(&weight),
+        Some(&bias),
+        &bad_mean,
+        &stats.rstd,
+    )
+    .unwrap();
+    let bad_dx = read(&bad.input);
+    let drift: f64 = dx
+        .iter()
+        .zip(bad_dx.iter())
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f64::max);
+    assert!(
+        drift > 1e-3,
+        "perturbed statistics left the gradients unchanged: the kernel is not reading them"
+    );
+    // And with the true statistics, the CPU reference agrees.
+    let (_, expected_dx, expected_dw, expected_db) =
+        cpu_batch_norm_training_grads(&BN_VALUES, &BN_WEIGHT, &BN_BIAS);
+    assert_close(&dx, &expected_dx, 1e-4, "dx against CPU reference");
+    assert_close(&read(&grads.weight.unwrap()), &expected_dw, 1e-4, "dw");
+    assert_close(&read(&grads.bias.unwrap()), &expected_db, 1e-4, "db");
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn batch_norm_training_execute_delegates_to_the_tape_tracked_method() {
+    // The executor branch #123 added: `attributes.training = true` must no
+    // longer be refused by name but run the tape-tracked method, record
+    // exactly one entry, and answer with the same values CPU's training
+    // kernel produces.
+    use incin_core::exec::catalog::BatchNormAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new()).with_training(true);
+    let (input, weight, bias) = (bn_input(), bn_weight(), bn_bias());
+    let (input_id, weight_id, bias_id) = (input.id, weight.id, bias.id);
+    let handles = [
+        TensorHandle::from_storage::<B, f32, _>(&input),
+        TensorHandle::from_storage::<B, f32, _>(&weight),
+        TensorHandle::from_storage::<B, f32, _>(&bias),
+    ];
+    let before = crate::cuda::tape::depth();
+    let out = dispatch::execute::<op::BatchNorm, _>(
+        &context,
+        BatchNormAttributes {
+            epsilon: f64::from(BN_EPS),
+            momentum: 0.1,
+            training: true,
+            has_weight: true,
+            has_bias: true,
+            has_running_mean: false,
+            has_running_variance: false,
+        },
+        &handles,
+    )
+    .expect("a training batch norm must execute on CUDA since #123");
+    assert!(
+        crate::cuda::tape::depth() > before,
+        "a training-mode forward under a recording grad mode must push a tape entry"
+    );
+    let (expected, expected_dx, expected_dw, expected_db) =
+        cpu_batch_norm_training_grads(&BN_VALUES, &BN_WEIGHT, &BN_BIAS);
+    let got: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| *v as f64)
+        .collect();
+    assert_close(&got, &expected, 1e-5, "dispatched forward");
+    let seed = cuda_f32(&[2, 2, 2], BN_GOUT.to_vec());
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    let read = |id: incin_core::exec::TensorId| {
+        download_f32_host(grads.get(id).expect("operand should have a gradient"))
+            .unwrap()
+            .iter()
+            .map(|v| *v as f64)
+            .collect::<Vec<_>>()
+    };
+    assert_close(&read(input_id), &expected_dx, 1e-4, "dispatched dx");
+    assert_close(&read(weight_id), &expected_dw, 1e-4, "dispatched dw");
+    assert_close(&read(bias_id), &expected_db, 1e-4, "dispatched db");
 }
 
 #[test]
@@ -2122,5 +2564,242 @@ fn matmul_exact_executes_rank_three_by_routing_to_batched_matmul() {
     assert_eq!(
         download_f32_host(&out).unwrap(),
         vec![22.0, 28.0, 49.0, 64.0, 220.0, 244.0, 301.0, 334.0]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Issue #84: the four loss/norm families that still had no hardware value
+// tests — mse, bce_with_logits (zero-logit slope regression), group_norm,
+// and instance_norm. All are `#[ignore]`d so `cargo test` stays green on
+// machines without a CUDA device; run with `-- --ignored` on real hardware.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn mse_loss_trains_through_scalar_reduction_on_cuda() {
+    // MSE is sub, mul, mean — the same composition shape as l1, so it gets
+    // its own hardware walk to pin the squared-diff chain end to end.
+    use incin_core::exec::catalog::{LossAttributes, LossReduction};
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let pred_values = vec![1.0, 0.0, -1.0, 2.0];
+    let targ_values = vec![1.0, 1.0, 0.0, 0.5];
+    let pred = cuda_f32(&[4], pred_values.clone());
+    let targ = cuda_f32(&[4], targ_values.clone());
+    let pred_id = pred.id;
+    let out = dispatch::execute::<op::MseLoss, _>(
+        &context,
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[
+            TensorHandle::from_storage::<B, f32, _>(&pred),
+            TensorHandle::from_storage::<B, f32, _>(&targ),
+        ],
+    )
+    .expect("mse executes on CUDA");
+
+    let fwd = download_f32_host(&out).unwrap();
+    assert_eq!(fwd.len(), 1);
+
+    // CPU reference on the same values, seeded with ones (backward's default).
+    let host_out_and_grads = cpu_forward_and_grads::<op::MseLoss>(
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[
+            host_f32(&[4], pred_values.clone()),
+            host_f32(&[4], targ_values),
+        ],
+        &[1.0],
+    );
+    let want_fwd = host_values(&host_out_and_grads.0);
+    let want_dx = host_values(&host_out_and_grads.1[0]);
+    assert_close(
+        &fwd.iter().map(|v| f64::from(*v)).collect::<Vec<_>>(),
+        &want_fwd,
+        1e-5,
+        "mse forward",
+    );
+
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad = grads.get(pred_id).expect("pred has a gradient");
+    let got_dx: Vec<f64> = download_f32_host(grad)
+        .unwrap()
+        .iter()
+        .map(|v| f64::from(*v))
+        .collect();
+    assert_close(&got_dx, &want_dx, 1e-5, "mse dx");
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn bce_with_logits_zero_logit_backward_matches_sigmoid_minus_target_on_cuda() {
+    // The stock relu derivative answers 0 at exactly zero; CPU (and PyTorch)
+    // define the subgradient of max(x, 0) at x = 0 as 0.5. This pins the
+    // #84 fix: GradMode::Disabled relu plus a custom tape entry with the
+    // CPU slope table.
+    use incin_core::exec::catalog::{LossAttributes, LossReduction};
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let p_values = vec![0.0, 0.0, 0.0];
+    let z_values = vec![0.0, 1.0, 0.25];
+    for (reduction, scale) in [
+        (LossReduction::Sum, 1.0f64),
+        (LossReduction::Mean, 1.0 / 3.0),
+    ] {
+        let p = cuda_f32(&[1, 3], p_values.clone());
+        let z = cuda_f32(&[1, 3], z_values.clone());
+        let p_id = p.id;
+        let out = dispatch::execute::<op::BceWithLogitsLoss, _>(
+            &context,
+            LossAttributes { reduction },
+            &[
+                TensorHandle::from_storage::<B, f32, _>(&p),
+                TensorHandle::from_storage::<B, f32, _>(&z),
+            ],
+        )
+        .expect("bce_with_logits executes on CUDA");
+
+        let grads = crate::cuda::tape::backward(&out).unwrap();
+        let grad = grads.get(p_id).expect("pred should have a gradient");
+        let got = download_f32_host(grad).unwrap();
+        for (i, (actual, expected)) in got.iter().zip([0.5f64, -0.5, 0.25].iter()).enumerate() {
+            assert!(
+                (f64::from(*actual) - expected * scale).abs() < 1e-6,
+                "{reduction:?}: grad[{i}] = {actual}, expected {}",
+                expected * scale
+            );
+        }
+    }
+
+    // Forward also matches the CPU reference on the same inputs.
+    let p = cuda_f32(&[1, 3], p_values.clone());
+    let z = cuda_f32(&[1, 3], z_values.clone());
+    let out = dispatch::execute::<op::BceWithLogitsLoss, _>(
+        &context,
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[
+            TensorHandle::from_storage::<B, f32, _>(&p),
+            TensorHandle::from_storage::<B, f32, _>(&z),
+        ],
+    )
+    .unwrap();
+    let (host_out, _) = cpu_forward_and_grads::<op::BceWithLogitsLoss>(
+        LossAttributes {
+            reduction: LossReduction::Mean,
+        },
+        &[
+            host_f32(&[1, 3], p_values.clone()),
+            host_f32(&[1, 3], z_values),
+        ],
+        &[1.0; 3],
+    );
+    let got_fwd: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| f64::from(*v))
+        .collect();
+    assert_close(&got_fwd, &host_values(&host_out), 1e-5, "bce forward");
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn group_norm_trains_through_the_statistical_path_on_cuda() {
+    // Group norm composes reshape → mean → sub → mul → mean → add eps →
+    // sqrt → div → reshape. Every step is tape-tracked, so forward must
+    // match the CPU reference values and backward must replay the same
+    // statistical path (not a silent variance).
+    use incin_core::exec::catalog::GroupNormAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let values = vec![0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0];
+    let input = cuda_f32(&[2, 4], values.clone());
+    let input_id = input.id;
+    let out = dispatch::execute::<op::GroupNorm, _>(
+        &context,
+        GroupNormAttributes {
+            groups: 2,
+            epsilon: 1e-5,
+        },
+        &[TensorHandle::from_storage::<B, f32, _>(&input)],
+    )
+    .expect("group_norm executes on CUDA");
+
+    let seed_values = vec![1.0; 8];
+    let (host_out, host_grads) = cpu_forward_and_grads::<op::GroupNorm>(
+        GroupNormAttributes {
+            groups: 2,
+            epsilon: 1e-5,
+        },
+        &[host_f32(&[2, 4], values.clone())],
+        &seed_values,
+    );
+
+    let got_fwd: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| f64::from(*v))
+        .collect();
+    assert_close(
+        &got_fwd,
+        &host_values(&host_out),
+        1e-5,
+        "group_norm forward",
+    );
+
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad = grads.get(input_id).expect("input has a gradient");
+    let got_dx: Vec<f64> = download_f32_host(grad)
+        .unwrap()
+        .iter()
+        .map(|v| f64::from(*v))
+        .collect();
+    assert_close(&got_dx, &host_values(&host_grads[0]), 1e-5, "group_norm dx");
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn instance_norm_normalizes_each_channel_alone_on_cuda() {
+    // instance_norm is group_norm with one group per channel, so each
+    // channel of each sample is normalized alone. Forward must match the
+    // CPU `instance_norm_storage` reference.
+    use incin_core::exec::catalog::EpsilonAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let values = vec![0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0];
+    let input = cuda_f32(&[2, 4], values.clone());
+    let out = dispatch::execute::<op::InstanceNorm, _>(
+        &context,
+        EpsilonAttributes { epsilon: 1e-5 },
+        &[TensorHandle::from_storage::<B, f32, _>(&input)],
+    )
+    .expect("instance_norm executes on CUDA");
+
+    let (host_out, _) = cpu_forward_and_grads::<op::InstanceNorm>(
+        EpsilonAttributes { epsilon: 1e-5 },
+        &[host_f32(&[2, 4], values)],
+        &[1.0; 8],
+    );
+    let got_fwd: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| f64::from(*v))
+        .collect();
+    assert_close(
+        &got_fwd,
+        &host_values(&host_out),
+        1e-5,
+        "instance_norm forward",
     );
 }

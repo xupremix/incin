@@ -8,11 +8,11 @@
 //! way `where_cond`/`masked_fill`'s `F32_AND_BOOL` was.
 //!
 //! Broadcasting the two binary operands to one shape is the caller's job
-//! (the executor), the same precondition `compare`/`select` state; the
-//! caller broadcasts through
-//! `cuda::ops::select::launch_broadcast_bool_mask` today, which may collapse
-//! into the generic broadcast now that it moves bytes at any width -- see
-//! #122.
+//! (the executor), the same precondition `compare`/`select` state; since
+//! #122 the caller broadcasts through `cuda::ops::shape::launch_broadcast`,
+//! whose width-parametric `shape_op_8bit` entry point moves these one-byte
+//! operands correctly (the dedicated `bool`-mask launcher that used to do
+//! this job was deleted as redundant).
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;

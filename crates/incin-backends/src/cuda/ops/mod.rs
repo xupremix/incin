@@ -2,6 +2,7 @@ pub(crate) mod cast;
 pub(crate) mod compare;
 pub(crate) mod conv;
 pub(crate) mod cublaslt;
+pub(crate) mod dropout;
 pub(crate) mod elementwise;
 #[cfg(test)]
 mod ir_conformance_tests;

@@ -285,6 +285,45 @@ fn normalization_templates_use_welford_and_dtype_specific_compute() {
     assert!(render_cuda_normalization("unknown", DTypeId::F32).is_err());
 }
 
+/// The training claim of issue #123 is only honest if the rendered
+/// `batch_norm` module actually carries the two kernels the launchers
+/// resolve by name: a source with just the inference form would compile,
+/// load, and then fail `get_function` at the first recording forward --
+/// or worse, silently run the wrong entry if the names ever collided.
+#[test]
+fn batch_norm_template_renders_training_and_backward_entries() {
+    let kernel = render_cuda_normalization("batch_norm", DTypeId::F32).unwrap();
+    let entry = &kernel.entry_point;
+    assert!(
+        kernel.source.contains(&format!("void {entry}(")),
+        "the inference entry must remain in the source"
+    );
+    assert!(
+        kernel.source.contains(&format!("void {entry}_training(")),
+        "the training entry the tape-tracked forward resolves by name is missing"
+    );
+    assert!(
+        kernel.source.contains(&format!("void {entry}_backward(")),
+        "the backward entry the tape recipe resolves by name is missing"
+    );
+    // The training form reduces with Welford, the same accumulator the
+    // layer_norm template uses, and saves stats behind its flag.
+    assert!(kernel.source.contains("struct IncinWelford"));
+    assert!(kernel.source.contains("incin_welford_combine"));
+    assert!(kernel.source.contains("save_stats"));
+    // The backward's dx formula carries the channel mean of g*w and of
+    // g*w*xhat -- dropping either term is the classic wrong batch-norm
+    // gradient that still passes a uniform-upstream smoke test.
+    assert!(kernel.source.contains("mean_gw"));
+    assert!(kernel.source.contains("mean_gwx"));
+    // One block owns one channel, so the per-channel sums are plain
+    // stores, not atomics: deterministic at the last ulp.
+    assert!(
+        !kernel.source.contains("atomicAdd"),
+        "the channel-owned batch-norm backward must not need atomics"
+    );
+}
+
 #[cfg(feature = "cuda")]
 #[test]
 #[ignore = "requires a locally installed NVRTC shared library"]
