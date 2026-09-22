@@ -14,6 +14,7 @@ pub mod cross_entropy;
 pub mod dsl;
 pub mod fragment;
 pub mod fused_epilogue;
+pub(crate) mod fuser;
 pub mod fusion;
 pub mod gemm;
 pub mod ir;

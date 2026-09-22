@@ -22,7 +22,10 @@ pub use artifact::{
 };
 pub use capture::{CapturedGraph, CapturedNode};
 pub use fold::{ConstantFolder, ShapeBucket, WeightPrepacker};
-pub use fusion::{FusedKernel, FusionBlocker, FusionCandidate, FusionPass};
+pub use fusion::{
+    FusedKernel, FusionBlocker, FusionCandidate, FusionPass, FusionPatternKind, GroupRefusal,
+    PlannedGroups, fusion_pattern_kind,
+};
 pub use manifest::ReproducibilityManifest;
 pub use plan::{CompileOptions, CompiledPlan, DynamicShapePolicy, FusionPolicy, ShapeGuard};
 pub use tuning::{BoundedPlanTuner, PlanTuningReport, TuningUnavailable};
