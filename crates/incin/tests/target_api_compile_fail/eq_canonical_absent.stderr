@@ -7,9 +7,9 @@ error[E0599]: no method named `eq_canonical` found for struct `incin_core::tenso
 help: there is a method `concat` with a similar name, but with different arguments
  --> $WORKSPACE/crates/incin-core/src/tensor/ops/manipulation/concat.rs
   |
-  | /     pub fn concat<S2, A>(
+  | /     pub fn concat<S2, A, L2>(
   | |         &self,
-  | |         other: &Tensor<S2, B, K, G>,
+  | |         other: &Tensor<S2, B, K, G, Local, L2>,
   | |         axis: A,
 ... |
   | |         B: Execute<op::ConcatExact> + Capabilities,

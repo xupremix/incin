@@ -765,6 +765,66 @@ fn a_loss_method_accepts_a_proven_target() {
     assert!((loss - 3.0f32.ln()).abs() < 1e-5, "got {loss}");
 }
 
+/// Joining two proven tensors does not require forgetting either proof.
+///
+/// The same asymmetry the indexing and loss methods had. `concat`, `stack`, the
+/// two legacy spellings of each and `outer` took their receiver at any layout
+/// and their second operand only at `Dyn`, so a row-major tensor could stand on
+/// the left of a join and was refused on the right. Every one is called here
+/// with a proven tensor on both sides.
+///
+/// `concat_structural` and `stack_structural` are deliberately absent. Their
+/// axis is a type no argument carries, so every caller names it in a turbofish,
+/// and a layout parameter would have to be named there too.
+#[test]
+fn a_joining_method_accepts_a_proven_second_operand() {
+    use incin_core::prelude::*;
+
+    let proven = |values: &[f32]| {
+        incin_core::prelude::Tensor::<s![2, 2], CpuBackendImpl>::from_slice(values, ())
+            .unwrap()
+            .into_row_major()
+            .expect("a fresh allocation is row-major")
+    };
+    let a = proven(&[1.0, 2.0, 3.0, 4.0]);
+    let b = proven(&[5.0, 6.0, 7.0, 8.0]);
+
+    let rows = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let columns = [1.0, 2.0, 5.0, 6.0, 3.0, 4.0, 7.0, 8.0];
+    assert_eq!(
+        a.concat(&b, axis!(0)).unwrap().to_vec1::<f32>().unwrap(),
+        rows
+    );
+    assert_eq!(
+        a.try_concat(&b, 1).unwrap().to_vec1::<f32>().unwrap(),
+        columns
+    );
+    assert_eq!(
+        a.concat_axis(&b, -1).unwrap().to_vec1::<f32>().unwrap(),
+        columns
+    );
+    assert_eq!(
+        a.stack(&b, axis!(0)).unwrap().to_vec1::<f32>().unwrap(),
+        rows
+    );
+    assert_eq!(a.try_stack(&b, 0).unwrap().shape_buf().as_ref(), &[2, 2, 2]);
+
+    let vector = |values: &[f32]| {
+        incin_core::prelude::Tensor::<s![2], CpuBackendImpl>::from_slice(values, ())
+            .unwrap()
+            .into_row_major()
+            .expect("a fresh allocation is row-major")
+    };
+    assert_eq!(
+        vector(&[1.0, 2.0])
+            .outer(&vector(&[3.0, 4.0]))
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap(),
+        vec![3.0, 4.0, 6.0, 8.0]
+    );
+}
+
 /// A layout is a *request* at construction, and the request can be refused.
 ///
 /// `FreshLayout::strides` is what the creation path allocates with, so a

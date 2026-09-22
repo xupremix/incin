@@ -1590,6 +1590,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   methods delegating to their own `_with` form, and the loss modules, which is
   how a reduction is usually chosen, are unaffected.
 
+- **`concat`, `stack` and `outer` refused a proven tensor as their second
+  operand.** The same asymmetry again: each took its receiver at any layout and
+  its second operand only at `Dyn`, so a row-major tensor could stand on the
+  left of a join and was refused on the right. `try_concat`, `concat_axis` and
+  `try_stack`, the hidden legacy spellings, had it too, as did the private
+  helper `concat` and `try_concat` both route through. All six are generic over
+  the second operand's layout now, and a test joins two proven tensors through
+  each.
+
+  `concat_structural` and `stack_structural` keep the old bound, deliberately.
+  Their axis is a type no argument carries, so every caller names it in a
+  turbofish, and a layout parameter would have to be named there as well: a
+  break at every call site, including two compile-fail tests whose expected
+  diagnostics would change with it. That trade is a separate decision, and the
+  two stay consistent with each other in the meantime.
+
+  One compile-fail snapshot moved. `eq_canonical_absent` checks that a method
+  named `eq_canonical` does not exist, and rustc's hint beside that error quotes
+  `concat`'s signature as a near miss; the quoted lines are the only change, and
+  the error the test exists to pin is the same.
+
 ## [0.1.0] - 2026-08-25
 
 The first release intended for crates.io. CPU is the complete, verified

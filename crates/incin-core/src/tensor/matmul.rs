@@ -405,9 +405,9 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     }
 
     /// Computes outer product of vectors `self` and `rhs`.
-    pub fn outer<S2: Shape + DynShape>(
+    pub fn outer<S2: Shape + DynShape, L2: Layout<S2>>(
         &self,
-        rhs: &Tensor<S2, B, K, G1>,
+        rhs: &Tensor<S2, B, K, G1, Local, L2>,
     ) -> Result<crate::shapes::Dense<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,

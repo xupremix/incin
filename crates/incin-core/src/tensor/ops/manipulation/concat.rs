@@ -118,20 +118,21 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// named selectors preserve the input rank when the input shape carries
     /// rank information.
     #[allow(clippy::type_complexity)]
-    pub fn concat<S2, A>(
+    pub fn concat<S2, A, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         axis: A,
     ) -> Result<crate::shapes::Dense<<A as ConcatSelector<S, S2>>::Output, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         A: ConcatSelector<S, S2>,
         <A as ConcatSelector<S, S2>>::Output: Shape,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
         let dim = axis.resolve(self.shape_buf().rank())?;
-        self.concat_resolved::<S2, <A as ConcatSelector<S, S2>>::Output>(other, dim)
+        self.concat_resolved::<S2, <A as ConcatSelector<S, S2>>::Output, L2>(other, dim)
     }
 
     /// Advanced structural concatenation retained for shape-proof internals.
@@ -194,26 +195,28 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Legacy dynamic concatenation entry point. Prefer [`Self::concat`] with
     /// an `axis!` selector or signed `isize`.
     #[doc(hidden)]
-    pub fn try_concat<S2>(
+    pub fn try_concat<S2, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         dim: usize,
     ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
-        self.concat_resolved::<S2, Dyn>(other, dim)
+        self.concat_resolved::<S2, Dyn, L2>(other, dim)
     }
 
-    fn concat_resolved<S2, Out>(
+    fn concat_resolved<S2, Out, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         dim: usize,
     ) -> Result<crate::shapes::Dense<Out, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         Out: Shape,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
@@ -292,13 +295,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Legacy signed-axis spelling. Prefer [`Self::concat`] with an `isize`.
     #[doc(hidden)]
-    pub fn concat_axis<S2>(
+    pub fn concat_axis<S2, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         axis: isize,
     ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
@@ -415,9 +419,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Stacks `self` with `other` along a static, named, or signed axis selector.
     #[allow(clippy::type_complexity)]
-    pub fn stack<A>(
+    pub fn stack<A, L2: Layout<S>>(
         &self,
-        other: &Tensor<S, B, K, G>,
+        other: &Tensor<S, B, K, G, Local, L2>,
         axis: A,
     ) -> Result<crate::shapes::Dense<<A as StackSelector<S>>::Output, B, K, G, Local>>
     where
@@ -459,7 +463,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Legacy dynamic stacking entry point. Prefer [`Self::stack`] with an
     /// `axis!` selector or signed `isize`.
     #[doc(hidden)]
-    pub fn try_stack(&self, other: &Tensor<S, B, K, G>, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn try_stack<L2: Layout<S>>(
+        &self,
+        other: &Tensor<S, B, K, G, Local, L2>,
+        dim: usize,
+    ) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<op::StackExact> + Capabilities,
         <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
