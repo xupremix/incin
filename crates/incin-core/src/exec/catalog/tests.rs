@@ -1272,6 +1272,95 @@ fn frontend_shape_evidence_reaches_the_validated_descriptor() {
     );
 }
 
+/// The attribute contract must run exactly once per typed lowering.
+///
+/// `infer_typed` validates before it infers outputs, then used to enter
+/// `validate_with_provenance`, which validated the very same
+/// `(operation, inputs)` again - a complete duplicate pass on every typed
+/// operation the framework executes. The second call cannot disagree with
+/// the first, so dropping it is behavior-preserving; this count is what
+/// keeps it dropped. Pre-dedup this observed 2.
+#[cfg(feature = "std")]
+#[test]
+fn typed_lowering_validates_the_attribute_contract_exactly_once() {
+    let _ = super::validated::take_attribute_validate_count();
+    let created = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    type Static23 = crate::shapes::DimCons<
+        typenum::U2,
+        crate::shapes::DimCons<typenum::U3, crate::shapes::Nil>,
+    >;
+    let expected = crate::shapes::ShapeValue::<Static23>::try_new(ShapeBuf::from_slice(&[2, 3]))
+        .expect("2x3 fits the static type");
+    ValidatedInvocation::<op::Zeros>::infer_typed(created, vec![], &expected)
+        .expect("a static creation request is legal");
+    assert_eq!(
+        super::validated::take_attribute_validate_count(),
+        1,
+        "typed lowering must validate the attribute contract exactly once"
+    );
+}
+
+/// The runtime path had the same duplicate: `infer_runtime` validated, then
+/// `validate_with_provenance` validated again over identical metadata.
+/// Pre-dedup this observed 2.
+#[cfg(feature = "std")]
+#[test]
+fn runtime_lowering_validates_the_attribute_contract_exactly_once() {
+    let _ = super::validated::take_attribute_validate_count();
+    let created = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    ValidatedInvocation::<op::Zeros>::infer_runtime(created, vec![])
+        .expect("a dynamic creation request is legal");
+    assert_eq!(
+        super::validated::take_attribute_validate_count(),
+        1,
+        "runtime lowering must validate the attribute contract exactly once"
+    );
+}
+
+/// The stated-output entry point validates once, as it did before the dedup
+/// (it was never the duplicated path). Pinned so a future merge of the entry
+/// points cannot quietly reintroduce a second pass here too.
+#[cfg(feature = "std")]
+#[test]
+fn stated_output_validation_validates_the_attribute_contract_exactly_once() {
+    let _ = super::validated::take_attribute_validate_count();
+    let lhs = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[2, 1])),
+        dtype: None,
+        device: None,
+    };
+    let rhs = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[1, 3])),
+        dtype: None,
+        device: None,
+    };
+    let output = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[2, 3])),
+        dtype: None,
+        device: None,
+    };
+    ValidatedInvocation::<op::Add>::validate(
+        NoAttributes,
+        vec![lhs, rhs],
+        vec![output],
+        crate::exec::ProofLevel::Dynamic,
+    )
+    .expect("2x1 plus 1x3 broadcasts to 2x3");
+    assert_eq!(
+        super::validated::take_attribute_validate_count(),
+        1,
+        "stated-output validation must validate the attribute contract exactly once"
+    );
+}
+
 #[test]
 fn inferred_metadata_cannot_be_fabricated() {
     let lhs = LogicalTensorMeta {

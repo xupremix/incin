@@ -1,5 +1,36 @@
 use super::*;
 
+#[cfg(all(test, feature = "std"))]
+std::thread_local! {
+    /// How many times this test thread has run the attribute contract.
+    ///
+    /// The dispatch paths below must validate `attributes` exactly once: the
+    /// contract depends only on `(operation, inputs)`, so a second call over
+    /// the same pair is a complete duplicate validation of metadata the first
+    /// call already accepted. These tests count the calls to pin that; the
+    /// counter is thread-local because each `#[test]` runs on its own thread,
+    /// so parallel tests never read each other's counts (a shared
+    /// `AtomicUsize` would).
+    static ATTRIBUTE_VALIDATE_CALLS: core::cell::Cell<usize> =
+        const { core::cell::Cell::new(0) };
+}
+
+/// Records one attribute-contract validation for the counter above.
+///
+/// Compiles to nothing outside instrumented test builds, so production call
+/// sites pay no branching and no storage.
+#[inline]
+fn bump_attribute_validate_count() {
+    #[cfg(all(test, feature = "std"))]
+    ATTRIBUTE_VALIDATE_CALLS.with(|calls| calls.set(calls.get() + 1));
+}
+
+/// Drains this thread's attribute-contract validation count.
+#[cfg(all(test, feature = "std"))]
+pub(super) fn take_attribute_validate_count() -> usize {
+    ATTRIBUTE_VALIDATE_CALLS.with(|calls| calls.replace(0))
+}
+
 /// Opaque proof that exact input/output metadata was validated without storage.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidatedInvocation<O: Operation> {
@@ -101,8 +132,6 @@ impl<O: CanonicalOperation> ValidatedInvocation<O>
 where
     O::Attributes: AttributeContract,
 {
-    /// Internal lowering entry point. The output is supplied by the typed
-    /// frontend proof; callers outside `incin-core` cannot assert it.
     /// Validate an invocation whose outputs were stated rather than derived.
     ///
     /// Only the descriptor test suite reaches this: both production lowering
@@ -118,22 +147,53 @@ where
         outputs: Vec<LogicalTensorMeta>,
         proof: crate::exec::ProofLevel,
     ) -> Result<Self, DescriptorError> {
-        Self::validate_with_provenance(
+        let row = Self::entry_arities(&inputs, &outputs)?;
+        bump_attribute_validate_count();
+        attributes.validate(O::ID, &inputs)?;
+        Self::finish_validation(
+            row,
             attributes,
             inputs,
             outputs,
-            proof,
+            crate::exec::ShapeEvidence::weakened(proof),
             OutputProvenance::Supplied,
         )
     }
 
+    /// Shared finishing path: catalog arities already checked, attribute
+    /// contract already validated by whichever entry point dispatched here.
+    ///
+    /// Takes the [`ShapeEvidence`] to seal rather than a bare proof level:
+    /// `infer_runtime` passes [`dynamic()`], the test-only `validate` passes
+    /// [`weakened()`], and `infer_typed` passes the caller-held
+    /// [`combined_evidence()`] directly, so the typed path no longer seals a
+    /// level and then re-mints the same descriptor with full evidence.
+    ///
+    /// [`dynamic()`]: crate::exec::ShapeEvidence::dynamic
+    /// [`weakened()`]: crate::exec::ShapeEvidence::weakened
+    /// [`combined_evidence()`]: crate::shapes::ExpectedShapes::combined_evidence
     fn validate_with_provenance(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
         outputs: Vec<LogicalTensorMeta>,
-        proof: crate::exec::ProofLevel,
+        evidence: crate::exec::ShapeEvidence,
         provenance: OutputProvenance,
     ) -> Result<Self, DescriptorError> {
+        let row = Self::entry_arities(&inputs, &outputs)?;
+        Self::finish_validation(row, attributes, inputs, outputs, evidence, provenance)
+    }
+
+    /// Looks up the catalog row and rejects input/output arity violations.
+    ///
+    /// The fail-closed prefix of every validation entry, factored so the
+    /// attribute contract can sit between it and [`finish_validation`]:
+    /// arities are checked before `attributes.validate`, exactly as they
+    /// always were, and both production entry points share one copy of the
+    /// checks instead of re-walking them inside a nested call.
+    fn entry_arities(
+        inputs: &[LogicalTensorMeta],
+        outputs: &[LogicalTensorMeta],
+    ) -> Result<&'static OperationCatalogEntry, DescriptorError> {
         let row = catalog_entry(O::ID)
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
         if !row.input_arity.contains(&inputs.len()) {
@@ -150,7 +210,25 @@ where
                 actual: outputs.len(),
             });
         }
-        attributes.validate(O::ID, &inputs)?;
+        Ok(row)
+    }
+
+    /// Everything after the attribute contract: operation-specific shape
+    /// rules, per-input rank/device checks, `verify_outputs`, and the seal.
+    ///
+    /// Deliberately does *not* call `attributes.validate`: the contract is a
+    /// pure function of `(operation, inputs)` and has already run at the
+    /// entry point that reached this function. Every check below either
+    /// reads `outputs` (which only exists after inference) or reads state
+    /// the contract does not cover, so nothing is lost by running it once.
+    fn finish_validation(
+        row: &'static OperationCatalogEntry,
+        attributes: O::Attributes,
+        inputs: Vec<LogicalTensorMeta>,
+        outputs: Vec<LogicalTensorMeta>,
+        evidence: crate::exec::ShapeEvidence,
+        provenance: OutputProvenance,
+    ) -> Result<Self, DescriptorError> {
         if let Some(has_bias) = attributes.optional_bias() {
             let expected = if has_bias { 3 } else { 2 };
             if inputs.len() != expected {
@@ -383,26 +461,28 @@ where
             marker: PhantomData,
         };
         Ok(Self {
-            validated: crate::exec::Validated::new(descriptor, proof),
+            validated: crate::exec::Validated::new_with_evidence(descriptor, evidence),
         })
     }
 
     /// Validate an invocation whose outputs are derived rather than supplied.
     ///
-    /// Runtime inference path: infers output metadata with ProofLevel::Dynamic.
+    /// Runtime inference path: infers output metadata and seals it with
+    /// dynamic evidence, which claims nothing the runtime field does not.
     pub(crate) fn infer_runtime(
         attributes: O::Attributes,
         inputs: Vec<LogicalTensorMeta>,
     ) -> Result<Self, DescriptorError> {
         let row = catalog_entry(O::ID)
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
+        bump_attribute_validate_count();
         attributes.validate(O::ID, &inputs)?;
         let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
         Self::validate_with_provenance(
             attributes,
             inputs,
             outputs,
-            crate::exec::ProofLevel::Dynamic,
+            crate::exec::ShapeEvidence::dynamic(),
             OutputProvenance::Derived,
         )
     }
@@ -417,6 +497,7 @@ where
     ) -> Result<Self, DescriptorError> {
         let row = catalog_entry(O::ID)
             .ok_or(DescriptorError::MissingCatalogEntry { operation: O::ID })?;
+        bump_attribute_validate_count();
         attributes.validate(O::ID, &inputs)?;
         let outputs = infer_outputs(O::ID, row, &attributes, &inputs)?;
 
@@ -444,19 +525,12 @@ where
             }
         }
 
-        let validated = Self::validate_with_provenance(
+        Self::validate_with_provenance(
             attributes,
             inputs,
             outputs,
-            expected.combined_proof(),
+            expected.combined_evidence(),
             OutputProvenance::Derived,
-        )?;
-        let descriptor = validated.validated.into_descriptor();
-        Ok(Self {
-            validated: crate::exec::Validated::new_with_evidence(
-                descriptor,
-                expected.combined_evidence(),
-            ),
-        })
+        )
     }
 }

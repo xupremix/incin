@@ -7,7 +7,9 @@ use crate::backend_authoring::TensorMeta;
 use crate::compiled::alloc::{AllocationPlanner, LivenessMap, MemoryPlan};
 use crate::compiled::capture::CapturedGraph;
 use crate::err::{Error, Result};
-use crate::exec::{DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolTable};
+use crate::exec::{
+    DimExpr, LayoutClass, OperationIdentity, ShapeExpr, SymbolEnvironment, SymbolTable,
+};
 use crate::graph::ValueId;
 use crate::tensor::device::DeviceId;
 use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
@@ -265,21 +267,24 @@ impl CompiledPlan {
                     ))
                 })?;
         }
-        let constraints = self
-            .input_guards
-            .iter()
-            .flat_map(|guard| guard.shape.constraints.iter())
-            .cloned()
-            .chain(self.symbols.constraints.iter().cloned())
-            .collect::<Vec<_>>();
-        environment
-            .validate_constraints(&constraints)
-            .map_err(|reason| {
-                Error::Msg(alloc::format!("compiled invocation guard failed: {reason}"))
-            })
+        self.validate_guard_constraints(&environment)
     }
 
     /// Same check against full metadata handles.
+    ///
+    /// Each input's dtype, extents, device, and layout are checked in that
+    /// order against a single shared [`SymbolEnvironment`], binding every
+    /// input's symbols exactly once. Constraints cannot be checked until all
+    /// inputs have bound, because a guard constraint may reference a symbol
+    /// an earlier input did not carry; they are validated afterwards by
+    /// `validate_guard_constraints`. Extent mismatches keep the
+    /// historical `shape guard failed for input value ...` wording, and
+    /// device/layout mismatches keep the wording previously produced by
+    /// [`ShapeGuard::check_metadata`]. Constraint failures now always use the
+    /// shared `compiled invocation guard failed:` prefix that
+    /// [`Self::verify_inputs`] already used; the two paths previously
+    /// disagreed on that prefix for the same failure, and no caller matches
+    /// on it.
     pub fn verify_input_metadata(&self, inputs: &[&TensorMeta]) -> Result<()> {
         if inputs.len() != self.input_guards.len() {
             return Err(Error::Msg(alloc::format!(
@@ -290,7 +295,12 @@ impl CompiledPlan {
         }
         let mut environment = self.symbols.environment();
         for (guard, metadata) in self.input_guards.iter().zip(inputs) {
-            guard.check_metadata(metadata)?;
+            if guard.expected_dtype != metadata.dtype {
+                return Err(Error::DTypeStorageMismatch {
+                    expected: guard.expected_dtype,
+                    got: metadata.dtype,
+                });
+            }
             guard
                 .shape
                 .bind_and_validate(metadata.shape.as_ref(), &mut environment)
@@ -301,16 +311,54 @@ impl CompiledPlan {
                         reason
                     ))
                 })?;
+            if let Some(expected) = guard.expected_device
+                && expected != metadata.device
+            {
+                return Err(Error::Msg(alloc::format!(
+                    "shape guard failed for input value {}: expected device {:?}, got {:?}",
+                    guard.value_id,
+                    expected,
+                    metadata.device
+                )));
+            }
+            if let Some(expected) = guard.expected_layout
+                && expected != metadata.layout
+            {
+                return Err(Error::Msg(alloc::format!(
+                    "shape guard failed for input value {}: expected layout {}, got {}",
+                    guard.value_id,
+                    expected.as_str(),
+                    metadata.layout.as_str()
+                )));
+            }
         }
-        let constraints = self
-            .input_guards
-            .iter()
-            .flat_map(|guard| guard.shape.constraints.iter())
-            .cloned()
-            .chain(self.symbols.constraints.iter().cloned())
-            .collect::<Vec<_>>();
+        self.validate_guard_constraints(&environment)
+    }
+
+    /// Validates every input guard's constraints and then the plan-wide
+    /// symbol constraints against an environment in which all inputs have
+    /// already bound.
+    ///
+    /// Both lists are checked even though [`CompiledPlan::compile`] pushes
+    /// every value's constraints into `symbols.constraints`, which makes the
+    /// guard lists subsets of it: [`CompiledPlan`] has public fields and
+    /// derives `Deserialize`, so a hand-built or decoded plan need not
+    /// satisfy that invariant, and dropping the guard loop would silently
+    /// stop checking exactly the plans where it does not hold. The lists are
+    /// validated by borrow rather than concatenated into a fresh `Vec` per
+    /// invocation; the constraint index reported inside a failure message is
+    /// local to each list rather than to the old concatenated list, but no
+    /// caller matches on that index.
+    fn validate_guard_constraints(&self, environment: &SymbolEnvironment) -> Result<()> {
+        for guard in &self.input_guards {
+            environment
+                .validate_constraints(&guard.shape.constraints)
+                .map_err(|reason| {
+                    Error::Msg(alloc::format!("compiled invocation guard failed: {reason}"))
+                })?;
+        }
         environment
-            .validate_constraints(&constraints)
+            .validate_constraints(&self.symbols.constraints)
             .map_err(|reason| {
                 Error::Msg(alloc::format!("compiled invocation guard failed: {reason}"))
             })

@@ -420,3 +420,204 @@ fn requested_fusion_fails_closed_without_fused_lowering() {
     );
     assert!(result.is_err());
 }
+
+#[test]
+fn metadata_verification_rejects_guard_and_symbol_constraint_violations() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![8, 768], DTypeId::F32, Some("x".into()));
+    graph.mark_input(x);
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+
+    let metadata = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[8, 768]),
+        <f32 as incin_core::prelude::ConstDType>::DESCRIPTOR,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        8 * 768,
+    )
+    .unwrap();
+    assert!(plan.verify_input_metadata(&[&metadata]).is_ok());
+
+    // A hand-built plan can carry a violated constraint on a guard alone;
+    // `CompiledPlan` derives `Deserialize`, so decoded plans can too. The
+    // guard chain must reject it even though `symbols.constraints` does not
+    // contain it.
+    let mut guard_only = plan.clone();
+    guard_only.input_guards[0]
+        .shape
+        .constraints
+        .push(Constraint::equal(DimExpr::Const(8), DimExpr::Const(9)));
+    let error = guard_only
+        .verify_input_metadata(&[&metadata])
+        .expect_err("a guard-only constraint violation must fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("compiled invocation guard failed"),
+        "{error}"
+    );
+
+    // Symmetrically the plan-wide chain must reject a violation no guard
+    // carries.
+    let mut symbols_only = plan.clone();
+    symbols_only
+        .symbols
+        .constraints
+        .push(Constraint::equal(DimExpr::Const(4), DimExpr::Const(5)));
+    let error = symbols_only
+        .verify_input_metadata(&[&metadata])
+        .expect_err("a symbols-only constraint violation must fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("compiled invocation guard failed"),
+        "{error}"
+    );
+}
+
+#[test]
+fn metadata_verification_binds_symbols_across_inputs() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![8, 768], DTypeId::F32, Some("x".into()));
+    let w = graph.add_value(vec![768, 3072], DTypeId::F32, Some("w".into()));
+    graph.mark_input(x);
+    graph.mark_input(w);
+    graph.values.get_mut(&x).unwrap().shape_expr.dims[1] = DimExpr::Symbol(SymbolId(7));
+    graph.values.get_mut(&w).unwrap().shape_expr.dims[0] = DimExpr::Symbol(SymbolId(7));
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+
+    let dtype = <f32 as incin_core::prelude::ConstDType>::DESCRIPTOR;
+    let x_ok = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[8, 768]),
+        dtype,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        8 * 768,
+    )
+    .unwrap();
+    let x_conflicting = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[8, 512]),
+        dtype,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        8 * 512,
+    )
+    .unwrap();
+    let w_meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[768, 3072]),
+        dtype,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        768 * 3072,
+    )
+    .unwrap();
+
+    assert!(plan.verify_input_metadata(&[&x_ok, &w_meta]).is_ok());
+    assert!(
+        plan.verify_input_metadata(&[&x_conflicting, &w_meta])
+            .is_err()
+    );
+}
+
+#[test]
+fn metadata_verification_resolves_guard_constraints_bound_by_other_inputs() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![8, 768], DTypeId::F32, Some("x".into()));
+    let w = graph.add_value(vec![768, 3072], DTypeId::F32, Some("w".into()));
+    graph.mark_input(x);
+    graph.mark_input(w);
+    // x's guard carries a constraint on a symbol only w's dims bind; the
+    // check must resolve it after every input has bound, not against a
+    // per-input snapshot that cannot see w's bindings.
+    graph
+        .values
+        .get_mut(&x)
+        .unwrap()
+        .shape_expr
+        .constraints
+        .push(Constraint::equal(
+            DimExpr::Symbol(SymbolId(7)),
+            DimExpr::Const(768),
+        ));
+    graph.values.get_mut(&w).unwrap().shape_expr.dims[0] = DimExpr::Symbol(SymbolId(7));
+    let plan = CompiledPlan::compile(
+        CapturedGraph::capture(&graph).unwrap(),
+        CompileOptions::new(),
+    )
+    .unwrap();
+
+    let dtype = <f32 as incin_core::prelude::ConstDType>::DESCRIPTOR;
+    let x_meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[8, 768]),
+        dtype,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        8 * 768,
+    )
+    .unwrap();
+    let w_meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[768, 3072]),
+        dtype,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        768 * 3072,
+    )
+    .unwrap();
+    assert!(plan.verify_input_metadata(&[&x_meta, &w_meta]).is_ok());
+
+    // The same constraint still fails closed when the other input binds the
+    // symbol to a conflicting extent.
+    let w_wrong = TensorMeta::contiguous(
+        ShapeBuf::from_slice(&[512, 3072]),
+        dtype,
+        DeviceId::CPU,
+        Alignment::of::<f32>(),
+        512 * 3072,
+    )
+    .unwrap();
+    assert!(plan.verify_input_metadata(&[&x_meta, &w_wrong]).is_err());
+}
+
+#[test]
+fn compiled_guard_constraints_are_covered_by_symbol_constraints() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![8, 768], DTypeId::F32, Some("x".into()));
+    graph.mark_input(x);
+    graph
+        .values
+        .get_mut(&x)
+        .unwrap()
+        .shape_expr
+        .constraints
+        .push(Constraint::equal(
+            DimExpr::Symbol(SymbolId(7)),
+            DimExpr::Const(3),
+        ));
+
+    let captured = CapturedGraph::capture(&graph).unwrap();
+    for options in [
+        CompileOptions::new(),
+        CompileOptions {
+            dynamic_shapes: incin_core::experimental::compiled::DynamicShapePolicy::Strict,
+            ..CompileOptions::new()
+        },
+    ] {
+        let plan = CompiledPlan::compile(captured.clone(), options).unwrap();
+        for guard in &plan.input_guards {
+            for constraint in &guard.shape.constraints {
+                assert!(
+                    plan.symbols.constraints.contains(constraint),
+                    "guard constraint {constraint:?} is missing from symbols.constraints"
+                );
+            }
+        }
+    }
+}
