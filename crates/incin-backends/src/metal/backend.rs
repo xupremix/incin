@@ -304,26 +304,65 @@ impl<D: Device> MetalBackendImpl<D> {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/// Reduce `grad` back to `target_shape` for a broadcast backward recipe.
+///
+/// Semantics (fail-closed, shared with CPU, CUDA, and WGPU): on success the
+/// result's shape equals `target_shape`, so it can always be accumulated into
+/// the target. A compatible grad of lower rank than the target - a scalar
+/// seed, e.g. `[] -> [1]` - expands (a scalar broadcasts to any shape); a
+/// grad that does not broadcast into the target refuses with a named
+/// `ShapeMismatch`. Never panics on rank-deficient input.
 fn unbroadcast(grad: &MetalStorage, target_shape: &[usize]) -> Result<MetalStorage> {
-    if grad.metadata().shape().dims() == target_shape {
+    if grad.shape() == target_shape {
         return Ok(grad.clone());
     }
-    let grad_dims = grad.metadata().shape().dims();
-    let ndim_diff = grad_dims.len().saturating_sub(target_shape.len());
+
+    let ndim_diff = grad.shape().len().saturating_sub(target_shape.len());
     let mut result = grad.clone();
 
+    // Reduce leading dims
     for _ in 0..ndim_diff {
         result = sum_dim_squeeze(&result, 0)?;
     }
 
-    let cur_dims = result.metadata().shape().dims().to_vec();
-    for (i, &t_dim) in target_shape.iter().enumerate() {
-        if t_dim == 1 && cur_dims[i] != 1 {
-            result = sum_dim_keepdim(&result, i)?;
+    // Reduce keepdim dims. Only when the ranks agree after the leading
+    // squeeze (grad rank >= target rank): that squeeze right-aligns the
+    // axes, so indexing `result.shape()[i]` against `target_shape[i]` is
+    // sound only at equal rank. When the target outranks the grad - the
+    // scalar-seed case, e.g. `[] -> [1]` - there is no aligned axis to
+    // reduce; the tail expands the smaller grad instead of indexing past
+    // it (the latent cross-backend panic this guards).
+    if result.shape().len() == target_shape.len() {
+        for (i, &t_dim) in target_shape.iter().enumerate() {
+            if t_dim == 1 && result.shape()[i] != 1 {
+                result = sum_dim_keepdim(&result, i)?;
+            }
         }
     }
 
-    Ok(result)
+    if result.shape() == target_shape {
+        return Ok(result);
+    }
+
+    // Expand what reduction left smaller: a reduced-all-the-way scalar seed
+    // reaches here with fewer elements than its target, and the accumulator
+    // requires grads shape-matched to their target, so handing the scalar on
+    // breaks the tape's shape contract. `broadcast_shape` must resolve *to*
+    // the target, not merely be mutual: the materializer assumes a legal
+    // right-aligned broadcast into `target_shape` and would otherwise
+    // mis-index on a shape like `[4] -> [2,1]`. Mirrors the CPU tail
+    // (`cpu/tape.rs`), the CUDA tail (`cuda/tape.rs`), and the WGPU tail
+    // (`wgpu/tape.rs`).
+    let resolved = crate::layout::broadcast_shape(result.shape(), target_shape)?;
+    if resolved.as_slice() != target_shape {
+        return Err(Error::ShapeMismatch {
+            op: "autograd unbroadcast",
+            expected: target_shape.to_vec(),
+            got: result.shape().to_vec(),
+            msg: "the reduced gradient does not broadcast into the target shape".into(),
+        });
+    }
+    broadcast_metal(&result, target_shape)
 }
 
 fn sum_dim_squeeze(storage: &MetalStorage, axis: usize) -> Result<MetalStorage> {
@@ -335,6 +374,22 @@ fn sum_dim_squeeze(storage: &MetalStorage, axis: usize) -> Result<MetalStorage> 
 
 fn sum_dim_keepdim(storage: &MetalStorage, axis: usize) -> Result<MetalStorage> {
     sum_dim_impl(storage, axis, true)
+}
+
+/// Materialize `t` at `shape` by right-aligned broadcast, recording nothing.
+///
+/// The reduction-backward tail needs a plain expand, not an op: the tape
+/// entry lives in `MetalBackendImpl::broadcast_as`, which routes through this
+/// helper. Mirrors WGPU's non-recording `broadcast_storage` and CUDA's
+/// `ops::shape::launch_broadcast`, the expands the other tape tails call.
+fn broadcast_metal(t: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
+    let zeros = MetalStorage::zeros(
+        &ShapeBuf::from_slice(shape),
+        t.metadata().dtype(),
+        t.mode(),
+        t.device_ordinal(),
+    )?;
+    binary_op_metal(t, &zeros, "broadcast_as", |x, _| x)
 }
 
 fn binary_op_metal(
@@ -1010,13 +1065,7 @@ impl<D: Device> MetalBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let zeros = MetalStorage::zeros(
-            &ShapeBuf::from_slice(shape),
-            t.metadata().dtype(),
-            t.mode(),
-            t.device_ordinal(),
-        )?;
-        let out = binary_op_metal(t, &zeros, "broadcast_as", |x, _| x)?;
+        let out = broadcast_metal(t, shape)?;
         let t_dims = t.metadata().shape().dims().to_vec();
         let (t_id, out_id) = (t.id(), out.id());
         crate::metal::tape::push(crate::metal::tape::TapeEntry {
@@ -1117,5 +1166,124 @@ impl<D: Device> VariableBackend for MetalBackendImpl<D> {
     fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
         var.storage = tensor.clone();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+/// `unbroadcast` tests mirroring `cpu/tape.rs`, `wgpu/tape.rs`, and
+/// `cuda/backend/tests.rs`. Metal's unbroadcast path is pure host-side
+/// `Vec<u8>` math (`sum_dim_impl`, `binary_op_metal`), so these run without
+/// a Metal device.
+mod tests {
+    use super::*;
+    use incin_core::tensor::dtype::DTypeId;
+
+    /// Host-side contiguous f32 storage.
+    fn storage(values: &[f32], shape: &[usize]) -> MetalStorage {
+        let bytes: Vec<u8> = bytemuck::cast_slice(values).to_vec();
+        let meta = TensorMeta::contiguous(
+            ShapeBuf::from_slice(shape),
+            DTypeId::F32.into(),
+            DeviceId::metal(0),
+            MetalStorage::alignment(),
+            values.len(),
+        )
+        .expect("contiguous metadata for test storage");
+        MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, 0)
+            .expect("bytes cover the metadata span")
+    }
+
+    /// `scalar`.
+    fn scalar(v: f32) -> MetalStorage {
+        storage(&[v], &[])
+    }
+
+    /// `vector`.
+    fn vector(v: &[f32]) -> MetalStorage {
+        storage(v, &[v.len()])
+    }
+
+    /// `matrix`.
+    fn matrix(v: &[f32], rows: usize, cols: usize) -> MetalStorage {
+        storage(v, &[rows, cols])
+    }
+
+    /// `read`.
+    fn read(s: &MetalStorage) -> Vec<f32> {
+        bytemuck::cast_slice(s.as_bytes().expect("shared-mode storage is host-readable")).to_vec()
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_for_size_one_target_materializes`.
+    fn unbroadcast_scalar_seed_for_size_one_target_materializes() {
+        // Regression for the latent cross-backend panic: a size-1 target
+        // dimension at an index >= the grad's rank (here the whole target)
+        // used to index past the reduced grad in the keepdim loop at
+        // `cur_dims[i]`. A scalar broadcasts to any shape, so `[] -> [1]`
+        // expands to `[v]`, matching the tail's `[3]` materialization.
+        let grad = scalar(2.0);
+        let result =
+            unbroadcast(&grad, &[1]).expect("a compatible scalar seed for a size-1 target expands");
+        assert_eq!(result.shape(), &[1]);
+        assert_eq!(read(&result), vec![2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_is_materialized_to_full_width`.
+    fn unbroadcast_scalar_seed_is_materialized_to_full_width() {
+        // Pre-fix this returned the scalar `[]` unchanged for a `[3]`
+        // target - no panic (the `t_dim == 1` guard short-circuits on a 3)
+        // but a wrong-shaped gradient handed to accumulation. A scalar
+        // broadcasts to any shape, so it materializes to full width here,
+        // matching the CPU/CUDA/WGPU tails (#121).
+        let grad = scalar(2.0);
+        let result = unbroadcast(&grad, &[3]).expect("a compatible scalar seed expands");
+        assert_eq!(result.shape(), &[3]);
+        assert_eq!(read(&result), vec![2.0, 2.0, 2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_incompatible_shapes_are_refused`.
+    fn unbroadcast_incompatible_shapes_are_refused() {
+        // A grad that no broadcast could have produced for this target must
+        // refuse rather than hand a wrong-shaped gradient on to accumulation
+        // (mirrors the CPU/CUDA/WGPU refusal tests; see #121).
+        let grad = vector(&[1.0, 2.0, 3.0]);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+        let grad = matrix(&[1.0; 6], 2, 3);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused`.
+    fn unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused() {
+        // Mutually-broadcastable is not enough: `[4]` does not broadcast
+        // *into* `[2,1]` (a 4 cannot shrink onto a 1). Pre-fix this indexed
+        // past the grad in the keepdim loop and panicked; it must refuse by
+        // name instead (mirrors the CPU/WGPU/CUDA tests).
+        let grad = vector(&[1.0, 2.0, 3.0, 4.0]);
+        assert!(matches!(
+            unbroadcast(&grad, &[2, 1]),
+            Err(Error::ShapeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    /// `unbroadcast_bias_vector_b_n_to_n`.
+    fn unbroadcast_bias_vector_b_n_to_n() {
+        // The reduction half of unbroadcast, which the equal-rank guard and
+        // the tail must not disturb: grad shape [4,3] (B=4, N=3), summed
+        // back to [3] (bias vector case).
+        let grad = matrix(
+            &[
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            4,
+            3,
+        );
+        let result = unbroadcast(&grad, &[3]).expect("the bias reduction runs");
+        assert_eq!(result.shape(), &[3]);
+        // Column sums: col0 = 1+4+7+10=22, col1 = 2+5+8+11=26, col2 = 3+6+9+12=30
+        assert_eq!(read(&result), vec![22.0, 26.0, 30.0]);
     }
 }
