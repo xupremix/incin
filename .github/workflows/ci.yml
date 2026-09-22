@@ -225,7 +225,7 @@ jobs:
         key: ${{ runner.os }}-powerset-${{ hashFiles('**/Cargo.lock') }}
 
     - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
-    - uses: taiki-e/install-action@d438492cf8a250514fa2d34b30bc3c0dc37c65ff # v2.87.8
+    - uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
       with:
         tool: cargo-hack
 
@@ -396,7 +396,7 @@ jobs:
       run: |
         rustup toolchain install 1.88.0 --profile minimal
         rustup default 1.88.0
-    - uses: taiki-e/install-action@d438492cf8a250514fa2d34b30bc3c0dc37c65ff # v2.87.8
+    - uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
       with:
         tool: cargo-hack
     - name: Cache Cargo modules
@@ -580,7 +580,7 @@ jobs:
       with:
         fetch-depth: 0
     - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
-    - uses: taiki-e/install-action@d438492cf8a250514fa2d34b30bc3c0dc37c65ff # v2.87.8
+    - uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
       with:
         tool: cargo-semver-checks
     - name: Diff public API against the most recent release tag
