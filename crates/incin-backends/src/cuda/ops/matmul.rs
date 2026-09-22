@@ -1,14 +1,17 @@
 //! Wires `kernels/matmul.cu`'s tiled shared-memory GEMM (`BM=128, BN=128,
 //! BK=8, TM=8, TN=8`, 16x16 thread blocks) into the CUDA backend. Unbatched
-//! 2D operands only, matching `::matmul`'s currently-wired scope on
-//! this backend - batched matmul is not
-//! implemented here.
+//! 2D operands only - batched matmul is composed in
+//! `cuda/backend/shape_ops.rs` - and, since issue #90, every float storage
+//! dtype the kernel exports an entry point for: `f32`/`f64` accumulate in
+//! their own type, `f16`/`bf16` hold half-precision operands and
+//! accumulate in `f32`.
 
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
-use incin_core::error::Result;
+use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 const BM: u32 = 128;
 const BN: u32 = 128;
@@ -26,19 +29,49 @@ fn ensure_matmul_loaded(device_id: usize) -> Result<()> {
     Ok(())
 }
 
-/// `lhs`: `[M, K]`, `rhs`: `[K, N]` -> `[M, N]`. Caller (the ``
+/// The kernel entry point for a storage dtype, or a typed refusal for
+/// anything `matmul.cu` does not export (`i64`/`bool`/`q8_0`/`u8`/`u32`).
+/// Fail-closed by construction: the launcher launches exactly this name, so
+/// a dtype without an entry can never reach a buffer reinterpreted as the
+/// wrong type.
+#[cfg(feature = "cuda")]
+fn matmul_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok("matmul"),
+        Some(DTypeId::F64) => Ok("matmul_f64"),
+        Some(DTypeId::F16) => Ok("matmul_f16"),
+        Some(DTypeId::BF16) => Ok("matmul_bf16"),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op: "matmul",
+        }),
+    }
+}
+
+/// `lhs`: `[M, K]`, `rhs`: `[K, N]` -> `[M, N]`. Caller (the `Execute` /
 /// trait method) is responsible for the `lhs.shape[1] == rhs.shape[0]`
-/// shape check - this function assumes it already holds.
+/// shape check - this function assumes it already holds. Both operands
+/// must carry the same float dtype: one typed kernel reads them both, so a
+/// mixed pair is refused rather than reinterpreted.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
+    if lhs_buf.dtype != rhs_buf.dtype {
+        return Err(Error::DTypeMismatch {
+            operation: "matmul",
+            expected: lhs_buf.dtype,
+            actual: rhs_buf.dtype,
+        });
+    }
+    // Selects the entry point and refuses every dtype without one, before
+    // any buffer is reinterpreted.
+    let entry_point = matmul_entry_point(lhs_buf.dtype)?;
     let device_id = lhs_buf.device_id;
-    crate::cuda::capability::validate_cuda_f32_kernel(lhs_buf.dtype, "matmul")?;
-    crate::cuda::capability::validate_cuda_f32_kernel(rhs_buf.dtype, "matmul")?;
     ensure_matmul_loaded(device_id)?;
 
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let f = dispatcher.get_function("matmul", "matmul")?;
+    let f = dispatcher.get_function("matmul", entry_point)?;
     let stream = lhs_buf.device.default_stream();
 
     let m = lhs.shape[0];
@@ -71,29 +104,31 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
         shared_mem_bytes: 0,
     };
 
-    // SAFETY: checked matrix dimensions establish each f32 slice length and
-    // launch extent; out_b was just allocated and is uniquely owned.
+    // SAFETY: checked matrix dimensions establish each slice length and the
+    // launch extent; out_b was just allocated and is uniquely owned. The
+    // views pass through as byte buffers, the convention `quant.rs` and
+    // `embedding.rs` already use for multi-dtype entries: the driver only
+    // needs the device address, the kernel is typed by the entry point, and
+    // `matmul_entry_point` above established that the entry's type really
+    // is this buffer's dtype.
     unsafe {
-        let lhs_f32 = lhs_buf.data.transmute::<f32>(lhs_buf.len).unwrap();
-        let rhs_f32 = rhs_buf.data.transmute::<f32>(rhs_buf.len).unwrap();
         // out_b.data was allocated immediately above and never cloned, so
         // it stays uniquely owned (refcount 1) here - Arc::get_mut succeeds
         // without cloning first.
         let out_u8: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .expect("out_b.data is freshly allocated and uniquely owned here");
-        let mut out_f32 = out_u8.transmute_mut::<f32>(total).unwrap();
 
         use cudarc::driver::PushKernelArg;
         stream
             .launch_builder(&f)
-            .arg(&lhs_f32)
-            .arg(&rhs_f32)
-            .arg(&mut out_f32)
+            .arg(&*lhs_buf.data)
+            .arg(&*rhs_buf.data)
+            .arg(&mut *out_u8)
             .arg(&m_i32)
             .arg(&k_i32)
             .arg(&n_i32)
             .launch(cfg)
-            .map_err(|e| incin_core::error::Error::Msg(format!("matmul launch failed: {e:?}")))?;
+            .map_err(|e| Error::Msg(format!("matmul launch failed: {e:?}")))?;
     }
 
     let strides = crate::layout::contiguous_strides(&out_shape)

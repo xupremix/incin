@@ -1745,3 +1745,263 @@ fn scatter_add_refuses_last_write_wins_with_the_cpus_wording() {
         "refusal must carry CPU's wording, got {rendered}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Issue #90: the dtype-parametric matmul rows. The first test runs
+// everywhere - it answers the capability query, not the device. The rest are
+// `#[ignore]`d like every other hardware test above.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_dtype_parametric_cuda_matmul_rows_admit_their_canonical_invocations() {
+    use incin_core::exec::{
+        CapabilityQuery, LayoutClass, MathMode, OperationIdentity, SupportLevel, UnsupportedReason,
+    };
+    use incin_core::shapes::OperationKind;
+    use incin_core::tensor::device::DeviceKind;
+
+    // (operation, operand dtype, rank, training): every float storage dtype
+    // across the four rows that moved to FLOAT_DTYPES. Rank clears each
+    // row's floor (2 for `matmul`, 3 for `bmm`, 1 for `addmm`/`linear`);
+    // Contiguous is admitted by all the groups involved.
+    let admitted: &[(OperationKind, DTypeId, usize, bool)] = &[
+        (OperationKind::MatMulExact, DTypeId::BF16, 2, true),
+        (OperationKind::MatMulExact, DTypeId::F16, 2, true),
+        (OperationKind::MatMulExact, DTypeId::F32, 2, true),
+        (OperationKind::MatMulExact, DTypeId::F64, 2, true),
+        (OperationKind::BatchedMatMul, DTypeId::BF16, 3, true),
+        (OperationKind::BatchedMatMul, DTypeId::F16, 3, true),
+        (OperationKind::BatchedMatMul, DTypeId::F32, 3, true),
+        (OperationKind::BatchedMatMul, DTypeId::F64, 3, true),
+        (OperationKind::Addmm, DTypeId::BF16, 2, true),
+        (OperationKind::Addmm, DTypeId::F16, 2, true),
+        (OperationKind::Addmm, DTypeId::F32, 2, true),
+        (OperationKind::Addmm, DTypeId::F64, 2, true),
+        (OperationKind::Linear, DTypeId::BF16, 2, true),
+        (OperationKind::Linear, DTypeId::F16, 2, true),
+        (OperationKind::Linear, DTypeId::F32, 2, true),
+        (OperationKind::Linear, DTypeId::F64, 2, true),
+    ];
+    for &(operation, dtype, rank, training) in admitted {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank,
+            training,
+            math_mode: MathMode::Precise,
+        };
+        let level = crate::capability::support(DeviceKind::Cuda, &query);
+        assert!(
+            !matches!(level, SupportLevel::Unsupported(_)),
+            "{operation:?} must admit a {dtype:?} operand at rank {rank} with training={training}, got {level:?}"
+        );
+    }
+
+    // FLOAT_DTYPES is the whole widening: integer, boolean and quantized
+    // operands stay refused rather than riding the moved rows.
+    let refused: &[(OperationKind, DTypeId, usize)] = &[
+        (OperationKind::MatMulExact, DTypeId::I64, 2),
+        (OperationKind::MatMulExact, DTypeId::Bool, 2),
+        (OperationKind::MatMulExact, DTypeId::Q8_0, 2),
+        (OperationKind::BatchedMatMul, DTypeId::I64, 3),
+        (OperationKind::Addmm, DTypeId::I64, 2),
+        (OperationKind::Linear, DTypeId::I64, 2),
+    ];
+    for &(operation, dtype, rank) in refused {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank,
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        let level = crate::capability::support(DeviceKind::Cuda, &query);
+        assert!(
+            matches!(level, SupportLevel::Unsupported(_)),
+            "{operation:?} must still refuse a {dtype:?} operand, got {level:?}"
+        );
+    }
+
+    // The rows that did not widen stay honest: `ScaledDotProductAttention`
+    // sits on f32-only `softmax`, so an f16 query is refused by dtype.
+    let sdpa_f16 = CapabilityQuery {
+        operation: OperationIdentity::Builtin(OperationKind::ScaledDotProductAttention),
+        dtype: DTypeId::F16.descriptor(),
+        layout: LayoutClass::Contiguous,
+        rank: 2,
+        training: true,
+        math_mode: MathMode::Precise,
+    };
+    assert!(
+        matches!(
+            crate::capability::support(DeviceKind::Cuda, &sdpa_f16),
+            SupportLevel::Unsupported(UnsupportedReason::DType { .. })
+        ),
+        "SDPA must stay f32-only on CUDA"
+    );
+
+    // A training-mode query keeps resolving: the moved rows all carry a
+    // real tape entry (checked structurally by the rank routing test below
+    // and the existing backward tests).
+    let training = CapabilityQuery {
+        operation: OperationIdentity::Builtin(OperationKind::MatMulExact),
+        dtype: DTypeId::F32.descriptor(),
+        layout: LayoutClass::Contiguous,
+        rank: 2,
+        training: false,
+        math_mode: MathMode::Precise,
+    };
+    assert!(
+        !matches!(
+            crate::capability::support(DeviceKind::Cuda, &training),
+            SupportLevel::Unsupported(_)
+        ),
+        "MatMulExact must also resolve in inference mode"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn matmul_multiplies_f16_operands() {
+    // [[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]] -
+    // every intermediate is an integer below 2048, exactly representable
+    // in f16, so this asserts the kernel's arithmetic rather than a
+    // tolerance window.
+    let lhs_bytes: Vec<u8> = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]
+        .iter()
+        .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
+        .collect();
+    let rhs_bytes: Vec<u8> = [7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]
+        .iter()
+        .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
+        .collect();
+    let lhs = crate::cuda::backend::cuda_from_bytes(&[2, 3], DTypeId::F16.into(), 0, &lhs_bytes)
+        .expect("f16 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(&[3, 2], DTypeId::F16.into(), 0, &rhs_bytes)
+        .expect("f16 storage is CUDA-admissible");
+    let out = B::matmul::<f32>(&lhs, &rhs).expect("f16 matmul executes");
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype(), DTypeId::F16.descriptor());
+    let got_bytes = out
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*out.buffer.data)
+        .unwrap();
+    let got: Vec<f32> = got_bytes
+        .chunks_exact(2)
+        .map(|c| half::f16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32())
+        .collect();
+    assert_eq!(got, vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn matmul_multiplies_bf16_operands() {
+    // Same product as the f16 test; every result is an integer below 256,
+    // exactly representable in bf16's 8-bit mantissa.
+    let lhs_bytes: Vec<u8> = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]
+        .iter()
+        .flat_map(|&v| half::bf16::from_f32(v).to_bits().to_le_bytes())
+        .collect();
+    let rhs_bytes: Vec<u8> = [7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]
+        .iter()
+        .flat_map(|&v| half::bf16::from_f32(v).to_bits().to_le_bytes())
+        .collect();
+    let lhs = crate::cuda::backend::cuda_from_bytes(&[2, 3], DTypeId::BF16.into(), 0, &lhs_bytes)
+        .expect("bf16 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(&[3, 2], DTypeId::BF16.into(), 0, &rhs_bytes)
+        .expect("bf16 storage is CUDA-admissible");
+    let out = B::matmul::<f32>(&lhs, &rhs).expect("bf16 matmul executes");
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype(), DTypeId::BF16.descriptor());
+    let got_bytes = out
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*out.buffer.data)
+        .unwrap();
+    let got: Vec<f32> = got_bytes
+        .chunks_exact(2)
+        .map(|c| half::bf16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32())
+        .collect();
+    assert_eq!(got, vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn matmul_multiplies_f64_operands() {
+    let lhs_vals = [1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let rhs_vals = [7.0f64, 8.0, 9.0, 10.0, 11.0, 12.0];
+    let lhs_bytes: Vec<u8> = lhs_vals.iter().flat_map(|v| v.to_le_bytes()).collect();
+    let rhs_bytes: Vec<u8> = rhs_vals.iter().flat_map(|v| v.to_le_bytes()).collect();
+    let lhs = crate::cuda::backend::cuda_from_bytes(&[2, 3], DTypeId::F64.into(), 0, &lhs_bytes)
+        .expect("f64 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(&[3, 2], DTypeId::F64.into(), 0, &rhs_bytes)
+        .expect("f64 storage is CUDA-admissible");
+    let out = B::matmul::<f32>(&lhs, &rhs).expect("f64 matmul executes");
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype(), DTypeId::F64.descriptor());
+    let got_bytes = out
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*out.buffer.data)
+        .unwrap();
+    let got: Vec<f64> = got_bytes
+        .chunks_exact(8)
+        .map(|c| f64::from_le_bytes(c.try_into().unwrap()))
+        .collect();
+    assert_eq!(got, vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn matmul_refuses_a_mixed_dtype_operand_pair() {
+    // One typed kernel reads both operands, so f32 @ f64 fails on the host
+    // side before any buffer is reinterpreted.
+    let lhs = cuda_f32(&[2, 2], vec![1.0; 4]);
+    let rhs_bytes: Vec<u8> = [1.0f64; 4].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let rhs = crate::cuda::backend::cuda_from_bytes(&[2, 2], DTypeId::F64.into(), 0, &rhs_bytes)
+        .expect("f64 storage is CUDA-admissible");
+    let error = B::matmul::<f32>(&lhs, &rhs).expect_err("f32 @ f64 must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::DTypeMismatch {
+                operation: "matmul",
+                ..
+            }
+        ),
+        "mixed-dtype matmul must fail as a dtype mismatch, got {error:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn matmul_exact_executes_rank_three_by_routing_to_batched_matmul() {
+    // `Tensor::matmul` sends every rank through `MatMulExact`, and the
+    // capability row admits 2..=MAX: before the rank routing fix this
+    // failed inside `matmul`'s unbatched-2D check even though the row
+    // promised rank 3.
+    use incin_core::exec::catalog::NoAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new());
+    let lhs = cuda_f32(&[2, 2, 3], (1..=12).map(|v| v as f32).collect());
+    let rhs = cuda_f32(&[2, 3, 2], (1..=12).map(|v| v as f32).collect());
+    let lhs_handle = TensorHandle::from_storage::<B, f32, _>(&lhs);
+    let rhs_handle = TensorHandle::from_storage::<B, f32, _>(&rhs);
+    let out =
+        dispatch::execute::<op::MatMulExact, _>(&context, NoAttributes, &[lhs_handle, rhs_handle])
+            .expect("a rank-3 MatMulExact must reach batched_matmul, not the unbatched-2D refusal");
+    assert_eq!(out.shape, vec![2, 2, 2]);
+    // batch 0: [[1,2,3],[4,5,6]] @ [[1,2],[3,4],[5,6]] = [[22,28],[49,64]]
+    // batch 1: [[7,8,9],[10,11,12]] @ [[7,8],[9,10],[11,12]] = [[220,244],[301,334]]
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![22.0, 28.0, 49.0, 64.0, 220.0, 244.0, 301.0, 334.0]
+    );
+}

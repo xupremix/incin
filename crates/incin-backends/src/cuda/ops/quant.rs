@@ -1,15 +1,16 @@
 //! CUDA launchers for Q8_0 quantization kernels.
 //!
-//! `quantize_q8_0`'s kernel reads its input as `const float*`, so only f32
-//! storage may reach it. `launch_quantize_q8_0` refuses anything else loudly
-//! rather than reinterpreting narrower/wider bytes as floats; extending the
-//! kernel to bf16/f16/f64 is future work, not a silent reinterpretation.
+//! Since #106(b) `quantize` accepts every float storage dtype
+//! (`FLOAT_DTYPES`): `quantize_entry_point` picks the typed kernel entry
+//! for the input's dtype, so no buffer is ever reinterpreted as the wrong
+//! type. The capability row already advertised `FLOAT_DTYPES`; the f32-only
+//! `cuda_require_f32` gate that made that row a lie is gone.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::shapes::error::OperationKind;
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 #[cfg(feature = "cuda")]
 const QUANT_SRC: &str = include_str!("kernels/quant.cu");
@@ -23,13 +24,31 @@ fn ensure_quant_loaded(device_id: usize) -> Result<()> {
     Ok(())
 }
 
+/// The quantize entry point for a storage dtype, or a typed refusal for
+/// anything `quant.cu` does not export (`i64`/`bool`/`q8_0`/`u8`/`u32`).
+/// Fail-closed by construction: the launcher launches exactly this name, so
+/// a dtype without an entry can never reach a buffer reinterpreted as the
+/// wrong type.
+#[cfg(feature = "cuda")]
+fn quantize_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok("quantize_q8_0"),
+        Some(DTypeId::F64) => Ok("quantize_q8_0_f64"),
+        Some(DTypeId::F16) => Ok("quantize_q8_0_f16"),
+        Some(DTypeId::BF16) => Ok("quantize_q8_0_bf16"),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op: "quantize",
+        }),
+    }
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
-    // The kernel below reads `const float*`: a bf16/f16 input would hand the
-    // transmute fewer bytes than it asks for (driver panic), an f64 input
-    // would hand it more (first half read as f32, wrong values, no error).
-    // Both become the same typed refusal here.
-    crate::cuda::backend::cuda_require_f32(input.buffer.dtype, "quantize")?;
+    // Selects the entry point and refuses every dtype without one, before
+    // any buffer is reinterpreted (replaces the old f32-only gate).
+    let entry_point = quantize_entry_point(input.buffer.dtype)?;
     let total_numel = input.shape.iter().product::<usize>();
     if total_numel % 32 != 0 {
         return Err(Error::Msg(format!(
@@ -42,7 +61,7 @@ pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
     let device_id = input.buffer.device_id;
     ensure_quant_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("quant", "quantize_q8_0")?;
+    let function = dispatcher.get_function("quant", entry_point)?;
     let stream = input.buffer.device.default_stream();
 
     let mut out_buffer = CudaBuffer {
@@ -68,7 +87,9 @@ pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
         };
         let num_blocks_i32 = crate::cuda::checked_i32(num_blocks, "quantize block count")?;
 
-        // SAFETY: Launches Q8_0 quantize kernel with verified block count and output byte allocation.
+        // SAFETY: Launches the typed Q8_0 quantize kernel with verified block
+        // count and output byte allocation; `quantize_entry_point` above
+        // established that the entry's type really is this buffer's dtype.
         unsafe {
             let out_u8 = Arc::get_mut(&mut out_buffer.data)
                 .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
