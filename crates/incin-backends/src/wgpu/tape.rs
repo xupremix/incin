@@ -273,3 +273,85 @@ fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
     );
     Ok(WgpuStorage::new(out_buf, out_shape))
 }
+
+#[cfg(test)]
+/// `tests`.
+mod tests {
+    use super::*;
+
+    /// `storage`.
+    fn storage(values: &[f32], shape: &[usize]) -> WgpuStorage {
+        let buffer =
+            WgpuBuffer::try_from_slice(values).expect("a WGPU adapter is available for tape tests");
+        WgpuStorage::new(buffer, shape.to_vec())
+    }
+
+    /// `scalar`.
+    fn scalar(v: f32) -> WgpuStorage {
+        storage(&[v], &[])
+    }
+
+    /// `vector`.
+    fn vector(v: &[f32]) -> WgpuStorage {
+        storage(v, &[v.len()])
+    }
+
+    /// `matrix`.
+    fn matrix(v: &[f32], rows: usize, cols: usize) -> WgpuStorage {
+        storage(v, &[rows, cols])
+    }
+
+    /// `read`.
+    fn read(storage: &WgpuStorage) -> Vec<f32> {
+        storage
+            .buffer
+            .to_vec::<f32>()
+            .expect("reading a contiguous f32 buffer back must succeed")
+    }
+
+    // --- unbroadcast tail tests (#121) ---
+
+    #[test]
+    /// `unbroadcast_scalar_seed_is_materialized_to_full_width`.
+    fn unbroadcast_scalar_seed_is_materialized_to_full_width() {
+        // The #121 tail: a reduced-all-the-way scalar seed for a `[3]`
+        // target must be materialized to full width here, because the WGPU
+        // kernels do not broadcast scalars implicitly the way the CPU ones
+        // do -- handing the scalar on produces a shape the next launch
+        // refuses (`iteration_plan: expected [], got [3]`).
+        let grad = scalar(2.0);
+        let result = unbroadcast(&grad, &[3]).expect("a compatible scalar seed expands");
+        assert_eq!(result.shape, vec![3]);
+        assert_eq!(read(&result), vec![2.0, 2.0, 2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_incompatible_shapes_are_refused`.
+    fn unbroadcast_incompatible_shapes_are_refused() {
+        // A grad that no broadcast could have produced for this target must
+        // refuse rather than hand a wrong-shaped gradient on to accumulation
+        // (mirrors the CPU/CUDA refusal tests; see #121).
+        let grad = vector(&[1.0, 2.0, 3.0]);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+        let grad = matrix(&[1.0; 6], 2, 3);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_bias_vector_b_n_to_n`.
+    fn unbroadcast_bias_vector_b_n_to_n() {
+        // The reduction half of unbroadcast, which the tail must not
+        // disturb: grad shape [4,3] (B=4, N=3), summed back to [3].
+        let grad = matrix(
+            &[
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            4,
+            3,
+        );
+        let result = unbroadcast(&grad, &[3]).expect("the bias reduction runs");
+        assert_eq!(result.shape, vec![3]);
+        // Column sums: col0 = 1+4+7+10=22, col1 = 2+5+8+11=26, col2 = 3+6+9+12=30
+        assert_eq!(read(&result), vec![22.0, 26.0, 30.0]);
+    }
+}
