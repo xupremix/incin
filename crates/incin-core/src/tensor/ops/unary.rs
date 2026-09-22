@@ -275,6 +275,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the absolute value of each element in the tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 2.0]).unwrap();
+    /// assert_eq!(t.abs().unwrap().to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn abs(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Abs>,
@@ -284,6 +294,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Rectified Linear Unit (ReLU) function element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 0.0, 2.0]).unwrap();
+    /// assert_eq!(t.relu().unwrap().to_vec1::<f32>().unwrap(), vec![0.0, 0.0, 2.0]);
+    /// ```
     pub fn relu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Relu>,
@@ -293,6 +313,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Gaussian Error Linear Unit (GELU) function element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 2.0]).unwrap();
+    /// let out = t.gelu().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// // GELU(2) = 2 * Phi(2) ~= 1.9545.
+    /// assert!((out[1] - 1.9545).abs() < 1e-3);
+    /// ```
     pub fn gelu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Gelu>,
@@ -301,7 +334,18 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         execute_unary_descriptor::<op::Gelu, S, B, K, G, L>(self)
     }
 
-    /// Applies the Step function element-wise.
+    /// Applies the Step function element-wise: `1.0` where `x > 0.0`, else `0.0`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 0.0, 2.0]).unwrap();
+    /// // Zero maps to 0.0, not 1.0: the comparison is strictly greater-than.
+    /// assert_eq!(t.step().unwrap().to_vec1::<f32>().unwrap(), vec![0.0, 0.0, 1.0]);
+    /// ```
     pub fn step(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Step>,
@@ -311,6 +355,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Mish function element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 2.0]).unwrap();
+    /// let out = t.mish().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// // Mish(2) = 2 * tanh(softplus(2)) ~= 1.9434.
+    /// assert!((out[1] - 1.9434).abs() < 1e-3);
+    /// ```
     pub fn mish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Mish>,
@@ -320,6 +377,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Exponential Linear Unit (ELU) function element-wise with alpha=1.0.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 2.0]).unwrap();
+    /// let out = t.elu().unwrap().to_vec1::<f32>().unwrap();
+    /// // Negative side: exp(-1) - 1 ~= -0.6321; positive side is the identity.
+    /// assert!((out[0] + 0.6321).abs() < 1e-3);
+    /// assert_eq!(out[1], 2.0);
+    /// ```
     pub fn elu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Elu>,
@@ -329,6 +399,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Swish function element-wise (also known as SiLU).
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 1.0]).unwrap();
+    /// let out = t.swish().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// // Swish(1) = sigmoid(1) ~= 0.7311.
+    /// assert!((out[1] - 0.7311).abs() < 1e-3);
+    /// ```
     pub fn swish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Swish>,
@@ -338,6 +421,20 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Softmax function over the specified dimension.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// let probs = t.softmax(0).unwrap().to_vec1::<f32>().unwrap();
+    /// // A probability distribution over the selected axis.
+    /// let sum: f32 = probs.iter().sum();
+    /// assert!((sum - 1.0).abs() < 1e-5);
+    /// assert!(probs[0] < probs[1] && probs[1] < probs[2]);
+    /// ```
     #[inline]
     pub fn softmax<A: ReduceSelector<S>>(
         &self,
@@ -399,6 +496,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Negates the tensor element-wise, returning recoverable execution errors.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 2.0]).unwrap();
+    /// assert_eq!(t.try_neg().unwrap().to_vec1::<f32>().unwrap(), vec![1.0, -2.0]);
+    /// ```
     pub fn try_neg(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Neg>,
@@ -418,6 +525,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the square root of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([4.0f32, 9.0]).unwrap();
+    /// assert_eq!(t.sqrt().unwrap().to_vec1::<f32>().unwrap(), vec![2.0, 3.0]);
+    /// ```
     pub fn sqrt(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Sqrt>,
@@ -427,6 +544,18 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the exponential of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 1.0]).unwrap();
+    /// let out = t.exp().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 1.0);
+    /// assert!((out[1] - core::f32::consts::E).abs() < 1e-5);
+    /// ```
     pub fn exp(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Exp>,
@@ -436,6 +565,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Raises tensor elements to power `exponent`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// assert_eq!(t.powf(2.0).unwrap().to_vec1::<f32>().unwrap(), vec![1.0, 4.0, 9.0]);
+    /// ```
     #[inline]
     pub fn powf(&self, exponent: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
@@ -449,6 +588,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Clamps tensor elements to range `[min, max]`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-2.0f32, 0.5, 5.0]).unwrap();
+    /// assert_eq!(
+    ///     t.clamp(-1.0, 1.0).unwrap().to_vec1::<f32>().unwrap(),
+    ///     vec![-1.0, 0.5, 1.0]
+    /// );
+    /// ```
     #[inline]
     pub fn clamp(&self, min: f64, max: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
@@ -502,6 +654,18 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     );
 
     /// Computes the natural logarithm of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, core::f32::consts::E]).unwrap();
+    /// let out = t.log().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// assert!((out[1] - 1.0).abs() < 1e-5);
+    /// ```
     pub fn log(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Log>,
@@ -511,6 +675,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the hyperbolic tangent of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 0.0, 1.0]).unwrap();
+    /// let out = t.tanh().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[1], 0.0);
+    /// assert!((out[0] + 0.7616).abs() < 1e-3);
+    /// assert!((out[2] - 0.7616).abs() < 1e-3);
+    /// ```
     pub fn tanh(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Tanh>,
@@ -520,6 +697,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the sigmoid of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 1.0]).unwrap();
+    /// let out = t.sigmoid().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.5);
+    /// // sigmoid(1) ~= 0.7311.
+    /// assert!((out[1] - 0.7311).abs() < 1e-3);
+    /// ```
     pub fn sigmoid(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Sigmoid>,
@@ -688,6 +878,23 @@ where
 
 impl<S: Shape, B: Backend, G: RequiresGrad, L: Layout<S>> Tensor<S, B, bool, G, Local, L> {
     /// Logical NOT element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // Bool tensors come from comparisons; there is no bool literal constructor.
+    /// let mask = Cpu.tensor([1.0f32, 0.0, 3.0])
+    ///     .unwrap()
+    ///     .gt(&Cpu.tensor([0.5f32, 0.5, 1.5]).unwrap())
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     mask.logical_not().unwrap().to_vec1::<bool>().unwrap(),
+    ///     vec![false, true, false]
+    /// );
+    /// ```
     pub fn logical_not(
         &self,
     ) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad, Local, RowMajor>>

@@ -34,6 +34,16 @@ where
     L: crate::shapes::FreshDense<S>,
 {
     /// Creates a tensor filled with zeros.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![2, 3], IncinBackend>::zeros(()).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![0.0; 6]);
+    /// ```
     pub fn zeros<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
@@ -61,6 +71,16 @@ where
     }
 
     /// Creates a tensor filled with ones.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![3], IncinBackend>::ones(()).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![1.0, 1.0, 1.0]);
+    /// ```
     pub fn ones<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
@@ -92,6 +112,16 @@ where
     /// Requires a [`PlainDType`]: dtypes with an actual Rust scalar element per
     /// logical value. Block-quantized dtypes (e.g. `Q8_0`) are rejected at
     /// compile time since they have no plain scalar slice representation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![2, 2], IncinBackend>::from_slice(&[1.0f32, 2.0, 3.0, 4.0], ()).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+    /// ```
     pub fn from_slice<A>(data: &[<K as PlainDType>::Elem], args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
@@ -157,6 +187,18 @@ where
     }
 
     /// Creates a tensor filled with random values uniform in [0, 1).
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![8], IncinBackend>::rand(()).unwrap();
+    /// let values = t.to_vec1::<f32>().unwrap();
+    /// assert_eq!(values.len(), 8);
+    /// assert!(values.iter().all(|&v| (0.0..1.0).contains(&v)));
+    /// ```
     pub fn rand<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
@@ -184,6 +226,18 @@ where
     }
 
     /// Creates a tensor filled with standard normal random values.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![8], IncinBackend>::randn(()).unwrap();
+    /// let values = t.to_vec1::<f32>().unwrap();
+    /// assert_eq!(values.len(), 8);
+    /// assert!(values.iter().all(|v| v.is_finite()));
+    /// ```
     pub fn randn<A>(args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
@@ -211,6 +265,16 @@ where
     }
 
     /// Creates a tensor filled with scalar `val`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![3], IncinBackend>::full(0.5, ()).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![0.5, 0.5, 0.5]);
+    /// ```
     pub fn full<Sc: Into<crate::tensor::backend::ScalarValue>, A>(val: Sc, args: A) -> Result<Self>
     where
         A: ArgInto<<(S, K, B::Device, G) as TensorArgs<S, K, B::Device, G>>::Args>,
@@ -240,6 +304,16 @@ where
     }
 
     /// Creates a 1D tensor starting at `start` with step `step`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![4], IncinBackend>::arange(0.0, 1.0, ()).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![0.0, 1.0, 2.0, 3.0]);
+    /// ```
     pub fn arange<Sc: Into<crate::tensor::backend::ScalarValue>, A>(
         start: Sc,
         step: Sc,
@@ -275,6 +349,19 @@ where
     }
 
     /// Creates a 1D tensor with linearly spaced values between `start` and `end`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Tensor::<s![5], IncinBackend>::linspace(0.0, 1.0, ()).unwrap();
+    /// assert_eq!(
+    ///     t.to_vec1::<f32>().unwrap(),
+    ///     vec![0.0, 0.25, 0.5, 0.75, 1.0]
+    /// );
+    /// ```
     pub fn linspace<Sc: Into<crate::tensor::backend::ScalarValue>, A>(
         start: Sc,
         end: Sc,

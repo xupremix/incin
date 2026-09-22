@@ -69,6 +69,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Cast the tensor's elements to another dtype.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// let d = t.to_dtype::<f64>().unwrap();
+    /// assert_eq!(d.to_vec1::<f64>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
     ) -> Result<crate::shapes::Dense<S, B, T2, G, Local>>
@@ -108,6 +119,20 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// rather than reinterpreting an arbitrary stored byte as `bool` via
     /// `read_unaligned`, which would be undefined behavior whenever that
     /// byte isn't `0` or `1`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[7.0f32]]).unwrap(); // one element, any shape
+    /// let v: f32 = t.to_scalar().unwrap();
+    /// assert_eq!(v, 7.0);
+    /// // A multi-element tensor has no single scalar to extract.
+    /// let m = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// assert!(m.to_scalar::<f32>().is_err());
+    /// ```
     pub fn to_scalar<E: Copy + 'static>(&self) -> Result<E>
     where
         B: HostInterop,
@@ -191,6 +216,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// compiler already knows it (`K: PlainDType`), so there is no `TypeId`
     /// parameter to get wrong. The untyped `to_vec1` remains for `Dyn`-dtype
     /// tensors, whose element type is only known at runtime.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let values = t.to_vec_elem().unwrap();
+    /// assert_eq!(values, vec![1.0, 2.0, 3.0, 4.0]);
+    /// ```
     pub fn to_vec_elem(&self) -> Result<alloc::vec::Vec<K::Elem>>
     where
         B: HostInterop,
@@ -200,6 +236,16 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts a 1D vector of scalars from this tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+    /// ```
     pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>>
     where
         B: HostInterop,

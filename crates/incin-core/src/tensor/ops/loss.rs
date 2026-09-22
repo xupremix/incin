@@ -92,7 +92,25 @@ impl<
         self.cross_entropy_loss_with::<Mean, S2, KT, G2, L2>(target)
     }
 
-    /// `cross_entropy_loss_with`.
+    /// `cross_entropy_loss_with` picks the reduction at the type level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let pred = Cpu.zeros(shape![2, 10]).unwrap();
+    /// let target = Cpu.tensor([0i64, 0]).unwrap();
+    /// // `NoneReduction` keeps one loss per example instead of averaging.
+    /// let loss = pred.cross_entropy_loss_with::<NoneReduction, _, _, _, _>(&target).unwrap();
+    /// assert_eq!(loss.dims().dims(), &[2]);
+    /// // Uniform logits give -ln(1/10) per row.
+    /// let vals = loss.to_vec1::<f32>().unwrap();
+    /// let expected = 10.0f32.ln();
+    /// assert!((vals[0] - expected).abs() < 1e-4);
+    /// assert!((vals[1] - expected).abs() < 1e-4);
+    /// ```
     pub fn cross_entropy_loss_with<
         R,
         S2: Shape,
@@ -163,7 +181,20 @@ impl<
         self.mse_loss_with::<Mean, S2, G2, L2>(target)
     }
 
-    /// `mse_loss_with`.
+    /// `mse_loss_with` picks the reduction at the type level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let pred = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// let target = Cpu.zeros(shape![2]).unwrap();
+    /// // Unreduced: one squared error per element, same shape as `pred`.
+    /// let loss = pred.mse_loss_with::<NoneReduction, _, _, _>(&target).unwrap();
+    /// assert_eq!(loss.to_vec1::<f32>().unwrap(), vec![1.0, 4.0]);
+    /// ```
     pub fn mse_loss_with<R, S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
         target: &Tensor<S2, B, K, G2, Local, L2>,
@@ -193,7 +224,20 @@ impl<
         )
     }
 
-    /// `l1_loss`.
+    /// Computes the Mean Absolute Error (L1) loss, reduced to a scalar.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let pred = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// let target = Cpu.tensor([0.0f32, 4.0]).unwrap();
+    /// // (|1 - 0| + |2 - 4|) / 2 = 1.5
+    /// let loss = pred.l1_loss(&target).unwrap();
+    /// assert!((loss.to_scalar::<f32>().unwrap() - 1.5).abs() < 1e-6);
+    /// ```
     pub fn l1_loss<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
         target: &Tensor<S2, B, K, G2, Local, L2>,
@@ -205,7 +249,20 @@ impl<
         self.l1_loss_with::<Mean, S2, G2, L2>(target)
     }
 
-    /// `l1_loss_with`.
+    /// `l1_loss_with` picks the reduction at the type level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let pred = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// let target = Cpu.tensor([0.0f32, 4.0]).unwrap();
+    /// // Unreduced: one absolute error per element.
+    /// let loss = pred.l1_loss_with::<NoneReduction, _, _, _>(&target).unwrap();
+    /// assert_eq!(loss.to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn l1_loss_with<R, S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
         target: &Tensor<S2, B, K, G2, Local, L2>,
@@ -235,7 +292,20 @@ impl<
         )
     }
 
-    /// `bce_with_logits_loss`.
+    /// Computes the binary cross-entropy loss from logits, reduced to a scalar.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let logits = Cpu.zeros(shape![2]).unwrap();
+    /// let target = Cpu.tensor([1.0f32, 0.0]).unwrap();
+    /// // At logit 0 both labels cost ln(2); the mean of two ln(2)s is ln(2).
+    /// let loss = logits.bce_with_logits_loss(&target).unwrap();
+    /// assert!((loss.to_scalar::<f32>().unwrap() - 0.6931472).abs() < 1e-5);
+    /// ```
     pub fn bce_with_logits_loss<S2: Shape, G2: RequiresGrad, L2: crate::shapes::Layout<S2>>(
         &self,
         target: &Tensor<S2, B, K, G2, Local, L2>,
@@ -247,7 +317,23 @@ impl<
         self.bce_with_logits_loss_with::<Mean, S2, G2, L2>(target)
     }
 
-    /// `bce_with_logits_loss_with`.
+    /// `bce_with_logits_loss_with` picks the reduction at the type level.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let logits = Cpu.zeros(shape![2]).unwrap();
+    /// let target = Cpu.tensor([1.0f32, 0.0]).unwrap();
+    /// // Unreduced: one loss per element.
+    /// let loss = logits.bce_with_logits_loss_with::<NoneReduction, _, _, _>(&target).unwrap();
+    /// let vals = loss.to_vec1::<f32>().unwrap();
+    /// assert_eq!(vals.len(), 2);
+    /// assert!((vals[0] - 0.6931472).abs() < 1e-5);
+    /// assert!((vals[1] - 0.6931472).abs() < 1e-5);
+    /// ```
     pub fn bce_with_logits_loss_with<
         R,
         S2: Shape,

@@ -446,6 +446,20 @@ impl<
 
     /// [`Self::logsumexp`] over a static, named, or runtime axis selector,
     /// retaining the reduced axis as size one.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([300.0f32, 300.0, 300.0]).unwrap();
+    /// let kept = t.logsumexp_keepdim(0).unwrap();
+    /// // The axis survives as extent 1 instead of disappearing.
+    /// assert_eq!(kept.dims().dims(), &[1]);
+    /// let total = kept.to_vec1::<f32>().unwrap()[0];
+    /// assert!((total - (300.0 + 3.0f32.ln())).abs() < 1e-2);
+    /// ```
     pub fn logsumexp_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,

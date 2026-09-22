@@ -28,6 +28,18 @@ where
     <B as Execute<op::MaxPool2d>>::Output: Into<B::Storage<K>>,
 {
     /// Functional `max_pool2d` operation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// use incin::typenum::{U0, U1, U2};
+    /// let x = Cpu.ones(shape![1, 1, 4, 4]).unwrap();
+    /// let y = x.max_pool2d::<U2, U2, U0, U1>().unwrap();
+    /// assert_eq!(y.to_vec1::<f32>().unwrap(), vec![1.0; 4]);
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn max_pool2d<KShape, SShape, Pool, Dilation>(
         &self,
@@ -85,6 +97,18 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Rearranges elements in a 4D tensor of shape (N, C, H, W) to (N, C / r^2, H * r, W * r).
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let x = Cpu.ones(shape![1, 4, 2, 2]).unwrap();
+    /// let y = x.pixel_shuffle(2).unwrap();
+    /// assert_eq!(y.dims().dims(), &[1, 1, 4, 4]);
+    /// assert_eq!(y.to_vec1::<f32>().unwrap().len(), 16);
+    /// ```
     pub fn pixel_shuffle(
         &self,
         upscale_factor: usize,
@@ -154,6 +178,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Group normalization across `groups`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // A constant input normalizes to (near) zero in every group.
+    /// let x = Cpu.ones(shape![1, 4, 2, 2]).unwrap();
+    /// let y = x.group_norm(2, 1e-5).unwrap();
+    /// assert_eq!(y.dims().dims(), &[1, 4, 2, 2]);
+    /// assert!(y.to_vec1::<f32>().unwrap().iter().all(|e| e.abs() < 1e-4));
+    /// ```
     pub fn group_norm(
         &self,
         groups: usize,
@@ -188,6 +225,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Instance normalization for 4D (N, C, H, W) tensors.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // A constant input normalizes to (near) zero per channel.
+    /// let x = Cpu.ones(shape![1, 4, 2, 2]).unwrap();
+    /// let y = x.instance_norm(1e-5).unwrap();
+    /// assert_eq!(y.dims().dims(), &[1, 4, 2, 2]);
+    /// assert!(y.to_vec1::<f32>().unwrap().iter().all(|e| e.abs() < 1e-4));
+    /// ```
     pub fn instance_norm(&self, eps: f64) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::InstanceNorm> + Capabilities,

@@ -15,6 +15,22 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 {
     #[inline]
     /// `layer_norm`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let x = Cpu.tensor([[1.0f32, 2.0, 3.0, 4.0]]).unwrap();
+    /// let weight = Cpu.ones(vec![4]).unwrap();
+    /// let bias = Cpu.zeros(vec![4]).unwrap();
+    /// let y = x.layer_norm(&weight, &bias, 1e-5).unwrap();
+    /// assert_eq!(y.dims().dims(), &[1, 4]);
+    /// // Normalized rows have (approximately) zero mean.
+    /// let mean = y.to_vec1::<f32>().unwrap().iter().sum::<f32>() / 4.0;
+    /// assert!(mean.abs() < 1e-4);
+    /// ```
     pub fn layer_norm(
         &self,
         weight: &Tensor<Dyn, B, K, G>,
@@ -52,6 +68,29 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     #[inline]
     /// `batch_norm`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let x = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let weight = Cpu.ones(vec![2]).unwrap();
+    /// let bias = Cpu.zeros(vec![2]).unwrap();
+    /// let running_mean = Cpu.zeros(vec![2]).unwrap();
+    /// let running_var = Cpu.ones(vec![2]).unwrap();
+    /// let y = x
+    ///     .batch_norm(&weight, &bias, &running_mean, &running_var, 1e-5)
+    ///     .unwrap();
+    /// assert_eq!(y.dims().dims(), &[2, 2]);
+    /// // Training mode normalizes each channel's batch mean to (near) zero.
+    /// let v = y.to_vec1::<f32>().unwrap();
+    /// let ch0 = (v[0] + v[2]) / 2.0;
+    /// let ch1 = (v[1] + v[3]) / 2.0;
+    /// assert!(ch0.abs() < 1e-4);
+    /// assert!(ch1.abs() < 1e-4);
+    /// ```
     pub fn batch_norm(
         &self,
         weight: &Tensor<Dyn, B, K, G>,

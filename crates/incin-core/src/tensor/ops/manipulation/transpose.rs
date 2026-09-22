@@ -24,6 +24,21 @@ impl<
 {
     /// Transposes two axis selectors while preserving the strongest available
     /// output shape proof.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let swapped = t.transpose(0isize, 1isize).unwrap();
+    /// assert_eq!(swapped.dims().dims(), &[2, 2]);
+    /// assert_eq!(
+    ///     swapped.to_vec1::<f32>().unwrap(),
+    ///     vec![1.0, 3.0, 2.0, 4.0]
+    /// );
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn transpose<Lx, Rx>(
         &self,
@@ -92,6 +107,19 @@ impl<
     ///
     /// Returns an error when the axes are out of range for the runtime rank, or
     /// when the backend refuses the operation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// use incin::shapes::idx::{Here, Next};
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let viewed = t.transpose_view::<Here, Next<Here>>().unwrap();
+    /// // Same elements with axes 0 and 1 exchanged; no element moved on device.
+    /// assert_eq!(viewed.to_vec1::<f32>().unwrap(), vec![1.0, 3.0, 2.0, 4.0]);
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn transpose_view<Lx, Rx>(&self) -> Result<Tensor<<S as SwapAxes<Lx, Rx>>::Output, B, K, G>>
     where

@@ -210,6 +210,19 @@ impl<
     }
 
     /// Reshapes with one runtime-inferred extent from `shape![..., infer]`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// use incin::shapes::InferShape;
+    /// let t = Cpu.ones(shape![2, 3]).unwrap();
+    /// // The `None` extent is filled from the element count: 6 / 2 = 3.
+    /// let r = t.reshape_infer(InferShape::<Dyn>::new(vec![Some(2), None])).unwrap();
+    /// assert_eq!(r.dims().dims(), &[2, 3]);
+    /// ```
     pub fn reshape_infer<S2>(
         &self,
         spec: crate::shapes::InferShape<S2>,
@@ -406,6 +419,17 @@ impl<
     }
 
     /// Broadcast the tensor to the specific shape `S2`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0, 3.0]]).unwrap(); // [1, 3]
+    /// let b = t.broadcast_to::<s![2, 3]>(Default::default()).unwrap();
+    /// assert_eq!(b.dims().dims(), &[2, 3]);
+    /// ```
     pub fn broadcast_to<S2: Shape + DynShape>(
         &self,
         args: S2::Arg,
@@ -462,6 +486,20 @@ impl<
     }
 
     /// Expands the tensor to target shape `S2`.
+    ///
+    /// [`expand`](Self::expand) is the alias NumPy users reach for; it shares
+    /// [`broadcast_to`](Self::broadcast_to)'s implementation and bounds.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0, 3.0]]).unwrap(); // [1, 3]
+    /// let e = t.expand::<s![2, 3]>(Default::default()).unwrap();
+    /// assert_eq!(e.dims().dims(), &[2, 3]);
+    /// ```
     pub fn expand<S2: Shape + DynShape>(&self, args: S2::Arg) -> Result<Tensor<S2, B, K, G, P>>
     where
         S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
@@ -483,6 +521,18 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// The associated output shape is kept in the public signature so the
     /// selector remains visible to type-level callers. Clippy cannot express
     /// that intent without reporting the signature as a complex type.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.ones(shape![2, 3, 4]).unwrap();
+    /// // Inclusive axis range: axes 0..=1 collapse to 2 * 3 = 6.
+    /// let f = t.flatten(axis!(0), axis!(1)).unwrap();
+    /// assert_eq!(f.dims().dims(), &[6, 4]);
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn flatten<A, BSel>(
         &self,
@@ -698,6 +748,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Inserts a 1-sized dimension at the selected axis.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// assert_eq!(t.unsqueeze(0isize).unwrap().dims().dims(), &[1, 3]);
+    /// assert_eq!(t.unsqueeze(1isize).unwrap().dims().dims(), &[3, 1]);
+    /// ```
     pub fn unsqueeze<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Output, B, K, G, Local>>
     where
         A: UnsqueezeSelector<S>,
