@@ -380,9 +380,25 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             false,
         ),
         native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+        // Issue #90 (98df2b6c): `matmul.cu` exports one GEMM entry per float
+        // storage dtype, so the coarse row now matches the exact
+        // `MatMulExact` row (which sits in `declarations`'s `reduction`
+        // group on `FLOAT_DTYPES`) rather than trailing it at `F32_ONLY` -
+        // a coarse row that understates the exact row beside it refuses
+        // reachable work just as a wider one would over-advertise. The
+        // executor's own refusals are narrower than this row in the one
+        // direction a single row cannot state: `launch_matmul` requires
+        // both operands to carry the *same* dtype (a mixed `f16`/`f32`
+        // pair fails `DTypeMismatch` host-side before any kernel launch)
+        // and refuses every dtype without a `matmul.cu` entry
+        // (`i64`/`bool`/`u8`/`u32`/`q8_0`). `dispatch::execute` applies
+        // this one set to every operand in turn, so like `F32_AND_BOOL`
+        // and `INDEX_AND_F32_DTYPES` the row states the union of what the
+        // operands may carry, and the equality/dtype-split it cannot
+        // express is enforced fail-closed inside the executor.
         CapabilityRule::new(
             OperationKind::MatMul,
-            F32_ONLY,
+            FLOAT_DTYPES,
             CONTIGUOUS,
             2,
             usize::MAX,

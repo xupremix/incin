@@ -424,7 +424,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `concat` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | 1+ | yes | native |
 | `reshape` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | any | no | native |
 | `reshape` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
-| `matmul` | `f32` | `contiguous` | 2+ | yes | native |
+| `matmul` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 2+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `where_cond` | `f32`, `bool` | `contiguous` | 0–6 | yes | native |

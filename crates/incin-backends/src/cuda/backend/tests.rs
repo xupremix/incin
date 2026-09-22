@@ -264,6 +264,15 @@ fn matmul_computes_correct_shape_and_values() {
     let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
     let out = B::matmul::<f32>(&lhs, &rhs).unwrap();
     assert_eq!(out.shape, vec![2, 2]);
+    // The values, not just the shape: dispatch (#85) may serve this from
+    // cuBLASLt or fall back to `kernels/matmul.cu`, and both must agree.
+    // These products and sums are small integers, exactly representable in
+    // f32 under any accumulation order, so equality is the right bar.
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![58.0, 64.0, 139.0, 154.0],
+        "the product must be identical whether cuBLASLt or the NVRTC fallback runs"
+    );
 }
 
 #[test]
@@ -284,6 +293,116 @@ fn matmul_backward_produces_gradients_for_both_operands() {
     let grads = crate::cuda::tape::backward(&out).unwrap();
     assert!(grads.get(lhs_id).is_some());
     assert!(grads.get(rhs_id).is_some());
+}
+
+// Issue #85: the cuBLASLt path itself, driven directly. These call
+// `cublaslt::try_launch_matmul` rather than `B::matmul` so a failure names
+// the cuBLASLt path instead of being masked by the NVRTC fallback that
+// `launch_matmul` would take on a plain request.
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_path_computes_the_f32_product() {
+    use crate::cuda::ops::cublaslt::try_launch_matmul;
+
+    let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+    let out = try_launch_matmul(&lhs, &rhs, None, None)
+        .expect("cuBLASLt must answer a canonical f32 request on hardware")
+        .expect("the request fits the #85 dispatch policy");
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![58.0, 64.0, 139.0, 154.0]
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_bias_epilogue_adds_the_bias() {
+    use crate::cuda::ops::cublaslt::try_launch_matmul;
+
+    let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+    let bias = cuda_f32(&[2], vec![10.0, 20.0]);
+    let out = try_launch_matmul(&lhs, &rhs, Some(&bias), None)
+        .expect("the biased request must stay on the cuBLASLt path")
+        .expect("the request fits the #85 dispatch policy");
+    // [58,64;139,154] + [10,20] broadcast down the columns.
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![68.0, 84.0, 149.0, 174.0]
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_bias_relu_epilogue_fuses_the_activation() {
+    use crate::cuda::ops::cublaslt::try_launch_matmul;
+    use cudarc::cublaslt::Activation;
+
+    // [[1,-2],[3,-4]] @ [[5,6],[7,8]] = [[-9,-10],[-13,-14]];
+    // + [20,0] -> [[11,-10],[7,-14]]; relu -> [11,0,7,0].
+    let lhs = cuda_f32(&[2, 2], vec![1.0, -2.0, 3.0, -4.0]);
+    let rhs = cuda_f32(&[2, 2], vec![5.0, 6.0, 7.0, 8.0]);
+    let bias = cuda_f32(&[2], vec![20.0, 0.0]);
+    let out = try_launch_matmul(&lhs, &rhs, Some(&bias), Some(Activation::Relu))
+        .expect("the fused request must stay on the cuBLASLt path")
+        .expect("the request fits the #85 dispatch policy");
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![11.0, 0.0, 7.0, 0.0],
+        "relu must clamp the negatives after the bias is added, in one kernel"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_epilogue_requests_fail_closed_on_a_malformed_bias() {
+    use crate::cuda::ops::cublaslt::try_launch_matmul;
+
+    let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+    let short_bias = cuda_f32(&[3], vec![1.0, 2.0, 3.0]);
+    let error = try_launch_matmul(&lhs, &rhs, Some(&short_bias), None)
+        .expect_err("a bias of the wrong length must be refused, not ignored");
+    assert!(
+        format!("{error}").contains("vector of length 2"),
+        "the refusal must name the required bias length, got: {error}"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_plain_requests_outside_policy_report_not_applicable() {
+    use crate::cuda::ops::cublaslt::try_launch_matmul;
+
+    // Rank 3 is composed by `batched_matmul` and never handed to cuBLASLt
+    // as a batch: the plain request reports "does not apply" so the caller
+    // keeps its existing path.
+    let lhs = cuda_f32(&[2, 2, 3], (1..=12).map(|v| v as f32).collect());
+    let rhs = cuda_f32(&[2, 3, 2], (1..=12).map(|v| v as f32).collect());
+    let out = try_launch_matmul(&lhs, &rhs, None, None).expect("plain requests never fail closed");
+    assert!(out.is_none(), "rank 3 must not fit the cuBLASLt policy");
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_epilogue_requests_on_out_of_policy_operands_fail_closed() {
+    use crate::cuda::ops::cublaslt::try_launch_matmul;
+
+    // An epilogue request that does not fit must error rather than return
+    // `Ok(None)` - `Ok(None)` would invite a caller to fall back to a
+    // kernel that has no epilogue and silently drop the bias.
+    let lhs = cuda_f32(&[2, 2, 3], (1..=12).map(|v| v as f32).collect());
+    let rhs = cuda_f32(&[2, 3, 2], (1..=12).map(|v| v as f32).collect());
+    let bias = cuda_f32(&[2], vec![1.0, 2.0]);
+    let error = try_launch_matmul(&lhs, &rhs, Some(&bias), None)
+        .expect_err("out-of-policy epilogue requests must fail closed");
+    assert!(
+        format!("{error}").contains("dispatch policy"),
+        "the refusal must name the dispatch policy, got: {error}"
+    );
 }
 
 #[test]

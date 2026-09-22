@@ -4,7 +4,10 @@
 //! `cuda/backend/shape_ops.rs` - and, since issue #90, every float storage
 //! dtype the kernel exports an entry point for: `f32`/`f64` accumulate in
 //! their own type, `f16`/`bf16` hold half-precision operands and
-//! accumulate in `f32`.
+//! accumulate in `f32`. Since issue #85, plain `f32` requests are offered
+//! to the cuBLASLt path in `cuda/ops/cublaslt.rs` first, which either
+//! serves them or reports that they do not fit; every other request - and
+//! every cuBLASLt failure - reaches the kernel below unchanged.
 
 use super::alloc_zeroed_bytes;
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
@@ -54,6 +57,16 @@ fn matmul_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
 /// shape check - this function assumes it already holds. Both operands
 /// must carry the same float dtype: one typed kernel reads them both, so a
 /// mixed pair is refused rather than reinterpreted.
+///
+/// Issue #85 dispatch: a plain request that fits
+/// [`crate::cuda::ops::cublaslt`]'s policy is served by cuBLASLt; anything
+/// else - a non-`f32` dtype, a strided or offset view, a zero extent, or
+/// any cuBLASLt failure - falls through to `kernels/matmul.cu` below,
+/// which computes the identical product. The fallback is what keeps the
+/// fast path advisory: no request can regress by cuBLASLt being absent or
+/// refusing a shape, it merely misses the fusion opportunity. This
+/// function carries no epilogue parameters; bias/activation requests reach
+/// `cublaslt::try_launch_matmul` only from its own callers.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
@@ -63,6 +76,13 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             expected: lhs_buf.dtype,
             actual: rhs_buf.dtype,
         });
+    }
+    // Issue #85: canonical f32 products go to cuBLASLt first. The dtype
+    // check above already ran, so a mixed pair never reaches it, and a
+    // non-f32 dtype is refused by `gemm_request_fits` rather than by an
+    // error - `Ok(None)` and `Err` alike fall through to the kernel path.
+    if let Ok(Some(product)) = super::cublaslt::try_launch_matmul(lhs, rhs, None, None) {
+        return Ok(product);
     }
     // Selects the entry point and refuses every dtype without one, before
     // any buffer is reinterpreted.

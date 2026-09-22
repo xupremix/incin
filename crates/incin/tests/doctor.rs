@@ -175,7 +175,7 @@ cpu normalization f32 rank 2 training: native
 cuda pointwise f32 rank 2 inference: native
 cuda pointwise f32 rank 2 training: native
 cuda matmul f32 rank 2 inference: native
-cuda matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matmul)
+cuda matmul f16 rank 2 inference: native
 cuda reduction f32 rank 2 inference: native
 cuda reduction f64 rank 2 inference: native
 cuda conv2d f32 rank 4 training: native
