@@ -824,11 +824,6 @@ mod tests {
         use super::*;
         use alloc::collections::BTreeMap;
         use incin_core::graph::Graph;
-        use incin_core::prelude::OperationKind as PreludeOp;
-
-        // `DTypeId` is already in scope from the parent; alias only what the
-        // graph fixture needs that might collide.
-        use incin_core::prelude::DTypeId;
 
         fn relu_mul_graph() -> (CapturedGraph, ValueId, ValueId, ValueId) {
             let mut graph = Graph::new();
@@ -840,13 +835,13 @@ mod tests {
             graph.mark_input(c);
             graph.mark_output(out);
             graph.add_node(
-                PreludeOp::Relu,
+                OperationKind::Relu,
                 alloc::vec![x],
                 alloc::vec![y],
                 BTreeMap::new(),
             );
             graph.add_node(
-                PreludeOp::Mul,
+                OperationKind::Mul,
                 alloc::vec![y, c],
                 alloc::vec![out],
                 BTreeMap::new(),
@@ -860,13 +855,13 @@ mod tests {
             let (captured, x, c, _y) = relu_mul_graph();
             let group = FusedKernel {
                 source_node_indices: alloc::vec![0, 1],
-                primary_op: PreludeOp::Relu,
+                primary_op: OperationKind::Relu,
             };
             let chain = chain_from_graph(&captured, &group, &SavedTensorSet::new())
                 .expect("proven group should lower");
             assert_eq!(chain.steps.len(), 2);
-            assert_eq!(chain.steps[0].op, PreludeOp::Relu);
-            assert_eq!(chain.steps[1].op, PreludeOp::Mul);
+            assert_eq!(chain.steps[0].op, OperationKind::Relu);
+            assert_eq!(chain.steps[1].op, OperationKind::Mul);
             assert_eq!(
                 chain.steps[0].inputs,
                 alloc::vec![ChainOperandRef::Boundary(0)]
@@ -890,7 +885,7 @@ mod tests {
             let (captured, _x, _c, y) = relu_mul_graph();
             let group = FusedKernel {
                 source_node_indices: alloc::vec![0, 1],
-                primary_op: PreludeOp::Relu,
+                primary_op: OperationKind::Relu,
             };
             let mut saved = SavedTensorSet::new();
             saved.save(y);
@@ -910,13 +905,13 @@ mod tests {
             graph.mark_input(b);
             graph.mark_output(out);
             graph.add_node(
-                PreludeOp::MatMul,
+                OperationKind::MatMul,
                 alloc::vec![a, b],
                 alloc::vec![y],
                 BTreeMap::new(),
             );
             graph.add_node(
-                PreludeOp::Relu,
+                OperationKind::Relu,
                 alloc::vec![y],
                 alloc::vec![out],
                 BTreeMap::new(),
@@ -924,7 +919,7 @@ mod tests {
             let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
             let group = FusedKernel {
                 source_node_indices: alloc::vec![0, 1],
-                primary_op: PreludeOp::MatMul,
+                primary_op: OperationKind::MatMul,
             };
             let err = chain_from_graph(&captured, &group, &SavedTensorSet::new())
                 .expect_err("matmul must not enter a pointwise chain");
