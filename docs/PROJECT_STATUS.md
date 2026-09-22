@@ -54,6 +54,33 @@ claim that every named test has run on the reader's current checkout.
 - Quantized operations are backend-authoring functionality, not a stable
   `Tensor` method surface, and training through them is not claimed.
 
+## Hardware runs
+
+`.github/workflows/hardware.yml` is the scheduled hardware matrix: it runs
+every Monday at 05:00 UTC and on `workflow_dispatch` with a `job` input
+(`all`, `cuda`, `wgpu`, `metal`, `dist2-network`, `multinode`). The `select`
+job resolves which suites have a registered runner, and each hardware job
+that executes uploads its own artifact named `hardware-<job>-<attempt>`
+holding a dated result record (`result-<job>.md`: UTC timestamp, run id and
+attempt, requested suite, runner OS/arch, runner-variable state, job
+conclusion) plus the suite log. A dated execution claim cites the run id,
+the job, and that artifact; a job that was skipped uploads nothing, because
+it executed nothing.
+
+Runner labels come from the `HARDWARE_CUDA_RUNNER` and
+`HARDWARE_WGPU_RUNNER` repository variables. Both were unset as of
+2026-09-22 (check with `gh api repos/xupremix/incin/actions/variables`), so
+the `cuda`, `wgpu-native`, `dist2-network`, and `multinode` jobs conclude
+*skipped* - they never queue on a label no runner carries - and the final
+`Hardware Coverage Conclusion` job fails the run with the coverage verdict
+*skipped, not success* rather than letting it read as a pass. Registering a
+self-hosted runner and setting those two variables is repository-settings
+work outside this tree; until that happens there is no dated CUDA,
+native-WGPU, or multi-rank execution run to name here, and this file does
+not claim one. The suites that do run on GitHub-hosted hardware every
+schedule - `wgpu-software` (lavapipe) and `metal` (Apple Silicon) - publish
+their artifacts whether they pass or fail.
+
 ## Validation vocabulary
 
 - **Verified** means the named command ran successfully on the current tree.

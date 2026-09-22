@@ -13,6 +13,16 @@
 # resolves runner availability from the `HARDWARE_CUDA_RUNNER` and
 # `HARDWARE_WGPU_RUNNER` repository variables first, and states what it skipped
 # and why.
+#
+# Two follow-ons keep a skip from reading as a pass. Each hardware job that
+# executes uploads its own `hardware-<job>-<attempt>` artifact: a dated result
+# record plus the suite log, so a capability claim cites a run instead of a
+# configuration. The final `conclusion` job then fails the run whenever a
+# requested suite was skipped for want of a runner variable: GitHub cannot
+# give a run whose other jobs executed a `skipped` or `neutral` conclusion,
+# so the coverage verdict ("skipped, not success") is carried by that job's
+# annotation and step summary, and a green run always means the suites in it
+# really ran.
 name: Hardware Matrix
 
 on:
@@ -51,6 +61,8 @@ jobs:
       metal_runner: ${{ steps.resolve.outputs.metal_runner }}
       dist2_network: ${{ steps.resolve.outputs.dist2_network }}
       multinode: ${{ steps.resolve.outputs.multinode }}
+      coverage_skipped: ${{ steps.resolve.outputs.coverage_skipped }}
+      skipped_jobs: ${{ steps.resolve.outputs.skipped_jobs }}
     steps:
       - name: Resolve requested jobs against registered runners
         id: resolve
@@ -88,12 +100,18 @@ jobs:
 
           # A runner variable holds a JSON array of labels, e.g.
           # ["self-hosted","linux","cuda"]. Unset means no such runner is
-          # registered, which is the repository's current state.
+          # registered, which is the repository's current state. Every suite
+          # disabled below is recorded in skipped_jobs, because a run that
+          # skipped a requested suite must conclude "skipped, not success"
+          # rather than green; the conclusion job turns that list into the
+          # run-level verdict.
+          skipped_jobs=""
           if [ -z "${CUDA_RUNNER:-}" ]; then
             if [ "$REQUESTED" = "cuda" ] || [ "$REQUESTED" = "dist2-network" ] || [ "$REQUESTED" = "multinode" ]; then
               echo "::error::job=$REQUESTED was requested but the HARDWARE_CUDA_RUNNER variable is unset, so no GPU runner is registered"
               exit 1
             fi
+            if [ "$cuda" = "true" ]; then skipped_jobs="cuda"; fi
             cuda=false
             # The collective jobs inherit the CUDA runner: without one they
             # would schedule onto the GPU-less ubuntu-latest fallback and run
@@ -102,13 +120,19 @@ jobs:
             if [ "$dist2_network" = "true" ] || [ "$multinode" = "true" ]; then
               echo "::warning::CUDA collective jobs skipped alongside the CUDA hardware job: HARDWARE_CUDA_RUNNER is unset, so there is no GPU and no second rank to run them on"
             fi
+            if [ "$dist2_network" = "true" ]; then skipped_jobs="$skipped_jobs${skipped_jobs:+, }dist2-network"; fi
+            if [ "$multinode" = "true" ]; then skipped_jobs="$skipped_jobs${skipped_jobs:+, }multinode"; fi
             dist2_network=false
             multinode=false
           fi
           if [ -z "${WGPU_RUNNER:-}" ]; then
+            if [ "$wgpu_native" = "true" ]; then skipped_jobs="$skipped_jobs${skipped_jobs:+, }wgpu-native"; fi
             wgpu_native=false
             echo "::notice::WGPU native-adapter job skipped: HARDWARE_WGPU_RUNNER is unset. The software-adapter job still runs."
           fi
+
+          coverage_skipped=false
+          if [ -n "$skipped_jobs" ]; then coverage_skipped=true; fi
 
           {
             echo "cuda=$cuda"
@@ -120,6 +144,8 @@ jobs:
             echo "metal_runner=${METAL_RUNNER:-[\"macos-latest\"]}"
             echo "dist2_network=$dist2_network"
             echo "multinode=$multinode"
+            echo "coverage_skipped=$coverage_skipped"
+            echo "skipped_jobs=$skipped_jobs"
           } >> "$GITHUB_OUTPUT"
 
       - name: Summarize what this run covers
@@ -162,13 +188,15 @@ jobs:
               --format=csv,noheader
             nvcc --version | tail -2
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a hardware-cuda.log >> "$GITHUB_STEP_SUMMARY"
 
       # `cargo test` runs the suite that passes anywhere; the `--ignored` run is
       # the one this workflow exists for. Both are recorded so a device-specific
       # failure is distinguishable from a general one.
       - name: CUDA suite, default tests
-        run: cargo test -p incin-backends --no-default-features --features std,cpu,cuda
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --no-default-features --features std,cpu,cuda 2>&1 | tee -a hardware-cuda.log
 
       - name: CUDA suite, hardware tests
         run: |
@@ -187,7 +215,44 @@ jobs:
           cargo run -q -p xtask -- hardware-tests hardware.log
 
       - name: Storage metadata against real device pointers
-        run: cargo test -p incin-backends --features cuda --test tensor_meta -- --ignored
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --features cuda --test tensor_meta -- --ignored 2>&1 | tee -a hardware-cuda.log
+
+      # The artifact is the citable per-job execution result: a dated record
+      # (what ran, where, with which runner variable, and how it concluded)
+      # plus every suite log. if: always() so a red suite still publishes
+      # what failed. hardware.log stays the ignored-suite log the xtask gate
+      # counts; hardware-cuda.log carries the environment record and the two
+      # surrounding suites.
+      - name: Record CUDA job result
+        if: always()
+        env:
+          REQUESTED_SUITE: ${{ github.event.inputs.job || 'all' }}
+          CUDA_RUNNER_STATE: ${{ vars.HARDWARE_CUDA_RUNNER && 'set' || 'unset' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# CUDA hardware suite result"
+            echo ""
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Run: ${{ github.run_id }}, attempt ${{ github.run_attempt }} (${{ github.event_name }})"
+            echo "- Requested suite: $REQUESTED_SUITE"
+            echo "- Runner: ${{ runner.os }}-${{ runner.arch }}"
+            echo "- HARDWARE_CUDA_RUNNER: $CUDA_RUNNER_STATE"
+            echo "- Conclusion: ${{ job.status }}"
+          } > result-cuda.md
+
+      - name: Upload CUDA hardware results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            result-cuda.md
+            hardware-cuda.log
+            hardware.log
+          if-no-files-found: warn
 
   wgpu-software:
     name: WGPU Software Adapter
@@ -213,10 +278,38 @@ jobs:
             echo '```'
             vulkaninfo --summary 2>/dev/null | head -40 || echo "vulkaninfo unavailable"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a hardware-wgpu-software.log >> "$GITHUB_STEP_SUMMARY"
 
       - name: WGPU suite with CPU parity
-        run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu 2>&1 | tee -a hardware-wgpu-software.log
+
+      - name: Record WGPU software adapter job result
+        if: always()
+        env:
+          REQUESTED_SUITE: ${{ github.event.inputs.job || 'all' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# WGPU software adapter result (lavapipe)"
+            echo ""
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Run: ${{ github.run_id }}, attempt ${{ github.run_attempt }} (${{ github.event_name }})"
+            echo "- Requested suite: $REQUESTED_SUITE"
+            echo "- Runner: ${{ runner.os }}-${{ runner.arch }} (GitHub-hosted, software adapter)"
+            echo "- Conclusion: ${{ job.status }}"
+          } > result-wgpu-software.md
+
+      - name: Upload WGPU software adapter results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            result-wgpu-software.md
+            hardware-wgpu-software.log
+          if-no-files-found: warn
 
   wgpu-native:
     name: WGPU Native Adapter
@@ -237,13 +330,45 @@ jobs:
             echo '```'
             vulkaninfo --summary 2>/dev/null | head -40 || echo "vulkaninfo unavailable"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a hardware-wgpu-native.log >> "$GITHUB_STEP_SUMMARY"
 
       - name: WGPU suite with CPU parity
-        run: cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --all-targets --no-default-features --features std,cpu,wgpu 2>&1 | tee -a hardware-wgpu-native.log
 
       - name: WGPU hardware tests
-        run: cargo test -p incin-backends --no-default-features --features std,cpu,wgpu -- --ignored
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --no-default-features --features std,cpu,wgpu -- --ignored 2>&1 | tee -a hardware-wgpu-native.log
+
+      - name: Record WGPU native adapter job result
+        if: always()
+        env:
+          REQUESTED_SUITE: ${{ github.event.inputs.job || 'all' }}
+          WGPU_RUNNER_STATE: ${{ vars.HARDWARE_WGPU_RUNNER && 'set' || 'unset' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# WGPU native adapter result"
+            echo ""
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Run: ${{ github.run_id }}, attempt ${{ github.run_attempt }} (${{ github.event_name }})"
+            echo "- Requested suite: $REQUESTED_SUITE"
+            echo "- Runner: ${{ runner.os }}-${{ runner.arch }}"
+            echo "- HARDWARE_WGPU_RUNNER: $WGPU_RUNNER_STATE"
+            echo "- Conclusion: ${{ job.status }}"
+          } > result-wgpu-native.md
+
+      - name: Upload WGPU native adapter results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            result-wgpu-native.md
+            hardware-wgpu-native.log
+          if-no-files-found: warn
 
   metal:
     name: Metal Hardware Suite (Apple Silicon)
@@ -265,13 +390,43 @@ jobs:
             echo '```'
             system_profiler SPDisplaysDataType || echo "system_profiler unavailable"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a hardware-metal.log >> "$GITHUB_STEP_SUMMARY"
 
       - name: Metal backend suite
-        run: cargo test -p incin-backends --no-default-features --features std,cpu,metal,metal-mps,autotune
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --no-default-features --features std,cpu,metal,metal-mps,autotune 2>&1 | tee -a hardware-metal.log
 
       - name: Metal autotuning integration tests
-        run: cargo test -p incin-backends --features metal,metal-mps,autotune --test metal_tuning
+        run: |
+          set -euo pipefail
+          cargo test -p incin-backends --features metal,metal-mps,autotune --test metal_tuning 2>&1 | tee -a hardware-metal.log
+
+      - name: Record Metal job result
+        if: always()
+        env:
+          REQUESTED_SUITE: ${{ github.event.inputs.job || 'all' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Metal hardware suite result (Apple Silicon)"
+            echo ""
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Run: ${{ github.run_id }}, attempt ${{ github.run_attempt }} (${{ github.event_name }})"
+            echo "- Requested suite: $REQUESTED_SUITE"
+            echo "- Runner: ${{ runner.os }}-${{ runner.arch }} (GitHub-hosted Apple Silicon)"
+            echo "- Conclusion: ${{ job.status }}"
+          } > result-metal.md
+
+      - name: Upload Metal hardware results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            result-metal.md
+            hardware-metal.log
+          if-no-files-found: warn
 
   dist2-network:
     name: Distributed 2-Rank Network Suite (CI-003)
@@ -285,13 +440,47 @@ jobs:
         uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Data Parallel (DP2) Networked Training Test
-        run: cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network
+        run: |
+          set -euo pipefail
+          cargo test -p incin --features distributed-nccl,hardware-tests --test dp2_network 2>&1 | tee -a hardware-dist2-network.log
 
       - name: Tensor Parallel (TP2) Networked Linear/Attention Test
-        run: cargo test -p incin --features distributed-nccl,hardware-tests --test tp2_network
+        run: |
+          set -euo pipefail
+          cargo test -p incin --features distributed-nccl,hardware-tests --test tp2_network 2>&1 | tee -a hardware-dist2-network.log
 
       - name: Pipeline Parallel (PP2) Networked Execution Test
-        run: cargo test -p incin --features distributed-nccl,hardware-tests --test pp2_network
+        run: |
+          set -euo pipefail
+          cargo test -p incin --features distributed-nccl,hardware-tests --test pp2_network 2>&1 | tee -a hardware-dist2-network.log
+
+      - name: Record distributed 2-rank job result
+        if: always()
+        env:
+          REQUESTED_SUITE: ${{ github.event.inputs.job || 'all' }}
+          CUDA_RUNNER_STATE: ${{ vars.HARDWARE_CUDA_RUNNER && 'set' || 'unset' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Distributed 2-rank network suite result (CI-003)"
+            echo ""
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Run: ${{ github.run_id }}, attempt ${{ github.run_attempt }} (${{ github.event_name }})"
+            echo "- Requested suite: $REQUESTED_SUITE"
+            echo "- Runner: ${{ runner.os }}-${{ runner.arch }}"
+            echo "- HARDWARE_CUDA_RUNNER: $CUDA_RUNNER_STATE"
+            echo "- Conclusion: ${{ job.status }}"
+          } > result-dist2-network.md
+
+      - name: Upload distributed 2-rank results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            result-dist2-network.md
+            hardware-dist2-network.log
+          if-no-files-found: warn
 
   multinode:
     name: Multi-Node & Rendezvous Suite (CI-004)
@@ -305,7 +494,105 @@ jobs:
         uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Multi-Process Rendezvous & Shutdown Test
-        run: cargo test -p incin --features distributed-nccl --test rendezvous
+        run: |
+          set -euo pipefail
+          cargo test -p incin --features distributed-nccl --test rendezvous 2>&1 | tee -a hardware-multinode.log
 
       - name: Global Checkpoint Manifest & Reshard Load Test
-        run: cargo test -p incin-core --test checkpoint_reshard
+        run: |
+          set -euo pipefail
+          cargo test -p incin-core --test checkpoint_reshard 2>&1 | tee -a hardware-multinode.log
+
+      - name: Record multinode job result
+        if: always()
+        env:
+          REQUESTED_SUITE: ${{ github.event.inputs.job || 'all' }}
+          CUDA_RUNNER_STATE: ${{ vars.HARDWARE_CUDA_RUNNER && 'set' || 'unset' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Multi-node and rendezvous suite result (CI-004)"
+            echo ""
+            echo "- Date (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Run: ${{ github.run_id }}, attempt ${{ github.run_attempt }} (${{ github.event_name }})"
+            echo "- Requested suite: $REQUESTED_SUITE"
+            echo "- Runner: ${{ runner.os }}-${{ runner.arch }}"
+            echo "- HARDWARE_CUDA_RUNNER: $CUDA_RUNNER_STATE"
+            echo "- Conclusion: ${{ job.status }}"
+          } > result-multinode.md
+
+      - name: Upload multinode results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hardware-${{ github.job }}-${{ github.run_attempt }}
+          path: |
+            result-multinode.md
+            hardware-multinode.log
+          if-no-files-found: warn
+
+  # The run-level verdict. GitHub only offers success/failure/cancelled/skipped
+  # as run conclusions, and a run where select, wgpu-software, and metal really
+  # executed cannot conclude "skipped" no matter what the CUDA half did; the
+  # removed exit-78 neutral path no longer exists either. So when a requested
+  # suite was skipped for want of a HARDWARE_*_RUNNER variable this job fails,
+  # and its annotation and step summary carry the coverage verdict verbatim:
+  # skipped, not success. Needs every hardware job so the verdict sees the
+  # whole matrix, and runs on a GitHub-hosted label so it can never queue on
+  # the self-hosted runners it is judging.
+  conclusion:
+    name: Hardware Coverage Conclusion
+    needs:
+      - select
+      - cuda
+      - wgpu-software
+      - wgpu-native
+      - metal
+      - dist2-network
+      - multinode
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conclude hardware coverage
+        id: conclude
+        env:
+          SELECT_RESULT: ${{ needs.select.result }}
+          COVERAGE_SKIPPED: ${{ needs.select.outputs.coverage_skipped }}
+          SKIPPED_JOBS: ${{ needs.select.outputs.skipped_jobs }}
+          CUDA_RUNNER_STATE: ${{ vars.HARDWARE_CUDA_RUNNER && 'set' || 'unset' }}
+          WGPU_RUNNER_STATE: ${{ vars.HARDWARE_WGPU_RUNNER && 'set' || 'unset' }}
+        run: |
+          set -euo pipefail
+
+          # Fail closed: a resolver that did not finish has made no coverage
+          # decision, and "no decision" must not read as a pass either.
+          if [ "$SELECT_RESULT" != "success" ] || [ -z "$COVERAGE_SKIPPED" ]; then
+            {
+              echo "## Hardware coverage conclusion"
+              echo ""
+              echo "**Coverage conclusion: unknown** - the resolver did not complete (select: ${SELECT_RESULT:-missing}), so this run cannot be read as a pass."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Hardware coverage unknown::the select job produced no coverage decision (result: ${SELECT_RESULT:-missing}); failing closed so an unresolved run cannot read as success"
+            exit 1
+          fi
+
+          if [ "$COVERAGE_SKIPPED" = "true" ]; then
+            {
+              echo "## Hardware coverage conclusion"
+              echo ""
+              echo "**Coverage conclusion: skipped** - ${SKIPPED_JOBS} did not run because a HARDWARE_*_RUNNER variable is unset. A skipped suite must not read as a pass: this run fails rather than reporting success."
+              echo ""
+              echo "| Runner variable | State |"
+              echo "|---|---|"
+              echo "| HARDWARE_CUDA_RUNNER | ${CUDA_RUNNER_STATE} |"
+              echo "| HARDWARE_WGPU_RUNNER | ${WGPU_RUNNER_STATE} |"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Hardware coverage skipped::${SKIPPED_JOBS} did not run because a HARDWARE_*_RUNNER variable is unset (HARDWARE_CUDA_RUNNER=${CUDA_RUNNER_STATE}, HARDWARE_WGPU_RUNNER=${WGPU_RUNNER_STATE}). A skipped suite must not read as a pass: this run fails rather than reporting success."
+            exit 1
+          fi
+
+          {
+            echo "## Hardware coverage conclusion"
+            echo ""
+            echo "**Coverage conclusion: complete** - every requested hardware suite ran; each executed job published its dated hardware artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
