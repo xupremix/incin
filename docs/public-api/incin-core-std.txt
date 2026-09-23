@@ -281,6 +281,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Gather
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Gelu
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::GroupNorm
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::GroupedMatMul
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::IndexSelect
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::InstanceNorm
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::L1Loss
@@ -318,6 +319,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::MulScalar
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Narrow
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Neg
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::NonZero
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Norm
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::NormalRandom
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::OneHot
@@ -462,6 +464,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Ful
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Gather
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Gelu
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::GroupNorm
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::GroupedMatMul
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::IndexSelect
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::InstanceNorm
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::L1Loss
@@ -499,6 +502,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Mul
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::MulScalar
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Narrow
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Neg
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::NonZero
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Norm
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::NormalRandom
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::OneHot
@@ -1441,6 +1445,7 @@ impl<S: incin_core::nn::rnn::RnnShape, BiasIh: incin_core::nn::optional::Optiona
 impl<S: incin_core::nn::rnn::RnnShape, BiasIh: incin_core::nn::optional::OptionalField, BiasHh: incin_core::nn::optional::OptionalField, Train: incin_core::nn::param::TrainState> incin_core::nn::rnn::RNNCellBuilder<S, BiasIh, BiasHh, Train>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape + incin_core::shapes::RuntimeRankProjection, B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>, G: incin_core::tensor::grad::RequiresGrad, L: incin_core::shapes::layout::Layout<S>> incin_core::nn::module::Module<incin_core::prelude::Tensor<S, B, f32, G, incin_core::dist::placement::Local, L>> for incin_core::nn::activation::Softmax where <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B, K: incin_core::prelude::ConstDType, G: incin_core::tensor::grad::RequiresGrad, L: incin_core::shapes::layout::FreshDense<S>> incin_core::nn::module::Module<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>> for incin_core::nn::dropout::Dropout where B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout> + incin_core::backend_authoring::VariableBackend, <B as incin_core::backend_authoring::StorageBackend>::Device: incin_core::tensor::device::ConstDevice, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, L: incin_core::shapes::layout::Layout<S>> incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L> where B: incin_core::backend_authoring::StorageBackend + incin_core::backend_authoring::Backend
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, L: incin_core::shapes::layout::Layout<S>> incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Backend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxPool2d>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MaxPool2d>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, L> incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L> where (S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G): incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::backend_authoring::Backend, L: incin_core::shapes::layout::FreshDense<S>
 impl<S: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::exec::capability::Capabilities, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad + incin_core::tensor::grad::GradJoin<G, Output = G>> incin_core::prelude::Tensor<S, B, K, G> where <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MeanAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -3071,6 +3076,8 @@ pub const incin_core::exec::catalog::op::Gelu::ID: incin_core::shapes::Operation
 pub const incin_core::exec::catalog::op::Gelu::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::GroupNorm::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::GroupNorm::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::GroupedMatMul::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::GroupedMatMul::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::IndexSelect::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::IndexSelect::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::InstanceNorm::ID: incin_core::shapes::OperationKind
@@ -3145,6 +3152,8 @@ pub const incin_core::exec::catalog::op::Narrow::ID: incin_core::shapes::Operati
 pub const incin_core::exec::catalog::op::Narrow::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Neg::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Neg::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::NonZero::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::NonZero::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Norm::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Norm::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::NormalRandom::ID: incin_core::shapes::OperationKind
@@ -5884,6 +5893,9 @@ pub fn incin_core::exec::catalog::op::Gelu::infer_outputs(&Self::Attributes, &[i
 pub fn incin_core::exec::catalog::op::GroupNorm::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::GroupNorm::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::GroupNorm::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::GroupedMatMul::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::GroupedMatMul::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::GroupedMatMul::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::IndexSelect::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::IndexSelect::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::IndexSelect::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -5995,6 +6007,9 @@ pub fn incin_core::exec::catalog::op::Narrow::infer_outputs(&Self::Attributes, &
 pub fn incin_core::exec::catalog::op::Neg::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Neg::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Neg::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::NonZero::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::NonZero::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::NonZero::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Norm::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Norm::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Norm::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -7540,6 +7555,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::gelu(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::get<I: incin_core::tensor::ops::index::IndexArgs>(&self, I) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::group_norm(&self, usize, f64) -> incin_core::error::Result<incin_core::shapes::layout::Dense<S, B, K, G, incin_core::dist::placement::Local>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::GroupNorm> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::GroupNorm>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::grouped_matmul<S2: incin_core::shapes::Shape + incin_core::shapes::DynShape, S3: incin_core::shapes::Shape + incin_core::shapes::DynShape, G2: incin_core::tensor::grad::RequiresGrad, G3: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout<S2>, L3: incin_core::shapes::layout::Layout<S3>>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>, &incin_core::prelude::Tensor<S3, B, i64, G3, incin_core::dist::placement::Local, L3>) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::GroupedMatMul> + incin_core::exec::capability::Capabilities + core::default::Default, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::GroupedMatMul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::index_select<A, S2: incin_core::shapes::Shape, KInt: incin_core::prelude::DType, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout<S2>>(&self, A, &incin_core::prelude::Tensor<S2, B, KInt, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::shapes::layout::Dense<<A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output, B, K, G, incin_core::dist::placement::Local>> where A: incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::ReplaceAxisSelector>::Output: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::IndexSelect> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::IndexSelect>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::instance_norm(&self, f64) -> incin_core::error::Result<incin_core::shapes::layout::Dense<S, B, K, G, incin_core::dist::placement::Local>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::InstanceNorm> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::InstanceNorm>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::l1_loss<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout<S2>>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<incin_core::shapes::Nil, B, K, G>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::L1Loss> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::L1Loss>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7563,6 +7579,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mul(self, i32) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mul(self, i64) -> Self::Output
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::mul_scalar<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>>(&self, Sc) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::nonzero(&self) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Dyn, B, i64, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::NonZero> + incin_core::exec::capability::Capabilities + core::default::Default, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::NonZero>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::norm(&self, f64) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Nil, B, K, G, incin_core::dist::placement::Local>> where G: incin_core::tensor::grad::GradJoin<G, Output = G>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Abs>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sqrt>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumAll>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Powf>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::one_hot<const N: usize>(&self) -> incin_core::error::Result<incin_core::shapes::layout::Dense<<S as incin_core::shapes::AppendDim<incin_core::shapes::ConstDim<N>>>::Output, B, bool, incin_core::tensor::grad::NoGrad, incin_core::dist::placement::Local>> where S: incin_core::shapes::AppendDim<incin_core::shapes::ConstDim<N>>, <S as incin_core::shapes::AppendDim<incin_core::shapes::ConstDim<N>>>::Output: incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::OneHot> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::OneHot>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::ones<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7612,7 +7629,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::unfold(&self, usize, usize, usize) -> incin_core::error::Result<incin_core::shapes::layout::Dense<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>> where B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Unfold>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Unfold>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::unsqueeze<A>(&self, A) -> incin_core::error::Result<incin_core::shapes::layout::Dense<<A as incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector>::Output, B, K, G, incin_core::dist::placement::Local>> where A: incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector<S>, <A as incin_core::tensor::ops::manipulation::selectors::UnsqueezeSelector>::Output: incin_core::shapes::DynShape, B: incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::zeros<A>(A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Zeros> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Zeros>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
-pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose<Lx, Rx>(&self, Lx, Rx) -> incin_core::error::Result<incin_core::prelude::Tensor<<() as incin_core::tensor::ops::manipulation::selectors::AxisPairSelector<S, Lx, Rx>>::Output, B, K, G>> where (): incin_core::tensor::ops::manipulation::selectors::AxisPairSelector<S, Lx, Rx>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose<Lx, Rx>(&self, Lx, Rx) -> incin_core::error::Result<incin_core::prelude::Tensor<<() as incin_core::tensor::ops::manipulation::selectors::AxisPairSelector<S, Lx, Rx>>::Output, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where (): incin_core::tensor::ops::manipulation::selectors::AxisPairSelector<S, Lx, Rx>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose_structural<Lx, Rx>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::SwapAxes<Lx, Rx>>::Output, B, K, G>> where Lx: incin_core::shapes::StaticCursor, Rx: incin_core::shapes::StaticCursor, S: incin_core::shapes::SwapAxes<Lx, Rx>, <S as incin_core::shapes::SwapAxes<Lx, Rx>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, TLayout>::transpose_view<Lx, Rx>(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<<S as incin_core::shapes::SwapAxes<Lx, Rx>>::Output, B, K, G>> where Lx: incin_core::shapes::StaticCursor, Rx: incin_core::shapes::StaticCursor, S: incin_core::shapes::SwapAxes<Lx, Rx>, <S as incin_core::shapes::SwapAxes<Lx, Rx>>::Output: incin_core::shapes::Shape + incin_core::shapes::DynShape, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeView> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeView>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G1, incin_core::dist::placement::Local, L1>::abs_diff<S2: incin_core::shapes::Shape, G2: incin_core::tensor::grad::RequiresGrad, L2: incin_core::shapes::layout::Layout<S2>>(&self, &incin_core::prelude::Tensor<S2, B, K, G2, incin_core::dist::placement::Local, L2>) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, incin_core::tensor::grad::JoinedGrad<G1, G2>, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where S: incin_core::tensor::ops::index::ShapeEq<S2>, G1: incin_core::tensor::grad::GradJoin<G2>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::AbsDiff>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -10506,6 +10523,7 @@ pub incin_core::prelude::OperationKind::Full
 pub incin_core::prelude::OperationKind::Gather
 pub incin_core::prelude::OperationKind::Gelu
 pub incin_core::prelude::OperationKind::GroupNorm
+pub incin_core::prelude::OperationKind::GroupedMatMul
 pub incin_core::prelude::OperationKind::IndexSelect
 pub incin_core::prelude::OperationKind::InstanceNorm
 pub incin_core::prelude::OperationKind::L1Loss
@@ -10544,6 +10562,7 @@ pub incin_core::prelude::OperationKind::Mul
 pub incin_core::prelude::OperationKind::MulScalar
 pub incin_core::prelude::OperationKind::Narrow
 pub incin_core::prelude::OperationKind::Neg
+pub incin_core::prelude::OperationKind::NonZero
 pub incin_core::prelude::OperationKind::Norm
 pub incin_core::prelude::OperationKind::NormalRandom
 pub incin_core::prelude::OperationKind::Normalization
@@ -10871,6 +10890,7 @@ pub incin_core::shapes::OperationKind::Full
 pub incin_core::shapes::OperationKind::Gather
 pub incin_core::shapes::OperationKind::Gelu
 pub incin_core::shapes::OperationKind::GroupNorm
+pub incin_core::shapes::OperationKind::GroupedMatMul
 pub incin_core::shapes::OperationKind::IndexSelect
 pub incin_core::shapes::OperationKind::InstanceNorm
 pub incin_core::shapes::OperationKind::L1Loss
@@ -10909,6 +10929,7 @@ pub incin_core::shapes::OperationKind::Mul
 pub incin_core::shapes::OperationKind::MulScalar
 pub incin_core::shapes::OperationKind::Narrow
 pub incin_core::shapes::OperationKind::Neg
+pub incin_core::shapes::OperationKind::NonZero
 pub incin_core::shapes::OperationKind::Norm
 pub incin_core::shapes::OperationKind::NormalRandom
 pub incin_core::shapes::OperationKind::Normalization
@@ -11137,6 +11158,7 @@ pub incin_core::shapes::error::OperationKind::Full
 pub incin_core::shapes::error::OperationKind::Gather
 pub incin_core::shapes::error::OperationKind::Gelu
 pub incin_core::shapes::error::OperationKind::GroupNorm
+pub incin_core::shapes::error::OperationKind::GroupedMatMul
 pub incin_core::shapes::error::OperationKind::IndexSelect
 pub incin_core::shapes::error::OperationKind::InstanceNorm
 pub incin_core::shapes::error::OperationKind::L1Loss
@@ -11175,6 +11197,7 @@ pub incin_core::shapes::error::OperationKind::Mul
 pub incin_core::shapes::error::OperationKind::MulScalar
 pub incin_core::shapes::error::OperationKind::Narrow
 pub incin_core::shapes::error::OperationKind::Neg
+pub incin_core::shapes::error::OperationKind::NonZero
 pub incin_core::shapes::error::OperationKind::Norm
 pub incin_core::shapes::error::OperationKind::NormalRandom
 pub incin_core::shapes::error::OperationKind::Normalization
@@ -11397,6 +11420,7 @@ pub incin_core::shapes::prelude::OperationKind::Full
 pub incin_core::shapes::prelude::OperationKind::Gather
 pub incin_core::shapes::prelude::OperationKind::Gelu
 pub incin_core::shapes::prelude::OperationKind::GroupNorm
+pub incin_core::shapes::prelude::OperationKind::GroupedMatMul
 pub incin_core::shapes::prelude::OperationKind::IndexSelect
 pub incin_core::shapes::prelude::OperationKind::InstanceNorm
 pub incin_core::shapes::prelude::OperationKind::L1Loss
@@ -11435,6 +11459,7 @@ pub incin_core::shapes::prelude::OperationKind::Mul
 pub incin_core::shapes::prelude::OperationKind::MulScalar
 pub incin_core::shapes::prelude::OperationKind::Narrow
 pub incin_core::shapes::prelude::OperationKind::Neg
+pub incin_core::shapes::prelude::OperationKind::NonZero
 pub incin_core::shapes::prelude::OperationKind::Norm
 pub incin_core::shapes::prelude::OperationKind::NormalRandom
 pub incin_core::shapes::prelude::OperationKind::Normalization
@@ -11784,6 +11809,7 @@ pub mod incin_core::tensor::ops::manipulation::concat
 pub mod incin_core::tensor::ops::manipulation::indexing
 pub mod incin_core::tensor::ops::manipulation::interop
 pub mod incin_core::tensor::ops::manipulation::reshape
+pub mod incin_core::tensor::ops::manipulation::routing
 pub mod incin_core::tensor::ops::manipulation::selectors
 pub mod incin_core::tensor::ops::manipulation::transfer
 pub mod incin_core::tensor::ops::manipulation::transpose
@@ -11895,6 +11921,7 @@ pub struct incin_core::backend_authoring::op::Full
 pub struct incin_core::backend_authoring::op::Gather
 pub struct incin_core::backend_authoring::op::Gelu
 pub struct incin_core::backend_authoring::op::GroupNorm
+pub struct incin_core::backend_authoring::op::GroupedMatMul
 pub struct incin_core::backend_authoring::op::IndexSelect
 pub struct incin_core::backend_authoring::op::InstanceNorm
 pub struct incin_core::backend_authoring::op::L1Loss
@@ -11932,6 +11959,7 @@ pub struct incin_core::backend_authoring::op::Mul
 pub struct incin_core::backend_authoring::op::MulScalar
 pub struct incin_core::backend_authoring::op::Narrow
 pub struct incin_core::backend_authoring::op::Neg
+pub struct incin_core::backend_authoring::op::NonZero
 pub struct incin_core::backend_authoring::op::Norm
 pub struct incin_core::backend_authoring::op::NormalRandom
 pub struct incin_core::backend_authoring::op::OneHot
@@ -12129,6 +12157,7 @@ pub struct incin_core::backend_authoring::operations::op::Full
 pub struct incin_core::backend_authoring::operations::op::Gather
 pub struct incin_core::backend_authoring::operations::op::Gelu
 pub struct incin_core::backend_authoring::operations::op::GroupNorm
+pub struct incin_core::backend_authoring::operations::op::GroupedMatMul
 pub struct incin_core::backend_authoring::operations::op::IndexSelect
 pub struct incin_core::backend_authoring::operations::op::InstanceNorm
 pub struct incin_core::backend_authoring::operations::op::L1Loss
@@ -12166,6 +12195,7 @@ pub struct incin_core::backend_authoring::operations::op::Mul
 pub struct incin_core::backend_authoring::operations::op::MulScalar
 pub struct incin_core::backend_authoring::operations::op::Narrow
 pub struct incin_core::backend_authoring::operations::op::Neg
+pub struct incin_core::backend_authoring::operations::op::NonZero
 pub struct incin_core::backend_authoring::operations::op::Norm
 pub struct incin_core::backend_authoring::operations::op::NormalRandom
 pub struct incin_core::backend_authoring::operations::op::OneHot
@@ -12420,6 +12450,7 @@ pub struct incin_core::exec::catalog::op::Full
 pub struct incin_core::exec::catalog::op::Gather
 pub struct incin_core::exec::catalog::op::Gelu
 pub struct incin_core::exec::catalog::op::GroupNorm
+pub struct incin_core::exec::catalog::op::GroupedMatMul
 pub struct incin_core::exec::catalog::op::IndexSelect
 pub struct incin_core::exec::catalog::op::InstanceNorm
 pub struct incin_core::exec::catalog::op::L1Loss
@@ -12457,6 +12488,7 @@ pub struct incin_core::exec::catalog::op::Mul
 pub struct incin_core::exec::catalog::op::MulScalar
 pub struct incin_core::exec::catalog::op::Narrow
 pub struct incin_core::exec::catalog::op::Neg
+pub struct incin_core::exec::catalog::op::NonZero
 pub struct incin_core::exec::catalog::op::Norm
 pub struct incin_core::exec::catalog::op::NormalRandom
 pub struct incin_core::exec::catalog::op::OneHot
@@ -12606,6 +12638,7 @@ pub struct incin_core::exec::op::Full
 pub struct incin_core::exec::op::Gather
 pub struct incin_core::exec::op::Gelu
 pub struct incin_core::exec::op::GroupNorm
+pub struct incin_core::exec::op::GroupedMatMul
 pub struct incin_core::exec::op::IndexSelect
 pub struct incin_core::exec::op::InstanceNorm
 pub struct incin_core::exec::op::L1Loss
@@ -12643,6 +12676,7 @@ pub struct incin_core::exec::op::Mul
 pub struct incin_core::exec::op::MulScalar
 pub struct incin_core::exec::op::Narrow
 pub struct incin_core::exec::op::Neg
+pub struct incin_core::exec::op::NonZero
 pub struct incin_core::exec::op::Norm
 pub struct incin_core::exec::op::NormalRandom
 pub struct incin_core::exec::op::OneHot
@@ -13866,6 +13900,7 @@ pub type incin_core::exec::catalog::op::Full::Attributes = incin_core::exec::cat
 pub type incin_core::exec::catalog::op::Gather::Attributes = incin_core::exec::catalog::AxisAttributes
 pub type incin_core::exec::catalog::op::Gelu::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::GroupNorm::Attributes = incin_core::exec::catalog::GroupNormAttributes
+pub type incin_core::exec::catalog::op::GroupedMatMul::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::IndexSelect::Attributes = incin_core::exec::catalog::AxisAttributes
 pub type incin_core::exec::catalog::op::InstanceNorm::Attributes = incin_core::exec::catalog::EpsilonAttributes
 pub type incin_core::exec::catalog::op::L1Loss::Attributes = incin_core::exec::catalog::LossAttributes
@@ -13903,6 +13938,7 @@ pub type incin_core::exec::catalog::op::Mul::Attributes = incin_core::exec::cata
 pub type incin_core::exec::catalog::op::MulScalar::Attributes = incin_core::exec::catalog::ScalarAttributes
 pub type incin_core::exec::catalog::op::Narrow::Attributes = incin_core::exec::catalog::NarrowAttributes
 pub type incin_core::exec::catalog::op::Neg::Attributes = incin_core::exec::catalog::NoAttributes
+pub type incin_core::exec::catalog::op::NonZero::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Norm::Attributes = incin_core::exec::catalog::NormAttributes
 pub type incin_core::exec::catalog::op::NormalRandom::Attributes = incin_core::exec::catalog::CreationAttributes
 pub type incin_core::exec::catalog::op::OneHot::Attributes = incin_core::exec::catalog::OneHotAttributes
