@@ -10,6 +10,71 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **FSDP/ZeRO sharded execution for the automatic `Trainer` (#99).**
+  `TrainerBuilder::sharding(ShardingSpec::Fsdp { stage })` makes `fit`
+  and `fit_scaled` lower ZeRO-2 to a reduce-scatter of gradients and
+  ZeRO-1 to all-reduce-then-mask, step, and all-gather parameters back
+  into a full replica - through `with_fsdp_synchronizer`, refused before
+  the first batch if absent or world-mismatched
+  (`TrainError::FsdpUnavailable`). `incin_core::dist::sync` gains the
+  `FsdpSynchronizer` trait, `reduce_scatter_model_gradients`,
+  `mask_gradients_to_owned_shard`, `all_gather_model_parameters`, and the
+  `ShardedGradients` report whose byte accessors measure the `1/N`-vs-`N`
+  fanout the stage exists for. Proven on CPU: scripted two-rank
+  arithmetic, divisibility/rank refusals before the offending collective,
+  ZeRO-1/ZeRO-2 buffer equivalence, and a two-rank ZeRO-2 trajectory equal
+  to the single-device full-batch reference. ZeRO-3 is refused at build
+  (`TrainError::UnsupportedShardingStage`); TP/PP execution and NCCL
+  transport remain the documented hardware-gated gaps.
+
+- **Mixture-of-experts typing for the facade (#102).** `incin::nn::Router`
+  and `incin::nn::MoE` are typed modules: a bias-free top-k gate over `E`
+  experts and a fixed expert array visited as `experts.N.*`. The reference
+  forward is the dense masked path from the #102 research note — one-hot
+  assignments scaled into per-expert weight columns — so no token is
+  silently dropped. Capacity-factor drop and the aux load-balancing loss
+  remain deferred gaps; `Routing::expert_offsets` exposes the exclusive
+  `[E + 1]` scan without host interop. Array trait impls
+  (`VisitState`/`NamedLayers`/`ComputeStats`/…) let `MoE` participate in
+  state round-trips and summaries like any other module.
+
+- **Data-parallel gradient synchronization for the automatic `Trainer`
+  (#97).** `incin::experimental::training` gains a `GradientSynchronizer`
+  seam (`with_synchronizer`) that mean-reduces model gradients after every
+  `backward()` and before the optimizer step. `SingleRankSynchronizer` is
+  the bit-identical identity for single-device runs; multi-device plans
+  without a synchronizer still fail closed with
+  `TrainError::CollectivesUnavailable`, and a synchronizer whose
+  world/device/rank disagree with the plan fail with
+  `TrainError::SynchronizerMismatch`. Aggregation math and a two-rank
+  protocol exchange are proven on CPU; real multi-rank transport remains
+  gated on the unset `HARDWARE_CUDA_RUNNER` (issue #82).
+
+- **Metal Batch-A pointwise executors and attention-block ops (#92).**
+  Host-side `Execute` coverage for the full unary/scalar/clamp/`atan2`/
+  `fmod`/`remainder` set, plus `softmax`, `log_softmax`, `layer_norm`,
+  `rms_norm`, and the layout family (`transpose`, `narrow`, `slice`,
+  `concat`, `stack`, `squeeze`, `unsqueeze`), `tril`/`triu`,
+  CUDA-matching `dropout`, `linear`, and `scaled_dot_product_attention`.
+  Each row is advertised only with a working executor;
+  `BatchNorm`/`GroupNorm` stay unadvertised because no Metal kernel backs
+  them. Dispatch-level tests in `metal_attention_ops` pin the coverage on
+  Linux (the Metal feature compiles and runs host-side methods without a
+  macOS runtime).
+
+- **Cross-attention completes the attention modules (#101).**
+  `incin::nn::CrossAttention` composes the same four projections over two
+  inputs: queries from one `[batch, seq, d_model]` sequence, keys and values
+  from another, with `forward` taking the tuple `(query, memory)` and both
+  sequence lengths free to differ. The head invariants are compile-time
+  (`const { assert! }` inside `build`, exactly as in `MultiHeadAttention`);
+  with `AttentionConfig::causal` the mask is rectangular — query row `i`
+  sees memory columns `0 ..= i`. Fixed memory is projected once by
+  `prefill_memory` into a caller-owned `KvCache` and then read (never
+  appended to) by `forward_with_cache(step, query_pos, &cache)`, a `NoGrad`
+  decode step whose rotary positions and causal diagonal both continue from
+  `query_pos`.
+
 - **Typed KV cache and fused-attention path for incremental decode (#104).**
   `incin::nn::KvCache` is a preallocated `[batch, kv_heads, capacity,
   head_dim]` buffer (static rank-4 shape; `Dyn` is rejected at construction)
@@ -231,6 +296,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   so `Cpu.zeros(shape![2, 3])` is a tier S call.
 
 ### Fixed
+
+- **`Dyn × Dyn` matmul broadcasts its batch dims (#91).** The frontend
+  shape rule took `lhs[..len-1]` and appended `n`, dropping `rhs`'s batch
+  entirely, while the structural impl and the catalog's `OutputRule::MatMul`
+  both right-aligned-broadcast. `[1,3,4] x [5,4,6]` therefore computed a
+  frontend `[1,3,6]` against the catalog's `[5,3,6]` and failed
+  `MatMulRule::agree` with an equality error on axis 0. The Dyn path now
+  uses the same `broadcast_dim_slices` as the structural path; a size-1
+  batch still does not unwrap, and unequal non-1 batches still refuse.
 
 - **Every public type carrying an attribute was missing from the API site's
   type index.** `build-api-site-data.py` matched declarations with a pattern

@@ -16,9 +16,11 @@
 //! | [`AvgPool2d`] | 2D Average Pooling |
 //! | [`Embedding`] | Embedding lookup table |
 //! | [`MultiHeadAttention`] | Multi-head / grouped-query attention with rotary positions (issue #101) |
+//! | [`CrossAttention`] | Attention over two sequences: queries from one, keys/values from another (issue #101) |
 //! | [`FeedForward`] | Position-wise feed-forward block, including gated SwiGLU |
 //! | [`TransformerEncoderLayer`] | Bidirectional self-attention + feed-forward with residuals and norms |
 //! | [`TransformerDecoderLayer`] | Causal (masked) self-attention + feed-forward with residuals and norms |
+//! | [`MoE`] | Sparse mixture of experts with soft top-k routing (issue #102) |
 //!
 //! ## Activations
 //!
@@ -95,6 +97,8 @@ pub mod lstm;
 pub mod max_pool2d;
 /// `module`.
 pub mod module;
+/// Typed sparse mixture-of-experts routing (issue #102).
+pub mod moe;
 /// `optional`.
 pub mod optional;
 /// `param`.
@@ -119,7 +123,8 @@ pub mod transformer;
 pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
 pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
 pub use attention::{
-    AttentionBackend, AttentionConfig, MultiHeadAttention, PositionEncoding, RotaryBackend,
+    AttentionBackend, AttentionConfig, CrossAttention, MultiHeadAttention, PositionEncoding,
+    RotaryBackend,
 };
 pub use avg_pool2d::AvgPool2d;
 pub use batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
@@ -148,6 +153,7 @@ pub use module::{
     VisitParameters, assign_sequential_names, clean_type_name, format_layer_summary,
     format_layer_summary_with_stats, update_node_name_prefix,
 };
+pub use moe::{FreezeExpert, MoE, MoEBackend, Router, RouterBackend, Routing, UnfreezeExpert};
 pub use optional::{False, OptionalField, True};
 pub use param::{Buffer, Frozen, Param, TrainState, Trainable};
 pub use rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm};

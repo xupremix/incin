@@ -23,10 +23,6 @@ of repeating a number that won't.
   runs in CI, so the CUDA training path remains a declared capability
   awaiting evidence (issues #82 and #83), and verified training in this
   book's [Building models](./building_models.md) chapter is CPU-only.
-- **No cross-attention layer.** The encoder and decoder layers attend to
-  their own input only. A layer that also attends to an encoder's output
-  takes two tensors, and `Module` is parameterized by one input, so that is
-  a separate module rather than a configuration of the existing one.
 - **Attention still has no online-softmax/flash kernel.** Evaluation and
   zero-dropout inference route through the catalog's composed
   `scaled_dot_product_attention` row (a single descriptor dispatch; the CPU
@@ -70,13 +66,25 @@ of repeating a number that won't.
   build on these: they are slated to become crate-private. Use the descriptor
   path described in [The target API and canonical
   dispatch](./target_api.md).
-- **Distributed training** (`FSDP`, tensor/pipeline parallelism) has a
-  complete planning layer behind the `distributed` feature but no execution
-  path yet, a design surface, not a training feature to reach for.
+- **Distributed training** has one executed tier and the rest is planning.
+  FSDP/ZeRO-1 and ZeRO-2 lower onto the trainer's synchronizer seam (#99),
+  proven on CPU against scripted peers; ZeRO-3 (parameter sharding),
+  tensor-parallel execution (waiting on partitioned matmul, #85/#90), and
+  pipeline-parallel schedule execution are planning surfaces only. No
+  NCCL-wired synchronizer ships (`HARDWARE_CUDA_RUNNER` unset, #82), the
+  host-side collectives round-trip every tensor, optimizer state stays
+  full-size per rank (owned-slice authority, not `1/N` memory), and global
+  gradient clipping is unsupported while gradients are masked.
 - **The automatic `Trainer`** (`incin::experimental::training`, `train`
-  feature) has a real single-device training loop (`fit`), but explicitly
-  refuses a multi-device plan (`TrainError::CollectivesUnavailable`) rather
-  than doing something wrong.
+  feature) has a real single-device training loop (`fit`), a
+  `GradientSynchronizer` seam for data-parallel mean-reduction (#97), and
+  an FSDP sharding seam for ZeRO-1/ZeRO-2 execution (#99). Single-rank
+  aggregation and the sharded walks are proven on CPU; multi-device plans
+  still refuse to run without the matching synchronizer
+  (`TrainError::CollectivesUnavailable` / `TrainError::FsdpUnavailable`),
+  and real multi-rank transport remains gated on the unset
+  `HARDWARE_CUDA_RUNNER` (#82). `Trainer::fit` does not shard its input
+  data: pair it with `incin-data`'s `DistributedSampler` (#98) yourself.
 - **Compiled execution** is only the CPU reference evaluator under
   `incin::experimental::compiled`. It has no stable facade contract, optimized
   backend, deployment target, or portable artifact ABI; its serialized plan

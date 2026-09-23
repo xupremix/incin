@@ -382,8 +382,16 @@ pub mod experimental {
     #[cfg(feature = "train")]
     /// Preview training planner and trainer.
     pub mod training {
+        #[cfg(feature = "distributed")]
+        pub use crate::train::ShardingSpec;
         pub use crate::train::{
-            Decision, FitOutcome, HostMachine, Machine, Plan, TrainError, Trainer, TrainerBuilder,
+            Decision, FitOutcome, HostMachine, Machine, Plan, SingleRankSynchronizer, TrainError,
+            Trainer, TrainerBuilder,
+        };
+        pub use incin_core::dist::sync::{
+            FsdpSynchronizer, GradientSynchronizer, ShardedGradients, SyncError,
+            all_gather_model_parameters, all_reduce_model_gradients, mask_gradients_to_owned_shard,
+            reduce_scatter_model_gradients,
         };
 
         /// Preview training-plan report renderer.
@@ -470,13 +478,14 @@ pub mod nn {
     pub use incin_core::nn::{
         AdaptiveAvgPool2d, AttentionBackend, AttentionConfig, AttentionDirection, AvgPool2d,
         BCEWithLogitsLoss, BatchNorm2d, BatchNormShape, Bidirectional, Buffer, Causal,
-        ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossEntropyLoss, Dropout, ELU,
-        Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend, FeedForwardKind,
-        Flatten, GELU, GRU, GRUCell, GruShape, Init, KvCache, L1Loss, LSTM, LSTMCell, LayerNode,
-        LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d,
-        Mish, ModelStats, Module, MultiHeadAttention, NamedLayers, NormPlacement, OptionalField,
-        Param, ParameterVisitor, PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU,
-        RnnShape, RotaryBackend, Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState,
+        ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossAttention, CrossEntropyLoss,
+        Dropout, ELU, Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend,
+        FeedForwardKind, Flatten, GELU, GRU, GRUCell, GruShape, Init, KvCache, L1Loss, LSTM,
+        LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
+        MSELoss, MaxPool2d, Mish, MoE, MoEBackend, ModelStats, Module, MultiHeadAttention,
+        NamedLayers, NormPlacement, OptionalField, Param, ParameterVisitor, PositionEncoding,
+        RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape, RotaryBackend, Router, RouterBackend,
+        Routing, Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState,
         TransformerBackend, TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer,
         TransformerLayer, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding,
         format_layer_summary, format_layer_summary_with_stats, gru, gru_cell, layer_norm, linear,
@@ -827,7 +836,7 @@ pub mod prelude {
 
     pub use incin_core::nn::{
         activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
-        attention::{AttentionConfig, MultiHeadAttention, PositionEncoding},
+        attention::{AttentionConfig, CrossAttention, MultiHeadAttention, PositionEncoding},
         avg_pool2d::AvgPool2d,
         dropout::Dropout,
         feed_forward::{FeedForward, FeedForwardKind},
@@ -840,6 +849,7 @@ pub mod prelude {
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
         module::{Sequential, TrainMode},
+        moe::{FreezeExpert, MoE, MoEBackend, Router, RouterBackend, Routing, UnfreezeExpert},
         rms_norm::RMSNorm,
         transformer::{
             AttentionDirection, Bidirectional, Causal, NormPlacement, TransformerConfig,
