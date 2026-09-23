@@ -4,12 +4,21 @@ pub mod backend;
 /// Capability registration for the Metal backend.
 pub mod capability;
 pub mod executor;
+/// Structural shape ops: transpose, narrow/slice, concat/stack, and the
+/// squeeze/unsqueeze axis views (#92), with host-side walks and tape recipes.
+pub mod layout;
+/// Matmul-family compositions: `linear` and `scaled_dot_product_attention`
+/// (#92), rewritten into taped Metal primitives in CPU's/WGPU's order.
+pub mod linalg;
 /// MPS and MPSGraph structured candidates with explicit native fallback.
 ///
 /// Enabled by the `metal-mps` Cargo feature. On non-Apple-Silicon hosts the
 /// module is always compiled (so tests are reachable) but every candidate
 /// resolves to the `Native` path because [`MPS_AVAILABLE`](mps::MPS_AVAILABLE) is `false`.
 pub mod mps;
+/// Normalization family: softmax/log_softmax, layer_norm, rms_norm, and the
+/// `max_keepdim` the stable softmax recipe needs (#92).
+pub mod normalization;
 /// Elementwise unaries, scalars, clamp, and the three binary pointwise ops
 /// (#92 Batch A), with their tape recipes and host-side parity tests.
 pub mod pointwise;

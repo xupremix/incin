@@ -63,7 +63,7 @@ run time.
 | `cmp_le` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
-| `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — |
+| `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `conv1d` | `f32` | `f32` | — | — |
 | `conv2d` | `f32` | `f32` | `f32` | — |
 | `conv_transpose2d` | `f32` | `f32` | — | — |
@@ -77,7 +77,7 @@ run time.
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `div_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `dot` | `f32` | `f32` | `f32` | — |
-| `dropout` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `dropout` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `elu` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `embedding` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | — | — |
 | `erf` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -98,14 +98,14 @@ run time.
 | `int_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `int_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `l1_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
-| `layer_norm` | `f32` | `f32` | `f32` | — |
+| `layer_norm` | `f32` | `f32` | `f32` | `f32` |
 | `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
-| `linear` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `linear` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `linspace` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `log` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `log10` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `log2` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `log_softmax` | `f32` | `f32` | `f32` | — |
+| `log_softmax` | `f32` | `f32` | `f32` | `f32` |
 | `logical_and` | `bool` | `bool` | — | — |
 | `logical_not` | `bool` | `bool` | — | — |
 | `logical_or` | `bool` | `bool` | — | — |
@@ -130,7 +130,7 @@ run time.
 | `mse_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `mul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `mul_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — |
+| `narrow` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `neg` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `nonzero` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — | — |
 | `norm` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
@@ -152,12 +152,12 @@ run time.
 | `repeat_interleave` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
 | `require_grad` | — | — | — | — |
 | `reshape` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `q8_0` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `i64`, `bf16`, `f16`, `f32`, `f64` |
-| `rms_norm` | `f32` | `f32` | `f32` | — |
+| `rms_norm` | `f32` | `f32` | `f32` | `f32` |
 | `rnn` | — | — | — | — |
 | `round` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `rsqrt` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `sample` | — | — | — | — |
-| `scaled_dot_product_attention` | `f32` | `f32` | `f32` | — |
+| `scaled_dot_product_attention` | `f32` | `f32` | `f32` | `f32` |
 | `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `scatter_add` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `u8`, `u32`, `i64`, `f32` | — | — |
 | `sgd_step` | — | — | — | — |
@@ -165,13 +165,13 @@ run time.
 | `sign` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `sin` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `sinh` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
-| `softmax` | `f32` | `f32` | `f32` | — |
+| `slice` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
+| `softmax` | `f32` | `f32` | `f32` | `f32` |
 | `sort` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
 | `split` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
 | `sqrt` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
-| `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
+| `squeeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
+| `stack` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `std_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `std_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `std_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
@@ -190,13 +190,13 @@ run time.
 | `to_device` | — | — | — | — |
 | `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — |
 | `topk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — |
+| `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `transpose_view` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — |
-| `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
-| `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
+| `tril` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
+| `triu` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `trunc` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `unfold` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — | — |
-| `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | — |
+| `unsqueeze` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` | `f32` |
 | `var_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `var_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `var_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
@@ -820,6 +820,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `atan2` | `f32` | `contiguous` | any | yes | native |
 | `fmod` | `f32` | `contiguous` | any | yes | native |
 | `remainder` | `f32` | `contiguous` | any | yes | native |
+| `dropout` | `f32` | `contiguous` | any | yes | native |
 | `broadcast_as` | `f32` | `contiguous` | any | no | native |
 | `reshape` | `i64`, `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
 | `broadcast_as` | `f32` | `contiguous` | any | yes | native |
@@ -849,6 +850,21 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `sum_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
 | `mean_dim` | `f32` | `contiguous` | 1+ | yes | native |
 | `mean_keepdim` | `f32` | `contiguous` | 1+ | yes | native |
+| `softmax` | `f32` | `contiguous` | 1+ | yes | native |
+| `log_softmax` | `f32` | `contiguous` | 1+ | yes | native |
+| `layer_norm` | `f32` | `contiguous` | 1+ | yes | native |
+| `rms_norm` | `f32` | `contiguous` | 1+ | yes | native |
+| `transpose` | `f32` | `contiguous` | 2+ | yes | native |
+| `narrow` | `f32` | `contiguous` | 1+ | yes | native |
+| `concat` | `f32` | `contiguous` | 1+ | yes | native |
+| `tril` | `f32` | `contiguous` | 1–2 | yes | native |
+| `triu` | `f32` | `contiguous` | 1–2 | yes | native |
+| `slice` | `f32` | `contiguous` | any | yes | composed |
+| `stack` | `f32` | `contiguous` | any | yes | composed |
+| `squeeze` | `f32` | `contiguous` | 1+ | yes | composed |
+| `unsqueeze` | `f32` | `contiguous` | any | yes | composed |
+| `scaled_dot_product_attention` | `f32` | `contiguous` | 2+ | yes | composed |
+| `linear` | `f32` | `contiguous` | 1+ | yes | composed |
 
 ## Reading this
 

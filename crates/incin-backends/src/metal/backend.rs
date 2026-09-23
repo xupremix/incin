@@ -500,6 +500,44 @@ pub(super) fn scalar_op_metal(
     unary_op_metal(t, move |x| f(x, s_f32))
 }
 
+/// Wrap host-computed `f32` values in contiguous [`MetalStorage`] that
+/// inherits `like`'s dtype, mode, device and alignment.
+///
+/// The shape ops and the `max` reduction below assemble their results in a
+/// `Vec<f32>` the same way `sum_dim_impl`/`transpose_metal` do, then need one
+/// place that turns those values back into storage without restating the
+/// `TensorMeta::contiguous` → `from_bytes` pairing (whose `numel` argument
+/// must match the value count, a mismatch `from_bytes` would only report as a
+/// byte-span error).
+pub(super) fn storage_from_f32(
+    values: &[f32],
+    shape: &[usize],
+    like: &MetalStorage,
+) -> Result<MetalStorage> {
+    let numel: usize = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Storage)?;
+    if values.len() != numel {
+        return Err(Error::ShapeMismatch {
+            op: "storage_from_f32",
+            expected: vec![numel],
+            got: vec![values.len()],
+            msg: "value count does not match the target shape".into(),
+        });
+    }
+    let meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(shape),
+        like.metadata().dtype(),
+        like.device(),
+        MetalStorage::alignment(),
+        numel,
+    )?;
+    MetalStorage::from_bytes(
+        bytemuck::cast_slice(values).to_vec(),
+        meta,
+        like.mode(),
+        like.device_ordinal(),
+    )
+}
+
 fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalStorage> {
     let dims = t.metadata().shape().dims();
     if axis >= dims.len() {
@@ -680,7 +718,11 @@ fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage
     )
 }
 
-fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<MetalStorage> {
+pub(super) fn transpose_metal(
+    storage: &MetalStorage,
+    dim0: usize,
+    dim1: usize,
+) -> Result<MetalStorage> {
     let dims = storage.metadata().shape().dims();
     if dim0 >= dims.len() || dim1 >= dims.len() {
         return Err(Error::ShapeMismatch {

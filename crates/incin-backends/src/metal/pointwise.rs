@@ -14,7 +14,9 @@ use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::DType;
 
 use super::backend::MetalBackendImpl;
-use super::backend::{binary_op_metal, scalar_op_metal, unary_op_metal, unbroadcast};
+use super::backend::{
+    binary_op_metal, scalar_op_metal, storage_from_f32, unary_op_metal, unbroadcast,
+};
 use super::storage::MetalStorage;
 
 /// Push a single-input `TapeEntry` whose backward maps one cotangent to one
@@ -73,6 +75,57 @@ fn sign_f32(value: f32) -> f32 {
 /// `step(x)` as CPU's `UnaryOp::Step` evaluates it (used by `relu`'s recipe).
 fn step_f32(value: f32) -> f32 {
     if value > 0.0 { 1.0 } else { 0.0 }
+}
+
+// ── Dropout counter hash (#84's reproducible draws) ─────────────────────────
+//
+// Duplicated from `cuda/ops/dropout.rs`: the two backends are separate
+// feature gates, so `cuda` is not compiled under `--features metal` and the
+// helpers cannot be shared from there. The mix, the seed and the advancing
+// flat-index offset are copied value for value so a (seed, index) pair means
+// the same draw on either backend.
+
+/// Module-level seed for every dropout draw on this process.
+///
+/// A fixed constant so tests are deterministic out of the box; the draw
+/// offset below advances past it on every call so consecutive dropouts on
+/// the same seed still see disjoint index ranges.
+static DROPOUT_SEED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0x9E37_79B9_7F4A_7C15);
+
+/// Monotonic flat-index offset advanced by `numel` on every draw.
+static DROPOUT_OFFSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// SplitMix64 finalizer: the mix that turns a (seed, index) pair into a
+/// well-scattered 64-bit value. Kept as a pure function so tests can call it
+/// directly without touching atomics.
+#[must_use]
+fn mix64(mut z: u64) -> u64 {
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+/// Map `(seed, index)` to a uniform `f32` in `[0, 1)`.
+///
+/// Deterministic, pure, and independent of call order: the same pair always
+/// yields the same float. The high 24 bits of the mix are shifted into the
+/// mantissa of a `1.0` bit pattern, then `1.0` is subtracted — the standard
+/// "u32 to unit float" trick that keeps every bit of entropy the hash
+/// produced.
+#[must_use]
+fn hash_uniform(seed: u64, index: u64) -> f32 {
+    let mixed = mix64(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(index));
+    let bits = (mixed >> 40) as u32; // top 24 bits -> mantissa
+    f32::from_bits(0x3F80_0000 | bits) - 1.0
+}
+
+/// Reserve `numel` consecutive counter indices and return
+/// `(seed, start_index)`.
+fn reserve_draw(numel: u64) -> (u64, u64) {
+    let seed = DROPOUT_SEED.load(core::sync::atomic::Ordering::Relaxed);
+    let start = DROPOUT_OFFSET.fetch_add(numel, core::sync::atomic::Ordering::Relaxed);
+    (seed, start)
 }
 
 /// Forward `f`, then record `backward(t, out, grad_out) -> grad`.
@@ -422,6 +475,54 @@ impl<D: Device> MetalBackendImpl<D> {
         let out = binary_op_metal(lhs, rhs, "remainder", |a, b| a.rem_euclid(b))?;
         Self::push_modulus_tape::<K>(lhs, rhs, &out);
         Ok(out)
+    }
+
+    /// `dropout(t, probability, training)`: identity when eval or
+    /// `p <= 0`, zeroed when `p >= 1` (the descriptor only admits
+    /// `[0, 1)`, so the branch is defensive), otherwise a counter-based
+    /// keep-mask scaled by `1 / (1 - p)` — CPU's and CUDA's (#84) recipe,
+    /// with the same `hash_uniform(seed, index)` mix so the draw is
+    /// reproducible from the process seed and a flat index. The mask is
+    /// constant; the tape rides `mul` and `mul_scalar_float`, so the
+    /// gradient multiplies by the same mask. The identity path returns the
+    /// operand itself (same tensor id), so a gradient arriving there needs
+    /// no entry of its own — the clone-links-identity pattern CPU and CUDA
+    /// use.
+    pub(crate) fn dropout<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        probability: f64,
+        training: bool,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if !training || probability <= 0.0 {
+            return Ok(t.clone());
+        }
+        if probability >= 1.0 {
+            return Self::mul_scalar_float::<K>(t, 0.0);
+        }
+        let dims = t.metadata().shape().dims().to_vec();
+        let numel = crate::bytes::checked_numel(&dims)?;
+        let numel_u64 = u64::try_from(numel).map_err(|_| {
+            incin_core::error::Error::Msg("dropout mask element count exceeds u64".into())
+        })?;
+        let (seed, start) = reserve_draw(numel_u64);
+        let p = probability as f32;
+        // `step(draw - p)`: keep when `draw > p`, matching CPU's
+        // `canonical_step` on the shifted draw — materialized directly
+        // rather than through `add_scalar`/`step` because the draws have no
+        // producer on the tape either way, so those two entries would be
+        // dead weight.
+        let mask_data: Vec<f32> = (0..numel_u64)
+            .map(|i| {
+                if hash_uniform(seed, start.wrapping_add(i)) > p {
+                    1.0
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let mask = storage_from_f32(&mask_data, &dims, t)?;
+        let kept = Self::mul::<K>(t, &mask)?;
+        Self::mul_scalar_float::<K>(&kept, 1.0 / (1.0 - probability))
     }
 
     /// Shared `record_modulus` tape entry for `fmod`/`remainder`.
@@ -960,6 +1061,7 @@ mod tests {
         let _ = GradMode::Disabled.scope(|| B::relu::<f32>(&t).unwrap());
         let _ = GradMode::Disabled.scope(|| B::add_scalar_float::<f32>(&t, 1.0).unwrap());
         let _ = GradMode::Disabled.scope(|| B::atan2::<f32>(&t, &t).unwrap());
+        let _ = GradMode::Disabled.scope(|| B::dropout::<f32>(&t, 0.5, true).unwrap());
         assert_eq!(
             crate::metal::tape::depth(),
             before,
@@ -986,5 +1088,99 @@ mod tests {
         let t = vector(&[-2.0, 0.0, 3.0]);
         let (_, grads, _) = recorded(|| B::abs::<f32>(&t).unwrap());
         assert_eq!(read(grads.get(t.id()).unwrap()), vec![-1.0, 0.0, 1.0]);
+    }
+
+    // ── dropout ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn dropout_outside_training_is_the_operand_itself() {
+        let t = vector(&[1.0, -2.0, 3.0, 0.0]);
+        let before = crate::metal::tape::depth();
+        let out = GradMode::Enabled.scope(|| B::dropout::<f32>(&t, 0.5, false).unwrap());
+        assert_eq!(read(&out), read(&t), "eval-mode dropout is the identity");
+        assert_eq!(
+            out.id(),
+            t.id(),
+            "the identity path links the gradient by sharing the operand's id"
+        );
+        assert_eq!(
+            crate::metal::tape::depth(),
+            before,
+            "the identity path pushes no tape entry"
+        );
+
+        // p <= 0 is identity even in training mode.
+        let zero = GradMode::Enabled.scope(|| B::dropout::<f32>(&t, 0.0, true).unwrap());
+        assert_eq!(zero.id(), t.id());
+    }
+
+    #[test]
+    fn dropout_training_zeroes_or_scales_and_the_gradient_carries_the_mask() {
+        let values = [1.0f32, -2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let t = vector(&values);
+        // Count the forward's own entries before `backward` drains them.
+        let before = crate::metal::tape::depth();
+        let out = GradMode::Enabled.scope(|| B::dropout::<f32>(&t, 0.5, true).unwrap());
+        let added = crate::metal::tape::depth() - before;
+        assert!(added >= 2, "mul + mul_scalar_float record (got {added})");
+        let grads = crate::metal::tape::backward(&out).expect("backward walk succeeds");
+
+        let got = read(&out);
+        assert_eq!(got.len(), values.len(), "dropout preserves the shape");
+        let scale = 1.0 / (1.0 - 0.5); // 2.0
+        for (i, (&g, &x)) in got.iter().zip(values.iter()).enumerate() {
+            assert!(
+                g == 0.0 || (g - x * scale).abs() <= 1e-5,
+                "training[{i}]: got {g}, expected 0 or {}",
+                x * scale
+            );
+        }
+
+        // d/dx of `x * mask * scale` is `mask * scale`: 0 where dropped,
+        // the keep reciprocal where kept — the same mask the forward drew.
+        let grad = read(grads.get(t.id()).expect("dropout records an input grad"));
+        for (i, (&gi, &g)) in grad.iter().zip(got.iter()).enumerate() {
+            if g == 0.0 {
+                assert_eq!(gi, 0.0, "dropped element {i} must not receive gradient");
+            } else {
+                assert!(
+                    (gi - scale).abs() <= 1e-5,
+                    "kept element {i}: gradient {gi}, expected {scale}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dropout_p_at_or_above_one_zeroes() {
+        let t = vector(&[1.0, 2.0]);
+        let out = B::dropout::<f32>(&t, 1.0, true).unwrap();
+        assert_close(&read(&out), &[0.0, 0.0], 0.0);
+    }
+
+    #[test]
+    fn dropout_hash_uniform_is_deterministic_and_in_the_unit_interval() {
+        // Pins the #84 counter mix: same pair is the same draw, adjacent
+        // indices differ, and every draw lands in [0, 1).
+        assert_eq!(hash_uniform(7, 123), hash_uniform(7, 123));
+        assert_ne!(hash_uniform(7, 123), hash_uniform(7, 124));
+        assert_ne!(hash_uniform(7, 123), hash_uniform(8, 123));
+        for i in 0..10_000u64 {
+            let v = hash_uniform(42, i);
+            assert!((0.0..1.0).contains(&v), "hash_uniform(42, {i}) = {v}");
+        }
+        assert_ne!(mix64(0), mix64(1), "adjacent inputs must scatter");
+    }
+
+    #[test]
+    fn dropout_draws_advance_so_consecutive_calls_do_not_collide() {
+        let t = vector(&[1.0, 2.0, 3.0, 4.0]);
+        let before = reserve_draw(0).1;
+        let _ = B::dropout::<f32>(&t, 0.5, true).unwrap();
+        let mid = reserve_draw(0).1;
+        assert_eq!(mid, before + 4, "one training draw advances by numel");
+        let _ = B::dropout::<f32>(&t, 0.5, true).unwrap();
+        let end = reserve_draw(0).1;
+        assert_eq!(end, mid + 4, "the second draw starts past the first");
     }
 }

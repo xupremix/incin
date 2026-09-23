@@ -686,10 +686,11 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
         native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
-        // No legacy Normalization row: no Metal kernel backs it. The typed
-        // `normalization = []` list above already advertises none, honestly;
-        // a coarse row here claimed native LayerNorm/BatchNorm support this
-        // backend has never executed.
+        // No legacy Normalization row: no Metal kernel backs the whole
+        // coarse family. The typed rows below cover only what this backend
+        // executes — `softmax`/`log_softmax`/`layer_norm`/`rms_norm` — and a
+        // coarse row here would also claim native BatchNorm/GroupNorm
+        // support this backend has never executed.
         // `broadcast_as` computes through `binary_op_metal`, which reinterprets
         // both operands as `f32`: the wider claim used to bless silent
         // misreads of `f16`/`bf16`/`f64`/`i64` bytes. `reshape` keeps the

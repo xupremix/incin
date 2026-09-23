@@ -384,7 +384,345 @@ impl_metal_reduction_dim![
     (MeanKeepDim, |input, axis| {
         MetalBackendImpl::<D>::mean_keepdim::<f32>(input, axis)
     }),
+    // Not a reduction: `softmax` maps an axis rather than collapsing it.
+    // It rides this macro because its request shape — one operand plus an
+    // axis — is identical, exactly as on WGPU.
+    (Softmax, |input, axis| {
+        MetalBackendImpl::<D>::softmax::<f32>(input, axis)
+    }),
+    // Same request shape, same tape-honest composition.
+    (LogSoftmax, |input, axis| {
+        MetalBackendImpl::<D>::log_softmax::<f32>(input, axis)
+    }),
+    // Also not reductions: both are views that add or drop a unit axis, and
+    // both read the same `axis` attribute the reductions do (WGPU hosts
+    // these two on the same macro for the same reason).
+    (SqueezeExact, |input, axis| {
+        MetalBackendImpl::<D>::squeeze::<f32>(input, axis)
+    }),
+    (UnsqueezeExact, |input, axis| {
+        MetalBackendImpl::<D>::unsqueeze::<f32>(input, axis)
+    }),
 ];
+
+/// `transpose` reads an attribute *pair* rather than a single `axis`, so it
+/// fits neither the axis macro above nor the unary/scalar ones.
+impl<D: Device> Execute<op::TransposeExact> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TransposeExact, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::TransposeExact;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "transpose expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::transpose::<f32>(input, attributes.first, attributes.second)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `narrow` carries a full window triple, so it cannot ride the axis macro.
+impl<D: Device> Execute<op::Narrow> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Narrow, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Narrow;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "narrow expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::narrow::<f32>(
+            input,
+            attributes.axis,
+            attributes.start,
+            attributes.length,
+        )
+        .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `slice` carries one `(start, end)` range per axis.
+impl<D: Device> Execute<op::SliceExact> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::SliceExact, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::SliceExact;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "slice expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let ranges = &request.operation.descriptor().attributes().ranges;
+        MetalBackendImpl::<D>::slice_exact::<f32>(input, ranges)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `concat` is variadic: every operand is downcast, then one host walk
+/// joins them (WGPU's variadic shape, with Metal's error wording).
+impl<D: Device> Execute<op::ConcatExact> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ConcatExact, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::ConcatExact;
+        if request.inputs.is_empty() {
+            return Err(invalid(operation, "concat expects at least 1 input"));
+        }
+        let mut operands = Vec::with_capacity(request.inputs.len());
+        for handle in request.inputs {
+            let storage = handle
+                .downcast_ref::<MetalStorage>()
+                .ok_or_else(|| invalid(operation, "operand is not Metal storage"))?;
+            operands.push(storage);
+        }
+        let axis = request.operation.descriptor().attributes().axis;
+        let refs: Vec<&_> = operands.to_vec();
+        MetalBackendImpl::<D>::concat_exact::<f32>(&refs, axis)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `stack` is variadic over the same request shape as `concat`.
+impl<D: Device> Execute<op::StackExact> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::StackExact, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::StackExact;
+        if request.inputs.is_empty() {
+            return Err(invalid(operation, "stack expects at least 1 input"));
+        }
+        let mut operands = Vec::with_capacity(request.inputs.len());
+        for handle in request.inputs {
+            let storage = handle
+                .downcast_ref::<MetalStorage>()
+                .ok_or_else(|| invalid(operation, "operand is not Metal storage"))?;
+            operands.push(storage);
+        }
+        let axis = request.operation.descriptor().attributes().axis;
+        let refs: Vec<&_> = operands.to_vec();
+        MetalBackendImpl::<D>::stack_exact::<f32>(&refs, axis)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// Two operands and an `epsilon`, so this fits neither the axis macro nor
+/// the canonical binary one. Composed from primitives Metal already
+/// advertises, in the same order as CPU's, CUDA's and WGPU's.
+impl<D: Device> Execute<op::RmsNorm> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RmsNorm, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::RmsNorm;
+        let [input, weight] = request.inputs else {
+            return Err(invalid(operation, "rms norm expects an input and a weight"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let weight = weight
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not Metal storage"))?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        MetalBackendImpl::<D>::rms_norm::<f32>(input, weight, epsilon)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `layer_norm` takes input, weight and an optional bias — arity the axis
+/// macro cannot express. The bias's presence is read from the operand count
+/// (the descriptor has already validated it against `has_bias`).
+impl<D: Device> Execute<op::LayerNorm> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LayerNorm, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::LayerNorm;
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "layer norm expects an input, a weight and an optional bias",
+                ));
+            }
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let weight = weight
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not Metal storage"))?;
+        let bias = bias
+            .map(|bias| {
+                bias.downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "bias is not Metal storage"))
+            })
+            .transpose()?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        MetalBackendImpl::<D>::layer_norm::<f32>(input, weight, bias, epsilon)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `tril`/`triu` read one `i64` diagonal offset, so they fit neither the
+/// axis macro (a `usize` axis) nor the unary one (no attributes). Mirrors
+/// WGPU's `impl_wgpu_triangular!` in arity and attribute read.
+macro_rules! impl_metal_triangular {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "expects exactly 1 input"));
+                };
+                let input = input
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+                let offset = request.operation.descriptor().attributes().offset;
+                MetalBackendImpl::<D>::$method::<f32>(input, offset)
+                    .map_err(|e| kernel_error("Metal", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_metal_triangular![(Tril, tril), (Triu, triu)];
+
+/// `dropout` is one operand plus the `(probability, training)` pair — the
+/// same request shape WGPU's executor answers.
+impl<D: Device> Execute<op::Dropout> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Dropout, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Dropout;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "dropout expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::dropout::<f32>(input, attributes.probability, attributes.training)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `linear`: an input, a weight and an optional bias — the same operand
+/// split LayerNorm above reads from the count, validated against
+/// `has_bias` by the descriptor before execution.
+impl<D: Device> Execute<op::Linear> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Linear, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Linear;
+        let (input, weight, bias) = match request.inputs {
+            [input, weight] => (input, weight, None),
+            [input, weight, bias] => (input, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "linear expects an input, a weight and an optional bias",
+                ));
+            }
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let weight = weight
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not Metal storage"))?;
+        let bias = bias
+            .map(|bias| {
+                bias.downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "bias is not Metal storage"))
+            })
+            .transpose()?;
+        MetalBackendImpl::<D>::linear::<f32>(input, weight, bias)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `scaled_dot_product_attention`: q, k, v and an optional additive mask.
+/// The attribute set says whether a mask is present, so the operand count
+/// and the declared contract have to agree before anything runs — WGPU's
+/// check, verbatim in intent.
+impl<D: Device> Execute<op::ScaledDotProductAttention> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ScaledDotProductAttention, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::ScaledDotProductAttention;
+        let attributes = request.operation.descriptor().attributes();
+        let (q, k, v, mask) = match request.inputs {
+            [q, k, v] if !attributes.has_mask => (q, k, v, None),
+            [q, k, v, mask] if attributes.has_mask => (q, k, v, Some(mask)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "operand count does not match the declared mask",
+                ));
+            }
+        };
+        let q = q
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "q is not Metal storage"))?;
+        let k = k
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "k is not Metal storage"))?;
+        let v = v
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "v is not Metal storage"))?;
+        let mask = mask
+            .map(|mask| {
+                mask.downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "mask is not Metal storage"))
+            })
+            .transpose()?;
+        MetalBackendImpl::<D>::scaled_dot_product_attention::<f32>(q, k, v, mask, attributes.scale)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
 
 macro_rules! assert_every_advertised_metal_row_executes {
     (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {

@@ -571,6 +571,12 @@ macro_rules! metal_descriptor_operations {
                 Atanh, Erf, Rsqrt, Trunc, Frac,
                 AddScalar, SubScalar, MulScalar, DivScalar, Powf, Clamp,
                 Atan2, Fmod, Remainder,
+                // `dropout` walks its operand once and writes one result of
+                // the same shape, which is this group exactly — CUDA's and
+                // WGPU's comment, with Metal's counter-based keep-mask
+                // (`metal/pointwise.rs`) behind it. That it consults a
+                // random draw on the way changes nothing the row states.
+                Dropout,
             ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
@@ -614,16 +620,54 @@ macro_rules! metal_descriptor_operations {
             // loud errors. Do NOT refill this without real Metal kernels.
             spatial = [],
             matmul = [MatMulExact],
-            // No canonical executor was written for this backend beyond the
-            // groups above, so it advertises none. An empty group is a truthful
-            // claim; a copied one would not be.
-            normalization = [],
+            // #92 attention-block closure: the normalization ops Metal can
+            // rewrite into taped primitives — `softmax`/`log_softmax` (the
+            // stable max/sub/exp/sum/log chain, `max_keepdim` included),
+            // `rms_norm` (mul/mean/sqrt/div over the last axis) and
+            // `layer_norm` (add the mean-center step and an optional affine
+            // bias). Each has an `Execute` impl in `metal/executor.rs`; the
+            // compile-time assert at the bottom of that file is what makes
+            // advertising them safe. BatchNorm/GroupNorm stay unadvertised:
+            // there is no batch-statistics or group-rewrite kernel here.
+            normalization = [Softmax, LogSoftmax, LayerNorm, RmsNorm],
             embedding = [],
-            native_tensor = [],
+            // The layout half of #92, each with a host-side walk and a tape
+            // entry in `metal/layout.rs`: `transpose` materializes the swap
+            // (a transpose is its own inverse, so backward reapplies it),
+            // `narrow` copies one window and scatters its cotangent back,
+            // `concat` assembles one output per operand offset and splits
+            // the cotangent with `narrow`, and `tril`/`triu` mask rank 1–2
+            // storage host-side the way CPU's `triangular_storage` does
+            // (zeroing is its own transpose, so backward reapplies the mask).
+            native_tensor = [TransposeExact, Narrow, ConcatExact, Tril, Triu],
             logical = [],
-            composed_tensor = [],
-            composed_matmul = [],
-            composed_matmul_bias = [],
+            // The rewrites: `slice` is one `narrow` per axis, `stack` is
+            // `unsqueeze` per operand then `concat`, and the two axis views
+            // are `reshape`s — each inherits the tape entry of the primitive
+            // it rewrites into rather than pushing math of its own, which is
+            // what makes `training = true` on these rows true.
+            //
+            // The matmul compositions follow: `scaled_dot_product_attention`
+            // (transpose-k, matmul, scale, optional additive mask, softmax on
+            // the last axis, matmul with v) rides `composed_matmul` — same
+            // f32-only contiguous constraint as the product it wraps — and
+            // `linear` (promote, weight transpose, matmul, optional bias
+            // add, demote) rides `composed_matmul_bias`, whose rank bound
+            // admits the rank-one bias beside it. Each has an `Execute` impl
+            // in `metal/executor.rs`; the compile-time assert at the bottom
+            // of that file is what makes advertising them safe.
+            //
+            // Everything still empty stays empty on purpose: an empty group
+            // is a truthful claim, a copied one would not be. `logical`
+            // needs the boolean-result representation settled first (no
+            // comparison executor exists here), `embedding` and the
+            // quantization groups need kernels that do not exist, and
+            // `composed_matmul`'s remaining members (`bmm`/`addmm`/`dot`/
+            // `outer`) and `composed_reduction` are compositions this
+            // backend has not written yet.
+            composed_tensor = [SliceExact, StackExact, SqueezeExact, UnsqueezeExact],
+            composed_matmul = [ScaledDotProductAttention],
+            composed_matmul_bias = [Linear],
             quantizing = [],
             quantized = [],
             composed_reduction = [],
