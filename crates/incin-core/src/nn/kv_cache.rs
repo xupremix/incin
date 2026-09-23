@@ -18,8 +18,12 @@
 //!
 //! The cache is deliberately **not** a [`VisitState`](crate::nn::VisitState)
 //! member of an attention module: generation owns it across calls, passes it
-//! as `&mut` to
-//! [`MultiHeadAttention::forward_with_cache`](crate::nn::MultiHeadAttention::forward_with_cache),
+//! to
+//! [`MultiHeadAttention::forward_with_cache`](crate::nn::MultiHeadAttention::forward_with_cache)
+//! (which appends as it decodes) or, for cross-attention, fills it once with
+//! [`CrossAttention::prefill_memory`](crate::nn::CrossAttention::prefill_memory)
+//! and reads it by shared reference from
+//! [`CrossAttention::forward_with_cache`](crate::nn::CrossAttention::forward_with_cache),
 //! and drops it when decoding ends. `len` is runtime bookkeeping and is never
 //! serialized; [`KvCache::reset`] starts a new sequence without touching the
 //! allocation.

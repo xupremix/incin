@@ -1,12 +1,13 @@
-//! `MultiHeadAttention` checked against attention composed by hand.
+//! `MultiHeadAttention` and `CrossAttention` checked against attention
+//! composed by hand.
 //!
-//! The module is only worth having if it computes what the hand-written block
-//! computed, so most of what follows re-derives the same numbers from the
-//! module's own weights and compares. "Gradients are finite and nonzero" is
-//! also asserted, but it is not the bar: a wrong implementation passes that.
+//! The modules are only worth having if they compute what the hand-written
+//! block computed, so most of what follows re-derives the same numbers from
+//! the modules' own weights and compares. "Gradients are finite and nonzero"
+//! is also asserted, but it is not the bar: a wrong implementation passes that.
 #![cfg(feature = "cpu")]
 
-use incin::nn::{AttentionConfig, MultiHeadAttention, PositionEncoding};
+use incin::nn::{AttentionConfig, CrossAttention, KvCache, MultiHeadAttention, PositionEncoding};
 use incin::prelude::*;
 use incin::state::{collect_state, load_state};
 
@@ -65,6 +66,11 @@ fn max_abs_diff(a: &[f32], b: &[f32]) -> f32 {
         .zip(b.iter())
         .map(|(x, y)| (x - y).abs())
         .fold(0.0_f32, f32::max)
+}
+
+/// The flat slice of time step `i` in a `[1, seq, width]` tensor's values.
+fn step(values: &[f32], i: usize, width: usize) -> &[f32] {
+    &values[i * width..(i + 1) * width]
 }
 
 /// The test issue #101 asks for: the module against the composition it replaces.
@@ -553,5 +559,374 @@ fn without_rotary_no_tables_are_allocated() -> Result<()> {
     assert!(attention.rotary_cos.is_none());
     assert!(attention.rotary_sin.is_none());
     assert_eq!(collect_state::<Cpu, _>(&attention)?.len(), 8);
+    Ok(())
+}
+
+/// Cross-attention over two sequences of different lengths, composed by hand
+/// from the module's own weights: queries feed only the query projection,
+/// memory feeds only key and value (issue #101).
+#[test]
+fn cross_attention_matches_a_hand_composition_over_two_sequences() -> Result<()> {
+    let width = 8;
+    let attention = CrossAttention::<8, 1, 1, Cpu>::build(AttentionConfig::default(), (), ())?;
+    let query = ramp(vec![1, 3, width])?;
+    let memory = ramp(vec![1, 5, width])?
+        .mul_scalar(-0.6_f64)?
+        .forget_layout();
+
+    let from_module = attention.forward((query.clone(), memory.clone()))?;
+    assert_eq!(
+        from_module.dims().dims(),
+        &[1, 3, width],
+        "the output follows the query length, not the memory length"
+    );
+
+    let (wq, bq) = weights(&attention.query)?;
+    let (wk, bk) = weights(&attention.key)?;
+    let (wv, bv) = weights(&attention.value)?;
+    let (wo, bo) = weights(&attention.output)?;
+    let q = linear_apply(&query, &wq, &bq)?;
+    let k = linear_apply(&memory, &wk, &bk)?;
+    let v = linear_apply(&memory, &wv, &bv)?;
+    let attended = attention_by_hand(&q, &k, &v, width)?;
+    let by_hand = linear_apply(&attended, &wo, &bo)?;
+
+    let diff = max_abs_diff(&from_module.to_vec1::<f32>()?, &by_hand.to_vec1::<f32>()?);
+    assert!(
+        diff < 1e-6,
+        "module and hand-composed cross-attention disagree by {diff:e}"
+    );
+    Ok(())
+}
+
+/// Queries and memory are not interchangeable: a query row's output depends
+/// only on that row of the query stream, while -- without a causal mask --
+/// every row sees the whole memory.
+#[test]
+fn query_rows_depend_only_on_themselves_and_memory_reaches_every_row() -> Result<()> {
+    let width = 8;
+    let seq_q = 3;
+    let seq_m = 5;
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
+
+    let query = ramp(vec![1, seq_q, width])?;
+    let memory = ramp(vec![1, seq_m, width])?;
+    let before = attention
+        .forward((query.clone(), memory.clone()))?
+        .to_vec1::<f32>()?;
+
+    // Disturb query row 0: rows 1 and 2 must not move.
+    let mut disturbed_query = query.to_vec1::<f32>()?;
+    for value in disturbed_query.iter_mut().take(width) {
+        *value += 3.5;
+    }
+    let disturbed_query = Tensor::<Dyn, Cpu>::from_slice(&disturbed_query, vec![1, seq_q, width])?;
+    let after = attention
+        .forward((disturbed_query, memory.clone()))?
+        .to_vec1::<f32>()?;
+    assert!(
+        max_abs_diff(step(&before, 0, width), step(&after, 0, width)) > 1e-4,
+        "the disturbed query row did not change its own output"
+    );
+    for i in 1..seq_q {
+        let diff = max_abs_diff(step(&before, i, width), step(&after, i, width));
+        assert!(
+            diff < 1e-6,
+            "query row {i} moved by {diff:e} when only row 0 changed; \
+             queries are leaking into each other"
+        );
+    }
+
+    // Disturb memory position 4 -- past the causal reach asserted below --
+    // and a non-causal module must move every query row.
+    let mut disturbed_memory = memory.to_vec1::<f32>()?;
+    for value in disturbed_memory.iter_mut().skip(4 * width).take(width) {
+        *value += 3.5;
+    }
+    let disturbed_memory =
+        Tensor::<Dyn, Cpu>::from_slice(&disturbed_memory, vec![1, seq_m, width])?;
+    let after = attention
+        .forward((query, disturbed_memory))?
+        .to_vec1::<f32>()?;
+    for i in 0..seq_q {
+        let diff = max_abs_diff(step(&before, i, width), step(&after, i, width));
+        assert!(
+            diff > 1e-4,
+            "query row {i} ignored memory position 4 in a non-causal module"
+        );
+    }
+    Ok(())
+}
+
+/// Causal cross-attention masks memory, not queries: query row `i` must not
+/// see memory position `j > i`. Asserted by disturbing one memory position
+/// at a time and checking exactly which query rows move -- the rectangular
+/// mask leaks or over-masks in ways a shape check would never catch.
+#[test]
+fn a_causal_query_cannot_see_a_later_memory_position() -> Result<()> {
+    let width = 8;
+    let seq_q = 3;
+    let seq_m = 5;
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(AttentionConfig::causal(), (), ())?;
+
+    let query = ramp(vec![1, seq_q, width])?;
+    let memory = ramp(vec![1, seq_m, width])?;
+    let before = attention
+        .forward((query.clone(), memory.clone()))?
+        .to_vec1::<f32>()?;
+    let disturb = |position: usize| -> Result<Plain> {
+        let mut values = memory.to_vec1::<f32>()?;
+        for value in values.iter_mut().skip(position * width).take(width) {
+            *value += 3.5;
+        }
+        Tensor::<Dyn, Cpu>::from_slice(&values, vec![1, seq_m, width])
+    };
+
+    // Position 0: every query row may see it.
+    let after = attention
+        .forward((query.clone(), disturb(0)?))?
+        .to_vec1::<f32>()?;
+    for i in 0..seq_q {
+        assert!(
+            max_abs_diff(step(&before, i, width), step(&after, i, width)) > 1e-4,
+            "query row {i} ignored memory position 0"
+        );
+    }
+
+    // Position 1: rows 1 and 2 may see it; row 0 must not move.
+    let after = attention
+        .forward((query.clone(), disturb(1)?))?
+        .to_vec1::<f32>()?;
+    assert!(
+        max_abs_diff(step(&before, 0, width), step(&after, 0, width)) < 1e-6,
+        "query row 0 saw memory position 1; the rectangular mask leaks"
+    );
+    for i in 1..seq_q {
+        assert!(
+            max_abs_diff(step(&before, i, width), step(&after, i, width)) > 1e-4,
+            "query row {i} ignored memory position 1; the mask masks too much"
+        );
+    }
+
+    // Position 4: past every query row (the longest query is 2), so nothing
+    // may move -- and the previous test proved the same edit reaches every
+    // row without the mask.
+    let after = attention.forward((query, disturb(4)?))?.to_vec1::<f32>()?;
+    for i in 0..seq_q {
+        assert!(
+            max_abs_diff(step(&before, i, width), step(&after, i, width)) < 1e-6,
+            "query row {i} saw memory position 4; the rectangular mask leaks"
+        );
+    }
+    Ok(())
+}
+
+/// Trains: the forward pass records a tape, every projection and **both
+/// inputs** receive finite nonzero gradients -- with different sequence
+/// lengths, so a gradient routed back through the wrong stream has the wrong
+/// shape and fails here.
+#[test]
+fn cross_attention_trains_and_both_sequences_receive_gradients() -> Result<()> {
+    let width = 8;
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(
+        AttentionConfig::causal().with_rotary(10_000.0, 32),
+        (),
+        (),
+    )?;
+    let query = ramp(vec![2, 3, width])?.require_grad();
+    let memory = ramp(vec![2, 5, width])?.require_grad();
+    let target = Tensor::<Dyn, Cpu>::zeros(vec![2, 3, width])?;
+
+    let before = incin_backends::cpu::tape_depth();
+    let output = attention.forward((query.clone(), memory.clone()))?;
+    let recorded = incin_backends::cpu::tape_depth().saturating_sub(before);
+    assert!(recorded > 0, "the forward pass recorded no tape nodes");
+    assert!(
+        output.to_vec1::<f32>()?.iter().all(|v| v.is_finite()),
+        "cross attention produced a non-finite value"
+    );
+
+    let grads = output.mse_loss(&target)?.backward()?;
+
+    let mut moved = 0usize;
+    for (name, parameter) in [
+        ("query", &attention.query),
+        ("key", &attention.key),
+        ("value", &attention.value),
+        ("output", &attention.output),
+    ] {
+        let weight = parameter.weight.as_tensor()?;
+        let gradient = grads
+            .require(&weight)
+            .map_err(|e| Error::Msg(format!("no gradient reached {name}.weight: {e}")))?;
+        let values = gradient.to_vec1::<f32>()?;
+        assert!(
+            values.iter().all(|v| v.is_finite()),
+            "{name}.weight received a non-finite gradient"
+        );
+        moved += values.iter().filter(|v| **v != 0.0).count();
+    }
+    assert!(moved > 0, "every projection gradient was exactly zero");
+
+    let query_grad = grads
+        .require(&query)
+        .map_err(|e| Error::Msg(format!("no gradient reached the query input: {e}")))?;
+    assert_eq!(
+        query_grad.dims().dims(),
+        &[2, 3, width],
+        "the query gradient came back with the wrong shape"
+    );
+    let values = query_grad.to_vec1::<f32>()?;
+    assert!(
+        values.iter().all(|v| v.is_finite()),
+        "the query input received a non-finite gradient"
+    );
+    assert!(
+        values.iter().any(|v| *v != 0.0),
+        "the query input received only zeros"
+    );
+
+    let memory_grad = grads
+        .require(&memory)
+        .map_err(|e| Error::Msg(format!("no gradient reached the memory input: {e}")))?;
+    assert_eq!(
+        memory_grad.dims().dims(),
+        &[2, 5, width],
+        "the memory gradient came back with the wrong shape"
+    );
+    let values = memory_grad.to_vec1::<f32>()?;
+    assert!(
+        values.iter().all(|v| v.is_finite()),
+        "the memory input received a non-finite gradient"
+    );
+    assert!(
+        values.iter().any(|v| *v != 0.0),
+        "the memory input received only zeros"
+    );
+    Ok(())
+}
+
+/// Memory prefilled once, then decoded against: one read-only step over the
+/// full query stream must equal a single plain forward of the same inputs.
+#[test]
+fn prefilled_memory_decode_matches_plain_forward() -> Result<()> {
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
+    let query = ramp(vec![1, 4, 8])?;
+    let memory = ramp(vec![1, 6, 8])?.mul_scalar(-0.5_f64)?.forget_layout();
+
+    let plain = attention.forward((query.clone(), memory.clone()))?;
+
+    let mut cache = KvCache::<s![1, 2, 8, 4], Cpu, f32>::new(())?;
+    attention.prefill_memory(memory, &mut cache)?;
+    assert_eq!(
+        cache.len(),
+        6,
+        "prefill did not store every memory position"
+    );
+    let cached = attention.forward_with_cache(query, 0, &cache)?;
+
+    assert_eq!(cached.dims().dims(), &[1, 4, 8]);
+    assert!(
+        !cached.requires_grad(),
+        "a decode step must hand back a NoGrad tensor"
+    );
+    let diff = max_abs_diff(&plain.to_vec1::<f32>()?, &cached.to_vec1::<f32>()?);
+    assert!(
+        diff < 1e-6,
+        "decode against prefilled memory disagrees with the plain forward by {diff:e}"
+    );
+    assert_eq!(
+        cache.len(),
+        6,
+        "forward_with_cache must not append to the cache"
+    );
+    Ok(())
+}
+
+/// Rotary positions on the query stream are absolute: two half-steps decoded
+/// at `query_pos` 0 and 2 must equal one full forward -- chunk boundaries
+/// must not restart the rotation at position 0.
+#[test]
+fn a_chunked_rotary_decode_matches_one_full_forward() -> Result<()> {
+    let config = AttentionConfig::default().with_rotary(10_000.0, 32);
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(config, (), ())?;
+    let query = ramp(vec![1, 4, 8])?;
+    let memory = ramp(vec![1, 6, 8])?;
+
+    let plain = attention.forward((query.clone(), memory.clone()))?;
+
+    let mut cache = KvCache::<s![1, 2, 8, 4], Cpu, f32>::new(())?;
+    attention.prefill_memory(memory, &mut cache)?;
+
+    let first = attention.forward_with_cache(
+        query.clone().try_narrow(1, 0, 2)?.forget_layout(),
+        0,
+        &cache,
+    )?;
+    let second = attention.forward_with_cache(
+        query.clone().try_narrow(1, 2, 2)?.forget_layout(),
+        2,
+        &cache,
+    )?;
+    let chunked = first.concat(&second, 1)?.forget_layout();
+
+    let diff = max_abs_diff(&plain.to_vec1::<f32>()?, &chunked.to_vec1::<f32>()?);
+    assert!(
+        diff < 1e-5,
+        "chunked rotary decode disagrees with the full forward by {diff:e}"
+    );
+    Ok(())
+}
+
+/// Decoding against an empty cache, and prefilling a full one twice, are
+/// typed failures that say what to do -- not a panic and not silence.
+#[test]
+fn an_empty_cache_and_a_second_prefill_are_refused() -> Result<()> {
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
+    let mut cache = KvCache::<s![1, 2, 8, 4], Cpu, f32>::new(())?;
+
+    let error = attention
+        .forward_with_cache(ramp(vec![1, 2, 8])?, 0, &cache)
+        .expect_err("decoding before prefill must be refused");
+    let text = error.to_string();
+    assert!(
+        text.contains("prefill"),
+        "the refusal should say to prefill, said: {text}"
+    );
+
+    attention.prefill_memory(ramp(vec![1, 6, 8])?, &mut cache)?;
+    let error = attention
+        .prefill_memory(ramp(vec![1, 6, 8])?, &mut cache)
+        .expect_err("a second prefill must be refused");
+    let text = error.to_string();
+    assert!(
+        text.contains('6'),
+        "the refusal should name the stored length, said: {text}"
+    );
+    Ok(())
+}
+
+/// A rank-two query and a batch mismatch are refused with the offending
+/// geometry named -- the tuple input doubles the surface to validate.
+#[test]
+fn a_bad_query_rank_or_batch_mismatch_is_refused() -> Result<()> {
+    let attention = CrossAttention::<8, 2, 2, Cpu>::build(AttentionConfig::default(), (), ())?;
+
+    let error = attention
+        .forward((ramp(vec![4, 8])?, ramp(vec![1, 5, 8])?))
+        .expect_err("attention takes rank-3 [batch, seq, d_model] inputs");
+    assert!(
+        error.to_string().contains("rank 2"),
+        "the refusal should name the rank it got, said: {error}"
+    );
+
+    let error = attention
+        .forward((ramp(vec![2, 3, 8])?, ramp(vec![3, 5, 8])?))
+        .expect_err("the two inputs must share a batch");
+    let text = error.to_string();
+    assert!(
+        text.contains('2') && text.contains('3'),
+        "the refusal should name both batch sizes, said: {text}"
+    );
     Ok(())
 }

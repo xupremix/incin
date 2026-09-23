@@ -25,13 +25,15 @@
 //!
 //! # What is not here
 //!
-//! **Cross-attention.** A full encoder-decoder layer attends to an encoder's
-//! output as well as its own input, so its forward pass takes two tensors.
-//! [`Module`] is parameterized by a single input, and the GPT-style stack this
-//! module is for is `Sequential<[TransformerDecoderLayer<..>; N]>`, which
-//! requires a single-input module to compose at all. A cross-attending layer
-//! is therefore a separate module with a tuple input, not a configuration of
-//! this one.
+//! **Cross-attending layers.** [`CrossAttention`](crate::nn::CrossAttention)
+//! exists -- a full encoder-decoder layer attends to an encoder's output as
+//! well as its own input, so its forward pass takes the tuple `(query,
+//! memory)` -- but it is a separate module with a tuple input, not a
+//! configuration of the layers here. [`Module`] is parameterized by a single
+//! input, and the GPT-style stack this module is for is
+//! `Sequential<[TransformerDecoderLayer<..>; N]>`, which requires a
+//! single-input module to compose at all; a decoder layer stays single-input
+//! for that reason.
 //!
 //! **Static shapes.** Tensor shapes are [`Dyn`](crate::shapes::Dyn), because
 //! the causal mask needs the mask and the score tensor to meet and the typed

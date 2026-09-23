@@ -13,17 +13,29 @@
 //! only its new tokens and attends against the keys and values already stored
 //! (issue #104).
 //!
+//! [`CrossAttention`] is the same four projections fed from two inputs: the
+//! queries come from one `[batch, seq, d_model]` sequence and the keys and
+//! values from another (issue #101), which is what an encoder--decoder model
+//! needs. Its [`Module`] impl therefore takes a tuple `(query, memory)`, and
+//! when the two sequence lengths differ the causal mask is rectangular:
+//! query row `i` sees memory columns `0 ..= i`. Memory that stays fixed
+//! across decode steps is projected once through
+//! [`CrossAttention::prefill_memory`] into a
+//! [`KvCache`](crate::nn::KvCache) and then read by
+//! [`CrossAttention::forward_with_cache`].
+//!
 //! # The head counts are compile-time (issue #101)
 //!
 //! `D_MODEL`, `N_HEADS` and `N_KV_HEADS` are const parameters, so both head
 //! invariants -- `D_MODEL` divisible by `N_HEADS`, and `N_HEADS` divisible by
 //! `N_KV_HEADS` -- are `const { assert!(..) }` inside
-//! [`MultiHeadAttention::build`]: a mismatched configuration fails at compile
-//! time at the construction site, proved by the compile-fail fixtures
-//! `attention_d_model_head_mismatch` and `attention_head_kv_mismatch`. The
-//! module itself is written against [`Dyn`](crate::shapes::Dyn) rather than a
-//! static shape because the causal mask needs the mask and the score tensor to
-//! meet, and the typed API can only express that pairing through `Dyn` today.
+//! [`MultiHeadAttention::build`] and [`CrossAttention::build`]: a mismatched
+//! configuration fails at compile time at the construction site, proved by the
+//! compile-fail fixtures `attention_d_model_head_mismatch` and
+//! `attention_head_kv_mismatch`. The modules themselves are written against
+//! [`Dyn`](crate::shapes::Dyn) rather than a static shape because the causal
+//! mask needs the mask and the score tensor to meet, and the typed API can
+//! only express that pairing through `Dyn` today.
 //! Tensor shapes stay dynamic; the head configuration does not.
 //!
 //! # Grouped-query attention
@@ -72,7 +84,7 @@ pub enum PositionEncoding {
     },
 }
 
-/// Configuration for [`MultiHeadAttention`].
+/// Configuration for [`MultiHeadAttention`] and [`CrossAttention`].
 #[derive(Debug, Clone, Copy)]
 pub struct AttentionConfig {
     /// Whether a position may attend only to itself and earlier positions.
@@ -801,8 +813,8 @@ where
                         ),
                     ));
                 }
-                let cos = self.rotary_table(self.rotary_cos.as_ref(), seq)?;
-                let sin = self.rotary_table(self.rotary_sin.as_ref(), seq)?;
+                let cos = rotary_table(self.rotary_cos.as_ref(), seq)?;
+                let sin = rotary_table(self.rotary_sin.as_ref(), seq)?;
                 (
                     apply_rotary(&query, &cos, &sin, Self::head_dim())?,
                     apply_rotary(&key, &cos, &sin, Self::head_dim())?,
@@ -829,7 +841,7 @@ where
                 .forget_layout();
 
             let scores = if self.config.causal {
-                let mask = causal_mask::<B, K>(seq, &scores._dtype, &scores._device)?;
+                let mask = causal_mask::<B, K>(seq, seq, 0, &scores._dtype, &scores._device)?;
                 scores.broadcast_add(&mask)?.forget_layout()
             } else {
                 scores
@@ -843,7 +855,13 @@ where
             // composes the same math the manual path above writes out, so
             // results match to floating-point noise.
             let mask = if self.config.causal {
-                Some(causal_mask::<B, K>(seq, &query._dtype, &query._device)?)
+                Some(causal_mask::<B, K>(
+                    seq,
+                    seq,
+                    0,
+                    &query._dtype,
+                    &query._device,
+                )?)
             } else {
                 None
             };
@@ -868,55 +886,52 @@ where
     }
 }
 
-impl<
-    const D_MODEL: usize,
-    const N_HEADS: usize,
-    const N_KV_HEADS: usize,
-    B: crate::tensor::backend::VariableBackend,
+/// Narrows a cached rotary table to `[start, start+len)`.
+///
+/// `start` is the absolute position of the first token in the window, so
+/// incremental decoding rotates a new chunk at its true offset rather than
+/// as if it began at position 0. Shared by `MultiHeadAttention`'s cached
+/// decode and `CrossAttention`'s, since both do the same table bookkeeping.
+fn rotary_table_range<B, K>(
+    table: Option<&Buffer<Dyn, B, K>>,
+    start: usize,
+    len: usize,
+) -> Result<Tensor<Dyn, B, K, NoGrad>>
+where
+    B: crate::tensor::backend::Backend
+        + crate::tensor::backend::VariableBackend
+        + crate::exec::Capabilities
+        + Execute<op::Narrow>,
     K: DType,
-    Train: TrainState,
-> MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
 {
-    /// Narrows a cached rotary table to `[start, start+len)`.
-    ///
-    /// `start` is the absolute position of the first token in the window, so
-    /// incremental decoding rotates a new chunk at its true offset rather than
-    /// as if it began at position 0.
-    fn rotary_table_range(
-        &self,
-        table: Option<&Buffer<Dyn, B, K>>,
-        start: usize,
-        len: usize,
-    ) -> Result<Tensor<Dyn, B, K, NoGrad>>
-    where
-        B: crate::exec::Capabilities + Execute<op::Narrow>,
-        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
-    {
-        let table = table.ok_or_else(|| {
-            invalid(
-                "attention forward",
-                "rotary positions are configured but the tables are missing; \
-                 the module was constructed without them",
-            )
-        })?;
-        Ok(table
-            .as_tensor()?
-            .try_narrow(0isize, start, len)?
-            .forget_layout())
-    }
+    let table = table.ok_or_else(|| {
+        invalid(
+            "attention forward",
+            "rotary positions are configured but the tables are missing; \
+             the module was constructed without them",
+        )
+    })?;
+    Ok(table
+        .as_tensor()?
+        .try_narrow(0isize, start, len)?
+        .forget_layout())
+}
 
-    /// Narrows a cached rotary table to the sequence length in hand.
-    fn rotary_table(
-        &self,
-        table: Option<&Buffer<Dyn, B, K>>,
-        seq: usize,
-    ) -> Result<Tensor<Dyn, B, K, NoGrad>>
-    where
-        B: crate::exec::Capabilities + Execute<op::Narrow>,
-        <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
-    {
-        self.rotary_table_range(table, 0, seq)
-    }
+/// Narrows a cached rotary table to the sequence length in hand.
+fn rotary_table<B, K>(
+    table: Option<&Buffer<Dyn, B, K>>,
+    seq: usize,
+) -> Result<Tensor<Dyn, B, K, NoGrad>>
+where
+    B: crate::tensor::backend::Backend
+        + crate::tensor::backend::VariableBackend
+        + crate::exec::Capabilities
+        + Execute<op::Narrow>,
+    K: DType,
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+{
+    rotary_table_range(table, 0, seq)
 }
 
 impl<const D_MODEL: usize, const N_HEADS: usize, const N_KV_HEADS: usize, B, K, Train>
@@ -1065,8 +1080,8 @@ where
             let (query, key) = match self.config.position {
                 PositionEncoding::None => (query, key),
                 PositionEncoding::Rotary { .. } => {
-                    let cos = self.rotary_table_range(self.rotary_cos.as_ref(), past, seq)?;
-                    let sin = self.rotary_table_range(self.rotary_sin.as_ref(), past, seq)?;
+                    let cos = rotary_table_range(self.rotary_cos.as_ref(), past, seq)?;
+                    let sin = rotary_table_range(self.rotary_sin.as_ref(), past, seq)?;
                     (
                         apply_rotary(&query, &cos, &sin, Self::head_dim())?,
                         apply_rotary(&key, &cos, &sin, Self::head_dim())?,
@@ -1091,8 +1106,866 @@ where
             // Rows `past .. past+seq` of the `[past+seq, past+seq]` causal
             // mask: each new query sees the whole prefix plus itself.
             let mask = if self.config.causal {
-                let full = causal_mask::<B, K>(past + seq, &query._dtype, &query._device)?;
+                let full =
+                    causal_mask::<B, K>(past + seq, past + seq, 0, &query._dtype, &query._device)?;
                 Some(full.try_narrow(0isize, past, seq)?.forget_layout())
+            } else {
+                None
+            };
+
+            let attended = Tensor::scaled_dot_product_attention(
+                &query,
+                &keys_all,
+                &values_all,
+                mask.as_ref(),
+                self.config.scale,
+            )?
+            .forget_layout();
+
+            let merged = attended
+                .transpose(1isize, 2isize)?
+                .forget_layout()
+                .reshape(vec![batch, seq, D_MODEL])?
+                .forget_layout();
+            let out = self.output.forward(merged)?.forget_layout();
+
+            // Inference entry point: hand back a `NoGrad` tensor even though
+            // the projections are typed with trainable joins.
+            Ok(retag_nograd(out))
+        })
+    }
+}
+
+/// Cross-attention over two `[batch, seq, D_MODEL]` inputs (issue #101).
+///
+/// Queries come from one sequence; keys and values come from another -- the
+/// *memory*, typically an encoder's output. This is the attention an
+/// encoder--decoder model needs, and it is a separate module from
+/// [`MultiHeadAttention`] because the dataflow is different, not merely
+/// parameterised differently: `forward` takes the tuple `(query, memory)`,
+/// the two projections of memory can be computed once and reused across
+/// decode steps, and when `seq_query != seq_memory` the causal mask is
+/// rectangular.
+///
+/// The head configuration is part of the type exactly as in
+/// [`MultiHeadAttention`] (issue #101): `D_MODEL` must divide into `N_HEADS`,
+/// and `N_HEADS` into `N_KV_HEADS`, or [`build`](Self::build) fails at
+/// compile time. Grouped-query and multi-query attention work the same way
+/// here -- `N_KV_HEADS` keys/values serve `N_HEADS` queries.
+///
+/// # Sequence lengths and the causal mask
+///
+/// Query row `i` and memory column `j` line up by position: without causal
+/// masking every query sees the whole memory; with
+/// [`AttentionConfig::causal`] query `i` sees memory positions
+/// `0 ..= i`. When the memory is longer, later memory positions are visible
+/// only to later queries, which is the encoder--decoder reading of
+/// causality.
+///
+/// # Rotary positions
+///
+/// The query stream is rotated at `0 .. seq_query` and the memory at
+/// `0 .. seq_memory`, each from its own origin: the two sequences carry
+/// independent position numbering. A cached decode rotates its query chunk
+/// at `query_pos .. query_pos+seq` so a chunk that starts mid-stream sees
+/// the same angles a full forward would have used.
+///
+/// # Example
+///
+/// ```
+/// # extern crate incin_core as incin;
+/// use incin::nn::{AttentionConfig, CrossAttention, Module};
+/// use incin::prelude::*;
+/// # type Cpu = incin_backends::cpu::CpuBackendImpl;
+///
+/// # fn main() -> Result<()> {
+/// // Eight query heads, two key/value heads reading encoder memory.
+/// let attention = CrossAttention::<64, 8, 2, Cpu>::build(
+///     AttentionConfig::default(),
+///     (),
+///     (),
+/// )?;
+///
+/// let query = Tensor::<Dyn, Cpu>::zeros(vec![2, 4, 64])?.require_grad();
+/// let memory = Tensor::<Dyn, Cpu>::zeros(vec![2, 12, 64])?.require_grad();
+/// let y = attention.forward((query, memory))?;
+/// assert_eq!(y.dims().dims(), &[2, 4, 64]);
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Clone)]
+#[incin_macros::module(internal, no_stats, no_train_mode)]
+pub struct CrossAttention<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType = f32,
+    Train: TrainState = Trainable,
+> {
+    /// Projection producing the query heads, from the query sequence.
+    pub query: Linear<Dyn, B, crate::nn::optional::True, K, Train>,
+    /// Projection producing the key heads, from the memory sequence.
+    pub key: Linear<Dyn, B, crate::nn::optional::True, K, Train>,
+    /// Projection producing the value heads, from the memory sequence.
+    pub value: Linear<Dyn, B, crate::nn::optional::True, K, Train>,
+    /// Projection applied to the concatenated heads.
+    pub output: Linear<Dyn, B, crate::nn::optional::True, K, Train>,
+    /// Cosine table for rotary positions, present when rotary is configured.
+    pub rotary_cos: Option<Buffer<Dyn, B, K>>,
+    /// Sine table for rotary positions, present when rotary is configured.
+    pub rotary_sin: Option<Buffer<Dyn, B, K>>,
+    #[module(ignore)]
+    /// Dropout applied to the attention weights.
+    ///
+    /// Ignored by the derived traversal because `Dropout` is not parameterized
+    /// by the backend, so nothing in a generated `ToDevice` call could infer
+    /// which backend it belongs to. Train-mode propagation is therefore
+    /// written out below rather than derived.
+    pub dropout: Dropout,
+    #[module(ignore)]
+    /// The configuration the module was built with.
+    pub config: AttentionConfig,
+}
+
+impl<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: TrainState,
+> crate::nn::TrainMode for CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>
+{
+    /// Propagates the mode to the one field whose behaviour depends on it.
+    ///
+    /// Written by hand because `dropout` is skipped by the derived traversal;
+    /// the projections have no train-mode behaviour of their own, and are
+    /// still visited so that stays true if one ever gains some.
+    fn set_training(&mut self, training: bool) {
+        crate::nn::TrainMode::set_training(&mut self.query, training);
+        crate::nn::TrainMode::set_training(&mut self.key, training);
+        crate::nn::TrainMode::set_training(&mut self.value, training);
+        crate::nn::TrainMode::set_training(&mut self.output, training);
+        self.dropout.is_training = training;
+    }
+}
+
+impl<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: TrainState,
+> crate::nn::ShapeInfo for CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>
+{
+    /// Reports the head configuration, unlike the shaped layers which report
+    /// nothing.
+    ///
+    /// The counts now live in the type, but a summary prints text, not types:
+    /// identical `CrossAttention` rows would not say how wide they are or how
+    /// many heads share a key.
+    fn shape_info(&self) -> Option<alloc::string::String> {
+        Some(alloc::format!(
+            "d_model={D_MODEL}, heads={N_HEADS}, kv_heads={N_KV_HEADS}, head_dim={}",
+            Self::head_dim()
+        ))
+    }
+}
+
+impl<
+    const D_MODEL: usize,
+    const N_HEADS: usize,
+    const N_KV_HEADS: usize,
+    B: crate::tensor::backend::VariableBackend,
+    K: DType,
+    Train: TrainState,
+> CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>
+{
+    /// The model width both inputs consume and the output produces.
+    #[must_use]
+    pub const fn d_model(&self) -> usize {
+        D_MODEL
+    }
+
+    /// Width of one head, `D_MODEL / N_HEADS` (issue #101: a computed
+    /// constant, not a configuration field).
+    #[must_use]
+    pub const fn head_dim() -> usize {
+        D_MODEL / N_HEADS
+    }
+
+    /// Number of query heads.
+    #[must_use]
+    pub const fn n_heads() -> usize {
+        N_HEADS
+    }
+
+    /// Number of key/value heads: `N_HEADS` for plain cross-attention,
+    /// `1` for multi-query, a divisor in between for grouped-query.
+    #[must_use]
+    pub const fn n_kv_heads() -> usize {
+        N_KV_HEADS
+    }
+
+    /// How many query heads share each key/value head.
+    #[must_use]
+    pub const fn heads_per_group(&self) -> usize {
+        N_HEADS / N_KV_HEADS
+    }
+
+    /// Freezes every projection, leaving the tables untouched.
+    ///
+    /// The rotary tables are already outside the gradient path, so freezing
+    /// has nothing to say about them.
+    pub fn freeze(self) -> CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Frozen> {
+        CrossAttention {
+            query: self.query.freeze(),
+            key: self.key.freeze(),
+            value: self.value.freeze(),
+            output: self.output.freeze(),
+            rotary_cos: self.rotary_cos,
+            rotary_sin: self.rotary_sin,
+            dropout: self.dropout,
+            config: self.config,
+        }
+    }
+
+    /// Unfreezes every projection.
+    pub fn unfreeze(self) -> CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Trainable> {
+        CrossAttention {
+            query: self.query.unfreeze(),
+            key: self.key.unfreeze(),
+            value: self.value.unfreeze(),
+            output: self.output.unfreeze(),
+            rotary_cos: self.rotary_cos,
+            rotary_sin: self.rotary_sin,
+            dropout: self.dropout,
+            config: self.config,
+        }
+    }
+}
+
+impl<const D_MODEL: usize, const N_HEADS: usize, const N_KV_HEADS: usize, B, K>
+    CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Trainable>
+where
+    B: crate::tensor::backend::TensorBackend<K>
+        + crate::nn::param::ParameterInit<K>
+        + RotaryBackend<K>
+        + Execute<op::MatMulExact>
+        + Execute<op::TransposeExact>,
+    K: DType,
+    <K as DType>::Arg: Clone,
+    <B::Device as Device>::Arg: Clone,
+    <B as Execute<op::Arange>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Exp>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Sin>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Cos>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::BroadcastAs>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+{
+    /// Builds the module. The head invariants are compile-time (issue #101).
+    ///
+    /// Same construction as [`MultiHeadAttention::build`]: `D_MODEL` must
+    /// divide evenly into `N_HEADS`, and `N_HEADS` into `N_KV_HEADS`, each
+    /// enforced by a `const { assert!(..) }` below so a mismatched
+    /// configuration fails at compile time at this call site.
+    ///
+    /// # Compile-time failures
+    ///
+    /// `N_HEADS == 0` or `N_KV_HEADS == 0` ("head counts must be nonzero"),
+    /// `D_MODEL % N_HEADS != 0` ("d_model must be divisible by n_heads"), and
+    /// `N_HEADS % N_KV_HEADS != 0` ("n_heads must be divisible by
+    /// n_kv_heads") all abort compilation at the construction site.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::InvalidModuleState`] when rotary positions are configured
+    ///   with an odd head width (the rotation pairs dimensions), from the
+    ///   table builder, or when `max_seq_len` is zero.
+    pub fn build(
+        config: AttentionConfig,
+        dtype: <K as DType>::Arg,
+        device: <B::Device as Device>::Arg,
+    ) -> Result<Self> {
+        // Issue #101: proven at compile time, at the construction site.
+        const {
+            assert!(N_HEADS > 0, "head counts must be nonzero");
+        }
+        const {
+            assert!(N_KV_HEADS > 0, "head counts must be nonzero");
+        }
+        const {
+            assert!(
+                D_MODEL.is_multiple_of(N_HEADS),
+                "d_model must be divisible by n_heads"
+            );
+        }
+        const {
+            assert!(
+                N_HEADS.is_multiple_of(N_KV_HEADS),
+                "n_heads must be divisible by n_kv_heads"
+            );
+        }
+        let head_dim = D_MODEL / N_HEADS;
+        if matches!(config.position, PositionEncoding::Rotary { .. }) && !head_dim.is_multiple_of(2)
+        {
+            return Err(invalid_owned(
+                "build cross attention",
+                alloc::format!(
+                    "rotary positions need an even head_dim, got {head_dim}; \
+                     the rotation pairs dimensions"
+                ),
+            ));
+        }
+        let kv_dim = N_KV_HEADS * head_dim;
+
+        let query = Linear::build_full(D_MODEL, D_MODEL, dtype.clone(), device.clone(), ())?;
+        let key = Linear::build_full(D_MODEL, kv_dim, dtype.clone(), device.clone(), ())?;
+        let value = Linear::build_full(D_MODEL, kv_dim, dtype.clone(), device.clone(), ())?;
+        let output = Linear::build_full(D_MODEL, D_MODEL, dtype.clone(), device.clone(), ())?;
+
+        let (rotary_cos, rotary_sin) = match config.position {
+            PositionEncoding::None => (None, None),
+            PositionEncoding::Rotary { theta, max_seq_len } => {
+                let (cos, sin) = rotary_tables::<B, K>(
+                    max_seq_len,
+                    head_dim,
+                    theta,
+                    &<K as DType>::init(dtype.clone()),
+                    &<B::Device as Device>::init(device.clone()),
+                )?;
+                (Some(cos), Some(sin))
+            }
+        };
+
+        Ok(Self {
+            query,
+            key,
+            value,
+            output,
+            rotary_cos,
+            rotary_sin,
+            dropout: Dropout::new(config.dropout),
+            config,
+        })
+    }
+}
+
+impl<const D_MODEL: usize, const N_HEADS: usize, const N_KV_HEADS: usize, B, K, Train, G, L, LM>
+    Module<(
+        Tensor<Dyn, B, K, G, Local, L>,
+        Tensor<Dyn, B, K, G, Local, LM>,
+    )> for CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>
+where
+    B: AttentionBackend<K> + crate::tensor::backend::SupportsDType<K>,
+    K: DType,
+    Train: TrainState,
+    G: RequiresGrad + GradJoin<Train::TensorGrad>,
+    L: Layout<Dyn>,
+    LM: Layout<Dyn>,
+    JoinedGrad<G, Train::TensorGrad>: GradJoin<Train::TensorGrad, Output = JoinedGrad<G, Train::TensorGrad>>
+        + GradJoin<JoinedGrad<G, Train::TensorGrad>, Output = JoinedGrad<G, Train::TensorGrad>>
+        + GradJoin<NoGrad, Output = JoinedGrad<G, Train::TensorGrad>>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::BroadcastAs>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Softmax>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Ones>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Tril>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Log>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ScaledDotProductAttention>>::Output: Into<B::Storage<K>>,
+{
+    /// `Dyn`: the result is the output projection's, and the chain that
+    /// reaches it re-describes buffers often enough that no layout claim
+    /// survives it honestly.
+    type Output = Tensor<Dyn, B, K, JoinedGrad<G, Train::TensorGrad>, Local>;
+    type Error = Error;
+
+    fn forward(
+        &self,
+        (x, memory): (
+            Tensor<Dyn, B, K, G, Local, L>,
+            Tensor<Dyn, B, K, G, Local, LM>,
+        ),
+    ) -> core::result::Result<Self::Output, Error> {
+        let query_dims = x.shape_buf().as_ref().to_vec();
+        let [batch, seq, model] = query_dims[..] else {
+            return Err(invalid_owned(
+                "cross attention forward",
+                alloc::format!(
+                    "expected a rank-3 [batch, seq, d_model] query input, got rank {} {:?}",
+                    query_dims.len(),
+                    query_dims
+                ),
+            ));
+        };
+        if model != self.d_model() {
+            return Err(invalid_owned(
+                "cross attention forward",
+                alloc::format!(
+                    "query width {model} does not match d_model {}",
+                    self.d_model()
+                ),
+            ));
+        }
+        let memory_dims = memory.shape_buf().as_ref().to_vec();
+        let [mem_batch, mem_seq, mem_model] = memory_dims[..] else {
+            return Err(invalid_owned(
+                "cross attention forward",
+                alloc::format!(
+                    "expected a rank-3 [batch, seq, d_model] memory input, got rank {} {:?}",
+                    memory_dims.len(),
+                    memory_dims
+                ),
+            ));
+        };
+        if mem_model != self.d_model() {
+            return Err(invalid_owned(
+                "cross attention forward",
+                alloc::format!(
+                    "memory width {mem_model} does not match d_model {}",
+                    self.d_model()
+                ),
+            ));
+        }
+        if mem_batch != batch {
+            return Err(invalid_owned(
+                "cross attention forward",
+                alloc::format!("query batch {batch} does not match memory batch {mem_batch}"),
+            ));
+        }
+
+        let query = self.query.forward(x)?.forget_layout();
+        let key = self.key.forward(memory.clone())?.forget_layout();
+        let value = self.value.forward(memory)?.forget_layout();
+
+        // [b, t, n*hd] -> [b, n, t, hd], each stream with its own length:
+        // queries over `seq`, keys and values over `mem_seq`.
+        let query = split_heads(&query, batch, seq, N_HEADS, Self::head_dim())?;
+        let key = split_heads(&key, batch, mem_seq, N_KV_HEADS, Self::head_dim())?;
+        let value = split_heads(&value, batch, mem_seq, N_KV_HEADS, Self::head_dim())?;
+
+        // The two streams carry independent position numbering, so each is
+        // rotated from its own origin: queries at 0..seq, memory at 0..mem_seq.
+        let (query, key) = match self.config.position {
+            PositionEncoding::None => (query, key),
+            PositionEncoding::Rotary { max_seq_len, .. } => {
+                if seq > max_seq_len || mem_seq > max_seq_len {
+                    return Err(invalid_owned(
+                        "cross attention forward",
+                        alloc::format!(
+                            "query length {seq} and memory length {mem_seq} must not exceed the \
+                             rotary tables' max_seq_len {max_seq_len}; rebuild the module with \
+                             a larger extent"
+                        ),
+                    ));
+                }
+                let cos_q = rotary_table(self.rotary_cos.as_ref(), seq)?;
+                let sin_q = rotary_table(self.rotary_sin.as_ref(), seq)?;
+                let cos_k = rotary_table(self.rotary_cos.as_ref(), mem_seq)?;
+                let sin_k = rotary_table(self.rotary_sin.as_ref(), mem_seq)?;
+                (
+                    apply_rotary(&query, &cos_q, &sin_q, Self::head_dim())?,
+                    apply_rotary(&key, &cos_k, &sin_k, Self::head_dim())?,
+                )
+            }
+        };
+
+        // Grouped-query attention: give every query head the key/value head
+        // of its group by widening the head axis.
+        let key = expand_kv_heads(&key, N_HEADS, N_KV_HEADS)?;
+        let value = expand_kv_heads(&value, N_HEADS, N_KV_HEADS)?;
+
+        let attended = if self.dropout.is_training && self.dropout.p > 0.0 {
+            // Training with attention-weight dropout stays on the composed
+            // path: the fused SDPA row has no dropout operand.
+            let scale = self
+                .config
+                .scale
+                .unwrap_or_else(|| 1.0_f64 / f64::sqrt(Self::head_dim() as f64));
+            let scores = query
+                .matmul(&key.transpose(2isize, 3isize)?.forget_layout())?
+                .mul_scalar(scale)?
+                .forget_layout();
+
+            // Rectangular mask when the streams differ in length: row `i`
+            // keeps columns `0 ..= i`.
+            let scores = if self.config.causal {
+                let mask = causal_mask::<B, K>(seq, mem_seq, 0, &scores._dtype, &scores._device)?;
+                scores.broadcast_add(&mask)?.forget_layout()
+            } else {
+                scores
+            };
+
+            let weights = scores.softmax(3)?.forget_layout();
+            let weights = apply_dropout(weights, self.dropout.p, self.dropout.is_training)?;
+            weights.matmul(&value)?.forget_layout()
+        } else {
+            // Eval (or zero dropout): one descriptor dispatch. The CPU row
+            // composes the same math the manual path above writes out, so
+            // results match to floating-point noise.
+            let mask = if self.config.causal {
+                Some(causal_mask::<B, K>(
+                    seq,
+                    mem_seq,
+                    0,
+                    &query._dtype,
+                    &query._device,
+                )?)
+            } else {
+                None
+            };
+            Tensor::scaled_dot_product_attention(
+                &query,
+                &key,
+                &value,
+                mask.as_ref(),
+                self.config.scale,
+            )?
+            .forget_layout()
+        };
+
+        // [b, n, t, hd] -> [b, t, n*hd], undoing the split.
+        let merged = attended
+            .transpose(1isize, 2isize)?
+            .forget_layout()
+            .reshape(vec![batch, seq, D_MODEL])?
+            .forget_layout();
+
+        Ok(self.output.forward(merged)?.forget_layout())
+    }
+}
+
+impl<const D_MODEL: usize, const N_HEADS: usize, const N_KV_HEADS: usize, B, K, Train>
+    CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>
+where
+    B: AttentionBackend<K> + crate::tensor::backend::SupportsDType<K>,
+    K: DType,
+    Train: TrainState,
+    Train::TensorGrad: GradJoin<NoGrad, Output = Train::TensorGrad>
+        + GradJoin<Train::TensorGrad, Output = Train::TensorGrad>,
+    <B as Execute<op::MatMulExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::TransposeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::BroadcastAs>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Softmax>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Add>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Mul>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Ones>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Tril>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Log>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Neg>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Dropout>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ScaledDotProductAttention>>::Output: Into<B::Storage<K>>,
+{
+    /// Projects the memory's keys and values into a caller-owned
+    /// [`KvCache`](crate::nn::KvCache), once, for reuse across decode steps.
+    ///
+    /// Issue #101: memory is fixed while queries advance, so projecting it
+    /// per step would repeat identical work. This method does what
+    /// [`MultiHeadAttention::forward_with_cache`] does for its own tokens --
+    /// project, split into heads, apply rotary positions from `0`, retag to
+    /// `NoGrad` -- and *appends* rather than replacing, refusing a cache that
+    /// already holds tokens so two memories cannot silently interleave. The
+    /// ambient gradient mode is forced off for the duration: generation does
+    /// not build a tape.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::InvalidModuleState`]
+    ///   when `memory` is not `[batch, seq, d_model]`, when the cache is not
+    ///   empty, when the cache geometry does not match `memory`'s batch /
+    ///   head configuration, or when rotary tables are configured with
+    ///   `max_seq_len < seq`.
+    /// - [`Error::CacheCapacityExceeded`]
+    ///   when `seq` would pass the cache's capacity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # extern crate incin_core as incin;
+    /// # use incin::nn::{AttentionConfig, CrossAttention, KvCache};
+    /// # use incin::prelude::*;
+    /// # type Cpu = incin_backends::cpu::CpuBackendImpl;
+    /// # fn main() -> Result<()> {
+    /// let attention = CrossAttention::<16, 2, 2, Cpu>::build(
+    ///     AttentionConfig::causal(), (), (),
+    /// )?;
+    /// // [batch=1, kv_heads=2, capacity=8, head_dim=8]
+    /// let mut cache = KvCache::<s![1, 2, 8, 8], Cpu, f32>::new(())?;
+    ///
+    /// let memory = Tensor::<Dyn, Cpu>::zeros(vec![1, 8, 16])?;
+    /// attention.prefill_memory(memory, &mut cache)?;
+    /// assert_eq!(cache.len(), 8);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn prefill_memory<S: Shape + DynShape>(
+        &self,
+        memory: Tensor<Dyn, B, K, NoGrad, Local>,
+        cache: &mut crate::nn::KvCache<S, B, K>,
+    ) -> Result<()> {
+        GradMode::Disabled.restrict(|| {
+            let dims = memory.shape_buf().as_ref().to_vec();
+            let [batch, mem_seq, model] = dims[..] else {
+                return Err(invalid_owned(
+                    "cross attention prefill_memory",
+                    alloc::format!(
+                        "expected a rank-3 [batch, seq, d_model] memory input, got rank {} {:?}",
+                        dims.len(),
+                        dims
+                    ),
+                ));
+            };
+            if model != self.d_model() {
+                return Err(invalid_owned(
+                    "cross attention prefill_memory",
+                    alloc::format!(
+                        "memory width {model} does not match d_model {}",
+                        self.d_model()
+                    ),
+                ));
+            }
+            if !cache.is_empty() {
+                return Err(invalid_owned(
+                    "cross attention prefill_memory",
+                    alloc::format!(
+                        "the cache already holds {} tokens; reset it before prefilling new memory",
+                        cache.len()
+                    ),
+                ));
+            }
+            if batch != cache.batch() {
+                return Err(invalid_owned(
+                    "cross attention prefill_memory",
+                    alloc::format!(
+                        "memory batch {batch} does not match the cache batch {}",
+                        cache.batch()
+                    ),
+                ));
+            }
+            if N_KV_HEADS != cache.kv_heads() || Self::head_dim() != cache.head_dim() {
+                return Err(invalid_owned(
+                    "cross attention prefill_memory",
+                    alloc::format!(
+                        "module kv_heads={} head_dim={} do not match the cache \
+                         kv_heads={} head_dim={}",
+                        N_KV_HEADS,
+                        Self::head_dim(),
+                        cache.kv_heads(),
+                        cache.head_dim()
+                    ),
+                ));
+            }
+            if let PositionEncoding::Rotary { max_seq_len, .. } = self.config.position
+                && mem_seq > max_seq_len
+            {
+                return Err(invalid_owned(
+                    "cross attention prefill_memory",
+                    alloc::format!(
+                        "memory length {mem_seq} exceeds the rotary tables' max_seq_len \
+                         {max_seq_len}; rebuild the module with a larger extent"
+                    ),
+                ));
+            }
+
+            let key = self.key.forward(memory.clone())?.forget_layout();
+            let value = self.value.forward(memory)?.forget_layout();
+            let key = split_heads(&key, batch, mem_seq, N_KV_HEADS, Self::head_dim())?;
+            let value = split_heads(&value, batch, mem_seq, N_KV_HEADS, Self::head_dim())?;
+            // Memory positions always begin at 0: it is the fixed stream.
+            let (key, value) = match self.config.position {
+                PositionEncoding::None => (key, value),
+                PositionEncoding::Rotary { .. } => {
+                    let cos = rotary_table(self.rotary_cos.as_ref(), mem_seq)?;
+                    let sin = rotary_table(self.rotary_sin.as_ref(), mem_seq)?;
+                    (apply_rotary(&key, &cos, &sin, Self::head_dim())?, value)
+                }
+            };
+
+            // Inference entry point: retag to `NoGrad` before storing, so
+            // the cache holds plain memory no matter how the module is typed.
+            let key = retag_nograd(key);
+            let value = retag_nograd(value);
+            cache.append(&key, &value)
+        })
+    }
+
+    /// One incremental decode step: queries against already-prefilled memory.
+    ///
+    /// The counterpart to [`MultiHeadAttention::forward_with_cache`]: the
+    /// input is this step's new queries only (`[batch, seq, d_model]`, no
+    /// gradient tracking), the cache already holds the memory's keys and
+    /// values from [`prefill_memory`](Self::prefill_memory) and is **not**
+    /// appended to -- memory is fixed while queries advance. `query_pos` is
+    /// the absolute position of the first query in the chunk: rotary
+    /// positions are applied at `query_pos .. query_pos+seq`, and a causal
+    /// mask of `rows=seq, cols=cache.len()`, `offset=query_pos` continues the
+    /// diagonal from where earlier chunks left off. The returned tensor is
+    /// `NoGrad`; the ambient gradient mode is forced off for the duration of
+    /// the call so trainable projections cannot record nodes either.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::InvalidModuleState`]
+    ///   when `x` is not `[batch, seq, d_model]`, when the cache geometry
+    ///   does not match `x`'s batch / head configuration, when the cache is
+    ///   empty (nothing to decode against), or when rotary tables are
+    ///   configured but missing.
+    /// - a rotary error when `query_pos + seq` exceeds the tables'
+    ///   `max_seq_len`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # extern crate incin_core as incin;
+    /// # use incin::nn::{AttentionConfig, CrossAttention, KvCache};
+    /// # use incin::prelude::*;
+    /// # type Cpu = incin_backends::cpu::CpuBackendImpl;
+    /// # fn main() -> Result<()> {
+    /// let attention = CrossAttention::<16, 2, 2, Cpu>::build(
+    ///     AttentionConfig::causal(), (), (),
+    /// )?;
+    /// // [batch=1, kv_heads=2, capacity=8, head_dim=8]
+    /// let mut cache = KvCache::<s![1, 2, 8, 8], Cpu, f32>::new(())?;
+    /// let memory = Tensor::<Dyn, Cpu>::zeros(vec![1, 8, 16])?;
+    /// attention.prefill_memory(memory, &mut cache)?;
+    ///
+    /// let step = Tensor::<Dyn, Cpu>::zeros(vec![1, 3, 16])?;
+    /// let y = attention.forward_with_cache(step, 0, &cache)?;
+    /// assert_eq!(y.dims().dims(), &[1, 3, 16]);
+    /// assert_eq!(cache.len(), 8);
+    /// assert!(!y.requires_grad());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn forward_with_cache<S: Shape + DynShape>(
+        &self,
+        x: Tensor<Dyn, B, K, NoGrad, Local>,
+        query_pos: usize,
+        cache: &crate::nn::KvCache<S, B, K>,
+    ) -> Result<Tensor<Dyn, B, K, NoGrad, Local>> {
+        GradMode::Disabled.restrict(|| {
+            let dims = x.shape_buf().as_ref().to_vec();
+            let [batch, seq, model] = dims[..] else {
+                return Err(invalid_owned(
+                    "cross attention forward_with_cache",
+                    alloc::format!(
+                        "expected a rank-3 [batch, seq, d_model] query input, got rank {} {:?}",
+                        dims.len(),
+                        dims
+                    ),
+                ));
+            };
+            if model != self.d_model() {
+                return Err(invalid_owned(
+                    "cross attention forward_with_cache",
+                    alloc::format!(
+                        "query width {model} does not match d_model {}",
+                        self.d_model()
+                    ),
+                ));
+            }
+            if batch != cache.batch() {
+                return Err(invalid_owned(
+                    "cross attention forward_with_cache",
+                    alloc::format!(
+                        "query batch {batch} does not match the cache batch {}",
+                        cache.batch()
+                    ),
+                ));
+            }
+            if N_KV_HEADS != cache.kv_heads() || Self::head_dim() != cache.head_dim() {
+                return Err(invalid_owned(
+                    "cross attention forward_with_cache",
+                    alloc::format!(
+                        "module kv_heads={} head_dim={} do not match the cache \
+                         kv_heads={} head_dim={}",
+                        N_KV_HEADS,
+                        Self::head_dim(),
+                        cache.kv_heads(),
+                        cache.head_dim()
+                    ),
+                ));
+            }
+            if cache.is_empty() {
+                return Err(invalid(
+                    "cross attention forward_with_cache",
+                    "the cache is empty; prefill the memory with prefill_memory \
+                     before decoding against it",
+                ));
+            }
+            if let PositionEncoding::Rotary { max_seq_len, .. } = self.config.position
+                && query_pos.saturating_add(seq) > max_seq_len
+            {
+                return Err(invalid_owned(
+                    "cross attention forward_with_cache",
+                    alloc::format!(
+                        "position {} exceeds the rotary tables' max_seq_len {max_seq_len}; \
+                         rebuild the module with a larger extent",
+                        query_pos.saturating_add(seq)
+                    ),
+                ));
+            }
+
+            let query = self.query.forward(x)?.forget_layout();
+            let query = split_heads(&query, batch, seq, N_HEADS, Self::head_dim())?;
+
+            // Rotate at absolute query positions so a chunk that starts
+            // mid-stream sees the same angles a full forward would have used.
+            let query = match self.config.position {
+                PositionEncoding::None => query,
+                PositionEncoding::Rotary { .. } => {
+                    let cos = rotary_table_range(self.rotary_cos.as_ref(), query_pos, seq)?;
+                    let sin = rotary_table_range(self.rotary_sin.as_ref(), query_pos, seq)?;
+                    apply_rotary(&query, &cos, &sin, Self::head_dim())?
+                }
+            };
+
+            // Everything below is inference: retag to `NoGrad` so SDPA's
+            // q/k/v share one gradient type and nothing can reach the tape
+            // even if a caller forgot `GradMode::Disabled`.
+            let query = retag_nograd(query);
+
+            let (keys_all, values_all) = cache.kv()?;
+            let keys_all = expand_kv_heads(&keys_all, N_HEADS, N_KV_HEADS)?;
+            let values_all = expand_kv_heads(&values_all, N_HEADS, N_KV_HEADS)?;
+
+            // Rectangular `[seq, cache.len()]` causal mask shifted by the
+            // chunk's absolute start: row `i` keeps columns `0 ..=
+            // query_pos + i`.
+            let mask = if self.config.causal {
+                let offset = i64::try_from(query_pos).map_err(|_| {
+                    invalid(
+                        "cross attention forward_with_cache",
+                        "query_pos does not fit the mask's diagonal offset",
+                    )
+                })?;
+                Some(causal_mask::<B, K>(
+                    seq,
+                    cache.len(),
+                    offset,
+                    &query._dtype,
+                    &query._device,
+                )?)
             } else {
                 None
             };
@@ -1248,15 +2121,23 @@ where
     Ok(direct.broadcast_add(&turned)?.forget_layout())
 }
 
-/// An additive `[t, t]` causal mask: `0` where attention is allowed and
-/// negative infinity where it is not.
+/// An additive `[rows, cols]` causal mask: `0` where `col <= row + offset`
+/// (attention is allowed) and negative infinity where it is not.
 ///
-/// Built as `log(tril(ones))` rather than by filling a constant, because that
-/// is exact: `log(1)` is `0` and `log(0)` is negative infinity, with no
-/// sentinel value to pick and no dtype-dependent "large enough" constant that
-/// silently stops being large enough in a narrower float.
+/// The square self-attention case is `(seq, seq, 0)`. Cross-attention with
+/// `rows != cols` is the rectangular form -- query row `i` sees memory
+/// columns `0 ..= i + offset` -- and a cached decode passes
+/// `offset = query_pos` so a chunk that starts mid-sequence continues the
+/// diagonal where the previous chunk left it.
+///
+/// Built as `log(tril(ones, offset))` rather than by filling a constant,
+/// because that is exact: `log(1)` is `0` and `log(0)` is negative infinity,
+/// with no sentinel value to pick and no dtype-dependent "large enough"
+/// constant that silently stops being large enough in a narrower float.
 fn causal_mask<B, K>(
-    seq: usize,
+    rows: usize,
+    cols: usize,
+    offset: i64,
     dtype: &<K as DType>::Field,
     device: &<B::Device as Device>::Field,
 ) -> Result<Tensor<Dyn, B, K, NoGrad, Local>>
@@ -1272,8 +2153,8 @@ where
     <B as Execute<op::Tril>>::Output: Into<B::Storage<K>>,
     <B as Execute<op::Log>>::Output: Into<B::Storage<K>>,
 {
-    let ones = ones_from_fields::<B, K>(vec![seq, seq], dtype, device)?;
-    Ok(ones.tril(0)?.forget_layout().log()?.forget_layout())
+    let ones = ones_from_fields::<B, K>(vec![rows, cols], dtype, device)?;
+    Ok(ones.tril(offset)?.forget_layout().log()?.forget_layout())
 }
 
 /// Applies dropout without going through the [`Dropout`] module.

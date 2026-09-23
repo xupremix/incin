@@ -7,6 +7,7 @@ made of, so building one is composition rather than reassembly from `matmul`,
 | Module | What it is |
 |---|---|
 | `MultiHeadAttention` | Four projections, optional rotary positions, optional causal mask. Grouped-query and multi-query attention are the `N_KV_HEADS` const parameter, not separate modules. |
+| `CrossAttention` | The same four projections over two inputs: queries from one sequence, keys and values from an encoder's memory (issue #101). `forward` takes the tuple `(query, memory)`. |
 | `FeedForward` | The position-wise half: `Relu`, `Gelu`, or the gated `SwiGlu`. |
 | `TransformerEncoderLayer` | Self-attention and feed-forward, each behind a residual and a `LayerNorm`. Every position sees every other. |
 | `TransformerDecoderLayer` | The same layer, masked: a position sees only itself and its predecessors. |
@@ -104,6 +105,32 @@ one head property that cannot be const-proven — rotary needs an even head
 width, and the table extent depends on the runtime config — remains a build
 error naming the odd `head_dim`.
 
+## Cross-attention takes two inputs (issue #101)
+
+`CrossAttention` is the same four projections with a different dataflow: the
+queries come from one `[batch, seq, d_model]` sequence and the keys and
+values from another — an encoder's memory — so `forward` takes a tuple and
+the two lengths are free to differ:
+
+```rust,ignore
+let attention = CrossAttention::<512, 8, 2, Cpu>::build(
+    AttentionConfig::default(), (), ())?;
+let y = attention.forward((query, memory))?; // [batch, seq_query, 512]
+```
+
+The head const-parameters and compile-time invariants are exactly
+`MultiHeadAttention`'s. The causal flag, when set, masks by *position*:
+query row `i` sees memory columns `0 ..= i`, a rectangular
+`[seq_query, seq_memory]` mask rather than the square `[T, T]` one. Memory
+that stays fixed across decode steps is projected once with
+`prefill_memory` into a `KvCache`, and then read — not appended to — by
+`forward_with_cache(step, query_pos, &cache)`, where `query_pos` continues
+both the rotary positions and the mask diagonal across chunk boundaries.
+
+The layers above do not embed it: a `TransformerDecoderLayer` stays
+single-input because `Sequential` composes single-input modules, so a
+cross-attending stack reaches for `CrossAttention` directly.
+
 ## Cached decode (issue #104)
 
 `MultiHeadAttention::forward_with_cache` runs one generation step against a
@@ -128,9 +155,10 @@ growing the buffer.
 
 ## What these layers are not
 
-- **Not cross-attending.** They attend to their own input only. A layer that
-  also attends to an encoder's output takes two tensors, and `Module` is
-  parameterized by one input.
+- **Not cross-attending.** They attend to their own input only. For an
+  encoder's memory use `CrossAttention` (above), whose `forward` takes the
+  tuple `(query, memory)` — `Module` is parameterized by one input, which is
+  why cross-attention is a separate module rather than a flag on these.
 - **Not a flash kernel.** Evaluation and zero-dropout inference dispatch the
   catalog's `scaled_dot_product_attention` row (one descriptor instead of the
   composed score/softmax/attend chain); training with attention dropout still
