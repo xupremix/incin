@@ -303,10 +303,24 @@ impl MatMulShape<Dyn> for Dyn {
         };
         checked_contraction(lhs[lhs.len() - 1], rhs_k)?;
 
-        let mut out: alloc::vec::Vec<usize> = lhs[..lhs.len() - 1].to_vec();
-        if !vector_rhs {
-            out.push(rhs[rhs.len() - 1]);
-        }
+        // Batch axes (everything but the trailing matrix) go through the same
+        // NumPy right-aligned broadcast the structural impl and the catalog's
+        // `OutputRule::MatMul` both use, so `MatMulRule::agree` sees one
+        // answer. Taking `lhs[..len-1]` and appending `n` silently dropped
+        // `rhs`'s batch: `[1,3,4] x [5,4,6]` computed a frontend `[1,3,6]`
+        // against the catalog's `[5,3,6]` and failed the equality check.
+        let out: alloc::vec::Vec<usize> = if vector_rhs {
+            // No rhs batch: `lhs` batch + `[m]` is exactly `lhs[..len-1]`.
+            lhs[..lhs.len() - 1].to_vec()
+        } else {
+            let mut dims = crate::shapes::broadcast::broadcast_dim_slices(
+                &lhs[..lhs.len() - 2],
+                &rhs[..rhs.len() - 2],
+            )?;
+            dims.push(lhs[lhs.len() - 2]);
+            dims.push(rhs[rhs.len() - 1]);
+            dims
+        };
         Ok(ShapeBuf::from_slice(&out))
     }
 }

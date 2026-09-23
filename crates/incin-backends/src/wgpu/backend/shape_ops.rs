@@ -37,19 +37,43 @@ impl<D: Device> WgpuBackendImpl<D> {
             });
         }
 
-        // Compute batch dims
-        let lhs_batch = ShapeBuf::from_slice(&lhs.shape[..lhs_rank - 2])
-            .checked_numel(OperationKind::MatMul)?;
-        let rhs_batch = ShapeBuf::from_slice(&rhs.shape[..rhs_rank - 2])
-            .checked_numel(OperationKind::MatMul)?;
+        // Batch dims = every axis except the trailing 2, resolved with the
+        // same NumPy right-aligned `broadcast_shape` the CPU backend reuses
+        // (size-1 batches broadcast; they are not unwrapped to rank-2).
+        let lhs_batch_dims = &lhs.shape[..lhs_rank - 2];
+        let rhs_batch_dims = &rhs.shape[..rhs_rank - 2];
+        let out_batch = crate::layout::broadcast_shape(lhs_batch_dims, rhs_batch_dims)?;
 
-        let batch = core::cmp::max(lhs_batch, rhs_batch);
-        if lhs_batch != 1 && rhs_batch != 1 && lhs_batch != rhs_batch {
+        let lhs_batch =
+            ShapeBuf::from_slice(lhs_batch_dims).checked_numel(OperationKind::MatMul)?;
+        let rhs_batch =
+            ShapeBuf::from_slice(rhs_batch_dims).checked_numel(OperationKind::MatMul)?;
+        let batch = ShapeBuf::from_slice(&out_batch).checked_numel(OperationKind::MatMul)?;
+
+        // The flat-stride kernel walks one batch index with a single stride
+        // per operand: a full batch (stride = one trailing matrix) or a
+        // size-1 batch (stride 0). A partial multi-dim broadcast — `[2,1]`
+        // against `[1,3]`, numels 2 and 3 under an output of 6 — needs
+        // per-axis strides the kernel does not carry, so refuse it rather
+        // than silently compute the wrong tiles. When the guard passes,
+        // each operand's batch row-major layout matches `out_batch` (or is
+        // size-1), so the flat stride is exact.
+        if lhs_batch != 1 && lhs_batch != batch {
             return Err(Error::ShapeMismatch {
                 op: "matmul",
                 expected: lhs.shape.to_vec(),
                 got: rhs.shape.to_vec(),
-                msg: "matmul batch dims incompatible".to_string(),
+                msg: "matmul batch dims require a multi-axis broadcast the flat-stride kernel cannot express"
+                    .to_string(),
+            });
+        }
+        if rhs_batch != 1 && rhs_batch != batch {
+            return Err(Error::ShapeMismatch {
+                op: "matmul",
+                expected: lhs.shape.to_vec(),
+                got: rhs.shape.to_vec(),
+                msg: "matmul batch dims require a multi-axis broadcast the flat-stride kernel cannot express"
+                    .to_string(),
             });
         }
 
@@ -70,15 +94,9 @@ impl<D: Device> WgpuBackendImpl<D> {
             })?
         };
 
-        // Output shape matches the larger batched input
-        let mut out_shape = if lhs_batch > 1 {
-            lhs.shape[..lhs_rank - 2].to_vec()
-        } else {
-            rhs.shape[..rhs_rank - 2].to_vec()
-        };
-        if out_shape.is_empty() && batch > 1 {
-            out_shape.push(batch);
-        }
+        // Output batch dims are the broadcast, not "whichever side had
+        // numel > 1": `[1,5,8] x [8,5]` is `[1,5,5]`, not `[5,5]`.
+        let mut out_shape = out_batch;
         out_shape.push(m);
         out_shape.push(n);
 
