@@ -556,7 +556,22 @@ macro_rules! metal_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
-            elementwise = [Add, Sub, Mul, Div],
+            // Batch-A pointwise on top of the four arithmetic binaries:
+            // every unary float with a host-side `Self::$method` and tape
+            // recipe in `metal/pointwise.rs`, the four scalar forms plus
+            // `powf`, `clamp`, and the three binary floats (`atan2`/
+            // `fmod`/`remainder`). Each has an `Execute` impl in
+            // `metal/executor.rs` — the compile-time assert at the bottom
+            // of that file is what makes advertising them safe.
+            elementwise = [
+                Add, Sub, Mul, Div,
+                Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
+                Tanh, Sigmoid, Swish, Sign, Floor, Ceil, Round, Log2, Log10,
+                Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Asinh, Acosh,
+                Atanh, Erf, Rsqrt, Trunc, Frac,
+                AddScalar, SubScalar, MulScalar, DivScalar, Powf, Clamp,
+                Atan2, Fmod, Remainder,
+            ],
             broadcast = [BroadcastAs],
             reshape = [ReshapeExact],
             // `impl_creation_executors!` gives Metal real `UniformRandom`/

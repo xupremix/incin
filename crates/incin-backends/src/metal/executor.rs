@@ -43,7 +43,139 @@ macro_rules! impl_metal_canonical {
     )*};
 }
 
-impl_metal_canonical![(Add, add), (Sub, sub), (Mul, mul), (Div, div),];
+impl_metal_canonical![
+    (Add, add),
+    (Sub, sub),
+    (Mul, mul),
+    (Div, div),
+    // The three binary floats whose backward is CPU's own recipe (the
+    // quotient rule for `atan2`, `record_modulus` for the two residues).
+    // Same request shape as the four above: two operands, no attributes.
+    (Atan2, atan2),
+    (Fmod, fmod),
+    (Remainder, remainder),
+];
+
+/// Unary floats with no attributes: one operand, one `Self::$method` call.
+/// Written once so the pointwise methods in `metal/pointwise.rs` and the
+/// capability rows that name them cannot drift apart — the same pattern
+/// `wgpu_unary_float_operations!` uses for its WGSL modes.
+macro_rules! impl_metal_unary_float {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "unary operation expects 1 input"));
+                };
+                let input = input
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+                Self::$method::<f32>(input)
+                    .map_err(|error| kernel_error("Metal", operation, error))
+            }
+        }
+    )*};
+}
+
+impl_metal_unary_float![
+    (Relu, relu),
+    (Step, step),
+    (Mish, mish),
+    (Elu, elu),
+    (Gelu, gelu),
+    (Abs, abs),
+    (Exp, exp),
+    (Neg, neg),
+    (Sqrt, sqrt),
+    (Log, log),
+    (Tanh, tanh),
+    (Sigmoid, sigmoid),
+    (Swish, swish),
+    (Sign, sign),
+    (Floor, floor),
+    (Ceil, ceil),
+    (Round, round),
+    (Log2, log2),
+    (Log10, log10),
+    (Sin, sin),
+    (Cos, cos),
+    (Tan, tan),
+    (Asin, asin),
+    (Acos, acos),
+    (Atan, atan),
+    (Sinh, sinh),
+    (Cosh, cosh),
+    (Asinh, asinh),
+    (Acosh, acosh),
+    (Atanh, atanh),
+    (Erf, erf),
+    (Rsqrt, rsqrt),
+    (Trunc, trunc),
+    (Frac, frac),
+];
+
+/// One operand and one `f64` attribute: the four scalar forms plus `powf`.
+/// Mirrors CUDA's `impl_cuda_scalar_tensor!` and WGPU's
+/// `impl_wgpu_scalar_tensor!` in arity and attribute read.
+macro_rules! impl_metal_scalar_tensor {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "operation expects exactly one operand"));
+                };
+                let input = input
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "operand is not Metal storage"))?;
+                let value = request.operation.descriptor().attributes().value;
+                Self::$method::<f32>(input, value)
+                    .map_err(|error| kernel_error("Metal", operation, error))
+            }
+        }
+    )*};
+}
+
+impl_metal_scalar_tensor![
+    (AddScalar, add_scalar_float),
+    (SubScalar, sub_scalar_float),
+    (MulScalar, mul_scalar_float),
+    (DivScalar, div_scalar_float),
+    (Powf, powf),
+];
+
+/// One operand and an ordered `min`/`max` pair, so this fits neither the
+/// unary macro (no attributes) nor the scalar one (two bounds, not one).
+impl<D: Device> Execute<op::Clamp> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Clamp, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Clamp;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "clamp expects exactly one operand"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "operand is not Metal storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        Self::clamp::<f32>(input, attributes.min, attributes.max)
+            .map_err(|error| kernel_error("Metal", operation, error))
+    }
+}
 
 impl<D: Device> Execute<op::ReshapeExact> for MetalBackendImpl<D> {
     type Output = MetalStorage;

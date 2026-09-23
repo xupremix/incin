@@ -14,8 +14,8 @@ use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::DType;
 
 use super::backend::MetalBackendImpl;
+use super::backend::{binary_op_metal, scalar_op_metal, unary_op_metal, unbroadcast};
 use super::storage::MetalStorage;
-use super::backend::{binary_op_metal, scalar_op_metal, unbroadcast, unary_op_metal};
 
 /// Push a single-input `TapeEntry` whose backward maps one cotangent to one
 /// gradient. Shared by every unary/scalar recipe below so the
@@ -52,7 +52,11 @@ fn erf_approx_f64(value: f64) -> f64 {
 
 /// Softplus with the large-input shortcut CPU's `Mish` kernel uses.
 fn softplus_f32(value: f32) -> f32 {
-    if value > 20.0 { value } else { (1.0 + value.exp()).ln() }
+    if value > 20.0 {
+        value
+    } else {
+        (1.0 + value.exp()).ln()
+    }
 }
 
 /// `sign(x)` as CPU's `UnaryOp::Sign` evaluates it (used by `abs`'s recipe).
@@ -100,9 +104,12 @@ macro_rules! unary_input_deriv_taped {
     ($method:ident, $forward:expr, $deriv:expr) => {
         unary_taped!($method, $forward, |t, _out, grad_out| {
             let deriv = unary_op_metal(t, $deriv)?;
-            binary_op_metal(grad_out, &deriv, concat!(stringify!($method), "_grad"), |g, d| {
-                g * d
-            })
+            binary_op_metal(
+                grad_out,
+                &deriv,
+                concat!(stringify!($method), "_grad"),
+                |g, d| g * d,
+            )
         });
     };
 }
@@ -113,9 +120,12 @@ macro_rules! unary_output_deriv_taped {
     ($method:ident, $forward:expr, $deriv:expr) => {
         unary_taped!($method, $forward, |_t, out, grad_out| {
             let deriv = unary_op_metal(out, $deriv)?;
-            binary_op_metal(grad_out, &deriv, concat!(stringify!($method), "_grad"), |g, d| {
-                g * d
-            })
+            binary_op_metal(
+                grad_out,
+                &deriv,
+                concat!(stringify!($method), "_grad"),
+                |g, d| g * d,
+            )
         });
     };
 }
@@ -131,6 +141,12 @@ macro_rules! unary_zero_grad_taped {
     };
 }
 
+// The unary/binary constructors below are macro invocations that expand to
+// `fn` items; rustc treats `///` on the invocation itself as an unused doc
+// comment even though the expansion is what readers of this file need the
+// docs for. Suppress the lint at the impl boundary rather than degrading
+// those docs to `//`.
+#[allow(unused_doc_comments)]
 impl<D: Device> MetalBackendImpl<D> {
     // ── Activations & elementwise basics ───────────────────────────────────
 
@@ -169,8 +185,7 @@ impl<D: Device> MetalBackendImpl<D> {
         |x: f32| {
             let x64 = f64::from(x);
             let cdf = 0.5 * (1.0 + erf_approx_f64(x64 / core::f64::consts::SQRT_2));
-            let pdf =
-                (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x64 * x64 / 2.0).exp();
+            let pdf = (1.0 / (2.0 * core::f64::consts::PI).sqrt()) * (-x64 * x64 / 2.0).exp();
             (cdf + x64 * pdf) as f32
         }
     );
@@ -282,7 +297,9 @@ impl<D: Device> MetalBackendImpl<D> {
 
     /// `frac(x) = x - trunc(x)`. Derivative 1 wherever it exists; the
     /// gradient passes straight through (CPU `canonical_frac`).
-    unary_taped!(frac, |x| x.fract(), |_t, _out, g| Ok(g.clone()));
+    unary_taped!(frac, |x| x.fract(), |_t, _out, g: &MetalStorage| Ok(
+        g.clone()
+    ));
 
     // ── Scalars ────────────────────────────────────────────────────────────
 
@@ -367,14 +384,12 @@ impl<D: Device> MetalBackendImpl<D> {
                 let x_sq = binary_op_metal(&x_cap, &x_cap, "atan2_grad_x_sq", |a, b| a * b)?;
                 let y_sq = binary_op_metal(&y_cap, &y_cap, "atan2_grad_y_sq", |a, b| a * b)?;
                 let denom = binary_op_metal(&x_sq, &y_sq, "atan2_grad_denom", |a, b| a + b)?;
-                let numer_y = binary_op_metal(grad_out, &x_cap, "atan2_grad_numer_y", |a, b| {
-                    a * b
-                })?;
+                let numer_y =
+                    binary_op_metal(grad_out, &x_cap, "atan2_grad_numer_y", |a, b| a * b)?;
                 let grad_y = binary_op_metal(&numer_y, &denom, "atan2_grad_y", |a, b| a / b)?;
                 let neg_y = unary_op_metal(&y_cap, |x| -x)?;
-                let numer_x = binary_op_metal(grad_out, &neg_y, "atan2_grad_numer_x", |a, b| {
-                    a * b
-                })?;
+                let numer_x =
+                    binary_op_metal(grad_out, &neg_y, "atan2_grad_numer_x", |a, b| a * b)?;
                 let grad_x = binary_op_metal(&numer_x, &denom, "atan2_grad_x", |a, b| a / b)?;
                 Ok(vec![
                     unbroadcast(&grad_y, &y_dims)?,
@@ -393,7 +408,7 @@ impl<D: Device> MetalBackendImpl<D> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = binary_op_metal(lhs, rhs, "fmod", |a, b| a % b)?;
-        Self::push_modulus_tape(lhs, rhs, &out);
+        Self::push_modulus_tape::<K>(lhs, rhs, &out);
         Ok(out)
     }
 
@@ -405,7 +420,7 @@ impl<D: Device> MetalBackendImpl<D> {
         rhs: &<Self as StorageBackend>::Storage<K>,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         let out = binary_op_metal(lhs, rhs, "remainder", |a, b| a.rem_euclid(b))?;
-        Self::push_modulus_tape(lhs, rhs, &out);
+        Self::push_modulus_tape::<K>(lhs, rhs, &out);
         Ok(out)
     }
 
@@ -430,12 +445,9 @@ impl<D: Device> MetalBackendImpl<D> {
             output_id: out_id,
             input_ids: vec![lhs_id, rhs_id],
             backward: Box::new(move |grad_out: &MetalStorage| {
-                let numerator =
-                    binary_op_metal(&lhs_cap, &out_cap, "mod_grad_num", |a, r| a - r)?;
-                let quotient =
-                    binary_op_metal(&numerator, &rhs_cap, "mod_grad_q", |n, b| n / b)?;
-                let grad_rhs =
-                    binary_op_metal(grad_out, &quotient, "mod_grad_rhs", |g, q| g * -q)?;
+                let numerator = binary_op_metal(&lhs_cap, &out_cap, "mod_grad_num", |a, r| a - r)?;
+                let quotient = binary_op_metal(&numerator, &rhs_cap, "mod_grad_q", |n, b| n / b)?;
+                let grad_rhs = binary_op_metal(grad_out, &quotient, "mod_grad_rhs", |g, q| g * -q)?;
                 Ok(vec![
                     unbroadcast(grad_out, &lhs_dims)?,
                     unbroadcast(&grad_rhs, &rhs_dims)?,
@@ -483,8 +495,23 @@ mod tests {
     }
 
     fn assert_close(got: &[f32], want: &[f32], eps: f32) {
-        assert_eq!(got.len(), want.len(), "length mismatch: {got:?} vs {want:?}");
+        assert_eq!(
+            got.len(),
+            want.len(),
+            "length mismatch: {got:?} vs {want:?}"
+        );
         for (i, (g, w)) in got.iter().zip(want.iter()).enumerate() {
+            // Domain edges: `log`/`log2`/`log10` of `0.0` are `-inf` on
+            // both sides (and negatives are `NaN` on both). CPU evaluates
+            // the same IEEE edge cases, so matching non-finite values are
+            // equal — `(-inf) - (-inf)` is `NaN` and would fail the
+            // tolerance check below for no semantic reason.
+            if g.is_nan() && w.is_nan() {
+                continue;
+            }
+            if *g == *w {
+                continue;
+            }
             let tol = eps * w.abs().max(1.0);
             assert!(
                 (g - w).abs() <= tol,
@@ -520,39 +547,173 @@ mod tests {
         }
 
         let cases: &[Case] = &[
-            Case { name: "relu", run: |v| read(&B::relu::<f32>(&vector(v)).unwrap()), want: |x| x.max(0.0) },
-            Case { name: "step", run: |v| read(&B::step::<f32>(&vector(v)).unwrap()), want: step_f32 },
-            Case { name: "abs", run: |v| read(&B::abs::<f32>(&vector(v)).unwrap()), want: |x| x.abs() },
-            Case { name: "neg", run: |v| read(&B::neg::<f32>(&vector(v)).unwrap()), want: |x| -x },
-            Case { name: "exp", run: |v| read(&B::exp::<f32>(&vector(v)).unwrap()), want: |x| x.exp() },
-            Case { name: "sqrt_abs", run: |v| read(&B::sqrt::<f32>(&vector(v)).unwrap()), want: |x| x.abs().sqrt() },
-            Case { name: "sign", run: |v| read(&B::sign::<f32>(&vector(v)).unwrap()), want: sign_f32 },
-            Case { name: "floor", run: |v| read(&B::floor::<f32>(&vector(v)).unwrap()), want: |x| x.floor() },
-            Case { name: "ceil", run: |v| read(&B::ceil::<f32>(&vector(v)).unwrap()), want: |x| x.ceil() },
-            Case { name: "round", run: |v| read(&B::round::<f32>(&vector(v)).unwrap()), want: |x| x.round() },
-            Case { name: "trunc", run: |v| read(&B::trunc::<f32>(&vector(v)).unwrap()), want: |x| x.trunc() },
-            Case { name: "frac", run: |v| read(&B::frac::<f32>(&vector(v)).unwrap()), want: |x| x.fract() },
-            Case { name: "sin", run: |v| read(&B::sin::<f32>(&vector(v)).unwrap()), want: |x| x.sin() },
-            Case { name: "cos", run: |v| read(&B::cos::<f32>(&vector(v)).unwrap()), want: |x| x.cos() },
-            Case { name: "tan", run: |v| read(&B::tan::<f32>(&vector(v)).unwrap()), want: |x| x.tan() },
-            Case { name: "sinh", run: |v| read(&B::sinh::<f32>(&vector(v)).unwrap()), want: |x| x.sinh() },
-            Case { name: "cosh", run: |v| read(&B::cosh::<f32>(&vector(v)).unwrap()), want: |x| x.cosh() },
-            Case { name: "elu", run: |v| read(&B::elu::<f32>(&vector(v)).unwrap()), want: |x| if x > 0.0 { x } else { x.exp() - 1.0 } },
-            Case { name: "mish", run: |v| read(&B::mish::<f32>(&vector(v)).unwrap()), want: |x| x * softplus_f32(x).tanh() },
-            Case { name: "swish", run: |v| read(&B::swish::<f32>(&vector(v)).unwrap()), want: |x| x / (1.0 + (-x).exp()) },
-            Case { name: "sigmoid", run: |v| read(&B::sigmoid::<f32>(&vector(v)).unwrap()), want: |x| 1.0 / (1.0 + (-x).exp()) },
-            Case { name: "tanh", run: |v| read(&B::tanh::<f32>(&vector(v)).unwrap()), want: |x| x.tanh() },
-            Case { name: "erf", run: |v| read(&B::erf::<f32>(&vector(v)).unwrap()), want: |x| erf_approx_f64(f64::from(x)) as f32 },
-            Case { name: "log2_pos", run: |v| read(&B::log2::<f32>(&vector(v)).unwrap()), want: |x| x.log2() },
-            Case { name: "log10_pos", run: |v| read(&B::log10::<f32>(&vector(v)).unwrap()), want: |x| x.log10() },
-            Case { name: "asin_domain", run: |v| read(&B::asin::<f32>(&vector(&[v[3]])).unwrap()), want: |x| x.asin() },
-            Case { name: "acos_domain", run: |v| read(&B::acos::<f32>(&vector(&[v[3]])).unwrap()), want: |x| x.acos() },
-            Case { name: "atan", run: |v| read(&B::atan::<f32>(&vector(v)).unwrap()), want: |x| x.atan() },
-            Case { name: "asinh", run: |v| read(&B::asinh::<f32>(&vector(v)).unwrap()), want: |x| x.asinh() },
-            Case { name: "acosh_domain", run: |v| read(&B::acosh::<f32>(&vector(&[v[6]])).unwrap()), want: |x| x.acosh() },
-            Case { name: "atanh_domain", run: |v| read(&B::atanh::<f32>(&vector(&[v[3]])).unwrap()), want: |x| x.atanh() },
-            Case { name: "rsqrt_pos", run: |v| read(&B::rsqrt::<f32>(&vector(&[v[3]])).unwrap()), want: |x| 1.0 / x.sqrt() },
-            Case { name: "log_pos", run: |v| read(&B::log::<f32>(&vector(&[v[3]])).unwrap()), want: |x| x.ln() },
+            Case {
+                name: "relu",
+                run: |v| read(&B::relu::<f32>(&vector(v)).unwrap()),
+                want: |x| x.max(0.0),
+            },
+            Case {
+                name: "step",
+                run: |v| read(&B::step::<f32>(&vector(v)).unwrap()),
+                want: step_f32,
+            },
+            Case {
+                name: "abs",
+                run: |v| read(&B::abs::<f32>(&vector(v)).unwrap()),
+                want: |x| x.abs(),
+            },
+            Case {
+                name: "neg",
+                run: |v| read(&B::neg::<f32>(&vector(v)).unwrap()),
+                want: |x| -x,
+            },
+            Case {
+                name: "exp",
+                run: |v| read(&B::exp::<f32>(&vector(v)).unwrap()),
+                want: |x| x.exp(),
+            },
+            Case {
+                // CPU's `UnaryOp::Sqrt` is `value.sqrt()`, which is `NaN`
+                // for a negative input — match that, not `abs().sqrt()`.
+                name: "sqrt",
+                run: |v| read(&B::sqrt::<f32>(&vector(v)).unwrap()),
+                want: |x| x.sqrt(),
+            },
+            Case {
+                name: "sign",
+                run: |v| read(&B::sign::<f32>(&vector(v)).unwrap()),
+                want: sign_f32,
+            },
+            Case {
+                name: "floor",
+                run: |v| read(&B::floor::<f32>(&vector(v)).unwrap()),
+                want: |x| x.floor(),
+            },
+            Case {
+                name: "ceil",
+                run: |v| read(&B::ceil::<f32>(&vector(v)).unwrap()),
+                want: |x| x.ceil(),
+            },
+            Case {
+                name: "round",
+                run: |v| read(&B::round::<f32>(&vector(v)).unwrap()),
+                want: |x| x.round(),
+            },
+            Case {
+                name: "trunc",
+                run: |v| read(&B::trunc::<f32>(&vector(v)).unwrap()),
+                want: |x| x.trunc(),
+            },
+            Case {
+                name: "frac",
+                run: |v| read(&B::frac::<f32>(&vector(v)).unwrap()),
+                want: |x| x.fract(),
+            },
+            Case {
+                name: "sin",
+                run: |v| read(&B::sin::<f32>(&vector(v)).unwrap()),
+                want: |x| x.sin(),
+            },
+            Case {
+                name: "cos",
+                run: |v| read(&B::cos::<f32>(&vector(v)).unwrap()),
+                want: |x| x.cos(),
+            },
+            Case {
+                name: "tan",
+                run: |v| read(&B::tan::<f32>(&vector(v)).unwrap()),
+                want: |x| x.tan(),
+            },
+            Case {
+                name: "sinh",
+                run: |v| read(&B::sinh::<f32>(&vector(v)).unwrap()),
+                want: |x| x.sinh(),
+            },
+            Case {
+                name: "cosh",
+                run: |v| read(&B::cosh::<f32>(&vector(v)).unwrap()),
+                want: |x| x.cosh(),
+            },
+            Case {
+                name: "elu",
+                run: |v| read(&B::elu::<f32>(&vector(v)).unwrap()),
+                want: |x| if x > 0.0 { x } else { x.exp() - 1.0 },
+            },
+            Case {
+                name: "mish",
+                run: |v| read(&B::mish::<f32>(&vector(v)).unwrap()),
+                want: |x| x * softplus_f32(x).tanh(),
+            },
+            Case {
+                name: "swish",
+                run: |v| read(&B::swish::<f32>(&vector(v)).unwrap()),
+                want: |x| x / (1.0 + (-x).exp()),
+            },
+            Case {
+                name: "sigmoid",
+                run: |v| read(&B::sigmoid::<f32>(&vector(v)).unwrap()),
+                want: |x| 1.0 / (1.0 + (-x).exp()),
+            },
+            Case {
+                name: "tanh",
+                run: |v| read(&B::tanh::<f32>(&vector(v)).unwrap()),
+                want: |x| x.tanh(),
+            },
+            Case {
+                name: "erf",
+                run: |v| read(&B::erf::<f32>(&vector(v)).unwrap()),
+                want: |x| erf_approx_f64(f64::from(x)) as f32,
+            },
+            Case {
+                name: "log2_pos",
+                run: |v| read(&B::log2::<f32>(&vector(v)).unwrap()),
+                want: |x| x.log2(),
+            },
+            Case {
+                name: "log10_pos",
+                run: |v| read(&B::log10::<f32>(&vector(v)).unwrap()),
+                want: |x| x.log10(),
+            },
+            Case {
+                name: "asin_domain",
+                run: |v| read(&B::asin::<f32>(&vector(&[v[3]])).unwrap()),
+                want: |x| x.asin(),
+            },
+            Case {
+                name: "acos_domain",
+                run: |v| read(&B::acos::<f32>(&vector(&[v[3]])).unwrap()),
+                want: |x| x.acos(),
+            },
+            Case {
+                name: "atan",
+                run: |v| read(&B::atan::<f32>(&vector(v)).unwrap()),
+                want: |x| x.atan(),
+            },
+            Case {
+                name: "asinh",
+                run: |v| read(&B::asinh::<f32>(&vector(v)).unwrap()),
+                want: |x| x.asinh(),
+            },
+            Case {
+                name: "acosh_domain",
+                run: |v| read(&B::acosh::<f32>(&vector(&[v[6]])).unwrap()),
+                want: |x| x.acosh(),
+            },
+            Case {
+                name: "atanh_domain",
+                run: |v| read(&B::atanh::<f32>(&vector(&[v[3]])).unwrap()),
+                want: |x| x.atanh(),
+            },
+            Case {
+                name: "rsqrt_pos",
+                run: |v| read(&B::rsqrt::<f32>(&vector(&[v[3]])).unwrap()),
+                want: |x| 1.0 / x.sqrt(),
+            },
+            Case {
+                name: "log_pos",
+                run: |v| read(&B::log::<f32>(&vector(&[v[3]])).unwrap()),
+                want: |x| x.ln(),
+            },
         ];
 
         for case in cases {
@@ -561,7 +722,7 @@ mod tests {
             // The domain-filtered cases return length-1 outputs; only compare
             // when the shapes line up.
             if got.len() == want.len() {
-                assert_close(&got, &want, 1e-5,);
+                assert_close(&got, &want, 1e-5);
             } else {
                 assert_eq!(got.len(), 1, "{} returned unexpected length", case.name);
             }
@@ -621,11 +782,17 @@ mod tests {
         let a = read(&B::atan2::<f32>(&y, &x).unwrap());
         assert_close(
             &a,
-            &[1.0f32.atan2(1.0), (-1.0f32).atan2(1.0), 0.0f32.atan2(-1.0), 3.0f32.atan2(2.0)],
+            &[
+                1.0f32.atan2(1.0),
+                (-1.0f32).atan2(1.0),
+                0.0f32.atan2(-1.0),
+                3.0f32.atan2(2.0),
+            ],
             1e-6,
         );
 
-        let f = read(&B::fmod::<f32>(&vector(&[7.0, -7.0, 7.0]), &vector(&[3.0, 3.0, -3.0])).unwrap());
+        let f =
+            read(&B::fmod::<f32>(&vector(&[7.0, -7.0, 7.0]), &vector(&[3.0, 3.0, -3.0])).unwrap());
         // f32 % is truncated remainder: 7%3=1, -7%3=-1, 7%-3=1
         assert_close(&f, &[1.0, -1.0, 1.0], 1e-6);
 
@@ -644,7 +811,11 @@ mod tests {
         let got = read(&out);
         assert_eq!(got.len(), 6);
         // First row (y=1): atan2(1, 10/20/30)
-        assert_close(&got[0..3], &[1.0f32.atan2(10.0), 1.0f32.atan2(20.0), 1.0f32.atan2(30.0)], 1e-6);
+        assert_close(
+            &got[0..3],
+            &[1.0f32.atan2(10.0), 1.0f32.atan2(20.0), 1.0f32.atan2(30.0)],
+            1e-6,
+        );
     }
 
     // ── Backward recipes ───────────────────────────────────────────────────
@@ -681,7 +852,11 @@ mod tests {
         let t = vector(&[2.0, 3.0]);
         let (_, grads, _) = recorded(|| B::powf::<f32>(&t, 3.0).unwrap());
         // d/dx x^3 = 3x^2 → 12, 27
-        assert_close(read(grads.get(t.id()).unwrap()).as_slice(), &[12.0, 27.0], 1e-4);
+        assert_close(
+            read(grads.get(t.id()).unwrap()).as_slice(),
+            &[12.0, 27.0],
+            1e-4,
+        );
     }
 
     #[test]
@@ -721,7 +896,9 @@ mod tests {
         ] {
             let t = vector(&[1.5, -2.5]);
             let (_, grads, _) = recorded(|| run(&t).unwrap());
-            let g = grads.get(t.id()).unwrap_or_else(|| panic!("{name} must record a grad"));
+            let g = grads
+                .get(t.id())
+                .unwrap_or_else(|| panic!("{name} must record a grad"));
             assert_eq!(
                 read(g),
                 vec![0.0, 0.0],
@@ -783,7 +960,11 @@ mod tests {
         let _ = GradMode::Disabled.scope(|| B::relu::<f32>(&t).unwrap());
         let _ = GradMode::Disabled.scope(|| B::add_scalar_float::<f32>(&t, 1.0).unwrap());
         let _ = GradMode::Disabled.scope(|| B::atan2::<f32>(&t, &t).unwrap());
-        assert_eq!(crate::metal::tape::depth(), before, "NoGrad must record nothing");
+        assert_eq!(
+            crate::metal::tape::depth(),
+            before,
+            "NoGrad must record nothing"
+        );
     }
 
     #[test]
