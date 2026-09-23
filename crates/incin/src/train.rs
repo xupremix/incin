@@ -851,6 +851,16 @@ pub struct Trainer {
     fsdp: Option<Arc<dyn FsdpSynchronizer>>,
 }
 
+// `Arc<dyn GradientSynchronizer>` / `Arc<dyn FsdpSynchronizer>` are not
+// auto-`UnwindSafe` (trait objects drop the bound), so the new fields would
+// have stripped `Trainer` of the auto impls `Plan` alone already had — a
+// semver-major auto-trait removal for a type that never unwound across its
+// own state. The synchronizers are `Send + Sync` value objects whose methods
+// take `&self` and return `Result`; the same assertion the plain `Plan`
+// fields already carry holds for the Arcs.
+impl std::panic::UnwindSafe for Trainer {}
+impl std::panic::RefUnwindSafe for Trainer {}
+
 impl Trainer {
     /// Starts a builder.
     ///

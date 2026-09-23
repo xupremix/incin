@@ -10,6 +10,8 @@
 
 use incin_core::backend_authoring::*;
 use incin_core::error::Result;
+use incin_core::shapes::ShapeBuf;
+use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::DType;
 
@@ -500,7 +502,7 @@ impl<D: Device> MetalBackendImpl<D> {
             return Self::mul_scalar_float::<K>(t, 0.0);
         }
         let dims = t.metadata().shape().dims().to_vec();
-        let numel = crate::bytes::checked_numel(&dims)?;
+        let numel = ShapeBuf::from_slice(&dims).checked_numel(OperationKind::Storage)?;
         let numel_u64 = u64::try_from(numel).map_err(|_| {
             incin_core::error::Error::Msg("dropout mask element count exceeds u64".into())
         })?;
