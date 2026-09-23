@@ -25,6 +25,7 @@ declare -A explained=(
     [crates/incin-core/src/tensor/ops/manipulation/indexing.rs]=1
     [crates/incin-core/src/tensor/ops/reduce.rs]=1
     [crates/incin-core/src/nn/attention.rs]=1
+    [crates/incin/src/train.rs]=1
 )
 
 mapfile -t actual < <(

@@ -153,7 +153,7 @@ jobs:
     # for `UX-001` and the completed distributed rows verbatim.
     - name: Run Preview-Feature Tests
       run: |
-        cargo test -p incin --features train --test trainer
+        cargo test -p incin --features train,distributed --test trainer
         cargo test -p incin-core --features distributed --test mesh_compile
         cargo test -p incin-core --features distributed --test mesh_bind
         cargo test -p incin-core --features distributed --test placement_rules

@@ -26,6 +26,7 @@ pub mod placement;
 pub mod plan;
 #[cfg(feature = "distributed")]
 pub mod rule;
+pub mod sync;
 #[cfg(feature = "distributed")]
 pub mod tensor_parallel;
 
@@ -84,6 +85,11 @@ pub use rule::{
     LegalTransition, PlacementTransition, PlacementTransitionRule, ReduceShardedAxis,
     ShardDivisible, ShardRemainderPolicy, ValidatedDistributed, validate_pipeline_stage,
     validate_shard, validate_transition,
+};
+pub use sync::{
+    FsdpSynchronizer, GradientSynchronizer, ShardedGradients, SyncError,
+    all_gather_model_parameters, all_reduce_model_gradients, mask_gradients_to_owned_shard,
+    reduce_scatter_model_gradients,
 };
 #[cfg(feature = "distributed")]
 pub use tensor_parallel::{
