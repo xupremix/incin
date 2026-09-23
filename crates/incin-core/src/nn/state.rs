@@ -231,6 +231,62 @@ pub trait VisitStateMut<B: crate::tensor::backend::VariableBackend> {
     }
 }
 
+impl<B, T, const N: usize> VisitState<B> for [T; N]
+where
+    B: crate::tensor::backend::VariableBackend,
+    T: VisitState<B>,
+{
+    fn flat_width() -> usize {
+        N * T::flat_width()
+    }
+
+    fn visit_state<V: StateVisitor<B>>(&self, path: &StatePath, visitor: &mut V) -> Result<()> {
+        self.visit_state_flat(path, 0, visitor)
+    }
+
+    fn visit_state_flat<V: StateVisitor<B>>(
+        &self,
+        parent: &StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        for (i, item) in self.iter().enumerate() {
+            item.visit_state_flat(parent, base_index + i * T::flat_width(), visitor)?;
+        }
+        Ok(())
+    }
+}
+
+impl<B, T, const N: usize> VisitStateMut<B> for [T; N]
+where
+    B: crate::tensor::backend::VariableBackend,
+    T: VisitStateMut<B>,
+{
+    fn flat_width() -> usize {
+        N * T::flat_width()
+    }
+
+    fn visit_state_mut<V: StateMutVisitor<B>>(
+        &mut self,
+        path: &StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.visit_state_mut_flat(path, 0, visitor)
+    }
+
+    fn visit_state_mut_flat<V: StateMutVisitor<B>>(
+        &mut self,
+        parent: &StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        for (i, item) in self.iter_mut().enumerate() {
+            item.visit_state_mut_flat(parent, base_index + i * T::flat_width(), visitor)?;
+        }
+        Ok(())
+    }
+}
+
 /// Collects typed leaves into the durable, backend-neutral snapshot format.
 #[derive(Debug, Default)]
 pub struct StateSnapshotVisitor {

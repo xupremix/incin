@@ -142,6 +142,14 @@ impl<L1: ComputeStats, L2: ComputeStats> ComputeStats for Sequential<L1, L2> {
     }
 }
 
+impl<T: ComputeStats, const N: usize> ComputeStats for [T; N] {
+    /// Sum over every element's stats, matching how a `#[module]` field
+    /// list sums its children.
+    fn compute_stats(&self, batch: u64) -> LayerStats {
+        self.iter().map(|item| item.compute_stats(batch)).sum()
+    }
+}
+
 macro_rules! impl_zero_compute_stats {
     ($($ty:ty),+ $(,)?) => {
         $(

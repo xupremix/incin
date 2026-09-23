@@ -156,6 +156,12 @@ impl<T: ShapeInfo> ShapeInfo for Option<T> {
     }
 }
 
+impl<T: ShapeInfo, const N: usize> ShapeInfo for [T; N] {
+    fn shape_info(&self) -> Option<String> {
+        self.iter().find_map(ShapeInfo::shape_info)
+    }
+}
+
 /// A generic Neural Network Layer or Module.
 /// Capable of taking an input and returning an output or error.
 ///
@@ -337,6 +343,36 @@ where
         self.0.visit_parameters_flat(parent, base_index, visitor)?;
         self.1
             .visit_parameters_flat(parent, base_index + L1::flat_width(), visitor)
+    }
+}
+
+impl<B, T, const N: usize> VisitParameters<B> for [T; N]
+where
+    B: crate::tensor::backend::VariableBackend,
+    T: VisitParameters<B>,
+{
+    fn flat_width() -> usize {
+        N * T::flat_width()
+    }
+
+    fn visit_parameters<V: ParameterVisitor<B>>(
+        &self,
+        path: &crate::nn::StatePath,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.visit_parameters_flat(path, 0, visitor)
+    }
+
+    fn visit_parameters_flat<V: ParameterVisitor<B>>(
+        &self,
+        parent: &crate::nn::StatePath,
+        base_index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        for (i, item) in self.iter().enumerate() {
+            item.visit_parameters_flat(parent, base_index + i * T::flat_width(), visitor)?;
+        }
+        Ok(())
     }
 }
 
@@ -593,10 +629,58 @@ impl<T: NamedLayers> NamedLayers for Option<T> {
     }
 }
 
+impl<T: NamedLayers, const N: usize> NamedLayers for [T; N] {
+    /// Returns one child subtree per element, named by its index under
+    /// `prefix` so the structure matches the `StatePath` components
+    /// [`VisitState`](crate::nn::VisitState) produces for the same array.
+    fn layer_structure(&self, prefix: &str) -> Vec<LayerNode> {
+        let mut nodes = Vec::new();
+        for (i, item) in self.iter().enumerate() {
+            let child_prefix = if prefix.is_empty() {
+                alloc::format!("{i}")
+            } else {
+                alloc::format!("{}.{}", prefix, i)
+            };
+            nodes.extend(item.layer_structure(&child_prefix));
+        }
+        nodes
+    }
+}
+
+impl<T, B, NewD, const N: usize> ToDevice<B, NewD> for [T; N]
+where
+    B: crate::tensor::backend::Backend,
+    NewD: Device,
+    T: ToDevice<B, NewD>,
+{
+    type Output = [T::Output; N];
+
+    fn to_device(self, arg: &NewD::Arg) -> Result<Self::Output> {
+        let items = self
+            .into_iter()
+            .map(|item| item.to_device(arg))
+            .collect::<Result<Vec<_>>>()?;
+        items
+            .try_into()
+            .map_err(|_| crate::err::Error::InternalInvariant {
+                operation: "array to_device",
+                reason: "converted vector length must match the source array length",
+            })
+    }
+}
+
 impl<T: TrainMode> TrainMode for Option<T> {
     fn set_training(&mut self, training: bool) {
         if let Some(value) = self {
             value.set_training(training);
+        }
+    }
+}
+
+impl<T: TrainMode, const N: usize> TrainMode for [T; N] {
+    fn set_training(&mut self, training: bool) {
+        for item in self.iter_mut() {
+            item.set_training(training);
         }
     }
 }
