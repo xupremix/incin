@@ -43,7 +43,10 @@ const SWAP: TransposeAttributes = TransposeAttributes {
 };
 
 fn bytes(values: &[f32]) -> Vec<u8> {
-    values.iter().flat_map(|value| value.to_le_bytes()).collect()
+    values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect()
 }
 
 /// Aborts unless a WGPU adapter is present, like every other WGPU suite:

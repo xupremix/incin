@@ -57,7 +57,9 @@ where
     /// assert_eq!(coordinates.to_vec1::<i64>().unwrap(), vec![0, 0, 1, 1]);
     /// ```
     #[allow(clippy::type_complexity)]
-    pub fn nonzero(&self) -> Result<crate::shapes::Dense<Dyn, B, i64, crate::tensor::grad::NoGrad, Local>>
+    pub fn nonzero(
+        &self,
+    ) -> Result<crate::shapes::Dense<Dyn, B, i64, crate::tensor::grad::NoGrad, Local>>
     where
         B: Execute<op::NonZero> + Capabilities + Default,
         <B as Execute<op::NonZero>>::Output: Into<B::Storage<i64>>,
@@ -69,9 +71,7 @@ where
         let context = ExecutionContext::from_scope(B::default())
             .with_grad_mode(crate::exec::GradMode::Disabled);
         let storage = crate::exec::GradMode::Disabled
-            .restrict(|| {
-                dispatch::execute::<op::NonZero, B>(&context, NoAttributes, &[input])
-            })?
+            .restrict(|| dispatch::execute::<op::NonZero, B>(&context, NoAttributes, &[input]))?
             .into();
         // The shape the kernel produced, not one the caller guessed: the
         // count of non-zero elements is the whole reason this is DataDependent.
@@ -134,17 +134,21 @@ where
     {
         let lhs_dims = self.shape_buf().as_ref();
         if lhs_dims.len() != 2 {
-            return Err(crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
-                axis: 0,
-                rank: lhs_dims.len(),
-            }));
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis {
+                    axis: 0,
+                    rank: lhs_dims.len(),
+                },
+            ));
         }
         let rhs_dims = rhs.shape_buf().as_ref();
         if rhs_dims.len() != 3 {
-            return Err(crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
-                axis: 0,
-                rank: rhs_dims.len(),
-            }));
+            return Err(crate::err::Error::Shape(
+                crate::shapes::ShapeError::InvalidAxis {
+                    axis: 0,
+                    rank: rhs_dims.len(),
+                },
+            ));
         }
         // `[T, N]` from the operands alone; the offsets only partition the rows
         // and never change the product's geometry, which is why this takes the

@@ -224,7 +224,8 @@ fn record(
                     let grad_block = matmul_forward(&g_rows, &transpose_2d(&weight))?;
                     for row in 0..(end - start) {
                         for col in 0..contracting {
-                            grad_lhs[(start + row) * contracting + col] = grad_block.get(&[row, col]);
+                            grad_lhs[(start + row) * contracting + col] =
+                                grad_block.get(&[row, col]);
                         }
                     }
                     let lhs_rows = expert_rows(&lhs_capture, start, end)?;

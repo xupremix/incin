@@ -302,16 +302,16 @@ fn shape_changing_operations_produce_dense_results() {
 
     // The public method makes the same claim at the type level: the result is
     // `RowMajor`, so it satisfies bounds a `Dyn` result could not.
+    #[allow(clippy::type_complexity)]
     let public: incin_core::shapes::Dense<s![4, 3], CpuBackendImpl> = t
         .transpose(
             ForwardAxis::<Here>::default(),
             ForwardAxis::<incin_core::shapes::idx::Next<Here>>::default(),
         )
         .expect("a 3x4 tensor transposes to 4x3");
-    let public_meta =
-        <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::metadata::<f32>(
-            public.inner(),
-        );
+    let public_meta = <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::metadata::<
+        f32,
+    >(public.inner());
     assert_eq!(
         public_meta.strides().as_ref(),
         &[3, 1],

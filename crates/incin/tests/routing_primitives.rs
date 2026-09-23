@@ -385,10 +385,7 @@ fn nonzero_returns_one_coordinate_row_per_nonzero_element() -> Result<()> {
 
     assert_eq!(coordinates.dims().as_ref(), &[3, 2]);
     // Row-major: [0,0], [0,2], [1,2].
-    assert_eq!(
-        coordinates.to_vec1::<i64>()?,
-        vec![0, 0, 0, 2, 1, 2]
-    );
+    assert_eq!(coordinates.to_vec1::<i64>()?, vec![0, 0, 0, 2, 1, 2]);
     Ok(())
 }
 
@@ -408,10 +405,8 @@ fn nonzero_of_an_empty_selection_is_an_empty_result() -> Result<()> {
 #[test]
 fn grouped_matmul_applies_each_experts_weight_to_its_own_rows() -> Result<()> {
     let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
-    let rhs = Tensor::<s![2, 2, 2], B>::from_slice(
-        &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
-        (),
-    )?;
+    let rhs =
+        Tensor::<s![2, 2, 2], B>::from_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], ())?;
     let offsets = Tensor::<s![3], B, i64>::from_slice(&[0, 2, 2], ())?;
 
     let out = lhs.grouped_matmul(&rhs, &offsets)?;
@@ -452,8 +447,10 @@ fn an_empty_expert_span_is_skipped_not_refused() -> Result<()> {
 #[test]
 fn the_gradient_reaches_both_matrices_and_not_the_offsets() -> Result<()> {
     let lhs = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
-    let rhs =
-        Tensor::<s![2, 2, 2], B, f32, Grad>::from_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], ())?;
+    let rhs = Tensor::<s![2, 2, 2], B, f32, Grad>::from_slice(
+        &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        (),
+    )?;
     let offsets = Tensor::<s![3], B, i64>::from_slice(&[0, 1, 2], ())?;
 
     let out = lhs.grouped_matmul(&rhs, &offsets)?;
@@ -485,10 +482,8 @@ fn the_gradient_reaches_both_matrices_and_not_the_offsets() -> Result<()> {
 #[test]
 fn offsets_that_do_not_tile_the_rows_are_refused() -> Result<()> {
     let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
-    let rhs = Tensor::<s![2, 2, 2], B>::from_slice(
-        &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
-        (),
-    )?;
+    let rhs =
+        Tensor::<s![2, 2, 2], B>::from_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], ())?;
     // Final offset is 1, not 2: expert rows do not cover the activation.
     let bad = Tensor::<s![3], B, i64>::from_slice(&[0, 1, 1], ())?;
     assert!(lhs.grouped_matmul(&rhs, &bad).is_err());

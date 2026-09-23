@@ -2784,13 +2784,13 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/ops/matmul/transpose.rs:9",
+    "site": "crates/incin-backends/src/cpu/ops/matmul/transpose.rs:10",
     "code": ".expect(\"2D transpose of a 2D matmul operand cannot fail\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/ops/matmul/transpose.rs:19",
+    "site": "crates/incin-backends/src/cpu/ops/matmul/transpose.rs:20",
     "code": ".expect(\"transpose of the last two axes of a rank>=2 tensor cannot fail\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -2856,7 +2856,7 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/executor.rs:1976",
+    "site": "crates/incin-backends/src/cuda/executor.rs:1996",
     "code": "batch_cols.into_iter().next().unwrap()",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
@@ -3278,6 +3278,12 @@
   {
     "site": "crates/incin-core/src/nn/conv2d.rs:330",
     "code": "let bias = self.bias.as_ref().unwrap().as_tensor()?;",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin-core/src/nn/kv_cache.rs:365",
+    "code": ".expect(\"stitch always has at least the new segment\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },

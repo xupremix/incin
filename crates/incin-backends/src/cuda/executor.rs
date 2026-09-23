@@ -1126,7 +1126,7 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
         } else {
             let broadcasted = crate::layout::broadcast_shape(&mask.shape, &input.shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?;
-            if broadcasted != input.shape {
+            if input.shape != broadcasted {
                 return Err(invalid(
                     operation,
                     "mask shape must broadcast to input shape without enlarging it",

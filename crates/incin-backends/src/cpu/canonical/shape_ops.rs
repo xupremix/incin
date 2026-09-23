@@ -15,9 +15,9 @@ use crate::cpu::ops::shape_ops::{
     bincount_storage, broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage,
     flatten_storage, gather_storage, index_select_storage, lerp_storage, masked_fill_storage,
     narrow_storage, nonzero_storage, one_hot_storage, pad_storage, pixel_shuffle_storage,
-    repeat_interleave_storage, repeat_storage, scatter_add_storage, scatter_storage,
-    slice_storage, squeeze_storage, stack_storage, transpose_exact_storage, transpose_storage,
-    tril_storage, triu_storage, unfold_storage, unsqueeze_storage, where_storage,
+    repeat_interleave_storage, repeat_storage, scatter_add_storage, scatter_storage, slice_storage,
+    squeeze_storage, stack_storage, transpose_exact_storage, transpose_storage, tril_storage,
+    triu_storage, unfold_storage, unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
