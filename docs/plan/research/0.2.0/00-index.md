@@ -168,8 +168,13 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
    resolves and the failing obligation lands on `(): Dim` one layer down where
    no curated message is attached. A named uninhabited bottom carrying both
    operands would fix it.
-5. #93 quantized contract (M): NumericDType marker, block-aware sharding,
-   type-enforced NoGrad. Gates #94/#95/#1.
+5. #93 quantized contract (M): **decisions settled 2026-09-24** — block
+   layout in format + block-aware sharding; STE gradient (PyTorch-style);
+   per-op admission (compile-fail static / typed Dyn error), not a blanket
+   NumericDType wall; comptime divisibility proofs; land tensor API now;
+   verify Q4_0/NVFP4/MXFP4 block generalization before freeze; bounds-only
+   admission with catalog gap documented. See `93-quantized-contract.md`.
+   Gates #94/#95/#1.
 6. #102 MoE typing (M): static outer shapes + E+1 offset array.
 
 **Tier 2 — correctness bugs first**
