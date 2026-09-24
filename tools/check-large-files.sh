@@ -26,6 +26,11 @@ declare -A explained=(
     [crates/incin-core/src/tensor/ops/reduce.rs]=1
     [crates/incin-core/src/nn/attention.rs]=1
     [crates/incin/src/train.rs]=1
+    [crates/incin-backends/src/cpu/canonical/tests.rs]=1
+    [crates/incin-backends/src/wgpu/backend/nn.rs]=1
+    [crates/incin-backends/src/cuda/backend/elementwise.rs]=1
+    [crates/incin-core/src/nn/state.rs]=1
+    [crates/incin-core/src/serialize.rs]=1
 )
 
 mapfile -t actual < <(

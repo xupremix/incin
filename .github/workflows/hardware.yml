@@ -14,6 +14,23 @@
 # `HARDWARE_WGPU_RUNNER` repository variables first, and states what it skipped
 # and why.
 #
+# Registering a runner is repository administration, not a workflow change:
+#
+#   1. On the machine that has the device, add a runner from
+#      Settings -> Actions -> Runners -> New self-hosted runner and give it a
+#      label that names the device (`cuda` for NVIDIA, `gpu` for a native
+#      WGPU adapter).
+#   2. Publish those labels as a repository variable holding a JSON array:
+#
+#        gh variable set HARDWARE_CUDA_RUNNER --body '["self-hosted","linux","x64","cuda"]'
+#        gh variable set HARDWARE_WGPU_RUNNER --body '["self-hosted","linux","x64","gpu"]'
+#
+# While a variable is unset, its jobs no-op with a notice instead of queueing
+# on a label no runner carries; setting the variable enables the job on the
+# next schedule or dispatch with no edit here. `HARDWARE_METAL_RUNNER` is
+# deliberately optional: the `macos-latest` fallback is real Apple Silicon.
+# The contributor-facing procedure lives in CONTRIBUTING.md.
+#
 # Two follow-ons keep a skip from reading as a pass. Each hardware job that
 # executes uploads its own `hardware-<job>-<attempt>` artifact: a dated result
 # record plus the suite log, so a capability claim cites a run instead of a

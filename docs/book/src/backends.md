@@ -24,45 +24,56 @@ backend registrations rather than written by hand:
 
 | Backend | Operations advertised | Tier |
 |---|---:|---|
-| CPU | 164 | complete, and the only one verified by execution |
-| CUDA | 159 | preview |
-| WGPU | 64 | preview |
-| Metal | 31 | preview |
+| CPU | 169 | complete, and the only one verified across the full catalog |
+| CUDA | 167 | preview, compile-gated (no automated device run) |
+| WGPU | 137 | preview, software-adapter execution evidence |
+| Metal | 107 | preview, host-verified + macOS Apple-Silicon job |
 
 Those are counts from the `Element types by operation and backend` matrix, so
 they say what each backend *advertises*, which is not the same as what it has
 been observed to compute. Two caveats belong next to the numbers:
 
 - **Advertised is not trainable.** The per-backend tables carry a `Training`
-  column. CUDA marks 136 of its 192 rows trainable; Metal marks 18 of 43
-  trainable, WGPU 52 of 76.
+  column. CUDA marks 147 of its 204 rows trainable; CPU 137 of 187; WGPU
+  123 of 155; Metal 89 of 119.
 - **Metal is the least proven of the three.** The Metal shader and MPS
-  infrastructure from MTL-001/002/003 is complete and the gap is operation
-  coverage on top of it, and every Metal row reports
-  `Implementation: native`, so that column does not distinguish a finished
-  kernel from a placeholder. Read Metal's 31 as a registry claim, not a
-  capability.
+  infrastructure from MTL-001/002/003 is complete and the gaps are operation
+  coverage on top of it (`conv2d`/pooling still empty; `instance_norm`,
+  `masked_fill`/`where_cond`, and `cmp_*`/`logical_*` unadvertised), and
+  every Metal row reports `Implementation: native`, so that column does not
+  distinguish a finished kernel from a placeholder. Host-side suites
+  (`metal_gap_ops`, `metal_attention_ops`) run the math on any OS; a real
+  Metal device run is the macOS Apple-Silicon hardware job only. Read
+  Metal's 107 as a registry claim, not a capability proof.
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
-`matmul`, and `conv2d`/pooling. WGPU additionally advertises thirteen unary
-activations (`relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
-`sqrt`, `log`, `tanh`, `sigmoid`, `swish`), which Metal does not, plus
-`maximum`/`minimum`/`abs_diff` and the shape views `transpose`, `flatten`,
-`squeeze` and `unsqueeze`. CUDA and WGPU both advertise `softmax` and
-`rms_norm`, trainable and composed from primitives rather than fused; CUDA
-adds the normalization family through `batch_norm`, all with training rows.
+`matmul`, and thirteen unary activations (`relu`, `step`, `mish`, `elu`,
+`gelu`, `abs`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, `swish`) —
+including Metal, which gained the Batch-A pointwise rows in `cbe7bac5`/`bf042c80`.
+WGPU and Metal both advertise `softmax`/`log_softmax`, `rms_norm`, and the
+composed losses; WGPU additionally covers `conv2d`/pooling, the normalization
+family through `group_norm`/`instance_norm`, `embedding`, `dropout`, and
+attention (`scaled_dot_product_attention`). CUDA adds the full training path
+(batch-norm training, losses, dropout, embedding) with native and composed
+rows.
 
-What WGPU and Metal still lack: any loss function, `embedding`, `dropout`,
-or group/instance normalization. CUDA advertises all four families — the
-losses composed, the rest native — with training rows.
+What the accelerator previews still lack relative to CPU:
 
-Concretely: you can allocate tensors, run matrix arithmetic, and apply an
-activation on a GPU today, and CUDA advertises the full training path
-(losses, normalization with backward, dropout, embedding) where WGPU and
-Metal do not. But advertised is not verified: no GPU execution runs in CI,
-so treat the CUDA training path as declared capability awaiting execution
-evidence (issues #82 and #83), not as something already proven. CPU is where
-verified training happens right now.
+- **WGPU/Metal:** `cmp_*` and `logical_*` (bool rows need a multi-dtype
+  advertising policy; WGPU storage admits ints/bools but `native_precision`
+  only names `f32` compute). Metal also lacks spatial ops and bool-mask
+  select ops.
+- **WGPU:** compute (including `matmul`) is `f32`-only even though storage
+  accepts `u8`/`u32`/`i64`/`bool`.
+- **CUDA:** still no automated device execution in this repository — value
+  tests are `#[ignore]`d pending `HARDWARE_CUDA_RUNNER`.
+
+Concretely: you can allocate tensors, run matrix arithmetic, apply
+activations, losses, and normalization on a GPU today, and train attention
+on WGPU. Advertised is not the same as hardware-proven: every-PR CI runs a
+WGPU **software** adapter (lavapipe) suite, but the CUDA training path
+remains declared capability awaiting NVIDIA-device evidence (issues #82 and
+#83). CPU remains where verified training happens for the complete catalog.
 
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with
@@ -93,7 +104,7 @@ hardware"]` in `cuda/backend/tests.rs`. This box has no CUDA device, so the
 cuBLASLt numerics are compile-verified only — treat them as declared
 capability awaiting the #82 runner, not as runtime-proven results.
 
-### WGPU Batch A: 24 runtime-verified pointwise operations (#91)
+### WGPU runtime evidence: Batches A–C, attention, cross-entropy (#91)
 
 WGPU's first #91 gap-closure batch landed 24 operations, every one executed
 on the local Vulkan adapter against a CPU-twin reference: `sign`/`floor`/
@@ -101,17 +112,26 @@ on the local Vulkan adapter against a CPU-twin reference: `sign`/`floor`/
 hyperbolics, `erf`/`rsqrt`/`log2`/`log10`/`trunc`/`frac`, scalar forms of
 `add`/`sub`/`mul`/`div`, `powf`/`clamp`, and `atan2`/`fmod`/`remainder`,
 plus backward kernels for `sin` (cosine gradient) and `clamp` (masked
-gradient) (`c9c0d035`, `crates/incin-backends/tests/wgpu_pointwise_gap.rs`,
-579 lines). Advertised rows are `f32`-only and contiguous. The WGPU suite
-runs 653+ green.
+gradient) (`c9c0d035`, `crates/incin-backends/tests/wgpu_pointwise_gap.rs`).
+Batch B (`631e5a1d`, `wgpu_batch_b.rs`) added structural, normalization
+(`layer_norm`/`group_norm`/`batch_norm`), loss (`mse`/`l1`), and matmul rows;
+Batch C (`wgpu_batch_c.rs`) added `instance_norm`, dropout, BCE, SDPA, and
+structural repeat/pad/chunk/split. Attention runs end-to-end against a CPU
+twin — non-causal, causal, grouped-query, and rotary — plus a training smoke
+that `backward`s to finite, non-zero projection gradients
+(`0623e762`, `wgpu_attention.rs`). Cross-entropy records and backpropagates
+against the hand-computed `(softmax − onehot) / batch` reference
+(`wgpu_cross_entropy.rs`). The whole `wgpu_*.rs` suite is 95+ test functions
+and runs green under every-PR CI's lavapipe software-adapter job.
 
-This is the one accelerator surface with real execution evidence in the
-tree today: CPU and the WGPU software adapter (lavapipe/Vulkan) both
+This is the accelerator surface with real execution evidence in the tree:
+CPU (complete catalog) and the WGPU software adapter (lavapipe/Vulkan) both
 compute and are compared against host references. Skipped rows (the
 comparison and logical families) are blocked on a multi-dtype advertising
-policy, not on missing kernels — WGPU declares `f32` and nothing else across
-every capability row, so a comparison that the catalog types as `bool` cannot
-be honestly registered until the backend grows a bool dtype.
+policy, not only on kernels — WGPU storage admits `u8`/`u32`/`i64`/`bool`,
+but `native_precision` only claims `f32` compute, so a comparison the
+catalog types as `bool` cannot be honestly registered until the backend
+grows a bool compute path.
 
 ## Picking a backend at compile time
 

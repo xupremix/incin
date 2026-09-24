@@ -9,28 +9,38 @@ of repeating a number that won't.
 
 ## Blocks real usage today
 
-- **GPU training is advertised, not verified.** See [Backends](./backends.md);
-  the previews cover basic arithmetic, reductions, `matmul`, and
-  `conv2d`/pooling; WGPU adds thirteen unary activations, and CUDA adds
-  `softmax` and `rms_norm`, the normalization family through `batch_norm`
-  with training rows, and the loss functions, `embedding`, and `dropout`.
-  WGPU and Metal still lack all of those. Two narrower surfaces *are*
-  runtime-verified: CPU, and WGPU's #91 Batch A (24 pointwise/trig/scalar
-  operations plus `sin`/`clamp` backward, executed on the local Vulkan
-  adapter against CPU-twin references, `c9c0d035`). CUDA's cuBLASLt matmul
-  path (`4023ceed`) is compile-gated only — six host policy tests pass,
-  six value tests are `#[ignore]`d pending the #82 runner. No GPU execution
-  runs in CI, so the CUDA training path remains a declared capability
-  awaiting evidence (issues #82 and #83), and verified training in this
-  book's [Building models](./building_models.md) chapter is CPU-only.
+- **GPU training is advertised with partial execution evidence, not a full
+  hardware proof.** See [Backends](./backends.md) for the generated counts.
+  All three previews now advertise a training-shaped subset: the losses,
+  the normalization family, `embedding`, and `dropout` are present on CPU,
+  CUDA, WGPU, and Metal (composed or native, with training rows). WGPU also
+  covers `conv2d`/pooling and attention end-to-end; Metal still has an empty
+  spatial group (no `conv2d`/pooling) and refuses bool-mask ops
+  (`masked_fill`/`where_cond`) plus the `cmp_*`/`logical_*` families.
+  Runtime-verified today: CPU (complete), and the WGPU software-adapter path
+  — Batch A pointwise/trig/scalar (`c9c0d035`), Batch B structural/norm/loss
+  rows (`631e5a1d`), Batch C (`instance_norm`/dropout/BCE/SDPA), attention
+  e2e including a training smoke that `backward`s to finite non-zero
+  projection gradients (`0623e762`), and cross-entropy with backward
+  (`wgpu_cross_entropy.rs`). Every-PR CI runs that software-adapter suite
+  (job `wgpu`, lavapipe on ubuntu). CUDA remains compile-gated: hundreds of
+  `#[ignore = "requires CUDA hardware"]` value tests (cuBLASLt, matmul
+  dtypes, losses, train ops) pass only on a machine with a device, and the
+  weekly matrix's CUDA job is still skipped because `HARDWARE_CUDA_RUNNER`
+  is unset (issues #82 and #83). Metal's host-side suites run on any OS but
+  do not prove a Metal device; the macOS Apple-Silicon hardware job is the
+  device run. Verified training in this book's
+  [Building models](./building_models.md) chapter is still CPU-first.
 - **Attention still has no online-softmax/flash kernel.** Evaluation and
   zero-dropout inference route through the catalog's composed
   `scaled_dot_product_attention` row (a single descriptor dispatch; the CPU
   backend materializes scores the same way the old hand-composed path did).
-  Training with attention-weight dropout keeps the manual score/softmax chain
-  because the fused row has no dropout operand. A typed [`KvCache`] handles
-  incremental decode (`MultiHeadAttention::forward_with_cache`); what remains
-  for #104 is a true flash-style kernel with block-sparse causal skipping.
+  WGPU and Metal advertise that composed row too; WGPU has e2e forward and
+  training-smoke coverage for it. Training with attention-weight dropout
+  keeps the manual score/softmax chain on CPU because the fused row has no
+  dropout operand. A typed [`KvCache`] handles incremental decode
+  (`MultiHeadAttention::forward_with_cache`); what remains for #104 is a
+  true flash-style kernel with block-sparse causal skipping.
 
 [`KvCache`]: https://docs.rs/incin/latest/incin/nn/struct.KvCache.html
 
@@ -57,15 +67,11 @@ of repeating a number that won't.
   operation-family traits have been removed from production source. Remaining
   work is splitting large backend files and making exceptional execution sites
   that cannot fit `Execute<O>` easier to maintain.
-- **The accelerator backends still expose operation helpers that bypass
-  canonical dispatch.** `WgpuBackendImpl`, `CudaBackendImpl`,
-  `MetalBackendImpl`, and `DispatchBackend` carry public inherent `add`,
-  `matmul`, `conv2d` and siblings that take runtime dimensions, mint no
-  descriptor, and consult no capability table. The CPU backend has none; it
-  was contracted already, which is part of why it is the complete one. Do not
-  build on these: they are slated to become crate-private. Use the descriptor
-  path described in [The target API and canonical
-  dispatch](./target_api.md).
+- **Accelerator inherent helpers are crate-private now.** `add`, `matmul`,
+  `conv2d` and siblings on `WgpuBackendImpl`, `CudaBackendImpl`,
+  `MetalBackendImpl`, and `DispatchBackend` are `pub(crate)` (or absent):
+  they are not part of the public surface. Use the descriptor path described
+  in [The target API and canonical dispatch](./target_api.md).
 - **Distributed training** has one executed tier and the rest is planning.
   FSDP/ZeRO-1 and ZeRO-2 lower onto the trainer's synchronizer seam (#99),
   proven on CPU against scripted peers; ZeRO-3 (parameter sharding),
@@ -89,15 +95,19 @@ of repeating a number that won't.
   `incin::experimental::compiled`. It has no stable facade contract, optimized
   backend, deployment target, or portable artifact ABI; its serialized plan
   snapshots are local preview data only.
-- **Only Apple Silicon is covered by the scheduled hardware matrix.** The
-  weekly `hardware.yml` run has a registered macOS runner, so the aarch64 CPU
-  path is exercised on real hardware. The CUDA and WGPU native-adapter jobs
-  resolve their runners from repository variables that are currently unset,
-  and report themselves skipped rather than queueing forever. So the native
-  CUDA backend is compile-checked in CI and has no automated execution
-  coverage on an NVIDIA device, and WGPU's execution coverage comes from a
-  software adapter. This is the mechanism behind [Backends](./backends.md)
-  calling CPU the only backend verified by execution.
+- **Only Apple Silicon and a software WGPU adapter are covered by automated
+  runs.** The weekly `hardware.yml` run has a registered macOS runner (real
+  Apple Silicon for the `metal` suite; `HARDWARE_METAL_RUNNER` is optional
+  with a `macos-latest` fallback). The CUDA and native-WGPU jobs resolve
+  their runners from repository variables that are still unset and report
+  themselves skipped rather than queueing forever. Separately, every-PR CI
+  runs a WGPU **software-adapter** job (lavapipe on ubuntu), so WGPU has
+  execution coverage without NVIDIA hardware. The native CUDA backend is
+  compile-checked in CI; its value tests stay `#[ignore]`d until
+  `HARDWARE_CUDA_RUNNER` exists. This is the mechanism behind
+  [Backends](./backends.md) calling CPU the only backend verified across
+  the complete catalog, and WGPU the only accelerator with automated
+  execution evidence for its subset.
 
 ## Where the current, generated truth lives
 

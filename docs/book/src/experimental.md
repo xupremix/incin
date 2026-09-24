@@ -21,24 +21,35 @@ gradient that never arrives.
 
 ## Distributed
 
-Feature `distributed`. This is a **planning and typing surface, not an
-execution path.**
+Feature `distributed`. Most of this surface is still **planning and typing**,
+but one lowering executes.
 
-What exists and works: typed device meshes (`mesh!`), compile-time and runtime
-tensor placements (`placement!`, `Sharded`/`Replicated`/`Partial`), FSDP and
-ZeRO stage descriptors, data-parallel/tensor-parallel/pipeline plan builders,
-collective descriptors, and a substantial body of validation that rejects
-inconsistent plans.
+What exists and works as typed planning: device meshes (`mesh!`), compile-time
+and runtime tensor placements (`placement!`, `Sharded`/`Replicated`/`Partial`),
+FSDP and ZeRO stage descriptors, data-parallel/tensor-parallel/pipeline plan
+builders, collective descriptors, and a substantial body of validation that
+rejects inconsistent plans.
 
-What does not exist: the execution. `Trainer::fit` refuses a multi-device plan
-with `TrainError::CollectivesUnavailable` rather than silently running on one
-device, which is the right failure, but it is a failure. Transports are
-separate opt-ins (`distributed-reference` for an in-process deterministic
-transport, `distributed-nccl` for two-host CUDA), and there is no end-to-end
-distributed training path.
+What executes: FSDP/ZeRO data parallel (#99) through the preview trainer.
+ZeRO-1 (all-reduce, then mask gradients to the rank's owned slice) and ZeRO-2
+(reduce-scatter) plus a parameter all-gather after every optimizer step run
+via `Trainer::with_fsdp_synchronizer`. That lowering is a host-side `f64`
+protocol proven on CPU against scripted peers and a two-rank trajectory equal
+to the single-device full-batch reference. See
+[Distributed planning](./distributed.md) for the exact boundary.
 
-Treat the whole subsystem as research-grade: excellent for exploring what a
-typed distributed plan should look like, not something to train a model with.
+What does not exist: multi-host transport in a default build.
+`Trainer::fit` refuses a multi-device plan without the matching synchronizer
+(`TrainError::CollectivesUnavailable` / `TrainError::FsdpUnavailable`) rather
+than silently running on one device. Transports are separate opt-ins
+(`distributed-reference` for an in-process deterministic transport,
+`distributed-nccl` for two-host CUDA), ZeRO-3 is refused at plan build, and
+real multi-rank NCCL execution stays gated on the unset
+`HARDWARE_CUDA_RUNNER` (#82).
+
+Treat the non-FSDP plan surface as research-grade — excellent for exploring
+what a typed distributed plan should look like — and the FSDP path as a
+CPU-proven preview, not a substitute for a distributed runtime.
 
 ## Autotune
 
@@ -121,9 +132,15 @@ scaling disabled via `TrainError::UnsupportedPrecision`; bf16 does not require
 scaling. Scaling protects small f16 gradients from underflow, while dynamic
 backoff handles non-finite gradients by skipping the optimizer update.
 
-The trainer's f32 master-weights contract is limited but tested: existing f32
-`Linear` weights and biases stay f32 through a step under a mixed-bf16 policy.
-This is not autocasting or a separate master-weight copy. `fit` is unchanged;
-`fit_scaled` scales the loss, checks for overflow, and unscales finite gradients.
-Neither adds autocast at module boundaries or bf16/f16 computation on CPU.
-Mixed-precision memory and throughput gains still require backend work.
+Both `fit` and `fit_scaled` install the plan's **dispatch-time autocast** for
+the duration of the run (`incin_core::exec::autocast`, issue #2). Under a
+mixed policy, allowlisted operands are cast at admission when the backend's
+capability rows admit the active dtype (for example `matmul` and
+`broadcast_add` under `mixed_bf16`); master weights stay f32 because
+parameter creation is outside the allowlist. This is not module-boundary
+autocasting and not a separate master-weight copy — it is an allowlist, not
+an ambient cast of every float op. The precision fixtures pin both sides:
+`mixed_bf16_autocasts_allowlisted_dispatch_operands` / the f16 twin assert the
+cast, while `mixed_bf16_retains_f32_master_weights` asserts the weights do
+not move. Mixed-precision memory and throughput gains still depend on which
+backend rows admit the low-precision dtype.

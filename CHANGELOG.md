@@ -247,6 +247,121 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and is wired into CI. It checks what is shipped rather than re-drafting, so
   the examples that never compiled are not re-proposed on every run.
 
+- **Mixed-precision autocast sits at the execution boundary (#2).**
+  `incin_core::exec::autocast` installs a `SemanticProfile` that says which
+  operations may compute in a lower precision: BinaryBroadcast, MatMul and
+  Attention downcast their operands to the working dtype, while Reduction
+  and Loss widen to the accumulator, so a sensitive sum never accumulates
+  in the dtype it is running in. The profile is gated on the capability
+  registry -- a backend without the row never enters the path -- and an
+  fp32 working dtype short-circuits to a no-op. `fit` and `fit_scaled`
+  install it around a block, the dispatch funnels gained `+ 'static` bounds
+  so a stored profile can be read back, and the optimizer step contexts pin
+  `RuntimePrecisionPolicy::fp32()` so training arithmetic is never silently
+  downcast. Three tests in `crates/incin/tests/precision_fixtures.rs` pin
+  the downcast/widen split, and the API baseline records
+  `InstalledAutocast` and `AutocastBackend`.
+
+- **Checkpoints and safetensors load as streams (#13).**
+  `serialize.rs` grows a `ByteSource` reader for safetensors: the 100MB
+  header cap mirrors the buffered path, each tensor's byte range is read
+  without materialising the file, one shard stays open across reads, and
+  the index is cross-checked against the shards it names. `nn/state.rs`
+  gains `StateStream` and `load_state_streaming`, which compare the path
+  set on disk against the one the checkpoint expects, re-read aliases from
+  their new homes, and stage a load as prepare then commit, with rollback
+  on a shape mismatch and finalize on success.
+  `crates/incin-core/tests/streaming_checkpoint.rs` covers multi-shard
+  round-trips, a mid-staging mismatch that rolls back, a missing tensor, a
+  truncated shard, a missing path, and binding the result on WGPU; unit
+  tests in `serialize.rs` pin residency.
+
+- **WGPU runs the indexing, mask and cross-entropy operations (#91).**
+  `wgpu/backend/indexing.rs` implements embedding, gather and index_select
+  as host-walks, plus `Execute` for MaskedFill and WhereCond through
+  `select.wgsl` and for EmbeddingExact. The storage tables admit u8, u32,
+  i64 and bool (bool stored as f32 physically), `broadcast_storage` keeps
+  its operand's dtype while a new `broadcast_storage_raw` serves untaped
+  bool masks, and `SupportsDType<bool>` lands in the contract.
+  `cross_entropy_loss` composes from indexing plus an f32 row
+  (INDEX_AND_F32_DTYPES), and batch_norm's training path composes through
+  `sum_keepdim` instead of refusing outright. Dropout now clone-links its
+  identity rather than copying data, and `wgpu_indexing.rs` and
+  `wgpu_cross_entropy.rs` pin the new surface.
+
+- **An experimental compiled-fusion lowering seam (#112).**
+  `FusedKernelLowering` in `incin-core`'s `compiled::fusion` names the
+  contract a lowering must meet, with `UnsupportedDtype` and
+  `BoundaryCount` blockers for the two reasons a lowering may refuse;
+  `incin-backends` ships `PointwiseScalarLowering` through the crate-private
+  `codegen::fuser`, and fused output and gradients are compared against the
+  unfused run. The seam is re-exported as `incin::experimental::compiled`,
+  the module docs now claim no *proven* lowering rather than no lowering at
+  all, and `FusionPolicy::Enabled` remains unavailable.
+
+- **Broadcast-mask operations are pinned from both directions (#100).**
+  The `BroadcastShape` bounds added for where_cond and masked_fill now have
+  compile-fail fixtures -- `where_cond_mask_not_broadcastable` (E0277),
+  `where_cond_mask_enlarges_data` (E0271) and
+  `masked_fill_mask_enlarges_input` -- beside a compile-pass case
+  (`where_cond_broadcast_mask.rs`) and the runtime suite
+  `crates/incin/tests/broadcast_mask_ops.rs`; D-109 in `PROPOSALS.md`
+  records the decision.
+
+- **Custom dtypes state their boundaries in code and in the book (#96).**
+  `CollectiveTuningProblem::new_static` now requires
+  `K: ConstDType + BuiltinDType + CollectiveDType` and fingerprints with
+  `K::DTYPE` instead of `unwrap_or(F32)`, so a dtype without a builtin id
+  is refused at the type rather than at the fingerprint. The refusal is
+  pinned by `custom_dtype_missing_builtin_id` under both
+  `collective_tuning_compile_fail/` and `hybrid_plan_compile_fail/`, and a
+  new section in `docs/book/src/backend_authoring.md` -- "Custom dtypes and
+  devices: current boundaries (issue #96)" -- writes the limits down.
+
+- **CPU matmul accepts f16 and bf16 (#90).**
+  MatMulExact and the composed `bmm`, `addmm` and `linear` move from
+  F32_ONLY to FLOAT_DTYPES, so a half-precision matmul runs instead of
+  refusing; a host gate, `ensure_matmul_dtypes`, raises `DTypeMismatch`
+  for mixed pairs and `UnsupportedDType` for the rest, and is called from
+  both `matmul_forward` and `batched_gemm`. SDPA, Dot and Outer keep
+  F32_ONLY through `composed_reduction`. Tests cover f16 and bf16 values
+  and result dtypes, a batched f16 case, the mixed-pair refusal, f16
+  backward, and the capability rows; on CUDA the per-dtype entry maps are
+  checked pure (`matmul_entry_point`, `matmul_batched_entry_point`) with
+  `cuda_matmul_dtypes.rs` `#[ignore]`d for hardware, and
+  `capabilities.md` is regenerated.
+
+- **CUDA closes its pointwise, reduction, indexing, convolution and
+  batched-GEMM gaps (#85, #86, #87, #88, #106).** `frac`, `atan2`, `fmod`
+  and `remainder` record gradients -- remainder composed from `fmod` plus
+  an euclid adjustment -- checked in `cuda_pointwise_gap.rs`. Reductions
+  fix their axis-0 row addressing, var and std gain a Welford tape recipe
+  (`push_var_std_tape_entry`), TopK and the six var/std capability rows
+  move to f32-only `native_tensor`, `cuda_reduce_ops.rs` expands, and
+  `testing.rs` grows a `var_std` seam. Gather, Scatter and IndexSelect
+  gain INDEX_AND_F32_DTYPES rows on both the CUDA and WGPU tables, with
+  `incin_cuda_repeat_backward` and `incin_cuda_diag_backward` kernels, and
+  tril/triu admit rank 1 through `launch_triangular`
+  (`cuda_indexing_admission.rs`, `cuda_indexing_layout.rs`). Convolution
+  gains `col2im_2d_tape`, transpose reports its natural output size, and
+  adaptive average pooling records a tape entry (`cuda_conv_spatial.rs`).
+  `matmul.cu` gains batched GEMM -- a `blockIdx.z` batch loop, stride-0
+  broadcast operands, refusal past 65535 batches -- and under
+  `cuda-vendor`, cuBLASLt strided-batched paths
+  (`try_launch_batched_matmul`,
+  `CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET`) take over
+  (`cuda_gemm_batched.rs`, `OperandMeta` in `cuda/ops/mod.rs`). The new
+  `cuda_loss_ops.rs` and `cuda_train_ops.rs` suites run the loss and
+  training surface: dropout through a `dropout_draws` seam, instance_norm
+  backward parity, and a full train step (#84).
+
+- **Hardware runners are registered in one documented place (#82).**
+  `hardware.yml` opens with the registration steps: runner labels as JSON
+  in `HARDWARE_*_RUNNER` variables via `gh variable set`, the notice that
+  an unset variable is a no-op, and the optional
+  `HARDWARE_METAL_RUNNER`. `CONTRIBUTING.md` gains a "Registering a
+  hardware runner" section, and `PROJECT_STATUS.md` points at it.
+
 ### Changed
 
 - **`transpose` materialises on every backend and states `RowMajor` (#113).**
@@ -274,6 +389,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   on a schedule. The property suites already run under the normal workspace
   test command.
 
+  `tools/fuzz-budget.sh` is the local mirror of that schedule: the same
+  three targets, the pinned nightly from `fuzz/rust-toolchain.toml`, 60
+  seconds per target by default and a 65536-byte `max_len`.
+  `fuzz/corpus/` and `fuzz/artifacts/` are gitignored, so a local run
+  leaves no run-state behind to commit.
+
 - **The library's own documentation now builds tensors from a target value.**
   `Tensor`'s rustdoc and the thirty method examples under `incin-core` used
   `Tensor::<s![2, 3], B>::zeros(())`; they use `Cpu.zeros(shape![2, 3])`.
@@ -294,6 +415,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `incin_backends::target`, tier X, and re-exported into `incin::prelude`,
   tier S. A re-export carries the tier of the module it is re-exported into,
   so `Cpu.zeros(shape![2, 3])` is a tier S call.
+
+- **Codegen is adopt-or-delete (#111).** Seven emitters -- `fusion`,
+  `scheduler`, `strided`, `pointwise`, `reduction`, `normalization` and
+  `vectorized` -- and their pointwise test are deleted, about 113KB of
+  source; the catalog, fragment, IR, DSL and JIT layers stay, along with
+  the crate-private fuser the new lowering seam calls. `codegen/mod.rs`'s
+  header now says what remains, and `codegen/jit.rs`'s is corrected:
+  `CpuJitKernel` is the f64 tree-walking reference, not a compiled kernel.
+  `docs/book/src/custom_operations.md` gains an experimental
+  expression-DSL section, `codegen_nvrtc_smoke.rs` renders only what is
+  retained, the public-api baseline `incin-backends-cpu.txt` drops 352
+  lines, and `API_TIERS.md`'s codegen row goes from 25 items to 102.
 
 ### Fixed
 
@@ -483,6 +616,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   an example and asserts the layout does not scroll sideways at 390px with it
   open -- the case that was missing, since the previous overflow checks only
   ever looked at closed rows.
+
+- **Two compile-fail snapshots caught up with the bounds they pin.**
+  `q8_problem.stderr` now names `BuiltinDType`, which #96 puts on
+  `CollectiveTuningProblem::new_static`, and
+  `unsupported_dtype_backend_pair.stderr` gains the `SupportsDType<bool>`
+  line that #91's bool contract added to the candidate list.
 
 ### Changed
 

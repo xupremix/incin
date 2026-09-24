@@ -164,8 +164,13 @@ growing the buffer.
   composed score/softmax/attend chain); training with attention dropout still
   runs the manual path because the fused row has no dropout operand. See
   [What is not finished](./whats_not_finished.md) for what remains of #104.
-- **Not GPU-verified.** Training anything in this chapter is CPU-only right
-  now; see [What is not finished](./whats_not_finished.md).
+- **Not fully GPU-proven.** Training anything in this chapter is still
+  CPU-first for the complete catalog. WGPU now runs attention end-to-end
+  against a CPU twin and has a training smoke with finite non-zero
+  projection gradients (`wgpu_attention.rs`, landed with `0623e762`), and
+  cross-entropy trains on WGPU too — but CUDA/Metal device runs and the
+  full stacked model on a GPU remain compile-gated or host-side. See
+  [What is not finished](./whats_not_finished.md).
 
 ## The earlier hand-composed proof
 
