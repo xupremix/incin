@@ -186,6 +186,7 @@ pub use incin::Dyn
 pub use incin::DynShape
 pub use incin::Error
 pub use incin::ErrorMessage
+pub use incin::FloatCapable
 pub use incin::FloatDType
 pub use incin::FloatToIntPolicy
 pub use incin::Grad
@@ -201,6 +202,7 @@ pub use incin::Optimizer
 pub use incin::OptimizerBackend
 pub use incin::PlainDType
 pub use incin::Q8_0
+pub use incin::QuantCapable
 pub use incin::QuantDType
 pub use incin::RequiresGrad
 pub use incin::Result
@@ -452,6 +454,7 @@ pub use incin::prelude::FeedForward
 pub use incin::prelude::FeedForwardKind
 pub use incin::prelude::Flatten
 pub use incin::prelude::FlattenAxes
+pub use incin::prelude::FloatCapable
 pub use incin::prelude::FloatDType
 pub use incin::prelude::FloatToIntPolicy
 pub use incin::prelude::Format
@@ -500,6 +503,7 @@ pub use incin::prelude::PositionEncoding
 pub use incin::prelude::Precision
 pub use incin::prelude::PrecisionSpec
 pub use incin::prelude::Q8_0
+pub use incin::prelude::QuantCapable
 pub use incin::prelude::QuantDType
 pub use incin::prelude::RMSNorm
 pub use incin::prelude::Ranked

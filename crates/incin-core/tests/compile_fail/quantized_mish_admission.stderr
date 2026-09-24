@@ -1,0 +1,26 @@
+error[E0277]: the trait bound `incin::prelude::Q8_0: FloatCapable` is not satisfied
+  --> tests/compile_fail/quantized_mish_admission.rs:11:15
+   |
+11 |     let _ = q.mish();
+   |               ^^^^ the trait `FloatDType` is not implemented for `incin::prelude::Q8_0`
+   |
+help: the following other types implement trait `FloatDType`
+  --> src/tensor/dtype/builtin.rs
+   |
+   | impl FloatDType for f32 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^ `f32`
+   | impl FloatDType for f64 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^ `f64`
+   | impl FloatDType for f16 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^ `incin::prelude::f16`
+   | impl FloatDType for bf16 {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^ `incin::prelude::bf16`
+   = note: required for `incin::prelude::Q8_0` to implement `FloatCapable`
+note: required by a bound in `unary::<impl incin::prelude::Tensor<S, B, K, G, incin::dist::Local, L>>::mish`
+  --> src/tensor/ops/unary.rs
+   |
+   |     pub fn mish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
+   |            ---- required by a bound in this associated function
+   |     where
+   |         K: crate::tensor::ops::quantization::FloatCapable,
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `unary::<impl Tensor<S, B, K, G, Local, L>>::mish`

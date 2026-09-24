@@ -21,6 +21,33 @@ macro_rules! impl_unary_op {
         $(#[$meta])*
         pub fn $method(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
         where
+            K: crate::tensor::ops::quantization::FloatCapable,
+            B: Execute<op::$operation>,
+            <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
+        {
+            execute_unary_descriptor::<op::$operation, S, B, K, G, L>(self)
+        }
+    };
+}
+
+/// Pointwise op admitted for every dtype, without the [`FloatCapable`] bound
+/// [`impl_unary_op`] attaches.
+///
+/// For the handful of ops a still-generic `K: DType` caller inside the crate
+/// needs -- `sin`/`cos` are reached from rotary-table construction, whose own
+/// signature cannot grow a float bound -- so that admission stays a
+/// decision at each op rather than a wall at the impl block. A quantized
+/// operand reaches the catalog's runtime dtype check instead of a compile
+/// error. The method's where clause is identical to the pre-bound surface:
+/// `K: DType` already comes from the impl block.
+macro_rules! impl_unary_op_any_k {
+    (
+        $(#[$meta:meta])*
+        $method:ident, $operation:ident
+    ) => {
+        $(#[$meta])*
+        pub fn $method(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
+        where
             B: Execute<op::$operation>,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
         {
@@ -287,6 +314,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// ```
     pub fn abs(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Abs>,
         <B as Execute<op::Abs>>::Output: Into<B::Storage<K>>,
     {
@@ -348,6 +376,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// ```
     pub fn step(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Step>,
         <B as Execute<op::Step>>::Output: Into<B::Storage<K>>,
     {
@@ -370,6 +399,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// ```
     pub fn mish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Mish>,
         <B as Execute<op::Mish>>::Output: Into<B::Storage<K>>,
     {
@@ -392,6 +422,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// ```
     pub fn elu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Elu>,
         <B as Execute<op::Elu>>::Output: Into<B::Storage<K>>,
     {
@@ -578,6 +609,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     #[inline]
     pub fn powf(&self, exponent: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Powf>,
         <B as Execute<op::Powf>>::Output: Into<B::Storage<K>>,
     {
@@ -604,6 +636,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     #[inline]
     pub fn clamp(&self, min: f64, max: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Clamp>,
         <B as Execute<op::Clamp>>::Output: Into<B::Storage<K>>,
     {
@@ -643,12 +676,12 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         log10, Log10
     );
 
-    impl_unary_op!(
+    impl_unary_op_any_k!(
         /// Computes sine elementwise.
         sin, Sin
     );
 
-    impl_unary_op!(
+    impl_unary_op_any_k!(
         /// Computes cosine elementwise.
         cos, Cos
     );

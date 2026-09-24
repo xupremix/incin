@@ -834,7 +834,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/tensor/ops/mod.rs:34",
+    "site": "crates/incin-core/src/tensor/ops/mod.rs:37",
     "code": "Err(_) => panic!(\"incin tensor operator `{operator}` failed\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"

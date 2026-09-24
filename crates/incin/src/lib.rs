@@ -149,6 +149,7 @@ pub use incin_core::tensor::dtype::{
     DTypeRegistry, FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16, f16,
 };
 pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
+pub use incin_core::tensor::ops::quantization::{FloatCapable, QuantCapable};
 
 /// Incin's target-backed adapter for model-ready MNIST batches.
 #[derive(Clone)]
@@ -788,6 +789,7 @@ pub mod prelude {
     };
     pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
     pub use incin_core::tensor::matmul::MatMulShape;
+    pub use incin_core::tensor::ops::quantization::{FloatCapable, QuantCapable};
     pub use incin_core::tensor::transfer::ToDevice;
 
     pub use incin_core::exec::AxisSet;

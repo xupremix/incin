@@ -846,6 +846,7 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// ```
     pub fn norm(&self, p: f64) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: Execute<op::Mul>
             + Execute<op::Abs>

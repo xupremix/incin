@@ -43,6 +43,19 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
             "attention_head_kv_mismatch",
             "n_heads must be divisible by n_kv_heads",
         ),
+        // Issue #93: block divisibility is a const assert on the static
+        // last-axis extent, so a non-multiple fails at monomorphization
+        // (E0080) rather than reaching the kernel.
+        (
+            "quantize_block_axis_not_divisible",
+            "must be a multiple of 32",
+        ),
+        // Issue #93: dtype admission is the `FloatCapable`/`QuantCapable`
+        // bound pair. Matched on the trait rather than the code: the point
+        // is that the admission bound is what refuses, naming the trait.
+        ("quantized_mish_admission", "FloatCapable"),
+        ("quantized_floor_admission", "FloatCapable"),
+        ("dequantize_rejects_float_input", "QuantCapable"),
         // Shape rules, all unsatisfied trait bounds.
         ("broadcast_static_mismatch", "E0277"),
         // #100's directional broadcast pins on the mask operations. The
