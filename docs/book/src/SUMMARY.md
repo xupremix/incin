@@ -32,6 +32,13 @@
 - [Metrics](./metrics.md)
 - [Saving and loading](./saving_loading.md)
 
+# How-to
+
+- [Run a training loop](./howto_training_loop.md)
+- [Save and load a model](./howto_save_load.md)
+- [Quantize tensors and weights](./howto_quantize.md)
+- [Debug shape and dtype errors](./howto_debug_shapes_errors.md)
+
 # Backends
 
 - [CPU, and what actually runs on GPU today](./backends.md)
