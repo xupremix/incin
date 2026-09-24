@@ -1,32 +1,28 @@
-//! Every CUDA source a `codegen` module renders must actually compile.
+//! Every CUDA source the retained `codegen` modules render must actually compile.
 //!
-//! This file exists because all 21 modules emitted `#include <math.h>`, which
-//! NVRTC rejects outright -- it compiles a translation unit with no host
-//! headers on the include path:
-//!
-//! ```text
-//! catastrophic error: cannot open source file "math.h"
-//! ```
-//!
-//! So not one of them could produce a usable kernel. That is the shared reason
-//! behind #111's "21 modules with no consumer": they could not have had one.
-//! Nothing caught it because rendering returns a `String`, and a `String` is
-//! easy to assert about without ever asking a compiler whether it is valid CUDA
-//! C. The module tests checked that the text contained the substrings they
-//! expected, and it did.
+//! This file exists because rendering returns a `String`, and a `String` is
+//! easy to assert about without ever asking a compiler whether it is valid
+//! CUDA C. The module tests check that emitted text contains the substrings
+//! they expect, and it does — which is how an entire generation of emitters
+//! carried an `#include <math.h>` that NVRTC rejects outright (it compiles a
+//! translation unit with no host headers on the include path) while every
+//! text assertion passed. Nothing executed them, so nothing held them to a
+//! compiler. Per #111 those emitters are gone; what remains is the IR/DSL
+//! kernel renderer behind `dsl` and `jit`, and it earns the same check.
 //!
 //! A rendered kernel is only worth anything if NVRTC accepts it, so that is
-//! what these check -- against the real device's architecture, for the same
-//! reason `kernel::tests` does: certifying a source for a target nothing runs
-//! is not certifying it.
+//! what these check — through `cuda::testing::compile_for_device`, which
+//! delegates to the production `compile_ptx_for_arch` path (same include
+//! resolution, same architecture selection), for the same reason
+//! `kernel::tests` does: certifying a source under options nothing builds it
+//! with is not certifying it.
 //!
 //! Requires a GPU:
 //! `cargo test -p incin-backends --features cuda --test codegen_nvrtc_smoke -- --ignored`.
 
 #![cfg(feature = "cuda")]
 
-use incin_backends::codegen::CompositeFusionSpec;
-use incin_backends::codegen::{normalization, pointwise, reduction, vectorized};
+use incin_backends::codegen::{define_binary_custom_op, define_unary_custom_op};
 use incin_core::tensor::dtype::DTypeId;
 
 /// Aborts unless a CUDA device is present.
@@ -53,7 +49,7 @@ fn must_compile(label: &str, source: &str) {
         Err(error) => panic!(
             "{label} rendered CUDA that NVRTC refused.\n\
              A module whose output does not compile cannot have a consumer, which is how \
-             every codegen module carried an `#include <math.h>` NVRTC cannot resolve.\n\n\
+             every removed codegen module carried an `#include <math.h>` NVRTC cannot resolve.\n\n\
              {error:?}\n\n--- source ---\n{source}"
         ),
     }
@@ -61,66 +57,34 @@ fn must_compile(label: &str, source: &str) {
 
 #[test]
 #[ignore = "requires CUDA hardware"]
-fn every_codegen_module_renders_compilable_cuda() {
+fn every_retained_codegen_emitter_renders_compilable_cuda() {
     require_cuda();
 
+    let unary = define_unary_custom_op("smoke_swish", DTypeId::F32, |x| {
+        let s = incin_backends::codegen::sigmoid(x.clone());
+        x * s
+    });
     must_compile(
-        "CompositeFusionSpec",
-        &CompositeFusionSpec::swiglu_residual("smoke_fusion", DTypeId::F32).render_cuda(),
+        "KernelDefinition::render_forward_cuda",
+        &unary.render_forward_cuda(),
+    );
+    must_compile(
+        "KernelDefinition::render_backward_cuda",
+        &unary
+            .render_backward_cuda(0)
+            .expect("unary definition carries a derivative"),
     );
 
-    for kind in [
-        normalization::NormKind::LayerNorm,
-        normalization::NormKind::RmsNorm,
-    ] {
-        let spec = normalization::NormalizationSpec::new(
-            "smoke_norm",
-            kind,
-            DTypeId::F32,
-            256,
-            1e-5,
-            true,
+    let binary = define_binary_custom_op("smoke_gated_linear_unit", DTypeId::F32, |a, b| {
+        a * incin_backends::codegen::sigmoid(b)
+    });
+    must_compile("binary forward", &binary.render_forward_cuda());
+    for input_idx in 0..binary.input_arity {
+        must_compile(
+            &format!("binary backward {input_idx}"),
+            &binary
+                .render_backward_cuda(input_idx)
+                .expect("each input carries a derivative"),
         );
-        must_compile("NormalizationSpec::forward", &spec.render_cuda_forward());
-        must_compile("NormalizationSpec::backward", &spec.render_cuda_backward());
     }
-
-    must_compile(
-        "PointwiseOpSpec",
-        &pointwise::PointwiseOpSpec {
-            name: "smoke_pointwise".to_string(),
-            inputs: vec![DTypeId::F32],
-            output: DTypeId::F32,
-            expr: pointwise::PointwiseExpr::Arg(0),
-            layout: pointwise::LayoutKind::Contiguous,
-            work_group_size: 256,
-        }
-        .render_cuda(),
-    );
-
-    must_compile(
-        "ReductionOpSpec",
-        &reduction::ReductionOpSpec {
-            name: "smoke_reduce".to_string(),
-            dtype: DTypeId::F32,
-            op: reduction::ReductionOpKind::Sum,
-            layout: reduction::ReductionLayout::RowWise,
-            reduction_size: Some(256),
-            work_group_size: 256,
-        }
-        .render_cuda(),
-    );
-
-    must_compile(
-        "VectorizedOpSpec",
-        &vectorized::VectorizedOpSpec {
-            name: "smoke_vectorized".to_string(),
-            inputs: vec![DTypeId::F32],
-            output: DTypeId::F32,
-            expr: pointwise::PointwiseExpr::Arg(0),
-            vector_width: vectorized::VectorWidth::Vec4,
-            work_group_size: 256,
-        }
-        .render_cuda(),
-    );
 }

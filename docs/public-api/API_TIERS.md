@@ -88,7 +88,7 @@ supported import.
 | `dispatch` | 72 | X | Runtime backend selection for `Dyn`. |
 | `external` | 67 | X | Conformance harness for third-party backends. |
 | `prelude` | 50 | X | Documented in `lib.rs` as the single import surface for backend authors. |
-| `codegen` | 25 | X | `render_wgsl` / `render_msl` / `render_cuda` on `PointwiseOpSpec`. Deliberately frozen: this is what a new accelerator backend needs. |
+| `codegen` | 102 | X | The IR body seam: `IrExpr` → `fragment::lower_scalar` → `ScalarFragment`, the `catalog` pointwise vocabulary (`unary_fused_backward` is the shipped fused backward), and the experimental `dsl`/`jit` custom-op pair. Whole-kernel emitters with no consumer under `src/` were removed per #111. |
 | `nn_target` | 6 | X | |
 | `detect` | 6 | X | Runtime device detection. |
 | `simd` | 5 | X | Compile-time lane-width resolution (`simd_lanes` is a `const fn`) plus AVX2 detection. Kept public deliberately: it has a module doc comment and a curated crate-root re-export, and it resolves const-generic parameters rather than executing operations. |

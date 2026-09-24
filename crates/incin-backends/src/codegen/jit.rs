@@ -1,8 +1,18 @@
-//! JIT compilation and dynamic kernel execution engine for IncinIR on CUDA and CPU.
+//! Dynamic execution of `KernelDefinition` custom operations on CUDA and the host CPU.
 //!
-//! Compiles, caches, and executes custom operations represented by `KernelDefinition` on the fly,
-//! providing zero-overhead execution for user-defined forward expressions and symbolically derived
-//! backward autograd passes.
+//! On CUDA, `CudaJitKernel` renders the definition's forward and backward
+//! sources and compiles them through the production NVRTC dispatcher, caching
+//! the loaded module per device: the compiled kernel runs at device speed.
+//!
+//! On the host, `CpuJitKernel` is a per-element tree-walking interpreter over
+//! `f64`. It exists to produce reference numbers for a definition — the CPU
+//! twin a hardware run is compared against — and carries the arithmetic cost
+//! of a tree walk per element. It is not a compiled kernel and not the path a
+//! production CPU operation takes; that path is `kernel::scalar` through the
+//! backend executors.
+//!
+//! Both directions of a definition carry backward passes derived
+//! symbolically from the forward expression.
 
 use super::ir::KernelDefinition;
 #[cfg(feature = "cuda")]

@@ -148,6 +148,49 @@ for dtypes the kernel does not hold. Unless a custom operation records this
 way or is composed from existing differentiable tensor operations, document
 it as forward-only.
 
+## Experimental: expression-DSL pointwise ops
+
+Separate from the three forms above — and **experimental**, not part of the
+stable authoring contract — `incin_backends::codegen::dsl` exposes an
+expression DSL for single-kernel pointwise custom ops. `define_unary_custom_op`,
+`define_binary_custom_op` and `define_ternary_custom_op` take a closure over
+the codegen IR (`IrExpr`) and build a `KernelDefinition`: the forward
+expression plus one symbolically derived backward derivative per input,
+computed by the same `IrExpr::diff` that the shipped fused-unary-backward
+path runs.
+
+```rust,ignore
+use incin_backends::codegen::{define_unary_custom_op, sigmoid};
+use incin_core::tensor::dtype::DTypeId;
+
+let swish = define_unary_custom_op("swish", DTypeId::F32, |x| {
+    let s = sigmoid(x.clone());
+    x * s
+});
+```
+
+Two executors take that definition:
+
+- `codegen::CpuJitKernel` evaluates forward and backward on the host as a
+  per-element tree-walking interpreter over `f64`. It is a reference — the CPU
+  twin a hardware result is checked against — not a zero-overhead runtime and
+  not the path a production CPU operation takes.
+- `codegen::CudaJitKernel` renders the definition to CUDA C and compiles it
+  through the production NVRTC dispatcher, caching the module per device.
+
+What it deliberately does not do: it defines no `Operation`, adds no catalog
+row, and participates in no capability admission — a DSL op is not reachable
+through tensor methods or `dispatch::execute`. Wiring one into the library is
+form 1 above; the DSL is for kernels launched directly while the surface
+moves, and it may change without a major bump. The whole path — symbolic
+derivatives, CPU reference numbers, NVRTC compilation — is exercised by
+`crates/incin-backends/tests/codegen_ir_pipeline.rs` and the ignored
+hardware suite in `crates/incin-backends/tests/codegen_nvrtc_smoke.rs`.
+
+The same IR ships inside ordinary kernels: `codegen::fragment::lower_scalar`
+renders an `IrExpr` into the body slot the scalar kernel templates fill — see
+[Lowering: from descriptor to kernel](./deep_lowering.md#fusion-legality-checked-pointwise-groups-cmp-005).
+
 ## Training a custom operation, end to end
 
 What follows is the whole pattern, condensed from the executed fixture in

@@ -17,21 +17,11 @@ impl core::ops::arith::Sub<f64> for incin_backends::codegen::ir::IrExpr
 impl core::ops::arith::Sub<incin_backends::codegen::ir::IrExpr> for f64
 impl core::ops::deref::Deref for incin_backends::cpu::CpuStorage
 impl incin_backends::codegen::fragment::ScalarFragment
-impl incin_backends::codegen::fusion::CompositeFusionSpec
 impl incin_backends::codegen::ir::IrBinaryOp
 impl incin_backends::codegen::ir::IrExpr
 impl incin_backends::codegen::ir::IrUnaryOp
 impl incin_backends::codegen::ir::KernelDefinition
 impl incin_backends::codegen::jit::CpuJitKernel
-impl incin_backends::codegen::normalization::NormalizationSpec
-impl incin_backends::codegen::pointwise::PointwiseOpSpec
-impl incin_backends::codegen::reduction::ReductionOpSpec
-impl incin_backends::codegen::scheduler::BlockTensorPtr
-impl incin_backends::codegen::scheduler::KernelScheduler
-impl incin_backends::codegen::strided::FastDivisor
-impl incin_backends::codegen::strided::StridedIndexSpec
-impl incin_backends::codegen::vectorized::VectorWidth
-impl incin_backends::codegen::vectorized::VectorizedOpSpec
 impl incin_backends::conformance::AdvertisedTuple
 impl incin_backends::conformance::OracleReport
 impl incin_backends::conformance::Verdict
@@ -339,8 +329,6 @@ impl<const A: usize> incin_backends::target::TensorData for [u8; A] where typenu
 pub const fn incin_backends::codegen::ir::IrExpr::arg(usize) -> Self
 pub const fn incin_backends::codegen::ir::IrExpr::constant(f64) -> Self
 pub const fn incin_backends::codegen::jit::CpuJitKernel::new(incin_backends::codegen::ir::KernelDefinition) -> Self
-pub const fn incin_backends::codegen::vectorized::VectorWidth::from_numel(usize) -> Self
-pub const fn incin_backends::codegen::vectorized::VectorWidth::lanes(self) -> usize
 pub const fn incin_backends::conformance::AdvertisedTuple::query(&self) -> incin_core::exec::capability::CapabilityQuery
 pub const fn incin_backends::conformance::Verdict::is_finding(&self) -> bool
 pub const fn incin_backends::cpu::CpuBackendImpl<D>::new() -> Self
@@ -359,38 +347,14 @@ pub const incin_backends::dispatch::DispatchBackend<D>::BACKEND_NAME: &'static s
 pub const incin_backends::external::conformance::Tolerance::EXACT: Self
 pub const incin_backends::external::conformance::Tolerance::F32_ACCUMULATED: Self
 pub const incin_backends::external::conformance::Tolerance::F32_WIDE: Self
-pub enum incin_backends::codegen::BinaryOp
-pub enum incin_backends::codegen::FusedNode
 pub enum incin_backends::codegen::IrBinaryOp
 pub enum incin_backends::codegen::IrExpr
 pub enum incin_backends::codegen::IrTernaryOp
 pub enum incin_backends::codegen::IrUnaryOp
-pub enum incin_backends::codegen::LayoutKind
-pub enum incin_backends::codegen::LoopScheduleKind
-pub enum incin_backends::codegen::MemorySpace
-pub enum incin_backends::codegen::NormKind
-pub enum incin_backends::codegen::PointwiseExpr
-pub enum incin_backends::codegen::ReductionLayout
-pub enum incin_backends::codegen::ReductionOpKind
-pub enum incin_backends::codegen::TernaryOp
-pub enum incin_backends::codegen::UnaryOp
-pub enum incin_backends::codegen::VectorWidth
-pub enum incin_backends::codegen::fusion::FusedNode
 pub enum incin_backends::codegen::ir::IrBinaryOp
 pub enum incin_backends::codegen::ir::IrExpr
 pub enum incin_backends::codegen::ir::IrTernaryOp
 pub enum incin_backends::codegen::ir::IrUnaryOp
-pub enum incin_backends::codegen::normalization::NormKind
-pub enum incin_backends::codegen::pointwise::BinaryOp
-pub enum incin_backends::codegen::pointwise::LayoutKind
-pub enum incin_backends::codegen::pointwise::PointwiseExpr
-pub enum incin_backends::codegen::pointwise::TernaryOp
-pub enum incin_backends::codegen::pointwise::UnaryOp
-pub enum incin_backends::codegen::reduction::ReductionLayout
-pub enum incin_backends::codegen::reduction::ReductionOpKind
-pub enum incin_backends::codegen::scheduler::LoopScheduleKind
-pub enum incin_backends::codegen::scheduler::MemorySpace
-pub enum incin_backends::codegen::vectorized::VectorWidth
 pub enum incin_backends::conformance::Coverage
 pub enum incin_backends::cpu::CpuBuffer
 pub enum incin_backends::external::conformance::Outcome
@@ -491,11 +455,6 @@ pub fn incin_backends::codegen::fma(incin_backends::codegen::ir::IrExpr, incin_b
 pub fn incin_backends::codegen::fragment::ScalarFragment::literal(&str) -> Self
 pub fn incin_backends::codegen::fragment::ScalarFragment::prologue_block(&self, &str) -> alloc::string::String
 pub fn incin_backends::codegen::fragment::lower_scalar(&incin_backends::codegen::ir::IrExpr, &[&str], incin_core::tensor::dtype::registry::DTypeId) -> incin_core::err::Result<incin_backends::codegen::fragment::ScalarFragment>
-pub fn incin_backends::codegen::fusion::CompositeFusionSpec::add_node(&mut self, incin_backends::codegen::fusion::FusedNode) -> &mut Self
-pub fn incin_backends::codegen::fusion::CompositeFusionSpec::new(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, usize) -> Self
-pub fn incin_backends::codegen::fusion::CompositeFusionSpec::render_cuda(&self) -> alloc::string::String
-pub fn incin_backends::codegen::fusion::CompositeFusionSpec::set_final_var(&mut self, impl core::convert::Into<alloc::string::String>) -> &mut Self
-pub fn incin_backends::codegen::fusion::CompositeFusionSpec::swiglu_residual(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId) -> Self
 pub fn incin_backends::codegen::gelu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::ir::IrBinaryOp::apply(self, f64, f64) -> f64
 pub fn incin_backends::codegen::ir::IrExpr::add(self, Self) -> Self
@@ -549,48 +508,14 @@ pub fn incin_backends::codegen::jit::CpuJitKernel::eval_backward_f32(&self, &[f3
 pub fn incin_backends::codegen::jit::CpuJitKernel::eval_f32(&self, &[&[f32]], &mut [f32]) -> incin_core::err::Result<()>
 pub fn incin_backends::codegen::log(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::lower_scalar(&incin_backends::codegen::ir::IrExpr, &[&str], incin_core::tensor::dtype::registry::DTypeId) -> incin_core::err::Result<incin_backends::codegen::fragment::ScalarFragment>
-pub fn incin_backends::codegen::normalization::NormalizationSpec::new(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::normalization::NormKind, incin_core::tensor::dtype::registry::DTypeId, usize, f64, bool) -> Self
-pub fn incin_backends::codegen::normalization::NormalizationSpec::render_cuda_backward(&self) -> alloc::string::String
-pub fn incin_backends::codegen::normalization::NormalizationSpec::render_cuda_forward(&self) -> alloc::string::String
-pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::binary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::BinaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId) -> Self
-pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::render_cuda(&self) -> alloc::string::String
-pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::render_msl(&self) -> alloc::string::String
-pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::render_wgsl(&self) -> alloc::string::String
-pub fn incin_backends::codegen::pointwise::PointwiseOpSpec::unary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::UnaryOp, incin_core::tensor::dtype::registry::DTypeId) -> Self
-pub fn incin_backends::codegen::pointwise::render_cuda(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
-pub fn incin_backends::codegen::pointwise::render_msl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
-pub fn incin_backends::codegen::pointwise::render_wgsl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
-pub fn incin_backends::codegen::reduction::ReductionOpSpec::all_elements(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::reduction::ReductionOpKind, incin_core::tensor::dtype::registry::DTypeId) -> Self
-pub fn incin_backends::codegen::reduction::ReductionOpSpec::render_cuda(&self) -> alloc::string::String
-pub fn incin_backends::codegen::reduction::ReductionOpSpec::render_msl(&self) -> alloc::string::String
-pub fn incin_backends::codegen::reduction::ReductionOpSpec::render_wgsl(&self) -> alloc::string::String
-pub fn incin_backends::codegen::reduction::ReductionOpSpec::row_wise(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::reduction::ReductionOpKind, incin_core::tensor::dtype::registry::DTypeId) -> Self
-pub fn incin_backends::codegen::reduction::ReductionOpSpec::with_reduction_size(self, usize) -> Self
 pub fn incin_backends::codegen::relu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
-pub fn incin_backends::codegen::render_cuda(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
-pub fn incin_backends::codegen::render_msl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
-pub fn incin_backends::codegen::render_wgsl(&incin_backends::codegen::pointwise::PointwiseOpSpec) -> alloc::string::String
 pub fn incin_backends::codegen::rsqrt(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
-pub fn incin_backends::codegen::scheduler::BlockTensorPtr::global(impl core::convert::Into<alloc::string::String>, incin_core::tensor::dtype::registry::DTypeId, alloc::vec::Vec<usize>, alloc::vec::Vec<isize>) -> Self
-pub fn incin_backends::codegen::scheduler::BlockTensorPtr::is_innermost_contiguous(&self) -> bool
-pub fn incin_backends::codegen::scheduler::BlockTensorPtr::optimal_vector_width(&self) -> usize
-pub fn incin_backends::codegen::scheduler::KernelScheduler::new(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::scheduler::LoopScheduleKind, alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>, alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>) -> Self
-pub fn incin_backends::codegen::scheduler::KernelScheduler::recommended_grid_dim(&self) -> (usize, usize, usize)
-pub fn incin_backends::codegen::scheduler::KernelScheduler::render_cuda_preamble(&self) -> alloc::string::String
 pub fn incin_backends::codegen::sigmoid(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::silu(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::sqrt(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
-pub fn incin_backends::codegen::strided::FastDivisor::new(u32) -> Self
-pub fn incin_backends::codegen::strided::StridedIndexSpec::new(alloc::vec::Vec<usize>, alloc::vec::Vec<isize>) -> Self
-pub fn incin_backends::codegen::strided::StridedIndexSpec::render_cuda_offset_expression(&self, &str) -> alloc::string::String
 pub fn incin_backends::codegen::tanh(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::codegen::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
-pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::binary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::BinaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::vectorized::VectorWidth) -> Self
-pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_cuda(&self) -> alloc::string::String
-pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_msl(&self) -> alloc::string::String
-pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::render_wgsl(&self) -> alloc::string::String
-pub fn incin_backends::codegen::vectorized::VectorizedOpSpec::unary(impl core::convert::Into<alloc::string::String>, incin_backends::codegen::pointwise::UnaryOp, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::vectorized::VectorWidth) -> Self
 pub fn incin_backends::conformance::AdvertisedTuple::label(&self) -> alloc::string::String
 pub fn incin_backends::conformance::OracleReport::covered_operations(&self) -> alloc::vec::Vec<incin_core::shapes::error::OperationKind>
 pub fn incin_backends::conformance::OracleReport::executed(&self) -> usize
@@ -992,45 +917,7 @@ pub incin_backends::capability::BackendCoverageRow::cuda_rules: usize
 pub incin_backends::capability::BackendCoverageRow::metal_rules: usize
 pub incin_backends::capability::BackendCoverageRow::operation: incin_core::shapes::error::OperationKind
 pub incin_backends::capability::BackendCoverageRow::wgpu_rules: usize
-pub incin_backends::codegen::BinaryOp::Add
-pub incin_backends::codegen::BinaryOp::Div
-pub incin_backends::codegen::BinaryOp::Maximum
-pub incin_backends::codegen::BinaryOp::Minimum
-pub incin_backends::codegen::BinaryOp::Mul
-pub incin_backends::codegen::BinaryOp::Pow
-pub incin_backends::codegen::BinaryOp::Sub
-pub incin_backends::codegen::BlockTensorPtr::block_shape: alloc::vec::Vec<usize>
-pub incin_backends::codegen::BlockTensorPtr::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::BlockTensorPtr::name: alloc::string::String
-pub incin_backends::codegen::BlockTensorPtr::requires_mask: bool
-pub incin_backends::codegen::BlockTensorPtr::space: incin_backends::codegen::scheduler::MemorySpace
-pub incin_backends::codegen::BlockTensorPtr::strides: alloc::vec::Vec<isize>
-pub incin_backends::codegen::CompositeFusionSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::CompositeFusionSpec::final_var: alloc::string::String
-pub incin_backends::codegen::CompositeFusionSpec::name: alloc::string::String
-pub incin_backends::codegen::CompositeFusionSpec::nodes: alloc::vec::Vec<incin_backends::codegen::fusion::FusedNode>
-pub incin_backends::codegen::CompositeFusionSpec::num_inputs: usize
 pub incin_backends::codegen::CpuJitKernel::definition: incin_backends::codegen::ir::KernelDefinition
-pub incin_backends::codegen::FastDivisor::divisor: u32
-pub incin_backends::codegen::FastDivisor::multiplier: u64
-pub incin_backends::codegen::FastDivisor::shift: u32
-pub incin_backends::codegen::FusedNode::Binary
-pub incin_backends::codegen::FusedNode::Binary::lhs_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Binary::op: char
-pub incin_backends::codegen::FusedNode::Binary::out_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Binary::rhs_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Fma
-pub incin_backends::codegen::FusedNode::Fma::a_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Fma::b_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Fma::c_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Fma::out_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::LoadInput
-pub incin_backends::codegen::FusedNode::LoadInput::slot: usize
-pub incin_backends::codegen::FusedNode::LoadInput::var_name: alloc::string::String
-pub incin_backends::codegen::FusedNode::Unary
-pub incin_backends::codegen::FusedNode::Unary::input_var: alloc::string::String
-pub incin_backends::codegen::FusedNode::Unary::op: alloc::string::String
-pub incin_backends::codegen::FusedNode::Unary::out_var: alloc::string::String
 pub incin_backends::codegen::IrBinaryOp::Add
 pub incin_backends::codegen::IrBinaryOp::Atan2
 pub incin_backends::codegen::IrBinaryOp::Div
@@ -1083,120 +970,10 @@ pub incin_backends::codegen::KernelDefinition::dtype: incin_core::tensor::dtype:
 pub incin_backends::codegen::KernelDefinition::forward: incin_backends::codegen::ir::IrExpr
 pub incin_backends::codegen::KernelDefinition::input_arity: usize
 pub incin_backends::codegen::KernelDefinition::name: alloc::string::String
-pub incin_backends::codegen::KernelScheduler::inputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
-pub incin_backends::codegen::KernelScheduler::kind: incin_backends::codegen::scheduler::LoopScheduleKind
-pub incin_backends::codegen::KernelScheduler::name: alloc::string::String
-pub incin_backends::codegen::KernelScheduler::outputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
-pub incin_backends::codegen::KernelScheduler::threads_per_block: usize
-pub incin_backends::codegen::LayoutKind::Contiguous
-pub incin_backends::codegen::LayoutKind::ScalarBroadcast
-pub incin_backends::codegen::LayoutKind::Strided
-pub incin_backends::codegen::LoopScheduleKind::Pointwise1D
-pub incin_backends::codegen::LoopScheduleKind::Pointwise1D::elements_per_thread: usize
-pub incin_backends::codegen::LoopScheduleKind::Pointwise1D::numel: usize
-pub incin_backends::codegen::LoopScheduleKind::Reduction
-pub incin_backends::codegen::LoopScheduleKind::Reduction::num_rows: usize
-pub incin_backends::codegen::LoopScheduleKind::Reduction::reduction_dim: usize
-pub incin_backends::codegen::LoopScheduleKind::Tiled2D
-pub incin_backends::codegen::LoopScheduleKind::Tiled2D::block_k: usize
-pub incin_backends::codegen::LoopScheduleKind::Tiled2D::block_m: usize
-pub incin_backends::codegen::LoopScheduleKind::Tiled2D::block_n: usize
-pub incin_backends::codegen::MemorySpace::Global
-pub incin_backends::codegen::MemorySpace::Register
-pub incin_backends::codegen::MemorySpace::Shared
-pub incin_backends::codegen::NormKind::LayerNorm
-pub incin_backends::codegen::NormKind::RmsNorm
-pub incin_backends::codegen::NormalizationSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::NormalizationSpec::eps: f64
-pub incin_backends::codegen::NormalizationSpec::has_affine: bool
-pub incin_backends::codegen::NormalizationSpec::kind: incin_backends::codegen::normalization::NormKind
-pub incin_backends::codegen::NormalizationSpec::name: alloc::string::String
-pub incin_backends::codegen::NormalizationSpec::norm_dim: usize
-pub incin_backends::codegen::PointwiseExpr::Arg(usize)
-pub incin_backends::codegen::PointwiseExpr::Binary(incin_backends::codegen::pointwise::BinaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
-pub incin_backends::codegen::PointwiseExpr::ScalarConst(f64)
-pub incin_backends::codegen::PointwiseExpr::Ternary(incin_backends::codegen::pointwise::TernaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
-pub incin_backends::codegen::PointwiseExpr::Unary(incin_backends::codegen::pointwise::UnaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
-pub incin_backends::codegen::PointwiseOpSpec::expr: incin_backends::codegen::pointwise::PointwiseExpr
-pub incin_backends::codegen::PointwiseOpSpec::inputs: alloc::vec::Vec<incin_core::tensor::dtype::registry::DTypeId>
-pub incin_backends::codegen::PointwiseOpSpec::layout: incin_backends::codegen::pointwise::LayoutKind
-pub incin_backends::codegen::PointwiseOpSpec::name: alloc::string::String
-pub incin_backends::codegen::PointwiseOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::PointwiseOpSpec::work_group_size: usize
-pub incin_backends::codegen::ReductionLayout::AllElements
-pub incin_backends::codegen::ReductionLayout::RowWise
-pub incin_backends::codegen::ReductionOpKind::L2Norm
-pub incin_backends::codegen::ReductionOpKind::Max
-pub incin_backends::codegen::ReductionOpKind::Mean
-pub incin_backends::codegen::ReductionOpKind::Min
-pub incin_backends::codegen::ReductionOpKind::Prod
-pub incin_backends::codegen::ReductionOpKind::Sum
-pub incin_backends::codegen::ReductionOpKind::WelfordStd
-pub incin_backends::codegen::ReductionOpKind::WelfordStd::unbiased: bool
-pub incin_backends::codegen::ReductionOpKind::WelfordVar
-pub incin_backends::codegen::ReductionOpKind::WelfordVar::unbiased: bool
-pub incin_backends::codegen::ReductionOpSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::ReductionOpSpec::layout: incin_backends::codegen::reduction::ReductionLayout
-pub incin_backends::codegen::ReductionOpSpec::name: alloc::string::String
-pub incin_backends::codegen::ReductionOpSpec::op: incin_backends::codegen::reduction::ReductionOpKind
-pub incin_backends::codegen::ReductionOpSpec::reduction_size: core::option::Option<usize>
-pub incin_backends::codegen::ReductionOpSpec::work_group_size: usize
 pub incin_backends::codegen::ScalarFragment::prologue: alloc::vec::Vec<alloc::string::String>
 pub incin_backends::codegen::ScalarFragment::value: alloc::string::String
-pub incin_backends::codegen::StridedIndexSpec::shape: alloc::vec::Vec<usize>
-pub incin_backends::codegen::StridedIndexSpec::strides: alloc::vec::Vec<isize>
-pub incin_backends::codegen::TernaryOp::Clamp
-pub incin_backends::codegen::TernaryOp::Fma
-pub incin_backends::codegen::UnaryOp::Abs
-pub incin_backends::codegen::UnaryOp::Ceil
-pub incin_backends::codegen::UnaryOp::Cos
-pub incin_backends::codegen::UnaryOp::Exp
-pub incin_backends::codegen::UnaryOp::Floor
-pub incin_backends::codegen::UnaryOp::Gelu
-pub incin_backends::codegen::UnaryOp::Log
-pub incin_backends::codegen::UnaryOp::Neg
-pub incin_backends::codegen::UnaryOp::Reciprocal
-pub incin_backends::codegen::UnaryOp::Relu
-pub incin_backends::codegen::UnaryOp::Rsqrt
-pub incin_backends::codegen::UnaryOp::Sigmoid
-pub incin_backends::codegen::UnaryOp::Silu
-pub incin_backends::codegen::UnaryOp::Sin
-pub incin_backends::codegen::UnaryOp::Sqrt
-pub incin_backends::codegen::UnaryOp::Square
-pub incin_backends::codegen::UnaryOp::Tanh
-pub incin_backends::codegen::VectorWidth::Scalar = 1
-pub incin_backends::codegen::VectorWidth::Vec2 = 2
-pub incin_backends::codegen::VectorWidth::Vec4 = 4
-pub incin_backends::codegen::VectorizedOpSpec::expr: incin_backends::codegen::pointwise::PointwiseExpr
-pub incin_backends::codegen::VectorizedOpSpec::inputs: alloc::vec::Vec<incin_core::tensor::dtype::registry::DTypeId>
-pub incin_backends::codegen::VectorizedOpSpec::name: alloc::string::String
-pub incin_backends::codegen::VectorizedOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::VectorizedOpSpec::vector_width: incin_backends::codegen::vectorized::VectorWidth
-pub incin_backends::codegen::VectorizedOpSpec::work_group_size: usize
 pub incin_backends::codegen::fragment::ScalarFragment::prologue: alloc::vec::Vec<alloc::string::String>
 pub incin_backends::codegen::fragment::ScalarFragment::value: alloc::string::String
-pub incin_backends::codegen::fusion::CompositeFusionSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::fusion::CompositeFusionSpec::final_var: alloc::string::String
-pub incin_backends::codegen::fusion::CompositeFusionSpec::name: alloc::string::String
-pub incin_backends::codegen::fusion::CompositeFusionSpec::nodes: alloc::vec::Vec<incin_backends::codegen::fusion::FusedNode>
-pub incin_backends::codegen::fusion::CompositeFusionSpec::num_inputs: usize
-pub incin_backends::codegen::fusion::FusedNode::Binary
-pub incin_backends::codegen::fusion::FusedNode::Binary::lhs_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Binary::op: char
-pub incin_backends::codegen::fusion::FusedNode::Binary::out_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Binary::rhs_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Fma
-pub incin_backends::codegen::fusion::FusedNode::Fma::a_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Fma::b_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Fma::c_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Fma::out_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::LoadInput
-pub incin_backends::codegen::fusion::FusedNode::LoadInput::slot: usize
-pub incin_backends::codegen::fusion::FusedNode::LoadInput::var_name: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Unary
-pub incin_backends::codegen::fusion::FusedNode::Unary::input_var: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Unary::op: alloc::string::String
-pub incin_backends::codegen::fusion::FusedNode::Unary::out_var: alloc::string::String
 pub incin_backends::codegen::ir::IrBinaryOp::Add
 pub incin_backends::codegen::ir::IrBinaryOp::Atan2
 pub incin_backends::codegen::ir::IrBinaryOp::Div
@@ -1250,110 +1027,6 @@ pub incin_backends::codegen::ir::KernelDefinition::forward: incin_backends::code
 pub incin_backends::codegen::ir::KernelDefinition::input_arity: usize
 pub incin_backends::codegen::ir::KernelDefinition::name: alloc::string::String
 pub incin_backends::codegen::jit::CpuJitKernel::definition: incin_backends::codegen::ir::KernelDefinition
-pub incin_backends::codegen::normalization::NormKind::LayerNorm
-pub incin_backends::codegen::normalization::NormKind::RmsNorm
-pub incin_backends::codegen::normalization::NormalizationSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::normalization::NormalizationSpec::eps: f64
-pub incin_backends::codegen::normalization::NormalizationSpec::has_affine: bool
-pub incin_backends::codegen::normalization::NormalizationSpec::kind: incin_backends::codegen::normalization::NormKind
-pub incin_backends::codegen::normalization::NormalizationSpec::name: alloc::string::String
-pub incin_backends::codegen::normalization::NormalizationSpec::norm_dim: usize
-pub incin_backends::codegen::pointwise::BinaryOp::Add
-pub incin_backends::codegen::pointwise::BinaryOp::Div
-pub incin_backends::codegen::pointwise::BinaryOp::Maximum
-pub incin_backends::codegen::pointwise::BinaryOp::Minimum
-pub incin_backends::codegen::pointwise::BinaryOp::Mul
-pub incin_backends::codegen::pointwise::BinaryOp::Pow
-pub incin_backends::codegen::pointwise::BinaryOp::Sub
-pub incin_backends::codegen::pointwise::LayoutKind::Contiguous
-pub incin_backends::codegen::pointwise::LayoutKind::ScalarBroadcast
-pub incin_backends::codegen::pointwise::LayoutKind::Strided
-pub incin_backends::codegen::pointwise::PointwiseExpr::Arg(usize)
-pub incin_backends::codegen::pointwise::PointwiseExpr::Binary(incin_backends::codegen::pointwise::BinaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
-pub incin_backends::codegen::pointwise::PointwiseExpr::ScalarConst(f64)
-pub incin_backends::codegen::pointwise::PointwiseExpr::Ternary(incin_backends::codegen::pointwise::TernaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
-pub incin_backends::codegen::pointwise::PointwiseExpr::Unary(incin_backends::codegen::pointwise::UnaryOp, alloc::boxed::Box<incin_backends::codegen::pointwise::PointwiseExpr>)
-pub incin_backends::codegen::pointwise::PointwiseOpSpec::expr: incin_backends::codegen::pointwise::PointwiseExpr
-pub incin_backends::codegen::pointwise::PointwiseOpSpec::inputs: alloc::vec::Vec<incin_core::tensor::dtype::registry::DTypeId>
-pub incin_backends::codegen::pointwise::PointwiseOpSpec::layout: incin_backends::codegen::pointwise::LayoutKind
-pub incin_backends::codegen::pointwise::PointwiseOpSpec::name: alloc::string::String
-pub incin_backends::codegen::pointwise::PointwiseOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::pointwise::PointwiseOpSpec::work_group_size: usize
-pub incin_backends::codegen::pointwise::TernaryOp::Clamp
-pub incin_backends::codegen::pointwise::TernaryOp::Fma
-pub incin_backends::codegen::pointwise::UnaryOp::Abs
-pub incin_backends::codegen::pointwise::UnaryOp::Ceil
-pub incin_backends::codegen::pointwise::UnaryOp::Cos
-pub incin_backends::codegen::pointwise::UnaryOp::Exp
-pub incin_backends::codegen::pointwise::UnaryOp::Floor
-pub incin_backends::codegen::pointwise::UnaryOp::Gelu
-pub incin_backends::codegen::pointwise::UnaryOp::Log
-pub incin_backends::codegen::pointwise::UnaryOp::Neg
-pub incin_backends::codegen::pointwise::UnaryOp::Reciprocal
-pub incin_backends::codegen::pointwise::UnaryOp::Relu
-pub incin_backends::codegen::pointwise::UnaryOp::Rsqrt
-pub incin_backends::codegen::pointwise::UnaryOp::Sigmoid
-pub incin_backends::codegen::pointwise::UnaryOp::Silu
-pub incin_backends::codegen::pointwise::UnaryOp::Sin
-pub incin_backends::codegen::pointwise::UnaryOp::Sqrt
-pub incin_backends::codegen::pointwise::UnaryOp::Square
-pub incin_backends::codegen::pointwise::UnaryOp::Tanh
-pub incin_backends::codegen::reduction::ReductionLayout::AllElements
-pub incin_backends::codegen::reduction::ReductionLayout::RowWise
-pub incin_backends::codegen::reduction::ReductionOpKind::L2Norm
-pub incin_backends::codegen::reduction::ReductionOpKind::Max
-pub incin_backends::codegen::reduction::ReductionOpKind::Mean
-pub incin_backends::codegen::reduction::ReductionOpKind::Min
-pub incin_backends::codegen::reduction::ReductionOpKind::Prod
-pub incin_backends::codegen::reduction::ReductionOpKind::Sum
-pub incin_backends::codegen::reduction::ReductionOpKind::WelfordStd
-pub incin_backends::codegen::reduction::ReductionOpKind::WelfordStd::unbiased: bool
-pub incin_backends::codegen::reduction::ReductionOpKind::WelfordVar
-pub incin_backends::codegen::reduction::ReductionOpKind::WelfordVar::unbiased: bool
-pub incin_backends::codegen::reduction::ReductionOpSpec::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::reduction::ReductionOpSpec::layout: incin_backends::codegen::reduction::ReductionLayout
-pub incin_backends::codegen::reduction::ReductionOpSpec::name: alloc::string::String
-pub incin_backends::codegen::reduction::ReductionOpSpec::op: incin_backends::codegen::reduction::ReductionOpKind
-pub incin_backends::codegen::reduction::ReductionOpSpec::reduction_size: core::option::Option<usize>
-pub incin_backends::codegen::reduction::ReductionOpSpec::work_group_size: usize
-pub incin_backends::codegen::scheduler::BlockTensorPtr::block_shape: alloc::vec::Vec<usize>
-pub incin_backends::codegen::scheduler::BlockTensorPtr::dtype: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::scheduler::BlockTensorPtr::name: alloc::string::String
-pub incin_backends::codegen::scheduler::BlockTensorPtr::requires_mask: bool
-pub incin_backends::codegen::scheduler::BlockTensorPtr::space: incin_backends::codegen::scheduler::MemorySpace
-pub incin_backends::codegen::scheduler::BlockTensorPtr::strides: alloc::vec::Vec<isize>
-pub incin_backends::codegen::scheduler::KernelScheduler::inputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
-pub incin_backends::codegen::scheduler::KernelScheduler::kind: incin_backends::codegen::scheduler::LoopScheduleKind
-pub incin_backends::codegen::scheduler::KernelScheduler::name: alloc::string::String
-pub incin_backends::codegen::scheduler::KernelScheduler::outputs: alloc::vec::Vec<incin_backends::codegen::scheduler::BlockTensorPtr>
-pub incin_backends::codegen::scheduler::KernelScheduler::threads_per_block: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Pointwise1D
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Pointwise1D::elements_per_thread: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Pointwise1D::numel: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Reduction
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Reduction::num_rows: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Reduction::reduction_dim: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D::block_k: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D::block_m: usize
-pub incin_backends::codegen::scheduler::LoopScheduleKind::Tiled2D::block_n: usize
-pub incin_backends::codegen::scheduler::MemorySpace::Global
-pub incin_backends::codegen::scheduler::MemorySpace::Register
-pub incin_backends::codegen::scheduler::MemorySpace::Shared
-pub incin_backends::codegen::strided::FastDivisor::divisor: u32
-pub incin_backends::codegen::strided::FastDivisor::multiplier: u64
-pub incin_backends::codegen::strided::FastDivisor::shift: u32
-pub incin_backends::codegen::strided::StridedIndexSpec::shape: alloc::vec::Vec<usize>
-pub incin_backends::codegen::strided::StridedIndexSpec::strides: alloc::vec::Vec<isize>
-pub incin_backends::codegen::vectorized::VectorWidth::Scalar = 1
-pub incin_backends::codegen::vectorized::VectorWidth::Vec2 = 2
-pub incin_backends::codegen::vectorized::VectorWidth::Vec4 = 4
-pub incin_backends::codegen::vectorized::VectorizedOpSpec::expr: incin_backends::codegen::pointwise::PointwiseExpr
-pub incin_backends::codegen::vectorized::VectorizedOpSpec::inputs: alloc::vec::Vec<incin_core::tensor::dtype::registry::DTypeId>
-pub incin_backends::codegen::vectorized::VectorizedOpSpec::name: alloc::string::String
-pub incin_backends::codegen::vectorized::VectorizedOpSpec::output: incin_core::tensor::dtype::registry::DTypeId
-pub incin_backends::codegen::vectorized::VectorizedOpSpec::vector_width: incin_backends::codegen::vectorized::VectorWidth
-pub incin_backends::codegen::vectorized::VectorizedOpSpec::work_group_size: usize
 pub incin_backends::conformance::AdvertisedTuple::dtype: incin_core::tensor::dtype::registry::DTypeDescriptor
 pub incin_backends::conformance::AdvertisedTuple::layout: incin_core::exec::meta::LayoutClass
 pub incin_backends::conformance::AdvertisedTuple::math_mode: incin_core::exec::policy::MathMode
@@ -1413,15 +1086,8 @@ pub mod incin_backends::codegen
 pub mod incin_backends::codegen::catalog
 pub mod incin_backends::codegen::dsl
 pub mod incin_backends::codegen::fragment
-pub mod incin_backends::codegen::fusion
 pub mod incin_backends::codegen::ir
 pub mod incin_backends::codegen::jit
-pub mod incin_backends::codegen::normalization
-pub mod incin_backends::codegen::pointwise
-pub mod incin_backends::codegen::reduction
-pub mod incin_backends::codegen::scheduler
-pub mod incin_backends::codegen::strided
-pub mod incin_backends::codegen::vectorized
 pub mod incin_backends::conformance
 pub mod incin_backends::cpu
 pub mod incin_backends::cpu::typed_kernel
@@ -1439,30 +1105,12 @@ pub static incin_backends::capability::METAL_CAPABILITIES: &[incin_core::exec::c
 pub static incin_backends::capability::WGPU_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
 pub struct incin_backends::DispatchBackend<D>(_)
 pub struct incin_backends::capability::BackendCoverageRow
-pub struct incin_backends::codegen::BlockTensorPtr
-pub struct incin_backends::codegen::CompositeFusionSpec
 pub struct incin_backends::codegen::CpuJitKernel
-pub struct incin_backends::codegen::FastDivisor
 pub struct incin_backends::codegen::KernelDefinition
-pub struct incin_backends::codegen::KernelScheduler
-pub struct incin_backends::codegen::NormalizationSpec
-pub struct incin_backends::codegen::PointwiseOpSpec
-pub struct incin_backends::codegen::ReductionOpSpec
 pub struct incin_backends::codegen::ScalarFragment
-pub struct incin_backends::codegen::StridedIndexSpec
-pub struct incin_backends::codegen::VectorizedOpSpec
 pub struct incin_backends::codegen::fragment::ScalarFragment
-pub struct incin_backends::codegen::fusion::CompositeFusionSpec
 pub struct incin_backends::codegen::ir::KernelDefinition
 pub struct incin_backends::codegen::jit::CpuJitKernel
-pub struct incin_backends::codegen::normalization::NormalizationSpec
-pub struct incin_backends::codegen::pointwise::PointwiseOpSpec
-pub struct incin_backends::codegen::reduction::ReductionOpSpec
-pub struct incin_backends::codegen::scheduler::BlockTensorPtr
-pub struct incin_backends::codegen::scheduler::KernelScheduler
-pub struct incin_backends::codegen::strided::FastDivisor
-pub struct incin_backends::codegen::strided::StridedIndexSpec
-pub struct incin_backends::codegen::vectorized::VectorizedOpSpec
 pub struct incin_backends::conformance::AdvertisedTuple
 pub struct incin_backends::conformance::Observation
 pub struct incin_backends::conformance::OracleReport
