@@ -2409,6 +2409,153 @@ fn scatter_add_refuses_last_write_wins_with_the_cpus_wording() {
 }
 
 // ---------------------------------------------------------------------------
+// Issue #103, AC6: CUDA `grouped_matmul`. All five are hardware-gated like
+// every other device path above; the geometry mirrors
+// `crates/incin/tests/routing_primitives.rs` so CPU and CUDA pin the same
+// hand-checkable values.
+// ---------------------------------------------------------------------------
+
+fn cuda_i64(shape: &[usize], values: &[i64]) -> CudaStorage {
+    let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+    crate::cuda::backend::cuda_from_bytes(shape, DTypeId::I64.into(), 0, &bytes).unwrap()
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn grouped_matmul_applies_each_experts_weight_to_its_own_rows() {
+    let lhs = cuda_f32(&[2, 2], vec![1.0, 0.0, 0.0, 1.0]);
+    let rhs = cuda_f32(&[2, 2, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    let offsets = cuda_i64(&[3], &[0, 2, 2]);
+    let out = B::grouped_matmul::<f32>(&lhs, &rhs, &offsets).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![1.0, 2.0, 3.0, 4.0],
+        "expert 0's weights apply to both rows; expert 1 owns none"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn grouped_matmul_skips_an_empty_expert_span() {
+    let lhs = cuda_f32(&[2, 2], vec![1.0, 0.0, 0.0, 1.0]);
+    // Expert 1 and 2 are empty (offsets 1..1, 1..1); expert 0 owns both rows.
+    let rhs = cuda_f32(
+        &[3, 2, 2],
+        vec![
+            1.0, 2.0, 3.0, 4.0, // expert 0
+            5.0, 6.0, 7.0, 8.0, // expert 1 (empty)
+            9.0, 10.0, 11.0, 12.0, // expert 2 (empty)
+        ],
+    );
+    let offsets = cuda_i64(&[4], &[0, 2, 2, 2]);
+    let out = B::grouped_matmul::<f32>(&lhs, &rhs, &offsets).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(download_f32_host(&out).unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn grouped_matmul_matches_a_loop_of_individual_matmuls() {
+    let tokens = 4;
+    let k = 2;
+    let experts = 2;
+    let n = 3;
+    let lhs_values: Vec<f32> = (0..tokens * k).map(|i| (i % 5) as f32 + 1.0).collect();
+    let rhs_values: Vec<f32> = (0..experts * k * n).map(|i| (i % 7) as f32 * 0.5).collect();
+    let lhs = cuda_f32(&[tokens, k], lhs_values.clone());
+    let rhs = cuda_f32(&[experts, k, n], rhs_values.clone());
+    let offsets = cuda_i64(&[3], &[0, 1, tokens as i64]);
+
+    let out = B::grouped_matmul::<f32>(&lhs, &rhs, &offsets).unwrap();
+    assert_eq!(out.shape, vec![tokens, n]);
+    let got = download_f32_host(&out).unwrap();
+
+    // Host-side reference: expert 0 owns row 0, expert 1 owns rows 1..4.
+    let mut expected = vec![0f32; tokens * n];
+    for (expert, start, end) in [(0usize, 0usize, 1usize), (1, 1, tokens)] {
+        for row in start..end {
+            for col in 0..n {
+                let mut acc = 0.0f32;
+                for contracting in 0..k {
+                    acc += lhs_values[row * k + contracting]
+                        * rhs_values[(expert * k + contracting) * n + col];
+                }
+                expected[row * n + col] = acc;
+            }
+        }
+    }
+    for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (g - e).abs() < 1e-4,
+            "grouped_matmul[{i}]: got {g}, loop reference {e}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn grouped_matmul_refuses_offsets_that_do_not_tile_with_cpus_wording() {
+    let lhs = cuda_f32(&[2, 2], vec![1.0, 0.0, 0.0, 1.0]);
+    let rhs = cuda_f32(&[2, 2, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    // Final offset is 1, not 2: expert rows do not cover the activation.
+    let bad = cuda_i64(&[3], &[0, 1, 1]);
+    let err = B::grouped_matmul::<f32>(&lhs, &rhs, &bad)
+        .expect_err("offsets that leave a row uncovered must be refused");
+    let rendered = format!("{err}");
+    assert!(
+        rendered.contains("must tile [0, 2)"),
+        "tile refusal must carry CPU's wording, got {rendered}"
+    );
+
+    // Decreasing offsets name overlapping spans rather than a partition.
+    let decreasing = cuda_i64(&[3], &[0, 2, 1]);
+    let err = B::grouped_matmul::<f32>(&lhs, &rhs, &decreasing)
+        .expect_err("decreasing offsets must be refused");
+    let rendered = format!("{err}");
+    assert!(
+        rendered.contains("must be non-decreasing"),
+        "ordering refusal must carry CPU's wording, got {rendered}"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn grouped_matmul_gradient_reaches_both_matrices_and_not_the_offsets() {
+    let lhs = cuda_f32(&[2, 2], vec![1.0, 0.0, 0.0, 1.0]);
+    let rhs = cuda_f32(&[2, 2, 2], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    let offsets = cuda_i64(&[3], &[0, 1, 2]);
+    let (lhs_id, rhs_id, offsets_id) = (lhs.id, rhs.id, offsets.id);
+
+    let out = B::grouped_matmul::<f32>(&lhs, &rhs, &offsets).unwrap();
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![1.0, 2.0, 7.0, 8.0],
+        "each row should use its own expert's weights"
+    );
+
+    // Ones-seeded backward is d(sum)/d(inputs), the same check CPU's
+    // routing_primitives gradient test makes through sum_all.
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad_lhs = download_f32_host(grads.get(lhs_id).unwrap()).unwrap();
+    assert_eq!(
+        grad_lhs,
+        vec![3.0, 7.0, 11.0, 15.0],
+        "d(sum)/d(lhs) = each row dotted into its own expert's weights"
+    );
+    let grad_rhs = download_f32_host(grads.get(rhs_id).unwrap()).unwrap();
+    assert_eq!(
+        grad_rhs,
+        vec![1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
+        "d(sum)/d(rhs[e]) = lhs_rows^T @ ones for that expert's rows"
+    );
+    assert!(
+        grads.get(offsets_id).is_none(),
+        "the integer offsets operand must stay off the tape, as on CPU"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Issue #90: the dtype-parametric matmul rows. The first test runs
 // everywhere - it answers the capability query, not the device. The rest are
 // `#[ignore]`d like every other hardware test above.

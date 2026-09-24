@@ -411,6 +411,121 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             false,
         ),
         native(OperationKind::Reshape, FLOAT_DTYPES, CONTIGUOUS, true),
+        // Issue: close the remaining narrow CUDA dtype capability rows.
+        // Each row here widens one identity past the `F32_ONLY` its shared
+        // declaration-group row still states. Legacy rows render first and
+        // `support()` is any-row-match, so a real invocation resolves
+        // against this wider claim while the group row keeps its narrower
+        // documented floor. Evidence per family:
+        // - The eight composed identities rewrite into the measured wide
+        //   byte-movement kernels (`tests/cuda_shape_dtypes.rs`'s
+        //   byte-exact matrix across transpose, broadcast, narrow and
+        //   concat): `flatten`/`squeeze`/`unsqueeze` are metadata-only
+        //   buffer rewraps (same as the wide `reshape` row above), `stack`/
+        //   `slice`/`chunk`/`split` rewrite through narrow+concat, and
+        //   `broadcast_left` through `broadcast_as`. Every step pushes a
+        //   real tape entry, so `training = true` is verified, not the
+        //   conservative default. `ImplementationKind::Composed` matches
+        //   what the group row already reports. Rank and training follow
+        //   `descriptor_min_rank`/`accelerator_max_rank`, the same helpers
+        //   the group row uses.
+        // - `PixelShuffle`/`Unfold` are native: their executors are pure
+        //   reshape/transpose and narrow+unsqueeze+concat+transpose chains
+        //   (`cuda/executor.rs`) over those same byte-movement kernels,
+        //   each pushing tape. `native_ranked` with `ImplementationKind::
+        //   Native` matches the group row; ranks follow the descriptor
+        //   (`PixelShuffle` is exactly 4-D, `Unfold` is rank 1..).
+        // - `TensorToBytes` widens per the `readback` comment in
+        //   `declarations.rs`: `HostInterop::to_bytes` only length-checks
+        //   against `checked_storage_byte_len` and never reinterprets
+        //   elements, so every dtype CUDA can hold round-trips. No tape
+        //   entry - a device-to-host copy records nothing to differentiate.
+        composed_ranked(
+            OperationKind::FlattenExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::FlattenExact),
+            accelerator_max_rank(OperationKind::FlattenExact),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::SqueezeExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::SqueezeExact),
+            accelerator_max_rank(OperationKind::SqueezeExact),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::UnsqueezeExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::UnsqueezeExact),
+            accelerator_max_rank(OperationKind::UnsqueezeExact),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::StackExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::StackExact),
+            accelerator_max_rank(OperationKind::StackExact),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::SliceExact,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::SliceExact),
+            accelerator_max_rank(OperationKind::SliceExact),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::BroadcastLeft,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::BroadcastLeft),
+            accelerator_max_rank(OperationKind::BroadcastLeft),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::Chunk,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Chunk),
+            accelerator_max_rank(OperationKind::Chunk),
+            true,
+        ),
+        composed_ranked(
+            OperationKind::Split,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Split),
+            accelerator_max_rank(OperationKind::Split),
+            true,
+        ),
+        native_ranked(
+            OperationKind::PixelShuffle,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            4,
+            4,
+            true,
+        ),
+        native_ranked(
+            OperationKind::Unfold,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            1,
+            usize::MAX,
+            true,
+        ),
+        native(
+            OperationKind::TensorToBytes,
+            CUDA_BOOL_SAFE_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false,
+        ),
         // Issue #90 (98df2b6c): `matmul.cu` exports one GEMM entry per float
         // storage dtype, so the coarse row now matches the exact
         // `MatMulExact` row (which sits in `declarations`'s `reduction`

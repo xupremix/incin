@@ -497,6 +497,137 @@ impl<D: Device> CudaBackendImpl<D> {
         Self::reshape::<K>(&stacked, &out_shape)
     }
 
+    /// Grouped (expert-tiled) matmul: `lhs [T, K]`, stacked `rhs [E, K, N]`,
+    /// and an i64 `offsets [E+1]` tiling `[0, T)` into per-expert row spans.
+    ///
+    /// Issue #103's CUDA half, mirroring `cpu::ops::matmul::grouped`: each
+    /// expert's block of rows multiplies its own `[K, N]` slice, an empty
+    /// span is skipped rather than refused, and the offsets are read back to
+    /// the host once (`E + 1` integers), validated with CPU's exact wording,
+    /// and never recorded — an integer tile has no cotangent, the same
+    /// exclusion `scatter_add` applies to its index. Forward runs one
+    /// tape-free `launch_matmul` per non-empty span and concatenates the
+    /// products in span order (the spans partition `[0, T)` increasingly, so
+    /// the concatenation lands every block at its own rows), then pushes one
+    /// `TapeEntry` for the whole product rather than one per expert. The
+    /// backward recomputes from the captured operands the same way CPU's
+    /// does: `grad_lhs` blocks concatenated in span order, `grad_rhs` as one
+    /// per-expert stack with zeros where a span was empty.
+    ///
+    /// The narrow/matmul path reads flat contiguous buffers (see
+    /// `launch_shape_op`), so this refuses a strided or non-zero-offset
+    /// operand fail-closed rather than mis-addressing it — the layout the
+    /// shared `embedding` capability row cannot narrow per-operation, the
+    /// same tightener the row's dtype union needs for the f32 matrices.
+    pub(crate) fn grouped_matmul<K: DType>(
+        lhs: &CudaStorage,
+        rhs: &CudaStorage,
+        offsets: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        require_dense(lhs, "lhs")?;
+        require_dense(rhs, "rhs")?;
+        require_dense(offsets, "offsets")?;
+        if lhs.shape.len() != 2 || rhs.shape.len() != 3 || offsets.shape.len() != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: vec![2, 3, 1],
+                got: vec![lhs.shape.len(), rhs.shape.len(), offsets.shape.len()],
+                msg: format!(
+                    "grouped_matmul requires lhs [T,K], rhs [E,K,N], offsets [E+1]; got lhs={:?}, rhs={:?}, offsets={:?}",
+                    lhs.shape, rhs.shape, offsets.shape
+                ),
+            });
+        }
+        let (tokens, contracting) = (lhs.shape[0], lhs.shape[1]);
+        let (experts, _, out_cols) = (rhs.shape[0], rhs.shape[1], rhs.shape[2]);
+        if contracting != rhs.shape[1] {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: vec![contracting],
+                got: vec![rhs.shape[1]],
+                msg: format!(
+                    "grouped_matmul contracting dimensions differ: lhs K = {contracting}, rhs K = {}",
+                    rhs.shape[1]
+                ),
+            });
+        }
+        let spans = expert_spans(offsets, experts, tokens)?;
+
+        let mut products: Vec<CudaStorage> = Vec::new();
+        for (expert, &(start, end)) in spans.iter().enumerate() {
+            if start == end {
+                continue;
+            }
+            let rows = crate::cuda::ops::shape::launch_narrow(lhs, 0, start, end - start)?;
+            let weight_slice = crate::cuda::ops::shape::launch_narrow(rhs, 0, expert, 1)?;
+            let weight = CudaStorage::new(weight_slice.buffer.clone(), vec![contracting, out_cols]);
+            products.push(crate::cuda::ops::matmul::launch_matmul(&rows, &weight)?);
+        }
+        let out = if products.is_empty() {
+            // `tokens == 0` (the offsets still tile `[0, 0)`): no product to
+            // concatenate, so the zero-row result comes from the zeroed
+            // allocation directly.
+            zeros_dense(lhs, &[tokens, out_cols])?
+        } else {
+            let refs: Vec<&CudaStorage> = products.iter().collect();
+            crate::cuda::ops::shape::launch_concat(&refs, 0)?
+        };
+
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let spans_capture = spans.clone();
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                require_dense(grad_out, "gradient")?;
+                let mut lhs_blocks: Vec<CudaStorage> = Vec::new();
+                let mut rhs_blocks: Vec<CudaStorage> = Vec::new();
+                for (expert, &(start, end)) in spans_capture.iter().enumerate() {
+                    if start == end {
+                        rhs_blocks.push(zeros_dense(&rhs_capture, &[1, contracting, out_cols])?);
+                        continue;
+                    }
+                    let g_rows =
+                        crate::cuda::ops::shape::launch_narrow(grad_out, 0, start, end - start)?;
+                    let weight_slice =
+                        crate::cuda::ops::shape::launch_narrow(&rhs_capture, 0, expert, 1)?;
+                    let weight =
+                        CudaStorage::new(weight_slice.buffer.clone(), vec![contracting, out_cols]);
+                    let weight_t = crate::cuda::ops::shape::launch_transpose(&weight, 0, 1)?;
+                    lhs_blocks.push(crate::cuda::ops::matmul::launch_matmul(&g_rows, &weight_t)?);
+
+                    let lhs_rows = crate::cuda::ops::shape::launch_narrow(
+                        &lhs_capture,
+                        0,
+                        start,
+                        end - start,
+                    )?;
+                    let lhs_t = crate::cuda::ops::shape::launch_transpose(&lhs_rows, 0, 1)?;
+                    let grad_w = crate::cuda::ops::matmul::launch_matmul(&lhs_t, &g_rows)?;
+                    rhs_blocks.push(CudaStorage::new(
+                        grad_w.buffer.clone(),
+                        vec![1, contracting, out_cols],
+                    ));
+                }
+                let grad_lhs = if lhs_blocks.is_empty() {
+                    zeros_dense(&lhs_capture, &[lhs_capture.shape[0], contracting])?
+                } else {
+                    let refs: Vec<&CudaStorage> = lhs_blocks.iter().collect();
+                    crate::cuda::ops::shape::launch_concat(&refs, 0)?
+                };
+                let grad_rhs = if rhs_blocks.is_empty() {
+                    zeros_dense(&rhs_capture, &rhs_capture.shape)?
+                } else {
+                    let refs: Vec<&CudaStorage> = rhs_blocks.iter().collect();
+                    crate::cuda::ops::shape::launch_concat(&refs, 0)?
+                };
+                Ok(vec![grad_lhs, grad_rhs])
+            }),
+        });
+        Ok(out)
+    }
+
     /// Materializes (see `reshape`'s doc for why).
     pub(crate) fn broadcast_as<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
@@ -856,6 +987,113 @@ impl<D: Device> CudaBackendImpl<D> {
         });
         Ok(out)
     }
+}
+
+/// Fail-closed layout gate for `grouped_matmul`'s narrow/matmul path.
+///
+/// `launch_shape_op` and the matmul kernel address storage as a flat
+/// contiguous buffer (they never receive strides or a view offset), so a
+/// strided or non-zero-offset operand would be read as if it were packed.
+/// The shared `embedding` capability row cannot narrow its layout claim
+/// per-operation — `OneHot`/`Bincount`/`ScatterAdd` are stride-aware — so
+/// the executor refuses here, the same tightener the row's dtype union
+/// needs for the f32 matrices.
+fn require_dense(t: &CudaStorage, name: &'static str) -> Result<()> {
+    if t.layout() != incin_core::exec::LayoutClass::Contiguous || t.offset_elements != 0 {
+        return Err(Error::Msg(format!(
+            "grouped_matmul requires contiguous {name} storage on CUDA (the narrow/matmul path \
+             reads flat buffers); got layout {:?}, strides {:?}, offset {}",
+            t.layout(),
+            t.strides,
+            t.offset_elements
+        )));
+    }
+    Ok(())
+}
+
+/// Zero-filled contiguous storage in `sample`'s dtype, for an empty expert
+/// stack or a `tokens == 0` product that has no kernel result to build on.
+fn zeros_dense(sample: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {
+    let numel = checked_numel(shape)?;
+    let stream = sample.buffer.device.default_stream();
+    let data = crate::cuda::ops::alloc_zeroed_bytes(
+        &stream,
+        sample.buffer.dtype,
+        numel,
+        OperationKind::Storage,
+    )?;
+    let buffer = CudaBuffer {
+        len: numel,
+        dtype: sample.buffer.dtype,
+        data: Arc::new(data),
+        device: sample.buffer.device.clone(),
+        device_id: sample.buffer.device_id,
+    };
+    Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
+}
+
+/// Validate that `offsets` is a non-decreasing i64 tile of `[0, T)` with
+/// exactly `E + 1` entries, then return the per-expert `(start, end)` spans.
+///
+/// Mirrors `cpu::ops::matmul::grouped::expert_spans`'s wording exactly so a
+/// refusal renders the same on either backend; the values are read back to
+/// the host once (`E + 1` integers), which is the only host interop this
+/// path performs.
+fn expert_spans(
+    offsets: &CudaStorage,
+    experts: usize,
+    tokens: usize,
+) -> Result<Vec<(usize, usize)>> {
+    if offsets.shape != [experts + 1] {
+        return Err(Error::ShapeMismatch {
+            op: "grouped_matmul",
+            expected: vec![experts + 1],
+            got: offsets.shape.to_vec(),
+            msg: format!(
+                "grouped_matmul offsets must have length E+1 = {}, got shape {:?}",
+                experts + 1,
+                offsets.shape
+            ),
+        });
+    }
+    let bytes = offsets
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*offsets.buffer.data)
+        .map_err(|error| {
+            Error::Msg(format!("grouped_matmul offsets readback failed: {error:?}"))
+        })?;
+    let raw: &[i64] = bytemuck::cast_slice(&bytes);
+    if raw.len() < experts + 1 {
+        return Err(Error::Msg(format!(
+            "grouped_matmul offsets buffer holds {} i64 values, need {}",
+            raw.len(),
+            experts + 1
+        )));
+    }
+    let mut values = Vec::with_capacity(experts + 1);
+    let mut previous = 0i64;
+    for (expert, &value) in raw.iter().enumerate().take(experts + 1) {
+        if value < 0 || value as usize > tokens {
+            return Err(Error::Msg(format!(
+                "grouped_matmul offsets[{expert}] = {value} is outside [0, {tokens}]"
+            )));
+        }
+        if value < previous {
+            return Err(Error::Msg(format!(
+                "grouped_matmul offsets must be non-decreasing; offsets[{expert}] = {value} < {previous}"
+            )));
+        }
+        previous = value;
+        values.push(value as usize);
+    }
+    if values.first() != Some(&0) || values.last() != Some(&tokens) {
+        return Err(Error::Msg(format!(
+            "grouped_matmul offsets must tile [0, {tokens}); got {values:?}"
+        )));
+    }
+    Ok(values.windows(2).map(|w| (w[0], w[1])).collect())
 }
 
 pub(crate) fn cuda_reshape_storage(t: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {

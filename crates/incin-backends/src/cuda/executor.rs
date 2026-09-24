@@ -2909,6 +2909,48 @@ impl<D: Device> Execute<op::ScatterAdd> for CudaBackendImpl<D> {
     }
 }
 
+impl<D: Device> Execute<op::GroupedMatMul> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupedMatMul, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::GroupedMatMul;
+        let [lhs, rhs, offsets] = request.inputs else {
+            return Err(invalid(operation, "grouped_matmul expects 3 inputs"));
+        };
+        let lhs = downcast(lhs, operation, "lhs is not CUDA storage")?;
+        let rhs = downcast(rhs, operation, "rhs is not CUDA storage")?;
+        let offsets = downcast(offsets, operation, "offsets is not CUDA storage")?;
+        // The offsets operand is i64 by the descriptor's per-operand contract;
+        // the matrices must share one float dtype, which the capability row's
+        // INDEX_AND_F32 union cannot state — the same tightener CPU's
+        // GroupedMatMul executor applies for the same reason.
+        if offsets.dtype() != DTypeId::I64.descriptor() {
+            return Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: offsets.dtype(),
+                },
+            ));
+        }
+        let lhs_dtype = lhs.dtype();
+        let rhs_dtype = rhs.dtype();
+        if !lhs_dtype.is_float() || lhs_dtype != rhs_dtype {
+            return Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: lhs_dtype,
+                },
+            ));
+        }
+        CudaBackendImpl::<D>::grouped_matmul::<f32>(lhs, rhs, offsets)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
 macro_rules! assert_every_advertised_cuda_row_executes {
     (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
         const _: () = {
