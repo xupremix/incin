@@ -30,3 +30,8 @@ DESIGN.md
 FUTURE_ROADMAP.md
 NATIVE_BACKEND_PLAN.md
 graphify-out/
+# cargo-fuzz run state (issue #48): corpus/artifacts regenerate locally and
+# the scheduled CI job starts fresh; only fuzz/Cargo.toml, rust-toolchain.toml
+# and fuzz_targets/ are sources.
+fuzz/corpus/
+fuzz/artifacts/

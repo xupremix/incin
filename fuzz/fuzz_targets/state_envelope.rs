@@ -9,6 +9,11 @@
 
 use std::path::PathBuf;
 
+// `shape!` expands to `::incin::…` paths; the repo's own tests alias
+// `incin_core` the same way (see `crates/incin-backends/tests/target_api.rs`).
+extern crate incin_core as incin;
+
+use incin_backends::nn_target::InitOnTarget;
 use incin_core::nn::linear::linear;
 use incin_core::prelude::*;
 use incin_core::tensor::device::Cpu;
