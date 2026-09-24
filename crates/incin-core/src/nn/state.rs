@@ -687,6 +687,288 @@ where
     module.visit_state_mut(&StatePath::root(), &mut clear)
 }
 
+/// Supplies checkpoint payloads to a streaming state load one tensor at a
+/// time.
+///
+/// [`load_state_streaming`] restores a module without ever materializing the
+/// whole checkpoint on the host: it asks the stream for the complete set of
+/// state *paths* first (names only, no payload bytes), then reads each
+/// payload exactly when the traversal reaches its leaf, and releases that
+/// host value again as soon as the leaf has staged it as device storage.
+/// Implementations must therefore keep peak host residency bounded by the
+/// largest single payload they return - never by the full checkpoint - and
+/// must fail with a structural error naming the tensor (and shard, when the
+/// source is sharded) rather than returning a truncated value.
+pub(crate) trait StateStream {
+    /// Every state path this stream will provide, without reading payload
+    /// bytes.
+    ///
+    /// The set is compared against the module's own paths before any
+    /// mutation, so missing/unexpected reporting never needs the payloads.
+    fn paths(&self) -> Result<alloc::collections::BTreeSet<StatePath>>;
+
+    /// Reads, validates, and returns the single payload for `path`.
+    ///
+    /// The returned value is the only checkpoint payload the streaming load
+    /// holds at once; callers consume it for one leaf and drop it before the
+    /// next `read` call.
+    fn read(&mut self, path: &StatePath) -> Result<StateValue>;
+}
+
+/// Collects the module's state paths during a streaming load without
+/// copying any parameter or buffer bytes off the device.
+struct StatePathsCollector {
+    paths: alloc::collections::BTreeSet<StatePath>,
+}
+
+impl<B: crate::tensor::backend::VariableBackend> StateVisitor<B> for StatePathsCollector {
+    fn visit_param<S, K, Train>(
+        &mut self,
+        path: &StatePath,
+        _param: &crate::nn::param::Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        self.paths.insert(path.clone());
+        Ok(())
+    }
+
+    fn visit_buffer<S, K>(
+        &mut self,
+        path: &StatePath,
+        _buffer: &crate::nn::param::Buffer<S, B, K>,
+    ) -> Result<()>
+    where
+        S: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        self.paths.insert(path.clone());
+        Ok(())
+    }
+}
+
+/// Streaming counterpart of [`StateAliasAudit`]: tied-parameter payloads are
+/// re-read from the stream on demand instead of being retained from a
+/// fully-materialized snapshot, so the audit never holds more than two
+/// payloads at once and only reads anything when a shared slot is actually
+/// visited (modules without tied parameters read zero payloads here).
+struct StateStreamAliasAudit<'a, S: StateStream + ?Sized> {
+    source: &'a mut S,
+    sources: BTreeMap<usize, StatePath>,
+}
+
+impl<'a, S: StateStream + ?Sized, B: crate::tensor::backend::VariableBackend> StateVisitor<B>
+    for StateStreamAliasAudit<'a, S>
+{
+    fn visit_param<SParam, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &crate::nn::param::Param<SParam, B, K, Train>,
+    ) -> Result<()>
+    where
+        SParam: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        let Some(slot) = param.state_slot_identity() else {
+            return Ok(());
+        };
+        let value = self.source.read(path)?;
+        if let Some(canonical) = self.sources.get(&slot) {
+            let canonical_value = self.source.read(canonical)?;
+            if canonical_value != value {
+                return Err(Error::InvalidModuleState {
+                    operation: "load state",
+                    reason: ErrorMessage::new(format!(
+                        "conflicting payloads for tied parameters at {canonical} and {path}"
+                    )),
+                });
+            }
+            if path < canonical {
+                self.sources.insert(slot, path.clone());
+            }
+        } else {
+            self.sources.insert(slot, path.clone());
+        }
+        Ok(())
+    }
+
+    fn visit_buffer<SBuf, K>(
+        &mut self,
+        _path: &StatePath,
+        _buffer: &crate::nn::param::Buffer<SBuf, B, K>,
+    ) -> Result<()>
+    where
+        SBuf: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        Ok(())
+    }
+}
+
+/// Stages one streamed leaf at a time: the payload read from the stream is
+/// wrapped in a single-entry [`StateSnapshot`], handed to the leaf's existing
+/// `prepare_state_value` (the shared `B::from_bytes` device-placement hook),
+/// and dropped again before the traversal advances to the next leaf.  At most
+/// one checkpoint payload is resident on the host at any moment.
+struct StateStreamPreparation<'a, S: StateStream + ?Sized> {
+    source: &'a mut S,
+    alias_sources: &'a BTreeMap<usize, StatePath>,
+}
+
+impl<'a, S: StateStream + ?Sized, B: crate::tensor::backend::VariableBackend> StateMutVisitor<B>
+    for StateStreamPreparation<'a, S>
+{
+    fn visit_param<SParam, K, Train>(
+        &mut self,
+        path: &StatePath,
+        param: &mut crate::nn::param::Param<SParam, B, K, Train>,
+    ) -> Result<()>
+    where
+        SParam: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+        Train: crate::nn::param::TrainState,
+    {
+        let source_path = param
+            .state_slot_identity()
+            .and_then(|slot| self.alias_sources.get(&slot))
+            .unwrap_or(path);
+        let value = self.source.read(source_path)?;
+        let mut one = StateSnapshot::new();
+        one.insert(source_path.clone(), value)?;
+        param.prepare_state_value(source_path, &one)
+    }
+
+    fn visit_buffer<SBuf, K>(
+        &mut self,
+        path: &StatePath,
+        buffer: &mut crate::nn::param::Buffer<SBuf, B, K>,
+    ) -> Result<()>
+    where
+        SBuf: crate::shapes::Shape,
+        K: crate::tensor::dtype::DType<Arg = ()>,
+        B: crate::tensor::backend::SupportsDType<K>
+            + crate::exec::Capabilities
+            + crate::tensor::backend::HostInterop,
+    {
+        let value = self.source.read(path)?;
+        let mut one = StateSnapshot::new();
+        one.insert(path.clone(), value)?;
+        buffer.prepare_state_value(path, &one)
+    }
+}
+
+/// Restores a module from a [`StateStream`] without ever materializing the
+/// whole checkpoint on the host.
+///
+/// Phases mirror [`load_state`] exactly so failure-atomicity is unchanged:
+///
+/// 1. The module's paths and the stream's paths (names only, no payload
+///    bytes) are compared first; a mismatch fails with the same
+///    `state paths differ: missing ..., unexpected ...` report before any
+///    mutation.
+/// 2. Tied parameters are audited, re-reading payloads from the stream only
+///    when a shared state slot is visited.
+/// 3. Leaves are prepared one at a time: read one payload, validate it
+///    through `StateValue::new`, stage it via the leaf's
+///    `prepare_state_value`, which routes through the generic
+///    `B::from_bytes` device-placement hook, identical to snapshot loads,
+///    so this traversal serves every `VariableBackend` (cpu, cuda, metal,
+///    wgpu) with no backend-specific code, then drop the host payload.
+///    Any error here clears staging through `StateFinalize` and returns
+///    without touching live leaves.
+/// 4. Commit, rollback, and finalize reuse the snapshot-load visitors
+///    unchanged.
+///
+/// Peak host checkpoint residency is therefore bounded by the largest single
+/// payload [`StateStream::read`] returns, never by checkpoint size.
+pub(crate) fn load_state_streaming<B, M, S>(module: &mut M, source: &mut S) -> Result<()>
+where
+    B: crate::tensor::backend::VariableBackend,
+    M: VisitState<B> + VisitStateMut<B>,
+    S: StateStream + ?Sized,
+{
+    let mut collector = StatePathsCollector {
+        paths: alloc::collections::BTreeSet::new(),
+    };
+    module.visit_state(&StatePath::root(), &mut collector)?;
+    let expected = collector.paths;
+    let provided = source.paths()?;
+    if expected != provided {
+        let missing = expected
+            .difference(&provided)
+            .map(ToString::to_string)
+            .collect::<alloc::vec::Vec<_>>();
+        let unexpected = provided
+            .difference(&expected)
+            .map(ToString::to_string)
+            .collect::<alloc::vec::Vec<_>>();
+        return Err(Error::InvalidModuleState {
+            operation: "load state",
+            reason: ErrorMessage::new(format!(
+                "state paths differ: missing {:?}, unexpected {:?}",
+                missing, unexpected
+            )),
+        });
+    }
+    let alias_sources = {
+        let mut aliases = StateStreamAliasAudit {
+            source,
+            sources: BTreeMap::new(),
+        };
+        module.visit_state(&StatePath::root(), &mut aliases)?;
+        aliases.sources
+    };
+    let mut visitor = StateStreamPreparation {
+        source,
+        alias_sources: &alias_sources,
+    };
+    if let Err(error) = module.visit_state_mut(&StatePath::root(), &mut visitor) {
+        let mut clear = StateFinalize;
+        let _ = module.visit_state_mut(&StatePath::root(), &mut clear);
+        return Err(error);
+    }
+
+    let mut commit = StateCommit;
+    if let Err(error) = module.visit_state_mut(&StatePath::root(), &mut commit) {
+        let mut rollback = StateRollback { first_error: None };
+        // StateRollback consumes leaf errors so every committed leaf receives
+        // a restoration attempt even if an earlier one fails.
+        module.visit_state_mut(&StatePath::root(), &mut rollback)?;
+        let mut clear = StateAbortClear;
+        let _ = module.visit_state_mut(&StatePath::root(), &mut clear);
+        if let Some(rollback_error) = rollback.first_error {
+            return Err(Error::InvalidModuleState {
+                operation: "load state rollback",
+                reason: ErrorMessage::new(format!(
+                    "commit failed ({error}); backend also rejected rollback ({rollback_error})"
+                )),
+            });
+        }
+        return Err(error);
+    }
+    let mut clear = StateFinalize;
+    module.visit_state_mut(&StatePath::root(), &mut clear)
+}
+
 /// One owned, exact-dtype state value.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct StateValue {

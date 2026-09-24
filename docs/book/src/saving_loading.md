@@ -40,6 +40,11 @@ ignore it, which read as a relocation the call never performed. Moving a model
 between devices is `ToDevice`, which is explicit and hands back the relocated
 model.
 
+The facade loader streams safetensors through a state stream
+(`load_state_streaming` / `SafetensorsStateStream`) so a large checkpoint is
+not materialized as one in-memory dictionary before the typed visitor runs;
+each path is still validated against the module before any write commits.
+
 Loading is transactional. Every path in the file is checked against the
 module's own state before anything is written, so a snapshot that is missing a
 parameter or carries an unexpected one is refused with both lists named rather
