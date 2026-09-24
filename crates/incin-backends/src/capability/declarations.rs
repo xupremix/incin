@@ -285,6 +285,20 @@ macro_rules! cuda_descriptor_operations {
     ($callback:ident, $($args:tt)*) => {
         $callback! {
             $($args)*;
+            // `Maximum`/`Minimum`/`AbsDiff` sit on the same
+            // `cuda_pointwise!` binary arms as `Add`/`Sub`
+            // (`backend/elementwise.rs`'s `cuda_maximum_storage`/
+            // `cuda_minimum_storage`/`cuda_abs_diff_storage`), and `Lerp`
+            // composes sub + mul_scalar + add through `cuda_lerp_storage` -
+            // one traversal, one dtype-parametric kernel family, the rule
+            // shape this group already encodes (`FLOAT_DTYPES` +
+            // `CUDA_LAYOUTS`, strided elementwise kernel included). They
+            // left `native_tensor` because the `F32_ONLY` there overstated
+            // nothing the kernels could not honour: #86 closed elementwise
+            // widening, and these four were simply filed under the wrong
+            // group. CPU's wider `NON_QUANTIZED` rides its own accessor;
+            // CUDA's pointwise kernels have no `i64`/`bool` mode, so the
+            // claim stops at `FLOAT_DTYPES` exactly like `Add`'s.
             elementwise = [
                 Add, Sub, Mul, Div,
                 Relu, Step, Mish, Elu, Gelu, Abs, Exp, Neg, Sqrt, Log,
@@ -294,7 +308,8 @@ macro_rules! cuda_descriptor_operations {
                 AddScalar, MulScalar, Powf, Clamp,
                 SubScalar, DivScalar,
                 Atan2, Fmod, Remainder,
-                Dropout
+                Dropout,
+                Maximum, Minimum, AbsDiff, Lerp
             ],
             // `ToDType` rides this group since #106(a): the cast kernel is
             // dtype-parametric over the source, and `broadcast`'s
@@ -312,6 +327,19 @@ macro_rules! cuda_descriptor_operations {
                 UniformRandom, NormalRandom,
                 VariableUniformRandom, VariableNormalRandom
             ],
+            // The four `ToHost*` identities stay `F32_ONLY` through this
+            // group row: their executors funnel into `float_to_vec1`/
+            // `int_to_vec1`, which gate on `cuda_require_f32`
+            // (`backend/contract.rs`) before any bytes leave the device.
+            // `TensorToBytes` widens instead via its standalone
+            // `CUDA_BOOL_SAFE_STORAGE_DTYPES` row in `tables.rs` - it
+            // downloads raw bytes through `HostInterop::to_bytes`, which
+            // only length-checks against `checked_storage_byte_len` and
+            // never reinterprets the elements, so every dtype CUDA can
+            // hold round-trips. Legacy rows render first and `support()` is
+            // any-row-matches, so the wide claim is the one a real
+            // `tensor_to_bytes` call resolves against while `ToHostFloatVec`
+            // still refuses an `f16` operand by dtype.
             readback = [
                 ToHostFloatScalar, ToHostFloatVec,
                 ToHostIntScalar, ToHostIntVec,
@@ -344,15 +372,20 @@ macro_rules! cuda_descriptor_operations {
             // they are in `composed_matmul` below, on purpose.
             matmul = [],
             normalization = [Softmax, LogSoftmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
-            // `OneHot`/`Bincount`/`ScatterAdd` ride this group because their
-            // index operand is an integer dtype their value operand is not:
-            // the union of integer index dtypes and f32 weights is exactly
-            // the admission `embedding`'s comment already documents, and all
-            // three take no view-incompatible path their `elementwise_layouts`
-            // would mis-describe. `ScatterAdd`'s index stays off the tape the
-            // way `EmbeddingExact`'s does; its f64-accumulated value operands
-            // and dropped out-of-range writes live in the executor.
-            embedding = [EmbeddingExact, OneHot, Bincount, ScatterAdd],
+            // `OneHot`/`Bincount`/`ScatterAdd`/`GroupedMatMul` ride this
+            // group because their index/offsets operand is an integer dtype
+            // their value operand is not: the union of integer index dtypes
+            // and f32 weights is exactly the admission `embedding`'s comment
+            // already documents. The first three take no view-incompatible
+            // path their `elementwise_layouts` would mis-describe.
+            // `GroupedMatMul`'s CUDA narrow/matmul path is flat-buffer only,
+            // so its executor re-checks contiguity fail-closed — the layout
+            // twin of the dtype split this row also cannot state (issue #103).
+            // `ScatterAdd`'s index stays off the tape the way
+            // `EmbeddingExact`'s does; its f64-accumulated value operands
+            // and dropped out-of-range writes live in the executor, as do
+            // `GroupedMatMul`'s i64 offsets tile.
+            embedding = [EmbeddingExact, OneHot, Bincount, ScatterAdd, GroupedMatMul],
             // Issue #87: `TopK` leaves `reduction` and the six Welford
             // `var`/`std` rows leave `composed_reduction` because both now
             // sit on f32-only kernels (`incin_cuda_topk`,
@@ -363,11 +396,38 @@ macro_rules! cuda_descriptor_operations {
             // already encodes. `descriptor_training` still answers true for
             // the `var`/`std` rows (they record a tape entry from the
             // backend method) and false for `TopK`/`Argsort`, same as before.
+            //
+            // The `F32_ONLY` this group's `tensor_dtypes` states is the
+            // honest floor for every member that has no wider standalone row
+            // in `tables.rs`, and the kernels name the reason one by one:
+            // - the order statistics and Welford rows - `argmax`/`argmin`,
+            //   `cumsum`, `sort`/`argsort` (both rewrite through `topk`),
+            //   `topk`, `var`/`std` - sit on `incin_cuda_argmax_argmin`,
+            //   `incin_cuda_cumsum`, `incin_cuda_topk` and
+            //   `incin_cuda_welford`, each of which takes `const float*`
+            //   input (`cuda/ops/reduce.rs`);
+            // - `triu`/`tril`/`diag`/`pad`/`repeat` allocate their output
+            //   buffer as `DTypeId::F32` no matter what the operand carries
+            //   (`cuda/ops/shape.rs`'s `launch_triangular`, `launch_diag`,
+            //   `launch_pad`, `launch_repeat`);
+            // - `repeat_interleave` refuses any non-`f32` operand outright
+            //   (`launch_repeat_interleave`'s `UnsupportedDType`);
+            // - the comparisons gate on `cuda_require_f32`
+            //   (`cuda/ops/compare.rs`).
+            // Members whose claim is wider than `F32_ONLY` say so with a
+            // standalone row in `tables.rs` that renders before this group
+            // row: the measured movement identities
+            // (`transpose*`/`narrow`/`concat`), the indexed ones
+            // (`gather`/`scatter`/`index_select`), the mask consumers
+            // (`where_cond`/`masked_fill` at `F32_AND_BOOL`), and -
+            // like the composed identities below - `pixel_shuffle`/`unfold`,
+            // whose executors are pure reshape/transpose/narrow chains over
+            // those same byte-movement kernels.
             native_tensor = [
                 ArgMax, ArgMin, Argsort, Cumsum, Sort,
                 TopK, VarianceAll, VarianceDim, VarianceKeepDim,
                 StdAll, StdDim, StdKeepDim,
-                Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
+                MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
                 ConcatExact, Gather, Scatter, IndexSelect, Repeat, RepeatInterleave,
@@ -375,6 +435,16 @@ macro_rules! cuda_descriptor_operations {
                 PixelShuffle
             ],
             logical = [LogicalAnd, LogicalOr, LogicalNot],
+            // Same shape, reported as composed: these answer by rewriting
+            // into another operation rather than by running a kernel of
+            // their own. The group row stays `F32_ONLY` through the shared
+            // `tensor_dtypes`; each identity's honest claim is the wider
+            // standalone `composed_ranked` row in `tables.rs` - the rewrite
+            // targets are the measured wide byte-movement kernels
+            // (`tests/cuda_shape_dtypes.rs`'s byte-exact matrix across
+            // transpose, broadcast, narrow and concat), so
+            // `CUDA_BOOL_SAFE_STORAGE_DTYPES` there is a verified claim
+            // rather than an extrapolation from the rewrite shape alone.
             composed_tensor = [
                 FlattenExact, SqueezeExact, UnsqueezeExact,
                 StackExact, SliceExact, BroadcastLeft,
@@ -517,11 +587,25 @@ macro_rules! wgpu_descriptor_operations {
             // index or a non-f32 weight before this row is consulted.
             embedding = [EmbeddingExact],
             // Advertised now that each has an executor and a gradient path.
-            // The comparison and logical modes of the same shader stay
-            // unadvertised on purpose: they write 0.0/1.0 into an f32 buffer,
-            // and this group's `tensor_dtypes` would claim an f32 result for
-            // an operation the catalog types as boolean. Registering them needs
-            // that representation settled first, not just a row.
+            // The six comparisons join this group (#91): `binary.wgsl` has
+            // carried their modes since the shader was written, and they sit
+            // here rather than in `logical` because the row must state the
+            // *operand* dtype set this group's `tensor_dtypes` already holds
+            // (`F32_ONLY`, re-checked by name in `wgpu/backend/compare.rs`).
+            // The result is `bool` — physical 0.0/1.0 under a `Bool` storage
+            // label, the representation `wgpu/storage.rs::
+            // physical_element_bytes` documents and `masked_fill`/
+            // `where_cond` already consume as a mask; the row cannot state
+            // an output dtype (admission checks operands only, see
+            // `incin-core`'s `admit_invocation`), and the catalog's
+            // `trace_output_dtype` is what types the output `Bool`.
+            // `descriptor_training` resolves these rows `false` — a
+            // comparison has nowhere to send a gradient — and
+            // `wgpu/backend/compare.rs` pushes no tape entry, matching CPU
+            // and CUDA walk for walk. Rank caps at 6 through
+            // `accelerator_max_rank` because a stretched operand rides
+            // `shape.wgsl`'s packed block, the same bound CUDA's
+            // comparison broadcasts claim.
             // `transpose` has its own WGSL kernel and its own tape entry (a
             // transpose is its own inverse), so it is native rather than
             // composed. It sat unregistered until now: the kernel existed,
@@ -547,10 +631,21 @@ macro_rules! wgpu_descriptor_operations {
                 // copies contiguous blocks; cumsum is a host scan whose reverse
                 // suffix-sum is its gradient. Each carries its own tape entry.
                 Pad, Repeat, RepeatInterleave, Cumsum,
+                // The six numeric comparisons (#91), operands `F32_ONLY`
+                // via `$tensor_dtypes`, result `Bool` — see the group's
+                // note above for why the row states only the operands.
+                CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
             ],
-            // Boolean result representation is still unsettled (see below), so
-            // no logical rows yet.
-            logical = [],
+            // Boolean on every operand and on the result (#91):
+            // `logical_and`/`logical_or` ride `binary.wgsl` modes 13/14 and
+            // `logical_not` rides `unary.wgsl` mode 34, all over the
+            // physical f32 0/1 encoding `wgpu/storage.rs` documents. The
+            // descriptor already refuses a non-bool operand
+            // (`catalog/inference.rs`'s logical contract), `BOOL_ONLY`
+            // refuses it at admission, and `wgpu/backend/compare.rs`
+            // re-checks by name. `descriptor_training` resolves these rows
+            // `false` and no tape entry is pushed — same as CPU and CUDA.
+            logical = [LogicalAnd, LogicalOr, LogicalNot],
             // All three rewrite into `reshape` rather than running a kernel of
             // their own: the elements are already in the right order and only
             // the shape changes. They push no tape entry of their own, so the
@@ -633,7 +728,14 @@ macro_rules! metal_descriptor_operations {
                 // random draw on the way changes nothing the row states.
                 Dropout,
             ],
-            broadcast = [BroadcastAs],
+            // `ToDType` rides this group since #92: the cast walks the shared
+            // host bytes dtype-parametrically over the source (`metal/convert.rs`),
+            // and `broadcast`'s F32_ONLY rows admit the source set the
+            // capability actually checks (inputs only — the target tag is an
+            // attribute, never inspected by `admit_invocation`). Both training
+            // arms of the group (`broadcast` and `broadcast_training`) cover
+            // the float-to-float tape entry and the integer-target no-tape path.
+            broadcast = [BroadcastAs, ToDType],
             reshape = [ReshapeExact],
             // `impl_creation_executors!` gives Metal real `UniformRandom`/
             // `NormalRandom` executors too, and `impl_data_creation_executors!`
@@ -693,7 +795,12 @@ macro_rules! metal_descriptor_operations {
             // (Metal refuses u8/u32 storage, so i64 is the only admitted
             // index dtype here) while the value operands stay f32 —
             // `tensor_dtypes = F32_ONLY` would refuse the index operand.
-            embedding = [EmbeddingExact, Gather, IndexSelect],
+            // `Scatter` joins with its ternary (input, index, source) walk
+            // and `OneHot` with its bool-mask host walk (#92); `OneHot`
+            // records no tape entry even though this group hardcodes
+            // `training = true` (the same claim CUDA's embedding group
+            // makes for it).
+            embedding = [EmbeddingExact, Gather, IndexSelect, Scatter, OneHot],
             // The layout half of #92, each with a host-side walk and a tape
             // entry in `metal/layout.rs`: `transpose` materializes the swap
             // (a transpose is its own inverse, so backward reapplies it),
@@ -705,7 +812,14 @@ macro_rules! metal_descriptor_operations {
             // `cumsum` is a host-side prefix scan with a suffix-sum backward
             // in `metal/reduction.rs`; it rides this group because it maps
             // an axis without collapsing it, same request shape as Softmax.
-            native_tensor = [TransposeExact, Narrow, ConcatExact, Tril, Triu, Cumsum],
+            // #92 adds `Pad`/`Repeat` (taped host walks in `metal/layout.rs`)
+            // and the three forward-only index reductions `ArgMax`/`Sort`/
+            // `TopK` (i64 results, no tape — `descriptor_training` resolves
+            // those to `false`), all on the same F32_ONLY contiguous claim.
+            native_tensor = [
+                TransposeExact, Narrow, ConcatExact, Tril, Triu, Cumsum,
+                Pad, Repeat, ArgMax, Sort, TopK,
+            ],
             logical = [],
             // The rewrites: `slice` is one `narrow` per axis, `stack` is
             // `unsqueeze` per operand then `concat`, and the two axis views
@@ -738,10 +852,12 @@ macro_rules! metal_descriptor_operations {
             // needs the boolean-result representation settled first (no
             // comparison executor exists here), the quantization groups need
             // kernels that do not exist, and `composed_matmul`'s remaining
-            // members (`bmm`/`addmm`/`dot`/`outer`) are compositions this
-            // backend has not written yet.
+            // members (`addmm`/`dot`/`outer`) are compositions this
+            // backend has not written yet (`bmm`/`BatchedMatMul` joins
+            // with `ScaledDotProductAttention` in #92, rewriting into the
+            // already-taped `Self::matmul`).
             composed_tensor = [SliceExact, StackExact, SqueezeExact, UnsqueezeExact],
-            composed_matmul = [ScaledDotProductAttention],
+            composed_matmul = [ScaledDotProductAttention, BatchedMatMul],
             composed_matmul_bias = [Linear],
             quantizing = [],
             quantized = [],
@@ -750,6 +866,7 @@ macro_rules! metal_descriptor_operations {
                 VarianceAll, VarianceDim, VarianceKeepDim,
                 StdAll, StdDim, StdKeepDim,
                 Norm,
+                InstanceNorm,
             ],
             composed_reduction_indexed = [CrossEntropyLoss]
         }

@@ -10,6 +10,75 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **WGPU comparison and logical operations (#91 Tier-3).** The six
+  numeric comparisons (`cmp_eq`..`cmp_ge`) and the three logicals
+  (`logical_and`, `logical_or`, `logical_not`) now have WGPU `Execute`
+  rows: operands stay `F32_ONLY` for the comparisons and `BOOL_ONLY` for
+  the logicals, results carry the API-boundary `Bool` dtype over the
+  physical `f32` 0/1 encoding `masked_fill`/`where_cond` already consume,
+  and no tape entry is pushed (matching CPU/CUDA, whose
+  `descriptor_training` resolves these rows `false`). The kernels ride
+  `binary.wgsl` modes 7–14 and `unary.wgsl` mode 34; `binary.wgsl`'s
+  mode 8 was rewritten from `!=` to `!(==)` because naga lowers `!=` to
+  *ordered* not-equal and answered `false` for `nan != nan` where CPU
+  answers `true`. f16/bf16 remain refused by dtype across the whole
+  WGPU registry (no `SHADER_F16` query, no bf16 feature bit), documented
+  in `wgpu/capability.rs`'s audit comment. Tests: `wgpu_comparison` 8/8,
+  `wgpu_f16_audit` 2/2.
+
+- **Metal deferred operations batch (#92 follow-up).** Ten more `Execute`
+  rows land beside the Batch-A surface: `instance_norm` (per-sample,
+  per-channel, composed from the shared statistical helpers),
+  `pad`/`repeat` (taped host walks in `metal/layout.rs`),
+  `batched_matmul` (strided-batch over leading dims, joining the
+  composed-matmul group with `scaled_dot_product_attention`),
+  the three forward-only order statistics `argmax`/`sort`/`topk` (i64
+  results, no tape — `descriptor_training` resolves them `false`),
+  `scatter` (ternary input/index/source walk) and `one_hot` (bool-mask
+  host walk, no tape entry even though the embedding group hardcodes
+  `training = true`, the same claim CUDA makes), and `to_dtype`
+  (bidirectional casts among the storage dtypes Metal admits, riding the
+  `broadcast` group since the cast walks host bytes dtype-parametrically
+  in `metal/convert.rs`). Tests: `metal_gap_ops` covers all ten on the
+  host-side path; the runtime kernels remain macOS-gated.
+
+- **CUDA narrow dtype capability rows.** Ten standalone wide rows in
+  `capability/tables.rs` widen identities that the shared declaration
+  groups still floor at `F32_ONLY`: the eight composed byte-movement
+  rewrites (`flatten`, `squeeze`, `unsqueeze`, `stack`, `slice`, `chunk`,
+  `split`, `broadcast_left`) now admit the dense storage set
+  (`i64`, `bf16`, `f16`, `f32`, `f64`, `bool`) with `training = true`
+  verified by the tape entries their rewrite steps push;
+  `pixel_shuffle`/`unfold` widen as native reshape/transpose chains over
+  the same measured kernels; `tensor_to_bytes` widens per the readback
+  contract (length-check only, never reinterprets elements); and
+  `maximum`/`minimum`/`abs_diff`/`lerp` leave `native_tensor` for the
+  `elementwise` group now that #86 closed their half/double kernels.
+  `support()` is any-row-match, so real invocations resolve against the
+  wider claim while the group row keeps its narrower documented floor.
+  Tests: `cuda_dtype_rows` — 4 admission tests pass host-side, 7
+  `#[ignore]`d hardware tests.
+
+- **CUDA `grouped_matmul` for the routing primitives catalog (#103).**
+  The expert-tiled matmul that issue #103 added to the CPU catalog now has
+  a CUDA `Execute` row: `lhs [T, K]`, stacked `rhs [E, K, N]`, and an i64
+  `offsets [E + 1]` tile validated with CPU's exact refusal wording
+  (length, range, non-decreasing, and exact `[0, T)` coverage) after a
+  single host readback of the `E + 1` integers. Forward runs one tape-free
+  `launch_matmul` per non-empty span and concatenates the products in span
+  order — an empty expert contributes nothing rather than erroring, the
+  empty-expert case a router produces when no token lands on an expert —
+  and pushes one composed `TapeEntry` for the whole product so the tape
+  sees a single entry rather than one per expert. Backward recomputes
+  `grad_lhs` and `grad_rhs` from the captured operands the same way CPU's
+  does; the integer offsets stay off the tape, the same exclusion
+  `scatter_add` applies to its index. The capability row joins CUDA's
+  `embedding` group (the `INDEX_AND_F32_DTYPES` union one row cannot state
+  any more tightly), the executor re-checks the i64-offsets and
+  same-float-matrices split the row cannot carry, and a strided or
+  non-zero-offset operand is refused fail-closed before the flat-buffer
+  narrow/matmul path could mis-address it.
+
 - **FSDP/ZeRO sharded execution for the automatic `Trainer` (#99).**
   `TrainerBuilder::sharding(ShardingSpec::Fsdp { stage })` makes `fit`
   and `fit_scaled` lower ZeRO-2 to a reduce-scatter of gradients and

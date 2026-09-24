@@ -22,6 +22,7 @@ declare -A explained=(
     [crates/incin-backends/src/cuda/ops/norm.rs]=1
     [crates/incin-backends/src/cuda/backend/tests.rs]=1
     [crates/incin-backends/src/metal/backend.rs]=1
+    [crates/incin-backends/src/metal/executor.rs]=1
     [crates/incin-core/src/tensor/ops/manipulation/indexing.rs]=1
     [crates/incin-core/src/tensor/ops/reduce.rs]=1
     [crates/incin-core/src/nn/attention.rs]=1
