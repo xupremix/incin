@@ -50,8 +50,12 @@
 //!   advertised tuples from the registry for the execution half; driving
 //!   *values* from the same enumeration is the intended next step, and is
 //!   what makes a newly advertised row automatically value-tested.
-//! * **Machine-readable artifacts.** No `target/conformance/*.json` yet; the
-//!   report is a test-failure string.
+//! * **Machine-readable artifacts.** The run-level artifact lives one layer
+//!   up: `src/conformance/artifact.rs` writes the matrix (per-tuple verdicts
+//!   plus skip groups) as versioned JSON. This suite's own case results are
+//!   still a test-failure string; folding them into the artifact is a
+//!   follow-up, since the artifact's unit is the advertised tuple and this
+//!   suite's is the hand-written case.
 //! * **Unadvertised-tuple refusals and `ImplementationKind` dispatch.**
 //!   Checked by `tests/conformance_oracle.rs`, not repeated here.
 //!

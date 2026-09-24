@@ -32,13 +32,27 @@
 //! of the harness is actually reading. A backend whose executors trusted the
 //! dispatcher instead would fail here, which is the point.
 //!
-//! It does **not** check values, and it does not check gradients. Values are
-//! meaningless while the oracle and the subject are the same backend, and they
-//! become meaningful the moment a second backend runs through the same driver.
-//! Gradients are a separate harness rather than another axis on this loop: the
-//! `Training` column is a claim about a derivative, and checking a derivative
-//! means finite differences or a recorded reference, not a second call to the
-//! same dispatcher.
+//! It does **not** check values. Values are meaningless while the oracle and
+//! the subject are the same backend, and they become meaningful the moment a
+//! second backend runs through the same driver. (`tests/conformance_values.rs`
+//! checks CPU forward values against an independent `f64` oracle.)
+//!
+//! Gradients are checked one level down, in
+//! [`check_gradients`](crate::conformance::check_gradients): the tape-depth probe
+//! here says a training row recorded *something*, and the central-difference
+//! sweep there says the something it recorded computes the right derivative.
+//! A `Training: yes` row with a wrong or missing backward fails the harness,
+//! which is the check that would have caught the pre-#93 gaps.
+//!
+//! The full registry-enumerated matrix across every backend family lives in
+//! [`run_matrix`](crate::conformance::run_matrix): the CPU leg executes, and the CUDA, WGPU, and Metal legs
+//! enumerate their registries with explicit
+//! [`SkipReason::NoDevice`](crate::conformance::SkipReason::NoDevice)
+//! verdicts until the #82 runner gives them a device. The machine-readable
+//! artifact the documentation generator reads is
+//! [`Artifact`](crate::conformance::Artifact), and the one
+//! tolerance table every comparison here uses is
+//! [`Tolerance`](crate::conformance::Tolerance).
 //!
 //! # Coverage is a number, not a wall
 //!
@@ -58,6 +72,16 @@ mod operands;
 mod plan;
 mod shaped;
 
+/// The machine-readable artifact: schema, version, and writer.
+mod artifact;
+/// Gradient correctness for training rows: analytic recipes against central
+/// differences.
+mod gradient;
+/// The registry-enumerated matrix across every backend family.
+mod matrix;
+/// The one tolerance table every comparison in this harness reads.
+mod tolerance;
+
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -69,6 +93,18 @@ use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 pub use fixtures::Coverage;
 pub use plan::{AdvertisedTuple, RANK_CAP, advertised_tuples};
+
+pub use artifact::{
+    Artifact, CellRecord, DEFAULT_PATH, ExampleTuple, LegSummary, SCHEMA_VERSION, SkippedGroup,
+};
+pub use gradient::{
+    GRADIENT_OPERATION_FLOOR, GRADIENT_OPERATIONS, GradientObservation, GradientVerdict,
+    check_gradients, findings_text as gradient_findings_text,
+};
+pub use matrix::{
+    CellVerdict, MatrixCell, MatrixReport, SkipReason, map_oracle_verdict, run_matrix,
+};
+pub use tolerance::{EXCEPTIONS, Tolerance, for_dtype, for_operation, gradient_options};
 
 use crate::cpu::tape;
 use fixtures::{Route, Subject};
