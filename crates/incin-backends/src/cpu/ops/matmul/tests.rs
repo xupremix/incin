@@ -821,6 +821,134 @@ fn batch_axes_broadcast_on_both_sides_index_the_right_slices() {
     }
 }
 
+// --- Issue #90: half-precision matmul matches the f32 reference ---
+//
+// The `FLOAT_DTYPES` capability rows are only honest if a half matmul
+// computes the same product as the f32 one up to the error half rounding
+// itself introduces. The exact-value tests below pin exact results for
+// exactly representable integers; these pin the tolerance contract for
+// values: inputs round to half on the way in (relative error at most one
+// ulp: 2^-10 for f16, 2^-7 for bf16), the kernel accumulates the widened
+// products (f64 on CPU, f32 on CUDA's `matmul.cu`), and the result rounds
+// back to half on the way out. Propagating the input rounding through K
+// terms plus one output rounding gives an a-priori absolute bound of
+// `(K + 1) * ulp * max|term|`; the tests assert four times that bound, so
+// a failure means the kernel did something other than round-then-multiply,
+// not that the bound was tight.
+//
+// The CUDA side of this contract is pinned on hardware by
+// `matmul_multiplies_f16_operands`/`matmul_multiplies_bf16_operands`
+// (`cuda/backend/tests.rs`, `#[ignore = "requires CUDA hardware"]`),
+// which use exactly representable integers for the same reason the
+// exact-value tests below do; the tolerance half of the contract can only
+// run on CPU here.
+
+/// Deterministic mixed-sign values in [-0.45, 0.45]: dense enough in both
+/// half formats that every rounding direction is exercised, small enough
+/// that f16 (max 65504) never overflows no matter how K grows.
+fn parity_values(count: usize) -> Vec<f32> {
+    (0..count)
+        .map(|i| ((i * 37) % 19) as f32 * 0.05 - 0.45)
+        .collect()
+}
+
+/// The absolute tolerance for one half dtype over an inner dimension of
+/// `k`: four times the `(K + 1) * ulp * max|term|` bound derived above,
+/// with `max|term|` measured from the f32 inputs, not assumed.
+fn half_tolerance(ulp: f64, k: usize, max_abs_term: f64) -> f64 {
+    4.0 * (k as f64 + 1.0) * ulp * max_abs_term
+}
+
+fn max_abs_term(lhs: &[f32], rhs: &[f32]) -> f64 {
+    let lhs_max = lhs.iter().map(|v| v.abs()).fold(0.0f32, f32::max) as f64;
+    let rhs_max = rhs.iter().map(|v| v.abs()).fold(0.0f32, f32::max) as f64;
+    lhs_max * rhs_max
+}
+
+fn half_storage(values: &[f32], dtype: DTypeId, shape: Vec<usize>) -> CpuStorage {
+    let buffer = match dtype {
+        DTypeId::F16 => CpuBuffer::F16(values.iter().map(|&v| half::f16::from_f32(v)).collect()),
+        DTypeId::BF16 => CpuBuffer::BF16(values.iter().map(|&v| half::bf16::from_f32(v)).collect()),
+        _ => panic!("parity helper only builds half buffers"),
+    };
+    CpuStorage::from_contiguous(buffer, shape)
+}
+
+/// `a_half_matmul_matches_the_f32_reference_within_half_tolerance`.
+fn check_half_matches_f32(dtype: DTypeId, ulp: f64) {
+    // Unbatched [4,16] @ [16,4]: K = 16 terms per output element.
+    let (m, k, n) = (4usize, 16usize, 4usize);
+    let lhs_values = parity_values(m * k);
+    let rhs_values = parity_values(k * n);
+    let tolerance = half_tolerance(ulp, k, max_abs_term(&lhs_values, &rhs_values));
+
+    let reference = matmul_impl(
+        &matrix(lhs_values.clone(), m, k),
+        &matrix(rhs_values.clone(), k, n),
+    )
+    .unwrap();
+    let candidate = matmul_impl(
+        &half_storage(&lhs_values, dtype, vec![m, k]),
+        &half_storage(&rhs_values, dtype, vec![k, n]),
+    )
+    .unwrap();
+    assert_eq!(candidate.shape, vec![m, n]);
+    assert_eq!(candidate.dtype, dtype.descriptor());
+    let (got, want) = (values_of(&candidate), values_of(&reference));
+    let worst = got
+        .iter()
+        .zip(&want)
+        .map(|(g, w)| (g - w).abs())
+        .fold(0.0f64, f64::max);
+    assert!(
+        worst <= tolerance,
+        "{dtype:?} unbatched matmul drifted {worst} from the f32 reference, past the {tolerance} half-rounding bound"
+    );
+
+    // Batched [2,4,16] @ [2,16,4]: the batched path splits on dtype
+    // separately (`batched_gemm`), so parity is asserted there too rather
+    // than assumed to follow the unbatched result.
+    let batch = 2usize;
+    let lhs_values = parity_values(batch * m * k);
+    let rhs_values = parity_values(batch * k * n);
+    let tolerance = half_tolerance(ulp, k, max_abs_term(&lhs_values, &rhs_values));
+
+    let reference = batched_matmul_impl(
+        &tensor(lhs_values.clone(), vec![batch, m, k]),
+        &tensor(rhs_values.clone(), vec![batch, k, n]),
+    )
+    .unwrap();
+    let candidate = batched_matmul_impl(
+        &half_storage(&lhs_values, dtype, vec![batch, m, k]),
+        &half_storage(&rhs_values, dtype, vec![batch, k, n]),
+    )
+    .unwrap();
+    assert_eq!(candidate.shape, vec![batch, m, n]);
+    assert_eq!(candidate.dtype, dtype.descriptor());
+    let (got, want) = (values_of(&candidate), values_of(&reference));
+    let worst = got
+        .iter()
+        .zip(&want)
+        .map(|(g, w)| (g - w).abs())
+        .fold(0.0f64, f64::max);
+    assert!(
+        worst <= tolerance,
+        "{dtype:?} batched matmul drifted {worst} from the f32 reference, past the {tolerance} half-rounding bound"
+    );
+}
+
+#[test]
+/// `an_f16_matmul_matches_the_f32_reference_within_half_tolerance`.
+fn an_f16_matmul_matches_the_f32_reference_within_half_tolerance() {
+    check_half_matches_f32(DTypeId::F16, 2f64.powi(-10));
+}
+
+#[test]
+/// `a_bf16_matmul_matches_the_f32_reference_within_half_tolerance`.
+fn a_bf16_matmul_matches_the_f32_reference_within_half_tolerance() {
+    check_half_matches_f32(DTypeId::BF16, 2f64.powi(-7));
+}
+
 // --- Issue #90: CPU matmul dtype parametrization ---
 
 /// `[[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]]`.

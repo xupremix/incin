@@ -360,14 +360,15 @@ macro_rules! cuda_descriptor_operations {
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
                 LogSumExpDim, LogSumExpKeepDim,
                 // Issue #90: `matmul.cu` now exports one GEMM entry per
-                // float storage dtype, so `MatMulExact` needs this group's
-                // wider FLOAT_DTYPES row rather than the `matmul` group's
-                // f32-only one. The rule shapes are identical apart from
-                // that dtype set - Native, Contiguous, training, the same
-                // rank bounds - and a group is a rule shape, so this is
-                // where it honestly sits now. The coarse legacy `MatMul`
-                // row in `tables.rs` still states F32_ONLY and is outside
-                // this file's ownership scope.
+                // float storage dtype, so `MatMulExact` sits in this
+                // group's FLOAT_DTYPES row rather than the `matmul`
+                // group's f32-only one. The rule shapes are identical
+                // apart from that dtype set - Native, Contiguous,
+                // training, the same rank bounds - and a group is a rule
+                // shape, so this is where it honestly sits now. The
+                // `matmul` group's F32_ONLY row (`tables.rs`) is
+                // intentional: it feeds the composed `SDPA`/`Dot`/`Outer`
+                // rows, which must stay narrow.
                 MatMulExact
             ],
             spatial = [
