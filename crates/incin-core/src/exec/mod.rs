@@ -35,6 +35,8 @@
 //! [`Execute<O>`](crate::backend_authoring::Execute) is now the descriptor consumer.
 //! Concrete backend execution consumes the canonical catalog descriptors.
 
+/// Dispatch-time autocast: allowlisted operand casting for mixed precision.
+pub mod autocast;
 /// Backend-neutral capability queries and registry resolution.
 pub mod capability;
 /// Canonical exact-operation inventory and typed descriptor vocabulary.

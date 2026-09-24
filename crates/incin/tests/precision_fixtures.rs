@@ -144,6 +144,118 @@ fn mixed_bf16_retains_f32_master_weights() -> TestResult {
     Ok(())
 }
 
+/// `UX-001`, issue #2: under the plan's mixed-bf16 scope, dispatch casts
+/// allowlisted operands at admission. `Linear::forward` runs `matmul` and
+/// ends in `broadcast_add` (BinaryBroadcast): CPU's matmul and elementwise
+/// rows both admit bf16, so the f32 operands are cast and the forward
+/// output's storage is bf16. Master weights remain f32: creation is outside
+/// the allowlist. A unary float (`exp`, also outside the allowlist) applied
+/// to the f32 input inside the same scope keeps f32 storage: the allowlist
+/// decides, not the ambient policy.
+#[test]
+fn mixed_bf16_autocasts_allowlisted_dispatch_operands() -> TestResult {
+    let trainer = Trainer::new(
+        Trainer::plan()
+            .devices(DeviceSet::cpu())
+            .precision(RuntimePrecisionPolicy::mixed_bf16())
+            .build()?,
+    );
+    let mut model = Linear::<Dyn, Backend>::build((2, 2))?;
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.05)?;
+    let input = Tensor::<Dyn, Backend>::ones(vec![1, 2])?;
+    let outcome = trainer.fit(&mut model, &mut optimizer, [input], |model, input| {
+        let widened = input.exp()?;
+        assert_eq!(
+            Backend::storage_dtype::<f32>(widened.inner()),
+            Some(<f32 as ConstDType>::DESCRIPTOR),
+            "unary floats are outside the allowlist and must stay f32"
+        );
+        let forward = model.forward(widened)?;
+        assert_eq!(
+            Backend::storage_dtype::<f32>(forward.inner()),
+            Some(<bf16 as ConstDType>::DESCRIPTOR),
+            "mixed_bf16 must cast the forward broadcast_add operands to bf16"
+        );
+        assert_eq!(
+            Backend::storage_dtype::<f32>(model.weight.as_tensor()?.inner()),
+            Some(<f32 as ConstDType>::DESCRIPTOR),
+            "master weights must stay f32"
+        );
+        Ok(forward.sum_all()?.forget_layout())
+    })?;
+    assert_eq!(outcome.batches, 1);
+    assert!(outcome.final_loss.is_some_and(f32::is_finite));
+    Ok(())
+}
+
+/// `UX-001`, issue #2: the same admission cast under a mixed-f16 plan. The
+/// scaled loop is what a mixed-f16 plan runs through, `broadcast_add` casts
+/// to f16 (CPU's elementwise row admits it), `sum_all` widens back to the
+/// exact-f32 accumulator, and master weights stay f32 throughout.
+#[test]
+fn mixed_f16_autocasts_allowlisted_dispatch_operands() -> TestResult {
+    let trainer = Trainer::new(
+        Trainer::plan()
+            .devices(DeviceSet::cpu())
+            .precision(RuntimePrecisionPolicy::mixed_f16())
+            .build()?,
+    );
+    let mut scaler = trainer.report().loss_scale_state();
+    let mut model = Linear::<Dyn, Backend>::build((2, 2))?;
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.05)?;
+    let input = Tensor::<Dyn, Backend>::ones(vec![1, 2])?;
+    let outcome = trainer.fit_scaled(
+        &mut model,
+        &mut optimizer,
+        &mut scaler,
+        [input],
+        |model, input| {
+            let forward = model.forward(input)?;
+            assert_eq!(
+                Backend::storage_dtype::<f32>(forward.inner()),
+                Some(<f16 as ConstDType>::DESCRIPTOR),
+                "mixed_f16 must cast the forward broadcast_add operands to f16"
+            );
+            assert_eq!(
+                Backend::storage_dtype::<f32>(model.weight.as_tensor()?.inner()),
+                Some(<f32 as ConstDType>::DESCRIPTOR),
+                "master weights must stay f32"
+            );
+            Ok(forward.sum_all()?.forget_layout())
+        },
+    )?;
+    assert_eq!(outcome.batches, 1);
+    assert!(outcome.final_loss.is_some_and(f32::is_finite));
+    Ok(())
+}
+
+/// `UX-001`, issue #2: an `fp32` plan has no active dtype, so the allowlist
+/// short-circuits and the same forward keeps f32 storage end to end.
+#[test]
+fn fp32_plan_casts_no_dispatch_operands() -> TestResult {
+    let trainer = Trainer::new(
+        Trainer::plan()
+            .devices(DeviceSet::cpu())
+            .precision(RuntimePrecisionPolicy::fp32())
+            .build()?,
+    );
+    let mut model = Linear::<Dyn, Backend>::build((2, 2))?;
+    let mut optimizer = SGD::<Backend>::from_module(&model, 0.05)?;
+    let input = Tensor::<Dyn, Backend>::ones(vec![1, 2])?;
+    let outcome = trainer.fit(&mut model, &mut optimizer, [input], |model, input| {
+        let forward = model.forward(input)?;
+        assert_eq!(
+            Backend::storage_dtype::<f32>(forward.inner()),
+            Some(<f32 as ConstDType>::DESCRIPTOR),
+            "fp32 must not cast any dispatch operand"
+        );
+        Ok(forward.sum_all()?.forget_layout())
+    })?;
+    assert_eq!(outcome.batches, 1);
+    assert!(outcome.final_loss.is_some_and(f32::is_finite));
+    Ok(())
+}
+
 /// `UX-001`: sum(linear(ones)) has unit gradients for every weight and bias.
 /// Multiplying that loss by infinity injects non-finite gradients through the
 /// trainer's backward pass, not by bypassing it with a manual optimizer call.

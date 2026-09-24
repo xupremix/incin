@@ -156,7 +156,8 @@ where
         TensorHandle::from_storage::<B, K, Local>(rhs),
     ];
     let context = crate::exec::ExecutionContext::from_scope(B::default())
-        .with_grad_mode(crate::exec::GradMode::Disabled);
+        .with_grad_mode(crate::exec::GradMode::Disabled)
+        .with_precision_policy(crate::exec::RuntimePrecisionPolicy::fp32());
     dispatch::execute_shaped::<O, B, Dyn>(&context, NoAttributes, &inputs, &expected)
         .map(Into::into)
         .map_err(Error::from)
@@ -173,7 +174,8 @@ where
         .map_err(Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
     let context = crate::exec::ExecutionContext::from_scope(B::default())
-        .with_grad_mode(crate::exec::GradMode::Disabled);
+        .with_grad_mode(crate::exec::GradMode::Disabled)
+        .with_precision_policy(crate::exec::RuntimePrecisionPolicy::fp32());
     dispatch::execute_shaped::<O, B, Dyn>(&context, NoAttributes, &[input], &expected)
         .map(Into::into)
         .map_err(Error::from)
@@ -190,7 +192,8 @@ where
         .map_err(Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
     let context = crate::exec::ExecutionContext::from_scope(B::default())
-        .with_grad_mode(crate::exec::GradMode::Disabled);
+        .with_grad_mode(crate::exec::GradMode::Disabled)
+        .with_precision_policy(crate::exec::RuntimePrecisionPolicy::fp32());
     dispatch::execute_shaped::<O, B, Dyn>(&context, ScalarAttributes { value }, &[input], &expected)
         .map(Into::into)
         .map_err(Error::from)
@@ -207,7 +210,8 @@ where
         .map_err(Error::Shape)?;
     let input = TensorHandle::from_storage::<B, K, Local>(storage);
     let context = crate::exec::ExecutionContext::from_scope(B::default())
-        .with_grad_mode(crate::exec::GradMode::Disabled);
+        .with_grad_mode(crate::exec::GradMode::Disabled)
+        .with_precision_policy(crate::exec::RuntimePrecisionPolicy::fp32());
     dispatch::execute_shaped::<O, B, Dyn>(
         &context,
         ClampAttributes { min, max },

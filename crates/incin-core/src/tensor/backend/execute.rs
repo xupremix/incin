@@ -176,7 +176,7 @@ where
 
 impl<B, O, K> ExecuteInto<O, K> for B
 where
-    B: Execute<O> + crate::exec::Capabilities,
+    B: Execute<O> + crate::exec::Capabilities + 'static,
     O: crate::exec::catalog::Operation,
     K: DType,
     <B as Execute<O>>::Output: Into<B::Storage<K>>,

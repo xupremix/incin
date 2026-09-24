@@ -22,21 +22,26 @@
 //! # What admission reads off the policy
 //!
 //! Admission (`admit_invocation`) reads `training`, `fallback`, and `math_mode`
-//! from the [`ExecutionContext`] the caller passes. It does not call
-//! [`ExecutionPolicy::current`](crate::exec::ExecutionPolicy::current) and does
-//! not branch on the policy's `precision` axis. The axis still reaches dispatch,
-//! because every eager operation builds its context with
-//! [`ExecutionContext::from_scope`], which copies the ambient policy once - so a
-//! scoped precision (the trainer's `fit` installs one) is what those contexts
-//! carry into [`ExecutionRequest::context`](crate::tensor::backend::ExecutionRequest::context).
-//! Acting on it - casting operands
-//! through an allowlist - is a later slice of issue #2; until then the axis is
-//! carried and inspectable, not enforced.
+//! from the [`ExecutionContext`] the caller passes; it does not call
+//! [`ExecutionPolicy::current`](crate::exec::ExecutionPolicy::current). The
+//! `precision` axis arrives the same way - every eager operation builds its
+//! context with `ExecutionContext::from_scope`, which copies the ambient
+//! policy once, so a scoped precision (the trainer's `fit` installs one) is
+//! what those contexts carry into
+//! [`ExecutionRequest::context`](crate::tensor::backend::ExecutionRequest::context).
+//! Both funnels act on that axis before inference: they run the
+//! [`autocast`](crate::exec::autocast) allowlist (issue #2), which - when a
+//! caster is installed on the thread and the backend's capability rows admit
+//! the target dtype - replaces operands with casted ones so the descriptor is
+//! inferred from the dtypes the backend will really see. Outside a scope with
+//! an active dtype, or without an installed caster, that step is a no-op and
+//! the request proceeds exactly as before.
 
 use alloc::vec::Vec;
 use core::fmt;
 
 use crate::err::BackendError;
+use crate::exec::autocast;
 use crate::exec::capability::{
     Capabilities, CapabilityQuery, OperationIdentity, SupportLevel, UnsupportedReason,
 };
@@ -313,7 +318,7 @@ pub fn execute<O, B>(
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<O> + Capabilities,
+    B: Execute<O> + Capabilities + 'static,
 {
     execute_with_payload(context, attributes, inputs, None)
 }
@@ -327,8 +332,18 @@ pub fn execute_with_payload<O, B>(
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<O> + Capabilities,
+    B: Execute<O> + Capabilities + 'static,
 {
+    let cast_outcome = autocast::cast_operands::<O, B>(context, inputs)?;
+    let rebuilt = match &cast_outcome {
+        Some(outcome) => Some(autocast::rebind(outcome, inputs)?),
+        None => None,
+    };
+    let inputs: &[TensorHandle<'_>] = match &rebuilt {
+        Some(handles) => handles.as_slice(),
+        None => inputs,
+    };
+
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
         .map(|handle| logical_meta(handle.metadata()))
@@ -365,7 +380,7 @@ pub fn execute_shaped<O, B, S>(
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<O> + Capabilities,
+    B: Execute<O> + Capabilities + 'static,
     S: crate::shapes::Shape,
 {
     execute_shaped_n(context, attributes, inputs, expected)
@@ -385,7 +400,7 @@ pub fn execute_shaped_n<O, B, E>(
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<O> + Capabilities,
+    B: Execute<O> + Capabilities + 'static,
     E: crate::shapes::ExpectedShapes,
 {
     execute_shaped_n_with_payload(context, attributes, inputs, expected, None)
@@ -401,7 +416,7 @@ pub fn execute_shaped_with_payload<O, B, S>(
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<O> + Capabilities,
+    B: Execute<O> + Capabilities + 'static,
     S: crate::shapes::Shape,
 {
     execute_shaped_n_with_payload(context, attributes, inputs, expected, payload)
@@ -417,9 +432,19 @@ pub fn execute_shaped_n_with_payload<O, B, E>(
 ) -> Result<<B as Execute<O>>::Output, CanonicalError>
 where
     O: Operation,
-    B: Execute<O> + Capabilities,
+    B: Execute<O> + Capabilities + 'static,
     E: crate::shapes::ExpectedShapes,
 {
+    let cast_outcome = autocast::cast_operands::<O, B>(context, inputs)?;
+    let rebuilt = match &cast_outcome {
+        Some(outcome) => Some(autocast::rebind(outcome, inputs)?),
+        None => None,
+    };
+    let inputs: &[TensorHandle<'_>] = match &rebuilt {
+        Some(handles) => handles.as_slice(),
+        None => inputs,
+    };
+
     let logical: Vec<LogicalTensorMeta> = inputs
         .iter()
         .map(|handle| logical_meta(handle.metadata()))

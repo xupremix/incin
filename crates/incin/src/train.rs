@@ -233,7 +233,9 @@ impl Plan {
     /// [`TrainerBuilder::precision`] supplies the default; a later
     /// [`TrainerBuilder::loss_scaling`] overrides it. Keep this state across
     /// [`Trainer::fit_scaled`] calls to preserve dynamic growth and backoff.
-    /// This does not enable autocasting or change f32 parameter storage.
+    /// Creating the state enables nothing by itself: `fit` and `fit_scaled`
+    /// install the plan's autocast for the duration of a run, and master
+    /// parameter storage stays f32 either way.
     #[must_use]
     pub fn loss_scale_state(&self) -> LossScaleState {
         LossScaleState::new(self.loss_scaling)
@@ -241,8 +243,9 @@ impl Plan {
 
     /// The runtime precision policy configured for this plan.
     ///
-    /// `fit` and `fit_scaled` make it the ambient precision for the duration
-    /// of the run; nothing else enforces it.
+    /// `fit` and `fit_scaled` make it the ambient precision and install the
+    /// dispatch autocast for the duration of the run; nothing else enforces
+    /// it.
     #[must_use]
     pub fn precision(&self) -> RuntimePrecisionPolicy {
         self.precision
@@ -401,8 +404,10 @@ pub enum TrainError {
     ///
     /// The f16 active / exact-f32 accumulator contract requires scaling to
     /// protect small gradients from underflow, with non-finite detection and
-    /// backoff handling overflow in dynamic mode. This is a planning safeguard,
-    /// not a claim that the trainer performs f16 computation or autocasting.
+    /// backoff handling overflow in dynamic mode. This is a planning
+    /// safeguard, not a claim that every operation runs in f16: dispatch
+    /// autocasts only the allowlisted dtypes the backend's capability rows
+    /// admit.
     #[non_exhaustive]
     UnsupportedPrecision {
         /// The active dtype requested by the precision policy.
@@ -599,7 +604,8 @@ impl TrainerBuilder {
     /// Configures the runtime precision policy (e.g. AMP, mixed-bf16, fp32).
     ///
     /// Replaces any earlier loss scaling setting with this policy's default.
-    /// The policy remains inspectable; this does not enable module autocasting.
+    /// The policy remains inspectable; `fit` and `fit_scaled` enforce it
+    /// through dispatch-time autocasting from an allowlist.
     #[must_use]
     pub fn precision(mut self, precision: RuntimePrecisionPolicy) -> Self {
         self.precision = precision;
@@ -1016,8 +1022,12 @@ impl Trainer {
     /// Each step runs inside an [`ExecutionPolicy`] scope holding this plan's
     /// [`RuntimePrecisionPolicy`], so every `ExecutionContext` the step builds
     /// carries the plan's precision and the caller's ambient policy is
-    /// restored when this returns, errors included. The scope casts nothing:
-    /// autocasting from an allowlist is not implemented.
+    /// restored when this returns, errors included. The step also holds this
+    /// plan's [`autocast`](incin_core::exec::autocast) installation (issue
+    /// #2), so dispatch casts allowlisted operands toward the plan's active
+    /// dtype - and widens reductions to the exact accumulator - whenever the
+    /// backend's capability rows admit the cast. An `fp32` plan casts
+    /// nothing, and master parameter storage stays f32 regardless.
     ///
     /// When a synchronizer is attached, gradients are reduced after the
     /// backward pass and before the optimizer step, via
@@ -1047,7 +1057,11 @@ impl Trainer {
         mut loss: F,
     ) -> Result<FitOutcome, TrainError>
     where
-        B: Backend + VariableBackend + AutogradBackend + HostInterop,
+        B: Backend
+            + VariableBackend
+            + AutogradBackend
+            + HostInterop
+            + incin_core::exec::autocast::AutocastBackend,
         M: VisitParameters<B>,
         O: Optimizer<B>,
         D: IntoIterator<Item = Batch> + Clone,
@@ -1070,6 +1084,7 @@ impl Trainer {
             None => None,
         };
 
+        let _autocast = incin_core::exec::autocast::install::<B>();
         ExecutionPolicy::current()
             .with_precision(self.plan.precision)
             .scope(|| {
@@ -1152,7 +1167,7 @@ impl Trainer {
     /// the optimizer.
     ///
     /// The loop body runs under the same plan-precision [`ExecutionPolicy`]
-    /// scope as [`fit`](Self::fit).
+    /// scope and autocast installation as [`fit`](Self::fit).
     ///
     /// When a synchronizer is attached, gradients are reduced after the
     /// scaled backward pass and before [`ScaledOptimizer::step_scaled`]
@@ -1176,6 +1191,7 @@ impl Trainer {
             + VariableBackend
             + AutogradBackend
             + HostInterop
+            + incin_core::exec::autocast::AutocastBackend
             + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>
             + incin_core::optim::OptimizerBackend<f32>,
         <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output:
@@ -1202,6 +1218,7 @@ impl Trainer {
             None => None,
         };
 
+        let _autocast = incin_core::exec::autocast::install::<B>();
         ExecutionPolicy::current()
             .with_precision(self.plan.precision)
             .scope(|| {
