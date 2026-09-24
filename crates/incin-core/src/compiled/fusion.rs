@@ -1,7 +1,11 @@
-//! Inspection-only fusion analysis for compiled graphs.
+//! Proven fusion analysis and admission for compiled graphs.
 //!
-//! Executable fused lowering is unavailable in the preview CPU evaluator, so
-//! applying candidates fails closed.
+//! [`FusionPass`] discovers candidate pointwise pairs, proves each chain's
+//! intermediates exclusively consumed (tape, topological order, one geometry,
+//! float dtype, template boundary budget), and admits the proven groups while
+//! refusing everything else by name. Emitting an admitted group as one
+//! executable kernel is a backend's job behind [`FusedKernelLowering`]; core
+//! never promises a lowering it cannot name.
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
@@ -11,7 +15,7 @@ use crate::compiled::capture::CapturedGraph;
 use crate::err::Result;
 use crate::graph::ValueId;
 use crate::shapes::error::OperationKind;
-use crate::tensor::dtype::DTypeDescriptor;
+use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 fn builtin_operation(identity: &crate::exec::OperationIdentity) -> Option<OperationKind> {
     match identity {
@@ -63,6 +67,11 @@ pub enum FusionBlocker {
     OutOfTopologicalOrder,
     /// The chain is too short to be worth emitting as one kernel.
     InsufficientBenefit,
+    /// The chain's values are not a builtin float the scalar templates compute.
+    UnsupportedDtype,
+    /// The chain does not have the one or two boundary operands the pointwise
+    /// templates hold.
+    BoundaryCount,
 }
 
 /// A candidate pair of adjacent nodes that may be fused.
@@ -117,7 +126,39 @@ pub struct PlannedGroups {
     pub refused: Vec<GroupRefusal>,
 }
 
-/// Fusion analysis that identifies candidate chains; applying them fails closed.
+/// A backend's contract for emitting one proven fusion group as one kernel.
+///
+/// [`FusionPass::apply`] admits only groups that are exclusive, absent from
+/// the backward tape, topologically ordered, geometrically uniform, float
+/// typed, and within the two-operand boundary budget — but an admitted group
+/// is still just node indices in a [`CapturedGraph`]. Turning it into a
+/// single executable unit is backend representation work, and this trait is
+/// where core hands that job over.
+///
+/// Implementations must re-validate rather than trust, exactly as
+/// [`FusionPass::plan_groups`] re-runs [`FusionPass::check_link`] on
+/// hand-fed candidates: a group that bypassed admission, or a saved set that
+/// changed since, has to be refused, never lowered.
+pub trait FusedKernelLowering {
+    /// The single executable unit this backend emits for a group.
+    type Kernel;
+
+    /// Lowers `group` into one kernel covering exactly its node chain.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first gate that refuses the group. A failed call never
+    /// yields a partial kernel.
+    fn lower_group(
+        &self,
+        graph: &CapturedGraph,
+        group: &FusedKernel,
+        saved: &SavedTensorSet,
+    ) -> Result<Self::Kernel>;
+}
+
+/// Fusion analysis that proves pointwise chains exclusive, then admits the
+/// proven groups or refuses the rest by name.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FusionPass;
 
@@ -286,7 +327,10 @@ impl FusionPass {
     ///
     /// Accepted edges are then assembled into maximal ascending paths, and a
     /// path whose values do not share one shape and dtype is refused whole: a
-    /// single pointwise kernel iterates one geometry.
+    /// single pointwise kernel iterates one geometry. Two lowering gates then
+    /// run so a returned group is one a backend can actually emit: the chain
+    /// must be a builtin float the scalar templates compute, and its distinct
+    /// boundary operands must fit the one-or-two the pointwise templates hold.
     #[must_use]
     pub fn plan_groups(
         &self,
@@ -393,6 +437,13 @@ impl FusionPass {
                 });
                 continue;
             }
+            if let Err(blocker) = Self::chain_lowering_ok(graph, &path) {
+                refused.push(GroupRefusal::Chain {
+                    node_indices: path,
+                    blocker,
+                });
+                continue;
+            }
             groups.push(FusedKernel {
                 source_node_indices: path,
                 primary_op,
@@ -439,21 +490,94 @@ impl FusionPass {
         Ok(())
     }
 
-    /// Returns the unchanged graph when there are no candidates.
+    /// The chain must be a builtin float and fit the two-operand templates.
     ///
-    /// Non-empty candidate sets fail closed until executable fused-descriptor lowering exists.
+    /// [`Self::chain_geometry_ok`] already proved every value shares one
+    /// descriptor, so one probe decides the dtype. The boundary walk mirrors
+    /// what a lowering re-does: each step reads the previous step's output
+    /// (the spine) or an external value, the distinct external values are the
+    /// emitted kernel's operands, and the pointwise templates hold one or
+    /// two. Refusing here keeps [`Self::apply`] from promising a group a
+    /// backend [`FusedKernelLowering`] implementation would have to refuse.
+    fn chain_lowering_ok(
+        graph: &CapturedGraph,
+        path: &[usize],
+    ) -> core::result::Result<(), FusionBlocker> {
+        let probe = path
+            .first()
+            .and_then(|&index| graph.nodes.get(index))
+            .and_then(|node| node.outputs.first())
+            .copied()
+            .ok_or(FusionBlocker::OutOfTopologicalOrder)?;
+        let meta = graph
+            .value_metadata
+            .get(&probe)
+            .ok_or(FusionBlocker::ShapeMismatch)?;
+        let dtype = meta
+            .dtype
+            .builtin_id()
+            .ok_or(FusionBlocker::UnsupportedDtype)?;
+        if !matches!(
+            dtype,
+            DTypeId::F16 | DTypeId::BF16 | DTypeId::F32 | DTypeId::F64
+        ) {
+            return Err(FusionBlocker::UnsupportedDtype);
+        }
+
+        let mut boundaries = BTreeSet::new();
+        for (step_index, &index) in path.iter().enumerate() {
+            let node = graph
+                .nodes
+                .get(index)
+                .ok_or(FusionBlocker::OutOfTopologicalOrder)?;
+            let spine = if step_index == 0 {
+                None
+            } else {
+                Some(
+                    graph.nodes[path[step_index - 1]]
+                        .outputs
+                        .first()
+                        .copied()
+                        .ok_or(FusionBlocker::NotProvenExclusive)?,
+                )
+            };
+            for &input in &node.inputs {
+                if spine != Some(input) {
+                    boundaries.insert(input);
+                }
+            }
+        }
+        if !(1..=2).contains(&boundaries.len()) {
+            return Err(FusionBlocker::BoundaryCount);
+        }
+        Ok(())
+    }
+
+    /// Runs fusion admission and returns the graph plus every named outcome.
+    ///
+    /// Candidates are planned through [`Self::plan_groups`], so each returned
+    /// group has proven exclusive consumption of its intermediates, absence
+    /// from `saved`, topological order, one shared shape and dtype, a float
+    /// dtype, and the one-or-two boundary budget — every property a backend
+    /// lowering re-checks through [`FusedKernelLowering`]. Candidates that
+    /// fail a gate land in [`PlannedGroups::refused`] with their
+    /// [`FusionBlocker`]: fail-closed per group, never a blanket error.
+    ///
+    /// The graph itself is returned structurally unchanged: admitted nodes
+    /// still execute as their original op chain through the compiled plan
+    /// path, and emitting a group as one kernel is the backend's
+    /// [`FusedKernelLowering`] job.
+    ///
+    /// # Errors
+    ///
+    /// Admission is infallible today; the [`Result`] keeps the seam open for
+    /// failures that cannot be attributed to one named group.
     pub fn apply(
         &self,
         graph: &CapturedGraph,
         candidates: &[FusionCandidate],
-    ) -> Result<(CapturedGraph, Vec<FusedKernel>)> {
-        if candidates.is_empty() {
-            return Ok((graph.clone(), Vec::new()));
-        }
-
-        let _ = (graph, candidates);
-        Err(crate::err::Error::Msg(
-            "compiled fusion has no executable fused descriptor lowering".into(),
-        ))
+        saved: &SavedTensorSet,
+    ) -> Result<(CapturedGraph, PlannedGroups)> {
+        Ok((graph.clone(), self.plan_groups(graph, candidates, saved)))
     }
 }

@@ -36,8 +36,14 @@ fn test_fusion_detects_pointwise_chain_candidates() {
     assert_eq!(candidates[0].consumer_op, OperationKind::Relu);
 }
 
+/// `apply` admits a proven chain as one group and returns the graph unchanged.
+///
+/// The predecessor of this pass failed every non-empty candidate set with a
+/// blanket "no executable lowering" error. Admission now proves the chain the
+/// same way `plan_groups` does, and the group it returns is what a backend
+/// lowers through `FusedKernelLowering` into one executable kernel.
 #[test]
-fn test_fusion_apply_fails_closed_without_executable_lowering() {
+fn apply_admits_a_proven_pointwise_chain_as_one_group() {
     let mut graph = Graph::new();
     let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));
     let y = graph.add_value(vec![4], DTypeId::F32, Some("y".into()));
@@ -52,7 +58,122 @@ fn test_fusion_apply_fails_closed_without_executable_lowering() {
     let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
     let pass = FusionPass;
     let candidates = pass.find_candidates(&captured);
-    assert!(pass.apply(&captured, &candidates).is_err());
+    assert_eq!(candidates.len(), 1, "{candidates:?}");
+
+    let (returned, planned) = pass
+        .apply(&captured, &candidates, &SavedTensorSet::new())
+        .expect("a proven chain is admitted, not a blanket error");
+    assert_eq!(planned.groups.len(), 1, "refused: {:?}", planned.refused);
+    assert_eq!(planned.groups[0].source_node_indices, vec![0, 1]);
+    assert_eq!(planned.groups[0].primary_op, OperationKind::Relu);
+    assert!(planned.refused.is_empty(), "{:?}", planned.refused);
+    assert_eq!(returned.nodes.len(), captured.nodes.len());
+    assert_eq!(returned.outputs, captured.outputs);
+}
+
+/// Admission refuses a saved intermediate by name instead of lowering it.
+///
+/// The group would be exclusive and geometrically fine, but it is on the
+/// backward tape: fusing it away would silently change what the tape can
+/// replay, so `apply` returns the refusal, not the group.
+#[test]
+fn apply_refuses_a_saved_intermediate_by_name() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));
+    let y = graph.add_value(vec![4], DTypeId::F32, Some("y".into()));
+    let out = graph.add_value(vec![4], DTypeId::F32, Some("out".into()));
+
+    graph.mark_input(x);
+    graph.mark_output(out);
+
+    graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Neg, vec![y], vec![out], BTreeMap::new());
+
+    let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
+    let candidates = FusionPass.find_candidates(&captured);
+    assert_eq!(candidates.len(), 1, "{candidates:?}");
+
+    let mut saved = SavedTensorSet::new();
+    saved.save(y);
+    let (returned, planned) = FusionPass
+        .apply(&captured, &candidates, &saved)
+        .expect("admission is infallible");
+    assert!(planned.groups.is_empty());
+    assert_eq!(
+        planned.refused,
+        vec![GroupRefusal::Link {
+            producer_idx: 0,
+            consumer_idx: 1,
+            blocker: FusionBlocker::SavedForBackward,
+        }]
+    );
+    assert_eq!(returned.nodes.len(), captured.nodes.len());
+}
+
+/// A chain the two-operand templates cannot hold is refused at plan time.
+///
+/// `out = (x + c1) * c2` reads three external values once the intermediate is
+/// fused away. The pointwise templates take one or two operands, so the group
+/// must never be promised to a backend that would then have to refuse it.
+#[test]
+fn plan_groups_refuses_a_chain_with_three_boundaries() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![4], DTypeId::F32, Some("x".into()));
+    let c1 = graph.add_value(vec![4], DTypeId::F32, Some("c1".into()));
+    let c2 = graph.add_value(vec![4], DTypeId::F32, Some("c2".into()));
+    let t = graph.add_value(vec![4], DTypeId::F32, Some("t".into()));
+    let out = graph.add_value(vec![4], DTypeId::F32, Some("out".into()));
+
+    graph.mark_input(x);
+    graph.mark_input(c1);
+    graph.mark_input(c2);
+    graph.mark_output(out);
+
+    graph.add_node(OperationKind::Add, vec![x, c1], vec![t], BTreeMap::new());
+    graph.add_node(OperationKind::Mul, vec![t, c2], vec![out], BTreeMap::new());
+
+    let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
+    let candidates = FusionPass.find_candidates(&captured);
+    assert_eq!(candidates.len(), 1, "{candidates:?}");
+    let planned = FusionPass.plan_groups(&captured, &candidates, &SavedTensorSet::new());
+
+    assert!(planned.groups.is_empty());
+    assert_eq!(
+        planned.refused,
+        vec![GroupRefusal::Chain {
+            node_indices: vec![0, 1],
+            blocker: FusionBlocker::BoundaryCount,
+        }]
+    );
+}
+
+/// An integer chain is refused: the scalar templates compute floats.
+#[test]
+fn plan_groups_refuses_a_non_float_chain() {
+    let mut graph = Graph::new();
+    let x = graph.add_value(vec![4], DTypeId::I64, Some("x".into()));
+    let y = graph.add_value(vec![4], DTypeId::I64, Some("y".into()));
+    let out = graph.add_value(vec![4], DTypeId::I64, Some("out".into()));
+
+    graph.mark_input(x);
+    graph.mark_output(out);
+
+    graph.add_node(OperationKind::Relu, vec![x], vec![y], BTreeMap::new());
+    graph.add_node(OperationKind::Neg, vec![y], vec![out], BTreeMap::new());
+
+    let captured = CapturedGraph::capture(&graph).expect("capture should succeed");
+    let candidates = FusionPass.find_candidates(&captured);
+    assert_eq!(candidates.len(), 1, "{candidates:?}");
+    let planned = FusionPass.plan_groups(&captured, &candidates, &SavedTensorSet::new());
+
+    assert!(planned.groups.is_empty());
+    assert_eq!(
+        planned.refused,
+        vec![GroupRefusal::Chain {
+            node_indices: vec![0, 1],
+            blocker: FusionBlocker::UnsupportedDtype,
+        }]
+    );
 }
 
 /// A value with two readers must not be fused away.

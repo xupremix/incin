@@ -292,11 +292,11 @@ pub mod experimental {
         pub use incin_core::experimental::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
             CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
-            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
-            FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal, LivenessInterval,
-            LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups, ReproducibilityManifest,
-            SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable, WeightPrepacker,
-            fusion_pattern_kind,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusedKernelLowering, FusionBlocker,
+            FusionCandidate, FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal,
+            LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups,
+            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
+            WeightPrepacker, fusion_pattern_kind,
         };
         /// Minimal graph and descriptor-building types for the preview CPU
         /// evaluator. These remain experimental with the rest of this module.

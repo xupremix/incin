@@ -3,7 +3,9 @@
 //! This feature supplies plan inspection plus a CPU reference evaluator through
 //! `incin-backends`. It is neither an optimized compiler nor a stable execution
 //! API, deployment target, or portable-ABI format. Optimization requests that
-//! have no executable lowering (including fusion) fail closed.
+//! have no proven executable lowering fail closed; proven pointwise fusion
+//! groups lower to one kernel through a backend `FusedKernelLowering`, while
+//! `FusionPolicy::Enabled` on a `CompiledPlan` remains unavailable.
 
 pub mod alloc;
 pub mod artifact;
@@ -23,8 +25,8 @@ pub use artifact::{
 pub use capture::{CapturedGraph, CapturedNode};
 pub use fold::{ConstantFolder, ShapeBucket, WeightPrepacker};
 pub use fusion::{
-    FusedKernel, FusionBlocker, FusionCandidate, FusionPass, FusionPatternKind, GroupRefusal,
-    PlannedGroups, fusion_pattern_kind,
+    FusedKernel, FusedKernelLowering, FusionBlocker, FusionCandidate, FusionPass,
+    FusionPatternKind, GroupRefusal, PlannedGroups, fusion_pattern_kind,
 };
 pub use manifest::ReproducibilityManifest;
 pub use plan::{CompileOptions, CompiledPlan, DynamicShapePolicy, FusionPolicy, ShapeGuard};

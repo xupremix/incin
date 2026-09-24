@@ -12,6 +12,10 @@ pub mod capability;
 #[cfg(feature = "std")]
 pub mod capability_docs;
 pub mod codegen;
+/// Executable lowering of proven CMP-005 fusion groups: one group, one kernel
+/// (`#112`), behind the core `FusedKernelLowering` contract.
+#[cfg(feature = "compiled")]
+pub mod compiled_fusion;
 #[macro_use]
 #[cfg(any(
     feature = "cpu",

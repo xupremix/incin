@@ -91,11 +91,11 @@ pub mod experimental {
         pub use crate::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
             CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
-            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
-            FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal, LivenessInterval,
-            LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups, ReproducibilityManifest,
-            SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable, WeightPrepacker,
-            fusion_pattern_kind,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusedKernelLowering, FusionBlocker,
+            FusionCandidate, FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal,
+            LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups,
+            ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
+            WeightPrepacker, fusion_pattern_kind,
         };
     }
 }
