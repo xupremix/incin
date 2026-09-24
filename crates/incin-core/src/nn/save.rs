@@ -179,7 +179,8 @@ pub fn load_checkpoint_manifest<P: AsRef<Path>>(path: P) -> Result<GlobalCheckpo
 
 /// Slices a contiguous multidimensional byte array along a target sharded axis for a given rank.
 ///
-/// Behavior by storage encoding, where `local_shard_dim` is each rank's
+/// Behavior by storage encoding (block-aware sharding, issue #93), where
+/// `local_shard_dim` is each rank's
 /// extent along `shard_axis` (`global_shape[shard_axis] / world_size`) and
 /// `inner_stride` is the product of the dimensions after `shard_axis`:
 ///

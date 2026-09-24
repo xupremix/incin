@@ -111,7 +111,12 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S>> Tensor<S, B,
     /// straight-through gradient node for `quantize` (Decision 2, wired in the
     /// CPU executor). The operand must be contiguous; the capability row
     /// refuses a strided view because the kernel reads the block buffer
-    /// directly.
+    /// directly. The CPU row narrows the input further to `f32` (its kernel
+    /// matches on the `F32` buffer variant rather than converting), so an
+    /// `f16`/`f64`/`bf16` operand compiles and passes descriptor validation
+    /// but is refused at admission with a typed `UnsupportedReason` rather
+    /// than a panic; CUDA admits every float storage dtype through its typed
+    /// kernel entries.
     ///
     /// # Examples
     /// ```rust
@@ -216,8 +221,8 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S>> Tensor<S, B,
     /// expanded to one float element each, so the result has the same shape
     /// as the operand. `K` must be [`QuantCapable`] (`Q8_0` or `Dyn`, whose
     /// runtime descriptor the catalog checks) and `Kout` any [`FloatDType`];
-    /// the backend's capability row narrows the output further (the CPU
-    /// kernel currently writes `f32` only) and refuses with a typed
+    /// the CPU executor narrows the output further (its kernel currently
+    /// writes `f32` only) and refuses a non-`f32` target with a typed
     /// `UnsupportedReason` rather than a panic.
     ///
     /// The backend records the straight-through gradient node for
