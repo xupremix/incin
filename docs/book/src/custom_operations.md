@@ -153,7 +153,7 @@ it as forward-only.
 Separate from the three forms above — and **experimental**, not part of the
 stable authoring contract — `incin_backends::codegen::dsl` exposes an
 expression DSL for single-kernel pointwise custom ops. `define_unary_custom_op`,
-`define_binary_custom_op` and `define_ternary_custom_op` take a closure over
+`define_unary_custom_op` and `define_binary_custom_op` take a closure over
 the codegen IR (`IrExpr`) and build a `KernelDefinition`: the forward
 expression plus one symbolically derived backward derivative per input,
 computed by the same `IrExpr::diff` that the shipped fused-unary-backward

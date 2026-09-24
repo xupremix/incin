@@ -242,12 +242,6 @@ impl IrExpr {
         Self::Const(val)
     }
 
-    /// Creates a variable node.
-    #[must_use]
-    pub fn var(name: impl Into<String>) -> Self {
-        Self::Var(name.into())
-    }
-
     /// Rewrites every argument index through `map`.
     ///
     /// Fusing two expressions means placing them over one shared operand list,

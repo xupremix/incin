@@ -32,7 +32,7 @@ pub mod ir;
 pub mod jit;
 
 pub use catalog::{binary_forward, unary_forward, unary_fused_backward};
-pub use dsl::{define_binary_custom_op, define_ternary_custom_op, define_unary_custom_op};
+pub use dsl::{define_binary_custom_op, define_unary_custom_op};
 pub use fragment::{ScalarFragment, lower_scalar};
 pub use ir::{
     IrBinaryOp, IrExpr, IrTernaryOp, IrUnaryOp, KernelDefinition, exp, fma, gelu, log, relu, rsqrt,
