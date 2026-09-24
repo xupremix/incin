@@ -178,6 +178,20 @@ pub fn load_checkpoint_manifest<P: AsRef<Path>>(path: P) -> Result<GlobalCheckpo
 }
 
 /// Slices a contiguous multidimensional byte array along a target sharded axis for a given rank.
+///
+/// Behavior by storage encoding, where `local_shard_dim` is each rank's
+/// extent along `shard_axis` (`global_shape[shard_axis] / world_size`) and
+/// `inner_stride` is the product of the dimensions after `shard_axis`:
+///
+/// - **Scalar** dtypes (e.g. `f32`): each outer row contributes
+///   `local_shard_dim * inner_stride * scalar_bytes` bytes. Always supported.
+/// - **Block** dtypes (e.g. `q8_0`) with `local_shard_dim` a multiple of
+///   `logical_elements_per_block`: each outer row contributes
+///   `size_bytes(local_shard_dim * inner_stride)` bytes, so physical block
+///   boundaries always align with shard boundaries.
+/// - **Block** dtypes with `local_shard_dim` not a multiple of
+///   `logical_elements_per_block`: refused with an error — the shard boundary
+///   would fall mid-block and cannot be expressed as a byte range.
 #[cfg(feature = "std")]
 pub fn slice_bytes_for_rank(
     bytes: &[u8],
@@ -211,14 +225,28 @@ pub fn slice_bytes_for_rank(
     let mut local_shape = global_shape.to_vec();
     local_shape[shard_axis] = local_shard_dim;
 
-    let elem_bytes = dtype
-        .encoding()
-        .scalar_bytes()
-        .ok_or_else(|| Error::UnsupportedDType {
-            dtype,
-            backend: "safetensors",
-            op: "shard",
-        })?;
+    let encoding = dtype.encoding();
+
+    // Block storage (e.g. Q8_0) packs logical elements into fixed-size
+    // physical blocks laid out flat over the whole tensor. A shard boundary
+    // that falls inside a physical block cannot be expressed as a byte range,
+    // so each rank's local extent along the shard axis must cover whole
+    // blocks. This also guarantees the per-row global span below is a whole
+    // number of blocks, because `global_dim = local_shard_dim * world_size`.
+    if encoding.is_block() {
+        let block_size = encoding.logical_elements_per_block();
+        if !local_shard_dim.is_multiple_of(block_size) {
+            return Err(Error::Msg(format!(
+                "Cannot shard dtype {} along axis {}: local extent {} is not a multiple \
+                 of block size {}; shard boundary would fall mid-block",
+                dtype.name(),
+                shard_axis,
+                local_shard_dim,
+                block_size
+            )));
+        }
+    }
+
     let outer_stride = crate::shapes::ShapeBuf::from_slice(&global_shape[..shard_axis])
         .checked_numel(crate::shapes::error::OperationKind::Storage)?;
     let inner_stride = crate::shapes::ShapeBuf::from_slice(&global_shape[shard_axis + 1..])
@@ -236,21 +264,44 @@ pub fn slice_bytes_for_rank(
         inner_stride,
         "local shard dimension * inner stride",
     )?;
-    let bytes_per_shard_block = checked_mul(
-        elem_per_shard_block,
-        elem_bytes,
-        "shard elements * element byte width",
-    )?;
     let elem_per_global_block = checked_mul(
         global_dim,
         inner_stride,
         "global shard dimension * inner stride",
     )?;
-    let bytes_per_global_block = checked_mul(
-        elem_per_global_block,
-        elem_bytes,
-        "global block elements * element byte width",
-    )?;
+
+    let (bytes_per_shard_block, bytes_per_global_block) = if encoding.is_block() {
+        (
+            encoding.size_bytes(
+                elem_per_shard_block,
+                crate::shapes::error::OperationKind::Storage,
+            )?,
+            encoding.size_bytes(
+                elem_per_global_block,
+                crate::shapes::error::OperationKind::Storage,
+            )?,
+        )
+    } else {
+        let elem_bytes = encoding
+            .scalar_bytes()
+            .ok_or_else(|| Error::UnsupportedDType {
+                dtype,
+                backend: "safetensors",
+                op: "shard",
+            })?;
+        (
+            checked_mul(
+                elem_per_shard_block,
+                elem_bytes,
+                "shard elements * element byte width",
+            )?,
+            checked_mul(
+                elem_per_global_block,
+                elem_bytes,
+                "global block elements * element byte width",
+            )?,
+        )
+    };
 
     let output_bytes = checked_mul(
         outer_stride,

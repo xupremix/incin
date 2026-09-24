@@ -54,6 +54,40 @@ Generated documents (`docs/capabilities.md`, operation semantics), audit
 evidence, and derived directories are outputs of the source and tests; their
 content may change in any release as truth changes, without notice.
 
+## Quantized checkpoint dtype format
+
+A checkpoint carries an explicit dtype record (`CheckpointDType`) with three
+parts, and each part is a compatibility promise:
+
+- **`key` (`DTypeKey`)** — the stable logical identity `(namespace, name,
+  version)`. Built-in keys use the reserved `"incin"` namespace. A load
+  *refuses* any key this build does not recognize, including a known name at an
+  unknown `version`; it is never coerced to the version the build does know.
+- **`kind` (`DTypeKind`)** — the semantic category (`Quantized` for `q8_0`).
+- **`encoding` (`StorageEncoding`)** — the physical storage arithmetic:
+  `logical_elements_per_block`, `bytes_per_block`, and `alignment`. This is the
+  authoritative source of all storage sizing; `size_bytes` derives from it and
+  no other path may recompute `numel * element_size`.
+
+For block-quantized dtypes the **on-disk byte layout is part of the format**:
+
+- `q8_0` is `StorageEncoding::block(32, 34, 2)`: 32 logical elements packed
+  into one 34-byte physical block (`f16` scale + 32 `i8` quants), 2-byte
+  aligned, laid out flat in row-major order over the tensor's logical elements.
+- Changing that layout — block size, byte width, alignment, or packing order —
+  is a breaking format change and **must bump `DTypeKey::version`**. The old
+  and new versions are distinct keys, so a file written with one is refused
+  rather than misread by a build that only knows the other.
+- Because resharding slices physical byte ranges, a shard boundary must fall on
+  a whole block: `slice_bytes_for_rank` requires each rank's local extent along
+  the shard axis to be a multiple of `logical_elements_per_block` and refuses
+  anything else with an explicit mid-block error.
+
+A load therefore refuses, in order: an unknown `DTypeKey` (including a known
+name at an unregistered `version`), a `CheckpointDType` whose `kind` or
+`encoding` disagrees with the registered descriptor for that key, and a tensor
+whose dtype disagrees with the manifest.
+
 ## Hardware and feature-combination coverage
 
 Compiling every supported feature combination is a per-PR gate (the
