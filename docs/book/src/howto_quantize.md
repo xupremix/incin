@@ -150,9 +150,10 @@ if let Err(err) = execute::<op::QuantizedMatMul, B>(&train_ctx, NoAttributes, &[
 ```
 
 `quantize` and `dequantize` themselves *are* covered for training on CPU —
-they record the straight-through estimator — while `quantized_matmul` is
-forward-only. The capability row behind each is what `with_training(true)`
-consults.
+their rows declare `training = true` and they record the straight-through
+estimator — while `quantized_matmul` is forward-only (`training = false`,
+as are all three quantized rows on CUDA). The capability row behind each
+is what `with_training(true)` consults.
 
 ## 5. Read the refusals you will hit
 

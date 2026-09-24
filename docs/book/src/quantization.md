@@ -33,7 +33,12 @@ let back = q.dequantize::<f32>()?; // lossy: the f16 block scale rounds
   never straddle two rows. A different axis, an out-of-bounds axis, or a
   rank-0 tensor is a typed error naming what is wrong — never a panic, and
   never a silently reinterpreted buffer. The operand must be contiguous;
-  a strided view is refused rather than copied around.
+  a strided view is refused rather than copied around. The CPU executor
+  narrows the input further to `f32` — its kernel matches the `F32` buffer
+  variant rather than converting — so an `f16`/`f64`/`bf16` operand
+  compiles and passes descriptor validation but is refused at admission
+  with a typed `UnsupportedReason`; CUDA admits every float storage dtype
+  through typed kernel entries.
 - `Tensor::dequantize::<Kout>()` requires `K: QuantCapable`, where `Kout`
   is any `FloatDType`. The result has the operand's shape. The CPU kernel
   writes `f32` only; a different output dtype is refused with a typed
@@ -164,13 +169,18 @@ A general STE zeroes the cotangent outside a clip range,
 against and the pass-through is unconditional. Clip-based masking for
 fixed-range formats is not implemented (see the list below).
 
-Two flags are worth keeping apart. The capability rows for `quantize`,
-`dequantize` and `quantized_matmul` declare `training = false`, which
-gates `ExecutionPolicy`'s training flag — an invocation with that flag set
-is refused with *"training is unsupported for quantize"* — while the STE
-node above is gated by gradient recording (the operand's gradient marker
-under `GradMode`, on by default). The row's training flag therefore says
-nothing about whether these operations are differentiable.
+Two flags are worth keeping apart. The capability rows' `training` flag
+gates `ExecutionPolicy`'s training flag, while the STE node above is gated
+by gradient recording (the operand's gradient marker under `GradMode`, on
+by default) — so the row's flag says nothing about whether an operation is
+differentiable. On CPU the `quantize`/`dequantize` rows declare
+`training = true`: a training-policy invocation is admitted and records
+the STE entry (pinned by
+`a_training_context_admits_the_boundary_and_records_both_ste_entries` in
+`crates/incin-backends/tests/quantize_ste.rs`). `quantized_matmul` stays
+`training = false` on every backend, and all three rows stay `false` on
+CUDA, whose kernels record no tape entry yet — there the flag is refused
+with *"training is unsupported for {operation}"*.
 
 ## Checkpoints, sharding, and the format promise
 

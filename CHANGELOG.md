@@ -457,7 +457,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   in `docs/COMPATIBILITY.md`); `DTypeRule::Quantized` deliberately stays at
   `quantize`/`dequantize`/`quantized_matmul` for this release (Decision 7).
   Tests: trybuild `compile_fail` 4/4, `quantized_tensor_ops` 10/10,
-  `checkpoint_block_quant` 9/9, `quantize_ste` 4/4.
+  `checkpoint_block_quant` 9/9, `quantize_ste` 6/6.
 
 ### Changed
 

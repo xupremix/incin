@@ -119,18 +119,21 @@ encoding.
 
 ### What breaks in the helpers if a block format is added
 
-- **`slice_bytes_for_rank` (`nn/save.rs:182-295`)** — **fails today for every
-  block encoding, Q8_0 included**: it demands
-  `encoding().scalar_bytes().ok_or(UnsupportedDType)` (`nn/save.rs:214-221`)
-  then computes byte spans as `elements × elem_bytes`. This is exactly the
-  Decision-1 defect. The fix is format-generic and must: (a) compute row/slab
-  byte sizes via `size_bytes` instead of element×width; (b) require the shard
-  extent on the cut axis to keep blocks whole (row-major: blocks live on the
-  innermost axis, so whole-row shards are safe when `row numel % block == 0`,
-  matching `conformance/operands.rs:59-75`'s rule that the widened extent goes
-  last); (c) keep refusing non-contiguous layouts. Once that lands, Q4_0 /
-  NVFP4 / MXFP4 inherit it with zero per-format code — **no format-specific
-  field is needed for sharding**.
+- **`slice_bytes_for_rank` (`nn/save.rs:196-347`)** — **LANDED during
+  #93 (was the Decision-1 defect at audit time; R4 2026-09-24 update).**
+  The audit-time code demanded
+  `encoding().scalar_bytes().ok_or(UnsupportedDType)` for every dtype;
+  the landed code gates block encodings first: each rank's local extent
+  along the shard axis must cover whole blocks
+  (`nn/save.rs:236-248`, mid-block boundary → descriptive error), and
+  row/slab byte sizes go through `size_bytes` instead of element×width
+  (`nn/save.rs:273-283`; the `scalar_bytes` demand survives only in the
+  scalar `else` arm, `nn/save.rs:284-304`). The fix is format-generic:
+  Q4_0 / NVFP4 / MXFP4 inherit it with zero per-format code — **no
+  format-specific field is needed for sharding**. (Whole-row shards stay
+  safe when `row numel % block == 0`, matching
+  `conformance/operands.rs:59-75`'s rule that the widened extent goes
+  last; non-contiguous layouts are still refused.)
 - **`size_bytes` (`registry.rs:282-305`)** — works unchanged for all four; the
   only new surface is stricter divisibility: `% 32` for Q4_0/MXFP4/Q8_0,
   `% 16` for NVFP4. Violations produce the existing typed
@@ -226,7 +229,7 @@ sample of rows a future population pass must decide, with what they say today:
 | Sample ops | Current profile / `DTypeRule` | Missing statement |
 |---|---|---|
 | `matmul`, `bmm`, `addmm`, `dot`, `outer`, `grouped_matmul` | MatMul / `Floating` | whether quantized operands are refused (→ `quantized_matmul`) or get a dequant path; today the float wall in `inference.rs:902-928` refuses them implicitly |
-| `linear`, `layer_norm`, `embedding`, `conv1d`… | Module·Composite / `TypedContract` | `embedding` is explicitly *exempt* from the float requirement (`inference.rs:911-914`), so quantized weights reach descriptor validation with no catalog opinion |
+| `linear`, `layer_norm`, `embedding`, `conv1d`… | Module·Composite / `TypedContract` | `embedding` is exempt from the *generic* float wall (`inference.rs:911-914`: Module/Composite require float except `EmbeddingExact`), but a Q8_0 weight is still refused by the embedding-specific arm (`inference.rs:965-976`, "embedding weight metadata requires a floating dtype") — so the refusal exists, it just lives outside the catalog's dtype rule |
 | `add`, `mul`, `relu`, `exp`… (pointwise binary) | BinaryBroadcast / `NumericSame`; UnaryFloat / `Floating` | `NumericSame` enforces only same-dtype (`inference.rs:876-901`) — two `q8_0` tensors satisfy `add` at descriptor level; the refusal, if any, arrives only from capability rows |
 | `sum*`, `mean*`, `max*`, `norm`, `cumsum`… | Reduction / `Floating` | same implicit float wall, no per-op "no quantized path" record |
 | `reshape`, `transpose`, `slice`, `concat`, `narrow`… | Shape / `Preserve` or `TypedContract` | whether q8_0 metadata may pass through; the catalog cannot express the distinction the CPU capability table already draws between contiguous (ALL_DTYPES) and strided (`NON_QUANTIZED`) reshape (`incin-backends/src/capability/tables.rs:60-82`) |
@@ -267,11 +270,23 @@ files inline only where relevant (e.g. the #93 entry's
 aren't all listed, skip"), **no index line was added**; the index is otherwise
 untouched.
 
+R4 addendum (2026-09-24): the #93 entry in `00-index.md` now also links
+this sibling memo, and the "What breaks / slice_bytes" section above was
+updated from "fails today" to LANDED. Both edits are recorded under
+"Files written" below; the audit-time prose is otherwise preserved.
+
 ## Files written
 
 - `docs/plan/research/0.2.0/93-block-generalization.md` (this file) — created.
 - `docs/plan/research/0.2.0/00-index.md` — intentionally unchanged (Task C skip).
 - Not edited: Rust code, `93-quantized-contract.md`, book pages, CHANGELOG.
+
+R4 (2026-09-24) follow-ups, same lane ownership: `00-index.md` #93 entry
+now links this sibling memo; this file's `slice_bytes_for_rank` and
+`embedding` rows corrected to the landed tree (see above); the Decision-2
+clip formula, draft-NoGrad supersession notes, and capability-row wording
+in `93-quantized-contract.md` corrected; CHANGELOG `quantize_ste` count
+4/4 → 6/6.
 
 ## Gates
 

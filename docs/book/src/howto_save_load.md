@@ -108,16 +108,15 @@ demonstrate:
 
 ```rust,no_run
 use incin::prelude::*;
-use std::path::Path;
 
 type B = DefaultBackend;
 
 # fn main() -> Result<()> {
 let model = Linear::<s![64, 32], B>::build(())?;
-let path = Path::new("/tmp/version-demo.safetensors");
-model.save(Format::Safetensors, path)?;
+let path = std::env::temp_dir().join(format!("incin_version_demo_{}.safetensors", std::process::id()));
+model.save(Format::Safetensors, &path)?;
 
-let mut raw = std::fs::read(path)?;
+let mut raw = std::fs::read(&path)?;
 let mut len = [0u8; 8];
 len.copy_from_slice(&raw[..8]);
 let header_len = u64::from_le_bytes(len) as usize;
@@ -130,10 +129,10 @@ let bumped = header.replace(
 let mut rewritten = (bumped.len() as u64).to_le_bytes().to_vec();
 rewritten.extend_from_slice(bumped.as_bytes());
 rewritten.extend_from_slice(&raw[8 + header_len..]);
-std::fs::write(path, &rewritten)?;
+std::fs::write(&path, &rewritten)?;
 
 let mut fresh = Linear::<s![64, 32], B>::build(())?;
-if let Err(err) = fresh.load(Format::Safetensors, path) {
+if let Err(err) = fresh.load(Format::Safetensors, &path) {
     // open safetensors stream: malformed safetensors file: safetensors state
     // file declares format version 99, but this build reads at most version
     // 1; upgrade incin to read it
@@ -206,11 +205,10 @@ process has never registered is refused rather than guessed at:
 
 ```rust,no_run
 use incin::prelude::*;
-use std::path::Path;
 
 # fn main() -> Result<()> {
-let dir = Path::new("/tmp/manifest-demo");
-std::fs::create_dir_all(dir)?;
+let dir = std::env::temp_dir().join(format!("incin_manifest_demo_{}", std::process::id()));
+std::fs::create_dir_all(&dir)?;
 
 let mut manifest = incin_core::nn::GlobalCheckpointManifest::new(2);
 manifest.add_tensor("quant.weight", vec![64], DTypeId::Q8_0, "Sharded:0");

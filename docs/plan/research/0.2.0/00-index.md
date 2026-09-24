@@ -173,7 +173,8 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
    per-op admission (compile-fail static / typed Dyn error), not a blanket
    NumericDType wall; comptime divisibility proofs; land tensor API now;
    verify Q4_0/NVFP4/MXFP4 block generalization before freeze; bounds-only
-   admission with catalog gap documented. See `93-quantized-contract.md`.
+   admission with catalog gap documented. See `93-quantized-contract.md`;
+   block-generalization audit in `93-block-generalization.md`.
    Gates #94/#95/#1.
 6. #102 MoE typing (M): static outer shapes + E+1 offset array.
 

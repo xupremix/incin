@@ -9,7 +9,15 @@ These eight answers supersede the draft "Recommendation" line below where they c
    Block layout is part of the on-disk format via the existing `CheckpointDType.encoding` + `DTypeKey` (`("incin", "q8_0", version)`). Layout changes bump `version`; load refuses on key/version mismatch rather than misreading bytes. Keep the door open for expansion: new block formats are new keys (or version bumps), and `StorageEncoding::block` stays the shared representation so Q4_0 / NVFP4 / MXFP4 can join without a format fork. Sharding must become block-aware (`slice_bytes_for_rank` cannot demand `scalar_bytes()`).
 
 2. **Gradient — what PyTorch does: straight-through estimator (STE).**
-   `quantize` records a tape entry. Forward: `y = dequantize(quantize(x))` semantics at the boundary (or the true quantized value with STE backward). Backward: `dx = dy * 1{|x| <= clip}` — pass gradient through as if quantization were identity within the clip range. This is PyTorch QAT's `FakeQuantize` behavior. Document as an approximation in operation semantics. Do **not** ship silent NoGrad.
+   `quantize` records a tape entry. Forward is the true block-quantized
+   value. Backward: `dx = dy` unconditionally — the cotangent passes
+   through unchanged, as if quantization were the identity. This is
+   PyTorch QAT's `FakeQuantize` rule minus its clip mask: `FakeQuantize`
+   zeroes the gradient outside `|x| <= clip`, but Q8_0 scales each block
+   by its own `max_abs/127`, so nothing saturates and there is no clip
+   range to mask (CPU executor, `cpu/canonical/linalg.rs:208-222`;
+   catalog `GradientRule::StraightThrough`). Document as an approximation
+   in operation semantics. Do **not** ship silent NoGrad.
 
 3. **Dtype admission — compile error when statically known unsupported; descriptive runtime error when `Dyn`.**
    An operation must not compile when the dtype is statically known to be unsupported by that operation (via trait bounds / compile-fail fixtures that name the operation). When the dtype (or the support fact) is only known at runtime (`Dyn`), fail with a descriptive typed error, not a panic and not silent wrong results. Support is **per-operation**, not a global wall (see 8).
@@ -35,6 +43,21 @@ Recommendation (draft): (1) block layout recorded in format via CheckpointDType.
 Example (draft): quantize\<Q\>(axis) -> Tensor\<S,B,Q,NoGrad\>; save writes key("incin","q8_0",1)+block; load refuses v2.
 Risk: NumericDType bounds break downstream generics (pre-1.0 OK); STE absence must be documented.
 
+Supersession notes (R4, 2026-09-24 — history preserved above, corrections only):
+- `(3) type-enforced NoGrad at quantize()` is **superseded by Decision 2**:
+  the landed boundary records an identity-STE tape entry instead of
+  refusing gradients. `validate_gradient_dtype` still refuses gradient
+  markers on Q8_0 *storage* (`tensor/base/error.rs:9-21`, a constructor
+  rule — hence the facade `.detach()` gap in Status), which is not the
+  draft's NoGrad-carrying `quantize` type.
+- `NumericDType marker on numeric ops` is **superseded by Decisions 3+8**:
+  admission is the per-op `FloatCapable`/`QuantCapable` bound pair
+  (`tensor/ops/quantization.rs:65-85`); no `NumericDType` bound exists
+  anywhere in the tree.
+- The `-> Tensor<S,B,Q,NoGrad>` example is **superseded**: `quantize`
+  preserves the input's gradient marker `G` (`quantization.rs:130`) and
+  records STE on CPU, so the result is `Dense<S, B, Q8_0, G, Local>`.
+
 ## Acceptance (from issue #93)
 
 - A user can write a model with a quantized weight parameter through the `incin` facade, without calling backend-authoring APIs.
@@ -54,7 +77,8 @@ Risk: NumericDType bounds break downstream generics (pre-1.0 OK); STE absence mu
   compile-fail + block-divisibility admission), block-aware checkpoint
   sharding + `DTypeKey` refusal, identity-STE tape on CPU
   (`GradientRule::StraightThrough`, capability rows training=true on CPU,
-  false on CUDA/WGPU/Metal), block generalization audit
+  training=false on CUDA, both quantize groups empty — hence refused —
+  on WGPU/Metal: `capability/declarations.rs:694-695,878-879`), block generalization audit
   (`93-block-generalization.md`: Q4_0/NVFP4/MXFP4 all fit today's encoding),
   docs (quantization chapter rewrite, how-to cookbook, MIGRATION, CHANGELOG,
   three learning examples).

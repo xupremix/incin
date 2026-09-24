@@ -257,7 +257,7 @@ operation-semantics table renders it `StraightThrough (approximation:
 STE)`. Exhaustive matches on `GradientRule` in backend or catalog code
 must handle the new variant. Coverage: `crates/incin-core/tests/quantized_tensor_ops.rs`
 (10 runtime tests), `crates/incin-core/tests/checkpoint_block_quant.rs`
-(9), `crates/incin-backends/tests/quantize_ste.rs` (4), and four trybuild
+(9), `crates/incin-backends/tests/quantize_ste.rs` (6), and four trybuild
 fixtures in `crates/incin-core/tests/compile_fail/`
 (`quantized_mish_admission`, `quantized_floor_admission`,
 `dequantize_rejects_float_input`, `quantize_block_axis_not_divisible`).

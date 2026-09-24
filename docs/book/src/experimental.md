@@ -20,10 +20,13 @@ gradient node stay the backend's — see [Quantization](./quantization.md).
 CPU and CUDA advertise all three operations; WGPU and Metal advertise
 none. The CPU implementations record an identity straight-through tape
 entry under gradient recording (#93), `quantized_matmul` records none, and
-CUDA's quantize kernels record no tape entry yet. The capability rows on
-every backend that advertises these operations declare `training = false`,
-which gates `ExecutionPolicy`'s training flag rather than gradient
-recording.
+CUDA's quantize kernels record no tape entry yet. The `training` flag on
+those capability rows gates `ExecutionPolicy`'s training flag rather than
+gradient recording: CPU's `quantize`/`dequantize` rows declare
+`training = true` (a training-policy call is admitted and records the STE
+entry), while `quantized_matmul` is `training = false` on every backend
+and all three rows are `false` on CUDA, whose kernels record no tape entry
+yet.
 
 ## Distributed
 
