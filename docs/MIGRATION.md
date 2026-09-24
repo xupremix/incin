@@ -198,6 +198,70 @@ rank-deficit masks, `Dyn` rejection messages, backward splits) and the CPU
 storage-level forward/backward/gradcheck tests in
 `crates/incin-backends/src/cpu/ops/shape_ops/tests.rs`.
 
+### Quantized dtype admission and block-aware checkpoints (#93)
+
+The quantized surface moved from backend-authoring-only to the tensor
+surface, and the elementwise float methods gained dtype-admission bounds.
+Breaking is accepted pre-1.0 (issue #93, Decision 5); the public-api
+baselines were updated deliberately with it.
+
+**New `FloatCapable`/`QuantCapable` bounds on unary methods.** Twenty-five
+elementwise unary methods (`abs`, `floor`, `ceil`, `round`, `sign`, `step`,
+`trunc`, `frac`, `mish`, `elu`, `powf`, `clamp`, `erf`, `rsqrt`, `log2`,
+`log10`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`,
+`atanh`) plus `norm` now require `K: FloatCapable`, and `dequantize`
+requires `K: QuantCapable`. Both traits blanket-admit every `FloatDType` /
+`QuantDType` plus `Dyn`, and both are exported from the `incin` root and
+prelude. What breaks: generic code spelled `K: DType` — or any bound that
+does not imply float-ness — that calls one of those methods no longer
+compiles, even when every instantiation is `f32`, because the bound is
+checked against your signature; the diagnostic is `E0277` and it names the
+trait (concretely `Q8_0` on `floor`/`mish` is pinned by the fixtures, and
+`dequantize` on a float operand by `dequantize_rejects_float_input`). Fix:
+raise your bound to `K: FloatCapable` — `K: FloatDType` also works, since
+the blanket impl derives `FloatCapable` from it. (A concrete `Dyn` dtype
+compiles against either trait and is refused at run time by the catalog's
+typed float rule when the operation has no path for it.) `sin` and `cos`
+deliberately keep the unbounded `K: DType` surface (in-crate generic
+callers such as rotary-table construction need them), so a quantized
+operand still compiles there and is refused at run time.
+
+**New `Tensor::quantize` / `Tensor::dequantize`.** `quantize(axis)` takes
+`K: FloatCapable` and returns a `Q8_0` tensor; `dequantize::<Kout>()` takes
+`K: QuantCapable` and any `FloatDType` `Kout`. `axis` must resolve to the
+last axis, whose extent must be a whole multiple of 32: a statically known
+violation fails compilation (`E0080`, "the last axis of a Q8_0 block must
+be a multiple of 32"), while a `Dyn` shape gets a typed error naming the
+axis, the actual extent and the block size. Both methods dispatch the
+catalog descriptors, so backend admission and validation are unchanged
+behind them.
+
+**Checkpoint sharding is block-aware.** `slice_bytes_for_rank` computes
+block-dtype shard spans through `StorageEncoding::size_bytes` and requires
+each rank's local extent along the shard axis to be a whole multiple of
+the block size; a mid-block boundary is refused ("local extent 24 is not a
+multiple of block size 32; shard boundary would fall mid-block") instead
+of being sliced arbitrarily. The sharded manifest's dtype record is now
+load-checked end to end: an unknown `DTypeKey` (including a known name at
+an unknown version) and an encoding that disagrees with the registered
+dtype are both refused rather than misread. The format commitment lives in
+`docs/COMPATIBILITY.md`.
+
+**New `GradientRule::StraightThrough` variant.** On the CPU backend
+`quantize` and `dequantize` now record an identity straight-through tape
+entry (STE, PyTorch QAT `FakeQuantize` behavior; Q8_0's per-block scale
+never saturates, so there is no clip masking — the CUDA kernels for these
+ops record no tape entry yet), and the catalog's `GradientRule`
+enum gained a `StraightThrough` variant to say so — the generated
+operation-semantics table renders it `StraightThrough (approximation:
+STE)`. Exhaustive matches on `GradientRule` in backend or catalog code
+must handle the new variant. Coverage: `crates/incin-core/tests/quantized_tensor_ops.rs`
+(10 runtime tests), `crates/incin-core/tests/checkpoint_block_quant.rs`
+(9), `crates/incin-backends/tests/quantize_ste.rs` (4), and four trybuild
+fixtures in `crates/incin-core/tests/compile_fail/`
+(`quantized_mish_admission`, `quantized_floor_admission`,
+`dequantize_rejects_float_input`, `quantize_block_axis_not_divisible`).
+
 ### Minimum supported Rust version
 
 `rust-version = "1.88"`, verified by a CI job pinned to exactly that toolchain

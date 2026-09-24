@@ -431,6 +431,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `HARDWARE_METAL_RUNNER`. `CONTRIBUTING.md` gains a "Registering a
   hardware runner" section, and `PROJECT_STATUS.md` points at it.
 
+- **Tensor-level quantized dtype contract (#93).** `Tensor::quantize(axis)`
+  and `Tensor::dequantize::<Kout>()` bring `Q8_0` onto the stable tensor
+  surface behind two new admission traits — `FloatCapable` (blanket over
+  `FloatDType` + `Dyn`) and `QuantCapable` (blanket over `QuantDType` +
+  `Dyn`), exported from the facade root and prelude. Admission is
+  compile-time where the dtype is static: 25 elementwise unary methods plus
+  `norm` bound `K: FloatCapable`, so a `Q8_0` operand there is `E0277`
+  naming the trait, and `dequantize` on a float is `E0277` naming
+  `QuantCapable` — pinned by the trybuild fixtures `quantized_mish_admission`,
+  `quantized_floor_admission` and `dequantize_rejects_float_input`;
+  `Dyn` operands fall through to the catalog's typed descriptor refusals.
+  Block divisibility is proved twice: a const assert fails monomorphization
+  (`E0080`, "the last axis of a Q8_0 block must be a multiple of 32") for
+  static shapes — pinned by `quantize_block_axis_not_divisible` — while
+  `Dyn` reports axis, extent and block size as a typed
+  error. On the CPU backend `quantize`/`dequantize` record identity
+  straight-through tape entries — PyTorch QAT's `FakeQuantize` rule, an
+  approximation, with Q8_0's per-block `max_abs/127` scale never
+  saturating and so no clip masking (CUDA's quantize kernels record none
+  yet) — and the catalog gains `GradientRule::StraightThrough`. Sharded
+  checkpoints now slice block dtypes only at whole-block boundaries
+  (mid-block shard → descriptive error) and refuse `DTypeKey` version /
+  encoding mismatches on load rather than misread bytes (format commitment
+  in `docs/COMPATIBILITY.md`); `DTypeRule::Quantized` deliberately stays at
+  `quantize`/`dequantize`/`quantized_matmul` for this release (Decision 7).
+  Tests: trybuild `compile_fail` 4/4, `quantized_tensor_ops` 10/10,
+  `checkpoint_block_quant` 9/9, `quantize_ste` 4/4.
+
 ### Changed
 
 - **`transpose` materialises on every backend and states `RowMajor` (#113).**

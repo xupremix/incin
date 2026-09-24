@@ -13,11 +13,17 @@ The quantized backend-authoring contract has three operations: `quantize`
 dequantizing first). The only quantized representation any backend implements
 is `Q8_0`.
 
-There is **no `Tensor::quantize` method**; quantization is reachable only
-through the backend trait, not the stable tensor surface. The CPU backend
-implements all three. They are registered `training = false` because their
-kernels push no tape entry: advertising them for training would promise a
-gradient that never arrives.
+The stable tensor facade sits on top of these ops rather than beside them:
+`Tensor::quantize(axis)` and `Tensor::dequantize::<Kout>()` (#93) dispatch
+the same catalog descriptors, so validation, capability admission and the
+gradient node stay the backend's — see [Quantization](./quantization.md).
+CPU and CUDA advertise all three operations; WGPU and Metal advertise
+none. The CPU implementations record an identity straight-through tape
+entry under gradient recording (#93), `quantized_matmul` records none, and
+CUDA's quantize kernels record no tape entry yet. The capability rows on
+every backend that advertises these operations declare `training = false`,
+which gates `ExecutionPolicy`'s training flag rather than gradient
+recording.
 
 ## Distributed
 

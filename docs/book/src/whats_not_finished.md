@@ -53,6 +53,15 @@ of repeating a number that won't.
   facade users should use `incin::prelude::{Format, ModelExt}`. The facade
   path supports the same typed snapshot contract through `ModelExt::save`
   and `ModelExt::load`.
+- **Facade-level QAT (issue #93).** `Tensor::quantize`/`dequantize` exist and
+  the CPU executor records the straight-through gradient, but a gradient-
+  marked tensor cannot be quantized in place: gradient tracking only admits
+  floating dtypes, so `weight.quantize(-1)` is refused until you
+  `.detach()` first. The STE round-trip therefore runs on the canonical
+  dispatch surface (`incin_core::exec::dispatch`, proven in
+  `quantize_ste.rs` and the `quantization_qat` example), not through the
+  `Tensor` method chain, and `quantized_matmul` has no `Tensor` method at
+  all. See [Quantization](./quantization.md) and the how-to chapter.
 - **No shape-only test backend.** There used to be a `DummyBackend` behind a
   `test-utils` feature; it stored a shape instead of data and claimed to
   execute every operation, so a test written against it passed whether or not
