@@ -77,6 +77,19 @@ fn reserve_draw(numel: u64) -> (u64, u64) {
     (seed, start)
 }
 
+/// Generate `numel` counter-based uniform draws for an explicit
+/// `(seed, start)` range.
+///
+/// Pure: no atomics and no device. `launch_dropout_mask` reserves a
+/// disjoint range first and then calls this, so a test that pins these
+/// values pins exactly what the mask upload sends.
+#[must_use]
+pub(crate) fn dropout_draws(seed: u64, start: u64, numel: u64) -> alloc::vec::Vec<f32> {
+    (0..numel)
+        .map(|i| hash_uniform(seed, start.wrapping_add(i)))
+        .collect()
+}
+
 /// Generate `numel` counter-based uniform draws and upload them as `f32`
 /// CUDA storage with `shape`.
 ///
@@ -98,9 +111,7 @@ pub(crate) fn launch_dropout_mask(shape: &[usize]) -> Result<CudaStorage> {
         incin_core::error::Error::Msg("dropout mask element count exceeds u64".into())
     })?;
     let (seed, start) = reserve_draw(numel_u64);
-    let values: alloc::vec::Vec<f32> = (0..numel_u64)
-        .map(|i| hash_uniform(seed, start.wrapping_add(i)))
-        .collect();
+    let values = dropout_draws(seed, start, numel_u64);
     crate::cuda::backend::cuda_from_f32(
         shape,
         DTypeId::F32.descriptor(),

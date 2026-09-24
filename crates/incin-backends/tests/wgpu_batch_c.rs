@@ -254,10 +254,10 @@ fn instance_norm_matches_the_host_reference_and_records() {
 fn dropout_inference_is_identity_and_training_records() {
     require_wgpu();
     let input = upload(&LS_IN, &[2, 3]);
-    // training=false: the identity path must still execute and record (row
-    // claims training = true at the capability level; the identity path is
-    // the fresh-id wrapper which pushes a tape entry).
-    let (out, _) = run1::<op::Dropout, _>(
+    // training=false: the clone-links-identity path returns the operand
+    // itself (same tensor id), so a gradient arriving there needs no entry
+    // of its own — matching CPU, CUDA and Metal's eval-mode dropout.
+    let (out, recorded_id) = run1::<op::Dropout, _>(
         &input,
         DropoutAttributes {
             probability: 0.5,
@@ -274,6 +274,13 @@ fn dropout_inference_is_identity_and_training_records() {
         0.0,
         "dropout inference",
     );
+    assert_eq!(
+        incin_core::exec::TapeStorage::id(&out),
+        incin_core::exec::TapeStorage::id(&input),
+        "eval-mode dropout is the clone-links-identity: same tensor id, no \
+         tape entry of its own"
+    );
+    let _ = recorded_id;
 
     // training=true with p in (0,1): the output is a scaled keep-mask; the
     // magnitude of each kept element is x / (1-p), dropped elements are 0.

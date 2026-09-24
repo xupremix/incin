@@ -4,12 +4,18 @@ pub mod backend;
 /// Capability registration for the Metal backend.
 pub mod capability;
 pub mod executor;
+/// Gather-family indexing: `embedding`, `gather`, `index_select` (#92),
+/// host-side walks with scatter-add tape recipes.
+pub mod indexing;
 /// Structural shape ops: transpose, narrow/slice, concat/stack, and the
 /// squeeze/unsqueeze axis views (#92), with host-side walks and tape recipes.
 pub mod layout;
 /// Matmul-family compositions: `linear` and `scaled_dot_product_attention`
 /// (#92), rewritten into taped Metal primitives in CPU's/WGPU's order.
 pub mod linalg;
+/// Loss family: `mse_loss`, `l1_loss`, `bce_with_logits_loss`,
+/// `cross_entropy_loss` (#92), composed from taped primitives.
+pub mod loss;
 /// MPS and MPSGraph structured candidates with explicit native fallback.
 ///
 /// Enabled by the `metal-mps` Cargo feature. On non-Apple-Silicon hosts the
@@ -22,6 +28,9 @@ pub mod normalization;
 /// Elementwise unaries, scalars, clamp, and the three binary pointwise ops
 /// (#92 Batch A), with their tape recipes and host-side parity tests.
 pub mod pointwise;
+/// Variance, std, norm and cumsum reductions (#92), composed from taped
+/// primitives with a host-side prefix/suffix scan for `cumsum`.
+pub mod reduction;
 pub mod shaders;
 pub mod storage;
 // `pub(crate)`, matching cpu, cuda and wgpu. The thread-local itself is not

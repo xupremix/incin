@@ -316,8 +316,12 @@ fn matmul_backward_produces_gradients_for_both_operands() {
 // Issue #85: the cuBLASLt path itself, driven directly. These call
 // `cublaslt::try_launch_matmul` rather than `B::matmul` so a failure names
 // the cuBLASLt path instead of being masked by the NVRTC fallback that
-// `launch_matmul` would take on a plain request.
+// `launch_matmul` would take on a plain request. The whole block is gated
+// to `cuda-vendor` builds: without the feature the `cublaslt` module does
+// not exist, which is the point of the gate - no cuBLASLt symbol is
+// reachable from a build that did not ask for vendor libraries.
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cublaslt_path_computes_the_f32_product() {
@@ -335,6 +339,7 @@ fn cublaslt_path_computes_the_f32_product() {
     );
 }
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cublaslt_bias_epilogue_adds_the_bias() {
@@ -353,6 +358,7 @@ fn cublaslt_bias_epilogue_adds_the_bias() {
     );
 }
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cublaslt_bias_relu_epilogue_fuses_the_activation() {
@@ -374,6 +380,7 @@ fn cublaslt_bias_relu_epilogue_fuses_the_activation() {
     );
 }
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cublaslt_epilogue_requests_fail_closed_on_a_malformed_bias() {
@@ -390,20 +397,26 @@ fn cublaslt_epilogue_requests_fail_closed_on_a_malformed_bias() {
     );
 }
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cublaslt_plain_requests_outside_policy_report_not_applicable() {
     use crate::cuda::ops::cublaslt::try_launch_matmul;
 
-    // Rank 3 is composed by `batched_matmul` and never handed to cuBLASLt
-    // as a batch: the plain request reports "does not apply" so the caller
-    // keeps its existing path.
+    // The *plain* (rank-2, epilogue-free) request reports "does not apply"
+    // for rank 3 and the caller keeps its existing path - which, since
+    // issue #85, may still reach cuBLASLt through the dedicated batched
+    // entry `try_launch_batched_matmul` when the feature is on. This test
+    // pins only the plain entry's refusal; the batched entry's admission
+    // is covered by the `cuda-vendor` agreement test in
+    // `tests/cuda_gemm_batched.rs`.
     let lhs = cuda_f32(&[2, 2, 3], (1..=12).map(|v| v as f32).collect());
     let rhs = cuda_f32(&[2, 3, 2], (1..=12).map(|v| v as f32).collect());
     let out = try_launch_matmul(&lhs, &rhs, None, None).expect("plain requests never fail closed");
     assert!(out.is_none(), "rank 3 must not fit the cuBLASLt policy");
 }
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn cublaslt_epilogue_requests_on_out_of_policy_operands_fail_closed() {
@@ -1376,6 +1389,89 @@ fn batch_norm_training_execute_delegates_to_the_tape_tracked_method() {
     assert_close(&read(input_id), &expected_dx, 1e-4, "dispatched dx");
     assert_close(&read(weight_id), &expected_dw, 1e-4, "dispatched dw");
     assert_close(&read(bias_id), &expected_db, 1e-4, "dispatched db");
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn batch_norm_training_without_affine_ignores_running_statistics() {
+    // The other half of #123's acceptance: gradients with *no* optional
+    // weight/bias, and a training forward handed the running pair. The
+    // running values are deliberately far from the batch's own statistics,
+    // so an inference-style kernel normalizing by them would miss the CPU
+    // reference by orders of magnitude -- this pins that training mode
+    // accepts the pair for arity and ignores it, exactly like CPU's
+    // `batch_norm_training_impl`, which never reads it either.
+    use incin_core::exec::catalog::BatchNormAttributes;
+    use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};
+
+    let context = ExecutionContext::new(B::new()).with_training(true);
+    let input = bn_input();
+    let input_id = input.id;
+    let running_mean = cuda_f32(&[2], vec![8.0, -8.0]);
+    let running_var = cuda_f32(&[2], vec![64.0, 25.0]);
+    let handles = [
+        TensorHandle::from_storage::<B, f32, _>(&input),
+        TensorHandle::from_storage::<B, f32, _>(&running_mean),
+        TensorHandle::from_storage::<B, f32, _>(&running_var),
+    ];
+    let before = crate::cuda::tape::depth();
+    let out = dispatch::execute::<op::BatchNorm, _>(
+        &context,
+        BatchNormAttributes {
+            epsilon: f64::from(BN_EPS),
+            momentum: 0.1,
+            training: true,
+            has_weight: false,
+            has_bias: false,
+            has_running_mean: true,
+            has_running_variance: true,
+        },
+        &handles,
+    )
+    .expect("training batch norm without affine operands must execute on CUDA");
+    assert!(
+        crate::cuda::tape::depth() > before,
+        "a training-mode forward under a recording grad mode must push a tape entry"
+    );
+
+    let t = host_f32(&[2, 2, 2], BN_VALUES.to_vec());
+    let expected_out = crate::cpu::ops::norm::batch_norm_training_impl::<
+        incin_core::tensor::device::Cpu,
+        f32,
+    >(&t, None, None, BN_EPS)
+    .unwrap();
+    let expected_values = host_values(&expected_out);
+    let got: Vec<f64> = download_f32_host(&out)
+        .unwrap()
+        .iter()
+        .map(|v| *v as f64)
+        .collect();
+    assert_close(&got, &expected_values, 1e-5, "no-affine training forward");
+
+    let seed = cuda_f32(&[2, 2, 2], BN_GOUT.to_vec());
+    let grads = crate::cuda::tape::backward_with(&out, &seed).unwrap();
+    let dx = download_f32_host(
+        grads
+            .get(input_id)
+            .expect("the input must carry a gradient without affine operands"),
+    )
+    .unwrap()
+    .iter()
+    .map(|v| *v as f64)
+    .collect::<Vec<_>>();
+    let host_seed = host_f32(&[2, 2, 2], BN_GOUT.to_vec());
+    let expected_grads = crate::cpu::tape::backward_with(&expected_out, &host_seed).unwrap();
+    let expected_dx = host_values(expected_grads.get(t.id).unwrap());
+    assert_close(&dx, &expected_dx, 1e-4, "no-affine dx");
+    // Nothing else was an operand, so nothing else may carry a gradient:
+    // a stray dw/db entry would mean the backward wrote the absent
+    // parameter scratch and the tape attached it to something.
+    assert_eq!(
+        grads.len(),
+        1,
+        "only the input operand exists; no other gradient may appear"
+    );
 }
 
 #[test]

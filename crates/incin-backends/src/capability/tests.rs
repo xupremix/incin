@@ -235,3 +235,123 @@ fn mixed_mask_and_data_operations_admit_both_operand_dtypes_on_every_backend() {
         }
     }
 }
+
+/// Issue #90: the CPU matmul rows widened from `F32_ONLY` to
+/// `FLOAT_DTYPES`. The exact rows (`MatMulExact`/`BatchedMatMul`/`Addmm`/
+/// `Linear`) and the coarse legacy `MatMul` row all have to agree on that
+/// set - an exact row that understates the coarse one beside it (or the
+/// reverse) would make `doctor`'s family probe and a real `matmul` call
+/// disagree about what runs. The non-float dtypes stay refused, and the
+/// three rows that deliberately did *not* widen
+/// (`ScaledDotProductAttention`/`Dot`/`Outer`, which moved to
+/// `composed_reduction` so they keep the F32_ONLY `$reduction` claim)
+/// refuse an f16 query by dtype rather than by accident.
+#[test]
+fn the_cpu_matmul_rows_admit_every_float_and_refuse_the_rest() {
+    use super::constants::FLOAT_DTYPES;
+    use incin_core::exec::{LayoutClass, MathMode, OperationIdentity, UnsupportedReason};
+    use incin_core::shapes::error::OperationKind as K;
+
+    // Every float storage dtype across the four rows that widened.
+    // Rank clears each row's floor (2 for `matmul`, 3 for `bmm`, 1 for
+    // `addmm`/`linear`); Contiguous and training are admitted by all.
+    let admitted: &[(K, DTypeId, usize)] = &[
+        (K::MatMulExact, DTypeId::BF16, 2),
+        (K::MatMulExact, DTypeId::F16, 2),
+        (K::MatMulExact, DTypeId::F32, 2),
+        (K::MatMulExact, DTypeId::F64, 2),
+        (K::BatchedMatMul, DTypeId::BF16, 3),
+        (K::BatchedMatMul, DTypeId::F16, 3),
+        (K::BatchedMatMul, DTypeId::F32, 3),
+        (K::BatchedMatMul, DTypeId::F64, 3),
+        (K::Addmm, DTypeId::BF16, 2),
+        (K::Addmm, DTypeId::F16, 2),
+        (K::Addmm, DTypeId::F32, 2),
+        (K::Addmm, DTypeId::F64, 2),
+        (K::Linear, DTypeId::BF16, 2),
+        (K::Linear, DTypeId::F16, 2),
+        (K::Linear, DTypeId::F32, 2),
+        (K::Linear, DTypeId::F64, 2),
+    ];
+    for &(operation, dtype, rank) in admitted {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank,
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        assert!(
+            !matches!(
+                support(DeviceKind::Cpu, &query),
+                SupportLevel::Unsupported(_)
+            ),
+            "CPU must admit {operation:?} at {dtype:?} rank {rank}, got {:?}",
+            support(DeviceKind::Cpu, &query)
+        );
+    }
+
+    // FLOAT_DTYPES is the whole widening: integer and boolean operands
+    // stay refused rather than riding the moved rows.
+    let refused: &[(K, DTypeId, usize)] = &[
+        (K::MatMulExact, DTypeId::I64, 2),
+        (K::MatMulExact, DTypeId::Bool, 2),
+        (K::BatchedMatMul, DTypeId::I64, 3),
+        (K::Addmm, DTypeId::I64, 2),
+        (K::Linear, DTypeId::I64, 2),
+    ];
+    for &(operation, dtype, rank) in refused {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank,
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        assert!(
+            matches!(
+                support(DeviceKind::Cpu, &query),
+                SupportLevel::Unsupported(_)
+            ),
+            "CPU must still refuse {operation:?} at {dtype:?}, got {:?}",
+            support(DeviceKind::Cpu, &query)
+        );
+    }
+
+    // The rows that did not widen stay honest: SDPA sits on f32-only
+    // `softmax`, Dot's `sum_all` always returns f32 storage, and Outer
+    // stays on the same narrow set CUDA advertises - an f16 query is
+    // refused by dtype, not by rank or layout.
+    for operation in [K::ScaledDotProductAttention, K::Dot, K::Outer] {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: DTypeId::F16.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank: descriptor_min_rank(operation),
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        assert!(
+            matches!(
+                support(DeviceKind::Cpu, &query),
+                SupportLevel::Unsupported(UnsupportedReason::DType { .. })
+            ),
+            "CPU {operation:?} must stay f32-only (moved to composed_reduction), got {:?}",
+            support(DeviceKind::Cpu, &query)
+        );
+    }
+
+    // The coarse legacy `MatMul` row has to match the exact row it stands
+    // beside: both claim FLOAT_DTYPES, neither trails the other at
+    // F32_ONLY.
+    let coarse = CPU_CAPABILITIES
+        .iter()
+        .find(|rule| rule.operation == K::MatMul)
+        .expect("CPU carries a coarse MatMul row");
+    assert_eq!(
+        coarse.dtypes, FLOAT_DTYPES,
+        "the coarse CPU MatMul row must match the exact MatMulExact row's FLOAT_DTYPES"
+    );
+}

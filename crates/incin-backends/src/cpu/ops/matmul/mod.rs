@@ -74,6 +74,33 @@ use types::MatrixView;
 // slice; it stays private to this module so only the kernels below call it.
 pub(crate) use unbatched::matmul_forward;
 
+/// Fail-closed host-side dtype gate for every CPU matmul entry, mirroring
+/// CUDA's `launch_matmul` order: a mixed pair fails `DTypeMismatch` first
+/// (one typed kernel reads both operands), then anything that is not a
+/// float fails `UnsupportedDType`. Direct callers, composed paths
+/// (`conv`/`grouped`/`addmm`), and `Route::PastAdmission` invocations all
+/// pass through here, so a non-float buffer can never reach `gemm`'s
+/// reinterpret-as-`f32` path or `from_f64_values`'s silent cast.
+fn ensure_matmul_dtypes(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<()> {
+    let lhs_dtype = lhs.buffer.dtype_id().descriptor();
+    let rhs_dtype = rhs.buffer.dtype_id().descriptor();
+    if lhs_dtype != rhs_dtype {
+        return Err(Error::DTypeMismatch {
+            operation: "matmul",
+            expected: lhs_dtype,
+            actual: rhs_dtype,
+        });
+    }
+    if !lhs_dtype.is_float() {
+        return Err(Error::UnsupportedDType {
+            dtype: lhs_dtype,
+            backend: "cpu",
+            op: "matmul",
+        });
+    }
+    Ok(())
+}
+
 // Test-only: `scalar_gemm` is otherwise private to `gemm` (only `gemm`
 // itself calls it to pick a kernel) and reached only by `tests`, so a
 // non-test build reports it unused.

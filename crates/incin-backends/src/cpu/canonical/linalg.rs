@@ -71,16 +71,26 @@ impl<D: Device> Execute<op::MatMulExact> for CpuBackendImpl<D> {
         };
         let lhs = operand(lhs, operation)?;
         let rhs = operand(rhs, operation)?;
+        // The capability row states FLOAT_DTYPES - the union across
+        // operands - so the real constraint (both sides the *same* float
+        // dtype) cannot live in the row. Mirror `GroupedMatMul`'s executor
+        // re-check below: refuse a non-float or mixed pair fail-closed
+        // before `admitted` or the kernel is consulted. Dispatch-level
+        // calls already stop earlier at the descriptor's same-dtype rule;
+        // this is the layer that answers direct `Execute` and
+        // `Route::PastAdmission` invocations.
+        let lhs_dtype = lhs.metadata().dtype();
+        let rhs_dtype = rhs.metadata().dtype();
+        if !lhs_dtype.is_float() || lhs_dtype != rhs_dtype {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: lhs_dtype,
+                },
+            ));
+        }
         for storage in [lhs, rhs] {
-            if storage.metadata().dtype() != DTypeId::F32.descriptor() {
-                return Err(BackendError::unsupported(
-                    CPU_NAME,
-                    UnsupportedReason::DType {
-                        operation,
-                        dtype: storage.metadata().dtype(),
-                    },
-                ));
-            }
             admitted(self, operation, storage, training_mode(request.context))?;
         }
         crate::cpu::ops::shape_ops::matmul_storage(lhs, rhs)

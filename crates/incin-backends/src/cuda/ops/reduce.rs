@@ -332,19 +332,21 @@ extern "C" __global__ void incin_cuda_argmax_argmin(
     int64_t* __restrict__ output,
     int in_offset,
     int reduce_dim_size,
+    int slice_stride,
     int out_numel,
     int is_argmin)
 {
     int out_idx = blockIdx.x;
     if (out_idx >= out_numel) return;
     int tid = threadIdx.x;
-    int row_start = in_offset + out_idx * reduce_dim_size;
+    int row_start = in_offset + (out_idx / slice_stride) * (reduce_dim_size * slice_stride)
+        + (out_idx % slice_stride);
     
     float best_val = is_argmin ? 1e38f : -1e38f;
     int64_t best_idx = -1;
     
     for (int i = tid; i < reduce_dim_size; i += blockDim.x) {
-        float val = input[row_start + i];
+        float val = input[row_start + i * slice_stride];
         int64_t idx = (int64_t)i;
         if (best_idx < 0) {
             best_val = val;
@@ -457,6 +459,7 @@ extern "C" __global__ void incin_cuda_welford(
     float* __restrict__ output,
     int in_offset,
     int reduce_dim_size,
+    int slice_stride,
     int out_numel,
     int unbiased,
     int is_std)
@@ -464,12 +467,13 @@ extern "C" __global__ void incin_cuda_welford(
     int out_idx = blockIdx.x;
     if (out_idx >= out_numel) return;
     int tid = threadIdx.x;
-    int row_start = in_offset + out_idx * reduce_dim_size;
+    int row_start = in_offset + (out_idx / slice_stride) * (reduce_dim_size * slice_stride)
+        + (out_idx % slice_stride);
     
     WelfordTuple acc;
     acc.count = 0; acc.mean = 0.0f; acc.m2 = 0.0f;
     for (int i = tid; i < reduce_dim_size; i += blockDim.x) {
-        float x = input[row_start + i];
+        float x = input[row_start + i * slice_stride];
         WelfordTuple curr;
         curr.count = 1; curr.mean = x; curr.m2 = 0.0f;
         acc = merge_welford(acc, curr);
@@ -626,7 +630,7 @@ pub(crate) fn launch_argmax_argmin_op(
     let function = dispatcher.get_function("reduce_ops", "incin_cuda_argmax_argmin")?;
     let stream = buffer.device.default_stream();
 
-    let (_reduce_axis, _keepdim_shape, final_shape, reduce_dim_size) = match axis {
+    let (_reduce_axis, _keepdim_shape, final_shape, reduce_dim_size, slice_stride) = match axis {
         Some(dim) => {
             if dim >= storage.shape.len() {
                 return Err(Error::Msg(format!(
@@ -635,11 +639,12 @@ pub(crate) fn launch_argmax_argmin_op(
                 )));
             }
             let (k_shape, f_shape) = reduction_shapes(&storage.shape, dim, false);
-            (dim, k_shape, f_shape, storage.shape[dim])
+            let stride = storage.shape[dim + 1..].iter().product::<usize>().max(1);
+            (dim, k_shape, f_shape, storage.shape[dim], stride)
         }
         None => {
             let total = storage.shape.iter().product::<usize>();
-            (0, vec![1], vec![], total)
+            (0, vec![1], vec![], total, 1)
         }
     };
 
@@ -663,7 +668,8 @@ pub(crate) fn launch_argmax_argmin_op(
     }
 
     let in_offset = checked_i32(storage.offset_elements, "input offset")?;
-    let reduce_dim = checked_i32(reduce_dim_size, "reduce dimension")?;
+    let reduce_dim = checked_i32(reduce_dim_size, "reduction dimension")?;
+    let slice_stride_i32 = checked_i32(slice_stride, "slice stride")?;
     let out_numel_i32 = checked_i32(out_numel, "output element count")?;
     let block_size = 256u32;
     // One block per output element, not one thread. The kernel reads its output
@@ -690,6 +696,7 @@ pub(crate) fn launch_argmax_argmin_op(
             .arg(&mut *out_u8)
             .arg(&in_offset)
             .arg(&reduce_dim)
+            .arg(&slice_stride_i32)
             .arg(&out_numel_i32)
             .arg(&is_argmin)
             .launch(config)
@@ -715,7 +722,7 @@ pub(crate) fn launch_welford_var_std(
     let function = dispatcher.get_function("reduce_ops", "incin_cuda_welford")?;
     let stream = buffer.device.default_stream();
 
-    let (final_shape, reduce_dim_size) = match axis {
+    let (final_shape, reduce_dim_size, slice_stride) = match axis {
         Some(dim) => {
             if dim >= storage.shape.len() {
                 return Err(Error::Msg(format!(
@@ -724,7 +731,12 @@ pub(crate) fn launch_welford_var_std(
                 )));
             }
             let (k_shape, f_shape) = reduction_shapes(&storage.shape, dim, keepdim);
-            (if keepdim { k_shape } else { f_shape }, storage.shape[dim])
+            let stride = storage.shape[dim + 1..].iter().product::<usize>().max(1);
+            (
+                if keepdim { k_shape } else { f_shape },
+                storage.shape[dim],
+                stride,
+            )
         }
         None => {
             let total = storage.shape.iter().product::<usize>();
@@ -735,6 +747,7 @@ pub(crate) fn launch_welford_var_std(
                     vec![]
                 },
                 total,
+                1,
             )
         }
     };
@@ -757,7 +770,8 @@ pub(crate) fn launch_welford_var_std(
     }
 
     let in_offset = checked_i32(storage.offset_elements, "input offset")?;
-    let reduce_dim = checked_i32(reduce_dim_size, "reduce dimension")?;
+    let reduce_dim = checked_i32(reduce_dim_size, "reduction dimension")?;
+    let slice_stride_i32 = checked_i32(slice_stride, "slice stride")?;
     let out_numel_i32 = checked_i32(out_numel, "output element count")?;
     let unbiased_i32 = if unbiased { 1i32 } else { 0i32 };
     let std_i32 = if is_std { 1i32 } else { 0i32 };
@@ -780,6 +794,7 @@ pub(crate) fn launch_welford_var_std(
             .arg(&mut *out_u8)
             .arg(&in_offset)
             .arg(&reduce_dim)
+            .arg(&slice_stride_i32)
             .arg(&out_numel_i32)
             .arg(&unbiased_i32)
             .arg(&std_i32)

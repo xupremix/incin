@@ -787,7 +787,7 @@ fn a_broadcast_non_contiguous_operand_matches_its_per_slice_reference() {
     }
 }
 
-/// An operand whose batch axes are broadcast on both sides at once, which
+/// Batch axes broadcast on both sides at once, which
 /// is where a batch index that ignores the coalescing the plan performs
 /// would go wrong. `[2,1,3,4]` against `[1,5,4,6]` broadcasts each
 /// operand along the axis the other one owns.
@@ -819,4 +819,224 @@ fn batch_axes_broadcast_on_both_sides_index_the_right_slices() {
             );
         }
     }
+}
+
+// --- Issue #90: CPU matmul dtype parametrization ---
+
+/// `[[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]]`.
+/// Every entry is an integer below 256, so both half formats round-trip it
+/// exactly (8-bit mantissa covers every integer up to 256) and the f16/bf16
+/// value assertions below need no tolerance.
+fn half_lhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 3],
+    )
+}
+
+fn half_rhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![3, 2],
+    )
+}
+
+fn bf16_lhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::BF16(
+            [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]
+                .iter()
+                .map(|&v| half::bf16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 3],
+    )
+}
+
+fn bf16_rhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::BF16(
+            [7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]
+                .iter()
+                .map(|&v| half::bf16::from_f32(v))
+                .collect(),
+        ),
+        vec![3, 2],
+    )
+}
+
+fn values_of(out: &CpuStorage) -> Vec<f64> {
+    (0..out.shape.iter().product::<usize>())
+        .map(|i| {
+            let mut multi = vec![0usize; out.shape.len()];
+            let mut remaining = i;
+            for axis in (0..out.shape.len()).rev() {
+                multi[axis] = remaining % out.shape[axis];
+                remaining /= out.shape[axis];
+            }
+            out.get(&multi)
+        })
+        .collect()
+}
+
+#[test]
+/// `a_contiguous_f16_matmul_computes_values_and_keeps_its_dtype`.
+fn a_contiguous_f16_matmul_computes_values_and_keeps_its_dtype() {
+    let out = matmul_impl(&half_lhs(), &half_rhs()).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype, DTypeId::F16.descriptor());
+    assert_eq!(values_of(&out), vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+/// `a_contiguous_bf16_matmul_computes_values_and_keeps_its_dtype`.
+fn a_contiguous_bf16_matmul_computes_values_and_keeps_its_dtype() {
+    let out = matmul_impl(&bf16_lhs(), &bf16_rhs()).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype, DTypeId::BF16.descriptor());
+    assert_eq!(values_of(&out), vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+/// `a_batched_f16_matmul_keeps_its_dtype`.
+///
+/// The batched path splits on dtype separately from the unbatched one
+/// (`batched_gemm`), so it is asserted separately rather than assumed to
+/// follow the unbatched half-precision result above.
+fn a_batched_f16_matmul_keeps_its_dtype() {
+    // Two batches, each multiplying by the identity, so the operand comes back.
+    let lhs = CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 2, 2],
+    );
+    let rhs = CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [1.0f32, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 2, 2],
+    );
+
+    let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+    assert_eq!(out.shape, vec![2, 2, 2]);
+    assert_eq!(out.dtype, DTypeId::F16.descriptor());
+    assert_eq!(
+        values_of(&out),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+    );
+}
+
+#[test]
+/// `matmul_refuses_a_mixed_dtype_operand_pair`.
+///
+/// The capability row states FLOAT_DTYPES - a union across operands - so
+/// the real constraint (both sides the same float dtype) cannot live in the
+/// row. `ensure_matmul_dtypes` refuses a mixed pair host-side, before any
+/// kernel runs, with the same `DTypeMismatch` CUDA's `launch_matmul`
+/// raises.
+fn matmul_refuses_a_mixed_dtype_operand_pair() {
+    let f16 = half_lhs();
+    let f32 = matrix(vec![1.0, 0.0, 0.0, 1.0, 0.0, 1.0], 3, 2);
+    let error = matmul_impl(&f16, &f32).expect_err("a mixed pair must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::DTypeMismatch {
+                operation: "matmul",
+                ..
+            }
+        ),
+        "expected a DTypeMismatch naming matmul, got {error:?}"
+    );
+
+    // Same refusal on the batched path, which has its own entry.
+    let error = batched_matmul_impl(&f16, &f32).expect_err("a mixed pair must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::DTypeMismatch {
+                operation: "matmul",
+                ..
+            }
+        ),
+        "expected a DTypeMismatch naming matmul, got {error:?}"
+    );
+}
+
+#[test]
+/// `matmul_refuses_a_non_float_operand`.
+///
+/// FLOAT_DTYPES is the honest union the row can state; a non-float buffer
+/// must never reach `gemm`'s reinterpret-as-`f32` path or
+/// `from_f64_values`'s silent cast. `ensure_matmul_dtypes` answers with a
+/// typed `UnsupportedDType` before either runs.
+fn matmul_refuses_a_non_float_operand() {
+    let i64 = CpuStorage::from_contiguous(CpuBuffer::I64(vec![1, 2, 3, 4, 5, 6]), vec![2, 3]);
+    let other = CpuStorage::from_contiguous(CpuBuffer::I64(vec![7, 8, 9, 10, 11, 12]), vec![3, 2]);
+    let error = matmul_impl(&i64, &other).expect_err("an integer operand must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::UnsupportedDType {
+                backend: "cpu",
+                op: "matmul",
+                ..
+            }
+        ),
+        "expected an UnsupportedDType naming cpu/matmul, got {error:?}"
+    );
+}
+
+#[test]
+/// `an_f16_matmul_backward_produces_f16_gradients`.
+///
+/// `tape::backward` seeds `loss.ones_like()`, which preserves dtype, so
+/// using the matmul output directly as the loss keeps the whole walk in
+/// f16: the seed is f16 ones, and the backward closures re-enter
+/// `matmul_forward` with matching f16 operands through the same
+/// `ensure_matmul_dtypes` gate. The expected gradients are integers below
+/// 256, so they round-trip f16 exactly.
+fn an_f16_matmul_backward_produces_f16_gradients() {
+    let lhs = half_lhs();
+    let rhs = half_rhs();
+    let (lhs_id, rhs_id) = (lhs.id, rhs.id);
+
+    let out = matmul_impl(&lhs, &rhs).unwrap();
+    let grads = tape::backward(&out).unwrap();
+
+    let lhs_grad = grads.get(lhs_id).expect("lhs should have a gradient");
+    let rhs_grad = grads.get(rhs_id).expect("rhs should have a gradient");
+    assert_eq!(lhs_grad.dtype, DTypeId::F16.descriptor());
+    assert_eq!(rhs_grad.dtype, DTypeId::F16.descriptor());
+
+    // grad_out = ones_like(out) = [2,2] all ones.
+    // grad_lhs = ones @ rhs^T: each row is a row-sum of rhs.
+    //   rhs rows: [7,8]→15, [9,10]→19, [11,12]→23
+    assert_eq!(lhs_grad.shape, vec![2, 3]);
+    assert_eq!(
+        values_of(lhs_grad),
+        vec![15.0, 19.0, 23.0, 15.0, 19.0, 23.0]
+    );
+
+    // grad_rhs = lhs^T @ ones: each column is a column-sum of lhs.
+    //   lhs cols: [1,4]→5, [2,5]→7, [3,6]→9
+    assert_eq!(rhs_grad.shape, vec![3, 2]);
+    assert_eq!(values_of(rhs_grad), vec![5.0, 5.0, 7.0, 7.0, 9.0, 9.0]);
 }

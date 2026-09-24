@@ -77,8 +77,9 @@ fn read_all<L: Layout<Dyn>>(
     }
 }
 
-/// f32 twin of [`tensor_for`] for operations whose CPU kernels are
-/// documented as f32-only; every oracle value involved is exactly
+/// f32 twin of [`tensor_for`] for operations this harness runs at f32: the
+/// reduction, normalization, loss, conv and pool kernels are f32-only on
+/// this backend, and every matmul oracle value involved is exactly
 /// representable in f32.
 fn tensor_for_f32(shape: &[usize], values: &[f64]) -> Tensor<Dyn, CpuBackendImpl> {
     let f32_values: Vec<f32> = values.iter().map(|&v| v as f32).collect();
@@ -183,8 +184,8 @@ fn execute_vector(vector: &ConformanceVector) -> Result<Vec<f64>> {
             Ok(vec![input.prod_all()?.to_scalar::<f32>()? as f64])
         }
         OperationKind::MatMulExact => {
-            // The CPU matmul kernel is documented as f32; both matrix rows
-            // and their products are exactly representable in f32.
+            // Both matrix rows and their products are exactly representable
+            // in f32, which is the precision this harness runs them at.
             let lhs = tensor_for_f32(vector.input_shapes[0], vector.inputs[0]);
             let rhs = tensor_for_f32(vector.input_shapes[1], vector.inputs[1]);
             let out = lhs.matmul(&rhs)?;

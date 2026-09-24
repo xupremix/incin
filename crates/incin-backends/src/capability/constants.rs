@@ -51,6 +51,25 @@ pub(super) const CUDA_BOOL_SAFE_STORAGE_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::Bool.descriptor(),
 ];
 pub(super) const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
+/// Storage dtypes a WGPU allocation can honestly hold and round-trip:
+/// `f32` compute storage, `bool` as a physical `f32` of 0.0/1.0 (WGSL
+/// storage buffers cannot hold `bool`), and the integer widths the indexing
+/// paths need for index operands (`u8`/`u32`/`i64` at their own physical
+/// widths).
+///
+/// Deliberately a separate constant rather than widening `F32_ONLY`: the
+/// fill/random creation paths still build a host `Vec<f32>` regardless of
+/// the requested dtype, so `Zeros`/`Ones`/`Full` and the sampling rows stay
+/// on `F32_ONLY` and only `Storage` (allocation/`to_bytes`/`from_bytes`),
+/// `TensorFromData`/`TensorFromBytes`, and the indexing capability rows
+/// below draw from this wider set.
+pub(super) const WGPU_STORAGE_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
+    DTypeId::I64.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::Bool.descriptor(),
+];
 /// The union of `where_cond`'s/`masked_fill`'s value dtype and their `bool`
 /// mask operand's, for the same reason `INDEX_AND_F32_DTYPES` exists:
 /// `dispatch::execute` (`crates/incin-core/src/exec/dispatch.rs`'s

@@ -32,11 +32,19 @@
 //! fail closed with an error rather than silently computing the product
 //! *without* the epilogue.
 //!
-//! Rank > 2 never reaches this module as a batched request: it is composed
-//! by `batched_matmul`, which narrows the batch axes away and re-enters the
-//! rank-2 path per slice, so each constituent product may be served here
-//! while the batched request itself never becomes a strided-batched
-//! cuBLASLt configuration.
+//! # Batched requests (issue #85, `cuda-vendor` only)
+//!
+//! [`try_launch_batched_matmul`] serves plain rank-3 x rank-3 products with
+//! an equal contiguous batch as one strided-batched cuBLASLt call: the
+//! matrix layouts carry `CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT` and
+//! `CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET`, so cuBLASLt iterates the
+//! batch itself. Its policy ([`batched_gemm_request_fits`]) is stricter
+//! than the native plan's - no batch broadcast (a stride-0 read), no rank
+//! deficit - because the native path in `matmul.rs` covers those; this
+//! module only claims the shape where the vendor library is the straight
+//! win. `Ok(None)` means the request does not fit, and the caller keeps
+//! its existing path (the orchestrator then offers the native batched
+//! launch, falling back to the composed loop only if that refuses too).
 //!
 //! # Compute type
 //!
@@ -89,11 +97,11 @@ use cudarc::cublaslt::{
 };
 use cudarc::driver::{CudaSlice, DevicePtr, DevicePtrMut};
 
-use super::alloc_zeroed_bytes;
+use super::{OperandMeta, alloc_zeroed_bytes};
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
-use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
+use incin_core::tensor::dtype::DTypeId;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -117,28 +125,10 @@ static STATES: OnceLock<Mutex<BTreeMap<usize, Arc<CublasLtState>>>> = OnceLock::
 /// failures deliberately do not set it: another shape may still succeed.
 static UNAVAILABLE: AtomicBool = AtomicBool::new(false);
 
-/// Host-side metadata [`gemm_request_fits`] and [`bias_request_fits`] decide
-/// on, borrowed from a storage without touching the device.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct OperandMeta<'a> {
-    dtype: DTypeDescriptor,
-    device_id: usize,
-    shape: &'a [usize],
-    strides: &'a [usize],
-    offset: usize,
-}
-
-impl<'a> OperandMeta<'a> {
-    fn of(storage: &'a CudaStorage) -> Self {
-        Self {
-            dtype: storage.buffer.dtype,
-            device_id: storage.buffer.device_id,
-            shape: storage.shape.dims(),
-            strides: storage.strides.strides(),
-            offset: storage.offset_elements(),
-        }
-    }
-}
+// Host-side metadata for the fit policies lives next to their other
+// consumer (`matmul`'s native batch plan) in `ops/mod.rs`: one
+// `OperandMeta` type, one `of` constructor, both policies reading the
+// same borrowed fields.
 
 /// Whether a plain product request fits the cuBLASLt path of issue #85.
 ///
@@ -591,9 +581,297 @@ pub(crate) fn try_launch_matmul(
     CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0).map(Some)
 }
 
+/// Whether a plain *batched* product request fits the cuBLASLt path of
+/// issue #85: `f32` on both operands of the same device, rank 3 each, an
+/// equal nonzero batch, matching inner dimensions, no zero extent, fully
+/// row-major contiguous at offset zero. Anything else - a batch broadcast
+/// (stride-0 read), a rank deficit, a strided or offset view - returns
+/// false so the orchestrator keeps the native batched plan or the composed
+/// loop; refusing is never a regression, only a missed vendor opportunity.
+/// Pure and host-side so the policy is unit-testable without a GPU.
+pub(crate) fn batched_gemm_request_fits(lhs: &OperandMeta<'_>, rhs: &OperandMeta<'_>) -> bool {
+    let f32 = DTypeId::F32.descriptor();
+    if lhs.dtype != f32 || rhs.dtype != f32 {
+        return false;
+    }
+    if lhs.device_id != rhs.device_id {
+        return false;
+    }
+    if lhs.offset != 0 || rhs.offset != 0 {
+        return false;
+    }
+    if lhs.shape.len() != 3 || rhs.shape.len() != 3 {
+        return false;
+    }
+    let batch = lhs.shape[0];
+    if batch == 0 || rhs.shape[0] != batch {
+        return false;
+    }
+    let m = lhs.shape[1];
+    let k = lhs.shape[2];
+    let n = rhs.shape[2];
+    if m == 0 || k == 0 || n == 0 || k != rhs.shape[1] {
+        return false;
+    }
+    is_contiguous_rank_three(lhs) && is_contiguous_rank_three(rhs)
+}
+
+/// Row-major contiguity for a rank-3 operand: strides `[m*k, k, 1]`,
+/// exactly what `StrideBuf::contiguous_for` produces for the shape.
+fn is_contiguous_rank_three(operand: &OperandMeta<'_>) -> bool {
+    operand.strides.len() == 3
+        && operand.strides[2] == 1
+        && operand.strides[1] == operand.shape[2]
+        && operand.shape[1].checked_mul(operand.shape[2]) == Some(operand.strides[0])
+}
+
+/// Checked element count of one batch slice, for the strided-batch offsets.
+fn slice_elements(a: usize, b: usize, field: &str) -> Result<usize> {
+    a.checked_mul(b)
+        .ok_or_else(|| Error::Msg(format!("cuBLASLt {field} slice overflows usize: {a} * {b}")))
+}
+
+/// Runs one strided-batched `f32` GEMM through cuBLASLt (issue #85).
+///
+/// `lhs` is `[B, M, K]`, `rhs` is `[B, K, N]`, the product is `[B, M, N]`.
+/// The caller owns the shape contract - this function additionally
+/// enforces [`batched_gemm_request_fits`]. The row-major derivation is the
+/// same `Cᵀ = Bᵀ · Aᵀ` identity the plain launcher documents; the batch
+/// rides the layouts as a count plus an element stride per operand
+/// (`k*n` on the rhs-turned-A, `m*k` on the lhs-turned-B, `m*n` on the
+/// output), so cuBLASLt walks the batch itself - one host-side call, no
+/// launch loop.
+///
+/// # Return contract
+///
+/// - `Ok(Some(product))` - cuBLASLt computed every slice of the batch.
+/// - `Ok(None)` - the request does not fit [`batched_gemm_request_fits`];
+///   the caller keeps its native batched plan or composed loop, which
+///   compute the same values.
+/// - `Err(..)` - the request fit but cuBLASLt failed (handle, heuristic,
+///   launch) or a host-side extent did not convert. Plain callers may fall
+///   back: the batched kernels compute the identical product. The
+///   orchestrator in `matmul.rs` treats `Err` exactly like `Ok(None)` for
+///   that reason; a direct caller (the hardware tests) sees the real error
+///   instead of a silent miss.
+pub(crate) fn try_launch_batched_matmul(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+) -> Result<Option<CudaStorage>> {
+    let lhs_meta = OperandMeta::of(lhs);
+    let rhs_meta = OperandMeta::of(rhs);
+    if !batched_gemm_request_fits(&lhs_meta, &rhs_meta) {
+        return Ok(None);
+    }
+    let (batch, m, k, n) = (lhs.shape[0], lhs.shape[1], lhs.shape[2], rhs.shape[2]);
+
+    let state = cublaslt_state(lhs_meta.device_id, &lhs.buffer.device.default_stream())?;
+    let stream = lhs.buffer.device.default_stream();
+
+    let m_u64 = extent(m, "row count")?;
+    let k_u64 = extent(k, "inner dimension")?;
+    let n_u64 = extent(n, "column count")?;
+    let k_i64 = leading(k, "inner dimension")?;
+    let n_i64 = leading(n, "column count")?;
+    let batch_i32 = i32::try_from(batch)
+        .map_err(|_| Error::Msg(format!("cuBLASLt batch count out of i32 range: {batch}")))?;
+    // Element strides between consecutive batch slices, in the col-major
+    // call's operand order (A = rhs, B = lhs, C = output - see the module
+    // doc's row-major derivation).
+    let a_stride = leading(slice_elements(k, n, "rhs")?, "rhs batch stride")?;
+    let b_stride = leading(slice_elements(m, k, "lhs")?, "lhs batch stride")?;
+    let c_stride = leading(slice_elements(m, n, "output")?, "output batch stride")?;
+
+    let out_shape = alloc::vec![batch, m, n];
+    let total = ShapeBuf::from_slice(&out_shape).checked_numel(OperationKind::MatMul)?;
+    let mut out_b = CudaBuffer {
+        len: total,
+        dtype: lhs.buffer.dtype,
+        data: Arc::new(alloc_zeroed_bytes(
+            &stream,
+            lhs.buffer.dtype,
+            total,
+            OperationKind::MatMul,
+        )?),
+        device: lhs.buffer.device.clone(),
+        device_id: lhs_meta.device_id,
+    };
+
+    // Same row-major derivation as the plain launcher, three times over:
+    // A[batch, N, K] = rhs, B[batch, K, M] = lhs, C[batch, N, M] = output.
+    let a_layout = MatrixLayout(
+        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, n_u64, k_u64, n_i64)
+            .map_err(lt_error)?,
+    );
+    let b_layout = MatrixLayout(
+        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, k_u64, m_u64, k_i64)
+            .map_err(lt_error)?,
+    );
+    let c_layout = MatrixLayout(
+        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, n_u64, m_u64, n_i64)
+            .map_err(lt_error)?,
+    );
+    // The batch itself: count plus element stride on each layout, the
+    // strided-batched configuration cuBLASLt walks without the host
+    // launching per slice.
+    for (layout, stride) in [
+        (a_layout.0, a_stride),
+        (b_layout.0, b_stride),
+        (c_layout.0, c_stride),
+    ] {
+        // SAFETY: the handle was created a few lines above by
+        // `result::create_matrix_layout` and is kept alive by its RAII
+        // guard; `batch_i32` and `stride` are plain host-side integers
+        // whose addresses and sizes (`i32`, `i64`) match what
+        // `cublasLtMatrixLayoutSetAttribute` reads for `BATCH_COUNT` and
+        // `STRIDED_BATCH_OFFSET`.
+        unsafe {
+            result::set_matrix_layout_attribute(
+                layout,
+                sys::cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
+                (&batch_i32 as *const i32).cast::<c_void>(),
+                mem::size_of::<i32>(),
+            )
+            .map_err(lt_error)?;
+            result::set_matrix_layout_attribute(
+                layout,
+                sys::cublasLtMatrixLayoutAttribute_t::CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
+                (&stride as *const i64).cast::<c_void>(),
+                mem::size_of::<i64>(),
+            )
+            .map_err(lt_error)?;
+        }
+    }
+    let desc = MatmulDesc(
+        result::create_matmul_desc(
+            sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
+            sys::cudaDataType_t::CUDA_R_32F,
+        )
+        .map_err(lt_error)?,
+    );
+    let pref = MatmulPref(result::create_matmul_pref().map_err(lt_error)?);
+
+    let (lhs_ptr, _lhs_sync) = lhs.buffer.data.device_ptr(&stream);
+    let (rhs_ptr, _rhs_sync) = rhs.buffer.data.device_ptr(&stream);
+    let (out_ptr, _out_sync) = {
+        // out_b.data was allocated immediately above and never cloned, so
+        // it stays uniquely owned (refcount 1) here - Arc::get_mut succeeds
+        // without cloning first.
+        let out_u8: &mut CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
+            .expect("out_b.data is freshly allocated and uniquely owned here");
+        out_u8.device_ptr_mut(&stream)
+    };
+    let (workspace_ptr, _workspace_sync) = state.workspace.device_ptr(&stream);
+
+    let transpose_off = 0i32;
+    // SAFETY: same handle-liveness and host-value argument as the plain
+    // launcher's attribute block: every descriptor was created above and is
+    // owned by its guard, the attribute values are plain integers read
+    // synchronously, and no epilogue pointer is involved on this path.
+    unsafe {
+        for (attr, value) in [
+            (
+                sys::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_TRANSA,
+                transpose_off,
+            ),
+            (
+                sys::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_TRANSB,
+                transpose_off,
+            ),
+            (
+                sys::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_TRANSC,
+                transpose_off,
+            ),
+        ] {
+            result::set_matmul_desc_attribute(
+                desc.0,
+                attr,
+                (&value as *const i32).cast::<c_void>(),
+                mem::size_of::<i32>(),
+            )
+            .map_err(lt_error)?;
+        }
+        result::set_matmul_desc_attribute(
+            desc.0,
+            sys::cublasLtMatmulDescAttributes_t::CUBLASLT_MATMUL_DESC_EPILOGUE,
+            (&sys::cublasLtEpilogue_t::CUBLASLT_EPILOGUE_DEFAULT as *const sys::cublasLtEpilogue_t)
+                .cast::<c_void>(),
+            mem::size_of::<sys::cublasLtEpilogue_t>(),
+        )
+        .map_err(lt_error)?;
+        result::set_matmul_pref_attribute(
+            pref.0,
+            sys::cublasLtMatmulPreferenceAttributes_t::CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+            (&state.workspace_size as *const usize).cast::<c_void>(),
+            mem::size_of::<usize>(),
+        )
+        .map_err(lt_error)?;
+    }
+
+    // SAFETY: `desc`, all three (now batched) layouts, and `pref` were
+    // created above and are still owned by their guards; the layouts
+    // describe live allocations of exactly the shapes passed in (the
+    // fits policy proved rank-3 contiguity and the output allocation
+    // covers `batch * m * n` elements).
+    let heuristic = unsafe {
+        result::get_matmul_algo_heuristic(
+            *state.blas.handle(),
+            desc.0,
+            a_layout.0,
+            b_layout.0,
+            c_layout.0,
+            c_layout.0,
+            pref.0,
+        )
+    }
+    .map_err(lt_error)?;
+
+    let alpha = 1.0f32;
+    let beta = 0.0f32;
+    // SAFETY: all descriptor handles are the same live guards as above;
+    // the operand, output, and workspace addresses come from `device_ptr` /
+    // `device_ptr_mut` calls made on this stream a few lines earlier, so
+    // the driver has synchronized their prior writes and the `SyncOnDrop`
+    // records are still in scope; `alpha`/`beta` are host-side values read
+    // synchronously; the batch count and strides travel inside the layouts,
+    // so this call itself is the same shape as the plain one.
+    unsafe {
+        result::matmul(
+            *state.blas.handle(),
+            desc.0,
+            (&alpha as *const f32).cast::<c_void>(),
+            (&beta as *const f32).cast::<c_void>(),
+            rhs_ptr as *const c_void,
+            a_layout.0,
+            lhs_ptr as *const c_void,
+            b_layout.0,
+            out_ptr as *const c_void,
+            c_layout.0,
+            out_ptr as *mut c_void,
+            c_layout.0,
+            &heuristic.algo as *const _,
+            workspace_ptr as *mut c_void,
+            state.workspace_size,
+            stream.cu_stream() as *mut _,
+        )
+        .map_err(lt_error)?;
+    }
+
+    // Release the exclusive borrow of `out_b.data` (same point cudarc's
+    // own path reaches when its records go out of scope) so the buffer can
+    // move into the storage below.
+    drop(_out_sync);
+
+    let strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
+    CudaStorage::try_from_parts(Arc::new(out_b), out_shape, strides, 0).map(Some)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use incin_core::tensor::dtype::DTypeDescriptor;
 
     fn meta<'a>(
         dtype: DTypeDescriptor,

@@ -1164,3 +1164,78 @@ fn topk_returns_its_values_in_the_dtype_it_read_them_in() {
     );
     assert!(matches!(&*values.buffer, CpuBuffer::F64(held) if held == &vec![4.0, 3.0]));
 }
+
+// --- Issue #90: CPU matmul dtype parametrization through dispatch ---
+
+fn f16_storage(values: &[f32], shape: &[usize]) -> CpuStorage {
+    CpuStorage::try_from_contiguous(
+        CpuBuffer::F16(values.iter().map(|&v| half::f16::from_f32(v)).collect()),
+        shape,
+    )
+    .expect("test storage must be well formed")
+}
+
+fn f16_handle(storage: &CpuStorage) -> TensorHandle<'_> {
+    TensorHandle::from_storage::<TestBackend, half::f16, Local>(storage)
+}
+
+#[test]
+/// `dispatch_admits_an_f16_matmul`.
+///
+/// The capability row widened to FLOAT_DTYPES, the descriptor already
+/// accepts any same-dtype float pair, and the executor's pair check passes
+/// when both operands agree - so a full `dispatch::execute` must run the
+/// product and hand back f16 storage, not refuse at admission.
+fn dispatch_admits_an_f16_matmul() {
+    let context = context();
+    // [[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]].
+    let lhs = f16_storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+    let rhs = f16_storage(&[7.0, 8.0, 9.0, 10.0, 11.0, 12.0], &[3, 2]);
+
+    let out = dispatch::execute::<op::MatMulExact, _>(
+        &context,
+        NoAttributes,
+        &[f16_handle(&lhs), f16_handle(&rhs)],
+    )
+    .expect("an f16 matmul is one of the dtypes the row advertises");
+
+    assert_eq!(out.shape.to_vec(), vec![2, 2]);
+    assert_eq!(out.buffer.dtype_id(), DTypeId::F16);
+    assert_eq!(out.get(&[0, 0]), 58.0);
+    assert_eq!(out.get(&[0, 1]), 64.0);
+    assert_eq!(out.get(&[1, 0]), 139.0);
+    assert_eq!(out.get(&[1, 1]), 154.0);
+}
+
+#[test]
+/// `dispatch_refuses_a_mixed_dtype_matmul_at_the_descriptor`.
+///
+/// FLOAT_DTYPES is the union the single capability row can state; the
+/// equality constraint (both operands the same float dtype) lives one layer
+/// earlier, in the descriptor's same-dtype rule, and answers before the
+/// executor or the kernel is ever consulted. The message has to name that
+/// reason so a caller is not left guessing which operand to convert.
+fn dispatch_refuses_a_mixed_dtype_matmul_at_the_descriptor() {
+    let context = context();
+    let lhs = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+    let rhs = CpuStorage::try_from_contiguous(
+        CpuBuffer::F64(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]),
+        vec![3, 2],
+    )
+    .expect("test storage must be well formed");
+
+    let error = dispatch::execute::<op::MatMulExact, _>(
+        &context,
+        NoAttributes,
+        &[
+            handle(&lhs),
+            TensorHandle::from_storage::<TestBackend, f64, Local>(&rhs),
+        ],
+    )
+    .expect_err("a mixed f32/f64 pair must be refused before execution");
+    let message = format!("{error}");
+    assert!(
+        message.contains("same dtype"),
+        "the refusal must name the same-dtype reason, not just fail: {message}"
+    );
+}

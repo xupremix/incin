@@ -687,7 +687,7 @@ fn matmul_metal(lhs: &MetalStorage, rhs: &MetalStorage) -> Result<MetalStorage> 
     MetalStorage::from_bytes(out_bytes, meta, lhs.mode(), lhs.device_ordinal())
 }
 
-fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
+pub(super) fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
     let numel = storage
         .metadata()
         .shape()

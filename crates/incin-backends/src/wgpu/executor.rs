@@ -1118,14 +1118,6 @@ impl<D: Device> Execute<op::BatchNorm> for WgpuBackendImpl<D> {
     ) -> Result<WgpuStorage, BackendError> {
         let operation = OperationKind::BatchNorm;
         let attributes = request.operation.descriptor().attributes();
-        if attributes.training {
-            return Err(invalid(
-                operation,
-                "WGPU batch norm supports inference mode only; training-mode batch \
-                 statistics have no kernel here and returning the inference answer \
-                 instead would be indistinguishable from a correct one",
-            ));
-        }
         let Some((input, optional)) = request.inputs.split_first() else {
             return Err(invalid(operation, "batch norm expects at least the input"));
         };
@@ -1141,12 +1133,6 @@ impl<D: Device> Execute<op::BatchNorm> for WgpuBackendImpl<D> {
                 "batch norm was given more operands than its presence flags account for",
             ));
         }
-        let (Some(running_mean), Some(running_variance)) = (running_mean, running_variance) else {
-            return Err(invalid(
-                operation,
-                "inference batch norm needs a running mean and a running variance",
-            ));
-        };
         let input = input
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
@@ -1162,6 +1148,21 @@ impl<D: Device> Execute<op::BatchNorm> for WgpuBackendImpl<D> {
                     .ok_or_else(|| invalid(operation, "bias is not WGPU storage"))
             })
             .transpose()?;
+        if attributes.training {
+            return WgpuBackendImpl::<D>::batch_norm_training::<f32>(
+                input,
+                weight,
+                bias,
+                attributes.epsilon,
+            )
+            .map_err(|e| kernel_error("Wgpu", operation, e));
+        }
+        let (Some(running_mean), Some(running_variance)) = (running_mean, running_variance) else {
+            return Err(invalid(
+                operation,
+                "inference batch norm needs a running mean and a running variance",
+            ));
+        };
         let running_mean = running_mean
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "running mean is not WGPU storage"))?;
@@ -1234,6 +1235,29 @@ impl_wgpu_loss![
     (L1Loss, l1_loss),
     (BceWithLogitsLoss, bce_with_logits_loss)
 ];
+
+impl<D: Device> Execute<op::CrossEntropyLoss> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::CrossEntropyLoss, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::CrossEntropyLoss;
+        let [logits, target] = request.inputs else {
+            return Err(invalid(operation, "cross_entropy_loss expects 2 inputs"));
+        };
+        let logits = logits
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "logits is not WGPU storage"))?;
+        let target = target
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "target is not WGPU storage"))?;
+        let reduction = wgpu_loss_reduction(request.operation.descriptor().attributes().reduction);
+        WgpuBackendImpl::<D>::cross_entropy_loss(logits, target, reduction)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
 
 macro_rules! impl_wgpu_variance_all {
     ($(($op:ident, $unbiased:literal, $square_root:literal)),* $(,)?) => {$(

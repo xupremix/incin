@@ -173,3 +173,79 @@ extern "C" __global__ void matmul_bf16(
     __shared__ float sB[BK * BN];
     matmul_impl<__nv_bfloat16, float>(A, B, C, M, K, N, sA, sB);
 }
+
+// Batched body (issue #85): one launch serves the whole batch. The slice
+// index is `blockIdx.z` - so the grid's z extent caps a batch at 65535
+// slices, and the launcher refuses larger batches rather than wrapping -
+// and each operand's distance between consecutive slices is an explicit
+// element stride. A stride of 0 reads the same matrix for every slice,
+// which is exactly the batch-broadcast case, so a shared batch axis never
+// needs a materialized copy. Every slice reuses `matmul_impl` unchanged,
+// so a batched slice accumulates bit-for-bit like the unbatched kernel.
+template <typename In, typename Acc>
+__device__ void matmul_batched_impl(
+    const In* A, const In* B, In* C,
+    int M, int K, int N,
+    long long strideA, long long strideB, long long strideC,
+    Acc* sA, Acc* sB
+) {
+    const long long batch = (long long)blockIdx.z;
+    matmul_impl<In, Acc>(
+        A + batch * strideA,
+        B + batch * strideB,
+        C + batch * strideC,
+        M, K, N, sA, sB
+    );
+}
+
+// Batched entry points, one per storage dtype the unbatched kernel exports.
+// The launcher selects by operand dtype through the same fail-closed mapping
+// as the unbatched names: it launches exactly the name it selected.
+
+extern "C" __global__ void matmul_batched(
+    const float* A, const float* B, float* C,
+    int M, int K, int N,
+    long long strideA, long long strideB, long long strideC
+) {
+    __shared__ float sA[BM * BK];
+    __shared__ float sB[BK * BN];
+    matmul_batched_impl<float, float>(
+        A, B, C, M, K, N, strideA, strideB, strideC, sA, sB
+    );
+}
+
+extern "C" __global__ void matmul_batched_f64(
+    const double* A, const double* B, double* C,
+    int M, int K, int N,
+    long long strideA, long long strideB, long long strideC
+) {
+    __shared__ double sA[BM * BK];
+    __shared__ double sB[BK * BN];
+    matmul_batched_impl<double, double>(
+        A, B, C, M, K, N, strideA, strideB, strideC, sA, sB
+    );
+}
+
+extern "C" __global__ void matmul_batched_f16(
+    const __half* A, const __half* B, __half* C,
+    int M, int K, int N,
+    long long strideA, long long strideB, long long strideC
+) {
+    __shared__ float sA[BM * BK];
+    __shared__ float sB[BK * BN];
+    matmul_batched_impl<__half, float>(
+        A, B, C, M, K, N, strideA, strideB, strideC, sA, sB
+    );
+}
+
+extern "C" __global__ void matmul_batched_bf16(
+    const __nv_bfloat16* A, const __nv_bfloat16* B, __nv_bfloat16* C,
+    int M, int K, int N,
+    long long strideA, long long strideB, long long strideC
+) {
+    __shared__ float sA[BM * BK];
+    __shared__ float sB[BK * BN];
+    matmul_batched_impl<__nv_bfloat16, float>(
+        A, B, C, M, K, N, strideA, strideB, strideC, sA, sB
+    );
+}

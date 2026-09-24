@@ -107,7 +107,7 @@ selected device and returns a `Result`. This establishes dtype support, not
 support for every operation using that dtype. Allocations and operations
 still validate their own requests and can fail later. The tensor carries
 `f16` in its type, but that alone does not turn a missing `f16` kernel into a
-compile error: CPU `f16` allocation is supported while CPU `f16` matmul is
+compile error: CPU `f16` allocation is supported while an `f16` reduction is
 refused at runtime. Missing trait implementations can instead make an
 operation unavailable at compile time.
 

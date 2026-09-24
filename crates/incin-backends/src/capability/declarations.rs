@@ -196,14 +196,16 @@ macro_rules! cpu_descriptor_operations {
                 // its output as an associated type.
                 Chunk, Split
             ],
-            composed_matmul = [
-                BatchedMatMul, Addmm, ScaledDotProductAttention,
-                // A dot is a multiply and an all-reduce; an outer product is
-                // two unsqueezes and a broadcast multiply. Neither has a kernel,
-                // and both inherit the matmul constraint rather than the wider
-                // tensor one because that is what the reduce behind them holds.
-                Dot, Outer
-            ],
+            // Issue #90: `BatchedMatMul` and `Addmm` rewrite into the widened
+            // matmul kernel and inherit FLOAT_DTYPES through `$matmul`.
+            // `ScaledDotProductAttention`/`Dot`/`Outer` moved to
+            // `composed_reduction` so they keep the F32_ONLY row
+            // `$reduction` states - see that group's note. Leaving them here
+            // would have advertised half-precision attention (whose second
+            // matmul meets f32 `softmax` scores against the value operand and
+            // fails the same-dtype guard) and a `Dot` whose `sum_all` always
+            // returns f32 storage under an f16 label.
+            composed_matmul = [BatchedMatMul, Addmm],
             // `linear` rewrites into a transpose and a matmul, so it inherits
             // the matmul constraint. It is a group of its own rather than a
             // name in the one above because the operations there carry no bias,
@@ -241,7 +243,19 @@ macro_rules! cpu_descriptor_operations {
                 // in an all-reduce or an axis reduce.
                 VarianceAll, VarianceDim, VarianceKeepDim,
                 StdAll, StdDim, StdKeepDim,
-                Norm
+                Norm,
+                // Issue #90: these three share this group's rule shape exactly
+                // (F32_ONLY via `$reduction`, CPU_LAYOUTS, Composed, training)
+                // and only sat in `composed_matmul` while that group also
+                // carried F32_ONLY. Widening `$matmul` to FLOAT_DTYPES would
+                // have over-advertised them: `ScaledDotProductAttention`
+                // rewrites through f32-only `softmax`, so its second matmul
+                // meets f32 scores against the value operand and fails the
+                // same-dtype guard; `Dot`'s `sum_all` always returns f32
+                // storage, so an f16 result would be a mislabel; `Outer` stays
+                // on the same narrow set CUDA advertises for it.
+                ScaledDotProductAttention,
+                Dot, Outer
             ],
             // The composed reductions whose operands split into a float and an
             // integer index, which is the one thing keeping them out of the
@@ -307,7 +321,7 @@ macro_rules! cuda_descriptor_operations {
                 SumAll, MeanAll, MaxAll, MinAll, ProdAll,
                 SumDim, SumKeepDim, MeanDim, MeanKeepDim,
                 MaxDim, MaxKeepDim, MinDim, MinKeepDim, ProdDim,
-                TopK, LogSumExpDim, LogSumExpKeepDim,
+                LogSumExpDim, LogSumExpKeepDim,
                 // Issue #90: `matmul.cu` now exports one GEMM entry per
                 // float storage dtype, so `MatMulExact` needs this group's
                 // wider FLOAT_DTYPES row rather than the `matmul` group's
@@ -339,8 +353,20 @@ macro_rules! cuda_descriptor_operations {
             // way `EmbeddingExact`'s does; its f64-accumulated value operands
             // and dropped out-of-range writes live in the executor.
             embedding = [EmbeddingExact, OneHot, Bincount, ScatterAdd],
+            // Issue #87: `TopK` leaves `reduction` and the six Welford
+            // `var`/`std` rows leave `composed_reduction` because both now
+            // sit on f32-only kernels (`incin_cuda_topk`,
+            // `incin_cuda_welford` take `const float* input`). A group is a
+            // rule shape, so they belong with the other f32-only native
+            // tensor rows here - dtype set is the only difference from the
+            // groups they left, and that is exactly the shape this group
+            // already encodes. `descriptor_training` still answers true for
+            // the `var`/`std` rows (they record a tape entry from the
+            // backend method) and false for `TopK`/`Argsort`, same as before.
             native_tensor = [
                 ArgMax, ArgMin, Argsort, Cumsum, Sort,
+                TopK, VarianceAll, VarianceDim, VarianceKeepDim,
+                StdAll, StdDim, StdKeepDim,
                 Maximum, Minimum, AbsDiff, Lerp, MaskedFill, WhereCond,
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
                 TransposeExact, TransposeView, Narrow, Triu, Tril, Diag,
@@ -372,8 +398,9 @@ macro_rules! cuda_descriptor_operations {
             composed_reduction = [
                 MseLoss, L1Loss, BceWithLogitsLoss,
                 InstanceNorm,
-                VarianceAll, VarianceDim, VarianceKeepDim,
-                StdAll, StdDim, StdKeepDim,
+                // Issue #87: the six `Variance*`/`Std*` rows moved to
+                // `native_tensor` - the Welford kernel is f32-only, so the
+                // FLOAT_DTYPES inheritance here overstated the claim.
                 Norm,
                 // Issue #90: these three matched this group's rule shape
                 // exactly and only sat in the matmul groups while those
@@ -457,19 +484,38 @@ macro_rules! wgpu_descriptor_operations {
                 LogSumExpDim, LogSumExpKeepDim
             ],
             spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
+            // Issue #90 audit: this group and the two composed matmul groups
+            // below keep the table's `F32_ONLY` `$matmul` while CPU/CUDA
+            // widened to `FLOAT_DTYPES`. `matmul.wgsl` is `array<f32>`
+            // throughout and `device.rs` requests `Features::empty()` (no
+            // `SHADER_F16` query), so a wider claim here would advertise
+            // half/double storage no kernel reads; see the `matmul`
+            // parameter's note in `tables.rs`.
             matmul = [MatMulExact],
             // The whole normalization family WGPU can answer by rewriting into
             // taped primitives: `softmax` (already had an Execute impl via the
             // axis macro), `rms_norm` (mul/mean/sqrt/div), `layer_norm` (add
             // the mean-center step and an optional affine bias), `group_norm`
-            // (reshape to runs, same statistical path, reshape back) and
-            // inference-mode `batch_norm` (running statistics only — training
-            // mode is refused by name in the executor because there is no
-            // batch-statistics kernel here). `LogSoftmax` joins in batch C:
-            // the stable max/sub/exp/sum/log chain over the same axis-macro
-            // request shape Softmax already rides.
+            // (reshape to runs, same statistical path, reshape back),
+            // `batch_norm` (inference rides the running-statistics path;
+            // training rides `sum_keepdim` over every non-channel axis so
+            // the batch-statistics path reaches the gradient, CPU's
+            // `batch_norm_training_impl` composition) and `instance_norm`
+            // (group_norm with one group per channel). `LogSoftmax` joins
+            // in batch C: the stable max/sub/exp/sum/log chain over the
+            // same axis-macro request shape Softmax already rides.
             normalization = [Softmax, LogSoftmax, LayerNorm, BatchNorm, RmsNorm, GroupNorm],
-            embedding = [],
+            // `embedding` runs through a host-walk forward and a scatter-add
+            // backward in `wgpu/backend/indexing.rs`, matching
+            // `cpu::ops::embedding`'s recipe exactly (ONE TapeEntry,
+            // `input_ids = vec![w.id]`, accumulate-not-overwrite for repeated
+            // indices). The row states `INDEX_AND_F32_DTYPES` via the shared
+            // `embedding_dtypes` parameter — the union of the integer index
+            // operand and the f32 weight table — because
+            // `dispatch::execute` applies one dtype set to every operand;
+            // the descriptor's own per-operand contract refuses a non-integer
+            // index or a non-f32 weight before this row is consulted.
+            embedding = [EmbeddingExact],
             // Advertised now that each has an executor and a gradient path.
             // The comparison and logical modes of the same shader stay
             // unadvertised on purpose: they write 0.0/1.0 into an f32 buffer,
@@ -525,6 +571,10 @@ macro_rules! wgpu_descriptor_operations {
             // and a broadcast multiply) and `scaled_dot_product_attention`
             // (transpose-k, matmul, scale, optional additive mask, softmax on
             // the last axis, matmul with v) — both pure taped compositions.
+            // Issue #90: unlike CPU/CUDA, none of these moved to
+            // `composed_reduction` - this backend's `$matmul` never widened
+            // past `F32_ONLY`, so the group already states the honest row
+            // for all five (and for `Linear` in its bias group beside it).
             composed_matmul = [
                 BatchedMatMul, Addmm, Dot,
                 Outer, ScaledDotProductAttention
@@ -535,11 +585,16 @@ macro_rules! wgpu_descriptor_operations {
             // Losses and moments composed from sub/mul/abs and an all- or
             // axis-reduce, exactly CPU's recipes, so each inherits this
             // backend's f32-only contiguous reduction claim honestly.
-            // `CrossEntropyLoss` stays unadvertised: it needs an integer
-            // class-target gather this backend has no path for.
             // Batch C adds `bce_with_logits_loss` (max(x,0) - x*z + softplus
             // with the custom 0.5 slope at the kink) and `instance_norm`
             // (group_norm with one group per channel).
+            // `CrossEntropyLoss` rides `composed_reduction_indexed`: its
+            // integer class-target operand means the row states the union
+            // `INDEX_AND_F32_DTYPES` (f32 logits + integer targets), the
+            // same widened claim `embedding` carries. The path is CPU's
+            // composition — `log_softmax`, a tape-tracked `gather` of the
+            // target class, negate, reduce — and the gather's scatter-based
+            // backward is what carries the gradient into the logits.
             composed_reduction = [
                 MseLoss, L1Loss, BceWithLogitsLoss,
                 VarianceAll, VarianceDim, VarianceKeepDim,
@@ -547,7 +602,7 @@ macro_rules! wgpu_descriptor_operations {
                 Norm,
                 InstanceNorm,
             ],
-            composed_reduction_indexed = []
+            composed_reduction_indexed = [CrossEntropyLoss]
         }
     };
 }
@@ -627,10 +682,18 @@ macro_rules! metal_descriptor_operations {
             // `layer_norm` (add the mean-center step and an optional affine
             // bias). Each has an `Execute` impl in `metal/executor.rs`; the
             // compile-time assert at the bottom of that file is what makes
-            // advertising them safe. BatchNorm/GroupNorm stay unadvertised:
-            // there is no batch-statistics or group-rewrite kernel here.
-            normalization = [Softmax, LogSoftmax, LayerNorm, RmsNorm],
-            embedding = [],
+            // advertising them safe. BatchNorm rides the same group: batch
+            // statistics are `mean_keepdim` walks plus a scale/shift, and
+            // GroupNorm is a per-group reshape into the layer-norm recipe —
+            // both composed from taped primitives in `metal/normalization.rs`.
+            normalization = [Softmax, LogSoftmax, LayerNorm, RmsNorm, BatchNorm, GroupNorm],
+            // Index-gather family: each is a host-side row/column walk with
+            // a scatter-based tape entry in `metal/indexing.rs`. The row
+            // claims `INDEX_AND_F32` because the index operands are i64
+            // (Metal refuses u8/u32 storage, so i64 is the only admitted
+            // index dtype here) while the value operands stay f32 —
+            // `tensor_dtypes = F32_ONLY` would refuse the index operand.
+            embedding = [EmbeddingExact, Gather, IndexSelect],
             // The layout half of #92, each with a host-side walk and a tape
             // entry in `metal/layout.rs`: `transpose` materializes the swap
             // (a transpose is its own inverse, so backward reapplies it),
@@ -639,7 +702,10 @@ macro_rules! metal_descriptor_operations {
             // the cotangent with `narrow`, and `tril`/`triu` mask rank 1–2
             // storage host-side the way CPU's `triangular_storage` does
             // (zeroing is its own transpose, so backward reapplies the mask).
-            native_tensor = [TransposeExact, Narrow, ConcatExact, Tril, Triu],
+            // `cumsum` is a host-side prefix scan with a suffix-sum backward
+            // in `metal/reduction.rs`; it rides this group because it maps
+            // an axis without collapsing it, same request shape as Softmax.
+            native_tensor = [TransposeExact, Narrow, ConcatExact, Tril, Triu, Cumsum],
             logical = [],
             // The rewrites: `slice` is one `narrow` per axis, `stack` is
             // `unsqueeze` per operand then `concat`, and the two axis views
@@ -657,21 +723,35 @@ macro_rules! metal_descriptor_operations {
             // in `metal/executor.rs`; the compile-time assert at the bottom
             // of that file is what makes advertising them safe.
             //
+            // The loss and moment compositions follow: the three pairwise
+            // losses (`mse`/`l1`/`bce_with_logits`) are taped arithmetic plus
+            // a reduction mode, the variance/std family is mean-center →
+            // square → sum → scale (optional sqrt), and `norm` is the
+            // order-aware abs/pow/sum/root chain — all composed from taped
+            // primitives in `metal/loss.rs`/`metal/reduction.rs`. The
+            // indexed loss (`cross_entropy`) rides
+            // `composed_reduction_indexed` because its target-class gather
+            // is what carries the gradient into the logits.
+            //
             // Everything still empty stays empty on purpose: an empty group
             // is a truthful claim, a copied one would not be. `logical`
             // needs the boolean-result representation settled first (no
-            // comparison executor exists here), `embedding` and the
-            // quantization groups need kernels that do not exist, and
-            // `composed_matmul`'s remaining members (`bmm`/`addmm`/`dot`/
-            // `outer`) and `composed_reduction` are compositions this
+            // comparison executor exists here), the quantization groups need
+            // kernels that do not exist, and `composed_matmul`'s remaining
+            // members (`bmm`/`addmm`/`dot`/`outer`) are compositions this
             // backend has not written yet.
             composed_tensor = [SliceExact, StackExact, SqueezeExact, UnsqueezeExact],
             composed_matmul = [ScaledDotProductAttention],
             composed_matmul_bias = [Linear],
             quantizing = [],
             quantized = [],
-            composed_reduction = [],
-            composed_reduction_indexed = []
+            composed_reduction = [
+                MseLoss, L1Loss, BceWithLogitsLoss,
+                VarianceAll, VarianceDim, VarianceKeepDim,
+                StdAll, StdDim, StdKeepDim,
+                Norm,
+            ],
+            composed_reduction_indexed = [CrossEntropyLoss]
         }
     };
 }

@@ -105,6 +105,56 @@ pub(crate) fn dispatch_unary(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_dat
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Unary");
 }
 
+/// Run `select.wgsl`: mask, a, b, out, params.
+///
+/// Mode 0 is `where` (`out = mask ? a : b`); mode 1 is `masked_fill`
+/// (`out = mask ? value : a`, with `value` bit-cast from `params[2]`).
+/// `b` is bound for both modes so the bind-group layout is fixed; the
+/// `masked_fill` path simply never reads it.
+pub(crate) fn dispatch_select(
+    mask: &WgpuBuffer,
+    a: &WgpuBuffer,
+    b: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    params_data: &[u32],
+) {
+    let state = get_device_state();
+    let shader = include_str!("shaders/select.wgsl");
+    let pipeline = get_or_create_pipeline("select", shader, "main");
+
+    let params_buf = WgpuBuffer::from_slice(params_data);
+    let bgl = pipeline.get_bind_group_layout(0);
+    let bg = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Select BG"),
+        layout: &bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: mask.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: a.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: b.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: out.buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: params_buf.buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let n = params_data[1];
+    let wg = n.div_ceil(WG_SIZE);
+    run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Select");
+}
+
 /// Run a scalar op: inp, out, params (op_mode, n, scalar_bits)
 pub(crate) fn dispatch_scalar(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32]) {
     let state = get_device_state();

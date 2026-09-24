@@ -368,10 +368,11 @@ const fn spec(operation: OperationKind, dtype: DTypeId, rank: usize, training: b
 /// The operations the report probes, chosen to be representative rather than
 /// exhaustive.
 ///
-/// One per coarse family a user actually reaches for, plus two deliberate
-/// negatives: `f64` reduction and `f16` matmul are unsupported on the CPU
-/// registry today, so the probe section demonstrates that it reports both
-/// answers rather than only confirming what works.
+/// One per coarse family a user actually reaches for, plus two probes meant
+/// as negatives when they were chosen: `f64` reduction, still unsupported on
+/// the CPU registry, and `f16` matmul, native on CPU since #90 but still
+/// unsupported on WGPU's registry, so the probe section demonstrates that it
+/// reports both answers rather than only confirming what works.
 const PROBES: &[ProbeSpec] = &[
     spec(OperationKind::Pointwise, DTypeId::F32, 2, false),
     spec(OperationKind::Pointwise, DTypeId::F32, 2, true),
@@ -755,10 +756,12 @@ fn run_probe(kind: DeviceKind, spec: &ProbeSpec) -> Probe {
 ///
 /// A rejected probe is deliberately *not* a finding. The first draft made one,
 /// and the healthy-machine test showed what that means in practice: an
-/// ordinary CPU laptop opened its report with two notes saying `f16` matmul
-/// and `f64` reduction are unsupported, which is not a fault, is not
-/// actionable, and is already in the probe section a few lines up. A section
-/// that always has something in it is a section people stop reading.
+/// ordinary CPU laptop opened its report with a note on each rejected probe -
+/// `f16` matmul and `f64` reduction were both rejected then, and #90 has
+/// since widened CPU matmul - saying the registry does not support it, which
+/// is not a fault, is not actionable, and is already in the probe section a
+/// few lines up. A section that always has something in it is a section
+/// people stop reading.
 fn findings(
     toolchain: &Toolchain,
     _features: &[Feature],

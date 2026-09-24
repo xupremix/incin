@@ -106,12 +106,12 @@ let dynamic_tensor = dynamic_target.zeros([2, 2])?;
 ### Declaring a dtype is not computing in one
 
 Every dtype above *allocates*. Far fewer of them *execute*, and the two are
-separate questions with separate answers. On CPU today `matmul` is `f32` only,
-and elementwise arithmetic is float only, so `i64` addition and `f16` matmul
-are both refused:
+separate questions with separate answers. On CPU today `matmul` runs every
+float dtype (`bf16`, `f16`, `f32`, `f64`) while elementwise arithmetic is
+float only, so an `i64` `add` is refused rather than promoted:
 
 ```text
-backend 'Cpu' refused the request: dtype f16 is unsupported for matmul
+backend 'Cpu' refused the request: dtype i64 is unsupported for add
 ```
 
 That refusal is generated from the same capability tables as

@@ -621,11 +621,37 @@ cuda_pointwise! {
     unary_no_grad: cuda_ceil_storage("ceil", "ceilf(x)");
     unary_no_grad: cuda_round_storage("round", "roundf(x)");
     unary_no_grad: cuda_trunc_storage("trunc", "truncf(x)");
-    unary_no_grad: cuda_frac_storage("frac", "x - truncf(x)");
 
     binary: cuda_maximum_storage("maximum", "a > b ? a : b", "a >= b ? 1.0f : 0.0f", "a < b ? 1.0f : 0.0f");
     binary: cuda_minimum_storage("minimum", "a < b ? a : b", "a <= b ? 1.0f : 0.0f", "a > b ? 1.0f : 0.0f");
     binary: cuda_abs_diff_storage("abs_diff", "fabsf(a - b)", "a >= b ? 1.0f : -1.0f", "a >= b ? -1.0f : 1.0f");
+}
+
+/// `frac(x) = x - trunc(x)`. Derivative 1 wherever it exists; the gradient
+/// passes straight through, matching CPU's `canonical_frac`.
+///
+/// Deliberately not a `unary_no_grad` arm of `cuda_pointwise!`: the row
+/// claims `training = yes`, and unlike its `trunc` half — which is one of
+/// the conformance harness's `carries_no_gradient` piecewise-constant rows
+/// and so may legitimately record nothing — an unrecorded `frac` leaves a
+/// hole in any graph that runs through it.
+pub(crate) fn cuda_frac_storage(
+    t: &CudaStorage,
+    spec: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
+    let fwd: &str = if uses_f64_compute(t) {
+        f64_unary_fwd("frac")?
+    } else {
+        "x - truncf(x)"
+    };
+    let out = crate::cuda::ops::elementwise::launch_unary_body(
+        "frac",
+        &crate::codegen::ScalarFragment::literal(fwd),
+        t,
+        spec,
+    )?;
+    push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
+    Ok(out)
 }
 
 pub(crate) fn cuda_powf_storage(t: &CudaStorage, exp: f64) -> Result<CudaStorage> {
@@ -670,6 +696,10 @@ pub(crate) fn cuda_clamp_storage(t: &CudaStorage, min: f64, max: f64) -> Result<
     Ok(out)
 }
 
+/// `atan2(y, x)`, matching CPU's argument order (lhs is y, rhs is x).
+///
+/// The backward is the quotient rule CPU's `canonical_atan2` uses:
+/// `d/dy = g * x / (x^2 + y^2)` and `d/dx = g * (-y) / (x^2 + y^2)`.
 pub(crate) fn cuda_atan2_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
     // `atan2f` narrows `double` operands first; f64 inputs take `atan2`.
@@ -678,7 +708,80 @@ pub(crate) fn cuda_atan2_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result
     } else {
         "atan2f(a, b)"
     };
-    crate::cuda::ops::elementwise::launch_binary_op("atan2", expr, lhs, rhs, &out_shape)
+    let out = crate::cuda::ops::elementwise::launch_binary_op("atan2", expr, lhs, rhs, &out_shape)?;
+    let (y_capture, x_capture) = (lhs.clone(), rhs.clone());
+    let (y_shape, x_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (y_id, x_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![y_id, x_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let x_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_x_sq",
+                "a * b",
+                &x_capture,
+                &x_capture,
+                &x_shape,
+            )?;
+            let y_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_y_sq",
+                "a * b",
+                &y_capture,
+                &y_capture,
+                &y_shape,
+            )?;
+            let denom_shape = crate::layout::broadcast_shape(&x_shape, &y_shape)?;
+            let denom = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_denom",
+                "a + b",
+                &x_sq,
+                &y_sq,
+                &denom_shape,
+            )?;
+            let numer_y_shape = crate::layout::broadcast_shape(&grad_out.shape, &x_shape)?;
+            let numer_y = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_numer_y",
+                "a * b",
+                grad_out,
+                &x_capture,
+                &numer_y_shape,
+            )?;
+            let grad_y_shape = crate::layout::broadcast_shape(&numer_y.shape, &denom.shape)?;
+            let grad_y = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_div_y",
+                "a / b",
+                &numer_y,
+                &denom,
+                &grad_y_shape,
+            )?;
+            let neg_y = crate::cuda::ops::elementwise::launch_unary_op(
+                "atan2_grad_neg_y",
+                "-x",
+                &y_capture,
+            )?;
+            let numer_x_shape = crate::layout::broadcast_shape(&grad_out.shape, &neg_y.shape)?;
+            let numer_x = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_numer_x",
+                "a * b",
+                grad_out,
+                &neg_y,
+                &numer_x_shape,
+            )?;
+            let grad_x_shape = crate::layout::broadcast_shape(&numer_x.shape, &denom.shape)?;
+            let grad_x = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_div_x",
+                "a / b",
+                &numer_x,
+                &denom,
+                &grad_x_shape,
+            )?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(&grad_y, &y_shape)?,
+                crate::cuda::tape::unbroadcast(&grad_x, &x_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
 }
 
 pub(crate) fn cuda_fmod_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
@@ -688,17 +791,88 @@ pub(crate) fn cuda_fmod_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<
     } else {
         "fmodf(a, b)"
     };
-    crate::cuda::ops::elementwise::launch_binary_op("fmod", expr, lhs, rhs, &out_shape)
+    let out = crate::cuda::ops::elementwise::launch_binary_op("fmod", expr, lhs, rhs, &out_shape)?;
+    push_modulus_tape(lhs, rhs, &out);
+    Ok(out)
 }
 
 pub(crate) fn cuda_remainder_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    let expr = if uses_f64_compute(lhs) {
-        "remainder(a, b)"
+    // `remainderf` is the IEEE remainder (`x - round(x/y) * y`), which lands
+    // on the wrong side of zero for a negative dividend: `remainderf(-1, 2)`
+    // is `-1`. The catalog's `remainder` — CPU's `canonical_remainder`, WGPU
+    // mode 20, Metal — is the least non-negative residue, where that pair
+    // yields `1`. Build it from the truncated `fmod` the same way Rust's
+    // `rem_euclid` does: adjust a negative residue up by `|b|`. `fmod` takes
+    // the double spelling for an f64 operand for the usual narrowing reason.
+    let (ty, fmod_call, fabs_call, zero) = if uses_f64_compute(lhs) {
+        ("double", "fmod", "fabs", "0.0")
     } else {
-        "remainderf(a, b)"
+        ("float", "fmodf", "fabsf", "0.0f")
     };
-    crate::cuda::ops::elementwise::launch_binary_op("remainder", expr, lhs, rhs, &out_shape)
+    let body = crate::codegen::ScalarFragment {
+        prologue: vec![format!("const {ty} t0 = {fmod_call}(a, b);")],
+        value: format!("t0 < {zero} ? t0 + {fabs_call}(b) : t0"),
+    };
+    let out = crate::cuda::ops::elementwise::launch_binary_body(
+        "remainder",
+        &body,
+        lhs,
+        rhs,
+        &out_shape,
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    push_modulus_tape(lhs, rhs, &out);
+    Ok(out)
+}
+
+/// The shared `record_modulus` tape entry for `fmod`/`remainder`.
+///
+/// Every modulus has the form `r = a - b * q` with `q` locally constant, so
+/// `dr/da = 1` and `dr/db = -q`, with `q` recovered as `(a - r) / b` from
+/// the values themselves rather than recomputed with a rounding rule that
+/// could drift from the forward — CPU's `record_modulus`, ported.
+fn push_modulus_tape(lhs: &CudaStorage, rhs: &CudaStorage, out: &CudaStorage) {
+    let (lhs_capture, rhs_capture, out_capture) = (lhs.clone(), rhs.clone(), out.clone());
+    let (lhs_shape, rhs_shape, out_shape) =
+        (lhs.shape.to_vec(), rhs.shape.to_vec(), out.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let num_shape = crate::layout::broadcast_shape(&lhs_shape, &out_shape)?;
+            let numerator = crate::cuda::ops::elementwise::launch_binary_op(
+                "mod_grad_num",
+                "a - b",
+                &lhs_capture,
+                &out_capture,
+                &num_shape,
+            )?;
+            let q_shape = crate::layout::broadcast_shape(&num_shape, &rhs_shape)?;
+            let quotient = crate::cuda::ops::elementwise::launch_binary_op(
+                "mod_grad_q",
+                "a / b",
+                &numerator,
+                &rhs_capture,
+                &q_shape,
+            )?;
+            let neg_q =
+                crate::cuda::ops::elementwise::launch_unary_op("mod_grad_neg_q", "-x", &quotient)?;
+            let grad_rhs_shape = crate::layout::broadcast_shape(&grad_out.shape, &neg_q.shape)?;
+            let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
+                "mod_grad_rhs",
+                "a * b",
+                grad_out,
+                &neg_q,
+                &grad_rhs_shape,
+            )?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
+                crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+            ])
+        }),
+    });
 }
 
 pub(crate) fn cuda_lerp_storage(

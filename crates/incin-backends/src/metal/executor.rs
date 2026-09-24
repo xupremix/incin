@@ -403,6 +403,10 @@ impl_metal_reduction_dim![
     (UnsqueezeExact, |input, axis| {
         MetalBackendImpl::<D>::unsqueeze::<f32>(input, axis)
     }),
+    // A scan, not a collapse: same one-operand-plus-axis request shape.
+    (Cumsum, |input, axis| {
+        MetalBackendImpl::<D>::cumsum::<f32>(input, axis)
+    }),
 ];
 
 /// `transpose` reads an attribute *pair* rather than a single `axis`, so it
@@ -720,6 +724,336 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for MetalBackendImpl<D> {
             })
             .transpose()?;
         MetalBackendImpl::<D>::scaled_dot_product_attention::<f32>(q, k, v, mask, attributes.scale)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// Map the catalog's `LossReduction` onto the host-side `Reduction` the
+/// loss methods take — WGPU's `wgpu_loss_reduction`, restated for Metal.
+fn metal_loss_reduction(
+    reduction: incin_core::exec::catalog::LossReduction,
+) -> incin_core::tensor::reduction::Reduction {
+    match reduction {
+        incin_core::exec::catalog::LossReduction::None => {
+            incin_core::tensor::reduction::Reduction::None
+        }
+        incin_core::exec::catalog::LossReduction::Mean => {
+            incin_core::tensor::reduction::Reduction::Mean
+        }
+        incin_core::exec::catalog::LossReduction::Sum => {
+            incin_core::tensor::reduction::Reduction::Sum
+        }
+    }
+}
+
+/// Pairwise losses: prediction, target and a `reduction` attribute — the
+/// same request shape WGPU's `impl_wgpu_loss!` answers.
+macro_rules! impl_metal_loss {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [pred, target] = request.inputs else {
+                    return Err(invalid(operation, "expects exactly 2 inputs"));
+                };
+                let pred = pred
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "prediction is not Metal storage"))?;
+                let target = target
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "target is not Metal storage"))?;
+                let reduction = metal_loss_reduction(
+                    request.operation.descriptor().attributes().reduction,
+                );
+                MetalBackendImpl::<D>::$method::<f32>(pred, target, reduction)
+                    .map_err(|e| kernel_error("Metal", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_metal_loss![
+    (MseLoss, mse_loss),
+    (L1Loss, l1_loss),
+    (BceWithLogitsLoss, bce_with_logits_loss)
+];
+
+/// `cross_entropy_loss` takes logits (f32) and a class-index target (i64),
+/// so it cannot ride the f32-only pairwise loss macro.
+impl<D: Device> Execute<op::CrossEntropyLoss> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::CrossEntropyLoss, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::CrossEntropyLoss;
+        let [logits, target] = request.inputs else {
+            return Err(invalid(operation, "cross_entropy_loss expects 2 inputs"));
+        };
+        let logits = logits
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "logits is not Metal storage"))?;
+        let target = target
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "target is not Metal storage"))?;
+        let reduction = metal_loss_reduction(request.operation.descriptor().attributes().reduction);
+        MetalBackendImpl::<D>::cross_entropy_loss(logits, target, reduction)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// Whole-tensor variance/std: one operand plus an `unbiased` flag.
+macro_rules! impl_metal_variance_all {
+    ($(($op:ident, $square_root:literal)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "expects exactly 1 input"));
+                };
+                let input = input
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+                let unbiased = request.operation.descriptor().attributes().unbiased;
+                if $square_root {
+                    MetalBackendImpl::<D>::std_all::<f32>(input, unbiased)
+                } else {
+                    MetalBackendImpl::<D>::variance_all::<f32>(input, unbiased)
+                }
+                .map_err(|e| kernel_error("Metal", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_metal_variance_all![(VarianceAll, false), (StdAll, true)];
+
+/// Axis variance/std: one operand plus the `(axis, unbiased)` pair.
+macro_rules! impl_metal_variance_axis {
+    ($(($op:ident, $keepdim:literal, $square_root:literal)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "expects exactly 1 input"));
+                };
+                let input = input
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+                let attributes = request.operation.descriptor().attributes();
+                let (axis, unbiased) = (attributes.axis, attributes.unbiased);
+                match ($keepdim, $square_root) {
+                    (false, false) => {
+                        MetalBackendImpl::<D>::variance_dim::<f32>(input, axis, unbiased)
+                    }
+                    (false, true) => MetalBackendImpl::<D>::std_dim::<f32>(input, axis, unbiased),
+                    (true, false) => {
+                        MetalBackendImpl::<D>::variance_keepdim::<f32>(input, axis, unbiased)
+                    }
+                    (true, true) => {
+                        MetalBackendImpl::<D>::std_keepdim::<f32>(input, axis, unbiased)
+                    }
+                }
+                .map_err(|e| kernel_error("Metal", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_metal_variance_axis![
+    (VarianceDim, false, false),
+    (VarianceKeepDim, true, false),
+    (StdDim, false, true),
+    (StdKeepDim, true, true),
+];
+
+/// `norm` reads an `order: f64`, so it fits neither the reduction macros
+/// (no attributes / axis only) nor the unary one.
+impl<D: Device> Execute<op::Norm> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Norm, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Norm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "norm expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let order = request.operation.descriptor().attributes().order;
+        MetalBackendImpl::<D>::norm::<f32>(input, order)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `embedding` is an index tensor and a weight table — no axis attribute.
+impl<D: Device> Execute<op::EmbeddingExact> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::EmbeddingExact, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::EmbeddingExact;
+        let [indices, weight] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "embedding expects an index tensor and a weight table",
+            ));
+        };
+        let indices = indices
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "indices is not Metal storage"))?;
+        let weight = weight
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not Metal storage"))?;
+        MetalBackendImpl::<D>::embedding(indices, weight)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `gather`/`index_select`: input, index and an `axis` — the same request
+/// shape WGPU's indexing Execute impls answer.
+macro_rules! impl_metal_index_axis {
+    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for MetalBackendImpl<D> {
+            type Output = MetalStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<MetalStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input, index] = request.inputs else {
+                    return Err(invalid(operation, "expects exactly 2 inputs"));
+                };
+                let input = input
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+                let index = index
+                    .downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "index is not Metal storage"))?;
+                let axis = request.operation.descriptor().attributes().axis;
+                MetalBackendImpl::<D>::$method(input, axis, index)
+                    .map_err(|e| kernel_error("Metal", operation, e))
+            }
+        }
+    )*};
+}
+
+impl_metal_index_axis![(Gather, gather), (IndexSelect, index_select)];
+
+/// `batch_norm`: presence-flag operand split (input, optional weight/bias,
+/// and — for inference — a running mean/variance pair), exactly as WGPU's
+/// executor reads the same `BatchNormAttributes`.
+impl<D: Device> Execute<op::BatchNorm> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::BatchNorm, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::BatchNorm;
+        let attributes = request.operation.descriptor().attributes();
+        let Some((input, optional)) = request.inputs.split_first() else {
+            return Err(invalid(operation, "batch norm expects at least the input"));
+        };
+        let mut remaining = optional.iter();
+        let mut next = |present: bool| present.then(|| remaining.next()).flatten();
+        let weight = next(attributes.has_weight);
+        let bias = next(attributes.has_bias);
+        let running_mean = next(attributes.has_running_mean);
+        let running_variance = next(attributes.has_running_variance);
+        if remaining.next().is_some() {
+            return Err(invalid(
+                operation,
+                "batch norm was given more operands than its presence flags account for",
+            ));
+        }
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let weight = weight
+            .map(|h| {
+                h.downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "weight is not Metal storage"))
+            })
+            .transpose()?;
+        let bias = bias
+            .map(|h| {
+                h.downcast_ref::<MetalStorage>()
+                    .ok_or_else(|| invalid(operation, "bias is not Metal storage"))
+            })
+            .transpose()?;
+        if attributes.training {
+            return MetalBackendImpl::<D>::batch_norm_training::<f32>(
+                input,
+                weight,
+                bias,
+                attributes.epsilon,
+            )
+            .map_err(|e| kernel_error("Metal", operation, e));
+        }
+        let (Some(running_mean), Some(running_variance)) = (running_mean, running_variance) else {
+            return Err(invalid(
+                operation,
+                "inference batch norm needs a running mean and a running variance",
+            ));
+        };
+        let running_mean = running_mean
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "running mean is not Metal storage"))?;
+        let running_variance = running_variance
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "running variance is not Metal storage"))?;
+        MetalBackendImpl::<D>::batch_norm_inference::<f32>(
+            input,
+            weight,
+            bias,
+            running_mean,
+            running_variance,
+            attributes.epsilon,
+        )
+        .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `group_norm`: one operand plus `(groups, epsilon)`.
+impl<D: Device> Execute<op::GroupNorm> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupNorm, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::GroupNorm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "group norm expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::group_norm::<f32>(input, attributes.groups, attributes.epsilon)
             .map_err(|e| kernel_error("Metal", operation, e))
     }
 }

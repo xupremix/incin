@@ -337,13 +337,22 @@ impl<D: Device> CudaBackendImpl<D> {
     }
 
     /// General N-D matrix product with NumPy-style batch broadcasting,
-    /// matching CPU's `matmul_storage` dispatcher. CUDA has no batched-GEMM
-    /// kernel, so unlike CPU's dedicated `batched_gemm`, the batch case here
-    /// is composed: broadcast both operands to the common batch shape,
-    /// flatten the batch axes into one, run 2D `matmul` per batch slice via
-    /// `narrow`, then `concat`/reshape the pieces back. Every step is
-    /// already tape-tracked, so the composite's backward is the tape replay
-    /// over them rather than new hand-derived math.
+    /// matching CPU's `matmul_storage` dispatcher. Since issue #85 the
+    /// batch first goes to `ops::matmul::try_launch_batched_matmul`: under
+    /// `cuda-vendor` a fitting contiguous `f32` rank-3 pair may be served
+    /// by one strided-batched cuBLASLt call, and a fitting pair otherwise
+    /// gets one native grid-z launch whose explicit slice strides carry
+    /// broadcasts the flat kernel can express (stride 0). That path pushes
+    /// a single tape entry whose backward re-enters it once per gradient.
+    /// When it reports `None` - a non-affine stride pattern, a batch over
+    /// the grid-z limit, a dtype without a batched entry, an offset or
+    /// padded view - the batch falls back to the composed form this
+    /// function had before #85: broadcast both operands to the common
+    /// batch shape, flatten the batch axes into one, run 2D `matmul` per
+    /// batch slice via `narrow`, then `concat`/reshape the pieces back.
+    /// Every step of the composed form is already tape-tracked, so its
+    /// backward is the tape replay over them rather than new hand-derived
+    /// math.
     pub(crate) fn batched_matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
@@ -379,6 +388,65 @@ impl<D: Device> CudaBackendImpl<D> {
         // path's reshape/narrow/concat overhead for it.
         if lhs_rank == 2 && rhs_rank == 2 {
             return Self::matmul::<K>(lhs, rhs);
+        }
+
+        // Issue #85: one launch for the whole batch when a path admits it
+        // (vendor first under `cuda-vendor`, then the native kernel), one
+        // tape entry whose backward differentiates both operands through
+        // the same path. `None` keeps the composed loop below - it
+        // computes the same product from tape-tracked 2D slices.
+        if let Some(product) = crate::cuda::ops::matmul::try_launch_batched_matmul(lhs, rhs)? {
+            let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, product.id);
+            let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+            let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+            let (lhs_rank, rhs_rank) = (lhs.shape.len(), rhs.shape.len());
+            crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+                output_id: out_id,
+                input_ids: vec![lhs_id, rhs_id],
+                backward: Box::new(move |grad_out: &CudaStorage| {
+                    // grad_lhs = grad_out @ rhs^T ; grad_rhs = lhs^T @ grad_out.
+                    // The transposes swap only the trailing matrix axes, so
+                    // each product still broadcasts against `grad_out`'s
+                    // batch exactly as the forward pair did; `unbroadcast`
+                    // then reduces the upstream batch axes back to each
+                    // operand's own shape. A refusal here means the flat
+                    // kernel cannot strided-read that gradient view: fail
+                    // closed with a named error rather than fall back to a
+                    // silently different recipe mid-replay.
+                    let rhs_t = crate::cuda::ops::shape::launch_transpose(
+                        &rhs_capture,
+                        rhs_rank - 2,
+                        rhs_rank - 1,
+                    )?;
+                    let grad_lhs =
+                        crate::cuda::ops::matmul::try_launch_batched_matmul(grad_out, &rhs_t)?
+                            .ok_or_else(|| {
+                                Error::Msg(
+                                    "batched matmul backward refused the transposed rhs; \
+                             failing closed rather than mis-striding the gradient"
+                                        .into(),
+                                )
+                            })?;
+                    let grad_lhs = crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?;
+                    let lhs_t = crate::cuda::ops::shape::launch_transpose(
+                        &lhs_capture,
+                        lhs_rank - 2,
+                        lhs_rank - 1,
+                    )?;
+                    let grad_rhs =
+                        crate::cuda::ops::matmul::try_launch_batched_matmul(&lhs_t, grad_out)?
+                            .ok_or_else(|| {
+                                Error::Msg(
+                                    "batched matmul backward refused the transposed lhs; \
+                             failing closed rather than mis-striding the gradient"
+                                        .into(),
+                                )
+                            })?;
+                    let grad_rhs = crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?;
+                    Ok(vec![grad_lhs, grad_rhs])
+                }),
+            });
+            return Ok(product);
         }
 
         let lhs_batch = &lhs.shape[..lhs_rank - 2];
@@ -617,7 +685,26 @@ impl<D: Device> CudaBackendImpl<D> {
     }
 
     pub(crate) fn diag<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {
-        crate::cuda::ops::shape::launch_diag(t, diagonal as i32)
+        let out = crate::cuda::ops::shape::launch_diag(t, diagonal as i32)?;
+        // Rank is 1 or 2 here: `launch_diag` refuses anything else before
+        // this line, so the branch below cannot see a shape the forward
+        // never produced.
+        let rank = t.shape.len();
+        let k = diagonal as i32;
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        push_unary_tape_entry(t_id, out_id, move |grad_out| {
+            if rank == 1 {
+                // Construct's adjoint is the extract with the same offset:
+                // the cotangent square's diagonal, read in the order the
+                // forward wrote it. One kernel for both directions is what
+                // keeps the two forms consistent.
+                crate::cuda::ops::shape::launch_diag(grad_out, k)
+            } else {
+                crate::cuda::ops::shape::launch_diag_backward(grad_out, k, &input_shape)
+            }
+        });
+        Ok(out)
     }
 
     pub(crate) fn pad<K: DType>(
@@ -641,9 +728,15 @@ impl<D: Device> CudaBackendImpl<D> {
 
     pub(crate) fn repeat<K: DType>(t: &CudaStorage, repeats: &[usize]) -> Result<CudaStorage> {
         let out = crate::cuda::ops::shape::launch_repeat(t, repeats)?;
-        let t_shape = t.shape.clone();
-        push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            crate::cuda::tape::unbroadcast(grad_out, &t_shape)
+        let source_shape = t.shape.clone();
+        let repeats_capture = repeats.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        push_unary_tape_entry(t_id, out_id, move |grad_out| {
+            crate::cuda::ops::shape::launch_repeat_backward(
+                grad_out,
+                &repeats_capture,
+                &source_shape,
+            )
         });
         Ok(out)
     }
@@ -652,10 +745,10 @@ impl<D: Device> CudaBackendImpl<D> {
     /// rule: the source coordinate divides where tiling would take a
     /// remainder). The backward is a group-sum over each element's
     /// `repeats` output copies, computed in the kernel in the same
-    /// `r`-ascending order CPU's row-major accumulation visits them -
-    /// deliberately NOT `unbroadcast`, which cannot express a non-axis
-    /// group reduction and is why `repeat`'s own backward is unsound for
-    /// factors greater than one (pre-existing, unrelated to this op).
+    /// `r`-ascending order CPU's row-major accumulation visits them.
+    /// (`repeat`'s multi-axis tile-sum has its own kernel —
+    /// `launch_repeat_backward` — and neither path goes through
+    /// `unbroadcast`, which cannot express a non-axis group reduction.)
     pub(crate) fn repeat_interleave<K: DType>(
         t: &CudaStorage,
         repeats: usize,
@@ -775,6 +868,18 @@ pub(crate) fn cuda_transpose_storage(t: &CudaStorage, d1: usize, d2: usize) -> R
 
 pub(crate) fn cuda_matmul_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     CudaBackendImpl::<Cuda>::matmul::<f32>(lhs, rhs)
+}
+
+/// The batched dispatcher for rank >= 2 inputs, used by `op::Linear` so a
+/// leading batch on the input reaches the batched path (one native or
+/// vendor launch when the plan admits it, the composed loop otherwise)
+/// instead of `matmul`'s unbatched-2D refusal. Rank-2 pairs short-circuit
+/// inside `batched_matmul` to the same 2D `matmul` as before.
+pub(crate) fn cuda_batched_matmul_storage(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::batched_matmul::<f32>(lhs, rhs)
 }
 
 pub(crate) fn cuda_broadcast_as_storage(t: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {

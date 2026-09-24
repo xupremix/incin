@@ -6,7 +6,7 @@
 //! is not a CPU-only construction.
 
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
-use incin_core::error::BackendError;
+use incin_core::error::{BackendError, Error};
 use incin_core::exec::catalog::{DuplicateIndexRule, LossReduction};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
 use incin_core::shapes::OperationKind;
@@ -199,10 +199,12 @@ impl<D: Device> Execute<op::MatMulExact> for CudaBackendImpl<D> {
             .ok_or_else(|| invalid(OperationKind::MatMulExact, "rhs is not CUDA storage"))?;
         // `Tensor::matmul` routes every rank through this identity and the
         // capability row admits 2..=MAX, so a batched pair has to reach
-        // `batched_matmul` (composed of tape-tracked reshapes/narrows
-        // around this same 2D kernel) instead of `matmul`'s
-        // unbatched-2D refusal. The pure 2D case keeps `matmul`'s own
-        // error wording for the inner-dimension mismatch callers see.
+        // `batched_matmul` - which since issue #85 tries one native (or
+        // `cuda-vendor` cuBLASLt) batched launch first and only composes
+        // tape-tracked reshapes/narrows around this same 2D kernel when
+        // the plan refuses - instead of `matmul`'s unbatched-2D refusal.
+        // The pure 2D case keeps `matmul`'s own error wording for the
+        // inner-dimension mismatch callers see.
         if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
             Self::matmul::<f32>(lhs, rhs)
                 .map_err(|e| kernel_error("Cuda", OperationKind::MatMulExact, e))
@@ -339,6 +341,26 @@ fn downcast<'a>(
     operand
         .downcast_ref::<CudaStorage>()
         .ok_or_else(|| invalid(operation, name))
+}
+
+/// [`kernel_error`], but a launcher's already-typed [`Error::Backend`] is
+/// returned as-is.
+///
+/// The index ops (`gather`/`scatter`/`index_select`/`embedding`) raise
+/// [`BackendError::InvalidInput`] when an index value falls outside the
+/// axis it names — a refusal of the operand, not a device failure.
+/// Handing that to [`kernel_error`] flattens it into `Execution` with the
+/// `InvalidInput` text buried in the message, so a caller matching on the
+/// typed variant sees "the backend executed something and it failed" for
+/// an input that was rejected before any element was read. The GPU never
+/// touches the out-of-range element either way: the kernel's `error_flag`
+/// fires before the load. This stays local to the index executors rather
+/// than changing the shared helper, which is not this lane's file.
+fn index_kernel_error(operation: OperationKind, error: Error) -> BackendError {
+    match error {
+        Error::Backend(inner) => inner,
+        other => kernel_error("Cuda", operation, other),
+    }
 }
 
 /// Fused Welford kernel, normalizing over the trailing axes the weight's own
@@ -1423,7 +1445,7 @@ impl<D: Device> Execute<op::EmbeddingExact> for CudaBackendImpl<D> {
         let indices = downcast(indices, operation, "indices is not CUDA storage")?;
         let weight = downcast(weight, operation, "weight is not CUDA storage")?;
         CudaBackendImpl::<D>::embedding::<f32, i64>(weight, indices)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1441,7 +1463,7 @@ impl<D: Device> Execute<op::Gather> for CudaBackendImpl<D> {
         let index = downcast(index, operation, "index is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
         CudaBackendImpl::<D>::gather::<f32, i64>(input, axis, index)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1460,7 +1482,7 @@ impl<D: Device> Execute<op::Scatter> for CudaBackendImpl<D> {
         let src = downcast(src, operation, "src is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
         CudaBackendImpl::<D>::scatter::<f32, i64>(input, axis, index, src)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1771,8 +1793,16 @@ impl<D: Device> Execute<op::Linear> for CudaBackendImpl<D> {
 
         let transposed =
             crate::cuda::backend::shape_ops::cuda_transpose_storage(weight, 0, 1).map_err(wrap)?;
-        let product = crate::cuda::backend::shape_ops::cuda_matmul_storage(rows, &transposed)
-            .map_err(wrap)?;
+        // Since issue #85 this goes through the batched dispatcher rather
+        // than the rank-2-only 2D launcher: a leading batch on the input
+        // (`[B..., T, in]`) reaches one native/vendor batched launch or the
+        // composed loop, while a rank-2 input short-circuits inside
+        // `batched_matmul` to the exact same 2D `matmul` (and tape entry)
+        // this call always made. Before that swap a rank-3+ Linear failed
+        // here inside `matmul`'s unbatched-2D check.
+        let product =
+            crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(rows, &transposed)
+                .map_err(wrap)?;
         let projected = match bias {
             None => product,
             Some(bias) => crate::cuda::backend::elementwise::cuda_add_storage(
@@ -1933,10 +1963,48 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
             .transpose()?;
         let wrap = |e| kernel_error("Cuda", operation, e);
 
-        let [stride_h, _stride_w] = attributes.stride;
-        let [pad_h, _pad_w] = attributes.padding;
-        let [out_pad_h, out_pad_w] = attributes.output_padding;
-        let [dil_h, _dil_w] = attributes.dilation;
+        let isotropic = |pair: [usize; 2], reason: &'static str| -> Result<usize, BackendError> {
+            if pair[0] == pair[1] {
+                Ok(pair[0])
+            } else {
+                Err(invalid(operation, reason))
+            }
+        };
+        let stride = isotropic(
+            attributes.stride,
+            "conv_transpose2d strides differ per axis; the routed kernel takes one stride for both",
+        )?;
+        let padding = isotropic(
+            attributes.padding,
+            "conv_transpose2d paddings differ per axis; the routed kernel takes one padding for \
+             both",
+        )?;
+        let output_padding = isotropic(
+            attributes.output_padding,
+            "conv_transpose2d output paddings differ per axis; the routed kernel takes one for \
+             both",
+        )?;
+        let dilation = isotropic(
+            attributes.dilation,
+            "conv_transpose2d dilations differ per axis; the routed kernel takes one dilation for \
+             both",
+        )?;
+        if attributes.groups != 1 {
+            return Err(kernel_error(
+                "Cuda",
+                operation,
+                incin_core::error::Error::ShapeMismatch {
+                    op: "conv_transpose2d",
+                    expected: vec![1],
+                    got: vec![attributes.groups],
+                    msg: format!(
+                        "conv_transpose2d: only groups == 1 is supported on CudaBackendImpl, \
+                         got groups={}",
+                        attributes.groups
+                    ),
+                },
+            ));
+        }
 
         let unbatched = activation.shape.len() == 3;
         let (b, cin, h, w) = if unbatched {
@@ -1954,15 +2022,33 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
                 activation.shape[3],
             )
         };
-        let (_cin_w, cout, kh, kw) = (
+        let (w_cin, cout, kh, kw) = (
             weight.shape[0],
             weight.shape[1],
             weight.shape[2],
             weight.shape[3],
         );
+        if w_cin != cin {
+            return Err(kernel_error(
+                "Cuda",
+                operation,
+                incin_core::error::Error::ShapeMismatch {
+                    op: "conv_transpose2d",
+                    expected: vec![cin],
+                    got: vec![w_cin],
+                    msg: format!(
+                        "conv_transpose2d: weight's Cin ({w_cin}) does not match input Cin ({cin})"
+                    ),
+                },
+            ));
+        }
 
-        let h_out = (h - 1) * stride_h + dil_h * (kh - 1) + 1 + out_pad_h - 2 * pad_h;
-        let w_out = (w - 1) * stride_h + dil_h * (kw - 1) + 1 + out_pad_w - 2 * pad_h;
+        let h_nat =
+            crate::cuda::ops::conv::natural_transpose_out_size(h, kh, stride, padding, dilation)
+                .map_err(wrap)?;
+        let w_nat =
+            crate::cuda::ops::conv::natural_transpose_out_size(w, kw, stride, padding, dilation)
+                .map_err(wrap)?;
 
         let act_4d = if unbatched {
             crate::cuda::backend::shape_ops::cuda_reshape_storage(activation, &[1, cin, h, w])
@@ -1999,18 +2085,37 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
             crate::cuda::backend::shape_ops::cuda_concat_storage(&refs, 0).map_err(wrap)?
         };
 
-        let spec = crate::cuda::ops::conv::Col2Im2dSpec {
-            h_out,
-            w_out,
-            kh,
-            kw,
-            stride: stride_h,
-            padding: pad_h,
-            dilation: dil_h,
+        // The column matrix's spatial extent is the *input* spatial size (the
+        // transpose fold scatters from input positions); the scatter target is
+        // the natural output size. `output_padding` is a trailing zero-pad
+        // after the fold, not part of the col2im geometry (Pitfall 4).
+        let natural = crate::cuda::backend::nn::col2im_2d_tape(
+            &cols,
+            &[b, cout, h_nat, w_nat],
+            crate::cuda::ops::conv::Col2Im2dSpec {
+                h_out: h,
+                w_out: w,
+                kh,
+                kw,
+                stride,
+                padding,
+                dilation,
+            },
+        )
+        .map_err(wrap)?;
+
+        let out_4d = if output_padding > 0 {
+            CudaBackendImpl::<D>::pad::<f32>(
+                &natural,
+                &[(0, 0), (0, 0), (0, output_padding), (0, output_padding)],
+                0.0,
+            )
+            .map_err(wrap)?
+        } else {
+            natural
         };
-        let target_shape = vec![b, cout, h_out, w_out];
-        let out_4d =
-            crate::cuda::ops::conv::launch_col2im_2d(&cols, &target_shape, spec).map_err(wrap)?;
+        let final_h = out_4d.shape[2];
+        let final_w = out_4d.shape[3];
 
         let with_bias = match bias {
             Some(b_storage) => {
@@ -2030,8 +2135,11 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
         };
 
         if unbatched {
-            crate::cuda::backend::shape_ops::cuda_reshape_storage(&with_bias, &[cout, h_out, w_out])
-                .map_err(wrap)
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(
+                &with_bias,
+                &[cout, final_h, final_w],
+            )
+            .map_err(wrap)
         } else {
             Ok(with_bias)
         }
@@ -2051,33 +2159,8 @@ impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let [out_h, out_w] = request.operation.descriptor().attributes().output;
-        let output_size = (out_h, out_w);
-        let wrap = |e| kernel_error("Cuda", operation, e);
-
-        let unbatched = input.shape.len() == 3;
-        let promoted;
-        let x = if unbatched {
-            promoted = crate::cuda::backend::shape_ops::cuda_reshape_storage(
-                input,
-                &[1, input.shape[0], input.shape[1], input.shape[2]],
-            )
-            .map_err(wrap)?;
-            &promoted
-        } else {
-            input
-        };
-
-        let pooled =
-            crate::cuda::ops::pool::launch_adaptive_avg_pool2d(x, output_size).map_err(wrap)?;
-        if unbatched {
-            crate::cuda::backend::shape_ops::cuda_reshape_storage(
-                &pooled,
-                &[pooled.shape[1], pooled.shape[2], pooled.shape[3]],
-            )
-            .map_err(wrap)
-        } else {
-            Ok(pooled)
-        }
+        Self::adaptive_avg_pool2d(input, (out_h, out_w))
+            .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
 
@@ -2188,7 +2271,7 @@ impl<D: Device> Execute<op::IndexSelect> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let index = downcast(index, operation, "index is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
-        let wrap = |e| kernel_error("Cuda", operation, e);
+        let wrap = |e| index_kernel_error(operation, e);
 
         let mut idx_expanded_shape = vec![1usize; input.shape.len()];
         idx_expanded_shape[axis] = index.shape.iter().product::<usize>();

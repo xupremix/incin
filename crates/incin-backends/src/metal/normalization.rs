@@ -258,6 +258,167 @@ impl<D: Device> MetalBackendImpl<D> {
         let normalized = Self::div::<K>(input, &scale)?;
         Self::mul::<K>(&normalized, weight)
     }
+
+    /// `batch_norm` in inference mode: `((x - running_mean) / sqrt(running_var
+    /// + eps)) * weight + bias`, with each per-channel vector reshaped to
+    /// `[1, C, 1, ...]` and stretched by the elementwise path's broadcast.
+    ///
+    /// Matches CPU's `batch_norm_impl` exactly, including the Candle default
+    /// fallbacks: absent mean becomes zeros, absent var/weight becomes ones,
+    /// absent bias becomes zeros. Every step is a taped primitive, so — like
+    /// `layer_norm` — this pushes nothing of its own.
+    pub(crate) fn batch_norm_inference<K: DType>(
+        input: &<Self as StorageBackend>::Storage<K>,
+        weight: Option<&<Self as StorageBackend>::Storage<K>>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
+        running_mean: &<Self as StorageBackend>::Storage<K>,
+        running_variance: &<Self as StorageBackend>::Storage<K>,
+        epsilon: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let rank = input.shape().len();
+        let channel_dim = if rank > 1 { 1 } else { 0 };
+        let channels = input.shape()[channel_dim];
+        let mut bcast = vec![1usize; rank];
+        bcast[channel_dim] = channels;
+
+        let reshape_param =
+            |p: &<Self as StorageBackend>::Storage<K>| Self::reshape::<K>(p, &bcast);
+        let rm = reshape_param(running_mean)?;
+        let rv = reshape_param(running_variance)?;
+        let w = match weight {
+            Some(w) => reshape_param(w)?,
+            None => storage_from_f32(&vec![1.0f32; channels], &bcast, input)?,
+        };
+        let b = match bias {
+            Some(b) => reshape_param(b)?,
+            None => storage_from_f32(&vec![0.0f32; channels], &bcast, input)?,
+        };
+
+        let centered = Self::sub::<K>(input, &rm)?;
+        let rv_eps = Self::add_scalar_float::<K>(&rv, epsilon)?;
+        let std = Self::sqrt::<K>(&rv_eps)?;
+        let normalized = Self::div::<K>(&centered, &std)?;
+        let scaled = Self::mul::<K>(&normalized, &w)?;
+        Self::add::<K>(&scaled, &b)
+    }
+
+    /// `batch_norm` in training mode: batch statistics computed from the
+    /// input itself, composed from the same taped primitives CPU's
+    /// `batch_norm_training_impl` uses — `sum_keepdim` over every axis but
+    /// the channel one (so the mean/variance path reaches the gradient),
+    /// then center, scale, and the optional affine weight/bias.
+    pub(crate) fn batch_norm_training<K: DType>(
+        input: &<Self as StorageBackend>::Storage<K>,
+        weight: Option<&<Self as StorageBackend>::Storage<K>>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
+        epsilon: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let rank = input.shape().len();
+        let channel_dim = if rank > 1 { 1 } else { 0 };
+        let num_channels = input.shape()[channel_dim];
+
+        let mut bcast_shape = vec![1usize; rank];
+        bcast_shape[channel_dim] = num_channels;
+
+        // Every axis but the channel one is reduced away, keeping its
+        // position so the result broadcasts back against the input without
+        // a reshape.
+        let reduced_axes: Vec<usize> = (0..rank).filter(|axis| *axis != channel_dim).collect();
+        let count: usize = reduced_axes
+            .iter()
+            .map(|&axis| input.shape()[axis])
+            .product();
+        if count == 0 {
+            return Err(Error::Msg(
+                "batch_norm: training mode needs at least one element per channel".into(),
+            ));
+        }
+
+        // Every reduction here must go through the tape-tracked
+        // `sum_keepdim`, not a raw launch: training-mode batch norm
+        // normalizes by statistics that are functions of the input, so a
+        // tape-silent reduction would cut the mean/variance path out of
+        // every backward pass computed through this composition.
+        let sum_over_reduced = |x: &<Self as StorageBackend>::Storage<K>| -> Result<
+            <Self as StorageBackend>::Storage<K>,
+        > {
+            let mut acc = x.clone();
+            for &axis in &reduced_axes {
+                acc = Self::sum_keepdim::<K>(&acc, axis)?;
+            }
+            Ok(acc)
+        };
+
+        let inv_count = 1.0 / count as f64;
+        let total = sum_over_reduced(input)?;
+        let mean = Self::mul_scalar_float::<K>(&total, inv_count)?;
+        let centered = Self::sub::<K>(input, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let squared_total = sum_over_reduced(&squared)?;
+        let variance = Self::mul_scalar_float::<K>(&squared_total, inv_count)?;
+
+        let variance_eps = Self::add_scalar_float::<K>(&variance, epsilon)?;
+        let std = Self::sqrt::<K>(&variance_eps)?;
+        let normalized = Self::div::<K>(&centered, &std)?;
+
+        let scaled = match weight {
+            Some(w) => {
+                let w = Self::reshape::<K>(w, &bcast_shape)?;
+                Self::mul::<K>(&normalized, &w)?
+            }
+            None => normalized,
+        };
+        match bias {
+            Some(b) => {
+                let b = Self::reshape::<K>(b, &bcast_shape)?;
+                Self::add::<K>(&scaled, &b)
+            }
+            None => Ok(scaled),
+        }
+    }
+
+    /// `group_norm(input, groups, eps)`: reshape to
+    /// `[batch * groups, channels/groups * spatial]`, mean-center, divide by
+    /// the per-group standard deviation, reshape back — CPU's
+    /// `group_norm_storage` composed from the same taped primitives, so the
+    /// statistical path reaches the gradient without a hand-derived kernel.
+    pub(crate) fn group_norm<K: DType>(
+        input: &<Self as StorageBackend>::Storage<K>,
+        groups: usize,
+        epsilon: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if groups == 0 {
+            return Err(Error::Msg("group_norm: groups must be non-zero".into()));
+        }
+        let rank = input.shape().len();
+        let channels = if rank >= 2 { input.shape()[1] } else { 1 };
+        if channels % groups != 0 {
+            return Err(Error::Msg(
+                "group_norm: channels must be divisible by groups".into(),
+            ));
+        }
+        let total = numel(input.shape())?;
+        let (batch, spatial) = if rank >= 2 {
+            (
+                input.shape()[0],
+                input.shape()[2..].iter().product::<usize>(),
+            )
+        } else {
+            (1, total)
+        };
+        let group_size = (channels / groups) * spatial;
+        let runs = batch * groups;
+
+        let flat = Self::reshape::<K>(input, &[runs, group_size])?;
+        let mean = Self::mean_keepdim::<K>(&flat, 1)?;
+        let centered = Self::sub::<K>(&flat, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let variance = Self::mean_keepdim::<K>(&squared, 1)?;
+        let guarded = Self::add_scalar_float::<K>(&variance, epsilon)?;
+        let std = Self::sqrt::<K>(&guarded)?;
+        let normalized = Self::div::<K>(&centered, &std)?;
+        Self::reshape::<K>(&normalized, input.shape())
+    }
 }
 
 #[cfg(test)]
@@ -787,6 +948,180 @@ mod tests {
         let _ = GradMode::Disabled.scope(|| B::layer_norm::<f32>(&t, &w, None, 1e-5).unwrap());
         let _ = GradMode::Disabled.scope(|| B::rms_norm::<f32>(&t, &w, 1e-5).unwrap());
         let _ = GradMode::Disabled.scope(|| B::max_keepdim::<f32>(&t, 1).unwrap());
+        assert_eq!(
+            crate::metal::tape::depth(),
+            before,
+            "NoGrad must record nothing"
+        );
+    }
+
+    // ── batch_norm (inference) ─────────────────────────────────────────────
+
+    /// Candle's formula: `(x - rm) / sqrt(rv + eps) * w + b`.
+    fn bn_expected(x: f32, rm: f32, rv: f32, w: f32, b: f32, eps: f32) -> f32 {
+        (x - rm) / (rv + eps).sqrt() * w + b
+    }
+
+    #[test]
+    fn batch_norm_inference_matches_hand_computed_formula() {
+        // Input [2, 3] (batch 2, channels 3); every sample is [1,2,3].
+        let input = storage(&[1.0, 2.0, 3.0, 1.0, 2.0, 3.0], &[2, 3]);
+        let rm = storage(&[0.5, 1.0, 2.0], &[3]);
+        let rv = storage(&[1.0, 4.0, 0.25], &[3]);
+        let w = storage(&[2.0, 1.0, 0.5], &[3]);
+        let b = storage(&[0.1, -0.2, 0.3], &[3]);
+        let eps = 1e-5f64;
+        let out =
+            B::batch_norm_inference::<f32>(&input, Some(&w), Some(&b), &rm, &rv, eps).unwrap();
+        assert_eq!(out.shape(), &[2, 3]);
+        let got = read(&out);
+        for sample in 0..2 {
+            for ch in 0..3 {
+                let x = [1.0f32, 2.0, 3.0][ch];
+                let want = bn_expected(
+                    x,
+                    [0.5f32, 1.0, 2.0][ch],
+                    [1.0f32, 4.0, 0.25][ch],
+                    [2.0f32, 1.0, 0.5][ch],
+                    [0.1f32, -0.2, 0.3][ch],
+                    eps as f32,
+                );
+                let g = got[sample * 3 + ch];
+                assert!(
+                    (g - want).abs() < 1e-4,
+                    "[{sample},{ch}]: got {g:.6}, want {want:.6}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn batch_norm_inference_default_fallbacks_match_candle() {
+        // Absent weight/bias/mean/var → ones/zeros/zeros/ones, i.e. identity
+        // when rv = 1 and rm = 0... here rm/rv are required, so supply
+        // rm=0, rv=1 and omit the affine: output is just the input / sqrt(1+eps).
+        let input = storage(&[1.0, 2.0, 3.0], &[1, 3]);
+        let rm = storage(&[0.0f32; 3], &[3]);
+        let rv = storage(&[1.0f32; 3], &[3]);
+        let eps = 1e-5f64;
+        let out = B::batch_norm_inference::<f32>(&input, None, None, &rm, &rv, eps).unwrap();
+        let got = read(&out);
+        let scale = 1.0f32 / (1.0 + eps as f32).sqrt();
+        for (i, (&g, &x)) in got.iter().zip([1.0f32, 2.0, 3.0].iter()).enumerate() {
+            assert!(
+                (g - x * scale).abs() < 1e-5,
+                "default weight/bias at {i}: got {g}, want {}",
+                x * scale
+            );
+        }
+    }
+
+    #[test]
+    fn batch_norm_training_normalizes_by_batch_statistics() {
+        // Two samples, two channels: training mode centers each channel
+        // across the batch, so channel means of the output are ~0.
+        let input = storage(&[1.0, 4.0, 3.0, 6.0], &[2, 2]);
+        let eps = 1e-5f64;
+        let out = B::batch_norm_training::<f32>(&input, None, None, eps).unwrap();
+        assert_eq!(out.shape(), &[2, 2]);
+        let got = read(&out);
+        for ch in 0..2 {
+            let m = (got[ch] + got[2 + ch]) / 2.0;
+            assert!(m.abs() < 1e-4, "channel {ch} mean should be ~0: {m}");
+        }
+    }
+
+    #[test]
+    fn batch_norm_training_backward_reaches_the_input() {
+        let input = storage(&[1.0, 4.0, 3.0, 6.0], &[2, 2]);
+        let weight = storage(&[1.5f32, 0.5], &[2]);
+        let bias = storage(&[0.1f32, -0.1], &[2]);
+        // Ones seed cancels: each channel's normalized values sum to 0, so
+        // `sum(out)` has zero derivative w.r.t. the input (same cancellation
+        // layer_norm's ones-seed test documents). A non-uniform seed breaks it.
+        let seed = storage(&[1.0, 0.5, -0.25, 2.0], &[2, 2]);
+        let (_, grads) = recorded_with_seed(
+            || B::batch_norm_training::<f32>(&input, Some(&weight), Some(&bias), 1e-5f64).unwrap(),
+            &seed,
+        );
+        let g = read(
+            grads
+                .get(input.id())
+                .expect("training batch_norm records an input grad"),
+        );
+        assert_eq!(g.len(), 4);
+        assert!(
+            g.iter().any(|v| v.abs() > 1e-6),
+            "training batch_norm must produce a non-trivial input gradient: {g:?}"
+        );
+    }
+
+    // ── group_norm ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn group_norm_normalizes_within_each_group() {
+        // [1, 4, 2] with 2 groups: group0 = [1,4], group1 = [2] (rank-1 →
+        // channels = 1 is not divisible by 2, so use rank-2).
+        // Input [2, 4]: batch=2, channels=4, groups=2 → each group is 2 wide.
+        let input = storage(&[1.0, 4.0, 2.0, 8.0, 3.0, 9.0, 5.0, 15.0], &[2, 4]);
+        let out = B::group_norm::<f32>(&input, 2, 1e-5).unwrap();
+        assert_eq!(out.shape(), &[2, 4]);
+        let got = read(&out);
+        // Group 0 of sample 0 is [1,4]: mean-centered, unit-ish variance.
+        let g0 = [got[0], got[1]];
+        let mean = (g0[0] + g0[1]) / 2.0;
+        assert!(mean.abs() < 1e-4, "group mean should be ~0: {mean:?}");
+        // Group 1 of sample 1 is [5,15]: also mean-centered.
+        let g1 = [got[6], got[7]];
+        let mean1 = (g1[0] + g1[1]) / 2.0;
+        assert!(mean1.abs() < 1e-4, "group mean should be ~0: {mean1:?}");
+    }
+
+    #[test]
+    fn group_norm_backward_reaches_the_input() {
+        let input = storage(&[1.0, 4.0, 2.0, 8.0], &[1, 4]);
+        // Ones seed cancels within each group (normalized values sum to 0);
+        // a non-uniform seed breaks the cancellation.
+        let seed = storage(&[1.0, 0.5, -0.25, 2.0], &[1, 4]);
+        let (_, grads) =
+            recorded_with_seed(|| B::group_norm::<f32>(&input, 2, 1e-5f64).unwrap(), &seed);
+        let g = read(
+            grads
+                .get(input.id())
+                .expect("group_norm records an input grad"),
+        );
+        assert_eq!(g.len(), 4);
+        assert!(
+            g.iter().any(|v| v.abs() > 1e-7),
+            "group_norm must produce a non-trivial input gradient: {g:?}"
+        );
+    }
+
+    #[test]
+    fn group_norm_refuses_zero_or_indivisible_groups() {
+        let input = storage(&[1.0, 2.0, 3.0, 4.0], &[1, 4]);
+        assert!(matches!(
+            B::group_norm::<f32>(&input, 0, 1e-5),
+            Err(Error::Msg(_))
+        ));
+        assert!(matches!(
+            B::group_norm::<f32>(&input, 3, 1e-5),
+            Err(Error::Msg(_))
+        ));
+    }
+
+    #[test]
+    fn batch_norm_and_group_norm_nograd_records_nothing() {
+        let input = storage(&[1.0, 2.0, 3.0, 4.0], &[2, 2]);
+        let rm = storage(&[0.0f32; 2], &[2]);
+        let rv = storage(&[1.0f32; 2], &[2]);
+        let before = crate::metal::tape::depth();
+        let _ = GradMode::Disabled.scope(|| {
+            B::batch_norm_inference::<f32>(&input, None, None, &rm, &rv, 1e-5f64).unwrap()
+        });
+        let _ = GradMode::Disabled
+            .scope(|| B::batch_norm_training::<f32>(&input, None, None, 1e-5f64).unwrap());
+        let _ = GradMode::Disabled.scope(|| B::group_norm::<f32>(&input, 2, 1e-5f64).unwrap());
         assert_eq!(
             crate::metal::tape::depth(),
             before,

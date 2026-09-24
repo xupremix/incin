@@ -142,6 +142,26 @@ pub fn cumsum(storage: &CudaStorage, axis: usize) -> Result<CudaStorage> {
     crate::cuda::ops::reduce::launch_cumsum_op(storage, axis)
 }
 
+/// Runs the Welford `variance`/`standard deviation` kernel.
+///
+/// `axis = None` is the all-reduce row; `is_std` selects the square root.
+/// The seam launches the raw kernel only - no tape entry, which is what a
+/// forward-value or backward-formula test wants when it drives the recorded
+/// path through `dispatch` instead.
+///
+/// # Errors
+///
+/// Propagates a launch or validation failure from the kernel.
+pub fn var_std(
+    storage: &CudaStorage,
+    axis: Option<usize>,
+    keepdim: bool,
+    unbiased: bool,
+    is_std: bool,
+) -> Result<CudaStorage> {
+    crate::cuda::ops::reduce::launch_welford_var_std(storage, axis, keepdim, unbiased, is_std)
+}
+
 /// Runs `topk`, returning values and their indices.
 ///
 /// # Errors
@@ -200,6 +220,47 @@ pub fn download_bytes(storage: &CudaStorage) -> alloc::vec::Vec<u8> {
         .default_stream()
         .clone_dtoh(&*storage.buffer.data)
         .expect("reading storage back to the host")
+}
+
+/// Launches the production dropout mask for `shape`.
+///
+/// This is `launch_dropout_mask` itself: the process-wide seed plus the
+/// monotonic draw offset, so a test comparing two launches pins the real
+/// reservation behaviour rather than a reimplementation.
+///
+/// # Panics
+///
+/// Panics if the mask cannot be generated or uploaded to device 0.
+#[must_use]
+pub fn dropout_mask(shape: &[usize]) -> CudaStorage {
+    crate::cuda::ops::dropout::launch_dropout_mask(shape)
+        .expect("launching the production dropout mask on device 0")
+}
+
+/// Uploads `numel` counter-based draws for an explicit `(seed, start)` range.
+///
+/// The values come from `ops::dropout`'s own hash, so an integration test
+/// can replay exactly what a masked launch would upload for a chosen counter
+/// window - the seam `set_dropout_seed` cannot serve from here, being gated
+/// to unit-test builds.
+///
+/// # Panics
+///
+/// Panics if the shape's numel is uncheckable or the upload fails.
+#[must_use]
+pub fn dropout_mask_seeded(shape: &[usize], seed: u64, start: u64) -> CudaStorage {
+    let numel = crate::bytes::checked_numel(shape)
+        .expect("dropout_mask_seeded: shape must have a checked numel");
+    let numel_u64 = u64::try_from(numel).expect("dropout_mask_seeded: numel fits u64");
+    let values = crate::cuda::ops::dropout::dropout_draws(seed, start, numel_u64);
+    crate::cuda::backend::cuda_from_f32(
+        shape,
+        DTypeId::F32.into(),
+        &DeviceId::cuda(0),
+        values,
+        "testing::dropout_mask_seeded",
+    )
+    .expect("uploading a seeded dropout mask to device 0")
 }
 
 /// Gathers embedding rows named by `indices`.
@@ -264,6 +325,47 @@ pub fn narrow(t: &CudaStorage, dim: usize, start: usize, len: usize) -> Result<C
 /// Propagates a launch or validation failure from the kernel.
 pub fn concat(tensors: &[&CudaStorage], dim: usize) -> Result<CudaStorage> {
     crate::cuda::ops::shape::launch_concat(tensors, dim)
+}
+
+/// The full production batched-matmul dispatch of issue #85: the
+/// `cuda-vendor` cuBLASLt attempt first (when that feature is on), then
+/// the native batched kernel, then `Ok(None)` for the composed per-slice
+/// loop - the same three-step order `op::MatMulExact` takes for a rank-3+
+/// pair, so a test through this seam exercises the orchestrator itself.
+///
+/// # Errors
+///
+/// Propagates a native-launch failure. A plan refusal is `Ok(None)`, not
+/// an error.
+pub fn batched_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Option<CudaStorage>> {
+    crate::cuda::ops::matmul::try_launch_batched_matmul(lhs, rhs)
+}
+
+/// The native batched kernel alone (`kernels/matmul.cu`'s grid-z launch),
+/// skipping any vendor attempt - so a hardware test can pin the kernel
+/// this slice added independently of whether `cuda-vendor` is on.
+/// `Ok(None)` means the plan refused and the composed loop is the answer.
+///
+/// # Errors
+///
+/// Propagates a launch failure on an admitted plan.
+pub fn batched_matmul_native(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Option<CudaStorage>> {
+    crate::cuda::ops::matmul::try_launch_batched_native(lhs, rhs)
+}
+
+/// The strided-batched cuBLASLt path alone (one call, no launch loop).
+/// `Ok(None)` means out of vendor policy; production then falls through
+/// to the native kernel. Gated with the vendor feature so the seam cannot
+/// exist on a build where the module it names is absent.
+///
+/// # Errors
+///
+/// Propagates a cuBLASLt failure on a request the policy admitted (the
+/// orchestrator swallows these and falls through; a direct caller sees
+/// the real error).
+#[cfg(feature = "cuda-vendor")]
+pub fn batched_matmul_vendor(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Option<CudaStorage>> {
+    crate::cuda::ops::cublaslt::try_launch_batched_matmul(lhs, rhs)
 }
 
 /// Runs the fused SGD step kernel.

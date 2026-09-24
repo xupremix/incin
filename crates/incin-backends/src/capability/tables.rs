@@ -10,7 +10,7 @@
 use super::constants::{
     ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES, CUDA_LAYOUTS,
     CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_ONLY, FLOAT_DTYPES, INDEX_AND_F32_DTYPES, NON_QUANTIZED,
-    PRECISE, Q8_ONLY,
+    PRECISE, Q8_ONLY, WGPU_STORAGE_DTYPES,
 };
 use super::declarations::{
     cpu_descriptor_operations, cuda_descriptor_operations, metal_descriptor_operations,
@@ -33,7 +33,18 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     filling_dtypes = NON_QUANTIZED,
     sampling_dtypes = FLOAT_DTYPES,
     spatial = F32_ONLY,
-    matmul = F32_ONLY,
+    // Issue #90: `matmul_forward`/`batched_gemm` read every float storage
+    // dtype through the stride-aware accessor and write the result back in
+    // the operand's own, so the exact `MatMulExact` row and the composed
+    // rows that rewrite into it (`bmm`/`addmm`/`linear`) honestly claim
+    // FLOAT_DTYPES. The executor's own refusal is narrower than this row
+    // in the one direction a single row cannot state: both operands must
+    // carry the *same* float dtype (a mixed pair fails `DTypeMismatch`
+    // host-side in `ensure_matmul_dtypes` before any kernel runs, and a
+    // non-float fails `UnsupportedDType`), which `dispatch::execute`'s
+    // per-operand application of this one union cannot express - the same
+    // split CUDA's coarse `MatMul` comment documents.
+    matmul = FLOAT_DTYPES,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
     broadcast_training = FLOAT_DTYPES,
@@ -106,9 +117,25 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
             PRECISE,
             ImplementationKind::Composed,
         ),
+        // Issue #90: `matmul.cu`-equivalent host kernels now run one GEMM
+        // path per float storage dtype, so the coarse row matches the exact
+        // `MatMulExact` row (which sits in `declarations`'s `matmul` group
+        // on `FLOAT_DTYPES`) rather than trailing it at `F32_ONLY` - a
+        // coarse row that understates the exact row beside it refuses
+        // reachable work just as a wider one would over-advertise. The
+        // executor's own refusals are narrower than this row in the one
+        // direction a single row cannot state: `ensure_matmul_dtypes`
+        // requires both operands to carry the *same* dtype (a mixed
+        // `f16`/`f32` pair fails `DTypeMismatch` host-side before any
+        // kernel runs) and refuses every non-float dtype
+        // (`i64`/`bool`/`u8`/`u32`/`q8_0`). `dispatch::execute` applies
+        // this one set to every operand in turn, so like `F32_AND_BOOL`
+        // and `INDEX_AND_F32_DTYPES` the row states the union of what the
+        // operands may carry, and the equality/dtype-split it cannot
+        // express is enforced fail-closed inside the executor.
         CapabilityRule::new(
             OperationKind::MatMul,
-            F32_ONLY,
+            FLOAT_DTYPES,
             CPU_LAYOUTS,
             2,
             usize::MAX,
@@ -454,6 +481,52 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             accelerator_max_rank(OperationKind::MaskedFill),
             true,
         ),
+        // `gather`/`scatter`/`index_select`: each takes an integer index
+        // operand beside `f32` data, and `dispatch::execute`'s
+        // `admit_invocation` checks every operand against the one resolved
+        // row in turn - so a row narrower than the union of what the
+        // operands actually carry makes the operation unreachable, the index
+        // operand failing dtype admission before either kernel ever launches.
+        // That is the exact bug class `F32_AND_BOOL` and
+        // `INDEX_AND_F32_DTYPES` document, and it is what these standalone
+        // rows fix: the shared `native_tensor` group's `tensor_dtypes` is
+        // `F32_ONLY`, which cannot state the integer index half.
+        // `INDEX_AND_F32_DTYPES` is the union, not a claim either operand
+        // may be *either* dtype - the descriptor's own per-operand contract
+        // (`exec/catalog`'s `index_input` slot requires the index to be
+        // integer) and `cuda::ops::shape`'s f32-only kernels enforce the
+        // real, tighter split this row cannot state on its own. `CONTIGUOUS`
+        // rather than the group's wider layouts because `launch_gather` and
+        // `launch_scatter` compute their input strides through
+        // `contiguous_strides` and never read the operand's actual
+        // `meta.strides`: admitting `strided` here would let a
+        // `transpose_view` reach a kernel that reads it as dense and
+        // silently return wrong values. Rank and training follow the
+        // descriptor, as the group row did.
+        native_ranked(
+            OperationKind::Gather,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Gather),
+            descriptor_max_rank(OperationKind::Gather),
+            true,
+        ),
+        native_ranked(
+            OperationKind::Scatter,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Scatter),
+            descriptor_max_rank(OperationKind::Scatter),
+            true,
+        ),
+        native_ranked(
+            OperationKind::IndexSelect,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::IndexSelect),
+            descriptor_max_rank(OperationKind::IndexSelect),
+            true,
+        ),
         // `logical_and`/`logical_or`/`logical_not` (`cuda/ops/logical.rs`):
         // dedicated kernels over `bool` throughout, `BOOL_ONLY` rather than
         // `F32_AND_BOOL` since there is no mixed-dtype operand here to union
@@ -499,6 +572,16 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     filling_dtypes = F32_ONLY,
     sampling_dtypes = F32_ONLY,
     spatial = F32_ONLY,
+    // Issue #90 audit: unlike CPU/CUDA, this backend's whole matmul family
+    // (`MatMulExact`/`bmm`/`addmm`/`linear`/`dot`/`outer`/SDPA) stays
+    // `F32_ONLY` honestly - `shaders/matmul.wgsl` is `array<f32>`
+    // throughout and every `Execute` impl hardcodes `::<f32>`.
+    // `device.rs` requests `Features::empty()` (no `SHADER_F16` feature
+    // query) and `validate_wgpu_dtype` refuses `f16`/`bf16`/`f64`
+    // outright, so nothing wider can reach the kernel. An `f16` claim
+    // would need the adapter feature queried *and* required at
+    // `request_device`, an `f16` shader variant, and a widened validator
+    // first - none of which exist today.
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
@@ -520,11 +603,101 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     // unbounded (a metadata-only buffer rewrap on this backend).
     max_rank = accelerator_max_rank,
     legacy = [
-        native(OperationKind::Storage, F32_ONLY, CONTIGUOUS, false),
+        // Storage (allocation / `to_bytes` / `from_bytes`) admits every
+        // dtype `validate_wgpu_dtype` now holds: `f32`, `bool` as physical
+        // `f32`, and the integer index widths `u8`/`u32`/`i64`. Narrower
+        // than the CPU row (no `f64`/`f16`/`bf16`/`q8_0`) because no WGPU
+        // kernel here reads them and `from_bytes`/`to_bytes` size by
+        // `dtype.size_bytes` for exactly these five.
+        native(
+            OperationKind::Storage,
+            WGPU_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false
+        ),
+        // Fill/Random stay F32-only: `creation.rs`'s `full`/`zeros`/`ones`/
+        // `arange`/`linspace`/`rand`/`randn` build a host `Vec<f32>`
+        // regardless of the requested dtype, so admitting anything else
+        // would upload `f32` bits under a non-`f32` meta.
         native(OperationKind::Fill, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Random, F32_ONLY, CONTIGUOUS, false),
         native(OperationKind::Pointwise, F32_ONLY, CONTIGUOUS, true),
         native(OperationKind::Reduction, F32_ONLY, CONTIGUOUS, true),
+        // `TensorFromData`/`TensorFromBytes` ride the fill group's
+        // `filling_dtypes` above, which is `F32_ONLY`. These standalone
+        // rows widen only the two data-creation identities whose payload
+        // path (`impl_data_creation_executors!` → `HostInterop::from_bytes`)
+        // now genuinely round-trips every dtype in `WGPU_STORAGE_DTYPES`:
+        // the fill group's `Zeros`/`Ones`/`Full`/`Arange`/`Linspace` and
+        // the `var_*` siblings still build `Vec<f32>` and stay narrow.
+        // Multiple rows for one operation are fine: capability resolution is
+        // "any row matches", so a `bool` `TensorFromBytes` is admitted by
+        // this row while an `f32` `Zeros` is admitted by the group row.
+        native(
+            OperationKind::TensorFromData,
+            WGPU_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false,
+        ),
+        native(
+            OperationKind::TensorFromBytes,
+            WGPU_STORAGE_DTYPES,
+            CONTIGUOUS,
+            false,
+        ),
+        // `masked_fill`/`where_cond`: the consumers a `bool` mask needs to
+        // be reachable at all. `F32_AND_BOOL` rather than `F32_ONLY`
+        // because both take a `bool` mask alongside `f32` data and
+        // `dispatch::execute` checks every operand against this one row —
+        // see that constant's own doc for why a shared-group row could not
+        // state this. Rank-capped through `accelerator_max_rank` because
+        // the mask broadcast routes through `prepare_shape_params`' fixed
+        // rank-6 block. CUDA carries the identical pair at lines 441-456
+        // above; these rows are their WGPU twins, `Native` over the new
+        // `select.wgsl` modes.
+        native_ranked(
+            OperationKind::MaskedFill,
+            F32_AND_BOOL,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::MaskedFill),
+            accelerator_max_rank(OperationKind::MaskedFill),
+            true,
+        ),
+        native_ranked(
+            OperationKind::WhereCond,
+            F32_AND_BOOL,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::WhereCond),
+            accelerator_max_rank(OperationKind::WhereCond),
+            true,
+        ),
+        // `gather`/`index_select`: host-walk forwards whose backward is the
+        // same scatter-add CPU's `gather_storage`/`index_select_storage`
+        // push (ONE TapeEntry, `input_ids = vec![t.id]`, integer index
+        // off-tape). `INDEX_AND_F32_DTYPES` is the union of the integer
+        // index operand and the f32 data operand for the same reason
+        // `embedding`'s row uses it. No `accelerator_max_rank` cap: the
+        // host walk is rank-agnostic, so `descriptor_max_rank` (unbounded)
+        // stands. CUDA registers neither (its kernels live under
+        // `embedding`'s group); these are standalone because WGPU's
+        // `embedding` group is the only place the shared macro would place
+        // them and it is already committed to `EmbeddingExact` alone.
+        native_ranked(
+            OperationKind::Gather,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Gather),
+            descriptor_max_rank(OperationKind::Gather),
+            true,
+        ),
+        native_ranked(
+            OperationKind::IndexSelect,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::IndexSelect),
+            descriptor_max_rank(OperationKind::IndexSelect),
+            true,
+        ),
         // No legacy Normalization row: no WGPU kernel backs the family. The
         // typed `normalization = []` list above still advertises none, and a
         // coarse row here would claim native LayerNorm/BatchNorm support this

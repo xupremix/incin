@@ -13,10 +13,53 @@ use super::*;
 /// method: `binary_op` takes bare storage and has no `Self` to call through,
 /// and duplicating the dispatch here would mean two broadcasts that could
 /// drift in how they push their tape entry.
+///
+/// The output allocation and metadata take `t`'s own dtype rather than a
+/// hardcoded `f32`: a `bool` mask (physically `f32` on this backend) must
+/// broadcast as `bool`, not be relabelled. Only `f32` and `bool` may ride
+/// this path — `shape.wgsl` reinterprets every buffer as `array<f32>`, so an
+/// integer index operand would be silently misread; those go through the
+/// host-walk indexing ops instead.
 pub(crate) fn broadcast_storage(t: &WgpuStorage, shape: &[usize]) -> Result<WgpuStorage> {
+    broadcast_storage_raw(t, shape).inspect(|out| {
+        let original_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                Ok(vec![crate::wgpu::tape::unbroadcast(
+                    grad_out,
+                    &original_shape,
+                )?])
+            }),
+        });
+    })
+}
+
+/// Materialize `t` at `shape` without recording on the tape.
+///
+/// Used for the `bool` mask broadcasts behind `where_cond`/`masked_fill`:
+/// a `bool` mask has nowhere to send a gradient, so the raw form skips the
+/// entry `broadcast_storage` would push — the same split CUDA's
+/// `launch_broadcast` vs `broadcast_as` makes.
+///
+/// Refuses any dtype whose physical elements are not `f32`-width (i.e. not
+/// `f32` or `bool`-as-`f32`): `shape.wgsl` addresses every buffer as
+/// `array<f32>`, so an `i64`/`u8`/`u32` operand would be reinterpreted
+/// bit-for-bit as floats rather than refused.
+pub(crate) fn broadcast_storage_raw(t: &WgpuStorage, shape: &[usize]) -> Result<WgpuStorage> {
+    let dtype_id = t.dtype.builtin_id();
+    if !matches!(dtype_id, Some(DTypeId::F32 | DTypeId::Bool)) {
+        return Err(Error::UnsupportedDType {
+            dtype: t.dtype,
+            backend: "Wgpu",
+            op: "broadcast_storage",
+        });
+    }
     let out_elements = num_elements(shape)?;
     let out_n = checked_u32(out_elements, "WGPU broadcast output element count")?;
-    let out_buf = WgpuBuffer::new_zeros_for(DTypeId::F32, out_elements, OperationKind::Storage)?;
+    let out_buf = WgpuBuffer::new_zeros_for(t.dtype, out_elements, OperationKind::Storage)?;
 
     let params = dispatch::prepare_shape_params(
         3, // op_mode = broadcast
@@ -26,21 +69,7 @@ pub(crate) fn broadcast_storage(t: &WgpuStorage, shape: &[usize]) -> Result<Wgpu
         &[],
     )?;
     dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
-    let out = WgpuStorage::new(out_buf, shape.to_vec());
-
-    let original_shape = t.shape.to_vec();
-    let (t_id, out_id) = (t.id, out.id);
-    crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
-        output_id: out_id,
-        input_ids: vec![t_id],
-        backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
-            Ok(vec![crate::wgpu::tape::unbroadcast(
-                grad_out,
-                &original_shape,
-            )?])
-        }),
-    });
-    Ok(out)
+    WgpuStorage::try_new_with_dtype(out_buf, shape.to_vec(), t.dtype)
 }
 
 /// One elementwise binary operation, broadcasting its operands when they

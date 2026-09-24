@@ -338,7 +338,7 @@ fn group_norm_matches_a_host_rewrite_over_groups() {
 }
 
 #[test]
-fn batch_norm_inference_uses_running_statistics_and_refuses_training() {
+fn batch_norm_inference_uses_running_statistics_and_training_uses_batch_statistics() {
     require_wgpu();
     let input = upload(&NORM_IN, &[2, 4]);
     let running_mean = upload(&[0.0f32; 4], &[4]);
@@ -370,9 +370,10 @@ fn batch_norm_inference_uses_running_statistics_and_refuses_training() {
         .collect();
     assert_close(&read(&out), &expected, 1e-4, "batch_norm inference");
 
-    // Training mode must be refused by name — there is no batch-statistics
-    // kernel on this backend, and silently answering with the inference
-    // formula is the failure the executor was written to prevent.
+    // Training mode computes batch statistics from the input itself
+    // (CPU's `batch_norm_training_impl` composition over `sum_keepdim`),
+    // so the result must differ from the running-statistics answer above
+    // whenever the batch mean/variance differ from the running ones.
     let training = BatchNormAttributes {
         epsilon: 1e-5,
         momentum: 0.1,
@@ -382,16 +383,66 @@ fn batch_norm_inference_uses_running_statistics_and_refuses_training() {
         has_running_mean: true,
         has_running_variance: true,
     };
-    let err =
-        match incin_core::exec::dispatch::execute::<op::BatchNorm, _>(&context, training, &handles)
-        {
-            Ok(_) => panic!("training-mode batch_norm must be refused on WGPU"),
-            Err(err) => err,
-        };
-    let message = format!("{err}");
+    let before = incin_backends::wgpu::tape_depth();
+    let train_out =
+        incin_core::exec::dispatch::execute::<op::BatchNorm, _>(&context, training, &handles)
+            .expect("training-mode batch_norm must execute on WGPU");
+    let recorded = incin_backends::wgpu::tape_depth() - before;
     assert!(
-        message.to_lowercase().contains("train") || message.to_lowercase().contains("batch"),
-        "the refusal must name the training/batch-statistics gap: {message}"
+        recorded >= 1,
+        "training-mode batch_norm advertises training = true and must record"
+    );
+
+    // Host reference for batch statistics over the [2, 4] input: reduce
+    // over axis 0 (the batch), keepdim, then center/scale.
+    let values: Vec<f64> = NORM_IN.iter().map(|&x| f64::from(x)).collect();
+    let batch_mean: Vec<f64> = (0..4).map(|c| (values[c] + values[4 + c]) / 2.0).collect();
+    let batch_var: Vec<f64> = (0..4)
+        .map(|c| {
+            let d0 = values[c] - batch_mean[c];
+            let d1 = values[4 + c] - batch_mean[c];
+            (d0 * d0 + d1 * d1) / 2.0
+        })
+        .collect();
+    let mut expected_train = vec![0.0f64; 8];
+    for r in 0..2 {
+        for c in 0..4 {
+            let std = (batch_var[c] + 1e-5f64).sqrt();
+            expected_train[r * 4 + c] = (values[r * 4 + c] - batch_mean[c]) / std;
+        }
+    }
+    assert_close(
+        &read(&train_out),
+        &expected_train,
+        1e-4,
+        "batch_norm training",
+    );
+
+    // Backward must reach the input: the composition's `sum_keepdim` chain
+    // is what carries the batch-statistics path into the gradient, so a
+    // silent tape would leave the input without one.
+    let input_id = incin_core::exec::TapeStorage::id(&input);
+    let loss = {
+        let ctx = ExecutionContext::new(TestBackend::default());
+        let handle = TensorHandle::from_storage::<TestBackend, f32, _>(&train_out);
+        incin_core::exec::dispatch::execute::<op::SumAll, _>(&ctx, NoAttributes, &[handle])
+            .expect("sum_all must seed the backward")
+    };
+    let grads =
+        <TestBackend as incin_core::backend_authoring::AutogradBackend>::backward::<f32>(&loss)
+            .expect("training-mode batch_norm backward must run");
+    let gin = grads
+        .get(input_id)
+        .expect("input must receive a gradient through the batch-statistics path");
+    let grad_vals = read(gin);
+    assert_eq!(
+        grad_vals.len(),
+        NORM_IN.len(),
+        "batch_norm training grad shape matches input"
+    );
+    assert!(
+        grad_vals.iter().all(|g| g.is_finite()),
+        "batch_norm training grad must be finite: {grad_vals:?}"
     );
 }
 

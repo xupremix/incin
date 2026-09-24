@@ -384,10 +384,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     ///
     /// Matches CPU's `batch_norm_impl` exactly, including the Candle default
     /// fallbacks: absent mean becomes zeros, absent var/weight becomes ones,
-    /// absent bias becomes zeros. Training mode is refused by name: WGPU has
-    /// no kernel for the batch-statistics path, and returning the inference
-    /// answer with nothing to distinguish it is the failure CPU's own
-    /// training impl was written to remove.
+    /// absent bias becomes zeros.
     pub(crate) fn batch_norm_inference<K: DType>(
         input: &<Self as StorageBackend>::Storage<K>,
         weight: Option<&<Self as StorageBackend>::Storage<K>>,
@@ -433,6 +430,79 @@ impl<D: Device> WgpuBackendImpl<D> {
         let normalized = Self::div::<K>(&centered, &std)?;
         let scaled = Self::mul::<K>(&normalized, &w)?;
         Self::add::<K>(&scaled, &b)
+    }
+
+    /// `batch_norm` in training mode: batch statistics computed from the
+    /// input itself, composed from the same taped primitives CPU's
+    /// `batch_norm_training_impl` uses — `sum_keepdim` over every axis but
+    /// the channel one (so the mean/variance path reaches the gradient),
+    /// then center, scale, and the optional affine weight/bias.
+    pub(crate) fn batch_norm_training<K: DType>(
+        input: &<Self as StorageBackend>::Storage<K>,
+        weight: Option<&<Self as StorageBackend>::Storage<K>>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
+        epsilon: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let rank = input.shape.len();
+        let channel_dim = if rank > 1 { 1 } else { 0 };
+        let num_channels = input.shape[channel_dim];
+
+        let mut bcast_shape = alloc::vec![1usize; rank];
+        bcast_shape[channel_dim] = num_channels;
+
+        // Every axis but the channel one is reduced away, keeping its
+        // position so the result broadcasts back against the input without
+        // a reshape.
+        let reduced_axes: alloc::vec::Vec<usize> =
+            (0..rank).filter(|axis| *axis != channel_dim).collect();
+        let count: usize = reduced_axes.iter().map(|&axis| input.shape[axis]).product();
+        if count == 0 {
+            return Err(Error::Msg(
+                "batch_norm: training mode needs at least one element per channel".into(),
+            ));
+        }
+
+        // Every reduction here must go through the tape-tracked
+        // `sum_keepdim`, not a raw launch: training-mode batch norm
+        // normalizes by statistics that are functions of the input, so a
+        // tape-silent reduction would cut the mean/variance path out of
+        // every backward pass computed through this composition.
+        let sum_over_reduced = |x: &<Self as StorageBackend>::Storage<K>| -> Result<
+            <Self as StorageBackend>::Storage<K>,
+        > {
+            let mut acc = x.clone();
+            for &axis in &reduced_axes {
+                acc = Self::sum_keepdim::<K>(&acc, axis)?;
+            }
+            Ok(acc)
+        };
+
+        let inv_count = 1.0 / count as f64;
+        let total = sum_over_reduced(input)?;
+        let mean = Self::mul_scalar_float::<K>(&total, inv_count)?;
+        let centered = Self::sub::<K>(input, &mean)?;
+        let squared = Self::mul::<K>(&centered, &centered)?;
+        let squared_total = sum_over_reduced(&squared)?;
+        let variance = Self::mul_scalar_float::<K>(&squared_total, inv_count)?;
+
+        let variance_eps = Self::add_scalar_float::<K>(&variance, epsilon)?;
+        let std = Self::sqrt::<K>(&variance_eps)?;
+        let normalized = Self::div::<K>(&centered, &std)?;
+
+        let scaled = match weight {
+            Some(w) => {
+                let w = Self::reshape::<K>(w, &bcast_shape)?;
+                Self::mul::<K>(&normalized, &w)?
+            }
+            None => normalized,
+        };
+        match bias {
+            Some(b) => {
+                let b = Self::reshape::<K>(b, &bcast_shape)?;
+                Self::add::<K>(&scaled, &b)
+            }
+            None => Ok(scaled),
+        }
     }
 
     /// `group_norm(input, groups, eps)`: reshape to
@@ -572,6 +642,68 @@ impl<D: Device> WgpuBackendImpl<D> {
         Self::reduce_loss::<K>(loss, reduction)
     }
 
+    /// `cross_entropy_loss(logits, target, reduction)`: CPU's composition —
+    /// `log_softmax` on the class axis, a tape-tracked `gather` of the
+    /// target class from each row, negate, then the reduction mode. The
+    /// integer target operand is off the tape (no gradient flows into it);
+    /// the gather's scatter-based backward is what carries the gradient
+    /// back into the logits.
+    pub(crate) fn cross_entropy_loss(
+        logits: &WgpuStorage,
+        target: &WgpuStorage,
+        reduction: incin_core::tensor::reduction::Reduction,
+    ) -> Result<WgpuStorage> {
+        if logits.shape.len() != 2 {
+            return Err(Error::ShapeMismatch {
+                op: "cross_entropy_loss",
+                expected: alloc::vec![0, 0],
+                got: logits.shape.to_vec(),
+                msg: alloc::format!(
+                    "cross_entropy_loss: logits must be rank-2 [batch, classes], got shape {:?}",
+                    logits.shape
+                ),
+            });
+        }
+        let batch = logits.shape[0];
+        if target.shape.as_ref() != [batch] {
+            return Err(Error::ShapeMismatch {
+                op: "cross_entropy_loss",
+                expected: alloc::vec![batch],
+                got: target.shape.to_vec(),
+                msg: alloc::format!(
+                    "cross_entropy_loss: target must be shape [{batch}] matching the logits \
+                     batch, got shape {:?}",
+                    target.shape
+                ),
+            });
+        }
+        require_f32(logits, "cross_entropy_logits")?;
+        match target.dtype.builtin_id() {
+            Some(DTypeId::I64) | Some(DTypeId::U32) | Some(DTypeId::U8) => {}
+            _ => {
+                return Err(Error::UnsupportedDType {
+                    dtype: target.dtype,
+                    backend: "Wgpu",
+                    op: "cross_entropy_target",
+                });
+            }
+        }
+
+        let log_probs = Self::log_softmax::<f32>(logits, 1)?;
+        // Reshape the integer target to `[batch, 1]` for the gather without
+        // pushing a tape entry: the index operand is off the tape by
+        // construction, and `reshape`'s own entry would be dead weight
+        // nothing ever backprops through.
+        let target_exp =
+            WgpuStorage::new_with_dtype(target.buffer.clone(), alloc::vec![batch, 1], target.dtype);
+        // The tape-tracked gather, not a raw launch: its scatter-based
+        // backward is what carries the gradient back into the logits.
+        let gathered = Self::gather(&log_probs, 1, &target_exp)?;
+        let neg_gathered = Self::neg::<f32>(&gathered)?;
+        let nll = Self::reshape::<f32>(&neg_gathered, &[batch])?;
+        Self::reduce_loss::<f32>(nll, reduction)
+    }
+
     /// `dropout(t, p, training)`: identity when off, zero when `p >= 1`,
     /// otherwise a host-LCG keep-mask (same LCG as `creation::rand`) scaled
     /// by `1 / (1 - p)`. The mask is constant; the tape rides `mul` and
@@ -582,7 +714,10 @@ impl<D: Device> WgpuBackendImpl<D> {
         training: bool,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         if !training || probability <= 0.0 {
-            return Ok(WgpuStorage::new(t.buffer.clone(), t.shape.to_vec()));
+            // Clone-links-identity: the operand itself, same tensor id, so a
+            // gradient arriving here needs no entry of its own — CPU, CUDA
+            // and Metal all return `t.clone()` for the eval/`p <= 0` path.
+            return Ok(t.clone());
         }
         if probability >= 1.0 {
             return Self::mul_scalar_float::<K>(t, 0.0);

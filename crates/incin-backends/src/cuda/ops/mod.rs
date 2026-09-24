@@ -1,6 +1,10 @@
 pub(crate) mod cast;
 pub(crate) mod compare;
 pub(crate) mod conv;
+// The vendor path is what the `cuda-vendor` feature exists to gate (issue
+// #85): without the feature the module is absent, so no cuBLASLt symbol can
+// be reached from a build that did not ask for vendor libraries.
+#[cfg(feature = "cuda-vendor")]
 pub(crate) mod cublaslt;
 pub(crate) mod dropout;
 pub(crate) mod elementwise;
@@ -23,6 +27,34 @@ use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::shapes::OperationKind;
 use incin_core::tensor::dtype::DTypeDescriptor;
+
+use crate::cuda::storage::CudaStorage;
+
+/// Host-side metadata the pure fit policies decide on, borrowed from a
+/// storage without touching the device. Shared between the native batched
+/// plan (`matmul::batched_gemm_plan`) and, behind `cuda-vendor`, the
+/// cuBLASLt policies in `cublaslt`, so both read the same fields through
+/// one constructor.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OperandMeta<'a> {
+    pub(crate) dtype: DTypeDescriptor,
+    pub(crate) device_id: usize,
+    pub(crate) shape: &'a [usize],
+    pub(crate) strides: &'a [usize],
+    pub(crate) offset: usize,
+}
+
+impl<'a> OperandMeta<'a> {
+    pub(crate) fn of(storage: &'a CudaStorage) -> Self {
+        Self {
+            dtype: storage.buffer.dtype,
+            device_id: storage.buffer.device_id,
+            shape: storage.shape.dims(),
+            strides: storage.strides.strides(),
+            offset: storage.offset_elements(),
+        }
+    }
+}
 
 /// Allocate a zeroed device buffer sized for `elements` values of `dtype`.
 ///

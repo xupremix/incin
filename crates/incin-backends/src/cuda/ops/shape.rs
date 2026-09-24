@@ -999,6 +999,79 @@ extern "C" __global__ void incin_cuda_scatter_add_backward(
         ((long long*)grad_src)[j] = ((const long long*)grad_out)[phys];
     }
 }
+
+// `repeat` backward: the transpose of the forward's modulo map. Each output
+// coordinate copies `out_coord[d] % in_shape[d]`, so each source element is
+// copied to every coordinate `s[d] + t[d] * in_shape[d]` for
+// `t[d] in [0, repeats[d])`, and its cotangent is the sum over those tiles.
+//
+// Threads own source elements. The inner loop walks the tiles in mixed-radix
+// with the LAST axis varying fastest, which is row-major order over the
+// output coordinates (`out_coord[d]` increases with `t[d]`, and row-major
+// visits the last axis fastest) - the same order CPU's odometer accumulates
+// them in, so the f64 sums are bitwise identical. Accumulation is in
+// `double` with one f32 store at the end, matching CPU's f64 `grads` plus a
+// single `from_f64_values` rounding. `grad_strides` are the incoming
+// cotangent's physical strides (it may arrive as a view) and `grad_offset`
+// its base; the source decodes through `in_shape` because `idx` is the
+// source's row-major flat.
+extern "C" __global__ void incin_cuda_repeat_backward(
+    const float* __restrict__ grad_out,
+    float* __restrict__ grad_in,
+    int numel_in,
+    int rank,
+    int num_tiles,
+    int grad_offset,
+    const int* __restrict__ in_shape,
+    const int* __restrict__ repeats,
+    const int* __restrict__ grad_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_in) return;
+    double acc = 0.0;
+    for (int tile = 0; tile < num_tiles; tile++) {
+        int rem_t = tile;
+        int rem_s = idx;
+        int out_flat = grad_offset;
+        for (int d = rank - 1; d >= 0; d--) {
+            int t_d = rem_t % repeats[d];
+            rem_t /= repeats[d];
+            int s_d = rem_s % in_shape[d];
+            rem_s /= in_shape[d];
+            out_flat += (s_d + t_d * in_shape[d]) * grad_strides[d];
+        }
+        acc += (double)grad_out[out_flat];
+    }
+    grad_in[idx] = (float)acc;
+}
+
+// `diag` backward for the EXTRACT form (rank-two input -> rank-one output):
+// the input gradient is zero everywhere except the extracted diagonal, where
+// it carries the outgoing cotangent. The forward read position `i` from
+// `(r, c) = (i, i + diagonal)` when `diagonal >= 0` and from
+// `(i - diagonal, i)` otherwise, so the inverse maps back to `i = r` in the
+// first case and `i = c` in the second; `out_len` guards the read and leaves
+// the cell at zero when the cotangent is shorter than the diagonal.
+// `grad_strides[0]` and `grad_offset` let the cotangent arrive as a view.
+extern "C" __global__ void incin_cuda_diag_backward(
+    const float* __restrict__ grad_out,
+    float* __restrict__ grad_in,
+    int numel_in,
+    int cols,
+    int out_len,
+    int diagonal,
+    int grad_offset,
+    const int* __restrict__ grad_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_in) return;
+    int r = idx / cols;
+    int c = idx % cols;
+    if ((long long)c != (long long)r + (long long)diagonal) return;
+    int i = diagonal >= 0 ? r : c;
+    if (i < 0 || i >= out_len) return;
+    grad_in[idx] = grad_out[grad_offset + i * grad_strides[0]];
+}
 "#;
 
 #[cfg(feature = "cuda")]
@@ -1724,16 +1797,22 @@ pub(crate) fn launch_triu(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
 #[cfg(feature = "cuda")]
 fn launch_triangular(input: &CudaStorage, diagonal: i32, is_upper: bool) -> Result<CudaStorage> {
     let rank = input.shape.len();
-    if rank < 2 {
+    // Rank 1 is admitted (descriptor min_rank) and CPU keeps it: a single
+    // index is column `idx` of row 0, so the kernel runs unchanged with
+    // `rows = 1`. Only the empty shape has no row and no column.
+    if rank == 0 {
         return Err(Error::ShapeMismatch {
             op: if is_upper { "triu" } else { "tril" },
-            expected: vec![2],
-            got: vec![rank],
-            msg: "triangular operations require rank >= 2".into(),
+            expected: vec![1],
+            got: vec![0],
+            msg: "triangular operations require at least one dimension".into(),
         });
     }
-    let rows = input.shape[rank - 2];
-    let cols = input.shape[rank - 1];
+    let (rows, cols) = if rank == 1 {
+        (1, input.shape[0])
+    } else {
+        (input.shape[rank - 2], input.shape[rank - 1])
+    };
 
     let device_id = input.buffer.device_id;
     ensure_index_ops_loaded(device_id)?;
@@ -2664,6 +2743,102 @@ pub(crate) fn launch_repeat(input: &CudaStorage, repeats: &[usize]) -> Result<Cu
     Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
 }
 
+/// `repeat`'s cotangent: each source element's gradient is the sum over the
+/// output tiles that copied it. See `incin_cuda_repeat_backward` for why the
+/// tile walk is ordered the way it is and why the f64 sums are bitwise
+/// CPU-identical.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_repeat_backward(
+    grad_out: &CudaStorage,
+    repeats: &[usize],
+    source_shape: &[usize],
+) -> Result<CudaStorage> {
+    let rank = source_shape.len();
+    if repeats.len() != rank {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Repeat,
+            reason: "repeat factors must match tensor rank",
+        }));
+    }
+    let numel_in = crate::bytes::checked_numel(source_shape)?;
+    let num_tiles = repeats.iter().try_fold(1usize, |acc, &factor| {
+        acc.checked_mul(factor)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Repeat,
+                expression: "CUDA repeat tile count",
+            })
+    })?;
+
+    let device_id = grad_out.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_repeat_backward")?;
+    let stream = grad_out.buffer.device.default_stream();
+
+    let in_shape_dev = dev_i32_arg(&stream, source_shape, "shape")?;
+    let repeats_dev = dev_i32_arg(&stream, repeats, "repeats")?;
+    let grad_strides_dev = dev_i32_arg(&stream, grad_out.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, numel_in, OperationKind::Storage)?;
+    let mut out_buffer =
+        CudaBuffer {
+            len: numel_in,
+            dtype: DTypeId::F32.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA repeat backward allocation failed: {e:?}"))
+            })?),
+            device: grad_out.buffer.device.clone(),
+            device_id,
+        };
+    // An empty source, or an empty tile set (some factor is 0), leaves every
+    // source gradient at zero - and keeps `cols`-style divisions inside the
+    // kernel off the zero-extent path the same way the forward does.
+    if numel_in == 0 || num_tiles == 0 {
+        return Ok(CudaStorage::new(
+            Arc::new(out_buffer),
+            source_shape.to_vec(),
+        ));
+    }
+
+    let numel_i32 = checked_i32(numel_in, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let num_tiles_i32 = checked_i32(num_tiles, "tile count")?;
+    let offset_i32 = checked_i32(grad_out.offset_elements, "grad offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches the tile-sum backward over a fresh allocation with
+    // validated strides, offsets, and a tile count the fold above proved
+    // non-overflowing.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_out.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&num_tiles_i32)
+            .arg(&offset_i32)
+            .arg(&in_shape_dev)
+            .arg(&repeats_dev)
+            .arg(&grad_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA repeat backward launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(
+        Arc::new(out_buffer),
+        source_shape.to_vec(),
+    ))
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStorage> {
     let rank = input.shape.len();
@@ -2797,4 +2972,88 @@ pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
             msg: "diag requires 1D or 2D tensor".into(),
         })
     }
+}
+
+/// `diag`'s cotangent for the EXTRACT form: zeros over the rank-2 input with
+/// the outgoing cotangent placed back on the extracted diagonal. The
+/// CONSTRUCT form's adjoint is the extract itself and goes through
+/// [`launch_diag`], keeping the two forms on one kernel and one
+/// out-length rule.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_diag_backward(
+    grad_out: &CudaStorage,
+    diagonal: i32,
+    input_shape: &[usize],
+) -> Result<CudaStorage> {
+    if input_shape.len() != 2 || grad_out.shape.len() != 1 {
+        return Err(Error::ShapeMismatch {
+            op: "diag",
+            expected: vec![1, 2],
+            got: vec![input_shape.len()],
+            msg: "diag backward needs a rank-2 input and a rank-1 cotangent".into(),
+        });
+    }
+    let cols = input_shape[1];
+    let numel_in = crate::bytes::checked_numel(input_shape)?;
+    let out_len = grad_out.shape[0];
+
+    let device_id = grad_out.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_diag_backward")?;
+    let stream = grad_out.buffer.device.default_stream();
+
+    let grad_strides_dev = dev_i32_arg(&stream, grad_out.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, numel_in, OperationKind::Storage)?;
+    let mut out_buffer = CudaBuffer {
+        len: numel_in,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(byte_len)
+                .map_err(|e| Error::Msg(format!("CUDA diag backward allocation failed: {e:?}")))?,
+        ),
+        device: grad_out.buffer.device.clone(),
+        device_id,
+    };
+    // No cell to fill (empty input) or no cotangent to place: the zeros
+    // already are the answer, and skipping the launch also keeps `idx /
+    // cols` off a zero `cols` the way every other launcher here does.
+    if numel_in == 0 || out_len == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), input_shape.to_vec()));
+    }
+
+    let numel_i32 = checked_i32(numel_in, "element count")?;
+    let cols_i32 = checked_i32(cols, "extent")?;
+    let out_len_i32 = checked_i32(out_len, "element count")?;
+    let offset_i32 = checked_i32(grad_out.offset_elements, "grad offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches the diagonal scatter over a fresh allocation with
+    // validated extents and offsets; `numel_in > 0` proved `cols > 0`.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_out.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&cols_i32)
+            .arg(&out_len_i32)
+            .arg(&diagonal)
+            .arg(&offset_i32)
+            .arg(&grad_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA diag backward launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(Arc::new(out_buffer), input_shape.to_vec()))
 }

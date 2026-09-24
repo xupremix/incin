@@ -167,7 +167,7 @@ telemetry-runs: unset — no XDG data directory could be resolved
 cpu pointwise f32 rank 2 inference: native
 cpu pointwise f32 rank 2 training: native
 cpu matmul f32 rank 2 inference: native
-cpu matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matmul)
+cpu matmul f16 rank 2 inference: native
 cpu reduction f32 rank 2 inference: native
 cpu reduction f64 rank 2 inference: unsupported (dtype f64 is unsupported for reduction)
 cpu conv2d f32 rank 4 training: native
@@ -525,11 +525,11 @@ fn a_probe_reports_the_registrys_reason_for_a_rejection() {
 
 /// A rejected probe is reported, but it is not a *finding*.
 ///
-/// `f16` matmul and `f64` reduction are unsupported on the CPU registry, which
-/// is how the CPU backend is rather than something wrong with the machine.
-/// Making each one a note put two of them at the top of every healthy report,
-/// duplicating the probe section verbatim. This pins the decision, because the
-/// obvious "improvement" is to add them back.
+/// `f64` reduction is unsupported on the CPU registry, which is how the CPU
+/// backend is rather than something wrong with the machine. Promoting every
+/// rejection to a note put one at the top of every healthy report,
+/// duplicating the probe section verbatim. This pins the decision, because
+/// the obvious "improvement" is to add it back.
 #[test]
 fn an_unsupported_operation_is_reported_without_becoming_a_finding() {
     let report = Report::gather(&FakeHost::healthy());
