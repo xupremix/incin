@@ -2951,8 +2951,13 @@ impl<D: Device> Execute<op::GroupedMatMul> for CudaBackendImpl<D> {
     }
 }
 
+/// Same compile-time obligation as the CPU one: every identity the CUDA
+/// declaration advertises must have an `Execute` impl. Group entries are
+/// bare `Op` idents or `(Op, training)` pairs (the quantization groups);
+/// the training flag is a capability claim, so both spellings assert the
+/// executor and neither is read here.
 macro_rules! assert_every_advertised_cuda_row_executes {
-    (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
+    (; $($group:ident = [$($entry:tt),* $(,)?]),* $(,)?) => {
         const _: () = {
             const fn executes<O, B>()
             where
@@ -2962,7 +2967,15 @@ macro_rules! assert_every_advertised_cuda_row_executes {
             }
 
             const fn assert_all<D: Device>() {
-                $($(executes::<op::$operation, CudaBackendImpl<D>>();)*)*
+                macro_rules! assert_entry {
+                    (($operation:ident, $training:expr)) => {
+                        executes::<op::$operation, CudaBackendImpl<D>>()
+                    };
+                    ($operation:ident) => {
+                        executes::<op::$operation, CudaBackendImpl<D>>()
+                    };
+                }
+                $( $(assert_entry!($entry);)*)*
             }
 
             assert_all::<incin_core::tensor::device::Cuda>();

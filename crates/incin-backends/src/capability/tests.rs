@@ -6,7 +6,8 @@ use super::rules::descriptor_min_rank;
 use super::tables::{CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, WGPU_CAPABILITIES};
 use alloc::collections::BTreeSet;
 use incin_core::exec::{
-    CapabilityQuery, ImplementationKind, LayoutClass, MathMode, OPERATION_CATALOG, SupportLevel,
+    CapabilityQuery, CapabilityRule, GradientRule, ImplementationKind, LayoutClass, MathMode,
+    OPERATION_CATALOG, SupportLevel, catalog_entry,
 };
 use incin_core::tensor::device::DeviceKind;
 use incin_core::tensor::dtype::DTypeId;
@@ -354,4 +355,76 @@ fn the_cpu_matmul_rows_admit_every_float_and_refuse_the_rest() {
         coarse.dtypes, FLOAT_DTYPES,
         "the coarse CPU MatMul row must match the exact MatMulExact row's FLOAT_DTYPES"
     );
+}
+
+/// Issue #93: the quantize boundary's `training` flag is a per-backend fact
+/// about which kernels record a tape entry, so it is stated per operation
+/// rather than per group.
+///
+/// CPU's `quantize`/`dequantize` kernels push the straight-through entry and
+/// the catalog backs that with [`GradientRule::StraightThrough`], so those two
+/// rows admit training. `quantized_matmul` has [`GradientRule::None`] and
+/// records nothing on any backend, so its row stays `false` everywhere.
+/// CUDA's executor pushes no tape for the boundary either, and WGPU/Metal do
+/// not advertise the groups at all - fail-closed in both directions: a row
+/// claims training only where the implementation that must answer for it
+/// exists, and the catalog's gradient rule and the row never disagree.
+#[test]
+fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
+    use incin_core::shapes::error::OperationKind as K;
+
+    let training_of = |rules: &[CapabilityRule], operation: K| {
+        rules
+            .iter()
+            .find(|rule| rule.operation == operation)
+            .map(|rule| rule.training)
+    };
+    let gradient_of = |operation: K| catalog_entry(operation).map(|entry| entry.gradient);
+
+    // The two halves of the boundary record on CPU, and say so in both
+    // places the contract is written down.
+    for operation in [K::Quantize, K::Dequantize] {
+        assert_eq!(
+            training_of(CPU_CAPABILITIES, operation),
+            Some(true),
+            "CPU records the STE tape entry for {operation:?}, so its row must admit training"
+        );
+        assert_eq!(
+            gradient_of(operation),
+            Some(GradientRule::StraightThrough),
+            "{operation:?} records the STE tape entry, so its catalog row must claim the approximation"
+        );
+    }
+
+    // The product over compressed blocks inherits nothing from the boundary.
+    assert_eq!(
+        training_of(CPU_CAPABILITIES, K::QuantizedMatMul),
+        Some(false),
+        "quantized_matmul records no tape, so its row must refuse training"
+    );
+    assert_eq!(
+        gradient_of(K::QuantizedMatMul),
+        Some(GradientRule::None),
+        "quantized_matmul has no backward rule and must not inherit the boundary's claim"
+    );
+
+    // Every other backend: whatever it advertises of the three stays
+    // training-false until an executor there records a tape entry. A backend
+    // that does not advertise one of them at all is fine - `None` is the
+    // fail-closed answer too.
+    for (device, rules) in [
+        (DeviceKind::Cuda, CUDA_CAPABILITIES),
+        (DeviceKind::Wgpu, WGPU_CAPABILITIES),
+        (DeviceKind::Metal, METAL_CAPABILITIES),
+    ] {
+        for operation in [K::Quantize, K::Dequantize, K::QuantizedMatMul] {
+            if let Some(training) = training_of(rules, operation) {
+                assert!(
+                    !training,
+                    "{device:?} advertises {operation:?} with training = true, but its \
+                     executor records no tape for it"
+                );
+            }
+        }
+    }
 }

@@ -24,8 +24,14 @@ use incin_core::tensor::device::Device;
 
 /// Prove, at compile time, that every identity `CPU_CAPABILITIES` advertises
 /// has an executor above.
+///
+/// Each group entry is either a bare `Op` or an `(Op, training)` pair - the
+/// quantization groups spell their per-operation training flag that way (see
+/// `capability::rules`'s `descriptor_capability_rules!`). The flag is a
+/// capability claim, not an execution requirement, so both spellings carry the
+/// same obligation here: `Execute<op::Op>` must exist.
 macro_rules! assert_every_advertised_row_executes {
-    (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
+    (; $($group:ident = [$($entry:tt),* $(,)?]),* $(,)?) => {
         const _: () = {
             const fn executes<O, B>()
             where
@@ -35,7 +41,15 @@ macro_rules! assert_every_advertised_row_executes {
             }
 
             const fn assert_all<D: Device>() {
-                $($(executes::<op::$operation, CpuBackendImpl<D>>();)*)*
+                macro_rules! assert_entry {
+                    (($operation:ident, $training:expr)) => {
+                        executes::<op::$operation, CpuBackendImpl<D>>()
+                    };
+                    ($operation:ident) => {
+                        executes::<op::$operation, CpuBackendImpl<D>>()
+                    };
+                }
+                $( $(assert_entry!($entry);)*)*
             }
 
             assert_all::<incin_core::tensor::device::Cpu>();

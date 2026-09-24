@@ -1032,6 +1032,28 @@ fn zero_output_gradient_and_determinism_exceptions_override_their_family() {
     assert!(catalog_entry(OperationKind::Add).unwrap().same_device);
 }
 
+/// The quantize boundary claims the straight-through estimator, and only the
+/// boundary: its two halves record tape entries whose backward passes the
+/// cotangent through unchanged (issue #93, Decision 2), while a product over
+/// compressed blocks inherits no such claim from sharing the profile.
+#[test]
+fn quantize_and_dequantize_claim_the_straight_through_estimator() {
+    for operation in [OperationKind::Quantize, OperationKind::Dequantize] {
+        assert_eq!(
+            catalog_entry(operation).unwrap().gradient,
+            GradientRule::StraightThrough,
+            "{operation} records an STE tape entry, so its row must claim the approximation",
+        );
+    }
+    assert_eq!(
+        catalog_entry(OperationKind::QuantizedMatMul)
+            .unwrap()
+            .gradient,
+        GradientRule::None,
+        "quantized_matmul has no backward rule and must not inherit the boundary's claim",
+    );
+}
+
 /// Known inputs must never certify an unchecked output shape.
 ///
 /// `verify_outputs` used to accept whatever shape the caller supplied

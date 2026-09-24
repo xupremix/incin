@@ -217,8 +217,17 @@ macro_rules! cpu_descriptor_operations {
             // `dequantize` and `quantized_matmul` read blocks. Both refuse a
             // strided operand: the kernels index the block buffer directly and
             // never consult a stride.
-            quantizing = [Quantize],
-            quantized = [Dequantize, QuantizedMatMul],
+            //
+            // The second element of each pair is this backend's training
+            // claim, and it is stated per operation because the three
+            // disagree. CPU's `quantize`/`dequantize` kernels record the
+            // issue #93 straight-through tape entry whenever `GradMode`
+            // enables recording (`cpu/canonical/linalg.rs`), so their rows
+            // advertise training. `quantized_matmul` records nothing and has
+            // `GradientRule::None` in the catalog, so its row stays `false` -
+            // fail-closed, until a kernel behind it records a gradient.
+            quantizing = [(Quantize, true)],
+            quantized = [(Dequantize, true), (QuantizedMatMul, false)],
             // The losses supplied as real composed defaults
             // rather than as stubs: each rewrites into `sub`, `mul`, `abs` and
             // an all-reduce. They inherit the reduction group's f32-only claim
@@ -463,8 +472,15 @@ macro_rules! cuda_descriptor_operations {
             // to FLOAT_DTYPES - same Composed kind, Contiguous layouts,
             // rank bounds and training; only the dtype set differed.
             composed_matmul_bias = [],
-            quantizing = [Quantize],
-            quantized = [Dequantize, QuantizedMatMul],
+            // All three `training` flags are `false` here, unlike CPU's: the
+            // CUDA executor's quantize/dequantize paths
+            // (`cuda/executor.rs` around the `Execute<op::Quantize>` impls,
+            // down to `cuda/ops/quant.rs`) launch a kernel and return without
+            // pushing a `cuda::tape` entry, so no training invocation could
+            // ever be answered with a gradient. Fail-closed: the row claims
+            // training only when the recording implementation exists.
+            quantizing = [(Quantize, false)],
+            quantized = [(Dequantize, false), (QuantizedMatMul, false)],
             composed_reduction = [
                 MseLoss, L1Loss, BceWithLogitsLoss,
                 InstanceNorm,

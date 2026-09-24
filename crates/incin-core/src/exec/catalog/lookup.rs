@@ -79,7 +79,7 @@ pub fn operation_semantics_document() -> alloc::string::String {
     use core::fmt::Write as _;
     let coverage = operation_coverage();
     let mut out = alloc::string::String::from(
-        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
+        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands. `Gradient` is the derivative contract; `StraightThrough` marks the straight-through estimator (STE), an approximation rather than a true derivative: backward passes the cotangent through unchanged, which is the `quantize`/`dequantize` boundary's rule (PyTorch QAT's `FakeQuantize` behavior; a fixed clip range would zero the cotangent outside `|x| <= clip`, and Q8_0's per-block scale never saturates, so the pass-through is unconditional).\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
     );
     let _ = writeln!(
         out,
@@ -105,9 +105,18 @@ pub fn operation_semantics_document() -> alloc::string::String {
         } else {
             row.output_arity.end().to_string()
         };
+        // The STE cell names the approximation outright rather than printing
+        // the variant alone: a reader of this table must be able to tell that
+        // `quantize`'s gradient is a deliberate estimate, not the derivative.
+        let gradient = match row.gradient {
+            GradientRule::StraightThrough => {
+                alloc::string::String::from("StraightThrough (approximation: STE)")
+            }
+            other => alloc::format!("{other:?}"),
+        };
         let _ = writeln!(
             out,
-            "| `{}` | `{}` | `{}` | `{:?}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{:?}` | {} | `{:?}` | `{}` |",
+            "| `{}` | `{}` | `{}` | `{:?}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{}` | {} | `{:?}` | `{}` |",
             row.name,
             row.descriptor,
             row.attributes,
@@ -123,7 +132,7 @@ pub fn operation_semantics_document() -> alloc::string::String {
             row.output,
             row.empty,
             row.numeric,
-            row.gradient,
+            gradient,
             if row.deterministic { "yes" } else { "no" },
             row.layout,
             row.legacy_source,

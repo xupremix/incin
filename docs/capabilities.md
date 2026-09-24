@@ -382,8 +382,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `bmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 3+ | yes | composed |
 | `addmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
 | `linear` | `bf16`, `f16`, `f32`, `f64` | `contiguous`, `strided` | 1+ | yes | composed |
-| `quantize` | `f32` | `contiguous` | any | no | native |
-| `dequantize` | `q8_0` | `contiguous` | any | no | native |
+| `quantize` | `f32` | `contiguous` | any | yes | native |
+| `dequantize` | `q8_0` | `contiguous` | any | yes | native |
 | `quantized_matmul` | `q8_0` | `contiguous` | 2+ | no | native |
 | `mse_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `l1_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |

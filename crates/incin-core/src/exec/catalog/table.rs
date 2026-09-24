@@ -460,6 +460,18 @@ pub(super) const fn entry(
     } else if matches!(operation, OperationKind::ToDevice) {
         gradient = GradientRule::Defined;
     }
+    // The quantize boundary records a tape entry whose backward is the
+    // straight-through estimator (issue #93, Decision 2): the cotangent
+    // passes through unchanged instead of the rounding being differentiated.
+    // `dequantize` is the dual half of the same boundary, so the roundtrip's
+    // backward is exactly the identity. `quantized_matmul` has no backward
+    // rule and keeps the profile default of `None`.
+    if matches!(
+        operation,
+        OperationKind::Quantize | OperationKind::Dequantize
+    ) {
+        gradient = GradientRule::StraightThrough;
+    }
     if matches!(
         operation,
         OperationKind::SumAll

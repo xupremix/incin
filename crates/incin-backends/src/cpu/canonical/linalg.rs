@@ -17,6 +17,7 @@ use crate::cpu::ops::shape_ops::{
     addmm_storage, reshape_storage, transpose_storage, unsqueeze_storage,
 };
 use crate::cpu::storage::CpuStorage;
+use crate::cpu::tape::{self, TapeEntry};
 use crate::descriptor_bind::{invalid, kernel_error};
 
 fn binary_operands<'a, D: Device>(
@@ -202,7 +203,24 @@ impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+        let output =
+            quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        // Straight-through estimator (issue #93, Decision 2): the forward is
+        // the true block-quantized value, and the backward passes the
+        // cotangent through unchanged - `grad_in = grad_out` - rather than
+        // differentiating the rounding, which has no derivative. Q8_0 scales
+        // each block by its own `max_abs / 127`, so nothing saturates and
+        // there is no clip range to zero outside of; a fixed-range format
+        // would mask with `1{|x| <= clip}` here. PyTorch QAT's
+        // `FakeQuantize` rule, documented as an approximation in the
+        // generated operation semantics (`GradientRule::StraightThrough`).
+        let (input_id, output_id) = (input.id, output.id);
+        tape::push_with(|| TapeEntry {
+            output_id,
+            input_ids: vec![input_id],
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+        });
+        Ok(output)
     }
 }
 
@@ -227,7 +245,20 @@ impl<D: Device> Execute<op::Dequantize> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        dequantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+        let output =
+            dequantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        // The dual of `quantize`'s straight-through node: decoding a block
+        // encoding has no derivative either, so the cotangent passes to the
+        // quantized operand unchanged. Together the two identity recipes make
+        // `dequantize(quantize(x))` backward exactly the identity, which is
+        // the boundary contract in issue #93, Decision 2.
+        let (input_id, output_id) = (input.id, output.id);
+        tape::push_with(|| TapeEntry {
+            output_id,
+            input_ids: vec![input_id],
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+        });
+        Ok(output)
     }
 }
 

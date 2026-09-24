@@ -130,8 +130,12 @@ macro_rules! descriptor_capability_rules {
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
         composed_matmul = [$($composed_matmul_op:ident),* $(,)?],
         composed_matmul_bias = [$($composed_matmul_bias_op:ident),* $(,)?],
-        quantizing = [$($quantizing_op:ident),* $(,)?],
-        quantized = [$($quantized_op:ident),* $(,)?],
+        // The quantization groups carry their `training` flag per operation
+        // rather than per group: the three identities disagree with each other
+        // on every backend that has them (see the row arms below), and the
+        // flag is a per-backend fact about which kernels record a tape entry.
+        quantizing = [$(($quantizing_op:ident, $quantizing_training:expr)),* $(,)?],
+        quantized = [$(($quantized_op:ident, $quantized_training:expr)),* $(,)?],
         composed_reduction = [$($composed_reduction_op:ident),* $(,)?],
         composed_reduction_indexed = [$($composed_reduction_indexed_op:ident),* $(,)?]
     ) => {
@@ -296,26 +300,37 @@ macro_rules! descriptor_capability_rules {
             ),)*
             // The compression reads the float set its kernel accepts, which is
             // narrower than the elementwise one: it matches on the buffer
-            // variant rather than converting.
+            // variant rather than converting. Its `training` flag is the
+            // declaring backend's, taken from the group entry rather than
+            // hardcoded: a row may only claim training once the kernel behind
+            // it records a tape entry (fail-closed).
             $(native_ranked(
                 OperationKind::$quantizing_op,
                 $reduction,
                 $quantized_layouts,
                 descriptor_min_rank(OperationKind::$quantizing_op),
                 $max_rank(OperationKind::$quantizing_op),
-                false,
+                $quantizing_training,
             ),)*
-            // Operations over compressed storage. `training` is false on both:
-            // quantization is not differentiable and neither kernel pushes a
-            // tape entry, so advertising them for training would promise a
-            // gradient that never arrives.
+            // Operations over compressed storage, same per-operation flag.
+            // `quantize`/`dequantize` record the issue #93 straight-through
+            // estimator entry on the backends that implemented it (CPU), so
+            // those rows advertise training; `quantized_matmul` has no
+            // gradient rule in the catalog (`GradientRule::None`) and records
+            // nothing anywhere, so its row stays `false` on every backend -
+            // advertising it would let a training invocation through admission
+            // and deliver a graph with a hole where its backward should be.
+            // Backends whose executor pushes no tape for the boundary either
+            // (CUDA, and the empty WGPU/Metal groups) declare `false` for
+            // `quantize`/`dequantize` too: the row claims training only when
+            // the implementation that must answer for it exists.
             $(native_ranked(
                 OperationKind::$quantized_op,
                 $quantized_dtypes,
                 $quantized_layouts,
                 descriptor_min_rank(OperationKind::$quantized_op),
                 $max_rank(OperationKind::$quantized_op),
-                false,
+                $quantized_training,
             ),)*
             // Same relationship to the reduction rows: a loss that ends in an
             // all-reduce cannot claim a dtype the all-reduce refuses.

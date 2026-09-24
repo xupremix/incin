@@ -1284,8 +1284,13 @@ impl<D: Device> Execute<op::BatchedMatMul> for MetalBackendImpl<D> {
     }
 }
 
+/// Same compile-time obligation as the CPU one: every identity the Metal
+/// declaration advertises must have an `Execute` impl. Group entries are
+/// bare `Op` idents or `(Op, training)` pairs (the quantization groups);
+/// the training flag is a capability claim, so both spellings assert the
+/// executor and neither is read here.
 macro_rules! assert_every_advertised_metal_row_executes {
-    (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
+    (; $($group:ident = [$($entry:tt),* $(,)?]),* $(,)?) => {
         const _: () = {
             const fn executes<O, B>()
             where
@@ -1295,7 +1300,15 @@ macro_rules! assert_every_advertised_metal_row_executes {
             }
 
             const fn assert_all<D: Device>() {
-                $($(executes::<op::$operation, MetalBackendImpl<D>>();)*)*
+                macro_rules! assert_entry {
+                    (($operation:ident, $training:expr)) => {
+                        executes::<op::$operation, MetalBackendImpl<D>>()
+                    };
+                    ($operation:ident) => {
+                        executes::<op::$operation, MetalBackendImpl<D>>()
+                    };
+                }
+                $( $(assert_entry!($entry);)*)*
             }
 
             assert_all::<incin_core::tensor::device::Metal>();
