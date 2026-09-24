@@ -3,6 +3,9 @@
 pub mod backend;
 /// Capability registration for the Metal backend.
 pub mod capability;
+/// Dtype conversion (`to_dtype`), bidirectional between the float and integer
+/// storage dtypes Metal admits (#92), with a float-to-float tape entry.
+pub mod convert;
 pub mod executor;
 /// Gather-family indexing: `embedding`, `gather`, `index_select` (#92),
 /// host-side walks with scatter-add tape recipes.

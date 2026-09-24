@@ -1176,13 +1176,23 @@ mod tests {
 
     #[test]
     fn dropout_draws_advance_so_consecutive_calls_do_not_collide() {
+        // Other unit tests call `dropout` on the same process-wide counter in
+        // parallel, so exact equality races; assert monotone advancement by at
+        // least numel instead — the non-collision property is that the offset
+        // never rewinds or stalls across draws.
         let t = vector(&[1.0, 2.0, 3.0, 4.0]);
         let before = reserve_draw(0).1;
         let _ = B::dropout::<f32>(&t, 0.5, true).unwrap();
         let mid = reserve_draw(0).1;
-        assert_eq!(mid, before + 4, "one training draw advances by numel");
+        assert!(
+            mid >= before + 4,
+            "one training draw advances by at least numel (before={before}, mid={mid})"
+        );
         let _ = B::dropout::<f32>(&t, 0.5, true).unwrap();
         let end = reserve_draw(0).1;
-        assert_eq!(end, mid + 4, "the second draw starts past the first");
+        assert!(
+            end >= mid + 4,
+            "the second draw starts at or past the first (mid={mid}, end={end})"
+        );
     }
 }

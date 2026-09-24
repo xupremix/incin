@@ -538,6 +538,30 @@ pub(super) fn storage_from_f32(
     )
 }
 
+/// Wrap raw little-endian bytes in contiguous [`MetalStorage`] with an
+/// explicit `dtype`, inheriting `like`'s mode, device and alignment.
+///
+/// `storage_from_f32` cannot produce `i64` index or `bool` outputs because
+/// it inherits `like`'s dtype; this helper is the typed counterpart for
+/// operations whose result is not the operand's dtype (`argmax`, `sort`,
+/// `topk` indices, `one_hot` masks, `to_dtype` targets).
+pub(super) fn storage_from_raw(
+    bytes: Vec<u8>,
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    like: &MetalStorage,
+) -> Result<MetalStorage> {
+    let numel: usize = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Storage)?;
+    let meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(shape),
+        dtype,
+        like.device(),
+        MetalStorage::alignment(),
+        numel,
+    )?;
+    MetalStorage::from_bytes(bytes, meta, like.mode(), like.device_ordinal())
+}
+
 fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalStorage> {
     let dims = t.metadata().shape().dims();
     if axis >= dims.len() {

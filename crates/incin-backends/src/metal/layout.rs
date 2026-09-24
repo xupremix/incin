@@ -24,6 +24,27 @@ fn numel(dims: &[usize]) -> Result<usize> {
     Ok(ShapeBuf::from_slice(dims).checked_numel(OperationKind::Storage)?)
 }
 
+/// Row-major contiguous strides for a host walk (same as `reduction.rs`).
+fn host_strides(shape: &[usize]) -> Vec<usize> {
+    let rank = shape.len();
+    let mut strides = vec![1usize; rank];
+    for i in (0..rank.saturating_sub(1)).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+    strides
+}
+
+/// Odometer increment over `shape` (wraps like CPU's `increment_index`).
+fn host_increment(idx: &mut [usize], shape: &[usize]) {
+    for axis in (0..shape.len()).rev() {
+        idx[axis] += 1;
+        if idx[axis] < shape[axis] {
+            return;
+        }
+        idx[axis] = 0;
+    }
+}
+
 impl<D: Device> MetalBackendImpl<D> {
     /// `transpose(t, dim1, dim2)`: materialize the operand with the two axes
     /// swapped, via [`transpose_metal`]'s host walk.
@@ -439,6 +460,189 @@ impl<D: Device> MetalBackendImpl<D> {
         offset: i64,
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
         Self::triangular::<K>(t, offset, true)
+    }
+
+    /// `pad(t, padding, value)`: grow each axis by `(before, after)`, filling
+    /// the exterior with the constant.
+    ///
+    /// Forward walks every output coordinate: in-window positions read the
+    /// operand at `coordinate - before`, exterior positions take `value` —
+    /// CPU's `pad_storage` walk for walk. Backward is the inverse window
+    /// extract: each input coordinate's cotangent sits at itself shifted by
+    /// the per-axis `before` padding, the same recipe CPU's reverse walk uses.
+    pub(crate) fn pad<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        padding: &[(usize, usize)],
+        value: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let in_dims = t.shape().to_vec();
+        if padding.len() != in_dims.len() {
+            return Err(Error::ShapeMismatch {
+                op: "pad",
+                expected: in_dims.clone(),
+                got: vec![padding.len()],
+                msg: "pad needs one (before, after) pair per axis".to_string(),
+            });
+        }
+        let out_dims: Vec<usize> = in_dims
+            .iter()
+            .zip(padding.iter())
+            .map(|(size, &(before, after))| size + before + after)
+            .collect();
+        let total = numel(&out_dims)?;
+        let in_strides = host_strides(&in_dims);
+        let bytes = t.as_bytes()?;
+        let data: &[f32] = bytemuck::cast_slice(bytes);
+        let fill = value as f32;
+
+        let mut out_vals = vec![fill; total];
+        let mut out_idx = vec![0usize; out_dims.len()];
+        for _ in 0..total {
+            let mut inside = true;
+            let mut src_idx = Vec::with_capacity(out_idx.len());
+            for (axis, &position) in out_idx.iter().enumerate() {
+                let (before, _) = padding[axis];
+                if position < before || position >= before + in_dims[axis] {
+                    inside = false;
+                    break;
+                }
+                src_idx.push(position - before);
+            }
+            if inside {
+                let flat: usize = src_idx
+                    .iter()
+                    .zip(in_strides.iter())
+                    .map(|(&i, &s)| i * s)
+                    .sum();
+                let out_flat: usize = out_idx
+                    .iter()
+                    .zip(host_strides(&out_dims).iter())
+                    .map(|(&i, &s)| i * s)
+                    .sum();
+                out_vals[out_flat] = data[flat];
+            }
+            if !out_dims.is_empty() {
+                host_increment(&mut out_idx, &out_dims);
+            }
+        }
+        let out = storage_from_f32(&out_vals, &out_dims, t)?;
+        let offsets: Vec<usize> = padding.iter().map(|&(before, _)| before).collect();
+        let out_strides = host_strides(&out_dims);
+        let (t_id, out_id) = (t.id(), out.id());
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                let grad_bytes = grad_out.as_bytes()?;
+                let grad: &[f32] = bytemuck::cast_slice(grad_bytes);
+                let total = numel(&in_dims)?;
+                let mut grad_input = vec![0.0f32; total];
+                let mut idx = vec![0usize; in_dims.len()];
+                for _ in 0..total {
+                    let mut out_idx = Vec::with_capacity(in_dims.len());
+                    for (axis, &coordinate) in idx.iter().enumerate() {
+                        out_idx.push(coordinate + offsets[axis]);
+                    }
+                    let out_flat: usize = out_idx
+                        .iter()
+                        .zip(out_strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    let flat: usize = idx
+                        .iter()
+                        .zip(in_strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    grad_input[flat] = grad[out_flat];
+                    if !in_dims.is_empty() {
+                        host_increment(&mut idx, &in_dims);
+                    }
+                }
+                Ok(vec![storage_from_f32(&grad_input, &in_dims, grad_out)?])
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `repeat(t, repeats)`: tile each axis by its factor —
+    /// `out[coords] = t[coords % shape]`, CPU's `repeat_storage` walk.
+    ///
+    /// Backward is the modulo-block sum: every tile's cotangent adds onto its
+    /// source element, the exact inverse of the forward tiling.
+    pub(crate) fn repeat<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        repeats: &[usize],
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let in_dims = t.shape().to_vec();
+        if repeats.len() != in_dims.len() {
+            return Err(Error::ShapeMismatch {
+                op: "repeat",
+                expected: in_dims.clone(),
+                got: vec![repeats.len()],
+                msg: "repeat factors must match tensor rank".to_string(),
+            });
+        }
+        let out_dims: Vec<usize> = in_dims
+            .iter()
+            .zip(repeats.iter())
+            .map(|(size, &rep)| size * rep)
+            .collect();
+        let total = numel(&out_dims)?;
+        let in_strides = host_strides(&in_dims);
+        let out_strides = host_strides(&out_dims);
+        let bytes = t.as_bytes()?;
+        let data: &[f32] = bytemuck::cast_slice(bytes);
+
+        let mut out_vals = Vec::with_capacity(total);
+        let mut out_idx = vec![0usize; out_dims.len()];
+        for _ in 0..total {
+            let src_idx: Vec<usize> = out_idx
+                .iter()
+                .enumerate()
+                .map(|(axis, &value)| value % in_dims[axis])
+                .collect();
+            let flat: usize = src_idx
+                .iter()
+                .zip(in_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            out_vals.push(data[flat]);
+            if !out_dims.is_empty() {
+                host_increment(&mut out_idx, &out_dims);
+            }
+        }
+        let out = storage_from_f32(&out_vals, &out_dims, t)?;
+
+        let (t_id, out_id) = (t.id(), out.id());
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                let grad_bytes = grad_out.as_bytes()?;
+                let grad: &[f32] = bytemuck::cast_slice(grad_bytes);
+                let total = numel(&in_dims)?;
+                let mut grads = vec![0.0f32; total];
+                let mut grad_idx = vec![0usize; out_dims.len()];
+                for _ in 0..numel(&out_dims)? {
+                    let flat_src: usize = grad_idx
+                        .iter()
+                        .enumerate()
+                        .map(|(axis, &value)| (value % in_dims[axis]) * in_strides[axis])
+                        .sum();
+                    let flat_g: usize = grad_idx
+                        .iter()
+                        .zip(out_strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    grads[flat_src] += grad[flat_g];
+                    if !out_dims.is_empty() {
+                        host_increment(&mut grad_idx, &out_dims);
+                    }
+                }
+                Ok(vec![storage_from_f32(&grads, &in_dims, grad_out)?])
+            }),
+        });
+        Ok(out)
     }
 }
 

@@ -14,7 +14,7 @@ use incin_core::error::{Error, Result};
 use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::Device;
-use incin_core::tensor::dtype::DType;
+use incin_core::tensor::dtype::{DType, DTypeId};
 
 use super::backend::{MetalBackendImpl, storage_from_f32};
 use super::storage::MetalStorage;
@@ -258,6 +258,201 @@ impl<D: Device> MetalBackendImpl<D> {
             }),
         });
         Ok(out)
+    }
+
+    /// Pack `i64` values into `MetalStorage` with an `I64` dtype tag,
+    /// inheriting `like`'s mode/device/alignment — the typed-output
+    /// counterpart of `storage_from_f32` for index results.
+    fn index_storage(values: &[i64], shape: &[usize], like: &MetalStorage) -> Result<MetalStorage> {
+        let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+        super::backend::storage_from_raw(bytes, shape, DTypeId::I64.descriptor(), like)
+    }
+
+    /// Shared axis-slice sort for `Sort` and `TopK`.
+    ///
+    /// Enumerates the `n_slices` independent 1-D slices along `dim` (the
+    /// `base_shape` with `dim` set to 1, unflattened — CPU's `topk` walk),
+    /// stable-sorts each slice's `(value, index)` pairs (stable sort preserves
+    /// tie order, matching CPU's `sort_by` on equal keys), optionally truncates
+    /// to `k`, and returns the flat value/index vectors plus the output shape.
+    fn sort_pairs(
+        t: &MetalStorage,
+        dim: usize,
+        descending: bool,
+        k: Option<usize>,
+    ) -> Result<(Vec<f32>, Vec<i64>, Vec<usize>)> {
+        let shape = t.shape().to_vec();
+        if dim >= shape.len() {
+            return Err(Error::ShapeMismatch {
+                op: "sort_pairs",
+                expected: shape.clone(),
+                got: vec![dim],
+                msg: format!("axis {dim} out of range for shape {shape:?}"),
+            });
+        }
+        let mut base_shape = shape.clone();
+        base_shape[dim] = 1;
+        let n_slices = numel(&base_shape)?;
+        let k = k.map(|k| k.min(shape[dim]));
+        let mut out_shape = shape.clone();
+        if let Some(k) = k {
+            out_shape[dim] = k;
+        }
+        let out_len = numel(&out_shape)?;
+        let mut out_vals = vec![0.0f32; out_len];
+        let mut out_indices = vec![0i64; out_len];
+
+        let bytes = t.as_bytes()?;
+        let data: &[f32] = bytemuck::cast_slice(bytes);
+        let strides = host_strides(&shape);
+        let out_strides = host_strides(&out_shape);
+
+        for i in 0..n_slices {
+            let mut rem = i;
+            let mut coords = vec![0usize; shape.len()];
+            for dd in (0..shape.len()).rev() {
+                coords[dd] = rem % base_shape[dd];
+                rem /= base_shape[dd];
+            }
+            let mut slice: Vec<(f32, i64)> = Vec::with_capacity(shape[dim]);
+            for j in 0..shape[dim] {
+                coords[dim] = j;
+                let flat: usize = coords
+                    .iter()
+                    .zip(strides.iter())
+                    .map(|(&c, &s)| c * s)
+                    .sum();
+                slice.push((data[flat], j as i64));
+            }
+            if descending {
+                slice.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
+            } else {
+                slice.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
+            }
+            let take = k.unwrap_or(shape[dim]);
+            let mut out_coords = coords.clone();
+            for (j, &(val, idx)) in slice.iter().enumerate().take(take) {
+                out_coords[dim] = j;
+                let flat: usize = out_coords
+                    .iter()
+                    .zip(out_strides.iter())
+                    .map(|(&c, &s)| c * s)
+                    .sum();
+                out_vals[flat] = val;
+                out_indices[flat] = idx;
+            }
+        }
+        Ok((out_vals, out_indices, out_shape))
+    }
+
+    /// `argmax(t, dim)`: index of the maximum along `dim` (axis removed, as
+    /// `max_dim` squeezes) or, for `None`, the flat index of the global max
+    /// as a scalar — CPU's `argmax`, forward-only (no tape, matching CPU's
+    /// deliberate non-push and `descriptor_training(ArgMax) = false`).
+    /// Indices are physically `i64`.
+    pub(crate) fn argmax(input: &MetalStorage, dim: Option<usize>) -> Result<MetalStorage> {
+        let shape = input.shape().to_vec();
+        let total = numel(&shape)?;
+        let bytes = input.as_bytes()?;
+        let data: &[f32] = bytemuck::cast_slice(bytes);
+        match dim {
+            Some(d) => {
+                if d >= shape.len() {
+                    return Err(Error::ShapeMismatch {
+                        op: "argmax",
+                        expected: shape.clone(),
+                        got: vec![d],
+                        msg: format!("axis {d} out of range for shape {shape:?}"),
+                    });
+                }
+                let mut base_shape = shape.clone();
+                base_shape[d] = 1;
+                let n_slices = numel(&base_shape)?;
+                let strides = host_strides(&shape);
+                let mut keepdim_shape = shape.clone();
+                keepdim_shape[d] = 1;
+                let mut winners = vec![0i64; n_slices];
+                for (i, slot) in winners.iter_mut().enumerate() {
+                    let mut rem = i;
+                    let mut coords = vec![0usize; shape.len()];
+                    for dd in (0..shape.len()).rev() {
+                        coords[dd] = rem % base_shape[dd];
+                        rem /= base_shape[dd];
+                    }
+                    let mut best_val = f32::NEG_INFINITY;
+                    let mut best_axis = 0usize;
+                    for j in 0..shape[d] {
+                        coords[d] = j;
+                        let flat: usize = coords
+                            .iter()
+                            .zip(strides.iter())
+                            .map(|(&c, &s)| c * s)
+                            .sum();
+                        if data[flat] > best_val {
+                            best_val = data[flat];
+                            best_axis = j;
+                        }
+                    }
+                    *slot = best_axis as i64;
+                }
+                let keepdim = Self::index_storage(&winners, &keepdim_shape, input)?;
+                // Squeeze the unit axis the same way CPU does: reshape to the
+                // axis-removed shape (a pure rewrap of the same bytes).
+                let mut squeeze_shape = keepdim_shape.clone();
+                squeeze_shape.remove(d);
+                super::backend::reshape_metal(&keepdim, &squeeze_shape)
+            }
+            None => {
+                let mut best_val = f32::NEG_INFINITY;
+                let mut best_flat = 0i64;
+                for (flat, &v) in data.iter().enumerate().take(total) {
+                    if v > best_val {
+                        best_val = v;
+                        best_flat = flat as i64;
+                    }
+                }
+                Self::index_storage(&[best_flat], &[], input)
+            }
+        }
+    }
+
+    /// `sort(t, axis, descending)`: sorted values beside the permutation that
+    /// produced them, both with the operand's own geometry — `topk` with
+    /// `k = axis length`, exactly the pair CUDA's `Sort` returns. Forward-only
+    /// (`descriptor_training(Sort) = false`); indices are physically `i64`.
+    pub(crate) fn sort(
+        input: &MetalStorage,
+        axis: usize,
+        descending: bool,
+    ) -> Result<(MetalStorage, MetalStorage)> {
+        let dim_len = *input
+            .shape()
+            .get(axis)
+            .ok_or_else(|| Error::Msg(format!("sort: axis {axis} outside the operand's rank")))?;
+        let (vals, idxs, out_shape) = Self::sort_pairs(input, axis, descending, Some(dim_len))?;
+        let values = storage_from_f32(&vals, &out_shape, input)?;
+        let indices = Self::index_storage(&idxs, &out_shape, input)?;
+        Ok((values, indices))
+    }
+
+    /// `topk(t, k, axis, largest)`: the `k` extreme values along `axis`
+    /// beside their indices; the axis shrinks to `k`. Forward-only; indices
+    /// are physically `i64` (the requested `index_dtype` is what admission
+    /// checked on inputs, and no Metal row post-checks its output tag —
+    /// same convention as CUDA's `TopK`/`Sort`).
+    pub(crate) fn topk(
+        input: &MetalStorage,
+        k: usize,
+        axis: usize,
+        largest: bool,
+    ) -> Result<(MetalStorage, MetalStorage)> {
+        if k == 0 {
+            return Err(Error::Msg("topk: k must be at least one".into()));
+        }
+        let (vals, idxs, out_shape) = Self::sort_pairs(input, axis, largest, Some(k))?;
+        let values = storage_from_f32(&vals, &out_shape, input)?;
+        let indices = Self::index_storage(&idxs, &out_shape, input)?;
+        Ok((values, indices))
     }
 }
 

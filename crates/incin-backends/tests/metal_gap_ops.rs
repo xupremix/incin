@@ -16,10 +16,15 @@
 #![cfg(feature = "metal")]
 
 use incin_backends::metal::{MetalBackendImpl, tape_depth};
-use incin_core::backend_authoring::{HostInterop, HostReadback, StorageBackend, op};
+use incin_core::backend_authoring::{
+    AutogradBackend, HostInterop, HostReadback, StorageBackend, op,
+};
 use incin_core::exec::catalog::{
-    AxisAttributes, AxisVarianceAttributes, BatchNormAttributes, GroupNormAttributes,
-    LossAttributes, LossReduction, NoAttributes, NormAttributes, VarianceAttributes,
+    ArgsortAttributes, AxisAttributes, AxisVarianceAttributes, BatchNormAttributes,
+    DTypeAttributes, DuplicateIndexRule, EpsilonAttributes, GroupNormAttributes,
+    IndexReductionAttributes, LossAttributes, LossReduction, NoAttributes, NormAttributes,
+    OneHotAttributes, PadAttributes, RepeatAttributes, ScatterAttributes, TopKAttributes,
+    VarianceAttributes,
 };
 use incin_core::exec::{ExecutionContext, TapeStorage, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, Metal};
@@ -671,6 +676,73 @@ fn storage_from_host(values: &[f32], shape: &[usize]) -> TestStorage {
     upload(values, shape)
 }
 
+/// Physically-i64 index results (ArgMax/Sort/TopK/…) read back through the
+/// shared host bytes — `HostReadback::int_to_vec1` misreads i64 as f32.
+fn read_i64(storage: &TestStorage) -> Vec<i64> {
+    let bytes = storage
+        .as_bytes()
+        .expect("shared-mode storage is host-readable");
+    bytemuck::cast_slice::<u8, i64>(bytes).to_vec()
+}
+
+/// Bool results (`OneHot`) are physical 0/1 u8 under a `Bool` label.
+fn read_bool(storage: &TestStorage) -> Vec<u8> {
+    let bytes = storage
+        .as_bytes()
+        .expect("shared-mode storage is host-readable");
+    bytes.to_vec()
+}
+
+/// Multi-output dispatch: Sort/TopK return `(values, indices)`.
+fn run_pair_outputs<O, A>(input: &TestStorage, attributes: A) -> ((TestStorage, TestStorage), usize)
+where
+    O: incin_core::exec::CanonicalOperation<Attributes = A>,
+    TestBackend: incin_core::backend_authoring::Execute<O, Output = (TestStorage, TestStorage)>,
+    A: Clone,
+{
+    let context = ExecutionContext::new(TestBackend::default());
+    let inputs = [TensorHandle::from_storage::<TestBackend, f32, _>(input)];
+    let before = tape_depth();
+    let out = incin_core::exec::dispatch::execute::<O, _>(&context, attributes, &inputs)
+        .expect("an advertised Metal operation must execute");
+    (out, tape_depth() - before)
+}
+
+/// N-channel input (1, 4, 2, 2) so per-instance stats are well defined.
+const IN_IN: [f32; 16] = [
+    1.0, 2.0, 3.0, 4.0, //
+    5.0, 6.0, 7.0, 8.0, //
+    9.0, 10.0, 11.0, 12.0, //
+    13.0, 14.0, 15.0, 16.0,
+];
+
+/// Instance norm is `group_norm` with one group per channel: each
+/// `(sample, channel)` vector is normalized alone over its spatial extent.
+fn host_instance_norm(values: &[f32], shape: &[usize], eps: f64) -> Vec<f64> {
+    let (n, c, hw) = (shape[0], shape[1], shape[2..].iter().product::<usize>());
+    let mut out = vec![0.0; values.len()];
+    for bi in 0..n {
+        for ci in 0..c {
+            let start = (bi * c + ci) * hw;
+            let group = &values[start..start + hw];
+            let mean = group.iter().map(|&x| f64::from(x)).sum::<f64>() / hw as f64;
+            let var = group
+                .iter()
+                .map(|&x| {
+                    let d = f64::from(x) - mean;
+                    d * d
+                })
+                .sum::<f64>()
+                / hw as f64;
+            let inv = 1.0 / (var + eps).sqrt();
+            for (j, &x) in group.iter().enumerate() {
+                out[start + j] = (f64::from(x) - mean) * inv;
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn group_norm_normalizes_within_each_group_and_backward_runs() {
     require_metal();
@@ -695,12 +767,475 @@ fn group_norm_normalizes_within_each_group_and_backward_runs() {
     }
 
     let loss = sum_loss(&out);
-    let grads =
-        <TestBackend as incin_core::backend_authoring::AutogradBackend>::backward::<f32>(&loss)
-            .expect("group_norm backward must run");
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("group_norm backward must run");
     let g = grads.get(input_id).expect("input receives a gradient");
     assert!(
         read(g).iter().all(|v| v.is_finite()),
         "group_norm grad finite"
+    );
+}
+
+// ── #92 batch: instance_norm / pad / repeat / scatter / one_hot / argmax /
+//    sort / topk / to_dtype / batched_matmul ──────────────────────────────────
+
+#[test]
+fn instance_norm_matches_the_host_reference_and_records() {
+    require_metal();
+    let input = upload(&IN_IN, &[1, 4, 2, 2]);
+    let input_id = TapeStorage::id(&input);
+    let (out, recorded) = run1::<op::InstanceNorm, _>(&input, EpsilonAttributes { epsilon: 1e-5 });
+    assert_close(
+        &read(&out),
+        &host_instance_norm(&IN_IN, &[1, 4, 2, 2], 1e-5),
+        1e-4,
+        "instance_norm",
+    );
+    assert!(recorded >= 1, "instance_norm advertises training = true");
+
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("instance_norm backward must run");
+    let g = grads.get(input_id).expect("input receives a gradient");
+    assert!(
+        read(g).iter().all(|v| v.is_finite()),
+        "instance_norm grad finite"
+    );
+}
+
+#[test]
+fn pad_fills_the_requested_margins_and_records() {
+    require_metal();
+    let input = upload(&[1.0, 2.0], &[2]);
+    let input_id = TapeStorage::id(&input);
+    let (out, recorded) = run1::<op::Pad, _>(
+        &input,
+        PadAttributes {
+            padding: vec![(1, 1)],
+            value: 9.0,
+        },
+    );
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[4],
+        "pad grows each axis by before+after"
+    );
+    assert_close(&read(&out), &[9.0, 1.0, 2.0, 9.0], 0.0, "pad forward");
+    assert!(recorded >= 1, "pad advertises training = true");
+
+    let loss = sum_loss(&out);
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("pad backward must run");
+    let g = grads.get(input_id).expect("input receives a gradient");
+    assert_close(&read(g), &[1.0, 1.0], 1e-6, "pad backward");
+}
+
+#[test]
+fn repeat_tiles_every_axis_and_records() {
+    require_metal();
+    let input = upload(&[1.0, 2.0], &[2]);
+    let input_id = TapeStorage::id(&input);
+    let (out, recorded) = run1::<op::Repeat, _>(&input, RepeatAttributes { repeats: vec![2] });
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[4],
+        "rank-1 repeat doubles the length"
+    );
+    assert_close(&read(&out), &[1.0, 2.0, 1.0, 2.0], 0.0, "repeat");
+    assert!(recorded >= 1, "repeat advertises training = true");
+
+    let loss = sum_loss(&out);
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("repeat backward must run");
+    let g = grads.get(input_id).expect("input receives a gradient");
+    assert_close(&read(g), &[2.0, 2.0], 1e-6, "repeat backward");
+}
+
+#[test]
+fn scatter_overwrites_the_indexed_positions_and_records() {
+    require_metal();
+    let input = upload(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+    let index = upload_i64(&[2, 0, 0, 1], &[2, 2]);
+    let src = upload(&[7.0, 8.0, 9.0, 10.0], &[2, 2]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [
+        TensorHandle::from_storage::<TestBackend, f32, _>(&input),
+        TensorHandle::from_storage::<TestBackend, i64, _>(&index),
+        TensorHandle::from_storage::<TestBackend, f32, _>(&src),
+    ];
+    let before = tape_depth();
+    let out = incin_core::exec::dispatch::execute::<op::Scatter, _>(
+        &context,
+        ScatterAttributes {
+            axis: 1,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+        &handles,
+    )
+    .expect("an advertised Metal scatter must execute");
+    let recorded = tape_depth() - before;
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[2, 3],
+        "scatter preserves the target shape"
+    );
+    assert_close(
+        &read(&out),
+        &[8.0, 2.0, 7.0, 9.0, 10.0, 6.0],
+        0.0,
+        "scatter forward",
+    );
+    assert!(recorded >= 1, "scatter advertises training = true");
+}
+
+/// The input keeps its cotangent everywhere except the overwritten
+/// positions; the source receives the output cotangent only through the
+/// last (here, only) write to each destination.
+#[test]
+fn scatter_backward_splits_between_target_and_source() {
+    require_metal();
+    let input = upload(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+    let index = upload_i64(&[2, 0, 0, 1], &[2, 2]);
+    let src = upload(&[7.0, 8.0, 9.0, 10.0], &[2, 2]);
+    let input_id = TapeStorage::id(&input);
+    let src_id = TapeStorage::id(&src);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [
+        TensorHandle::from_storage::<TestBackend, f32, _>(&input),
+        TensorHandle::from_storage::<TestBackend, i64, _>(&index),
+        TensorHandle::from_storage::<TestBackend, f32, _>(&src),
+    ];
+    let out = incin_core::exec::dispatch::execute::<op::Scatter, _>(
+        &context,
+        ScatterAttributes {
+            axis: 1,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+        &handles,
+    )
+    .expect("scatter must execute");
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("scatter backward must run");
+    let grad_t = grads.get(input_id).expect("target has a gradient");
+    let grad_src = grads.get(src_id).expect("source has a gradient");
+    // Written positions zeroed: (0,0),(0,2),(1,0),(1,1). Unwritten: (0,1),(1,2).
+    assert_close(
+        &read(grad_t),
+        &[0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        1e-6,
+        "scatter backward wrt target",
+    );
+    assert_close(
+        &read(grad_src),
+        &[1.0, 1.0, 1.0, 1.0],
+        1e-6,
+        "scatter backward wrt source",
+    );
+}
+
+/// `DuplicateIndexRule::Reject` is a named refusal: this backend is
+/// last-write-wins and cannot reject duplicate indices.
+#[test]
+fn scatter_reject_refuses_by_name() {
+    require_metal();
+    let input = upload(&[1.0, 2.0], &[2]);
+    let index = upload_i64(&[0, 0], &[2]);
+    let src = upload(&[7.0, 8.0], &[2]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [
+        TensorHandle::from_storage::<TestBackend, f32, _>(&input),
+        TensorHandle::from_storage::<TestBackend, i64, _>(&index),
+        TensorHandle::from_storage::<TestBackend, f32, _>(&src),
+    ];
+    let error = incin_core::exec::dispatch::execute::<op::Scatter, _>(
+        &context,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::Reject,
+        },
+        &handles,
+    )
+    .expect_err("Reject is not a rule this host walk implements");
+    let message = format!("{error}");
+    assert!(
+        message.contains("last-write-wins") || message.contains("reject"),
+        "the refusal must name the duplicate-index rule: {message}"
+    );
+}
+
+#[test]
+fn one_hot_encodes_indices_as_a_bool_mask_without_a_tape_entry() {
+    require_metal();
+    let indices = upload_i64(&[0, 2, 1], &[3]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, i64, _>(&indices)];
+    let before = tape_depth();
+    let out = incin_core::exec::dispatch::execute::<op::OneHot, _>(
+        &context,
+        OneHotAttributes { depth: 3 },
+        &handles,
+    )
+    .expect("one_hot is advertised and must execute");
+    let recorded = tape_depth() - before;
+    assert_eq!(recorded, 0, "one_hot is forward-only: no tape entry");
+    assert_eq!(
+        out.metadata().dtype(),
+        DTypeId::Bool.descriptor(),
+        "one_hot result is bool storage"
+    );
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[3, 3],
+        "one_hot appends a depth axis"
+    );
+    assert_eq!(
+        read_bool(&out),
+        vec![1, 0, 0, 0, 0, 1, 0, 1, 0],
+        "one_hot mask"
+    );
+    // An index outside 0..depth writes no 1 (CPU's skip).
+    let oob = upload_i64(&[5], &[1]);
+    let handles = [TensorHandle::from_storage::<TestBackend, i64, _>(&oob)];
+    let out = incin_core::exec::dispatch::execute::<op::OneHot, _>(
+        &context,
+        OneHotAttributes { depth: 3 },
+        &handles,
+    )
+    .expect("out-of-range one_hot index is a silent skip, not an error");
+    assert_eq!(read_bool(&out), vec![0, 0, 0], "oob one_hot is all zero");
+}
+
+#[test]
+fn argmax_returns_positions_and_records_nothing() {
+    require_metal();
+    // row 0: [3, 1, 4] -> max at 2; row 1: [-2, 5, 0] -> max at 1
+    let input = upload(&[3.0, 1.0, 4.0, -2.0, 5.0, 0.0], &[2, 3]);
+    let (out, recorded) = run1::<op::ArgMax, _>(
+        &input,
+        IndexReductionAttributes {
+            axis: Some(1),
+            dtype: DTypeId::I64.descriptor(),
+        },
+    );
+    assert_eq!(recorded, 0, "argmax is forward-only: no tape entry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[2],
+        "argmax squeezes the reduced axis"
+    );
+    assert_eq!(read_i64(&out), vec![2, 1], "argmax positions");
+
+    // Global argmax: flat index of the max (5.0 at flat 4).
+    let (flat, recorded) = run1::<op::ArgMax, _>(
+        &input,
+        IndexReductionAttributes {
+            axis: None,
+            dtype: DTypeId::I64.descriptor(),
+        },
+    );
+    assert_eq!(recorded, 0, "global argmax is forward-only");
+    let dims = <TestBackend as StorageBackend>::shape::<f32>(&flat);
+    assert!(
+        dims.is_empty(),
+        "axis=None yields a scalar, got shape {dims:?}"
+    );
+    assert_eq!(read_i64(&flat), vec![4], "global argmax flat index");
+}
+
+#[test]
+fn sort_orders_each_axis_slice_and_returns_a_replaying_permutation() {
+    require_metal();
+    let input = upload(&[3.0, 1.0, 2.0, 6.0, 4.0, 5.0], &[2, 3]);
+    let ((values, indices), recorded) = run_pair_outputs::<op::Sort, _>(
+        &input,
+        ArgsortAttributes {
+            axis: 1,
+            descending: false,
+            index_dtype: DTypeId::I64.descriptor(),
+        },
+    );
+    assert_eq!(recorded, 0, "sort is forward-only: no tape entry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&values).dims(),
+        &[2, 3],
+        "sort keeps the operand geometry"
+    );
+    assert_eq!(
+        read(&values),
+        &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        "ascending sort values"
+    );
+    let idx = read_i64(&indices);
+    assert_eq!(idx, vec![1, 2, 0, 1, 2, 0], "sort permutation");
+    // The permutation replays to the sorted values.
+    let flat = [3.0f64, 1.0, 2.0, 6.0, 4.0, 5.0];
+    let sorted = read(&values);
+    for (flat_i, &position) in idx.iter().enumerate() {
+        assert_eq!(
+            flat[flat_i / 3 * 3 + position as usize],
+            sorted[flat_i],
+            "indices must reorder the input into the sorted values at {flat_i}"
+        );
+    }
+
+    // Descending flips both outputs.
+    let ((values, indices), _) = run_pair_outputs::<op::Sort, _>(
+        &input,
+        ArgsortAttributes {
+            axis: 1,
+            descending: true,
+            index_dtype: DTypeId::I64.descriptor(),
+        },
+    );
+    assert_eq!(
+        read(&values),
+        &[3.0, 2.0, 1.0, 6.0, 5.0, 4.0],
+        "descending sort values"
+    );
+    assert_eq!(
+        read_i64(&indices),
+        vec![0, 2, 1, 0, 2, 1],
+        "descending permutation"
+    );
+}
+
+#[test]
+fn topk_returns_ordered_values_and_their_indices() {
+    require_metal();
+    let input = upload(&[3.0, 1.0, 4.0, 1.5, -2.0, 5.0, 0.5, -3.0], &[2, 4]);
+    let ((values, indices), recorded) = run_pair_outputs::<op::TopK, _>(
+        &input,
+        TopKAttributes {
+            k: 2,
+            axis: 1,
+            largest: true,
+            index_dtype: DTypeId::I64.descriptor(),
+        },
+    );
+    assert_eq!(recorded, 0, "topk is forward-only: no tape entry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&values).dims(),
+        &[2, 2],
+        "topk shrinks the axis to k"
+    );
+    assert_close(&read(&values), &[4.0, 3.0, 5.0, 0.5], 1e-6, "topk values");
+    assert_eq!(
+        read_i64(&indices),
+        vec![2, 0, 1, 2],
+        "topk indices address the values beside them"
+    );
+    let flat = [3.0f64, 1.0, 4.0, 1.5, -2.0, 5.0, 0.5, -3.0];
+    let vals = read(&values);
+    let idx = read_i64(&indices);
+    for (position, &index) in idx.iter().enumerate() {
+        let row = position / 2;
+        let source = flat[row * 4 + index as usize];
+        assert!(
+            (vals[position] - source).abs() < 1e-6,
+            "topk index {index} does not point at the value it was returned with"
+        );
+    }
+}
+
+#[test]
+fn to_dtype_f32_to_f64_round_trips_values_and_records() {
+    require_metal();
+    let input = upload(&[1.0, -2.5, 3.75, 0.0], &[4]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, f32, _>(&input)];
+    let before = tape_depth();
+    let out = incin_core::exec::dispatch::execute::<op::ToDType, _>(
+        &context,
+        DTypeAttributes {
+            dtype: DTypeId::F64.descriptor(),
+        },
+        &handles,
+    )
+    .expect("f32→f64 to_dtype executes");
+    let recorded = tape_depth() - before;
+    assert_eq!(
+        out.metadata().dtype(),
+        DTypeId::F64.descriptor(),
+        "the result carries the target dtype tag"
+    );
+    assert!(
+        recorded >= 1,
+        "float-to-float to_dtype records a tape entry"
+    );
+    let bytes = out.as_bytes().expect("host-readable");
+    let vals: &[f64] = bytemuck::cast_slice(bytes);
+    assert_eq!(vals, &[1.0, -2.5, 3.75, 0.0], "f32→f64 values");
+    // No backward walk here: Metal `SumAll` only admits F32, so a loss
+    // cannot be seeded on an F64 tensor — the recorded tape entry is the
+    // contract this test proves.
+}
+
+#[test]
+fn to_dtype_f32_to_i64_truncates_and_records_nothing() {
+    require_metal();
+    let input = upload(&[1.7, -2.3, 3.0], &[3]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, f32, _>(&input)];
+    let before = tape_depth();
+    let out = incin_core::exec::dispatch::execute::<op::ToDType, _>(
+        &context,
+        DTypeAttributes {
+            dtype: DTypeId::I64.descriptor(),
+        },
+        &handles,
+    )
+    .expect("f32→i64 to_dtype executes");
+    let recorded = tape_depth() - before;
+    assert_eq!(recorded, 0, "integer-target to_dtype records no tape entry");
+    assert_eq!(
+        out.metadata().dtype(),
+        DTypeId::I64.descriptor(),
+        "the result carries I64"
+    );
+    assert_eq!(read_i64(&out), vec![1, -2, 3], "truncating cast");
+}
+
+#[test]
+fn to_dtype_refuses_q8_0_target_by_name() {
+    require_metal();
+    let input = upload(&[1.0, 2.0], &[2]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, f32, _>(&input)];
+    let error = incin_core::exec::dispatch::execute::<op::ToDType, _>(
+        &context,
+        DTypeAttributes {
+            dtype: DTypeId::Q8_0.descriptor(),
+        },
+        &handles,
+    )
+    .expect_err("Q8_0 is not a to_dtype target on Metal");
+    let message = format!("{error}");
+    assert!(
+        message.contains("to_dtype") || message.contains("ToDType"),
+        "the refusal must name the operation: {message}"
+    );
+}
+
+#[test]
+fn batched_matmul_matches_a_host_batched_matmul_and_records() {
+    require_metal();
+    // Equal-batch only: `matmul_metal` handles equal-batch and
+    // unbatched-rhs broadcasting; the uneven multi-dim case is out of scope.
+    let a = upload(&[1.0, 2.0, 3.0, 4.0], &[1, 2, 2]);
+    let b = upload(&[5.0, 6.0, 7.0, 8.0], &[1, 2, 2]);
+    let a_id = TapeStorage::id(&a);
+    let (out, recorded) = run_pair::<op::BatchedMatMul, _>(&a, &b, NoAttributes);
+    // [[1,2],[3,4]] @ [[5,6],[7,8]] = [[19,22],[43,50]]
+    assert_close(&read(&out), &[19.0, 22.0, 43.0, 50.0], 1e-5, "bmm");
+    assert!(recorded >= 1, "batched_matmul advertises training = true");
+
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("batched_matmul backward must run");
+    let g = grads.get(a_id).expect("lhs receives a gradient");
+    assert!(
+        read(g).iter().all(|v| v.is_finite()),
+        "batched_matmul grad finite"
     );
 }

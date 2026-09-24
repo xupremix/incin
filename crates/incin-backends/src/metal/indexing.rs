@@ -9,18 +9,23 @@
 //! accumulates repeated selections rather than overwriting them.
 //!
 //! `masked_fill`/`where_cond` are deliberately absent: Metal's storage
-//! validator refuses `bool` (`validate_metal_storage_dtype`), so a mask
-//! tensor cannot exist on this backend, and no capability group in lane
+//! validator refuses `bool` (`validate_metal_storage_dtype`), so a *created*
+//! mask tensor cannot exist on this backend, and no capability group in lane
 //! carries an `F32_AND_BOOL` row. See the `logical = []` note in
-//! `metal_descriptor_operations!`.
+//! `metal_descriptor_operations!`. `one_hot` is the exception that proves
+//! the boundary: its op-produced `bool` result is written through
+//! `storage_from_raw`, which skips the creation-path validator the same way
+//! every other op-built buffer does — typed creation of `bool` still fails,
+//! an intermediate the executor just built does not.
 
 use incin_core::error::{Error, Result};
+use incin_core::exec::catalog::DuplicateIndexRule;
 use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::DTypeId;
 
-use super::backend::{MetalBackendImpl, storage_from_f32};
+use super::backend::{MetalBackendImpl, storage_from_f32, storage_from_raw};
 use super::storage::MetalStorage;
 
 /// Row-major element count of a dims slice, as `backend.rs` spells it.
@@ -367,6 +372,165 @@ impl<D: Device> MetalBackendImpl<D> {
             }),
         });
         Ok(out)
+    }
+
+    /// `scatter(input, axis, index, source)`: write `source` entries into
+    /// `input` at the positions `index` names along `axis`, last-write-wins.
+    ///
+    /// Forward is CPU's `scatter_storage` walk: for each index coordinate,
+    /// the destination is `input` with `axis` replaced by the index value;
+    /// out-of-range destinations are skipped (the same silent drop CPU
+    /// documents — CUDA refuses them, but this host walk matches CPU's
+    /// documented semantics and the descriptor has already validated the
+    /// request shape). Backward splits the cotangent exactly as CPU does:
+    /// the input keeps its gradient everywhere except positions a *surviving*
+    /// (last) write overwrote, and the source receives the output cotangent
+    /// only through those surviving writes. The integer index operand is off
+    /// the tape.
+    ///
+    /// `DuplicateIndexRule::Reject` is refused by name: this backend is
+    /// last-write-wins and cannot reject duplicate indices (CPU's
+    /// `canonical` path raises the same refusal for `Reject`).
+    pub(crate) fn scatter(
+        input: &MetalStorage,
+        axis: usize,
+        index: &MetalStorage,
+        source: &MetalStorage,
+        duplicate_indices: DuplicateIndexRule,
+    ) -> Result<MetalStorage> {
+        if duplicate_indices == DuplicateIndexRule::Reject {
+            return Err(Error::Msg(
+                "Metal scatter applies last-write-wins and cannot reject duplicate indices".into(),
+            ));
+        }
+        require_f32(input, "scatter_input")?;
+        require_f32(source, "scatter_source")?;
+        let in_dims = input.shape().to_vec();
+        if axis >= in_dims.len() {
+            return Err(Error::ShapeMismatch {
+                op: "scatter",
+                expected: in_dims.clone(),
+                got: vec![axis],
+                msg: "scatter axis out of bounds".to_string(),
+            });
+        }
+        let idx_vals = index_values(index)?;
+        let src_dims = source.shape().to_vec();
+        let in_strides = host_strides(&in_dims);
+        let src_strides = host_strides(&src_dims);
+        let in_total = numel(&in_dims)?;
+        let in_bytes = input.as_bytes()?;
+        let in_data: &[f32] = bytemuck::cast_slice(in_bytes);
+        let src_bytes = source.as_bytes()?;
+        let src_data: &[f32] = bytemuck::cast_slice(src_bytes);
+
+        let mut out_data = in_data.to_vec();
+        // Track every write as `(flat_dest, src_flat_coord)` in order so the
+        // backward can recover the surviving (last) write per destination.
+        let mut written: Vec<(usize, Vec<usize>)> = Vec::with_capacity(idx_vals.len());
+        let mut src_idx = vec![0usize; src_dims.len()];
+        for &raw_target in &idx_vals {
+            let target = usize::try_from(raw_target).unwrap_or(usize::MAX);
+            let mut dest_idx = src_idx.clone();
+            dest_idx[axis] = target;
+            let flat_dest: usize = dest_idx
+                .iter()
+                .zip(in_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            if target < in_dims[axis] && flat_dest < out_data.len() {
+                let flat_src: usize = src_idx
+                    .iter()
+                    .zip(src_strides.iter())
+                    .map(|(&i, &s)| i * s)
+                    .sum();
+                out_data[flat_dest] = src_data[flat_src];
+            }
+            written.push((flat_dest, src_idx.clone()));
+            if !src_dims.is_empty() {
+                host_increment(&mut src_idx, &src_dims);
+            }
+        }
+        let out = storage_from_f32(&out_data, &in_dims, input)?;
+
+        // Surviving write per destination: the last entry in `written` that
+        // landed inside the operand. Earlier writes contributed nothing.
+        let mut last_write_of_dest: std::collections::BTreeMap<usize, usize> =
+            std::collections::BTreeMap::new();
+        for (position, &(flat_dest, _)) in written.iter().enumerate() {
+            if flat_dest < in_total {
+                last_write_of_dest.insert(flat_dest, position);
+            }
+        }
+        let surviving: Vec<(usize, Vec<usize>)> = last_write_of_dest
+            .into_iter()
+            .filter_map(|(flat_dest, position)| {
+                written
+                    .get(position)
+                    .map(|(_, src_idx)| (flat_dest, src_idx.clone()))
+            })
+            .collect();
+        let surviving_dests: std::collections::HashSet<usize> =
+            surviving.iter().map(|&(flat, _)| flat).collect();
+        let input_like = input.clone();
+        let source_like = source.clone();
+        let (t_id, source_id, out_id) = (input.id(), source.id(), out.id());
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, source_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                let grad_bytes = grad_out.as_bytes()?;
+                let grad: &[f32] = bytemuck::cast_slice(grad_bytes);
+                let mut grad_t = vec![0.0f32; in_total];
+                for (i, item) in grad_t.iter_mut().enumerate() {
+                    if !surviving_dests.contains(&i) {
+                        *item = grad[i];
+                    }
+                }
+                let mut grad_source = vec![0.0f32; numel(&src_dims)?];
+                for (flat_dest, src_coord) in &surviving {
+                    let flat_src: usize = src_coord
+                        .iter()
+                        .zip(src_strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    if flat_src < grad_source.len() {
+                        grad_source[flat_src] += grad[*flat_dest];
+                    }
+                }
+                Ok(vec![
+                    storage_from_f32(&grad_t, &in_dims, &input_like)?,
+                    storage_from_f32(&grad_source, &src_dims, &source_like)?,
+                ])
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `one_hot(indices, depth)`: append a `depth` axis, setting position
+    /// `indices[i]` to `1` and the rest to `0` — CPU's `one_hot_storage`.
+    ///
+    /// The result is `bool` storage built through `storage_from_raw` (u8
+    /// 0/1 bytes with a `Bool` dtype tag): typed *creation* of `bool` still
+    /// fails `validate_metal_storage_dtype`, but an op-produced buffer skips
+    /// that check in `MetalStorage::from_bytes`, so the mask can exist as an
+    /// intermediate. Indices outside `0..depth` write no `1` (same skip CPU
+    /// uses). Forward-only: no tape entry.
+    pub(crate) fn one_hot(indices: &MetalStorage, depth: usize) -> Result<MetalStorage> {
+        if depth == 0 {
+            return Err(Error::Msg("one_hot: depth must be at least one".into()));
+        }
+        let idx_vals = index_values(indices)?;
+        let mut out_shape = indices.shape().to_vec();
+        out_shape.push(depth);
+        let total = numel(indices.shape())?;
+        let mut out = vec![0u8; total * depth];
+        for (flat, &raw) in idx_vals.iter().enumerate() {
+            if raw >= 0 && (raw as usize) < depth {
+                out[flat * depth + raw as usize] = 1;
+            }
+        }
+        storage_from_raw(out, &out_shape, DTypeId::Bool.descriptor(), indices)
     }
 }
 

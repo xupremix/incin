@@ -1058,6 +1058,232 @@ impl<D: Device> Execute<op::GroupNorm> for MetalBackendImpl<D> {
     }
 }
 
+/// `instance_norm`: one operand plus `epsilon` — `group_norm` with one
+/// group per channel (`metal/normalization.rs`).
+impl<D: Device> Execute<op::InstanceNorm> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::InstanceNorm, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::InstanceNorm;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "instance norm expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let epsilon = request.operation.descriptor().attributes().epsilon;
+        MetalBackendImpl::<D>::instance_norm::<f32>(input, epsilon)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `pad`: one operand plus `(padding, value)` — host walk in `metal/layout.rs`.
+impl<D: Device> Execute<op::Pad> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Pad, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Pad;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "pad expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attrs = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::pad::<f32>(input, &attrs.padding, attrs.value)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `repeat`: one operand plus `repeats` — host walk in `metal/layout.rs`.
+impl<D: Device> Execute<op::Repeat> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Repeat, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Repeat;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "repeat expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let repeats = &request.operation.descriptor().attributes().repeats;
+        MetalBackendImpl::<D>::repeat::<f32>(input, repeats)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `scatter`: input, index and source — ternary host walk in `metal/indexing.rs`.
+impl<D: Device> Execute<op::Scatter> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Scatter, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::Scatter;
+        let [input, index, source] = request.inputs else {
+            return Err(invalid(operation, "scatter expects 3 inputs"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let index = index
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "index is not Metal storage"))?;
+        let source = source
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "source is not Metal storage"))?;
+        let attrs = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::scatter(input, attrs.axis, index, source, attrs.duplicate_indices)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `one_hot`: index tensor plus `depth` — bool-mask host walk in
+/// `metal/indexing.rs`. Forward-only (no tape entry).
+impl<D: Device> Execute<op::OneHot> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::OneHot, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::OneHot;
+        let [indices] = request.inputs else {
+            return Err(invalid(operation, "one_hot expects exactly 1 input"));
+        };
+        let indices = indices
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "indices is not Metal storage"))?;
+        let depth = request.operation.descriptor().attributes().depth;
+        MetalBackendImpl::<D>::one_hot(indices, depth)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `argmax`: one operand plus an optional `axis` — i64 index result, no tape.
+impl<D: Device> Execute<op::ArgMax> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ArgMax, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::ArgMax;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "argmax expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attrs = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::argmax(input, attrs.axis)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `sort`: one operand plus `(axis, descending, index_dtype)` — returns the
+/// sorted values and the permutation, both with the operand's geometry.
+impl<D: Device> Execute<op::Sort> for MetalBackendImpl<D> {
+    type Output = (MetalStorage, MetalStorage);
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Sort, Self>,
+    ) -> Result<(MetalStorage, MetalStorage), BackendError> {
+        let operation = OperationKind::Sort;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "sort expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attrs = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::sort(input, attrs.axis, attrs.descending)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `topk`: one operand plus `(k, axis, largest, index_dtype)` — values and
+/// indices with the axis shrunk to `k`.
+impl<D: Device> Execute<op::TopK> for MetalBackendImpl<D> {
+    type Output = (MetalStorage, MetalStorage);
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TopK, Self>,
+    ) -> Result<(MetalStorage, MetalStorage), BackendError> {
+        let operation = OperationKind::TopK;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "topk expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let attrs = request.operation.descriptor().attributes();
+        MetalBackendImpl::<D>::topk(input, attrs.k, attrs.axis, attrs.largest)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `to_dtype`: one operand plus a target dtype — bidirectional host cast in
+/// `metal/convert.rs`.
+impl<D: Device> Execute<op::ToDType> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ToDType, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::ToDType;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "to_dtype expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "input is not Metal storage"))?;
+        let target = request.operation.descriptor().attributes().dtype;
+        MetalBackendImpl::<D>::to_dtype(input, target)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
+/// `batched_matmul`: two operands, rewritten into the already-taped
+/// `Self::matmul` (the same path `MatMulExact` rides; `matmul_metal` handles
+/// equal-batch and unbatched-rhs broadcasting, and the uneven multi-dim
+/// broadcast case is documented as out of scope for this host walk).
+impl<D: Device> Execute<op::BatchedMatMul> for MetalBackendImpl<D> {
+    type Output = MetalStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::BatchedMatMul, Self>,
+    ) -> Result<MetalStorage, BackendError> {
+        let operation = OperationKind::BatchedMatMul;
+        let [lhs, rhs] = request.inputs else {
+            return Err(invalid(operation, "batched matmul expects 2 inputs"));
+        };
+        let lhs = lhs
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "lhs is not Metal storage"))?;
+        let rhs = rhs
+            .downcast_ref::<MetalStorage>()
+            .ok_or_else(|| invalid(operation, "rhs is not Metal storage"))?;
+        MetalBackendImpl::<D>::matmul::<f32>(lhs, rhs)
+            .map_err(|e| kernel_error("Metal", operation, e))
+    }
+}
+
 macro_rules! assert_every_advertised_metal_row_executes {
     (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
         const _: () = {
