@@ -23,7 +23,13 @@ impl incin_backends::codegen::ir::IrUnaryOp
 impl incin_backends::codegen::ir::KernelDefinition
 impl incin_backends::codegen::jit::CpuJitKernel
 impl incin_backends::conformance::AdvertisedTuple
+impl incin_backends::conformance::CellVerdict
+impl incin_backends::conformance::GradientVerdict
+impl incin_backends::conformance::MatrixCell
+impl incin_backends::conformance::MatrixReport
 impl incin_backends::conformance::OracleReport
+impl incin_backends::conformance::SkipReason
+impl incin_backends::conformance::Tolerance
 impl incin_backends::conformance::Verdict
 impl incin_backends::cpu::CpuBuffer
 impl incin_backends::cpu::CpuGrads
@@ -330,7 +336,12 @@ pub const fn incin_backends::codegen::ir::IrExpr::arg(usize) -> Self
 pub const fn incin_backends::codegen::ir::IrExpr::constant(f64) -> Self
 pub const fn incin_backends::codegen::jit::CpuJitKernel::new(incin_backends::codegen::ir::KernelDefinition) -> Self
 pub const fn incin_backends::conformance::AdvertisedTuple::query(&self) -> incin_core::exec::capability::CapabilityQuery
+pub const fn incin_backends::conformance::CellVerdict::is_finding(&self) -> bool
+pub const fn incin_backends::conformance::CellVerdict::was_executed(&self) -> bool
+pub const fn incin_backends::conformance::GradientVerdict::is_finding(&self) -> bool
 pub const fn incin_backends::conformance::Verdict::is_finding(&self) -> bool
+pub const fn incin_backends::conformance::for_dtype(incin_core::tensor::dtype::registry::DTypeId) -> incin_backends::conformance::Tolerance
+pub const fn incin_backends::conformance::gradient_options() -> incin_core::exec::gradcheck::GradCheckOptions
 pub const fn incin_backends::cpu::CpuBackendImpl<D>::new() -> Self
 pub const fn incin_backends::detect::is_compiled_in(incin_core::tensor::device::DeviceKind) -> bool
 pub const fn incin_backends::dispatch::DispatchBackend<D>::new() -> Self
@@ -339,7 +350,12 @@ pub const fn incin_backends::simd::simd_vector_bytes() -> usize
 pub const fn incin_backends::simd_lanes<T: core::marker::Sized>() -> usize
 pub const incin_backends::codegen::catalog::BINARY_OPS: &[&str]
 pub const incin_backends::codegen::catalog::UNARY_OPS: &[&str]
+pub const incin_backends::conformance::DEFAULT_PATH: &str
+pub const incin_backends::conformance::EXCEPTIONS: &[(incin_core::shapes::error::OperationKind, incin_backends::conformance::Tolerance, &str)]
+pub const incin_backends::conformance::GRADIENT_OPERATIONS: &[incin_core::shapes::error::OperationKind]
+pub const incin_backends::conformance::GRADIENT_OPERATION_FLOOR: usize
 pub const incin_backends::conformance::RANK_CAP: usize
+pub const incin_backends::conformance::SCHEMA_VERSION: u32
 pub const incin_backends::cpu::CpuBackendImpl<D>::BACKEND_NAME: &'static str
 pub const incin_backends::cpu::typed_kernel::PARALLEL_GRAIN: usize
 pub const incin_backends::detect::PREFERENCE: &[incin_core::tensor::device::DeviceKind]
@@ -355,7 +371,10 @@ pub enum incin_backends::codegen::ir::IrBinaryOp
 pub enum incin_backends::codegen::ir::IrExpr
 pub enum incin_backends::codegen::ir::IrTernaryOp
 pub enum incin_backends::codegen::ir::IrUnaryOp
+pub enum incin_backends::conformance::CellVerdict
 pub enum incin_backends::conformance::Coverage
+pub enum incin_backends::conformance::GradientVerdict
+pub enum incin_backends::conformance::SkipReason
 pub enum incin_backends::cpu::CpuBuffer
 pub enum incin_backends::external::conformance::Outcome
 pub enum incin_backends::prelude::GeneratedFill
@@ -445,10 +464,8 @@ pub fn incin_backends::codegen::catalog::binary_forward(&str) -> core::option::O
 pub fn incin_backends::codegen::catalog::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::codegen::catalog::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::codegen::define_binary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
-pub fn incin_backends::codegen::define_ternary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
 pub fn incin_backends::codegen::define_unary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
 pub fn incin_backends::codegen::dsl::define_binary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
-pub fn incin_backends::codegen::dsl::define_ternary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
 pub fn incin_backends::codegen::dsl::define_unary_custom_op(&'static str, incin_core::tensor::dtype::registry::DTypeId, impl core::ops::function::Fn(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::KernelDefinition
 pub fn incin_backends::codegen::exp(incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
 pub fn incin_backends::codegen::fma(incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr, incin_backends::codegen::ir::IrExpr) -> incin_backends::codegen::ir::IrExpr
@@ -489,7 +506,6 @@ pub fn incin_backends::codegen::ir::IrExpr::sub(self, incin_backends::codegen::i
 pub fn incin_backends::codegen::ir::IrExpr::tanh(self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::ternary(incin_backends::codegen::ir::IrTernaryOp, Self, Self, Self) -> Self
 pub fn incin_backends::codegen::ir::IrExpr::unary(incin_backends::codegen::ir::IrUnaryOp, Self) -> Self
-pub fn incin_backends::codegen::ir::IrExpr::var(impl core::convert::Into<alloc::string::String>) -> Self
 pub fn incin_backends::codegen::ir::IrUnaryOp::apply(self, f64) -> f64
 pub fn incin_backends::codegen::ir::KernelDefinition::new(impl core::convert::Into<alloc::string::String>, usize, incin_core::tensor::dtype::registry::DTypeId, incin_backends::codegen::ir::IrExpr) -> Self
 pub fn incin_backends::codegen::ir::KernelDefinition::render_backward_cuda(&self, usize) -> core::option::Option<alloc::string::String>
@@ -517,13 +533,32 @@ pub fn incin_backends::codegen::tanh(incin_backends::codegen::ir::IrExpr) -> inc
 pub fn incin_backends::codegen::unary_forward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::codegen::unary_fused_backward(&str) -> core::option::Option<incin_backends::codegen::ir::IrExpr>
 pub fn incin_backends::conformance::AdvertisedTuple::label(&self) -> alloc::string::String
+pub fn incin_backends::conformance::MatrixCell::label(&self) -> alloc::string::String
+pub fn incin_backends::conformance::MatrixReport::executed_on(&self, incin_core::tensor::device::DeviceKind) -> usize
+pub fn incin_backends::conformance::MatrixReport::failed_on(&self, incin_core::tensor::device::DeviceKind) -> usize
+pub fn incin_backends::conformance::MatrixReport::failures(&self) -> impl core::iter::traits::iterator::Iterator<Item = &incin_backends::conformance::MatrixCell>
+pub fn incin_backends::conformance::MatrixReport::leg(&self, incin_core::tensor::device::DeviceKind) -> impl core::iter::traits::iterator::Iterator<Item = &incin_backends::conformance::MatrixCell>
+pub fn incin_backends::conformance::MatrixReport::passed(&self) -> bool
+pub fn incin_backends::conformance::MatrixReport::passed_on(&self, incin_core::tensor::device::DeviceKind) -> usize
+pub fn incin_backends::conformance::MatrixReport::skipped_on(&self, incin_core::tensor::device::DeviceKind) -> usize
+pub fn incin_backends::conformance::MatrixReport::summary_text(&self) -> alloc::string::String
+pub fn incin_backends::conformance::MatrixReport::to_artifact(&self) -> incin_backends::conformance::Artifact
+pub fn incin_backends::conformance::MatrixReport::to_json_string(&self) -> core::result::Result<alloc::string::String, serde_json::error::Error>
+pub fn incin_backends::conformance::MatrixReport::write_json(&self, &std::path::Path) -> core::io::error::Result<alloc::string::String>
 pub fn incin_backends::conformance::OracleReport::covered_operations(&self) -> alloc::vec::Vec<incin_core::shapes::error::OperationKind>
 pub fn incin_backends::conformance::OracleReport::executed(&self) -> usize
 pub fn incin_backends::conformance::OracleReport::findings(&self) -> impl core::iter::traits::iterator::Iterator<Item = &incin_backends::conformance::Observation>
 pub fn incin_backends::conformance::OracleReport::findings_text(&self) -> alloc::string::String
 pub fn incin_backends::conformance::OracleReport::unfixtured_operations(&self) -> alloc::vec::Vec<(incin_core::shapes::error::OperationKind, &'static str)>
+pub fn incin_backends::conformance::SkipReason::reason(&self) -> alloc::string::String
+pub fn incin_backends::conformance::Tolerance::accepts(self, f64, f64) -> bool
 pub fn incin_backends::conformance::advertised_tuples(incin_core::tensor::device::DeviceKind) -> alloc::vec::Vec<incin_backends::conformance::AdvertisedTuple>
+pub fn incin_backends::conformance::check_gradients() -> alloc::vec::Vec<incin_backends::conformance::GradientObservation>
+pub fn incin_backends::conformance::for_operation(incin_core::shapes::error::OperationKind, incin_core::tensor::dtype::registry::DTypeId) -> incin_backends::conformance::Tolerance
+pub fn incin_backends::conformance::gradient_findings_text(&[incin_backends::conformance::GradientObservation]) -> alloc::string::String
+pub fn incin_backends::conformance::map_oracle_verdict(&incin_backends::conformance::Verdict) -> incin_backends::conformance::CellVerdict
 pub fn incin_backends::conformance::run_cpu_self_check() -> incin_backends::conformance::OracleReport
+pub fn incin_backends::conformance::run_matrix() -> incin_backends::conformance::MatrixReport
 pub fn incin_backends::cpu::CpuBackendImpl<D>::assign_var<K: incin_core::tensor::dtype::traits::DType>(&mut Self::Var, &Self::Storage) -> incin_core::err::Result<()>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::backward<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage) -> incin_core::err::Result<Self::Grads>
 pub fn incin_backends::cpu::CpuBackendImpl<D>::backward_with<K: incin_core::tensor::dtype::traits::DType>(&Self::Storage, &Self::Storage) -> incin_core::err::Result<Self::Grads>
@@ -1033,12 +1068,67 @@ pub incin_backends::conformance::AdvertisedTuple::math_mode: incin_core::exec::p
 pub incin_backends::conformance::AdvertisedTuple::operation: incin_core::shapes::error::OperationKind
 pub incin_backends::conformance::AdvertisedTuple::rank: usize
 pub incin_backends::conformance::AdvertisedTuple::training: bool
+pub incin_backends::conformance::Artifact::cells: alloc::vec::Vec<incin_backends::conformance::CellRecord>
+pub incin_backends::conformance::Artifact::schema_version: u32
+pub incin_backends::conformance::Artifact::skipped: alloc::vec::Vec<incin_backends::conformance::SkippedGroup>
+pub incin_backends::conformance::Artifact::summary: alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_backends::conformance::LegSummary>
+pub incin_backends::conformance::CellRecord::backend: alloc::string::String
+pub incin_backends::conformance::CellRecord::dtype: alloc::string::String
+pub incin_backends::conformance::CellRecord::layout: alloc::string::String
+pub incin_backends::conformance::CellRecord::math_mode: alloc::string::String
+pub incin_backends::conformance::CellRecord::negative_probe: bool
+pub incin_backends::conformance::CellRecord::operation: alloc::string::String
+pub incin_backends::conformance::CellRecord::rank: usize
+pub incin_backends::conformance::CellRecord::reason: core::option::Option<alloc::string::String>
+pub incin_backends::conformance::CellRecord::status: &'static str
+pub incin_backends::conformance::CellRecord::training: bool
+pub incin_backends::conformance::CellVerdict::Failed(alloc::string::String)
+pub incin_backends::conformance::CellVerdict::Passed
+pub incin_backends::conformance::CellVerdict::Skipped(incin_backends::conformance::SkipReason)
 pub incin_backends::conformance::Coverage::Unbuildable(alloc::string::String)
 pub incin_backends::conformance::Coverage::Unfixtured(&'static str)
+pub incin_backends::conformance::ExampleTuple::dtype: alloc::string::String
+pub incin_backends::conformance::ExampleTuple::layout: alloc::string::String
+pub incin_backends::conformance::ExampleTuple::math_mode: alloc::string::String
+pub incin_backends::conformance::ExampleTuple::rank: usize
+pub incin_backends::conformance::ExampleTuple::training: bool
+pub incin_backends::conformance::GradientObservation::operation: incin_core::shapes::error::OperationKind
+pub incin_backends::conformance::GradientObservation::verdict: incin_backends::conformance::GradientVerdict
+pub incin_backends::conformance::GradientVerdict::Failed(alloc::string::String)
+pub incin_backends::conformance::GradientVerdict::Passed
+pub incin_backends::conformance::GradientVerdict::Passed::compared: usize
+pub incin_backends::conformance::GradientVerdict::Passed::worst_relative_error: f64
+pub incin_backends::conformance::GradientVerdict::Skipped(&'static str)
+pub incin_backends::conformance::LegSummary::advertised: usize
+pub incin_backends::conformance::LegSummary::failed: usize
+pub incin_backends::conformance::LegSummary::passed: usize
+pub incin_backends::conformance::LegSummary::skipped: usize
+pub incin_backends::conformance::MatrixCell::backend: incin_core::tensor::device::DeviceKind
+pub incin_backends::conformance::MatrixCell::dtype: alloc::string::String
+pub incin_backends::conformance::MatrixCell::layout: alloc::string::String
+pub incin_backends::conformance::MatrixCell::math_mode: alloc::string::String
+pub incin_backends::conformance::MatrixCell::negative_probe: bool
+pub incin_backends::conformance::MatrixCell::operation: incin_core::shapes::error::OperationKind
+pub incin_backends::conformance::MatrixCell::rank: usize
+pub incin_backends::conformance::MatrixCell::training: bool
+pub incin_backends::conformance::MatrixCell::verdict: incin_backends::conformance::CellVerdict
+pub incin_backends::conformance::MatrixReport::cells: alloc::vec::Vec<incin_backends::conformance::MatrixCell>
 pub incin_backends::conformance::Observation::tuple: incin_backends::conformance::AdvertisedTuple
 pub incin_backends::conformance::Observation::verdict: incin_backends::conformance::Verdict
 pub incin_backends::conformance::OracleReport::device: incin_core::tensor::device::DeviceKind
 pub incin_backends::conformance::OracleReport::observations: alloc::vec::Vec<incin_backends::conformance::Observation>
+pub incin_backends::conformance::SkipReason::NoDevice
+pub incin_backends::conformance::SkipReason::NoFixture(&'static str)
+pub incin_backends::conformance::SkipReason::Unbuildable(alloc::string::String)
+pub incin_backends::conformance::SkippedGroup::backend: alloc::string::String
+pub incin_backends::conformance::SkippedGroup::count: usize
+pub incin_backends::conformance::SkippedGroup::example: incin_backends::conformance::ExampleTuple
+pub incin_backends::conformance::SkippedGroup::operation: alloc::string::String
+pub incin_backends::conformance::SkippedGroup::reason: alloc::string::String
+pub incin_backends::conformance::SkippedGroup::skip: &'static str
+pub incin_backends::conformance::Tolerance::absolute: f64
+pub incin_backends::conformance::Tolerance::reason: &'static str
+pub incin_backends::conformance::Tolerance::relative: f64
 pub incin_backends::conformance::Verdict::Executed
 pub incin_backends::conformance::Verdict::Failed(alloc::string::String)
 pub incin_backends::conformance::Verdict::NotCovered(incin_backends::conformance::Coverage)
@@ -1112,8 +1202,17 @@ pub struct incin_backends::codegen::fragment::ScalarFragment
 pub struct incin_backends::codegen::ir::KernelDefinition
 pub struct incin_backends::codegen::jit::CpuJitKernel
 pub struct incin_backends::conformance::AdvertisedTuple
+pub struct incin_backends::conformance::Artifact
+pub struct incin_backends::conformance::CellRecord
+pub struct incin_backends::conformance::ExampleTuple
+pub struct incin_backends::conformance::GradientObservation
+pub struct incin_backends::conformance::LegSummary
+pub struct incin_backends::conformance::MatrixCell
+pub struct incin_backends::conformance::MatrixReport
 pub struct incin_backends::conformance::Observation
 pub struct incin_backends::conformance::OracleReport
+pub struct incin_backends::conformance::SkippedGroup
+pub struct incin_backends::conformance::Tolerance
 pub struct incin_backends::cpu::CpuBackendImpl<D>(_)
 pub struct incin_backends::cpu::CpuGrads
 pub struct incin_backends::cpu::CpuStorage
