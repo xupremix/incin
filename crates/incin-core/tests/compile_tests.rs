@@ -45,6 +45,15 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ),
         // Shape rules, all unsatisfied trait bounds.
         ("broadcast_static_mismatch", "E0277"),
+        // #100's directional broadcast pins on the mask operations. The
+        // non-broadcastable pair is refused deep in the per-axis rule (the
+        // same `(): Dim` resolution `broadcast_static_mismatch` records for
+        // `+`); the enlarging pairs are broadcast-compatible but resolve to
+        // the wrong `Output` for the pin, which the compiler reports as an
+        // associated-type mismatch rather than a missing impl.
+        ("where_cond_mask_not_broadcastable", "E0277"),
+        ("where_cond_mask_enlarges_data", "E0271"),
+        ("masked_fill_mask_enlarges_input", "E0271"),
         // A downstream layout cannot be minted by a constructor: `FreshDense` is sealed.
         ("layout_proof_cannot_be_forged", "E0277"),
         ("reshape_view_needs_contiguous", "E0277"),

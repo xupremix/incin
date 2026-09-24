@@ -318,10 +318,14 @@ impl StorageEncoding {
 ///
 /// # Design boundary
 ///
-/// `TensorMeta`, capability registries, and the operation catalog still use
-/// [`DTypeId`] as their built-in runtime vocabulary. Migrating them to
-/// arbitrary descriptors will happen in a future phase. This boundary is
-/// intentional and documented.
+/// `TensorMeta`, capability registries, and the operation catalog are
+/// descriptor-driven: they accept arbitrary `DTypeDescriptor`s, including
+/// external custom dtypes. The closed [`DTypeId`] vocabulary remains only on
+/// the narrower surfaces listed on
+/// [`BuiltinDType`](crate::tensor::dtype::BuiltinDType) (distributed plan
+/// digests, collective-tuning keys, kernel-table lookups, and the
+/// `safetensors` snapshot export). Migrating those to descriptors is a future
+/// phase (issue #96). This boundary is intentional and documented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct DTypeDescriptor {
     key: DTypeKey,

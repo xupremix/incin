@@ -77,6 +77,31 @@ fn where_cond_accepts_a_typed_rank_deficit_mask() -> Result<()> {
     Ok(())
 }
 
+/// The issue's own acceptance case: a causal `[T, T]` mask selects over
+/// `[B, H, T, T]` scores without an explicit `broadcast_to`, and the result
+/// keeps the scores' rank-4 shape type (`Output = S2` by rank promotion).
+#[test]
+fn where_cond_applies_a_rank_two_mask_to_rank_four_scores() -> Result<()> {
+    let scores = Cpu.ones(shape![2, 2, 3, 3])?;
+    let on_false = Cpu.zeros(shape![2, 2, 3, 3])?;
+    // Row/column positions as 1-based values; `ge` yields the inclusive
+    // lower-triangular (causal) mask over the `[T, T]` axes.
+    let row = Cpu.tensor([[1.0f32, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]])?;
+    let col = Cpu.tensor([[1.0f32, 2.0, 3.0], [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]])?;
+    let mask = row.ge(&col)?;
+
+    let out = mask.where_cond(&scores, &on_false)?;
+
+    assert_eq!(out.dims(), [2, 2, 3, 3]);
+    // One `[T, T]` plane, row-major, repeated across the `[B, H]` axes:
+    // masked (future) positions take `on_false`, kept positions take the
+    // scores' ones.
+    let plane = [1.0f32, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0];
+    let expected: Vec<f32> = plane.iter().copied().cycle().take(36).collect();
+    assert_eq!(out.to_vec1::<f32>()?, expected);
+    Ok(())
+}
+
 /// The `Dyn` path the transformer layers actually take: both operands erase
 /// their shape proof, the rank-deficit mask is admitted by the runtime
 /// broadcast rules, and the backward pass routes the cotangent through the

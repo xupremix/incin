@@ -577,6 +577,7 @@ fn static_collective_tuning_contract_rejections_are_compile_errors() {
     cases.compile_fail("tests/collective_tuning_compile_fail/*.rs");
     if std::env::var_os("TRYBUILD").as_deref() != Some(std::ffi::OsStr::new("overwrite")) {
         let expected = BTreeMap::from([
+            ("custom_dtype_missing_builtin_id", "BuiltinDType"),
             ("integer_mean", "CollectiveReductionDType"),
             ("odd_all_to_all", "ShardDivisible"),
             ("q8_problem", "CollectiveDType"),

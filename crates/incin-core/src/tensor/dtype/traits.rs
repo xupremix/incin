@@ -71,11 +71,16 @@ pub trait ConstDType: DType<Arg = ()> {
 /// - distributed collective descriptors and plan digests
 ///   (`crates/incin-core/src/dist/plan/`), which fingerprint a plan by
 ///   `DTypeId`;
+/// - the collective-tuning problem key
+///   (`CollectiveTuningProblem::new_static` in `incin-backends`), which
+///   caches candidate measurements by `DTypeId`;
 /// - the kernel table lookup in `incin-backends`, which resolves a
 ///   `builtin_id()` for fast-path dispatch;
-/// - the `safetensors` fast path in `crates/incin-core/src/serialize.rs`,
-///   which matches a closed set of builtin IDs before falling back to the
-///   descriptor path.
+/// - the `safetensors` snapshot export in
+///   `crates/incin-core/src/serialize.rs`, which matches a closed set of
+///   builtin IDs and returns a typed error for anything else (the postcard
+///   state envelope beside it is descriptor-driven and round-trips custom
+///   dtypes).
 ///
 /// Requiring `BuiltinDType` at those sites makes the narrow vocabulary
 /// explicit in the type system instead of an implicit assumption. Custom

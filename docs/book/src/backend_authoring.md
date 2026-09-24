@@ -285,3 +285,35 @@ is the worked fixture, with WGPU and CUDA twins beside it in
 `tape_record` path instead. A custom operation that neither implements the
 trait nor composes from existing differentiable tensor operations should be
 documented as forward-only.
+
+## Custom dtypes and devices: current boundaries (issue #96)
+
+A custom logical dtype is definable outside the workspace today: implement
+`DType` and `ConstDType` with a unique `DTypeKey` (it has no built-in
+`DTypeId`), register it, and use it anywhere the stack is descriptor-driven.
+`TensorMeta`, capability queries (`CapabilityQuery.dtype`), the operation
+catalog, and the postcard state envelope all carry `DTypeDescriptor` and
+accept it unchanged. Devices likewise have an open identity:
+`DeviceKind::Custom(namespace)` and `DeviceId::custom(namespace, ordinal)`
+let a downstream backend name hardware Incin has never heard of; Incin does
+not interpret the namespace key.
+
+The surfaces that still carry the closed built-in `DTypeId` vocabulary as a
+`const` require the `BuiltinDType` bound explicitly, so a custom dtype is
+refused at compile time rather than coerced onto a built-in's key (issue
+#96):
+
+- the distributed static planners — `HybridPlanner::plan_data_static` and the
+  collective, pipeline, tensor-parallel, data-parallel, and FSDP static
+  pushes — fingerprint plans by `DTypeId`;
+- `CollectiveTuningProblem::new_static` keys its measurement cache by
+  `DTypeId`.
+
+Two more sites match the closed builtin-ID set at runtime and return a typed
+error for `builtin_id() == None` instead: the backend kernel-table lookup and
+the `safetensors` snapshot export. `TensorElement` stays sealed (`SEC-005`):
+a custom dtype cannot supply its own Rust element type, so `PlainDType` and
+the typed target-layer constructors remain built-in-only. Each of these is a
+documented compile-time or typed-runtime refusal, never a silent fallback;
+descriptor-keying the remaining sites is tracked as a future phase under
+issue #96.

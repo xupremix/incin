@@ -400,6 +400,7 @@ fn static_hybrid_contract_rejections_are_compile_errors() {
         support::compile_fail_cases_name_their_reason(
             Path::new("tests/hybrid_plan_compile_fail"),
             &BTreeMap::from([
+                ("custom_dtype_missing_builtin_id", "BuiltinDType"),
                 ("integer_dtype", "HybridPlanDType"),
                 ("odd_data_batch", "ShardDivisible"),
                 ("odd_tensor_extent", "ShardDivisible"),
