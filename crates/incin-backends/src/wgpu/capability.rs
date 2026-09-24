@@ -32,8 +32,37 @@ impl<D: Device> SupportsDType<Dyn> for super::backend::WgpuBackendImpl<D> {
 /// cannot hold `bool`), and the integer widths the indexing paths need for
 /// index operands (`u8`/`u32`/`i64` at their own physical widths).
 ///
-/// `f16`/`bf16`/`f64`/`q8_0` stay refused: no WGPU kernel here reads them
-/// and the creation paths only ever build `Vec<f32>`.
+/// `f16`/`bf16`/`f64`/`q8_0` stay refused, and the refusal is
+/// load-bearing beyond this function — the #91 audit that answers
+/// "could this backend ever claim half precision?", companion to #90's
+/// matmul note in `capability/tables.rs`:
+///
+/// - The registry is `static WGPU_CAPABILITIES`: rows are compiled
+///   constants and cannot vary per adapter, so even an adapter that
+///   reports `SHADER_F16` has no plug-in point for a narrower claim —
+///   a runtime-gated dtype has nowhere honest to be stated.
+/// - `wgpu/device.rs` requests `wgpu::Features::empty()` at
+///   `request_device`: the adapter's `SHADER_F16` feature is neither
+///   queried nor required, so the device could not compile an `f16`
+///   shader even if one existed.
+/// - No shader under `wgpu/shaders/` declares `enable f16`; every kernel
+///   reads `array<f32>` (or fixed-width integers, or the bool-as-f32
+///   encoding above). There is no `f16` kernel variant to advertise.
+/// - `bf16` has no WGPU feature bit at all — unlike CUDA/Metal, which
+///   carry `bf16` storage — so there is nothing to query or require;
+///   serving it would mean a software reinterpretation no kernel here
+///   performs.
+/// - `native_precision` (below) refuses any non-`f32` storage for the
+///   same reason stated positively: compute here is `array<f32>` in
+///   every shader.
+///
+/// Advertising either dtype would need all of: a per-adapter feature
+/// query required at `request_device`, `enable f16` shader variants (or
+/// widened validators *and* kernels that read the narrow storage), and a
+/// registry able to express the conditional claim. None exist; until
+/// they do, every row stays `F32_ONLY`/`BOOL_ONLY`/integer and this
+/// validator stays the fail-closed chokepoint the creation and
+/// dispatch paths route through.
 pub(crate) fn validate_wgpu_dtype(dtype: DTypeDescriptor, op: &'static str) -> Result<()> {
     match dtype.builtin_id() {
         Some(DTypeId::F32 | DTypeId::Bool | DTypeId::U8 | DTypeId::U32 | DTypeId::I64) => Ok(()),

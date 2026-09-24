@@ -4,13 +4,16 @@
 //          13=sign, 14=floor, 15=ceil, 16=round, 17=log2, 18=log10,
 //          19=sin, 20=cos, 21=tan, 22=asin, 23=acos, 24=atan,
 //          25=sinh, 26=cosh, 27=asinh, 28=acosh, 29=atanh,
-//          30=erf, 31=rsqrt, 32=trunc, 33=frac
+//          30=erf, 31=rsqrt, 32=trunc, 33=frac, 34=logical_not
 //
-// Every mode above is dispatched by `backend/elementwise.rs`. There is no
-// logical-not mode here: the logical operations stay unadvertised on this
-// backend until their boolean representation is settled (see the
-// `native_tensor`/`logical` groups in `capability/declarations.rs`), so a
-// branch for one would be dead code that reads as coverage.
+// Every mode above is dispatched by `backend/elementwise.rs`, except
+// 34=logical_not, which `backend/compare.rs` dispatches (#91): a bool
+// operand - physical f32 0.0/1.0, the encoding
+// `wgpu/storage.rs::physical_element_bytes` documents - in, the negation
+// as 0.0/1.0 out, labeled `Bool` by the caller. That representation is the
+// one `masked_fill`/`where_cond` already consume, which is what settled
+// the question that once kept this mode (and the whole `logical` group in
+// `capability/declarations.rs`) deliberately absent.
 //
 // Host-parity notes (each was chosen because the obvious WGSL builtin
 // disagrees with the CPU reference on a class of inputs):
@@ -176,6 +179,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // Trunc-based fractional part, matching Rust `f32::fract`, not
         // WGSL's floor-based `fract`.
         out[idx] = x - trunc(x);
+    } else if op == 34u {
+        // logical_not over the bool-as-f32 encoding: CPU computes
+        // `elementwise_cmp(x, x, |a, _| a == 0.0)`, i.e. true exactly
+        // where the operand is 0.0, and false for the physical 1.0 of a
+        // true bool - the same 0.0/1.0 in, 1.0/0.0 out swap.
+        out[idx] = select(0.0, 1.0, x == 0.0);
     } else {
         // Unreachable through `backend/elementwise.rs`: every mode dispatched
         // there is named above. WGSL cannot trap, so the default repeats the

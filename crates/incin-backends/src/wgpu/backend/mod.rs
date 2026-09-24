@@ -5,7 +5,8 @@
 //! element-count/checked-conversion/validation helpers; `contract` is the
 //! `StorageBackend`/`Backend`/`HostInterop` trait implementations;
 //! `creation` is zero-operand and generator operations; `elementwise`
-//! is tape-tracked binary/unary/scalar arithmetic; `shape_ops` is
+//! is tape-tracked binary/unary/scalar arithmetic; `compare` is the nine
+//! bool-output comparison/logical identities; `shape_ops` is
 //! structural operations; `reduce` is reductions; `nn` is pooling and
 //! convolution; `indexing` is `embedding`/`gather`/`index_select` host-walks
 //! plus the `masked_fill`/`where_cond` GPU selection kernel; `autograd` is
@@ -21,6 +22,7 @@ pub(crate) use incin_core::tensor::device::{Device, DeviceId, DeviceKind, Wgpu};
 pub(crate) use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 
 mod autograd;
+mod compare;
 mod contract;
 mod creation;
 mod elementwise;

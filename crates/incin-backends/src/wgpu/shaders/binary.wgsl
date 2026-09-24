@@ -3,6 +3,19 @@
 //          7=cmp_eq, 8=cmp_ne, 9=cmp_lt, 10=cmp_le, 11=cmp_gt, 12=cmp_ge,
 //          13=logical_and, 14=logical_or, 15=maximum, 16=minimum, 17=abs_diff,
 //          18=atan2, 19=fmod, 20=remainder, 21=clamp_grad
+//
+// Host-parity notes (each was chosen because the obvious WGSL spelling
+// disagrees with the CPU reference on a class of inputs):
+//   - `cmp_ne` (mode 8) is spelled `!(==)` rather than `!=`: the SPIR-V
+//     lowering of WGSL's `!=` is *ordered* not-equal (`FOrdNotEqual`),
+//     which answers false when either operand is NaN, while CPU's f64
+//     `a != b` answers true for a NaN pair (IEEE: `==` false, `!=` true).
+//     `!(==)` is correct under every lowering of `==`, which this adapter
+//     already reports as false for the NaN pair (mode 7 is exercised
+//     against the same inputs).
+//   - The ordered comparisons (modes 9–12) need no such spell-out: both
+//     CPU and the ordered SPIR-V opcodes answer false whenever an operand
+//     is NaN, so the "obvious" `<`/`<=`/`>`/`>=` already agree.
 
 @group(0) @binding(0) var<storage, read> lhs: array<f32>;
 @group(0) @binding(1) var<storage, read> rhs: array<f32>;
@@ -68,7 +81,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     } else if op == 7u {
         out[idx] = select(0.0, 1.0, lhs[idx] == rhs[idx]);
     } else if op == 8u {
-        out[idx] = select(0.0, 1.0, lhs[idx] != rhs[idx]);
+        // `!(==)`, not `!=` -- see the host-parity note in this file's
+        // header: the ordered lowering of `!=` answers false for a NaN
+        // pair where CPU answers true.
+        out[idx] = select(1.0, 0.0, lhs[idx] == rhs[idx]);
     } else if op == 9u {
         out[idx] = select(0.0, 1.0, lhs[idx] < rhs[idx]);
     } else if op == 10u {
