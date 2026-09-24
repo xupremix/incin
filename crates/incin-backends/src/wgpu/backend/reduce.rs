@@ -60,7 +60,7 @@ pub(crate) fn reduce_dim_to_storage(
         dim_size,
         checked_u32(inner_stride, "WGPU reduction inner stride")?,
         checked_u32(out_n, "WGPU reduction output element count")?,
-    );
+    )?;
 
     let final_shape = if keepdim {
         out_shape

@@ -328,7 +328,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             out_n, &new_shape, shape, &aux,
         )?;
 
-        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params)?;
         let out = WgpuStorage::new(out_buf, new_shape);
 
         let (t_id, out_id) = (t.id, out.id);
@@ -393,7 +393,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             &t.shape,
             &aux,
         )?;
-        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params)?;
         let out = WgpuStorage::new(out_buf, out_shape);
 
         let (t_id, out_id) = (t.id, out.id);
@@ -413,7 +413,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                     &grad_out.shape,
                     &g_aux,
                 )?;
-                dispatch::dispatch_shape(&grad_out.buffer, &g_buf, &g_params);
+                dispatch::dispatch_shape(&grad_out.buffer, &g_buf, &g_params)?;
                 Ok(vec![WgpuStorage::new(g_buf, in_shape.clone())])
             }),
         });
@@ -459,7 +459,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             &t.shape,
             &starts,
         )?;
-        dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+        dispatch::dispatch_shape(&t.buffer, &out_buf, &params)?;
         let out = WgpuStorage::new(out_buf, out_shape);
 
         let (t_id, out_id) = (t.id, out.id);
@@ -477,7 +477,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                     &grad_out.shape,
                     &starts,
                 )?;
-                dispatch::dispatch_shape(&grad_out.buffer, &g_buf, &g_params);
+                dispatch::dispatch_shape(&grad_out.buffer, &g_buf, &g_params)?;
                 Ok(vec![WgpuStorage::new(g_buf, in_shape.clone())])
             }),
         });
@@ -549,7 +549,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                 &t.shape,
                 &start,
             )?;
-            dispatch::dispatch_shape(&t.buffer, &out.buffer, &params);
+            dispatch::dispatch_shape(&t.buffer, &out.buffer, &params)?;
             offset += t.shape[axis];
         }
 

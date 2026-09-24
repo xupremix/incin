@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use wgpu::ComputePipeline;
 
-use crate::wgpu::device::get_device_state;
+use crate::wgpu::device::{check_workgroups_1d, get_device_state, workgroup_size_x};
 use crate::wgpu::pipeline::get_or_create_pipeline;
 use incin_core::error::Result;
 use incin_core::shapes::{OperationKind, ShapeError};
@@ -9,8 +9,18 @@ use incin_core::tensor::dtype::DTypeId;
 
 use crate::wgpu::storage::WgpuBuffer;
 
-/// `WG_SIZE`.
-const WG_SIZE: u32 = 256;
+/// 1-D workgroups for `n` elements, sized from the adapter's
+/// `max_compute_workgroup_size_x` (#91) rather than a constant.
+///
+/// Every 1-D dispatch routes through here, so a narrower-than-256 adapter
+/// gets more (smaller) workgroups instead of an illegal launch, and a
+/// tensor too large for `max_compute_workgroups_per_dimension` is a named
+/// refusal rather than dropped work.
+fn workgroups_1d(n: u32) -> Result<u32> {
+    let wg = n.div_ceil(workgroup_size_x());
+    check_workgroups_1d(wg)?;
+    Ok(wg)
+}
 
 fn checked_workgroups(
     factors: &[u32],
@@ -25,13 +35,22 @@ fn checked_workgroups(
                 expression,
             })
     })?;
-    u32::try_from(total.div_ceil(u64::from(workgroup_size))).map_err(|_| {
-        ShapeError::ArithmeticOverflow {
+    let workgroups = u32::try_from(total.div_ceil(u64::from(workgroup_size))).map_err(|_| {
+        incin_core::error::Error::from(ShapeError::ArithmeticOverflow {
             operation: OperationKind::Storage,
             expression,
-        }
-        .into()
-    })
+        })
+    })?;
+    // Same per-dimension refusal as the 1-D path: `dispatch_workgroups`
+    // takes one count per axis, so the product's workgroup count must fit
+    // the adapter's per-dimension maximum, not just `u32`.
+    check_workgroups_1d(workgroups)?;
+    Ok(workgroups)
+}
+
+/// `checked_workgroups` sized from the adapter rather than a constant.
+fn checked_workgroups_auto(factors: &[u32], expression: &'static str) -> Result<u32> {
+    checked_workgroups(factors, workgroup_size_x(), expression)
 }
 
 /// Run a simple 1D dispatch with 3 storage bindings: lhs, rhs, out, plus a u32 params buffer.
@@ -40,7 +59,7 @@ pub(crate) fn dispatch_binary(
     rhs: &WgpuBuffer,
     out: &Arc<WgpuBuffer>,
     params_data: &[u32],
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/binary.wgsl");
     let pipeline = get_or_create_pipeline("binary", shader, "main");
@@ -70,12 +89,17 @@ pub(crate) fn dispatch_binary(
         ],
     });
     let n = params_data[1];
-    let wg = n.div_ceil(WG_SIZE);
+    let wg = workgroups_1d(n)?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Binary");
+    Ok(())
 }
 
 /// Run a 1D unary dispatch: inp, out, params
-pub(crate) fn dispatch_unary(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32]) {
+pub(crate) fn dispatch_unary(
+    inp: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    params_data: &[u32],
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/unary.wgsl");
     let pipeline = get_or_create_pipeline("unary", shader, "main");
@@ -101,8 +125,9 @@ pub(crate) fn dispatch_unary(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_dat
         ],
     });
     let n = params_data[1];
-    let wg = n.div_ceil(WG_SIZE);
+    let wg = workgroups_1d(n)?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Unary");
+    Ok(())
 }
 
 /// Run `select.wgsl`: mask, a, b, out, params.
@@ -117,7 +142,7 @@ pub(crate) fn dispatch_select(
     b: &WgpuBuffer,
     out: &Arc<WgpuBuffer>,
     params_data: &[u32],
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/select.wgsl");
     let pipeline = get_or_create_pipeline("select", shader, "main");
@@ -151,12 +176,17 @@ pub(crate) fn dispatch_select(
         ],
     });
     let n = params_data[1];
-    let wg = n.div_ceil(WG_SIZE);
+    let wg = workgroups_1d(n)?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Select");
+    Ok(())
 }
 
 /// Run a scalar op: inp, out, params (op_mode, n, scalar_bits)
-pub(crate) fn dispatch_scalar(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32]) {
+pub(crate) fn dispatch_scalar(
+    inp: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    params_data: &[u32],
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/scalar.wgsl");
     let pipeline = get_or_create_pipeline("scalar", shader, "main");
@@ -182,8 +212,9 @@ pub(crate) fn dispatch_scalar(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_da
         ],
     });
     let n = params_data[1];
-    let wg = n.div_ceil(WG_SIZE);
+    let wg = workgroups_1d(n)?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Scalar");
+    Ok(())
 }
 
 /// Full reduction over `n` elements. Returns a scalar WgpuStorage (shape=[1]).
@@ -198,7 +229,8 @@ pub(crate) fn dispatch_reduce_all(
     let pipeline = get_or_create_pipeline("reduce", shader, "main");
 
     // First pass: reduce into n_wg partial results
-    let n_wg = n.div_ceil(WG_SIZE);
+    let n_wg = n.div_ceil(workgroup_size_x());
+    check_workgroups_1d(n_wg)?;
     let partial_buf =
         WgpuBuffer::new_zeros_for(DTypeId::F32, n_wg as usize, OperationKind::Reduction)?;
     let params = [n, reduce_mode];
@@ -303,14 +335,18 @@ pub(crate) fn dispatch_im2col(
             params_data[6],
             params_data[7],
         ],
-        256,
+        workgroup_size_x(),
         "WGPU im2col dispatch size",
     )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Im2Col");
     Ok(())
 }
 
-pub(crate) fn dispatch_shape(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_data: &[u32; 21]) {
+pub(crate) fn dispatch_shape(
+    inp: &WgpuBuffer,
+    out: &Arc<WgpuBuffer>,
+    params_data: &[u32; 21],
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/shape.wgsl");
     let pipeline = get_or_create_pipeline("shape", shader, "main");
@@ -336,8 +372,9 @@ pub(crate) fn dispatch_shape(inp: &WgpuBuffer, out: &Arc<WgpuBuffer>, params_dat
         ],
     });
     let n = params_data[2];
-    let wg = n.div_ceil(WG_SIZE);
+    let wg = workgroups_1d(n)?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Shape");
+    Ok(())
 }
 
 pub(crate) fn prepare_shape_params(
@@ -410,7 +447,7 @@ pub(crate) fn dispatch_reduce_dim(
     dim_size: u32,
     inner_stride: u32,
     out_n: u32,
-) {
+) -> Result<()> {
     let state = get_device_state();
     let shader = include_str!("shaders/reduce_dim.wgsl");
     let pipeline = get_or_create_pipeline("reduce_dim", shader, "main");
@@ -435,8 +472,9 @@ pub(crate) fn dispatch_reduce_dim(
             },
         ],
     });
-    let wg = out_n.div_ceil(WG_SIZE);
+    let wg = workgroups_1d(out_n)?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "ReduceDim");
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -483,7 +521,7 @@ pub(crate) fn dispatch_pool2d(
             },
         ],
     });
-    let wg = checked_workgroups(&[n, c, oh, ow], WG_SIZE, "WGPU pooling dispatch size")?;
+    let wg = checked_workgroups_auto(&[n, c, oh, ow], "WGPU pooling dispatch size")?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Pool2D");
     Ok(())
 }
@@ -523,7 +561,7 @@ pub(crate) fn dispatch_conv2d_direct(
     });
     let wg = checked_workgroups(
         &[params[0], params[4], params[5], params[6]],
-        WG_SIZE,
+        workgroup_size_x(),
         "WGPU convolution dispatch size",
     )?;
     run_pipeline(&state, &pipeline, &bg, wg, 1, 1, "Conv2DDirect");

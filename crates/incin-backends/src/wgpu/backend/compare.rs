@@ -108,7 +108,7 @@ fn elementwise_bool_out(
     let out_buf =
         WgpuBuffer::new_zeros_for(DTypeId::Bool.descriptor(), elements, OperationKind::Storage)?;
     let params = [mode, n];
-    dispatch::dispatch_binary(&lhs.buffer, &rhs.buffer, &out_buf, &params);
+    dispatch::dispatch_binary(&lhs.buffer, &rhs.buffer, &out_buf, &params)?;
     WgpuStorage::try_new_with_dtype(out_buf, lhs.shape.to_vec(), DTypeId::Bool.descriptor())
 }
 
@@ -176,7 +176,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             OperationKind::Storage,
         )?;
         let params = [LOGICAL_NOT, n];
-        dispatch::dispatch_unary(&input.buffer, &out_buf, &params);
+        dispatch::dispatch_unary(&input.buffer, &out_buf, &params)?;
         WgpuStorage::try_new_with_dtype(out_buf, input.shape.to_vec(), DTypeId::Bool.descriptor())
     }
 }

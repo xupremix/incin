@@ -72,8 +72,19 @@ impl WgpuBuffer {
     /// [`wgpu::COPY_BUFFER_ALIGNMENT`] so later `copy_buffer_to_buffer`
     /// calls (which reject non-4-byte lengths) always have a legal extent.
     /// `Self::size` keeps the *logical* byte length for capacity math.
+    ///
+    /// Fail-loud on oversize (#91): this is the infallible allocation path,
+    /// so a buffer the adapter could never bind is a programmer error with
+    /// an explicit message rather than a wgpu validation failure inside an
+    /// unrelated dispatch. Fallible callers go through `new_zeros_for`,
+    /// which refuses with `Err` before reaching here.
     pub(crate) fn new_zeros(size_bytes: usize) -> Arc<Self> {
         let state = get_device_state();
+        if let Err(error) =
+            crate::wgpu::device::check_buffer_bytes_against(&state.limits, size_bytes as u64)
+        {
+            panic!("WGPU new_zeros refuses an oversized allocation: {error:?}");
+        }
         let padded = size_bytes
             .next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT as usize)
             .max(wgpu::COPY_BUFFER_ALIGNMENT as usize);
@@ -99,17 +110,34 @@ impl WgpuBuffer {
     /// `elements * 1`. The multiplication is checked either way, so an
     /// overflowing element count is reported instead of wrapping into an
     /// undersized buffer that a shader would then write past.
+    ///
+    /// Refuses buffers larger than the adapter's
+    /// `max_storage_buffer_binding_size` (#91) before allocating: every
+    /// buffer here is bound whole (`as_entire_binding`), so the binding
+    /// limit is the allocation limit.
     pub(crate) fn new_zeros_for(
         dtype: impl Into<DTypeDescriptor>,
         elements: usize,
         _operation: OperationKind,
     ) -> Result<Arc<Self>> {
-        Ok(Self::new_zeros(physical_byte_len(dtype.into(), elements)?))
+        let bytes = physical_byte_len(dtype.into(), elements)?;
+        crate::wgpu::device::check_buffer_bytes(bytes as u64)?;
+        Ok(Self::new_zeros(bytes))
     }
 
     pub(crate) fn from_slice<T: bytemuck::Pod>(data: &[T]) -> Arc<Self> {
         let state = get_device_state();
         let bytes = bytemuck::cast_slice(data);
+        // Fail-loud on oversize (#91): this is the infallible upload path,
+        // so an allocation the adapter could never bind is a programmer
+        // error with an explicit message rather than a wgpu validation
+        // failure inside an unrelated dispatch. Fallible callers use
+        // `try_from_slice`, which refuses with `Err`.
+        if let Err(error) =
+            crate::wgpu::device::check_buffer_bytes_against(&state.limits, bytes.len() as u64)
+        {
+            panic!("WGPU from_slice refuses an oversized upload: {error:?}");
+        }
         // `create_buffer_init` already pads the allocation to
         // `COPY_BUFFER_ALIGNMENT`; `Self::size` records the logical length.
         let buffer = state
@@ -130,6 +158,10 @@ impl WgpuBuffer {
     pub(crate) fn try_from_slice<T: bytemuck::Pod>(data: &[T]) -> Result<Arc<Self>> {
         let state = try_get_device_state()?;
         let bytes = bytemuck::cast_slice(data);
+        // Same refusal as `new_zeros_for`, but against the already-fetched
+        // state: this is the `try_` path precisely so it never initializes
+        // the device just to fail.
+        crate::wgpu::device::check_buffer_bytes_against(&state.limits, bytes.len() as u64)?;
         let buffer = state
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {

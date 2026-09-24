@@ -190,7 +190,7 @@ fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {
             incin_core::error::Error::Msg("WGPU launch element count exceeds u32".into())
         })?,
     ]; // op_mode 0=add
-    dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params);
+    dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params)?;
     Ok(WgpuStorage::new(out_buf, a.shape.to_vec()))
 }
 
@@ -298,7 +298,7 @@ fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
         axis_len,
         inner_stride,
         total,
-    );
+    )?;
     Ok(WgpuStorage::new(out_buf, out_shape))
 }
 

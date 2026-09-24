@@ -172,6 +172,16 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for WgpuBackendImpl<D
     ) -> Result<Self::Storage<K>> {
         validate_wgpu(dtype, device, OperationKind::Storage, "from_bytes")?;
         let numel = num_elements(shape)?;
+        // Refuse before the byte-length check (#91): the shape alone
+        // determines a buffer the adapter could never bind, so the binding
+        // limit is the load-bearing reason even when the payload is also
+        // short. Uses the *physical* size — a `bool` upload expands to
+        // `f32` on the device. Goes through the `try_` state accessor so
+        // the first-ever upload still initializes the device instead of
+        // panicking on uninitialized state.
+        let state = crate::wgpu::device::try_get_device_state()?;
+        let physical = crate::wgpu::storage::physical_byte_len(dtype, numel)?;
+        crate::wgpu::device::check_buffer_bytes_against(&state.limits, physical as u64)?;
         let expected = dtype.size_bytes(numel, OperationKind::Storage)?;
         if bytes.len() != expected {
             return Err(Error::InvalidByteLength {

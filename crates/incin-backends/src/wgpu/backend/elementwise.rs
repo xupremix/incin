@@ -68,7 +68,7 @@ pub(crate) fn broadcast_storage_raw(t: &WgpuStorage, shape: &[usize]) -> Result<
         &t.shape,
         &[],
     )?;
-    dispatch::dispatch_shape(&t.buffer, &out_buf, &params);
+    dispatch::dispatch_shape(&t.buffer, &out_buf, &params)?;
     WgpuStorage::try_new_with_dtype(out_buf, shape.to_vec(), t.dtype)
 }
 
@@ -137,7 +137,7 @@ fn binary_op<T: DType>(
     let n = checked_u32(num_elements(&lhs.shape)?, "WGPU binary element count")?;
     let out_buf = WgpuBuffer::new_zeros(lhs.buffer.size);
     let params = [op_mode, n];
-    dispatch::dispatch_binary(&lhs.buffer, &rhs.buffer, &out_buf, &params);
+    dispatch::dispatch_binary(&lhs.buffer, &rhs.buffer, &out_buf, &params)?;
     Ok(WgpuStorage::new(out_buf, lhs.shape.to_vec()))
 }
 
@@ -321,7 +321,7 @@ fn unary_op<T: DType>(t: &WgpuStorage, op_mode: u32) -> Result<WgpuStorage> {
     let n = checked_u32(num_elements(&t.shape)?, "WGPU unary element count")?;
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
     let params = [op_mode, n];
-    dispatch::dispatch_unary(&t.buffer, &out_buf, &params);
+    dispatch::dispatch_unary(&t.buffer, &out_buf, &params)?;
     Ok(WgpuStorage::new(out_buf, t.shape.to_vec()))
 }
 
@@ -336,7 +336,7 @@ pub(crate) fn scalar_op<T: DType>(
     let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
     let scalar_bits = (scalar as f32).to_bits();
     let params = [op_mode, n, scalar_bits];
-    dispatch::dispatch_scalar(&t.buffer, &out_buf, &params);
+    dispatch::dispatch_scalar(&t.buffer, &out_buf, &params)?;
     Ok(WgpuStorage::new(out_buf, t.shape.to_vec()))
 }
 
@@ -439,7 +439,7 @@ impl<D: Device> WgpuBackendImpl<D> {
         let n = checked_u32(num_elements(&t.shape)?, "WGPU clamp element count")?;
         let out_buf = WgpuBuffer::new_zeros(t.buffer.size);
         let params = [5u32, n, (min as f32).to_bits(), (max as f32).to_bits()];
-        dispatch::dispatch_scalar(&t.buffer, &out_buf, &params);
+        dispatch::dispatch_scalar(&t.buffer, &out_buf, &params)?;
         let out = WgpuStorage::new(out_buf, t.shape.to_vec());
 
         let t_capture = t.clone();
@@ -450,7 +450,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             )?;
             let out_buf = WgpuBuffer::new_zeros(grad_out.buffer.size);
             let params = [21u32, n, (min as f32).to_bits(), (max as f32).to_bits()];
-            dispatch::dispatch_binary(&t_capture.buffer, &grad_out.buffer, &out_buf, &params);
+            dispatch::dispatch_binary(&t_capture.buffer, &grad_out.buffer, &out_buf, &params)?;
             Ok(WgpuStorage::new(out_buf, grad_out.shape.to_vec()))
         });
         Ok(out)

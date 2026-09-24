@@ -416,7 +416,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             &input.buffer,
             &out_buf,
             &params,
-        );
+        )?;
         let out = WgpuStorage::new(out_buf, input.shape.to_vec());
 
         let mask_capture = mask_b.clone();
@@ -438,7 +438,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                     &grad_out.buffer,
                     &g_buf,
                     &params,
-                );
+                )?;
                 Ok(vec![WgpuStorage::new(g_buf, grad_out.shape.to_vec())])
             }),
         });
@@ -499,7 +499,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             &false_b.buffer,
             &out_buf,
             &params,
-        );
+        )?;
         let out = WgpuStorage::new(out_buf, out_shape.clone());
 
         let mask_capture = mask_b.clone();
@@ -525,7 +525,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                     &zeros.buffer,
                     &g_true_buf,
                     &params,
-                );
+                )?;
                 let g_false_buf =
                     WgpuBuffer::new_zeros_for(DTypeId::F32, n as usize, OperationKind::Storage)?;
                 dispatch::dispatch_select(
@@ -534,7 +534,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                     &grad_out.buffer,
                     &g_false_buf,
                     &params,
-                );
+                )?;
                 Ok(vec![
                     WgpuStorage::new(g_true_buf, shape_capture.clone()),
                     WgpuStorage::new(g_false_buf, shape_capture.clone()),

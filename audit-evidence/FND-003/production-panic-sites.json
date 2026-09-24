@@ -12,110 +12,122 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1052",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1046",
     "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1053",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1047",
     "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1054",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1048",
     "code": "writeln!(out).unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1056",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1050",
     "code": "write!(out, \"extern \\\"C\\\" __global__ void {}_forward(\", self.name).unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1058",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1052",
     "code": "write!(out, \"const {scalar_ty}* __restrict__ in{i}, \").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1060",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1054",
     "code": "writeln!(out, \"{scalar_ty}* __restrict__ out, const int numel) {{\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1065",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1059",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1066",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1060",
     "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1072",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1066",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1073",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1067",
     "code": "writeln!(out, \"}}\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1096",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1090",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1097",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1091",
     "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1098",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1092",
     "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1099",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1093",
     "code": "writeln!(out).unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1106",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1100",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1107",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1101",
     "code": "write!(out, \"const {scalar_ty}* __restrict__ grad_out, \").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1109",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1103",
     "code": "write!(out, \"const {scalar_ty}* __restrict__ in{i}, \").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1115",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1109",
     "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:1114",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
+    "site": "crates/incin-backends/src/codegen/ir.rs:1115",
+    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
@@ -126,37 +138,25 @@
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1121",
-    "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
-    "disposition": "infallible String formatting",
-    "evidence": "codegen unit tests"
-  },
-  {
     "site": "crates/incin-backends/src/codegen/ir.rs:1126",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
+    "site": "crates/incin-backends/src/codegen/ir.rs:1131",
+    "code": ".unwrap();",
+    "disposition": "infallible String formatting",
+    "evidence": "codegen unit tests"
+  },
+  {
     "site": "crates/incin-backends/src/codegen/ir.rs:1132",
-    "code": ".unwrap();",
-    "disposition": "infallible String formatting",
-    "evidence": "codegen unit tests"
-  },
-  {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1137",
-    "code": ".unwrap();",
-    "disposition": "infallible String formatting",
-    "evidence": "codegen unit tests"
-  },
-  {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1138",
     "code": "writeln!(out, \"}}\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/conformance/mod.rs:518",
+    "site": "crates/incin-backends/src/conformance/mod.rs:554",
     "code": ".expect(\"the operation was drawn from an executed observation\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -678,25 +678,37 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/wgpu/device.rs:21",
+    "site": "crates/incin-backends/src/wgpu/device.rs:29",
     "code": ".expect(\"WGPU state is initialized before an internal buffer is used\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/wgpu/device.rs:68",
+    "site": "crates/incin-backends/src/wgpu/device.rs:94",
     "code": ".expect(\"the WGPU state was just initialized\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/wgpu/storage.rs:272",
+    "site": "crates/incin-backends/src/wgpu/storage.rs:86",
+    "code": "panic!(\"WGPU new_zeros refuses an oversized allocation: {error:?}\");",
+    "disposition": "infallible API boundary: programmer error with explicit message; fallible twin returns typed Err",
+    "evidence": "wgpu_launch_limits refusal tests; storage.rs pre-length limit check"
+  },
+  {
+    "site": "crates/incin-backends/src/wgpu/storage.rs:139",
+    "code": "panic!(\"WGPU from_slice refuses an oversized upload: {error:?}\");",
+    "disposition": "infallible API boundary: programmer error with explicit message; fallible twin returns typed Err",
+    "evidence": "wgpu_launch_limits refusal tests; storage.rs pre-length limit check"
+  },
+  {
+    "site": "crates/incin-backends/src/wgpu/storage.rs:304",
     "code": ".expect(\"backend-created contiguous WGPU storage must match its allocation\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/wgpu/storage.rs:288",
+    "site": "crates/incin-backends/src/wgpu/storage.rs:320",
     "code": ".expect(\"backend-created contiguous WGPU storage must match its allocation\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
