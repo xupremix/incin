@@ -302,6 +302,10 @@ name = "metal"
 enables = []
 
 [[feature_crate.feature]]
+name = "rocm"
+enables = []
+
+[[feature_crate.feature]]
 name = "compiled"
 enables = ["serde_json"]
 
@@ -390,6 +394,10 @@ name = "metal"
 enables = ["std", "incin-core/metal"]
 
 [[feature_crate.feature]]
+name = "rocm"
+enables = ["std", "incin-core/rocm"]
+
+[[feature_crate.feature]]
 name = "metal-mps"
 enables = ["metal"]
 
@@ -458,6 +466,10 @@ enables = ["std", "incin-backends/wgpu"]
 [[feature_crate.feature]]
 name = "metal"
 enables = ["std", "incin-backends/metal"]
+
+[[feature_crate.feature]]
+name = "rocm"
+enables = ["std", "incin-backends/rocm"]
 
 [[feature_crate.feature]]
 name = "metal-mps"
