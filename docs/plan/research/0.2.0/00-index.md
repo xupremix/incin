@@ -177,10 +177,20 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
    block-generalization audit in `93-block-generalization.md`.
    Gates #94/#95/#1.
 6. #102 MoE typing (M): static outer shapes + E+1 offset array.
+   Nameability audit in `102-nameable-spans.md` (2026-09-25): dynamic
+   spans are not usefully nameable — adopt offset-array-as-shape (option
+   C formalized) as target, option B as CPU interim behind one public
+   type; aux loss in `Module::Output` tuple (decided); E-const/k-const +
+   gate-weight-only gradients (defaults). Needs #100's mechanism.
 
 **Tier 2 — correctness bugs first**
 7. #103 scatter_add (S within M): see the correction above. Then the other 7
    routing primitives (nonzero waits on #102).
+7b. #113 transpose view-vs-copy: evidence memo in
+   `113-transpose-semantics.md` (2026-09-25) — SOTA survey + CPU
+   measurement; recommendation (materialize in `transpose`, keep
+   explicit `transpose_view`) awaits maintainer decision; CUDA-side
+   measurement needs the #82 runner.
 8. #90 dtype-parametric matmul (M): the f32 transmute is a latent unsoundness
    for bf16 storage; GemmComputeType mapping. Gates #2.
 
@@ -196,7 +206,13 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
     #106 last 6 (M, kernels partially exist unwired), #91 WGPU tiers
     (Tier 0 partly done; the rest blocked on a WGPU bool dtype).
 12. #101 attention modules (M/L), #104 KvCache first (S/M) then fused
-    attention (L), #8 execute_impls! (M), #96 descriptor-keyed subsystems (L),
+    attention (L), #8 execute_impls! (M), #96 descriptor-keyed subsystems (L)
+    — SOTA survey + decisions in `96-extension-points.md` (2026-09-25):
+    UNSEAL TensorElement with the POD bound (preconditions: NCCL
+    error-field honesty, consumer audit, BuiltinDType gates stay,
+    PROPOSALS.md ruling); two-tier device identity (first-class variants
+    for maintained backends incl. ROCm, External(DeviceKey) for third
+    party; Custom(u64) migrates),
     #94 FP8 (L) -> #95 FP4 (M) -> #3 (M) -> #1 (M), #99 FSDP tier (M) ->
     TP -> PP, #6 ROCm (M), streaming writes (M, 0.3.0 lane).
 
