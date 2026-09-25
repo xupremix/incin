@@ -23,7 +23,8 @@ use crate::cpu::ops::loss::{
 use crate::cpu::ops::norm::{batch_norm_impl, batch_norm_training_impl, layer_norm_impl};
 use crate::cpu::ops::pool::{adaptive_avg_pool2d_impl, avg_pool2d_impl, max_pool2d_impl};
 use crate::cpu::ops::shape_ops::{
-    group_norm_storage, instance_norm_storage, scaled_dot_product_attention_storage,
+    fused_attention_storage, group_norm_storage, instance_norm_storage,
+    scaled_dot_product_attention_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -570,6 +571,42 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
             attributes.scale,
         )
         .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+/// Issue #104: the fused attention reference.
+///
+/// The operands arrive validated by the `FusedAttention` descriptor (rank-4
+/// geometry, head divisibility, positive-finite scale), so this arm binds
+/// them and hands them to the online-softmax kernel directly.
+///
+/// Deliberately no `admitted()` re-check: no capability row advertises
+/// `FusedAttention` yet (adding one is out of this lane -- see the lane
+/// report), so re-checking would refuse every invocation including the
+/// past-admission equivalence probes. Dispatch admission stays the
+/// enforcement point: once the row lands, dispatched invocations are
+/// admitted there and this arm keeps serving them unchanged. Dtype and
+/// geometry enforcement live in the kernel itself.
+impl<D: Device> Execute<op::FusedAttention> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::FusedAttention, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::FusedAttention;
+        let attributes = request.operation.descriptor().attributes();
+        let [query, key, value] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "fused attention expects exactly query, key and value",
+            ));
+        };
+        let query = operand(query, operation)?;
+        let key = operand(key, operation)?;
+        let value = operand(value, operation)?;
+        fused_attention_storage(query, key, value, attributes.causal, attributes.scale)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 

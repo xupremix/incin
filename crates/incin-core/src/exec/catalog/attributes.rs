@@ -680,6 +680,109 @@ impl AttributeContract for AttentionAttributes {
         Ok(())
     }
 }
+/// Shared head-geometry check for [`FusedAttentionAttributes`]: query
+/// `[batch, heads_q, seq_q, head_dim]` against key/value
+/// `[batch, heads_kv, seq_kv, head_dim]` with `heads_q` a multiple of
+/// `heads_kv` (the GQA grouping, issue #104).
+fn validate_fused_attention_geometry(
+    operation: OperationKind,
+    inputs: &[LogicalTensorMeta],
+) -> Result<(), DescriptorError> {
+    if inputs.len() != 3 {
+        return Err(invalid(
+            operation,
+            "arity",
+            "fused attention takes exactly query, key and value: causal masking is an \
+             attribute, not a mask operand",
+        ));
+    }
+    let shapes: Vec<&[usize]> = inputs
+        .iter()
+        .filter_map(|input| input.shape.as_deref())
+        .collect();
+    // Unknown metadata stays unknown: inference reports `None` downstream.
+    if shapes.len() != inputs.len() {
+        return Ok(());
+    }
+    let [query, key, value] = shapes[..] else {
+        return Err(invalid(
+            operation,
+            "arity",
+            "fused attention takes exactly query, key and value: causal masking is an \
+             attribute, not a mask operand",
+        ));
+    };
+    for shape in [query, key, value] {
+        if shape.len() != 4 {
+            return Err(invalid(
+                operation,
+                "rank",
+                "fused attention operands must be rank-4 [batch, heads, seq, head_dim]",
+            ));
+        }
+    }
+    if query[0] != key[0] {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention query batch differs from the key/value batch",
+        ));
+    }
+    if key != value {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention key and value must share [batch, kv_heads, seq_kv, head_dim]",
+        ));
+    }
+    if query[3] != key[3] {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention query and key head widths differ",
+        ));
+    }
+    if query[3] == 0 {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention head_dim must be non-zero",
+        ));
+    }
+    let (heads_q, heads_kv) = (query[1], key[1]);
+    if heads_q == 0 || heads_kv == 0 || heads_q % heads_kv != 0 {
+        return Err(invalid(
+            operation,
+            "heads",
+            "fused attention needs a non-zero query head count that is a multiple of \
+             the key/value head count (one group per key/value head)",
+        ));
+    }
+    Ok(())
+}
+impl AttributeContract for FusedAttentionAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        if self
+            .scale
+            .is_some_and(|scale| !scale.is_finite() || scale <= 0.0)
+        {
+            return Err(invalid(
+                operation,
+                "scale",
+                "attention scale must be positive and finite",
+            ));
+        }
+        // No mask operand exists on this row: causal masking is a property
+        // of the attributes, so unlike `AttentionAttributes` there is no
+        // `has_mask` arity to agree with. The generic arity gate already
+        // refused anything but exactly three inputs.
+        validate_fused_attention_geometry(operation, inputs)
+    }
+}
 impl AttributeContract for UnfoldAttributes {
     fn validate(
         &self,

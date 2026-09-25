@@ -64,6 +64,13 @@ attributes! {
     SplitAttributes { split_size: usize, axis: usize }
     AddmmAttributes { alpha: f64, beta: f64 }
     AttentionAttributes { scale: Option<f64>, has_mask: bool }
+    // Issue #104: the fused attention contract. `causal` is a property of
+    // the operation rather than a mask operand (a caller-supplied mask
+    // tensor cannot be block-skipped safely in general). The GQA grouping
+    // is derived from the operand shapes -- query heads over key/value
+    // heads -- and refused by validation when it does not divide, so it
+    // needs no attribute of its own.
+    FusedAttentionAttributes { scale: Option<f64>, causal: bool }
     UnfoldAttributes { axis: usize, size: usize, step: usize }
     PixelShuffleAttributes { upscale_factor: usize }
     GroupNormAttributes { groups: usize, epsilon: f64 }

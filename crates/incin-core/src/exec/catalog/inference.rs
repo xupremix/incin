@@ -769,6 +769,60 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
+            // Issue #104: the same output-shape rule as the composed row --
+            // `[batch, heads_q, seq_q, head_dim]` -- so selecting fused over
+            // composed is invisible to the caller's types. Stricter than the
+            // composed row on purpose: rank is exactly four (the kernel
+            // indexes `[batch, heads, seq, head_dim]` directly), key and
+            // value agree exactly, and the query head count is a multiple of
+            // the key/value head count (the GQA grouping). `seq_q` and
+            // `seq_kv` may differ (incremental decoding attends new queries
+            // against the cached prefix); the causal attribute aligns
+            // trailing positions, which needs no shape work here.
+            OperationKind::FusedAttention => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                inputs.get(1).and_then(|input| input.shape.as_deref()),
+                inputs.get(2).and_then(|input| input.shape.as_deref()),
+            ) {
+                (Some(query), Some(key), Some(value))
+                    if query.len() == 4 && key.len() == 4 && value.len() == 4 =>
+                {
+                    if query[0] != key[0] || key != value {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "fused attention needs one query batch matching key/value, \
+                             and key/value sharing [batch, kv_heads, seq_kv, head_dim]",
+                        ));
+                    }
+                    if query[3] != key[3] || query[3] == 0 {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "fused attention query/key head widths differ or are zero",
+                        ));
+                    }
+                    if query[1] == 0 || key[1] == 0 || query[1] % key[1] != 0 {
+                        return Err(invalid(
+                            operation,
+                            "heads",
+                            "fused attention query heads must be a non-zero multiple of \
+                             the key/value heads",
+                        ));
+                    }
+                    Some(Some(ShapeBuf::from_slice(&[
+                        query[0], query[1], query[2], query[3],
+                    ])))
+                }
+                (None, _, _) | (_, None, _) | (_, _, None) => Some(None),
+                _ => {
+                    return Err(invalid(
+                        operation,
+                        "rank",
+                        "fused attention operands must be rank-4 [batch, heads, seq, head_dim]",
+                    ));
+                }
+            },
             OperationKind::Linear => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),

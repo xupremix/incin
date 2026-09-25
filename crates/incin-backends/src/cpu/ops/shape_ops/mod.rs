@@ -8,7 +8,9 @@
 //! reads or writes by index or predicate (masked fill, where, gather,
 //! index select, scatter); `linalg` is matmul and its neighbors (addmm,
 //! lerp, attention); `cmp` is elementwise comparison and scalar arithmetic;
-//! `triangular` is triu/tril/diag; `norm` is group/instance normalization.
+//! `triangular` is triu/tril/diag; `norm` is group/instance normalization;
+//! `fused_attention` is the online-softmax fused attention reference (issue
+//! #104).
 
 use incin_core::error::{BackendError, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
@@ -29,6 +31,7 @@ use crate::cpu::tape::{self, TapeEntry};
 mod cmp;
 mod combine;
 mod convert;
+mod fused_attention;
 mod linalg;
 mod norm;
 mod select;
@@ -46,6 +49,7 @@ pub(crate) use convert::{
     canonical_to_dtype, float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage,
     int_to_vec1_storage,
 };
+pub(crate) use fused_attention::fused_attention_storage;
 pub(crate) use linalg::{
     addmm_storage, lerp_storage, matmul_storage, scaled_dot_product_attention_storage,
 };

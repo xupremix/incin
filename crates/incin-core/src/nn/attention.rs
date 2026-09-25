@@ -2079,6 +2079,388 @@ where
         .forget_layout())
 }
 
+/// Which attention implementation served a call (issue #104).
+///
+/// The fused and composed paths are different catalog operations with the
+/// same output-shape rule, so the path taken is visible wherever operation
+/// identities are recorded: the tracing graph's `trace_identity`, and from
+/// there the telemetry snapshots built on it. No separate event type is
+/// needed for this, and none is invented here -- a silent fallback that
+/// relabelled itself as fused would be exactly the failure mode the issue
+/// calls out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttentionPath {
+    /// The `FusedAttention` row: online softmax, no score matrix.
+    Fused,
+    /// The composed `ScaledDotProductAttention` row: portable fallback.
+    Composed,
+}
+
+impl AttentionPath {
+    /// Stable spelling for logs and telemetry consumers.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fused => "fused",
+            Self::Composed => "composed",
+        }
+    }
+}
+
+/// Why [`select_attention_path`] chose the path it did.
+///
+/// Every variant names a check the caller can reproduce: a forced run, a
+/// missing capability row, or the sequence length against the crossover
+/// stub. There is no "assumed fast" variant -- below some length the
+/// composed path wins on launch overhead, and until that crossover is a
+/// recorded measurement the stub points at the portable path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttentionSelectionSource {
+    /// The caller forced this path (benchmarks, equivalence probes).
+    Forced,
+    /// No capability row admits fused on this backend: composed is the only
+    /// executable path, so it is selected rather than attempted.
+    FusedUnavailable,
+    /// Both paths executable; the sequence is below the crossover stub.
+    BelowCrossover,
+    /// Both paths executable; the sequence is at or above the crossover.
+    AboveCrossover,
+}
+
+impl AttentionSelectionSource {
+    /// Stable spelling for logs and telemetry consumers.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Forced => "forced",
+            Self::FusedUnavailable => "fused-unavailable",
+            Self::BelowCrossover => "below-crossover",
+            Self::AboveCrossover => "above-crossover",
+        }
+    }
+}
+
+/// The path taken plus why, returned by every fused/composed dispatch.
+///
+/// Carrying the decision out in the return value -- rather than emitting it
+/// somewhere ambient -- is the whole telemetry hook this lane owes: the
+/// executed operation's own trace identity already records fused vs
+/// composed, and this record explains the selection. No new event types, no
+/// invented metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttentionSelection {
+    /// Which implementation ran.
+    pub path: AttentionPath,
+    /// Why it was chosen.
+    pub source: AttentionSelectionSource,
+}
+
+/// Caller override for path selection.
+///
+/// `Auto` probes capability admission and the crossover stub.
+/// `ForceFused`/`ForceComposed` run one path unconditionally, which is what
+/// crossover benchmarking needs: measuring each path on demand rather than
+/// assuming which wins. `ForceFused` deliberately bypasses capability
+/// admission (validated descriptor, direct executor call -- the
+/// past-admission route); it is a measurement and equivalence harness, not
+/// a way to run an unadvertised kernel in production.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AttentionPreference {
+    /// Probe admission, then consult the crossover stub.
+    #[default]
+    Auto,
+    /// Run fused past admission (benchmarks, equivalence probes).
+    ForceFused,
+    /// Run the composed row through normal dispatch.
+    ForceComposed,
+}
+
+/// The crossover stub: at or above this sequence length fused is expected
+/// to win.
+///
+/// The value is a recorded measurement per device, not a constant -- the
+/// issue's benchmark plan exists to produce it. `None` (see
+/// [`AttentionCrossover::unknown`]) means no measurement exists for this
+/// device, and selection fails closed toward the portable composed path.
+/// The CPU reference kernel exists so the equivalence proof can run, not so
+/// a CPU-measured crossover can stand in for a device one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttentionCrossover {
+    /// Sequence length at or above which fused is selected, when known.
+    pub fused_min_seq_len: Option<usize>,
+}
+
+impl AttentionCrossover {
+    /// No crossover measured for this device: select composed.
+    #[must_use]
+    pub const fn unknown() -> Self {
+        Self {
+            fused_min_seq_len: None,
+        }
+    }
+
+    /// A recorded crossover measurement: select fused at or above it.
+    #[must_use]
+    pub const fn measured(fused_min_seq_len: usize) -> Self {
+        Self {
+            fused_min_seq_len: Some(fused_min_seq_len),
+        }
+    }
+}
+
+impl Default for AttentionCrossover {
+    fn default() -> Self {
+        Self::unknown()
+    }
+}
+
+/// Selects the attention path without running anything.
+///
+/// Pure so crossover policy is unit-testable and benchmark harnesses can
+/// explain a selection without executing: `fused_admitted` is the
+/// capability probe's answer, `seq_len` the query sequence length.
+#[must_use]
+pub fn select_attention_path(
+    seq_len: usize,
+    fused_admitted: bool,
+    preference: AttentionPreference,
+    crossover: AttentionCrossover,
+) -> AttentionSelection {
+    match preference {
+        AttentionPreference::ForceFused => AttentionSelection {
+            path: AttentionPath::Fused,
+            source: AttentionSelectionSource::Forced,
+        },
+        AttentionPreference::ForceComposed => AttentionSelection {
+            path: AttentionPath::Composed,
+            source: AttentionSelectionSource::Forced,
+        },
+        AttentionPreference::Auto => {
+            if !fused_admitted {
+                return AttentionSelection {
+                    path: AttentionPath::Composed,
+                    source: AttentionSelectionSource::FusedUnavailable,
+                };
+            }
+            if crossover
+                .fused_min_seq_len
+                .is_some_and(|threshold| seq_len >= threshold)
+            {
+                AttentionSelection {
+                    path: AttentionPath::Fused,
+                    source: AttentionSelectionSource::AboveCrossover,
+                }
+            } else {
+                AttentionSelection {
+                    path: AttentionPath::Composed,
+                    source: AttentionSelectionSource::BelowCrossover,
+                }
+            }
+        }
+    }
+}
+
+/// Backend contract for [`fused_or_composed_attention`].
+///
+/// Split out like [`AttentionBackend`] and [`RotaryBackend`]: the dispatch
+/// helper below would otherwise open with the fused row, the composed row
+/// and the causal-mask rows all inline, and the reader could not tell which
+/// bound serves the kernel and which serves the fallback.
+pub trait FusedAttentionBackend<K: DType>: crate::tensor::backend::VariableBackend
+    + Execute<op::FusedAttention>
+    + Execute<op::ScaledDotProductAttention>
+    + Execute<op::Ones>
+    + Execute<op::Tril>
+    + Execute<op::Log>
+    + Execute<op::Narrow>
+    + Execute<op::ReshapeExact>
+    + Execute<op::UnsqueezeExact>
+    + Execute<op::BroadcastAs, Output = <Self as crate::tensor::backend::StorageBackend>::Storage<K>>
+{
+}
+
+impl<K: DType, B> FusedAttentionBackend<K> for B where
+    B: crate::tensor::backend::VariableBackend
+        + Execute<op::FusedAttention>
+        + Execute<op::ScaledDotProductAttention>
+        + Execute<op::Ones>
+        + Execute<op::Tril>
+        + Execute<op::Log>
+        + Execute<op::Narrow>
+        + Execute<op::ReshapeExact>
+        + Execute<op::UnsqueezeExact>
+        + Execute<op::BroadcastAs, Output = <B as crate::tensor::backend::StorageBackend>::Storage<K>>
+{
+}
+
+/// Output of [`fused_or_composed_attention`]: the attended tensor with the
+/// selection record from [`select_attention_path`].
+pub type FusedAttentionOutput<B, K, G> = (Tensor<Dyn, B, K, G, Local>, AttentionSelection);
+
+/// Runs fused attention with automatic fallback to the composed row.
+///
+/// Issue #104: `q`/`k`/`v` are head-split `[batch, heads, seq, head_dim]`
+/// operands (query heads a multiple of key/value heads for GQA); `causal`
+/// selects trailing-aligned causal masking as a property of the fused
+/// operation, and builds the equivalent additive mask for the composed
+/// fallback. Returns the output with the selection record from
+/// [`select_attention_path`], which is the telemetry hook: the executed
+/// operation's trace identity already says fused vs composed, and the
+/// record says why.
+///
+/// `Auto` probes the backend's capability registry for `FusedAttention`
+/// first: without an admitting row the composed row runs (source
+/// `FusedUnavailable`), so this helper is safe to call on backends whose
+/// fused kernel does not exist yet -- including through normal dispatch,
+/// which keeps enforcing admission. `ForceFused` runs the kernel
+/// past admission for benchmarking and equivalence probing; `ForceComposed`
+/// always runs the portable row.
+pub fn fused_or_composed_attention<B, K, G>(
+    q: &Tensor<Dyn, B, K, G, Local>,
+    k: &Tensor<Dyn, B, K, G, Local>,
+    v: &Tensor<Dyn, B, K, G, Local>,
+    causal: bool,
+    scale: Option<f64>,
+    preference: AttentionPreference,
+    crossover: AttentionCrossover,
+) -> Result<FusedAttentionOutput<B, K, G>>
+where
+    B: FusedAttentionBackend<K> + crate::tensor::backend::SupportsDType<K>,
+    K: DType,
+    G: RequiresGrad,
+    <B as Execute<op::FusedAttention>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ScaledDotProductAttention>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Ones>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Tril>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Log>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::Narrow>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::ReshapeExact>>::Output: Into<B::Storage<K>>,
+    <B as Execute<op::UnsqueezeExact>>::Output: Into<B::Storage<K>>,
+{
+    use crate::exec::catalog::{Descriptor, FusedAttentionAttributes};
+    use crate::exec::dispatch::logical_meta;
+    use crate::exec::{CapabilityQuery, OperationIdentity, SupportLevel};
+    use crate::shapes::OperationKind;
+    use crate::tensor::backend::ExecutionRequest;
+    use crate::tensor::grad::execution_context;
+
+    let dims = q.shape_buf().as_ref().to_vec();
+    let seq_q = dims.get(2).copied().unwrap_or(0);
+    let context = execution_context::<B, G>(&q._grad);
+    // The capability probe behind `Auto`: without an admitting
+    // `FusedAttention` row this backend cannot run the kernel, and the
+    // composed row is selected rather than attempted.
+    let probe = crate::exec::TensorHandle::from_storage::<B, K, Local>(&q.inner);
+    let fused_admitted = !matches!(
+        context.backend().support(&CapabilityQuery {
+            operation: OperationIdentity::Builtin(OperationKind::FusedAttention),
+            dtype: probe.metadata().dtype(),
+            layout: probe.metadata().layout(),
+            rank: probe.metadata().shape().rank(),
+            training: context.training(),
+            math_mode: context.math_mode(),
+        }),
+        SupportLevel::Unsupported(_)
+    );
+    let selection = select_attention_path(seq_q, fused_admitted, preference, crossover);
+
+    let q_handle = crate::exec::TensorHandle::from_storage::<B, K, Local>(&q.inner);
+    let k_handle = crate::exec::TensorHandle::from_storage::<B, K, Local>(&k.inner);
+    let v_handle = crate::exec::TensorHandle::from_storage::<B, K, Local>(&v.inner);
+    let inputs = [q_handle, k_handle, v_handle];
+    let expected =
+        crate::shapes::ShapeValue::<Dyn>::try_new(q.shape_buf_value()).map_err(Error::Shape)?;
+
+    let inner = match selection.path {
+        AttentionPath::Composed => {
+            // Portable row through normal dispatch. Grouped-query keys and
+            // values are widened to one head per query head first -- the
+            // composed row broadcasts batch prefixes but does not group, so
+            // like the module's own composed path this fallback expands
+            // before attending. The fused path needs no such copy: its
+            // kernel maps query heads to key/value heads internally.
+            let q_dims = q.shape_buf().as_ref().to_vec();
+            let kv_dims = k.shape_buf().as_ref().to_vec();
+            let seq_kv = kv_dims.get(2).copied().unwrap_or(0);
+            let n_kv_heads = kv_dims.get(1).copied().unwrap_or(1);
+            let key_full =
+                expand_kv_heads(k, q_dims.get(1).copied().unwrap_or(n_kv_heads), n_kv_heads)?;
+            let value_full =
+                expand_kv_heads(v, q_dims.get(1).copied().unwrap_or(n_kv_heads), n_kv_heads)?;
+            // The causal mask is the same right-aligned geometry the fused
+            // kernel implements: the last `seq_q` rows of the full
+            // `[seq_kv, seq_kv]` triangle when the keys lead, a plain
+            // `[seq_q, seq_kv]` triangle otherwise.
+            let mask = if causal {
+                let full = causal_mask::<B, K>(seq_kv, seq_kv, 0, &q._dtype, &q._device)?;
+                Some(if seq_kv >= seq_q {
+                    full.try_narrow(0isize, seq_kv - seq_q, seq_q)?
+                        .forget_layout()
+                } else {
+                    causal_mask::<B, K>(seq_q, seq_kv, 0, &q._dtype, &q._device)?
+                })
+            } else {
+                None
+            };
+            let mask_ref = mask.as_ref();
+            // The mask carries its own gradient marker (`NoGrad` out of
+            // `causal_mask`): `scaled_dot_product_attention` types it
+            // independently of the query/key/value gradient, the same way
+            // the module's own composed path passes it.
+            G::grad_mode(&q._grad)
+                .restrict(|| {
+                    Tensor::scaled_dot_product_attention(q, &key_full, &value_full, mask_ref, scale)
+                })?
+                .forget_layout()
+                .inner
+        }
+        AttentionPath::Fused => {
+            let attributes = FusedAttentionAttributes { scale, causal };
+            let run = |past_admission: bool| -> Result<B::Storage<K>> {
+                G::grad_mode(&q._grad).restrict(|| {
+                    if past_admission {
+                        let logical: Vec<crate::exec::catalog::LogicalTensorMeta> = inputs
+                            .iter()
+                            .map(|handle| logical_meta(handle.metadata()))
+                            .collect();
+                        let validated =
+                            Descriptor::<op::FusedAttention>::infer_runtime(attributes, logical)
+                                .map_err(Error::Descriptor)?;
+                        context
+                            .backend()
+                            .execute(ExecutionRequest {
+                                operation: &validated,
+                                inputs: &inputs,
+                                context: &context,
+                                payload: None,
+                            })
+                            .map_err(Error::from)
+                            .map(Into::into)
+                    } else {
+                        crate::exec::dispatch::execute_shaped::<op::FusedAttention, B, Dyn>(
+                            &context, attributes, &inputs, &expected,
+                        )
+                        .map_err(Error::from)
+                        .map(Into::into)
+                    }
+                })
+            };
+            // `Auto` with an admitting row goes through dispatch admission
+            // like every other operation; only the forced measurement path
+            // runs past it.
+            run(matches!(selection.source, AttentionSelectionSource::Forced))?
+        }
+    };
+    let output = Tensor::<Dyn, B, K, G>::from_shape_buf(
+        inner,
+        expected.shape_buf().clone(),
+        q._dtype.clone(),
+        q._device.clone(),
+        q._grad.clone(),
+    )?;
+    Ok((output, selection))
+}
+
 /// Rotates `[b, n, t, hd]` by the cached angles.
 ///
 /// `x * cos + rotate_half(x) * sin`, where `rotate_half` pairs dimension `i`

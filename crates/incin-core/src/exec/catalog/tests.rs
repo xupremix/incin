@@ -347,6 +347,8 @@ fn every_typed_output_rule_is_fail_closed_or_exactly_inferred() {
                 | OperationKind::Outer
                 | OperationKind::Addmm
                 | OperationKind::ScaledDotProductAttention
+                // Issue #104: same output-shape rule as the composed row.
+                | OperationKind::FusedAttention
                 | OperationKind::Linear
                 | OperationKind::EmbeddingExact
                 | OperationKind::Quantize
@@ -1123,6 +1125,8 @@ fn every_tensor_returning_row_declares_an_inference_source() {
                     | OperationKind::Outer
                     | OperationKind::Addmm
                     | OperationKind::ScaledDotProductAttention
+                    // Issue #104: same output-shape rule as the composed row.
+                    | OperationKind::FusedAttention
                     | OperationKind::Linear
                     | OperationKind::Quantize
                     | OperationKind::Dequantize
@@ -1632,4 +1636,230 @@ fn a_typed_invocation_carries_a_static_element_count_to_the_backend() {
         "an unproven shape must never hand a backend a constant to bake in"
     );
     assert_eq!(erased_evidence.static_extents(), &[][..]);
+}
+
+/// Issue #104: `FusedAttention` descriptor contract tests.
+///
+/// The fused row mirrors the composed `ScaledDotProductAttention` output
+/// rule (`[batch, heads_q, seq_q, head_dim]`) while refusing, with typed
+/// errors, the head configurations no single kernel can serve.
+fn fused_meta(dims: &[usize]) -> LogicalTensorMeta {
+    LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(dims)),
+        dtype: None,
+        device: None,
+    }
+}
+
+fn fused_attrs(causal: bool) -> FusedAttentionAttributes {
+    FusedAttentionAttributes {
+        scale: None,
+        causal,
+    }
+}
+
+#[test]
+fn fused_attention_infers_the_composed_output_shape() {
+    // Plain multi-head attention: geometry passes through.
+    let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(false),
+        vec![
+            fused_meta(&[2, 4, 6, 8]),
+            fused_meta(&[2, 4, 6, 8]),
+            fused_meta(&[2, 4, 6, 8]),
+        ],
+    )
+    .expect("a well-formed fused invocation is legal");
+    assert_eq!(
+        invocation.validated().descriptor().outputs()[0]
+            .shape
+            .as_deref(),
+        Some(&[2, 4, 6, 8][..]),
+        "fused output must match the composed [batch, heads, seq, head_dim] rule"
+    );
+
+    // Grouped-query decode: eight query heads over two key/value heads, new
+    // queries against a longer cached prefix. The causal flag must not move
+    // the geometry: masking is a property, not a shape.
+    for causal in [false, true] {
+        let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            fused_attrs(causal),
+            vec![
+                fused_meta(&[1, 8, 2, 4]),
+                fused_meta(&[1, 2, 9, 4]),
+                fused_meta(&[1, 2, 9, 4]),
+            ],
+        )
+        .expect("a grouped-query decode invocation is legal");
+        assert_eq!(
+            invocation.validated().descriptor().outputs()[0]
+                .shape
+                .as_deref(),
+            Some(&[1, 8, 2, 4][..]),
+            "causal={causal}: fused output keeps the query geometry"
+        );
+    }
+
+    // Multi-query attention is the same kernel with one key/value head.
+    let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(true),
+        vec![
+            fused_meta(&[1, 4, 3, 8]),
+            fused_meta(&[1, 1, 3, 8]),
+            fused_meta(&[1, 1, 3, 8]),
+        ],
+    )
+    .expect("a multi-query invocation is legal");
+    assert_eq!(
+        invocation.validated().descriptor().outputs()[0]
+            .shape
+            .as_deref(),
+        Some(&[1, 4, 3, 8][..]),
+    );
+}
+
+#[test]
+fn fused_attention_refuses_bad_head_configs_with_typed_errors() {
+    // (query, key, value, expected attribute field)
+    type HeadCase = ([usize; 4], [usize; 4], [usize; 4], &'static str);
+    let cases: [HeadCase; 7] = [
+        // Eight query heads cannot split over three key/value heads.
+        ([1, 8, 4, 8], [1, 3, 4, 8], [1, 3, 4, 8], "heads"),
+        // No head configuration at all.
+        ([1, 0, 4, 8], [1, 2, 4, 8], [1, 2, 4, 8], "heads"),
+        ([1, 4, 4, 8], [1, 0, 4, 8], [1, 0, 4, 8], "heads"),
+        // Query and key widths disagree.
+        ([1, 4, 4, 8], [1, 4, 4, 6], [1, 4, 4, 6], "shape"),
+        // Key and value are different tensors' worth of geometry.
+        ([1, 4, 4, 8], [1, 4, 5, 8], [1, 4, 6, 8], "shape"),
+        // Batches disagree.
+        ([2, 4, 4, 8], [1, 4, 4, 8], [1, 4, 4, 8], "shape"),
+        // A zero head width is not a head.
+        ([1, 4, 4, 0], [1, 4, 4, 0], [1, 4, 4, 0], "shape"),
+    ];
+    for (query, key, value, field) in cases {
+        let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            fused_attrs(true),
+            vec![fused_meta(&query), fused_meta(&key), fused_meta(&value)],
+        )
+        .expect_err("a bad head config must not validate");
+        assert!(
+            matches!(
+                error,
+                DescriptorError::InvalidAttribute {
+                    operation: OperationKind::FusedAttention,
+                    attribute,
+                    ..
+                } if attribute == field
+            ),
+            "expected InvalidAttribute {{ attribute: {field} }}, got {error:?} \
+             for q={query:?} k={key:?} v={value:?}"
+        );
+    }
+}
+
+#[test]
+fn fused_attention_refuses_non_rank_four_operands() {
+    for dims in [
+        alloc::vec![2, 6, 8],
+        alloc::vec![2, 4, 6, 8, 1],
+        alloc::vec![48],
+    ] {
+        let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            fused_attrs(false),
+            vec![
+                fused_meta(&dims),
+                fused_meta(&[2, 4, 6, 8]),
+                fused_meta(&[2, 4, 6, 8]),
+            ],
+        )
+        .expect_err("a non-rank-4 operand must not validate");
+        assert!(
+            matches!(
+                error,
+                DescriptorError::InvalidAttribute {
+                    operation: OperationKind::FusedAttention,
+                    attribute: "rank",
+                    ..
+                }
+            ),
+            "expected a rank refusal, got {error:?} for {dims:?}"
+        );
+    }
+}
+
+#[test]
+fn fused_attention_refuses_a_bad_scale() {
+    for scale in [Some(0.0), Some(-1.0), Some(f64::NAN), Some(f64::INFINITY)] {
+        let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            FusedAttentionAttributes {
+                scale,
+                causal: true,
+            },
+            vec![
+                fused_meta(&[1, 2, 4, 8]),
+                fused_meta(&[1, 2, 4, 8]),
+                fused_meta(&[1, 2, 4, 8]),
+            ],
+        )
+        .expect_err("a non-positive or non-finite scale must not validate");
+        assert!(
+            matches!(
+                error,
+                DescriptorError::InvalidAttribute {
+                    operation: OperationKind::FusedAttention,
+                    attribute: "scale",
+                    ..
+                }
+            ),
+            "expected a scale refusal, got {error:?} for {scale:?}"
+        );
+    }
+}
+
+#[test]
+fn fused_attention_takes_no_mask_operand() {
+    // Four inputs (a caller-supplied mask) is refused: the causal flag
+    // replaces the mask tensor. The attribute contract runs before the
+    // generic arity gate on this path, so the refusal arrives as a typed
+    // `InvalidAttribute` naming the arity, not as `DescriptorError::Arity`.
+    let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(true),
+        vec![
+            fused_meta(&[1, 2, 4, 8]),
+            fused_meta(&[1, 2, 4, 8]),
+            fused_meta(&[1, 2, 4, 8]),
+            fused_meta(&[1, 1, 4, 4]),
+        ],
+    )
+    .expect_err("a mask operand must not validate");
+    assert!(
+        matches!(
+            error,
+            DescriptorError::InvalidAttribute {
+                operation: OperationKind::FusedAttention,
+                attribute: "arity",
+                ..
+            }
+        ),
+        "expected an arity refusal, got {error:?}"
+    );
+}
+
+#[test]
+fn fused_attention_with_unknown_shapes_stays_unknown() {
+    let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(true),
+        vec![
+            LogicalTensorMeta::unknown(),
+            LogicalTensorMeta::unknown(),
+            LogicalTensorMeta::unknown(),
+        ],
+    )
+    .expect("unknown metadata must stay unknown, not fail");
+    assert_eq!(
+        invocation.validated().descriptor().outputs()[0].shape,
+        None,
+        "no shape may be inferred from unknown inputs"
+    );
 }

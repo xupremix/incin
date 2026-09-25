@@ -317,6 +317,10 @@ pub(super) const fn entry(
         // window is the loosest bound the three operands jointly admit
         // (lhs rank 2, stacked rhs rank 3, offsets rank 1).
         OperationKind::GroupedMatMul => 1..=3,
+        // Issue #104: the fused kernel indexes `[batch, heads, seq, head_dim]`
+        // directly, so unlike the composed row (rank two and up) the contract
+        // is exactly rank four on every operand.
+        OperationKind::FusedAttention => 4..=4,
         OperationKind::Rnn | OperationKind::Lstm => 2..=3,
         OperationKind::Conv1dExact => 2..=3,
         OperationKind::Conv2dExact
@@ -366,6 +370,9 @@ pub(super) const fn entry(
             | OperationKind::Outer
             | OperationKind::Addmm
             | OperationKind::ScaledDotProductAttention
+            // Issue #104: same output-shape rule as the composed row, so
+            // path selection is invisible to the caller's types.
+            | OperationKind::FusedAttention
             | OperationKind::Linear
     ) {
         output = OutputRule::TypedInference;

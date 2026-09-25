@@ -128,6 +128,13 @@ macro_rules! incin_operation_catalog {
             // rhs `[E, K, N]`, and i64 offsets `[E+1]` tiling `[0, T)` (#103).
             (GroupedMatMul, "grouped_matmul", Reduction, MatMul, NoAttributes, 3, 3, "::grouped_matmul"),
             (ScaledDotProductAttention, "scaled_dot_product_attention", Reduction, Attention, AttentionAttributes, 3, 4, "::scaled_dot_product_attention"),
+            // Issue #104: the fused path is a distinct operation, not a flag
+            // on the composed one, so a backend advertises it only where the
+            // kernel exists. Same output-shape rule as the composed row;
+            // causal masking is a property of the attributes (a kernel can
+            // only skip blocks for a mask it knows is causal), so there is
+            // no mask operand and the arity is exactly three.
+            (FusedAttention, "fused_attention", Reduction, Attention, FusedAttentionAttributes, 3, 3, "::fused_attention"),
             (Unfold, "unfold", Storage, Shape, UnfoldAttributes, 1, 1, "::unfold"),
             (PixelShuffle, "pixel_shuffle", Storage, Shape, PixelShuffleAttributes, 1, 1, "::pixel_shuffle"),
             (GroupNorm, "group_norm", Normalization, Normalization, GroupNormAttributes, 1, 1, "::group_norm"),

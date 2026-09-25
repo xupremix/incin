@@ -123,8 +123,10 @@ pub mod transformer;
 pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
 pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
 pub use attention::{
-    AttentionBackend, AttentionConfig, CrossAttention, MultiHeadAttention, PositionEncoding,
-    RotaryBackend,
+    AttentionBackend, AttentionConfig, AttentionCrossover, AttentionPath, AttentionPreference,
+    AttentionSelection, AttentionSelectionSource, CrossAttention, FusedAttentionBackend,
+    FusedAttentionOutput, MultiHeadAttention, PositionEncoding, RotaryBackend,
+    fused_or_composed_attention, select_attention_path,
 };
 pub use avg_pool2d::AvgPool2d;
 pub use batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
