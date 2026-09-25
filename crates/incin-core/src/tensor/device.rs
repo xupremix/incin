@@ -385,6 +385,81 @@ mod metal_static {
 #[cfg(feature = "metal")]
 pub use metal_static::MetalN;
 
+#[cfg(feature = "rocm")]
+mod rocm_partial {
+    use super::{Device, DeviceId, Result};
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    /// **Tier 2** ROCm device: backend kind known at compile time, ordinal
+    /// supplied at runtime as a `usize`.
+    pub struct Rocm {
+        ordinal: usize,
+    }
+
+    impl Rocm {
+        /// Selects a logical ROCm device ordinal without claiming that the
+        /// device exists on the current host.
+        #[must_use]
+        pub const fn new(ordinal: usize) -> Self {
+            Self { ordinal }
+        }
+
+        /// Returns the selected logical ordinal.
+        #[must_use]
+        pub const fn ordinal(&self) -> usize {
+            self.ordinal
+        }
+    }
+
+    impl Device for Rocm {
+        type Arg = Self;
+        type Field = Self;
+
+        fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::rocm(dev.ordinal))
+        }
+
+        fn init(arg: Self::Arg) -> Self::Field {
+            arg
+        }
+    }
+}
+
+#[cfg(feature = "rocm")]
+pub use rocm_partial::Rocm;
+
+#[cfg(feature = "rocm")]
+mod rocm_static {
+    use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
+    use core::fmt::Debug;
+    use typenum::{U0, Unsigned};
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    /// **Tier 3** ROCm device: both backend kind and device ordinal `N` are known at compile time.
+    pub struct RocmN<N: Unsigned = U0>(PhantomData<N>);
+
+    impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> ConstDevice
+        for RocmN<N>
+    {
+    }
+
+    impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> Device for RocmN<N> {
+        type Arg = ();
+        type Field = PhantomData<Self>;
+
+        fn to_incin(_: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::rocm(N::USIZE))
+        }
+
+        fn init(_: Self::Arg) -> Self::Field {
+            PhantomData
+        }
+    }
+}
+
+#[cfg(feature = "rocm")]
+pub use rocm_static::RocmN;
+
 // ============================================================================
 // CPU - always fully static (there is only one CPU)
 // ============================================================================
@@ -512,6 +587,13 @@ pub enum DeviceKind {
     Wgpu,
     /// The Metal backend family for Apple Silicon.
     Metal,
+    /// The ROCm/HIP backend family for AMD GPUs.
+    ///
+    /// First-class variant per the issue #6 decision (maintained backends get
+    /// variants; third-party backends use [`DeviceKind::External`]). Scaffolding
+    /// only so far: identity, an ordinal detection stub, and storage shells.
+    /// No HIP bindings are vendored, so no kernels are advertised.
+    Rocm,
     /// An externally defined backend family identified by a stable
     /// namespace key.
     ///
@@ -536,6 +618,7 @@ impl DeviceKind {
             Self::Cuda => "cuda",
             Self::Wgpu => "wgpu",
             Self::Metal => "metal",
+            Self::Rocm => "rocm",
             Self::External(key) => key.name(),
         }
     }
@@ -615,6 +698,14 @@ impl DeviceId {
         }
     }
 
+    /// A ROCm device at ordinal `ord`.
+    pub fn rocm(ord: usize) -> Self {
+        Self {
+            kind: DeviceKind::Rocm,
+            ordinal: ord,
+        }
+    }
+
     /// An externally defined backend device at ordinal `ord`.
     ///
     /// `key` must be a stable [`DeviceKey`] chosen by the external backend
@@ -641,6 +732,11 @@ pub const fn wgpu_is_available() -> bool {
 /// Whether this build was compiled with the `metal` feature enabled.
 pub const fn metal_is_available() -> bool {
     cfg!(feature = "metal")
+}
+/// Whether this build was compiled with the `rocm` feature enabled
+/// (does not check for actual ROCm hardware/drivers at runtime).
+pub const fn rocm_is_available() -> bool {
+    cfg!(feature = "rocm")
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -690,6 +786,26 @@ pub struct WgpuDevice {
 }
 
 impl WgpuDevice {
+    /// Creates a new instance with the given device ordinal.
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+
+    /// Returns the logical device ordinal.
+    #[must_use]
+    pub const fn ordinal(self) -> usize {
+        self.id
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// A ROCm device index, used as a hashable/orderable key distinct from
+/// the type-level `Rocm`/`RocmN<N>` markers.
+pub struct RocmDevice {
+    id: usize,
+}
+
+impl RocmDevice {
     /// Creates a new instance with the given device ordinal.
     pub fn new(id: usize) -> Self {
         Self { id }
@@ -1030,6 +1146,45 @@ mod tests {
         let field = <Metal as Device>::init(Metal::new(2));
         assert_eq!(field.ordinal(), 2);
         assert_eq!(Metal::to_incin(&field).unwrap(), DeviceId::metal(2));
+    }
+
+    #[test]
+    fn rocm_device_identity_follows_variant_conventions() {
+        let id = DeviceId::rocm(0);
+        assert_eq!(id.kind(), DeviceKind::Rocm);
+        assert_eq!(id.kind().name(), "rocm");
+        assert_eq!(id.kind().external_key(), None);
+        assert_eq!(id.ordinal(), 0);
+        assert_eq!(DeviceId::rocm(2).ordinal(), 2);
+        assert_eq!(rocm_is_available(), cfg!(feature = "rocm"));
+        let key = RocmDevice::new(3);
+        assert_eq!(key.ordinal(), 3);
+    }
+
+    #[test]
+    fn rocm_device_identity_round_trips_through_serde() {
+        let id = DeviceId::rocm(1);
+        let wire = serde_json::to_string(&id).expect("a device id always serializes");
+        let recovered: DeviceId = serde_json::from_str(&wire).expect("a rocm device id reads back");
+        assert_eq!(recovered, id);
+        assert_eq!(recovered.kind().name(), "rocm");
+    }
+
+    #[cfg(feature = "rocm")]
+    #[test]
+    fn test_rocm_tier2_runtime_ordinal() {
+        let field = <Rocm as Device>::init(Rocm::new(2));
+        assert_eq!(field.ordinal(), 2);
+        assert_eq!(Rocm::to_incin(&field).unwrap(), DeviceId::rocm(2));
+    }
+
+    #[cfg(feature = "rocm")]
+    #[test]
+    fn test_rocm_tier3_static_ordinal() {
+        use typenum::U1;
+        let field = <RocmN<U1> as Device>::init(());
+        let id = RocmN::<U1>::to_incin(&field).unwrap();
+        assert_eq!(id, DeviceId::rocm(1));
     }
 
     #[cfg(feature = "wgpu")]

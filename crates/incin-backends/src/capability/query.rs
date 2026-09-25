@@ -1,6 +1,8 @@
 //! The public query surface: `registry`, `support`, and the coverage report.
 
-use super::tables::{CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, WGPU_CAPABILITIES};
+use super::tables::{
+    CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, ROCM_CAPABILITIES, WGPU_CAPABILITIES,
+};
 use incin_core::exec::{
     Capabilities, CapabilityQuery, CapabilityRegistry, CapabilityRule, OPERATION_CATALOG,
     SupportLevel,
@@ -18,6 +20,10 @@ pub fn registry(device: DeviceKind) -> CapabilityRegistry {
         DeviceKind::Cuda => CUDA_CAPABILITIES,
         DeviceKind::Wgpu => WGPU_CAPABILITIES,
         DeviceKind::Metal => METAL_CAPABILITIES,
+        // Issue #6: the explicit empty table answers every query with a
+        // typed Unsupported (same observable behavior as the wildcard
+        // below, but routed through the backend's own declaration).
+        DeviceKind::Rocm => ROCM_CAPABILITIES,
         _ => EMPTY_CAPABILITIES,
     };
     CapabilityRegistry::new(rules)
@@ -44,6 +50,8 @@ pub struct BackendCoverageRow {
     pub wgpu_rules: usize,
     /// Number of capability rules the Metal registry declares for the operation.
     pub metal_rules: usize,
+    /// Number of capability rules the ROCm registry declares for the operation.
+    pub rocm_rules: usize,
 }
 
 /// Builds one coverage row per catalog operation across every compiled backend registry.
@@ -66,6 +74,10 @@ pub fn coverage_report() -> alloc::vec::Vec<BackendCoverageRow> {
                 .filter(|rule| rule.operation == entry.operation)
                 .count(),
             metal_rules: METAL_CAPABILITIES
+                .iter()
+                .filter(|rule| rule.operation == entry.operation)
+                .count(),
+            rocm_rules: ROCM_CAPABILITIES
                 .iter()
                 .filter(|rule| rule.operation == entry.operation)
                 .count(),

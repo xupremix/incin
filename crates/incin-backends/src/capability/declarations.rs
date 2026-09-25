@@ -909,3 +909,37 @@ macro_rules! metal_descriptor_operations {
 pub(crate) use cuda_descriptor_operations;
 pub(crate) use metal_descriptor_operations;
 pub(crate) use wgpu_descriptor_operations;
+
+macro_rules! rocm_descriptor_operations {
+    ($callback:ident, $($args:tt)*) => {
+        $callback! {
+            $($args)*;
+            // Issue #6 scaffolding: no HIP kernels exist — every group
+            // empty on purpose, so the table claims nothing and the
+            // registry answers every query with a typed Unsupported.
+            elementwise = [],
+            broadcast = [],
+            reshape = [],
+            filling = [],
+            sampling = [],
+            readback = [],
+            reduction = [],
+            spatial = [],
+            matmul = [],
+            normalization = [],
+            embedding = [],
+            fused_attention = [],
+            native_tensor = [],
+            logical = [],
+            composed_tensor = [],
+            composed_matmul = [],
+            composed_matmul_bias = [],
+            quantizing = [],
+            quantized = [],
+            composed_reduction = [],
+            composed_reduction_indexed = []
+        }
+    };
+}
+
+pub(crate) use rocm_descriptor_operations;

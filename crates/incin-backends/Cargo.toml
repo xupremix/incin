@@ -46,6 +46,10 @@ cuda-vendor = ["cuda"]
 wgpu = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
 # Enables Incin's native Metal backend for Apple Silicon.
 metal = ["std", "incin-core/metal"]
+# Enables Incin's ROCm backend scaffolding for AMD GPUs (issue #6).
+# Detection and storage metadata only: no HIP bindings are vendored, so no
+# device memory is allocated and the capability table is empty.
+rocm = ["std", "incin-core/rocm"]
 # Enables MPS and MPSGraph structured primitives for Apple Silicon.
 metal-mps = ["metal"]
 
@@ -78,6 +82,7 @@ cuda-vendor = { tier = "preview", owner = "backends", prerequisites = ["cuda"], 
 wgpu = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "wgpu" }
 metal = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "apple-silicon" }
 metal-mps = { tier = "preview", owner = "backends", prerequisites = ["metal"], hardware = "apple-silicon" }
+rocm = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "rocm" }
 autotune = { tier = "preview", owner = "backends", prerequisites = ["cuda"], hardware = "cuda" }
 external-candle = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }
 telemetry = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }

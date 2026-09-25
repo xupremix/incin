@@ -22,6 +22,9 @@
 //! What is *not* covered is as deliberate. Metal is `MTL-001` and unbuilt, so
 //! there is no Metal row: a row reporting "not available" for a backend that
 //! does not exist reads as a hardware finding rather than an absent feature.
+//! ROCm does have a row: issue #6's scaffolding reports it as not-compiled or
+//! compiled-but-unanswered until HIP bindings land, which is a truthful
+//! statement about the build rather than a claim about hardware.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -42,7 +45,12 @@ use serde::Serialize;
 pub const SCHEMA_VERSION: u32 = 2;
 
 /// The backend families the report covers, in the order it prints them.
-const DEVICE_ORDER: &[DeviceKind] = &[DeviceKind::Cpu, DeviceKind::Cuda, DeviceKind::Wgpu];
+const DEVICE_ORDER: &[DeviceKind] = &[
+    DeviceKind::Cpu,
+    DeviceKind::Cuda,
+    DeviceKind::Rocm,
+    DeviceKind::Wgpu,
+];
 
 // ============================================================================
 // The observations - one trait for the whole impure surface
@@ -776,7 +784,7 @@ fn findings(
             Severity::Error,
             "no-backend-compiled",
             "no backend family is compiled into this build, so nothing can execute".to_string(),
-            Some("rebuild with at least one of the cpu, cuda, or wgpu features"),
+            Some("rebuild with at least one of the cpu, cuda, rocm, or wgpu features"),
         ));
     }
 
@@ -802,6 +810,9 @@ fn findings(
                 ),
                 Some(match device.kind.as_str() {
                     "cuda" => "check that a driver is installed and visible to this process",
+                    "rocm" => {
+                        "check that an AMD GPU with a ROCm/HIP runtime is visible to this process"
+                    }
                     "wgpu" => "check that a non-software adapter is visible to this process",
                     _ => "check that the backend's runtime is present",
                 }),
@@ -878,6 +889,7 @@ fn compiled_features() -> Vec<Feature> {
         Feature::new("cpu", cfg!(feature = "cpu")),
         Feature::new("cpu-blas", cfg!(feature = "cpu-blas")),
         Feature::new("cuda", cfg!(feature = "cuda")),
+        Feature::new("rocm", cfg!(feature = "rocm")),
         Feature::new("wgpu", cfg!(feature = "wgpu")),
         Feature::new("external-candle", cfg!(feature = "external-candle")),
         Feature::new("metal", cfg!(feature = "metal")),

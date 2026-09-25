@@ -14,7 +14,7 @@ use super::constants::{
 };
 use super::declarations::{
     cpu_descriptor_operations, cuda_descriptor_operations, metal_descriptor_operations,
-    wgpu_descriptor_operations,
+    rocm_descriptor_operations, wgpu_descriptor_operations,
 };
 use super::rules::{
     accelerator_max_rank, composed_ranked, descriptor_capability_rules, descriptor_max_rank,
@@ -1033,4 +1033,41 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
         // would advertise an operation that can never execute. The
         // `Execute` impls stay as loud errors behind the registry's refusal.
     ]
+);
+
+/// ROCm capability rules: exactly none until HIP kernels land (issue #6).
+///
+/// Invoked through the same macro as the other backends so the declaration
+/// stays the single source of group membership; every group is empty, so
+/// this static claims nothing. Dtype/layout parameters ride along unused,
+/// per the file's convention for empty groups.
+pub static ROCM_CAPABILITIES: &[CapabilityRule] = rocm_descriptor_operations!(
+    descriptor_capability_rules,
+    elementwise = F32_ONLY,
+    broadcast = F32_ONLY,
+    reshape = F32_ONLY,
+    reduction = F32_ONLY,
+    filling_dtypes = F32_ONLY,
+    sampling_dtypes = F32_ONLY,
+    spatial = F32_ONLY,
+    matmul = F32_ONLY,
+    normalization_dtypes = F32_ONLY,
+    embedding_dtypes = INDEX_AND_F32_DTYPES,
+    fused_attention_dtypes = F32_AND_F64,
+    broadcast_training = F32_ONLY,
+    reshape_training = F32_ONLY,
+    elementwise_layouts = CONTIGUOUS,
+    broadcast_layouts = CONTIGUOUS,
+    reshape_layouts = CONTIGUOUS,
+    reduction_layouts = CONTIGUOUS,
+    spatial_layouts = CONTIGUOUS,
+    matmul_layouts = CONTIGUOUS,
+    fused_attention_layouts = CONTIGUOUS,
+    quantized_dtypes = Q8_ONLY,
+    quantized_layouts = CONTIGUOUS,
+    tensor_dtypes = F32_ONLY,
+    tensor_layouts = CONTIGUOUS,
+    logical_dtypes = BOOL_ONLY,
+    max_rank = descriptor_max_rank,
+    legacy = []
 );

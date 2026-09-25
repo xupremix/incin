@@ -219,8 +219,8 @@ install the binaries with `--path`.
 <summary><strong>Lower-level crate features</strong></summary>
 
 <!-- BEGIN GENERATED: crate-features -->
-- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
-- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `compiled`, `postcard`, `safetensors`, and `serde_json`.
+- `incin-backends`: defaults to `std,cpu`; optional `compiled`, `cpu-blas`, `cuda`, `cuda-vendor`, `wgpu`, `metal`, `rocm`, `metal-mps`, `autotune`, `external-candle`, `telemetry`, `distributed`, `distributed-reference`, `distributed-nccl`, and `test-utils`.
+- `incin-core`: defaults to `std`; optional `nightly`, `paranoid-validation`, `distributed`, `cuda`, `wgpu`, `metal`, `rocm`, `compiled`, `postcard`, `safetensors`, and `serde_json`.
 - `incin-macros`: defaults to `std`; optional `nightly` and `distributed`.
 - `incin-diagnostics`: defaults to `std`.
 - `incin-data`: defaults to `download`; optional `hub`.
@@ -261,6 +261,7 @@ Type error. Nothing switches backends behind your back.
 | `cuda` | preview | `std` | no | `std`, `incin-core/cuda`, `incin-backends/cuda` | none | Preview: the native CUDA backend, covering the subset in docs/capabilities.md. Never enabled implicitly. |
 | `wgpu` | preview | `std` | no | `std`, `incin-backends/wgpu` | none | Preview: the cross-platform WGPU backend, covering the subset in docs/capabilities.md. Never enabled implicitly. |
 | `metal` | preview | `std` | no | `std`, `incin-backends/metal` | none | Preview: the native Metal backend for Apple Silicon, covering the subset in docs/capabilities.md. Never enabled implicitly. |
+| `rocm` | preview | `std` | no | `std`, `incin-backends/rocm` | none | Scaffolding: ROCm device identity, detection stub, and storage shells for AMD GPUs (issue #6). No HIP bindings yet, so no kernels and no allocation. |
 | `metal-mps` | preview | `metal` | no | `metal`, `incin-backends/metal-mps` | none | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
 | `update-check` | stable | `std` | no | `std`, `dep:ureq` | none | Lets `cargo incin doctor --check-updates` ask crates.io whether a newer incin exists. Off by default: it is the only feature that can reach the network, and no build should gain that ability without asking for it. |
 | `external-candle` | stable | `std` | no | `std`, `incin-backends/external-candle` | none | Enables the external Candle backend at `incin::external::candle`. |

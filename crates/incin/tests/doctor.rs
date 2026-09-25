@@ -157,6 +157,7 @@ avx2: unavailable (scalar path)
 [devices]
 cpu: compiled, available as cpu:0
 cuda: compiled, available as cuda:2
+rocm: not compiled
 wgpu: compiled, no device found
 
 [caches]
@@ -369,6 +370,62 @@ fn a_backend_that_is_both_compiled_and_present_says_nothing() {
         ..FakeHost::healthy()
     };
     assert_eq!(codes(&Report::gather(&host)), Vec::<&str>::new());
+}
+
+/// The ROCm row distinguishes all three states issue #6 AC2 requires.
+///
+/// `not compiled` (feature off), `compiled, no device found` (feature on, no
+/// HIP runtime — the only state a scaffolding build can reach on real
+/// hardware), and `compiled, available` (future HIP-backed host, exercised
+/// here through the mock). The warning fires exactly in the middle state.
+#[test]
+fn the_rocm_row_distinguishes_all_three_availability_states() {
+    let absent = Report::gather(&FakeHost::healthy());
+    let rocm = absent
+        .devices
+        .iter()
+        .find(|device| device.kind == "rocm")
+        .expect("the report always has a rocm row");
+    assert!(!rocm.compiled_in);
+    assert!(!rocm.available);
+    assert!(absent.to_text().contains("rocm: not compiled"));
+
+    let host = FakeHost {
+        compiled: vec![DeviceKind::Cpu, DeviceKind::Rocm],
+        present: vec![DeviceId::cpu()],
+        ..FakeHost::healthy()
+    };
+    let report = Report::gather(&host);
+    let text = report.to_text();
+    assert!(text.contains("rocm: compiled, no device found"));
+    let rocm_findings: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|finding| finding.message.contains("rocm"))
+        .collect();
+    assert_eq!(rocm_findings.len(), 1);
+    assert_eq!(rocm_findings[0].severity, Severity::Warning);
+    assert!(rocm_findings[0].code == "backend-unavailable");
+    assert!(
+        rocm_findings[0]
+            .remedy
+            .as_deref()
+            .unwrap_or_default()
+            .contains("ROCm/HIP")
+    );
+
+    let host = FakeHost {
+        compiled: vec![DeviceKind::Cpu, DeviceKind::Rocm],
+        present: vec![DeviceId::cpu(), DeviceId::rocm(0)],
+        ..FakeHost::healthy()
+    };
+    let report = Report::gather(&host);
+    assert!(
+        report
+            .to_text()
+            .contains("rocm: compiled, available as rocm:0")
+    );
+    assert_eq!(codes(&report), Vec::<&str>::new());
 }
 
 #[test]
@@ -593,7 +650,12 @@ fn the_subcommand_renders_text_by_default_and_json_on_request() {
 #[test]
 fn a_real_build_agrees_with_the_mock_about_whether_it_can_run() {
     let report = Report::gather(&HostMachine);
-    let any_backend = cfg!(any(feature = "cpu", feature = "cuda", feature = "wgpu"));
+    let any_backend = cfg!(any(
+        feature = "cpu",
+        feature = "cuda",
+        feature = "rocm",
+        feature = "wgpu"
+    ));
 
     let claims_none = report
         .findings
@@ -624,7 +686,7 @@ fn the_real_machine_produces_a_report() {
     assert_eq!(report.schema_version, SCHEMA_VERSION);
     assert!(!report.toolchain.incin.is_empty());
     assert!(!report.features.is_empty());
-    assert_eq!(report.devices.len(), 3);
+    assert_eq!(report.devices.len(), 4);
 
     let cpu = report
         .devices

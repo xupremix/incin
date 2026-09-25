@@ -27,7 +27,9 @@ mod tables;
 mod tests;
 
 pub use query::{BackendCoverageRow, coverage_report, registry, support};
-pub use tables::{CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, WGPU_CAPABILITIES};
+pub use tables::{
+    CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, ROCM_CAPABILITIES, WGPU_CAPABILITIES,
+};
 
 #[cfg(feature = "cpu")]
 pub(crate) use declarations::cpu_descriptor_operations;

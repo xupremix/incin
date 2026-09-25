@@ -96,6 +96,10 @@ use std::time::{Duration, Instant};
 /// backend crate reorders its own detection for an unrelated reason.
 const FASTEST_ORDER: &[DeviceKind] = &[
     DeviceKind::Cuda,
+    // Issue #6: mirrors `incin_backends::detect::PREFERENCE` (the drift
+    // alarm below enforces this); ROCm ranks second as a discrete
+    // accelerator, ahead of the integrated/low-power families.
+    DeviceKind::Rocm,
     DeviceKind::Metal,
     DeviceKind::Wgpu,
     DeviceKind::Cpu,

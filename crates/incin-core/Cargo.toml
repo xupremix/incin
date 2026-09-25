@@ -48,6 +48,9 @@ cuda = []
 wgpu = []
 # Enables Metal device marker metadata used by Metal-capable backend crates.
 metal = []
+# Enables ROCm device marker metadata used by ROCm-capable backend crates
+# (issue #6 scaffolding: identity and storage shells; no HIP bindings yet).
+rocm = []
 # Enables preview artifact and typed execution descriptors for the CPU compiled evaluator.
 compiled = ["serde_json"]
 # Serialization format switches are intentionally lower-crate internal. They
@@ -67,6 +70,7 @@ distributed = { tier = "preview", owner = "core", prerequisites = [], hardware =
 cuda = { tier = "preview", owner = "core", prerequisites = [], hardware = "cuda" }
 wgpu = { tier = "preview", owner = "core", prerequisites = [], hardware = "wgpu" }
 metal = { tier = "preview", owner = "core", prerequisites = [], hardware = "apple-silicon" }
+rocm = { tier = "preview", owner = "core", prerequisites = [], hardware = "rocm" }
 compiled = { tier = "preview", owner = "core", prerequisites = ["serde_json"], hardware = "none" }
 postcard = { tier = "internal", owner = "core", prerequisites = ["std"], hardware = "none" }
 safetensors = { tier = "internal", owner = "core", prerequisites = ["std"], hardware = "none" }
