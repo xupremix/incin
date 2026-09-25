@@ -4,13 +4,13 @@ This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust cata
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 179
-Backend-executable operations: 169
+Canonical operations: 180
+Backend-executable operations: 170
 Non-backend execution sites: 10
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 151 |
+| `Kernel` | 152 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -140,6 +140,7 @@ Duplicate destinations accumulate in **row-major order of `index`**, not in an a
 | `bmm` | `Descriptor<op::BatchedMatMul>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-3 | `TypedContract` | `Floating` / `MatMul` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::bmm` |
 | `grouped_matmul` | `Descriptor<op::GroupedMatMul>` | `NoAttributes` | `Kernel` | 3-3 / 1-1 | 1-3 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::grouped_matmul` |
 | `scaled_dot_product_attention` | `Descriptor<op::ScaledDotProductAttention>` | `AttentionAttributes` | `Kernel` | 3-4 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Floating` / `TypedInference` | `TypedContract` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::scaled_dot_product_attention` |
+| `fused_attention` | `Descriptor<op::FusedAttention>` | `FusedAttentionAttributes` | `Kernel` | 3-3 / 1-1 | 4-4 | `TypedContract` | `Floating` / `TypedInference` | `TypedContract` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::fused_attention` |
 | `unfold` | `Descriptor<op::Unfold>` | `UnfoldAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unfold` |
 | `pixel_shuffle` | `Descriptor<op::PixelShuffle>` | `PixelShuffleAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::pixel_shuffle` |
 | `group_norm` | `Descriptor<op::GroupNorm>` | `GroupNormAttributes` | `Kernel` | 1-1 / 1-1 | 1-18446744073709551615 | `TypedContract` | `Floating` / `Preserve` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::group_norm` |
