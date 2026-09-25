@@ -51,6 +51,12 @@ pub(super) const CUDA_BOOL_SAFE_STORAGE_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::Bool.descriptor(),
 ];
 pub(super) const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
+/// Exactly the dtypes the CPU fused-attention kernel executes: `f32` and
+/// `f64` natively (issue #104). Not `F32_ONLY` (that would understate the
+/// f64 path) and not `FLOAT_DTYPES` (that would over-advertise f16/bf16,
+/// which the kernel refuses with `UnsupportedDType`, deferred to #90).
+pub(super) const F32_AND_F64: &[DTypeDescriptor] =
+    &[DTypeId::F32.descriptor(), DTypeId::F64.descriptor()];
 /// Storage dtypes a WGPU allocation can honestly hold and round-trip:
 /// `f32` compute storage, `bool` as a physical `f32` of 0.0/1.0 (WGSL
 /// storage buffers cannot hold `bool`), and the integer widths the indexing

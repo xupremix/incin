@@ -94,6 +94,7 @@ macro_rules! descriptor_capability_rules {
         matmul = $matmul:expr,
         normalization_dtypes = $normalization_dtypes:expr,
         embedding_dtypes = $embedding_dtypes:expr,
+        fused_attention_dtypes = $fused_attention_dtypes:expr,
         broadcast_training = $broadcast_training:expr,
         reshape_training = $reshape_training:expr,
         elementwise_layouts = $elementwise_layouts:expr,
@@ -102,6 +103,7 @@ macro_rules! descriptor_capability_rules {
         reduction_layouts = $reduction_layouts:expr,
         spatial_layouts = $spatial_layouts:expr,
         matmul_layouts = $matmul_layouts:expr,
+        fused_attention_layouts = $fused_attention_layouts:expr,
         quantized_dtypes = $quantized_dtypes:expr,
         quantized_layouts = $quantized_layouts:expr,
         tensor_dtypes = $tensor_dtypes:expr,
@@ -125,6 +127,7 @@ macro_rules! descriptor_capability_rules {
         matmul = [$($matmul_op:ident),* $(,)?],
         normalization = [$($normalization_op:ident),* $(,)?],
         embedding = [$($embedding_op:ident),* $(,)?],
+        fused_attention = [$($fused_attention_op:ident),* $(,)?],
         native_tensor = [$($native_tensor_op:ident),* $(,)?],
         logical = [$($logical_op:ident),* $(,)?],
         composed_tensor = [$($composed_tensor_op:ident),* $(,)?],
@@ -225,6 +228,23 @@ macro_rules! descriptor_capability_rules {
                 descriptor_min_rank(OperationKind::$normalization_op),
                 $max_rank(OperationKind::$normalization_op),
                 true,
+            ),)*
+            // `fused_attention` is a native single-pass kernel (online
+            // softmax, no materialized score matrix — issue #104), not a
+            // rewrite into the composed `scaled_dot_product_attention`
+            // row, so it is a group of its own rather than a name in
+            // `composed_matmul` (whose F32_ONLY row it would not honour)
+            // or `matmul` (whose FLOAT_DTYPES would over-advertise the
+            // f16/bf16 the kernel refuses). Training is per-operation:
+            // the kernel records one tape entry, and the operation is
+            // absent from `descriptor_training`'s never-train list.
+            $(native_ranked(
+                OperationKind::$fused_attention_op,
+                $fused_attention_dtypes,
+                $fused_attention_layouts,
+                descriptor_min_rank(OperationKind::$fused_attention_op),
+                $max_rank(OperationKind::$fused_attention_op),
+                descriptor_training(OperationKind::$fused_attention_op),
             ),)*
             // The union of the index operand's integer dtypes and the weight
             // operand's f32-only one - see `INDEX_AND_F32_DTYPES`'s own doc for why
@@ -388,6 +408,10 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         // `softmax` needs one axis to normalize along, and `layer_norm`
         // normalizes over a trailing suffix, so it needs one too.
         OperationKind::MatMulExact => 2,
+        // Fused attention takes exactly rank-4 operands (batch, heads,
+        // sequence, width); the descriptor's rank arm refuses anything
+        // else before this row is consulted.
+        OperationKind::FusedAttention => 4,
         // The quantized product reads its right operand as a two-axis [N, K]
         // weight and refuses a left operand with fewer than two axes.
         OperationKind::QuantizedMatMul => 2,

@@ -136,6 +136,13 @@ macro_rules! cpu_descriptor_operations {
             // operand and a non-float matrix before this row is consulted, and
             // the executor re-checks the f32 constraint the row cannot carry.
             embedding = [EmbeddingExact, GroupedMatMul],
+            // `fused_attention` is a group of its own (issue #104): the
+            // CPU kernel is native single-pass online softmax over f32/f64
+            // with one tape entry, so neither the composed-reduction
+            // F32_ONLY row nor the matmul FLOAT_DTYPES row states it
+            // honestly. Other backends leave this empty until they ship a
+            // kernel behind it.
+            fused_attention = [FusedAttention],
             native_tensor = [
                 // The order statistics sit here rather than in the f32-only
                 // reduction group above because each builds its value buffer
@@ -396,6 +403,9 @@ macro_rules! cuda_descriptor_operations {
             // and dropped out-of-range writes live in the executor, as do
             // `GroupedMatMul`'s i64 offsets tile.
             embedding = [EmbeddingExact, OneHot, Bincount, ScatterAdd, GroupedMatMul],
+            // No fused-attention kernel on CUDA yet (issue #104); empty
+            // until one ships.
+            fused_attention = [],
             // Issue #87: `TopK` leaves `reduction` and the six Welford
             // `var`/`std` rows leave `composed_reduction` because both now
             // sit on f32-only kernels (`incin_cuda_topk`,
@@ -603,6 +613,9 @@ macro_rules! wgpu_descriptor_operations {
             // the descriptor's own per-operand contract refuses a non-integer
             // index or a non-f32 weight before this row is consulted.
             embedding = [EmbeddingExact],
+            // No fused-attention kernel on WGPU yet (issue #104); empty
+            // until one ships.
+            fused_attention = [],
             // Advertised now that each has an executor and a gradient path.
             // The six comparisons join this group (#91): `binary.wgsl` has
             // carried their modes since the shader was written, and they sit
@@ -818,6 +831,9 @@ macro_rules! metal_descriptor_operations {
             // `training = true` (the same claim CUDA's embedding group
             // makes for it).
             embedding = [EmbeddingExact, Gather, IndexSelect, Scatter, OneHot],
+            // No fused-attention kernel on Metal yet (issue #104); empty
+            // until one ships.
+            fused_attention = [],
             // The layout half of #92, each with a host-side walk and a tape
             // entry in `metal/layout.rs`: `transpose` materializes the swap
             // (a transpose is its own inverse, so backward reapplies it),

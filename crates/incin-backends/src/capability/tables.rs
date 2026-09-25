@@ -9,8 +9,8 @@
 
 use super::constants::{
     ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES, CUDA_LAYOUTS,
-    CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_ONLY, FLOAT_DTYPES, INDEX_AND_F32_DTYPES, NON_QUANTIZED,
-    PRECISE, Q8_ONLY, WGPU_STORAGE_DTYPES,
+    CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_AND_F64, F32_ONLY, FLOAT_DTYPES, INDEX_AND_F32_DTYPES,
+    NON_QUANTIZED, PRECISE, Q8_ONLY, WGPU_STORAGE_DTYPES,
 };
 use super::declarations::{
     cpu_descriptor_operations, cuda_descriptor_operations, metal_descriptor_operations,
@@ -47,6 +47,8 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     matmul = FLOAT_DTYPES,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
+    // Issue #104: the native fused-attention kernel serves f32 and f64.
+    fused_attention_dtypes = F32_AND_F64,
     broadcast_training = FLOAT_DTYPES,
     reshape_training = FLOAT_DTYPES,
     elementwise_layouts = CPU_LAYOUTS,
@@ -55,6 +57,7 @@ pub static CPU_CAPABILITIES: &[CapabilityRule] = cpu_descriptor_operations!(
     reduction_layouts = CPU_LAYOUTS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CPU_LAYOUTS,
+    fused_attention_layouts = CPU_LAYOUTS,
     quantized_dtypes = Q8_ONLY,
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = NON_QUANTIZED,
@@ -200,6 +203,9 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
+    // Empty `fused_attention` group on CUDA; the dtype set rides along
+    // unused, per the file's convention for empty groups.
+    fused_attention_dtypes = F32_AND_F64,
     // Same measured set as the `broadcast` row above, for the reason stated
     // there: the training path moves the same bytes.
     broadcast_training = CUDA_BOOL_SAFE_STORAGE_DTYPES,
@@ -215,6 +221,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    fused_attention_layouts = CONTIGUOUS,
     quantized_dtypes = Q8_ONLY,
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
@@ -700,6 +707,9 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
+    // Empty `fused_attention` group here; the dtype set rides along
+    // unused, per the file's convention for empty groups.
+    fused_attention_dtypes = F32_AND_F64,
     broadcast_training = F32_ONLY,
     reshape_training = F32_ONLY,
     elementwise_layouts = CONTIGUOUS,
@@ -708,6 +718,7 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    fused_attention_layouts = CONTIGUOUS,
     quantized_dtypes = Q8_ONLY,
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
@@ -948,6 +959,9 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
+    // Empty `fused_attention` group here; the dtype set rides along
+    // unused, per the file's convention for empty groups.
+    fused_attention_dtypes = F32_AND_F64,
     broadcast_training = F32_ONLY,
     reshape_training = F32_ONLY,
     elementwise_layouts = CONTIGUOUS,
@@ -956,6 +970,7 @@ pub static METAL_CAPABILITIES: &[CapabilityRule] = metal_descriptor_operations!(
     reduction_layouts = CONTIGUOUS,
     spatial_layouts = CONTIGUOUS,
     matmul_layouts = CONTIGUOUS,
+    fused_attention_layouts = CONTIGUOUS,
     quantized_dtypes = Q8_ONLY,
     quantized_layouts = CONTIGUOUS,
     tensor_dtypes = F32_ONLY,
