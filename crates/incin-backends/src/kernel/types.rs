@@ -64,6 +64,17 @@ pub(super) enum KernelDType {
     F32,
     F64,
     Q8_0,
+    /// OCP E4M3 storage tag (`__nv_fp8_e4m3`, per cudarc 0.19.8's
+    /// `cuda_type!(float8::F8E4M3, "__nv_fp8_e4m3")`). Compile-only: no
+    /// kernel reads fp8 storage, so [`from_id`](Self::from_id) refuses it
+    /// with a typed error until #85/#90 land a kernel that does. Never
+    /// constructed outside tests until then (hence the dead-code allow).
+    #[allow(dead_code)]
+    F8E4M3,
+    /// OCP E5M2 storage tag (`__nv_fp8_e5m2`). Same compile-only status
+    /// as [`F8E4M3`](Self::F8E4M3).
+    #[allow(dead_code)]
+    F8E5M2,
 }
 
 impl KernelDType {
@@ -77,6 +88,11 @@ impl KernelDType {
             DTypeId::F32 => Ok(Self::F32),
             DTypeId::F64 => Ok(Self::F64),
             DTypeId::Q8_0 => Ok(Self::Q8_0),
+            // The mapping exists (tags below) but no kernel is wired to
+            // it: advertising would claim execution that does not exist.
+            DTypeId::F8E4M3 | DTypeId::F8E5M2 => Err(Error::Msg(format!(
+                "dtype {dtype:?} has a kernel-key tag but no kernel reads it yet (issues #85/#90)"
+            ))),
             _ => Err(Error::Msg(format!(
                 "dtype {dtype:?} has no kernel-key encoding"
             ))),
@@ -103,6 +119,8 @@ impl KernelDType {
             Self::F32 => "f32",
             Self::F64 => "f64",
             Self::Q8_0 => "q8_0",
+            Self::F8E4M3 => "__nv_fp8_e4m3",
+            Self::F8E5M2 => "__nv_fp8_e5m2",
         }
     }
 }
@@ -413,6 +431,32 @@ fn fnv1a64(text: &str) -> u64 {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Issue #94, CUDA compile-only slice: the fp8 kernel-key tags name the
+    /// real CUDA types (`__nv_fp8_e4m3`/`__nv_fp8_e5m2`, per cudarc 0.19.8),
+    /// but resolving an fp8 dtype refuses — the mapping exists, no kernel
+    /// is wired to it, and advertising would claim execution that does not
+    /// exist.
+    #[test]
+    fn fp8_has_a_tag_but_no_kernel() {
+        assert_eq!(KernelDType::F8E4M3.tag(), "__nv_fp8_e4m3");
+        assert_eq!(KernelDType::F8E5M2.tag(), "__nv_fp8_e5m2");
+        for dtype in [DTypeId::F8E4M3, DTypeId::F8E5M2] {
+            let err = KernelDType::from_id(dtype).unwrap_err();
+            let msg = err.to_string();
+            assert!(
+                msg.contains("no kernel reads it yet"),
+                "fp8 must be refused with the kernel reason, got: {msg}"
+            );
+        }
+        // The established dtypes still resolve.
+        assert_eq!(KernelDType::from_id(DTypeId::F32).unwrap().tag(), "f32");
+    }
 }
 
 /// A rendered kernel and the identity used by the backend module cache.

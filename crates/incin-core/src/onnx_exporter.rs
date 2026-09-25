@@ -187,6 +187,9 @@ fn dtype_to_onnx(dt: DTypeId) -> Result<onnx::tensor_proto::DataType, Error> {
         DTypeId::I64 => Ok(onnx::tensor_proto::DataType::Int64),
         DTypeId::U8 => Ok(onnx::tensor_proto::DataType::Uint8),
         DTypeId::Bool => Ok(onnx::tensor_proto::DataType::Bool),
+        // OCP E4M3 is ONNX FLOAT8E4M3FN; OCP E5M2 is ONNX FLOAT8E5M2.
+        DTypeId::F8E4M3 => Ok(onnx::tensor_proto::DataType::Float8e4m3fn),
+        DTypeId::F8E5M2 => Ok(onnx::tensor_proto::DataType::Float8e5m2),
         DTypeId::Q8_0 => Err(Error::UnsupportedDType {
             dtype: dt.descriptor(),
             backend: "ONNX",

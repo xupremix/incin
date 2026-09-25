@@ -1039,6 +1039,12 @@ impl KernelDefinition {
             DTypeId::F64 => "double",
             DTypeId::F16 => "__half",
             DTypeId::BF16 => "__nv_bfloat16",
+            // Compile-only CUDA type names (issue #94): no kernel body is
+            // emitted for fp8, so reaching here with one fails the NVRTC
+            // compile loudly instead of launching a `float` kernel on
+            // 1-byte storage. Capability rows never route fp8 here.
+            DTypeId::F8E4M3 => "__nv_fp8_e4m3",
+            DTypeId::F8E5M2 => "__nv_fp8_e5m2",
             _ => "float",
         };
 
@@ -1079,6 +1085,12 @@ impl KernelDefinition {
             DTypeId::F64 => "double",
             DTypeId::F16 => "__half",
             DTypeId::BF16 => "__nv_bfloat16",
+            // Compile-only CUDA type names (issue #94): no kernel body is
+            // emitted for fp8, so reaching here with one fails the NVRTC
+            // compile loudly instead of launching a `float` kernel on
+            // 1-byte storage. Capability rows never route fp8 here.
+            DTypeId::F8E4M3 => "__nv_fp8_e4m3",
+            DTypeId::F8E5M2 => "__nv_fp8_e5m2",
             _ => "float",
         };
 

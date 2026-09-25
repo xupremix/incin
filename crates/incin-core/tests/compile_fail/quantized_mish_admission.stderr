@@ -4,17 +4,13 @@ error[E0277]: the trait bound `incin::prelude::Q8_0: FloatCapable` is not satisf
 11 |     let _ = q.mish();
    |               ^^^^ the trait `FloatDType` is not implemented for `incin::prelude::Q8_0`
    |
-help: the following other types implement trait `FloatDType`
-  --> src/tensor/dtype/builtin.rs
-   |
-   | impl FloatDType for f32 {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^ `f32`
-   | impl FloatDType for f64 {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^ `f64`
-   | impl FloatDType for f16 {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^ `incin::prelude::f16`
-   | impl FloatDType for bf16 {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^ `incin::prelude::bf16`
+   = help: the following other types implement trait `FloatDType`:
+             f32
+             f64
+             incin::prelude::F8E4M3
+             incin::prelude::F8E5M2
+             incin::prelude::bf16
+             incin::prelude::f16
    = note: required for `incin::prelude::Q8_0` to implement `FloatCapable`
 note: required by a bound in `unary::<impl incin::prelude::Tensor<S, B, K, G, incin::dist::Local, L>>::mish`
   --> src/tensor/ops/unary.rs

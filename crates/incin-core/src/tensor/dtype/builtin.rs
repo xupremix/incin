@@ -121,11 +121,27 @@ impl_plain_builtin_dtype!(
     StorageEncoding::scalar(2, 2),
     "bf16"
 );
+impl_plain_builtin_dtype!(
+    F8E4M3,
+    F8E4M3,
+    DTypeKind::Float,
+    StorageEncoding::scalar(1, 1),
+    "f8e4m3"
+);
+impl_plain_builtin_dtype!(
+    F8E5M2,
+    F8E5M2,
+    DTypeKind::Float,
+    StorageEncoding::scalar(1, 1),
+    "f8e5m2"
+);
 
 impl FloatDType for f32 {}
 impl FloatDType for f64 {}
 impl FloatDType for f16 {}
 impl FloatDType for bf16 {}
+impl FloatDType for F8E4M3 {}
+impl FloatDType for F8E5M2 {}
 
 impl IntDType for u8 {}
 impl IntDType for u32 {}

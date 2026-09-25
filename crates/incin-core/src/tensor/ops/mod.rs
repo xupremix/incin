@@ -1,5 +1,7 @@
 /// `binary`.
 pub mod binary;
+/// `fp8`.
+pub mod fp8;
 /// `index`.
 pub mod index;
 /// `loss`.

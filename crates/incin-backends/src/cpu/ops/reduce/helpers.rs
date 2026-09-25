@@ -134,6 +134,18 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuS
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
 
+        // Reductions stay f32-only per the capability rows (F32_ONLY): the
+        // catalog admits fp8 descriptors as floats, and this is the typed
+        // refusal that narrows it, mirroring the dequantize precedent.
+        // Widening is an orchestrator row decision (issue #94 handoff).
+        CpuBuffer::F8E4M3(_) | CpuBuffer::F8E5M2(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: storage.buffer.descriptor(),
+                backend: "cpu",
+                op: "sum_axis_keepdim",
+            });
+        }
+
         CpuBuffer::Q8_0(_) => {
             return Err(Error::UnsupportedDType {
                 dtype: DTypeId::Q8_0.descriptor(),
@@ -172,24 +184,33 @@ pub(super) fn fill_like(
     scalar_value: f64,
 ) -> Result<CpuStorage> {
     let total: usize = crate::cpu::stride::validated_numel(shape);
-    let new_buffer = match &*like.buffer {
-        CpuBuffer::F32(_) => CpuBuffer::F32(vec![scalar_value as f32; total]),
-        CpuBuffer::F64(_) => CpuBuffer::F64(vec![scalar_value; total]),
-        CpuBuffer::U8(_) => CpuBuffer::U8(vec![scalar_value as u8; total]),
-        CpuBuffer::Bool(_) => CpuBuffer::Bool(vec![scalar_value as u8; total]),
-        CpuBuffer::U32(_) => CpuBuffer::U32(vec![scalar_value as u32; total]),
-        CpuBuffer::I64(_) => CpuBuffer::I64(vec![scalar_value as i64; total]),
-        CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(scalar_value); total]),
-        CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total]),
+    let new_buffer =
+        match &*like.buffer {
+            CpuBuffer::F32(_) => CpuBuffer::F32(vec![scalar_value as f32; total]),
+            CpuBuffer::F64(_) => CpuBuffer::F64(vec![scalar_value; total]),
+            CpuBuffer::U8(_) => CpuBuffer::U8(vec![scalar_value as u8; total]),
+            CpuBuffer::Bool(_) => CpuBuffer::Bool(vec![scalar_value as u8; total]),
+            CpuBuffer::U32(_) => CpuBuffer::U32(vec![scalar_value as u32; total]),
+            CpuBuffer::I64(_) => CpuBuffer::I64(vec![scalar_value as i64; total]),
+            CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(scalar_value); total]),
+            CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(scalar_value); total]),
+            CpuBuffer::F8E4M3(_) => CpuBuffer::F8E4M3(vec![
+            incin_core::tensor::dtype::F8E4M3::from_f64(scalar_value);
+            total
+        ]),
+            CpuBuffer::F8E5M2(_) => CpuBuffer::F8E5M2(vec![
+            incin_core::tensor::dtype::F8E5M2::from_f64(scalar_value);
+            total
+        ]),
 
-        CpuBuffer::Q8_0(_) => {
-            return Err(Error::UnsupportedDType {
-                dtype: DTypeId::Q8_0.descriptor(),
-                backend: "cpu",
-                op: "reduction gradient fill",
-            });
-        }
-    };
+            CpuBuffer::Q8_0(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "reduction gradient fill",
+                });
+            }
+        };
     Ok(CpuStorage::from_contiguous(new_buffer, shape))
 }
 

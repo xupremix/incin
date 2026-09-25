@@ -7,7 +7,7 @@
 
 use incin_core::error::{ConversionFailure, Error, FloatToIntPolicy, Result, convert_f64_to_i64};
 use incin_core::tensor::device::DeviceId;
-use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId, F8E4M3, F8E5M2};
 // `Rng` became the low-level trait in rand 0.10; the sampling methods moved to
 // `RngExt`. `SeedableRng` is only reachable on the no-std path, which seeds a
 // `SmallRng` because there is no thread-local generator to ask.
@@ -87,6 +87,18 @@ fn fill_buffer(
         DTypeId::I64 => CpuBuffer::I64(vec![exact_integer(value, builtin_id, operation)?; total]),
         DTypeId::F16 => CpuBuffer::F16(vec![half::f16::from_f64(value); total]),
         DTypeId::BF16 => CpuBuffer::BF16(vec![half::bf16::from_f64(value); total]),
+        DTypeId::F8E4M3 => {
+            CpuBuffer::F8E4M3(vec![
+                incin_core::tensor::dtype::F8E4M3::from_f64(value);
+                total
+            ])
+        }
+        DTypeId::F8E5M2 => {
+            CpuBuffer::F8E5M2(vec![
+                incin_core::tensor::dtype::F8E5M2::from_f64(value);
+                total
+            ])
+        }
         DTypeId::Bool => CpuBuffer::Bool(vec![if value != 0.0 { 1u8 } else { 0u8 }; total]),
         DTypeId::Q8_0 => {
             return Err(Error::UnsupportedBackendOperation {
@@ -294,6 +306,11 @@ pub(crate) fn arange_with_total(
         ),
         DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
         DTypeId::BF16 => CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect()),
+        // Issue #94: range values convert through the saturating fp8
+        // rounding; values past 448 (e4m3) / 57344 (e5m2) clip to max,
+        // exactly like a cast of the same f64 sequence.
+        DTypeId::F8E4M3 => CpuBuffer::F8E4M3(data.iter().map(|&x| F8E4M3::from_f64(x)).collect()),
+        DTypeId::F8E5M2 => CpuBuffer::F8E5M2(data.iter().map(|&x| F8E5M2::from_f64(x)).collect()),
         DTypeId::Bool => CpuBuffer::Bool(
             data.iter()
                 .map(|&x| if x != 0.0 { 1u8 } else { 0u8 })
@@ -373,6 +390,9 @@ pub(crate) fn linspace_with_total(
         ),
         DTypeId::F16 => CpuBuffer::F16(data.iter().map(|&x| half::f16::from_f64(x)).collect()),
         DTypeId::BF16 => CpuBuffer::BF16(data.iter().map(|&x| half::bf16::from_f64(x)).collect()),
+        // Issue #94: same saturating conversion as `arange` above.
+        DTypeId::F8E4M3 => CpuBuffer::F8E4M3(data.iter().map(|&x| F8E4M3::from_f64(x)).collect()),
+        DTypeId::F8E5M2 => CpuBuffer::F8E5M2(data.iter().map(|&x| F8E5M2::from_f64(x)).collect()),
         DTypeId::Bool => CpuBuffer::Bool(
             data.iter()
                 .map(|&x| if x != 0.0 { 1u8 } else { 0u8 })

@@ -124,6 +124,8 @@ pub(crate) fn validate_cpu_dtype(
                 | DTypeId::F64
                 | DTypeId::F16
                 | DTypeId::BF16
+                | DTypeId::F8E4M3
+                | DTypeId::F8E5M2
                 | DTypeId::U8
                 | DTypeId::U32
                 | DTypeId::I64
@@ -239,6 +241,18 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                 .iter()
                 .flat_map(|value| value.to_bits().to_ne_bytes())
                 .collect()),
+            // 1-byte dtypes with distinct Rust types: the bytes are the
+            // value, but the width alone must never decide the dtype (see
+            // the u8-collision audit, issue #94). These arms are keyed by
+            // buffer variant, not by width.
+            storage::CpuBuffer::F8E4M3(v) => Ok(v[offset..offset + num_elements]
+                .iter()
+                .map(|value| value.to_bits())
+                .collect()),
+            storage::CpuBuffer::F8E5M2(v) => Ok(v[offset..offset + num_elements]
+                .iter()
+                .map(|value| value.to_bits())
+                .collect()),
             storage::CpuBuffer::Q8_0(v) => Ok(v
                 .iter()
                 .flat_map(|block| {
@@ -314,6 +328,18 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                 bytes
                     .chunks_exact(2)
                     .map(|chunk| half::bf16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])))
+                    .collect(),
+            ),
+            DTypeId::F8E4M3 => storage::CpuBuffer::F8E4M3(
+                bytes
+                    .iter()
+                    .map(|&b| incin_core::tensor::dtype::F8E4M3::from_bits(b))
+                    .collect(),
+            ),
+            DTypeId::F8E5M2 => storage::CpuBuffer::F8E5M2(
+                bytes
+                    .iter()
+                    .map(|&b| incin_core::tensor::dtype::F8E5M2::from_bits(b))
                     .collect(),
             ),
             DTypeId::Q8_0 => storage::CpuBuffer::Q8_0(

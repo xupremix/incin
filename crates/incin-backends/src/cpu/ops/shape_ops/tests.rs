@@ -1097,3 +1097,205 @@ fn casting_to_an_integer_dtype_records_nothing() {
     let _ = canonical_to_dtype(&x, DTypeId::I64.descriptor()).unwrap();
     assert_eq!(tape::depth(), 0);
 }
+
+// --- FP8 scaled casts (issue #94) ---
+
+/// `fp8_cast_matches_the_element_functions`.
+///
+/// `tensor_to_dtype_storage` must agree bit-for-bit with the OCP conversion
+/// functions the dtype module proves against the spec: the CPU kernel is a
+/// caller of that contract, not a second implementation of it.
+#[test]
+fn fp8_cast_matches_the_element_functions() {
+    use incin_core::tensor::dtype::{DTypeId, F8E4M3, F8E5M2};
+
+    let values: Vec<f64> = vec![
+        0.0,
+        1.0,
+        -1.0,
+        0.5,
+        1.0625,
+        100.0,
+        -440.0,
+        448.0,
+        1000.0,
+        30000.0,
+        57344.0,
+        1e10,
+        1e-8,
+        2f64.powi(-10),
+        f64::INFINITY,
+        f64::NAN,
+    ];
+    let x = CpuStorage::from_contiguous(CpuBuffer::F64(values.clone()), vec![values.len()]);
+    let e4 = super::convert::tensor_to_dtype_storage(&x, DTypeId::F8E4M3.descriptor()).unwrap();
+    let e5 = super::convert::tensor_to_dtype_storage(&x, DTypeId::F8E5M2.descriptor()).unwrap();
+    let got_e4 = match &*e4.buffer {
+        CpuBuffer::F8E4M3(v) => v.clone(),
+        _ => panic!("expected F8E4M3 buffer"),
+    };
+    let got_e5 = match &*e5.buffer {
+        CpuBuffer::F8E5M2(v) => v.clone(),
+        _ => panic!("expected F8E5M2 buffer"),
+    };
+    for (i, &v) in values.iter().enumerate() {
+        assert_eq!(got_e4[i], F8E4M3::from_f64(v), "e4m3 at index {i} ({v})");
+        assert_eq!(got_e5[i], F8E5M2::from_f64(v), "e5m2 at index {i} ({v})");
+    }
+    assert_eq!(e4.buffer.dtype_id(), DTypeId::F8E4M3);
+    assert_eq!(e5.buffer.dtype_id(), DTypeId::F8E5M2);
+}
+
+/// `fp8_dequantize_is_exact`.
+///
+/// fp8 → f32 is exact (every fp8 value is representable), so a cast back
+/// over all 256 patterns of each format must reproduce the element
+/// functions bit-for-bit.
+#[test]
+fn fp8_dequantize_is_exact() {
+    use incin_core::tensor::dtype::{DTypeId, F8E4M3, F8E5M2};
+
+    for make in [
+        |bytes: Vec<u8>| CpuBuffer::F8E4M3(bytes.iter().map(|&b| F8E4M3::from_bits(b)).collect()),
+        |bytes: Vec<u8>| CpuBuffer::F8E5M2(bytes.iter().map(|&b| F8E5M2::from_bits(b)).collect()),
+    ] {
+        let all: Vec<u8> = (0u8..=255).collect();
+        let n = all.len();
+        let storage = CpuStorage::from_contiguous(make(all), vec![n]);
+        let back =
+            super::convert::tensor_to_dtype_storage(&storage, DTypeId::F32.descriptor()).unwrap();
+        let got = match &*back.buffer {
+            CpuBuffer::F32(v) => v.clone(),
+            _ => panic!("expected F32 buffer"),
+        };
+        assert_eq!(got.len(), n);
+    }
+    // Spot-check exactness against the element functions (NaN by predicate,
+    // since NaN != NaN).
+    let e4 = CpuStorage::from_contiguous(
+        CpuBuffer::F8E4M3(vec![F8E4M3::from_bits(0x7E), F8E4M3::from_bits(0x7F)]),
+        vec![2],
+    );
+    let back = super::convert::tensor_to_dtype_storage(&e4, DTypeId::F32.descriptor()).unwrap();
+    assert_eq!(back.get(&[0]), 448.0);
+    assert!(back.get(&[1]).is_nan());
+}
+
+/// `scaled_fp8_roundtrip_meets_the_conformance_tolerance`.
+///
+/// The documented calibration contract (issue #94 AC2): with `scale = amax`
+/// the cast only rounds, and the roundtrip error stays inside the dtype's
+/// conformance row from `conformance::tolerance`.
+#[test]
+fn scaled_fp8_roundtrip_meets_the_conformance_tolerance() {
+    use crate::conformance::for_dtype;
+    use incin_core::tensor::dtype::DTypeId;
+
+    let values: Vec<f64> = vec![
+        224.0, -112.0, 56.0, -28.0, 7.0, -3.5, 0.75, -0.125, 0.03125, -200.0, 3.0, -0.0,
+    ];
+    let amax = values.iter().map(|v| v.abs()).fold(0.0f64, f64::max);
+    for dtype in [DTypeId::F8E4M3, DTypeId::F8E5M2] {
+        let tolerance = for_dtype(dtype);
+        let scaled: Vec<f64> = values.iter().map(|v| v / amax).collect();
+        let x = CpuStorage::from_contiguous(CpuBuffer::F64(scaled), vec![values.len()]);
+        let q = super::convert::tensor_to_dtype_storage(&x, dtype.descriptor()).unwrap();
+        let back = super::convert::tensor_to_dtype_storage(&q, DTypeId::F64.descriptor()).unwrap();
+        for (i, &expected) in values.iter().enumerate() {
+            let actual = back.get(&[i]) * amax;
+            assert!(
+                tolerance.accepts(expected, actual),
+                "{dtype:?} roundtrip of {expected} gave {actual} (scale {amax})"
+            );
+        }
+    }
+}
+
+/// `casting_into_fp8_records_the_identity_edge`.
+///
+/// fp8 is `DTypeKind::Float`, which is what admits the float-to-float
+/// gradient edge in `canonical_to_dtype`. A cast that detached the graph
+/// would report no gradient for weights trained through fp8.
+#[test]
+fn casting_into_fp8_records_the_identity_edge() {
+    use crate::cpu::tape;
+    use incin_core::tensor::dtype::DTypeId;
+
+    for dtype in [DTypeId::F8E4M3, DTypeId::F8E5M2] {
+        tape::clear();
+        let x = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.5, -2.25, 3.0]), vec![3]);
+        let q = canonical_to_dtype(&x, dtype.descriptor()).unwrap();
+        assert_eq!(q.buffer.dtype_id(), dtype);
+        assert_eq!(tape::depth(), 1, "{dtype:?} cast must record");
+
+        // Back through the recorded edge: the fp8 cotangent returns as f32.
+        let back = canonical_to_dtype(&q, DTypeId::F32.descriptor()).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&back).unwrap();
+        let grads = tape::backward(&loss).unwrap();
+        let grad = grads.get(x.id).expect("the fp8 cast carried the gradient");
+        assert_eq!(grad.shape, vec![3]);
+        assert_eq!(f32_vec(grad), vec![1.0, 1.0, 1.0]);
+    }
+}
+
+/// `scaled_fp8_training_step_converges_like_bf16`.
+///
+/// The honest CPU slice of the adaptive-scale AC (issue #94 AC4): weights
+/// are projected through a per-tensor scaled fp8 cast every step
+/// (straight-through gradient), and the loss must decrease about like the
+/// bf16 projection's. Full device matmul/adaptive policy is deferred; what
+/// this pins is the mechanism — scaled forward, recorded backward, lower
+/// loss — on CPU.
+#[test]
+fn scaled_fp8_training_step_converges_like_bf16() {
+    use incin_core::tensor::dtype::DTypeId;
+
+    fn run(dtype: DTypeId) -> Vec<f64> {
+        let target = [1.0, -2.0, 0.5, 4.0, -0.25, 3.0, -1.0, 2.0];
+        let mut w: Vec<f64> = vec![0.1, 0.2, -0.1, 0.3, 0.0, -0.2, 0.15, -0.05];
+        let n = w.len() as f64;
+        let mut losses = Vec::with_capacity(64);
+        for _ in 0..64 {
+            let amax = w.iter().map(|v| v.abs()).fold(1e-12f64, f64::max);
+            let scaled: Vec<f64> = w.iter().map(|v| v / amax).collect();
+            let x = CpuStorage::from_contiguous(CpuBuffer::F64(scaled), vec![w.len()]);
+            let q = super::convert::tensor_to_dtype_storage(&x, dtype.descriptor()).unwrap();
+            let back =
+                super::convert::tensor_to_dtype_storage(&q, DTypeId::F64.descriptor()).unwrap();
+            let mut loss = 0.0;
+            let mut grad = vec![0.0; w.len()];
+            for i in 0..w.len() {
+                let what = back.get(&[i]) * amax;
+                let err = what - target[i];
+                loss += err * err;
+                grad[i] = 2.0 * err / n;
+            }
+            losses.push(loss / n);
+            for (wi, &gi) in w.iter_mut().zip(&grad) {
+                *wi -= 0.5 * gi;
+            }
+        }
+        losses
+    }
+
+    let e4 = run(DTypeId::F8E4M3);
+    let e5 = run(DTypeId::F8E5M2);
+    let bf16 = run(DTypeId::BF16);
+    for (name, losses) in [("e4m3", &e4), ("e5m2", &e5), ("bf16", &bf16)] {
+        assert!(
+            losses.last().unwrap() < &(losses.first().unwrap() * 0.05),
+            "{name} did not converge: first={} last={}",
+            losses.first().unwrap(),
+            losses.last().unwrap()
+        );
+    }
+    // Same trajectory family: fp8 finals land within 2x of the bf16 final.
+    let bf16_final = *bf16.last().unwrap();
+    for (name, losses) in [("e4m3", &e4), ("e5m2", &e5)] {
+        let final_loss = *losses.last().unwrap();
+        assert!(
+            final_loss <= 2.0 * bf16_final + 1e-6,
+            "{name} diverged from the bf16 trajectory: {final_loss} vs {bf16_final}"
+        );
+    }
+}

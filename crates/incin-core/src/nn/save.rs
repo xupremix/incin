@@ -42,6 +42,8 @@ impl CheckpointDType {
             "i64" => DTypeId::I64.descriptor(),
             "bf16" => DTypeId::BF16.descriptor(),
             "f16" => DTypeId::F16.descriptor(),
+            "f8e4m3" => DTypeId::F8E4M3.descriptor(),
+            "f8e5m2" => DTypeId::F8E5M2.descriptor(),
             "f32" => DTypeId::F32.descriptor(),
             "f64" => DTypeId::F64.descriptor(),
             "q8_0" => DTypeId::Q8_0.descriptor(),

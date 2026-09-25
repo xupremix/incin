@@ -60,8 +60,8 @@ pub mod prelude {
 
     pub use super::dtype::{
         BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
-        DTypeRegistry, FloatDType, IntDType, PlainDType, Q8_0, QuantDType, StorageEncoding,
-        TensorElement,
+        DTypeRegistry, F8E4M3, F8E5M2, FloatDType, IntDType, PlainDType, Q8_0, QuantDType,
+        StorageEncoding, TensorElement,
     };
     pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
     pub use super::matmul::MatMulShape;

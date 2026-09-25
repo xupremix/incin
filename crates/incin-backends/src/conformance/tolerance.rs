@@ -111,6 +111,23 @@ pub const fn for_dtype(dtype: DTypeId) -> Tolerance {
             reason: "bf16 EPSILON is 2^-8; a single rounding step costs half \
                      an ulp of the magnitude",
         },
+        // `f8e4m3` EPSILON is 2^-3 (0.125): three mantissa bits. Same
+        // shape as the f16/bf16 rows, at twice the epsilon: one rounding
+        // step costs half an ulp of the magnitude.
+        DTypeId::F8E4M3 => Tolerance {
+            absolute: 0.25,
+            relative: 0.25,
+            reason: "f8e4m3 EPSILON is 2^-3; a single rounding step costs \
+                     half an ulp of the magnitude",
+        },
+        // `f8e5m2` EPSILON is 2^-2 (0.25): two mantissa bits. Same shape
+        // as the e4m3 row, one binade looser.
+        DTypeId::F8E5M2 => Tolerance {
+            absolute: 0.5,
+            relative: 0.5,
+            reason: "f8e5m2 EPSILON is 2^-2; a single rounding step costs \
+                     half an ulp of the magnitude",
+        },
         // The `f64` oracle path is near-exact: both sides compute in double
         // precision, so the bound only absorbs accumulation-order differences
         // across a handful of elements.
@@ -193,6 +210,8 @@ mod tests {
             DTypeId::I64,
             DTypeId::BF16,
             DTypeId::F16,
+            DTypeId::F8E4M3,
+            DTypeId::F8E5M2,
             DTypeId::F32,
             DTypeId::F64,
             DTypeId::Q8_0,

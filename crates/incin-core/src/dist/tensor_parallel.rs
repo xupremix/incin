@@ -49,6 +49,10 @@ pub const fn validate_tensor_parallel_dtype(dtype: DTypeId) -> Result<(), Tensor
         DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(TensorParallelError::UnsupportedTensorDType { dtype })
         }
+        // Issue #94: fp8 shards refuse like Q8_0 (see collective.rs).
+        DTypeId::F8E4M3 | DTypeId::F8E5M2 => {
+            Err(TensorParallelError::UnsupportedTensorDType { dtype })
+        }
     }
 }
 

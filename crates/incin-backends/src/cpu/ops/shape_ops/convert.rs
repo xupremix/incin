@@ -128,6 +128,30 @@ pub(crate) fn tensor_to_dtype_storage(
             }
             CpuBuffer::BF16(out)
         }
+        Some(DTypeId::F8E4M3) => {
+            let mut out = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(incin_core::tensor::dtype::F8E4M3::from_f64(
+                    t.get(&multi_idx),
+                ));
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::F8E4M3(out)
+        }
+        Some(DTypeId::F8E5M2) => {
+            let mut out = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(incin_core::tensor::dtype::F8E5M2::from_f64(
+                    t.get(&multi_idx),
+                ));
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::F8E5M2(out)
+        }
         Some(DTypeId::Q8_0) => {
             return Err(Error::UnsupportedBackendOperation {
                 op: "tensor_to_dtype(Q8_0)",

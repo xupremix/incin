@@ -46,6 +46,8 @@ impl<'de> serde::Deserialize<'de> for DTypeKey {
                 ("i64", 1) => return Ok(<i64 as ConstDType>::DESCRIPTOR.key()),
                 ("f16", 1) => return Ok(<half::f16 as ConstDType>::DESCRIPTOR.key()),
                 ("bf16", 1) => return Ok(<half::bf16 as ConstDType>::DESCRIPTOR.key()),
+                ("f8e4m3", 1) => return Ok(<F8E4M3 as ConstDType>::DESCRIPTOR.key()),
+                ("f8e5m2", 1) => return Ok(<F8E5M2 as ConstDType>::DESCRIPTOR.key()),
                 ("f32", 1) => return Ok(<f32 as ConstDType>::DESCRIPTOR.key()),
                 ("f64", 1) => return Ok(<f64 as ConstDType>::DESCRIPTOR.key()),
                 ("bool", 1) => return Ok(<bool as ConstDType>::DESCRIPTOR.key()),
@@ -121,7 +123,7 @@ pub enum DTypeKind {
     UnsignedInteger,
     /// Signed integer dtype (e.g. `i64`).
     SignedInteger,
-    /// Floating-point dtype (e.g. `f16`, `bf16`, `f32`, `f64`).
+    /// Floating-point dtype (e.g. `f16`, `bf16`, `f8e4m3`, `f8e5m2`, `f32`, `f64`).
     Float,
     /// Complex dtype (reserved for future use).
     Complex,
@@ -493,6 +495,14 @@ pub enum DTypeId {
     I64,
     /// 16-bit brain floating point.
     BF16,
+    /// 8-bit floating point, OCP E4M3 (weights/activations). 1 byte per
+    /// element, `DTypeKind::Float`, max magnitude 448, saturating, no
+    /// infinities. See [`F8E4M3`](super::F8E4M3) for the conversion contract.
+    F8E4M3,
+    /// 8-bit floating point, OCP E5M2 (gradients). 1 byte per element,
+    /// `DTypeKind::Float`, max magnitude 57344. See
+    /// [`F8E5M2`](super::F8E5M2) for the conversion contract.
+    F8E5M2,
     /// 16-bit (IEEE 754 half-precision) floating point.
     F16,
     /// 32-bit floating point.
@@ -540,6 +550,18 @@ impl DTypeId {
                 DTypeKey::new("incin", "bf16", 1),
                 DTypeKind::Float,
                 StorageEncoding::scalar(2, 2),
+            ),
+            DTypeId::F8E4M3 => DTypeDescriptor::builtin(
+                DTypeId::F8E4M3,
+                DTypeKey::new("incin", "f8e4m3", 1),
+                DTypeKind::Float,
+                StorageEncoding::scalar(1, 1),
+            ),
+            DTypeId::F8E5M2 => DTypeDescriptor::builtin(
+                DTypeId::F8E5M2,
+                DTypeKey::new("incin", "f8e5m2", 1),
+                DTypeKind::Float,
+                StorageEncoding::scalar(1, 1),
             ),
             DTypeId::F16 => DTypeDescriptor::builtin(
                 DTypeId::F16,
@@ -605,7 +627,7 @@ impl DTypeId {
         )
     }
 
-    /// True for `BF16`, `F16`, `F32`, `F64`.
+    /// True for `BF16`, `F16`, `F32`, `F64`, `F8E4M3`, `F8E5M2`.
     #[must_use]
     pub const fn is_float(self) -> bool {
         matches!(self.descriptor().kind(), DTypeKind::Float)
@@ -651,7 +673,7 @@ impl DTypeId {
     )]
     pub fn element_size(&self) -> usize {
         match self {
-            DTypeId::U8 | DTypeId::Q8_0 | DTypeId::Bool => 1,
+            DTypeId::U8 | DTypeId::Q8_0 | DTypeId::Bool | DTypeId::F8E4M3 | DTypeId::F8E5M2 => 1,
             DTypeId::F16 | DTypeId::BF16 => 2,
             DTypeId::F32 | DTypeId::U32 => 4,
             DTypeId::F64 | DTypeId::I64 => 8,

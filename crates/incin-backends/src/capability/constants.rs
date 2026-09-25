@@ -18,6 +18,14 @@ pub(super) const ALL_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::F64.descriptor(),
     DTypeId::Q8_0.descriptor(),
     DTypeId::Bool.descriptor(),
+    // Issue #94: the fp8 pair rides the storage/shape rows whose kernels
+    // never read values (allocation, byte moves, contiguous reshape) or
+    // whose CPU kernels convert explicitly. No accelerator invocation
+    // passes ALL_DTYPES (CUDA uses CUDA_BOOL_SAFE_STORAGE_DTYPES, WGPU
+    // and Metal use F32_ONLY / CUDA_STORAGE_DTYPES), so this stays a
+    // CPU-only admission and the fp8 unsupported-hardware audit holds.
+    DTypeId::F8E4M3.descriptor(),
+    DTypeId::F8E5M2.descriptor(),
 ];
 pub(super) const FLOAT_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::BF16.descriptor(),
@@ -105,6 +113,11 @@ pub(super) const NON_QUANTIZED: &[DTypeDescriptor] = &[
     DTypeId::F32.descriptor(),
     DTypeId::F64.descriptor(),
     DTypeId::Bool.descriptor(),
+    // Issue #94, same CPU-only reasoning as ALL_DTYPES above: admits fp8
+    // sources to ToDType (the return leg), TensorFromData, and fill on CPU
+    // only. Block-quantized Q8_0 stays excluded everywhere.
+    DTypeId::F8E4M3.descriptor(),
+    DTypeId::F8E5M2.descriptor(),
 ];
 /// The union of an integer index operand's dtypes and an f32 data operand's.
 ///

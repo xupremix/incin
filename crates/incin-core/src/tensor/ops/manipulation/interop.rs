@@ -30,6 +30,8 @@ pub(crate) fn is_valid_scalar_type<E: 'static>() -> bool {
         || tid == core::any::TypeId::of::<f64>()
         || tid == core::any::TypeId::of::<half::f16>()
         || tid == core::any::TypeId::of::<half::bf16>()
+        || tid == core::any::TypeId::of::<crate::tensor::dtype::F8E4M3>()
+        || tid == core::any::TypeId::of::<crate::tensor::dtype::F8E5M2>()
 }
 
 /// Whether `E` is the exact Rust type the tensor's `dtype` stores.
@@ -47,6 +49,10 @@ pub(crate) fn is_valid_scalar_type<E: 'static>() -> bool {
 ///
 /// `Q8_0` is absent, and matches nothing: a block-quantized element has
 /// no scalar Rust type to be read as without dequantizing first.
+///
+/// Width is never consulted: `F8E4M3`/`F8E5M2` are 1 byte wide like `u8`
+/// and `bool`, and matching on width alone would misread one as the other.
+/// The `TypeId` equality below is what keeps them apart.
 pub(crate) fn scalar_type_matches_dtype<E: 'static>(
     dtype: crate::tensor::dtype::DTypeDescriptor,
 ) -> bool {
@@ -54,6 +60,8 @@ pub(crate) fn scalar_type_matches_dtype<E: 'static>(
     let tid = core::any::TypeId::of::<E>();
     match dtype.builtin_id() {
         Some(DTypeId::U8) => tid == core::any::TypeId::of::<u8>(),
+        Some(DTypeId::F8E4M3) => tid == core::any::TypeId::of::<crate::tensor::dtype::F8E4M3>(),
+        Some(DTypeId::F8E5M2) => tid == core::any::TypeId::of::<crate::tensor::dtype::F8E5M2>(),
         Some(DTypeId::U32) => tid == core::any::TypeId::of::<u32>(),
         Some(DTypeId::I64) => tid == core::any::TypeId::of::<i64>(),
         Some(DTypeId::BF16) => tid == core::any::TypeId::of::<half::bf16>(),
@@ -391,5 +399,51 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
             out.push(val);
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_valid_scalar_type, scalar_type_matches_dtype};
+    use crate::tensor::dtype::{DTypeId, F8E4M3, F8E5M2};
+
+    /// The u8-width collision audit (issue #94): fp8 shares `scalar(1, 1)`
+    /// with `u8`/`bool`, so every 1-byte dtype must match only its own Rust
+    /// type. A width-only check would read fp8 bytes as `u8` integers.
+    #[test]
+    fn one_byte_dtypes_match_only_their_own_rust_type() {
+        assert!(scalar_type_matches_dtype::<u8>(DTypeId::U8.descriptor()));
+        assert!(!scalar_type_matches_dtype::<u8>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<u8>(
+            DTypeId::F8E5M2.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<u8>(DTypeId::Bool.descriptor()));
+
+        assert!(scalar_type_matches_dtype::<F8E4M3>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E4M3>(
+            DTypeId::F8E5M2.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E4M3>(
+            DTypeId::U8.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E5M2>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+        assert!(scalar_type_matches_dtype::<F8E5M2>(
+            DTypeId::F8E5M2.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E5M2>(
+            DTypeId::U8.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<bool>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+
+        assert!(is_valid_scalar_type::<F8E4M3>());
+        assert!(is_valid_scalar_type::<F8E5M2>());
     }
 }
