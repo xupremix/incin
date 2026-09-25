@@ -146,7 +146,7 @@ pub use incin_core::optim::{
 pub use incin_core::optim::{CosineAnnealingLR, StepLR};
 pub use incin_core::shapes::{Dyn, DynShape, Shape};
 pub use incin_core::tensor::device::{
-    Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+    Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
 };
 pub use incin_core::tensor::dtype::{
     BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
@@ -786,7 +786,8 @@ pub mod prelude {
     // above rather than from here so it defaults its backend like `Tensor`.
     pub use incin_core::shapes::{Contiguous, FreshDense, Layout, RowMajor};
     pub use incin_core::tensor::device::{
-        ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+        ConstDevice, Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet,
+        DeviceSetError,
     };
     pub use incin_core::tensor::dtype::{
         BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,

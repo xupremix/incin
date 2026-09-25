@@ -347,6 +347,14 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // with no arithmetic, pushes a real tape entry, and refuses block
         // encodings. One row per training mode, like the coarse `Broadcast`
         // pair above.
+        //
+        // TRACKED DEVIATION for the `TransposeExact` pair below (issue #113,
+        // orchestrator decision 2026-09-25): the operation contract is views
+        // everywhere (`LayoutRule::ViewWhenPossible`), and this backend still
+        // copies through `launch_transpose` because its matmul/reduce
+        // consumers refuse strided operands and there is no device here to
+        // verify strided support on. Pending hardware-verified strided
+        // support; the copy is recorded here, not blessed.
         native_ranked(
             OperationKind::TransposeExact,
             CUDA_BOOL_SAFE_STORAGE_DTYPES,
