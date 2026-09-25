@@ -216,6 +216,19 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
     #94 FP8 (L) -> #95 FP4 (M) -> #3 (M) -> #1 (M), #99 FSDP tier (M) ->
     TP -> PP, #6 ROCm (M), streaming writes (M, 0.3.0 lane).
 
+## Forward-looking (post-0.2.0 inputs, 2026-09-25)
+- `moe-design-space.md`: 8 custom-MoE proposals (P1 dropless grouped-GEMM
+  over option-C offsets is the highest-leverage pick); FP8-per-expert,
+  FusedMoE kernel family, expert-parallel all-to-all, MoEfication
+  importer, load-balance telemetry.
+- `inference-engine-substrate.md`: staged serving roadmap — stage 1
+  starts with the generate loop + sampler (nothing else bottoms out
+  without it); paged KV, scheduler, GGUF import, quant, fused decode
+  follow in dependency order with test-shaped exit criteria.
+- `novel-solutions-platform.md`: friction audit (3 novelty walks with
+  stuck points) + top-3 unlocks (dtype checklist + guided refusals,
+  checked dtype dispatch in DifferentiableOp, DSL cliff expansion).
+
 ## Cross-cutting findings
 - **Dead/unwired code is a theme**: embedding.cu (non-conforming, unreferenced),
   adaptive-pool kernels, WGPU binary/scalar modes, WGPU `transpose`, quant.cu,
