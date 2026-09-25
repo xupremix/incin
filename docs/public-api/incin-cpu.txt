@@ -178,6 +178,7 @@ pub use incin::DTypeKind
 pub use incin::DTypeRegistry
 pub use incin::Device
 pub use incin::DeviceId
+pub use incin::DeviceKey
 pub use incin::DeviceKind
 pub use incin::DevicePreference
 pub use incin::DeviceSet
@@ -437,6 +438,7 @@ pub use incin::prelude::DTypeKind
 pub use incin::prelude::DTypeRegistry
 pub use incin::prelude::Device
 pub use incin::prelude::DeviceId
+pub use incin::prelude::DeviceKey
 pub use incin::prelude::DeviceKind
 pub use incin::prelude::DevicePreference
 pub use incin::prelude::DeviceSet

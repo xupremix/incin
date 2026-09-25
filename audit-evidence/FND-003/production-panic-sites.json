@@ -528,19 +528,19 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:424",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:434",
     "code": ".expect(\"CUDA concat input allocation covers its element count by construction\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:429",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:439",
     "code": ".expect(\"out_b.data is uniquely owned for the lifetime of this loop\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/shape.rs:433",
+    "site": "crates/incin-backends/src/cuda/ops/shape.rs:443",
     "code": ".expect(\"CUDA concat output allocation covers its element count by construction\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"

@@ -115,8 +115,9 @@ Single-file `.safetensors` behavior is unchanged.
 F32 passthrough, `QuantScheme::Q8_0`, and Q4_0 export through
 `QuantScheme::W4A16_Q4_0` are implemented. This is an export format,
 not a claim of Q4_0 tensor operations or W4A16 inference support. The exporter
-rejects non-F32 state and still rejects `QuantScheme::F16` and
-`QuantScheme::W4A16_Q4_K_M` as unimplemented conversions.
+rejects non-F32 state and still rejects `QuantScheme::F16` as an
+unimplemented conversion (`W4A16_Q4_K_M` exports; only `F16` remains
+unimplemented among the named schemes).
 
 Both block schemes share one eligibility rule: a tensor is quantized only when
 its element count is positive and its **last (fastest-varying) dimension is a
