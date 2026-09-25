@@ -220,6 +220,16 @@ pub(crate) fn launch_narrow(
 }
 
 /// Swaps dims `dim1`/`dim2`. Materializes (see `launch_narrow`'s doc for why).
+///
+/// TRACKED DEVIATION from the views-everywhere contract (issue #113,
+/// orchestrator decision 2026-09-25): the operation contract names a strided
+/// view sharing the input's buffer (`LayoutRule::ViewWhenPossible`, aliasing
+/// documented on `Tensor::transpose`), and this launcher instead runs a
+/// permutation kernel into a fresh contiguous allocation. It stays a copy
+/// because this backend's matmul/reduce consumers refuse strided operands and
+/// there is no device here to verify strided support on -- not because the
+/// contract allows two behaviours. Pending strided-consumer support verified
+/// on hardware; do not "fix" by relabelling the contract.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Result<CudaStorage> {
     let mut out_shape = t.shape.to_vec();

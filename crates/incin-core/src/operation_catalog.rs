@@ -90,6 +90,12 @@ macro_rules! incin_operation_catalog {
             (LogicalNot, "logical_not", Pointwise, Logical, NoAttributes, 1, 1, "::logical_not"),
 
             (ReshapeExact, "reshape", Storage, Shape, ShapeAttributes, 1, 1, "::reshape"),
+            // Views everywhere (#113, orchestrator decision 2026-09-25): the
+            // `transpose` row keeps the `Shape` profile, whose layout rule is
+            // `ViewWhenPossible` -- the result shares the input's buffer with
+            // permuted strides, aliasing documented on `Tensor::transpose`,
+            // densify explicitly via `into_row_major`. CUDA still copies as a
+            // tracked deviation (see its capability row and `launch_transpose`).
             (TransposeExact, "transpose", Storage, Shape, TransposeAttributes, 1, 1, "::transpose"),
             (TransposeView, "transpose_view", Storage, Shape, TransposeAttributes, 1, 1, "::transpose_view"),
             (MatMulExact, "matmul", Reduction, MatMul, NoAttributes, 2, 2, "::matmul"),

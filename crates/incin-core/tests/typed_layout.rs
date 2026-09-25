@@ -257,19 +257,26 @@ fn a_proven_tensor_reaches_every_converted_module() {
     let _ = incin_core::nn::Module::forward(&incin_core::nn::ReLU, t.clone());
 }
 
-/// Shape-changing operations really do produce dense buffers.
+/// Shape-changing operations state their result's layout honestly.
 ///
-/// This backs a claim the type system would otherwise make on faith. A
-/// reduction or a transpose cannot carry its operand's layout -- the shape
-/// changes, and a layout is only meaningful against the shape it describes --
-/// so its result's layout has to be *stated*. Stating `RowMajor` is only honest
-/// if the buffer is actually dense.
+/// This backs claims the type system would otherwise make on faith. A
+/// reduction or a pointwise operation cannot carry its operand's layout -- the
+/// shape changes, and a layout is only meaningful against the shape it
+/// describes -- so its result's layout has to be *stated*. Stating `RowMajor`
+/// is only honest if the buffer is actually dense, which is what the
+/// reductions and pointwise operations below check.
+///
+/// `transpose` is the exception that proves the rule: views everywhere (issue
+/// #113, decided 2026-09-25 following PyTorch) means it shares its input's
+/// buffer with permuted strides rather than allocating, so its result claims
+/// nothing (`Dyn`) and the dense assertions below do not apply to it -- the
+/// view-stride assertions after them do instead.
 ///
 /// Checked here at runtime rather than assumed, because the density is a
 /// property of what every current backend happens to do rather than something
-/// the operation contract states. If a backend ever returns a strided result,
-/// this fails and the type claim has to be withdrawn before it becomes a
-/// silent mis-read.
+/// the operation contract states. If a backend ever returns a strided result
+/// where dense is claimed, this fails and the type claim has to be withdrawn
+/// before it becomes a silent mis-read.
 #[test]
 fn shape_changing_operations_produce_dense_results() {
     use incin_core::shapes::idx::{ForwardAxis, Here};
@@ -281,12 +288,11 @@ fn shape_changing_operations_produce_dense_results() {
     assert_dense("mean", &t.mean(ForwardAxis::<Here>::default()).unwrap());
     assert_dense("neg", &t.neg().unwrap());
 
-    // `transpose` materialises on every backend now -- that was issue #113,
-    // and it is what lets the result state `RowMajor` in its type. The view
-    // half lives under `transpose_view`, asserted separately below. Strides
-    // [3, 1] are row-major for shape [4, 3]; the old view strides were [1, 4],
-    // so this assertion is the one that fails if a backend quietly goes back
-    // to sharing the buffer.
+    // `transpose` is a view on every backend now -- that was issue #113,
+    // decided views-everywhere following PyTorch: the result shares the
+    // input's buffer with permuted strides, and densifying is explicit via
+    // `into_row_major`. Strides [1, 4] are the input's [4, 1] swapped for
+    // shape [4, 3]; [3, 1] would mean a backend quietly went back to copying.
     let transposed = t
         .transpose_structural::<Here, incin_core::shapes::idx::Next<Here>>()
         .unwrap();
@@ -296,14 +302,14 @@ fn shape_changing_operations_produce_dense_results() {
     assert_eq!(meta.shape().as_ref(), &[4, 3]);
     assert_eq!(
         meta.strides().as_ref(),
-        &[3, 1],
-        "CPU transpose materialises a dense row-major result; [1, 4] would mean it viewed again"
+        &[1, 4],
+        "CPU transpose shares the buffer with permuted strides; [3, 1] would mean it copied again"
     );
 
-    // The public method makes the same claim at the type level: the result is
-    // `RowMajor`, so it satisfies bounds a `Dyn` result could not.
-    #[allow(clippy::type_complexity)]
-    let public: incin_core::shapes::Dense<s![4, 3], CpuBackendImpl> = t
+    // The public method makes the same honest claim at the type level: the
+    // result carries no layout proof (`Dyn`), because a view cannot state
+    // `RowMajor`.
+    let public = t
         .transpose(
             ForwardAxis::<Here>::default(),
             ForwardAxis::<incin_core::shapes::idx::Next<Here>>::default(),
@@ -312,10 +318,11 @@ fn shape_changing_operations_produce_dense_results() {
     let public_meta = <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::metadata::<
         f32,
     >(public.inner());
+    assert_eq!(public_meta.shape().as_ref(), &[4, 3]);
     assert_eq!(
         public_meta.strides().as_ref(),
-        &[3, 1],
-        "the public transpose must keep the RowMajor claim true"
+        &[1, 4],
+        "the public transpose must keep the view claim true"
     );
 }
 
@@ -343,35 +350,43 @@ fn transpose_view_permutes_metadata_without_copying() {
     );
 }
 
-/// The materialising transpose and the view disagree, which is the whole point.
+/// Both transpose spellings are views now, which is the point of #113's decision.
 ///
-/// Both are legal and neither is universally faster -- the view wins for a
-/// single consumer and loses from about four -- so the framework offers both
-/// and the caller chooses. This pins that they are actually different, since a
-/// backend quietly making them the same would remove the choice without
-/// removing the API.
+/// `transpose_structural` (the `TransposeExact` op) and `transpose_view` used
+/// to disagree -- copy vs view -- and this test pinned the difference, since a
+/// backend quietly making them the same would have removed the choice without
+/// removing the API. The views-everywhere decision (2026-09-25) removed that
+/// choice deliberately: one semantic, two selector spellings. So this pins
+/// the new unity with the same exactness it once pinned the difference with:
+/// same shape, same permuted strides [1, 4] through either spelling. A
+/// backend quietly copying in either spelling fails here rather than
+/// drifting.
 #[test]
-fn the_two_transposes_are_genuinely_different_operations() {
+fn the_two_transpose_spellings_are_both_views() {
     use incin_core::backend_authoring::StorageBackend;
     use incin_core::shapes::idx::{Here, Next};
 
     let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
 
     let viewed = t.transpose_view::<Here, Next<Here>>().unwrap();
-    let copied = t.transpose_structural::<Here, Next<Here>>().unwrap();
+    let structural = t.transpose_structural::<Here, Next<Here>>().unwrap();
 
     let view_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(viewed.inner());
-    let copy_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(copied.inner());
+    let structural_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(structural.inner());
 
-    assert_eq!(view_meta.shape().as_ref(), copy_meta.shape().as_ref());
-    // Same shape, different memory order: the view permutes the original's
-    // strides to [1, 4], the copy lands row-major at [3, 1]. The strides are
-    // what #113 was about, and they must stay different.
-    assert_eq!(view_meta.strides().as_ref(), &[1, 4]);
+    assert_eq!(view_meta.shape().as_ref(), structural_meta.shape().as_ref());
+    // Same shape, same memory order: both permute the original's strides to
+    // [1, 4]. The strides are what #113 was about, and either spelling
+    // landing row-major at [3, 1] means it copied.
     assert_eq!(
-        copy_meta.strides().as_ref(),
-        &[3, 1],
-        "the materialising half must not share the buffer with the view"
+        view_meta.strides().as_ref(),
+        &[1, 4],
+        "transpose_view permutes the strides; [3, 1] would mean it copied"
+    );
+    assert_eq!(
+        structural_meta.strides().as_ref(),
+        &[1, 4],
+        "the structural spelling is the same view; [3, 1] would mean it copied"
     );
 }
 

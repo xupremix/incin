@@ -19,6 +19,12 @@ pub(crate) fn reshape_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStor
     Ok(out)
 }
 
+/// Transpose by permuting metadata: the views-everywhere construction.
+///
+/// Permutes shape and strides over the same buffer and does no copy, so the
+/// result aliases its input (issue #113). The backward mirrors the forward --
+/// the same swap is its own inverse -- and stays a view throughout: CPU
+/// consumers serve strided storage, so no cotangent needs densifying here.
 pub(crate) fn transpose_storage(t: &CpuStorage, dim1: usize, dim2: usize) -> Result<CpuStorage> {
     let out = t.transpose(dim1, dim2)?;
     let (t_id, out_id) = (t.id, out.id);
@@ -26,34 +32,6 @@ pub(crate) fn transpose_storage(t: &CpuStorage, dim1: usize, dim2: usize) -> Res
         output_id: out_id,
         input_ids: vec![t_id],
         backward: Box::new(move |grad_out: &CpuStorage| Ok(vec![grad_out.transpose(dim1, dim2)?])),
-    });
-    Ok(out)
-}
-
-/// `TransposeExact`: permute, then materialise a fresh row-major buffer.
-///
-/// The shared-body question issue #113 settled: every backend that advertises
-/// `TransposeExact` now hands back a dense, contiguous result, so the type
-/// returned by the public `transpose` is entitled to state `RowMajor`. The
-/// view half of the old behaviour lives in [`transpose_storage`] behind
-/// `TransposeView`, unchanged.
-///
-/// The backward mirrors the forward: the same swap is its own inverse, and
-/// `contiguous` on the end buys the same copy CUDA's `launch_transpose`
-/// backward takes, so a strided cotangent never leaves this entry.
-pub(crate) fn transpose_exact_storage(
-    t: &CpuStorage,
-    dim1: usize,
-    dim2: usize,
-) -> Result<CpuStorage> {
-    let out = t.transpose(dim1, dim2)?.contiguous()?;
-    let (t_id, out_id) = (t.id, out.id);
-    tape::push_with(|| TapeEntry {
-        output_id: out_id,
-        input_ids: vec![t_id],
-        backward: Box::new(move |grad_out: &CpuStorage| {
-            Ok(vec![grad_out.transpose(dim1, dim2)?.contiguous()?])
-        }),
     });
     Ok(out)
 }

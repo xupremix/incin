@@ -9,7 +9,7 @@ use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
 use crate::shapes::Layout;
 use crate::shapes::idx::StaticCursor;
-use crate::shapes::{DynShape, RowMajor, Shape, ShapeBuf, ShapeValue, SwapAxes};
+use crate::shapes::{DynShape, Shape, ShapeBuf, ShapeValue, SwapAxes};
 use crate::tensor::base::Tensor;
 use crate::tensor::grad::RequiresGrad;
 use crate::tensor::ops::manipulation::selectors::AxisPairSelector;
@@ -22,23 +22,36 @@ impl<
     TLayout: Layout<S>,
 > Tensor<S, B, K, G, Local, TLayout>
 {
-    /// Transposes two axis selectors while preserving the strongest available
-    /// output shape proof, materialising a fresh dense result.
+    /// Transposes two axis selectors, returning a strided view over the same buffer.
     ///
     /// #113 settled the split-brain this used to be: CPU returned a view while
     /// CUDA returned a copy, so no type could honestly describe the result.
-    /// Every backend that advertises `transpose` now copies into a fresh
-    /// row-major buffer -- dense, contiguous, elements in the order the new
-    /// shape claims -- and the result therefore states [`RowMajor`]. That is
-    /// what makes `reshape_view` reachable at the end of the chain below,
-    /// where a view would have to be re-proven first.
+    /// The contract is now views everywhere (the PyTorch pattern): the
+    /// operation permutes the shape and strides over the same buffer and does
+    /// no copy. A layout is only meaningful against the shape it describes,
+    /// and the shape changed here, so the result claims nothing (`Dyn`) --
+    /// precisely the same honest typing as
+    /// [`transpose_view`](Self::transpose_view), which is the same semantic
+    /// under a static-selector spelling.
     ///
-    /// The no-copy half is the separate, explicitly named
-    /// [`transpose_view`](Self::transpose_view): same elements, permuted
-    /// strides over the same buffer, layout `Dyn`. Neither is universally
-    /// faster -- measured on a GTX 1650 the view wins for a single consumer
-    /// and loses from about four reads -- so the choice of which one to call
-    /// stays the caller's.
+    /// Aliasing is the contract, not an accident: the result shares its buffer
+    /// with the input, so a write through either handle is visible through the
+    /// other. Densifying is explicit via
+    /// [`into_row_major`](crate::tensor::base::Tensor::into_row_major), which
+    /// re-proves density where it holds and refuses a view rather than
+    /// copying -- fail-closed, so a hidden copy can never slip in. Consumers
+    /// that allocate (pointwise operations, matmul) already hand back dense,
+    /// typed results of their own.
+    ///
+    /// CUDA still copies: its matmul/reduce consumers refuse strided operands
+    /// and there is no device here to verify strided support on. That is a
+    /// tracked deviation (see the capability row and `launch_transpose`,
+    /// issue #113), not a second contract.
+    ///
+    /// Neither spelling is universally faster -- measured on a GTX 1650 the
+    /// view wins for a single consumer and loses from about four reads -- so
+    /// a caller that has measured its own regime and wants density says so
+    /// through the spelling above.
     ///
     /// # Errors
     ///
@@ -61,16 +74,16 @@ impl<
     ///     swapped.to_vec1::<f32>().unwrap(),
     ///     vec![1.0, 3.0, 2.0, 4.0]
     /// );
-    /// // The result proved it is dense, so the view-only path accepts it.
-    /// let flat = swapped.reshape_view::<s![4]>().unwrap();
-    /// assert_eq!(flat.dims().dims(), &[4]);
+    /// // A view is not dense, and the densify spelling refuses rather than
+    /// // copies: `into_row_major` fails here instead of hiding a copy.
+    /// assert!(swapped.into_row_major().is_err());
     /// ```
     #[allow(clippy::type_complexity)]
     pub fn transpose<Lx, Rx>(
         &self,
         left: Lx,
         right: Rx,
-    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G, Local, RowMajor>>
+    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G, Local>>
     where
         (): AxisPairSelector<S, Lx, Rx>,
         B: Execute<op::TransposeExact> + Capabilities,
@@ -109,11 +122,19 @@ impl<
 
     /// Transposes two axes without copying, when the backend can.
     ///
-    /// The counterpart to [`transpose`](Self::transpose), which materialises:
-    /// this permutes the shape and strides over the same buffer and does no
-    /// work on the device. [`transpose_structural`](Self::transpose_structural)
-    /// materialises too -- both go through `TransposeExact`, the operation
-    /// issue #113 settled as the copying one on every backend.
+    /// The same semantic as [`transpose`](Self::transpose) -- a strided view
+    /// sharing the input's buffer, layout `Dyn` -- under a static-selector
+    /// spelling: the axes are named in the type rather than passed as values.
+    /// Kept beside `transpose` because external code and tests name it; two
+    /// spellings for one semantic is duplication the views-everywhere decision
+    /// accepts rather than churns callers over (issue #113).
+    ///
+    /// Aliasing is the contract, not an accident: the result shares its buffer
+    /// with the input, so a write through either handle is visible through the
+    /// other. Densifying is explicit via
+    /// [`into_row_major`](crate::tensor::base::Tensor::into_row_major), which
+    /// re-proves density where it holds and refuses a view rather than
+    /// copying.
     ///
     /// Neither is universally faster, which is why both exist. Measured on a
     /// GTX 1650 for a transpose followed by pointwise consumption, the view

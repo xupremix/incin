@@ -1,10 +1,14 @@
 //! The settled transpose contract, issue #113, checked across backends.
 //!
-//! `TransposeExact` materialises a fresh dense row-major result on every
-//! backend that advertises it -- the property the public `transpose`'s
-//! `RowMajor` claim rests on -- and `TransposeView` is advertised only where
-//! the backend can serve a genuine view. CPU and WGPU are pinned against the
-//! same constants so a divergence fails the same assertion on both.
+//! Views everywhere (orchestrator decision 2026-09-25, reversing the
+//! unrecorded materialize settlement): `TransposeExact` permutes shape and
+//! strides over the same buffer -- the property the public `transpose`'s `Dyn`
+//! claim rests on -- and `TransposeView` states the same semantic under its
+//! own name. CPU serves the view and is pinned against it below. WGPU cannot
+//! serve a view (its pointwise shaders address linearly and would read a
+//! view's elements in the wrong order), so it still materialises a dense
+//! result there; that copy is a tracked deviation from the contract, pinned
+//! as one rather than blessed as parity.
 #![cfg(all(feature = "cpu", feature = "wgpu"))]
 
 use incin_backends::cpu::CpuBackendImpl;
@@ -109,18 +113,18 @@ where
 }
 
 #[test]
-fn cpu_transpose_exact_materialises_a_dense_row_major_result() {
+fn cpu_transpose_exact_is_a_view_with_permuted_strides() {
     let input = cpu_upload();
     let out = cpu_execute::<op::TransposeExact>(&input, SWAP);
     let meta = <Cpu as StorageBackend>::metadata::<f32>(&out);
     assert_eq!(meta.shape().as_ref(), &OUTPUT_SHAPE);
     assert_eq!(
         meta.strides().as_ref(),
-        &DENSE_STRIDES,
-        "TransposeExact must copy into row-major strides; [1, 3] would mean it viewed again"
+        &VIEW_STRIDES,
+        "TransposeExact is a view under #113 views-everywhere; [2, 1] would mean it copied again"
     );
     let values = <Cpu as HostReadback>::float_to_vec1::<f32>(&out)
-        .expect("reading the materialised result back must succeed");
+        .expect("reading the view back must succeed");
     assert_eq!(values, TRANSPOSED);
 }
 
@@ -141,7 +145,7 @@ fn cpu_transpose_view_permutes_strides_without_copying() {
 }
 
 #[test]
-fn wgpu_transpose_exact_matches_the_cpu_contract() {
+fn wgpu_transpose_exact_materialises_dense_as_a_tracked_deviation() {
     let input = wgpu_upload();
     let out = wgpu_execute::<op::TransposeExact>(&input, SWAP);
     let meta = <Wgpu as StorageBackend>::metadata::<f32>(&out);
@@ -149,7 +153,8 @@ fn wgpu_transpose_exact_matches_the_cpu_contract() {
     assert_eq!(
         meta.strides().as_ref(),
         &DENSE_STRIDES,
-        "the same operation on the same constants must produce the same memory order on every backend (issue #113)"
+        "WGPU still copies: it cannot serve the strided view the contract names, \
+         so the dense result here is a tracked deviation (issue #113), not parity with CPU"
     );
     let values = <Wgpu as HostReadback>::float_to_vec1::<f32>(&out)
         .expect("reading the materialised result back must succeed");

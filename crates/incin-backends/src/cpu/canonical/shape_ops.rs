@@ -16,8 +16,8 @@ use crate::cpu::ops::shape_ops::{
     flatten_storage, gather_storage, index_select_storage, lerp_storage, masked_fill_storage,
     narrow_storage, nonzero_storage, one_hot_storage, pad_storage, pixel_shuffle_storage,
     repeat_interleave_storage, repeat_storage, scatter_add_storage, scatter_storage, slice_storage,
-    squeeze_storage, stack_storage, transpose_exact_storage, transpose_storage, tril_storage,
-    triu_storage, unfold_storage, unsqueeze_storage, where_storage,
+    squeeze_storage, stack_storage, transpose_storage, tril_storage, triu_storage, unfold_storage,
+    unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -136,24 +136,27 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
-        // Materialises: issue #113 settled that every backend advertising
-        // `TransposeExact` returns a dense row-major result, which is what
-        // lets the public `transpose` state `RowMajor` in its type.
-        transpose_exact_storage(input, attributes.first, attributes.second)
+        // Views everywhere (issue #113, orchestrator decision 2026-09-25,
+        // reversing the unrecorded materialize settlement): `transpose`
+        // permutes shape and strides over the same buffer and does no copy.
+        // The result aliases its input; densifying is the caller's explicit
+        // choice via `into_row_major`. CUDA still materialises -- a tracked
+        // deviation recorded at its capability row and `launch_transpose`
+        // (no strided-consumer support verified on hardware yet).
+        transpose_storage(input, attributes.first, attributes.second)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
-/// A transpose that is explicitly a view.
+/// A transpose that is explicitly a view, and the construction the
+/// `TransposeExact` executor above routes through.
 ///
-/// Shares its storage-level primitive with `TransposeExact`'s former
-/// behaviour: `transpose_storage` permutes shape and strides over the same
-/// buffer and does no copy. The two operations are distinct in the catalog so
-/// a caller can *say* which behaviour they want: `TransposeExact` materialises
-/// on every backend (the settled half of issue #113), and a caller who needs
-/// the no-copy path asks for this one instead.
-///
-/// Which one to reach for is a property of the consumer, not of the transpose.
+/// Views everywhere (issue #113): `transpose_storage` permutes shape and
+/// strides over the same buffer and does no copy. `TransposeExact` and
+/// `TransposeView` share this one construction on CPU -- two spellings, one
+/// semantic -- so a caller can no longer tell them apart here by design.
+/// Which one to reach for was a property of the consumer, not of the
+/// transpose; the decision settled it at the operation level instead.
 /// Measured on a GTX 1650, a materialised transpose loses to a strided read by
 /// about 45% when the result is read once and wins by about 23% when it is read
 /// eight times, crossing over at about four reads. See

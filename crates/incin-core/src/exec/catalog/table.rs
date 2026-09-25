@@ -297,18 +297,17 @@ pub(super) const fn entry(
     max_arity: usize,
     legacy_source: &'static str,
 ) -> OperationCatalogEntry {
-    let (mut broadcasting, dtype, mut output, mut empty, numeric, mut gradient, mut layout) =
+    let (mut broadcasting, dtype, mut output, mut empty, numeric, mut gradient, layout) =
         profile_semantics(profile);
-    // The `Shape` profile's default is `ViewWhenPossible`, which each member
-    // earns for itself. `transpose` is the one that no longer does: issue #113
-    // settled that every backend advertising `TransposeExact` materialises a
-    // fresh dense result, so the generated operation contract has to say
-    // `FreshContiguous` here or a backend could return a view again with the
-    // catalog's blessing. `transpose_view` keeps the profile default and
-    // states the view half under its own name.
-    if matches!(operation, OperationKind::TransposeExact) {
-        layout = LayoutRule::FreshContiguous;
-    }
+    // Views everywhere (issue #113, orchestrator decision 2026-09-25,
+    // reversing the unrecorded materialize settlement this override used to
+    // state): `transpose` permutes shape and strides over the same buffer, so
+    // the `Shape` profile's `ViewWhenPossible` default -- which every other
+    // member keeps -- is the honest rule here too, and the result aliases its
+    // input (densify explicitly via `into_row_major`). `transpose_view` keeps
+    // the profile default and states the same semantic under its own name.
+    // CUDA still copies; that is a tracked deviation (see its capability row
+    // and `launch_transpose`), not a second contract.
     let accepted_ranks = match operation {
         OperationKind::MatMulExact | OperationKind::QuantizedMatMul => 2..=usize::MAX,
         OperationKind::Dot | OperationKind::Outer => 1..=1,

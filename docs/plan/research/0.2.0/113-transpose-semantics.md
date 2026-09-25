@@ -162,6 +162,44 @@ the working tree already converges on (`TransposeExact` copies on CPU,
 `TransposeView` exists, public `transpose` states `RowMajor`); this memo
 records that the evidence supports keeping that settlement, not revisiting it.
 
+## Decision (orchestrator, 2026-09-25 — maintainer: "do what PyTorch does, exceptionally justified")
+
+**Views everywhere.** `transpose` returns a strided view sharing the
+original buffer on every backend; aliasing is documented in the
+operation contract; densifying is explicit via the existing
+`into_row_major` spelling. This reverses the unrecorded
+materialize-on-CPU settlement described above (no D-record ever
+approved it) and follows PyTorch (`transpose`/`permute` view +
+`.contiguous()`), for five reasons. (1) The filed bug is silent
+cross-backend divergence, not speed: uniformity plus documented
+aliasing ends the mutation-through-alias and hidden-copy hazards
+together, and PyTorch's pattern is the proven answer to exactly that
+bug. (2) The default must be the cheap, explicit thing. The
+measurement crosses over at 4–8 consumers with the producer unable to
+know its caller's regime; a copy-default taxes every transpose to
+subsidize multi-read consumers the caller never chose — a hidden,
+unchosen cost, which fail-closed refuses. The 1.3× regime stays
+reachable by choice (`into_row_major`), and attention (transpose-heavy)
+stops paying a copy per transpose. (3) The densify spelling already
+exists, so views make `into_row_major` purposeful instead of a
+proof-recovery tax, and the result layout stays precisely statable
+(permuted strides) rather than degrading to `Unknown`. (4) SOTA
+converges here: PyTorch/NumPy views + explicit materialize, JAX
+laziness (never an eager copy); TF's copy-default is the outlier, and
+it buys uniformity at exactly the price views charge CUDA below.
+(5) The cost is honest and tracked: CUDA cannot serve strided views
+yet (the strided pointwise path becomes reachable — the memo's
+"unreachable" finding is corrected generally, as the issue
+anticipated), so CUDA remains copying while strided support lands,
+recorded as a tracked deviation verified on hardware, not a silent
+difference. Nothing here weakens a proof: strided layouts are stated,
+aliasing is contracted, densify is explicit.
+Consequences: CPU stops copying (`transpose_storage` → view path);
+`transpose` states the permuted layout; the pinned
+`shape_changing_operations_produce_dense_results` test flips to assert
+view strides on CPU; contract text + aliasing documentation is the
+local slice; CUDA strided support is hardware-gated follow-up.
+
 ### What changes if recommended
 
 Nothing in this branch — the settlement described above is already implemented
