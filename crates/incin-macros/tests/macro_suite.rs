@@ -83,6 +83,14 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
             "autotune_rejects_invalid_policy",
             "invalid autotune policy: expected disabled, heuristic, warmup, or profile",
         ),
+        (
+            "backend_operations_rejects_capability_without_executor",
+            "capability advertises operation",
+        ),
+        (
+            "backend_operations_rejects_incompatible_output",
+            "expected `Result<Vec<f64>, BackendError>`, found `Result<f64, BackendError>`",
+        ),
     ])
 }
 
