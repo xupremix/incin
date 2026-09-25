@@ -345,16 +345,16 @@ pub mod experimental {
             TwoRankBootstrapConfig,
         };
         pub use incin_core::dist::{
-            ActivationCheckpoint, AgreedPlan, CollectiveDType, CollectiveDescriptor,
-            CollectiveError, CollectiveKind, CollectivePlan, CollectivePlanBuilder,
-            CollectiveReductionDType, CollectiveTag, CommunicationEvidence, CompletePlacement,
-            ConstPlacement, ContextError, ContextFailure, DataParallelDType, DataParallelError,
-            DataParallelPlan, DataParallelPlanBuilder, DistributedContext,
+            ActivationCheckpoint, AgreedPlan, BucketError, BucketPlan, BucketPolicy,
+            CollectiveDType, CollectiveDescriptor, CollectiveError, CollectiveKind, CollectivePlan,
+            CollectivePlanBuilder, CollectiveReductionDType, CollectiveTag, CommunicationEvidence,
+            CompletePlacement, ConstPlacement, ContextError, ContextFailure, DataParallelDType,
+            DataParallelError, DataParallelPlan, DataParallelPlanBuilder, DistributedContext,
             DistributedContextHandle, DistributedContextState, DistributedError,
             DistributedIdentity, DistributedInputs, DistributedRule, ElementwisePlacement,
             FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
-            FsdpPlanBuilder, GPipe, GradientDescriptor, GradientId, GroupId, HybridPlanDType,
-            HybridPlanError, HybridPlanReport, HybridPlanner, HybridWorkload,
+            FsdpPlanBuilder, GPipe, GradientBucket, GradientDescriptor, GradientId, GroupId,
+            HybridPlanDType, HybridPlanError, HybridPlanReport, HybridPlanner, HybridWorkload,
             LOCAL_CUDA_DEVICE_ENV, LegalTransition, Local, Max, Mean, MemoryLimit, Min,
             OneForwardOneBackward, ParallelOptions, ParallelStrategy, ParallelStrategyKind,
             Partial, PartialReduction, PipelineAction, PipelineBoundaryId, PipelineClock,
@@ -389,6 +389,8 @@ pub mod experimental {
     pub mod training {
         #[cfg(feature = "distributed")]
         pub use crate::train::ShardingSpec;
+        #[cfg(feature = "distributed-reference")]
+        pub use crate::train::{BucketLaunch, ReferenceDataParallel, ReferenceRankSynchronizer};
         pub use crate::train::{
             Decision, FitOutcome, HostMachine, Machine, Plan, SingleRankSynchronizer, TrainError,
             Trainer, TrainerBuilder,

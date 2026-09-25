@@ -16,6 +16,8 @@ pub mod context;
 #[cfg(feature = "distributed")]
 pub mod data_parallel;
 #[cfg(feature = "distributed")]
+pub mod execute;
+#[cfg(feature = "distributed")]
 pub mod fsdp;
 #[cfg(feature = "distributed")]
 pub mod mesh;
@@ -51,6 +53,8 @@ pub use data_parallel::{
     DataParallelDType, DataParallelError, DataParallelPlan, DataParallelPlanBuilder,
     GradientDescriptor, GradientId, TwoRankDataParallel, validate_data_parallel_dtype,
 };
+#[cfg(feature = "distributed")]
+pub use execute::{BucketError, BucketPlan, BucketPolicy, GradientBucket, bucket_plan};
 #[cfg(feature = "distributed")]
 pub use fsdp::{
     FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,

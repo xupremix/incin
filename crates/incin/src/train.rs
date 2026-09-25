@@ -43,11 +43,15 @@
 //! synchronizer attached ([`TrainError::CollectivesUnavailable`]) and one
 //! whose attached synchronizer disagrees with the device count
 //! ([`TrainError::SynchronizerMismatch`]); with a matching synchronizer it
-//! runs, reducing gradients after every backward pass. No synchronizer
-//! shipped here speaks to real ranks - the hardware-gated gap (NCCL adapter
-//! wiring, device-resident buckets, per-rank data sharding, buffer
-//! synchronization) is documented on [`GradientSynchronizer`] and
-//! `incin_core::dist::sync`.
+//! runs, reducing gradients after every backward pass. The in-process
+//! two-rank path speaks to a real peer: [`ReferenceDataParallel`] pairs two
+//! rank synchronizers over the deterministic reference transport
+//! (`distributed-reference`), bucketed per
+//! [`BucketPolicy`](incin_core::dist::execute::BucketPolicy), with per-rank
+//! data sharding left to the caller's [`DistributedSampler`](incin_data::DistributedSampler).
+//! The remaining hardware-gated gap is the NCCL adapter wiring (plus
+//! device-resident buckets and buffer synchronization), documented on
+//! [`GradientSynchronizer`] and `incin_core::dist::sync`.
 //!
 //! Under the `distributed` feature a plan can also request
 //! `ShardingSpec::Fsdp` (`#99`): `fit` then reduce-scatters (ZeRO-2) or
@@ -79,6 +83,10 @@ use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
 use incin_core::tensor::dtype::{ConstDType, DTypeDescriptor, f16};
 use std::sync::Arc;
+#[cfg(feature = "distributed-reference")]
+use std::sync::{Condvar, Mutex};
+#[cfg(feature = "distributed-reference")]
+use std::time::{Duration, Instant};
 
 /// The devices a [`DevicePreference::Fastest`] resolution tries, most capable
 /// first.
@@ -447,7 +455,8 @@ impl core::fmt::Display for TrainError {
             Self::CollectivesUnavailable { devices } => write!(
                 f,
                 "a {devices}-device run needs gradient synchronization; attach a synchronizer \
-                 with Trainer::with_synchronizer (DST-005 transports are not wired)"
+                 with Trainer::with_synchronizer (DST-005 NCCL transports are hardware-gated; \
+                 the in-process reference transport serves through ReferenceDataParallel)"
             ),
             Self::SynchronizerMismatch {
                 devices,
@@ -770,8 +779,10 @@ impl TrainerBuilder {
                 "collectives-required",
                 format!(
                     "{} devices need collectives; attach a gradient synchronizer with \
-                     Trainer::with_synchronizer to execute this plan (DST-005 transports are \
-                     not wired, so without one this plan describes a run it cannot execute)",
+                         Trainer::with_synchronizer to execute this plan (DST-005 NCCL \
+                         transports are hardware-gated; the in-process reference transport \
+                         serves through ReferenceDataParallel, so without one this plan \
+                         describes a run it cannot execute)",
                     devices.len()
                 ),
             ));
@@ -910,12 +921,15 @@ impl Trainer {
     ///
     /// # Hardware-gated gap
     ///
-    /// No transport-backed synchronizer ships with this crate: a real
-    /// multi-rank run needs an implementation wired to a collective
-    /// backend (`DST-005`'s transports), which is not runnable on this
-    /// project's current hardware. [`SingleRankSynchronizer`] is the
-    /// proven path, and the two-rank arithmetic is proven in the
-    /// `dp2_network` tests against scripted peers.
+    /// The in-process two-rank path ships here: [`ReferenceDataParallel`]
+    /// pairs two rank synchronizers over the deterministic reference
+    /// transport (`distributed-reference`), so a two-device plan executes
+    /// on this machine with no hardware. A multi-host run still needs an
+    /// implementation wired to a real collective backend (`DST-005`'s NCCL
+    /// transport), which is not runnable on this project's current
+    /// hardware. [`SingleRankSynchronizer`] is the proven one-rank path,
+    /// and the two-rank arithmetic is proven in the `dp2_network` tests
+    /// against scripted peers and the reference transport.
     #[must_use]
     pub fn with_synchronizer(mut self, synchronizer: impl GradientSynchronizer + 'static) -> Self {
         self.synchronizer = Some(Arc::new(synchronizer));
@@ -1353,6 +1367,570 @@ impl FsdpSynchronizer for SingleRankSynchronizer {
     /// One rank's gathered sequence is its shard, unchanged.
     fn all_gather(&self, shard: &[f64]) -> Result<Vec<f64>, SyncError> {
         Ok(shard.to_vec())
+    }
+}
+
+// ============================================================================
+// In-process two-rank data parallel over the reference transport (#97)
+// ============================================================================
+
+/// Stream every reference-transport gradient bucket launches on.
+///
+/// The plan's descriptors carry per-tensor streams, but the host
+/// read-reduce-write protocol walks tensors without them; buckets reduce
+/// on this one gradient stream instead.
+#[cfg(feature = "distributed-reference")]
+const REFERENCE_GRADIENT_STREAM: incin_backends::dist::StreamId =
+    incin_backends::dist::StreamId::new(0);
+
+/// The rank that runs each bucket's reference-transport collective.
+///
+/// Both ranks deposit every tensor of a bucket; rank 1's arrival on a
+/// complete bucket runs the single `all_reduce` and publishes both ranks'
+/// results. The choice is arbitrary and fixed so exactly one caller ever
+/// runs the transport.
+#[cfg(feature = "distributed-reference")]
+const REFERENCE_BUCKET_LEADER: usize = 1;
+
+/// How long one rank waits for its peer inside a collective before the
+/// run fail-stops. A dropped peer trips the wait immediately through the
+/// liveness flags; this timeout is the backstop for a peer that is alive
+/// but stuck.
+#[cfg(feature = "distributed-reference")]
+const REFERENCE_RENDEZVOUS_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// What one reference-transport bucket launch carried.
+///
+/// The rendezvous records these in launch order: the execution evidence
+/// behind the bucketing claim. One step's buckets launch back-to-back in
+/// traversal order - bucket `k`'s collective completes before bucket
+/// `k + 1`'s launches - rather than as one collective per tensor.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BucketLaunch {
+    bucket: usize,
+    tensors: usize,
+    elements: usize,
+    deposits_seen: u64,
+}
+
+#[cfg(feature = "distributed-reference")]
+impl BucketLaunch {
+    /// Position in the launch order, counting from zero.
+    #[must_use]
+    pub const fn bucket(self) -> usize {
+        self.bucket
+    }
+
+    /// How many gradient tensors the bucket held.
+    #[must_use]
+    pub const fn tensors(self) -> usize {
+        self.tensors
+    }
+
+    /// Total `f64` elements the bucket's collective reduced.
+    #[must_use]
+    pub const fn elements(self) -> usize {
+        self.elements
+    }
+
+    /// How many per-tensor deposits both ranks had made when this bucket
+    /// launched. Equal across one step's buckets - the step deposits as
+    /// one batch - and growing across steps.
+    #[must_use]
+    pub const fn deposits_seen(self) -> u64 {
+        self.deposits_seen
+    }
+}
+
+/// Mutable state behind one [`ReferenceDataParallel`] pair.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug)]
+struct ReferenceShared {
+    /// Bucket boundaries both ranks derive independently.
+    policy: incin_core::dist::execute::BucketPolicy,
+    /// Backstop for a live-but-stuck peer.
+    timeout: Duration,
+    /// Guards `inner`; never held across the (pure-CPU) transport call any
+    /// longer than the call itself takes.
+    mutex: Mutex<ReferenceInner>,
+    /// Wakes depositors when buckets complete, results publish, or the
+    /// pair poison/fails.
+    cond: Condvar,
+}
+
+/// Per-bucket pairing slots, open results, and fail-stop latches.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug)]
+struct ReferenceInner {
+    /// This round's whole-step gradients per rank, in
+    /// [`all_reduce_model_gradients`] walk order; `None` until that rank
+    /// deposits. Batching the whole step is what lets buckets span
+    /// tensors: a per-tensor call would block the same thread that still
+    /// has to produce the bucket's remaining tensors.
+    pending: [Option<Vec<Vec<f64>>>; 2],
+    /// Published reduced steps per rank, in walk order.
+    ready: [Option<Vec<Vec<f64>>>; 2],
+    /// A rank clears its flag when its handle drops. A waiter that sees a
+    /// dead peer fail-stops immediately instead of running out the timeout.
+    alive: [bool; 2],
+    /// First failure wins: every waiter fail-stops with this message, so a
+    /// transport refusal or a length mismatch stops both ranks instead of
+    /// hanging one.
+    poison: Option<String>,
+    /// Test hook: drop rank 1's payload from the next collective, so the
+    /// reference transport itself refuses with `InputCount`.
+    drop_peer_once: bool,
+    /// How many `all_reduce` calls the reference transport ran.
+    transport_calls: usize,
+    /// Buckets launched so far; also the next group token.
+    closed_buckets: usize,
+    /// Total per-tensor deposits both ranks made.
+    deposits_seen: u64,
+    /// Launch record, in launch order.
+    launches: Vec<BucketLaunch>,
+}
+
+/// In-process two-rank data-parallel rendezvous over the reference transport.
+///
+/// `pair` returns a controller plus one [`ReferenceRankSynchronizer`] per
+/// rank. Attach each synchronizer to its rank's [`Trainer`] with
+/// [`with_synchronizer`](Trainer::with_synchronizer) and run the two ranks
+/// on two threads over identical models: every backward pass then reduces
+/// bucketed gradient means through
+/// [`ReferenceTransport`](incin_backends::dist::ReferenceTransport), and
+/// each rank steps on the full-batch-equivalent gradient. Feed each rank
+/// its own shard (for example through
+/// [`DistributedSampler`](incin_data::DistributedSampler)) so the pair
+/// trains on the whole batch at twice the throughput of one rank, not on
+/// the same data twice.
+///
+/// Bucket boundaries come from the shared
+/// [`BucketPolicy`](incin_core::dist::execute::BucketPolicy) applied to the
+/// paired step's tensor lengths: both ranks walk identical models, so the
+/// leader chunks identical buckets with no coordination beyond the deposits
+/// themselves. A length or count mismatch means the models diverged, and
+/// the pair fail-stops rather than pairing the wrong tensors.
+///
+/// A rank that drops its handle (a crashed rank) trips its peer's
+/// in-flight collective at once; a rank that arrives but never deposits
+/// trips the timeout. Either way the run ends as a typed
+/// [`TrainError::Step`](TrainError::Step), never a hang.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug, Clone)]
+pub struct ReferenceDataParallel {
+    shared: Arc<ReferenceShared>,
+}
+
+#[cfg(feature = "distributed-reference")]
+impl ReferenceDataParallel {
+    /// Pairs two rank synchronizers under `policy`.
+    ///
+    /// The second and third returns are rank 0 and rank 1: attach each to
+    /// its rank's trainer. The first return is the controller the test or
+    /// driver keeps for launch evidence and fault injection.
+    ///
+    /// # Errors
+    ///
+    /// [`BucketError`](incin_core::dist::execute::BucketError) for a zero
+    /// bucket budget, refused before either rank can run.
+    pub fn pair(
+        policy: incin_core::dist::execute::BucketPolicy,
+    ) -> Result<
+        (Self, ReferenceRankSynchronizer, ReferenceRankSynchronizer),
+        incin_core::dist::execute::BucketError,
+    > {
+        Self::pair_with_timeout(policy, REFERENCE_RENDEZVOUS_TIMEOUT)
+    }
+
+    /// [`pair`](Self::pair) with an explicit peer-wait backstop.
+    ///
+    /// Tests use a short timeout to keep fail-stop coverage fast; runs use
+    /// the default. Dropping a rank handle still trips its peer at once
+    /// regardless of this value.
+    ///
+    /// # Errors
+    ///
+    /// [`BucketError`](incin_core::dist::execute::BucketError) for a zero
+    /// bucket budget, refused before either rank can run.
+    pub fn pair_with_timeout(
+        policy: incin_core::dist::execute::BucketPolicy,
+        timeout: Duration,
+    ) -> Result<
+        (Self, ReferenceRankSynchronizer, ReferenceRankSynchronizer),
+        incin_core::dist::execute::BucketError,
+    > {
+        policy.validate()?;
+        let controller = Self {
+            shared: Arc::new(ReferenceShared {
+                policy,
+                timeout,
+                mutex: Mutex::new(ReferenceInner {
+                    pending: [None, None],
+                    ready: [None, None],
+                    alive: [true, true],
+                    poison: None,
+                    drop_peer_once: false,
+                    transport_calls: 0,
+                    closed_buckets: 0,
+                    deposits_seen: 0,
+                    launches: Vec::new(),
+                }),
+                cond: Condvar::new(),
+            }),
+        };
+        let rank0 = ReferenceRankSynchronizer {
+            shared: Arc::clone(&controller.shared),
+            rank: 0,
+        };
+        let rank1 = ReferenceRankSynchronizer {
+            shared: Arc::clone(&controller.shared),
+            rank: 1,
+        };
+        Ok((controller, rank0, rank1))
+    }
+
+    /// The bucketing policy both ranks close buckets under.
+    #[must_use]
+    pub fn policy(&self) -> incin_core::dist::execute::BucketPolicy {
+        self.shared.policy
+    }
+
+    /// How many reference-transport `all_reduce` calls were attempted so
+    /// far, bucket failures included.
+    #[must_use]
+    pub fn transport_calls(&self) -> usize {
+        self.lock().transport_calls
+    }
+
+    /// Bucket launches in launch order: the overlap-order evidence.
+    #[must_use]
+    pub fn launches(&self) -> Vec<BucketLaunch> {
+        self.lock().launches.clone()
+    }
+
+    /// Drops rank 1's payload from the next bucket collective.
+    ///
+    /// Test hook for transport-error fail-stop: the reference transport
+    /// itself then refuses with `InputCount`, both ranks fail-stop with
+    /// the transport's message, and no rank hangs.
+    pub fn inject_transport_error_once(&self) {
+        let mut inner = self.lock();
+        inner.drop_peer_once = true;
+        self.shared.cond.notify_all();
+    }
+
+    /// Fail-stops the pair at once with `message`.
+    ///
+    /// In-flight and future collectives on both ranks refuse; use it to
+    /// abort a run whose driver already knows it cannot continue.
+    pub fn shutdown(&self, message: impl Into<String>) {
+        let mut inner = self.lock();
+        if inner.poison.is_none() {
+            inner.poison = Some(message.into());
+        }
+        self.shared.cond.notify_all();
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, ReferenceInner> {
+        self.shared
+            .mutex
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// One rank's handle on a [`ReferenceDataParallel`] pair.
+///
+/// Implements [`GradientSynchronizer`] with a world of two: each step's
+/// [`all_reduce_model_gradients`] walk deposits the whole step's `f64`
+/// gradients as one batch, the batch chunks into buckets under the shared
+/// policy, and the leader runs one reference-transport mean per bucket.
+/// A one-tensor call forms its own bucket and always progresses. Dropping
+/// the handle marks the rank dead, which fail-stops its peer's in-flight
+/// collective at once.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug)]
+pub struct ReferenceRankSynchronizer {
+    shared: Arc<ReferenceShared>,
+    rank: usize,
+}
+
+#[cfg(feature = "distributed-reference")]
+impl Drop for ReferenceRankSynchronizer {
+    fn drop(&mut self) {
+        let mut inner = self
+            .shared
+            .mutex
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        inner.alive[self.rank] = false;
+        self.shared.cond.notify_all();
+    }
+}
+
+#[cfg(feature = "distributed-reference")]
+impl GradientSynchronizer for ReferenceRankSynchronizer {
+    fn world_size(&self) -> usize {
+        2
+    }
+
+    fn rank(&self) -> usize {
+        self.rank
+    }
+
+    fn all_reduce_mean(&self, values: &mut [f64]) -> Result<(), SyncError> {
+        // A one-tensor batch always forms exactly one bucket (the batch is
+        // the whole step, so the trailing partial bucket closes), and
+        // therefore always progresses.
+        let mut batch = Vec::from([values.to_vec()]);
+        self.all_reduce_mean_batch(&mut batch)?;
+        values.copy_from_slice(&batch[0]);
+        Ok(())
+    }
+
+    fn all_reduce_mean_batch(&self, batch: &mut [Vec<f64>]) -> Result<(), SyncError> {
+        use incin_backends::dist::{
+            CollectiveBackend, GroupId, ReferenceBuffer, ReferenceTransport, ReferenceValues,
+        };
+        use incin_core::dist::execute::BucketPolicy;
+        use incin_core::exec::ReduceOp;
+
+        let rank = self.rank;
+        let peer = 1 - rank;
+        let timeout = self.shared.timeout;
+        let deadline = Instant::now() + timeout;
+        let mut inner = self
+            .shared
+            .mutex
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        if inner.pending[rank].is_some() {
+            // The walk deposits exactly one batch per step; a second
+            // deposit from the same rank means the call sequence diverged.
+            let message = format!(
+                "reference data-parallel rank {rank} deposited twice without collecting; \
+                 the collective call sequence diverged"
+            );
+            inner.poison = Some(message.clone());
+            self.shared.cond.notify_all();
+            return Err(SyncError::Synchronizer { message });
+        }
+        inner.pending[rank] = Some(batch.to_vec());
+        inner.deposits_seen += batch.len() as u64;
+        self.shared.cond.notify_all();
+
+        loop {
+            if let Some(reduced) = inner.ready[rank].take() {
+                if reduced.len() != batch.len()
+                    || reduced
+                        .iter()
+                        .zip(batch.iter())
+                        .any(|(output, input)| output.len() != input.len())
+                {
+                    let message = format!(
+                        "reference data-parallel round returned {} tensor(s) for a step of {} \
+                         tensor(s); the pairing is corrupt",
+                        reduced.len(),
+                        batch.len()
+                    );
+                    inner.poison = Some(message.clone());
+                    self.shared.cond.notify_all();
+                    return Err(SyncError::Synchronizer { message });
+                }
+                for (output, input) in reduced.into_iter().zip(batch.iter_mut()) {
+                    input.copy_from_slice(&output);
+                }
+                return Ok(());
+            }
+            if let Some(reason) = inner.poison.clone() {
+                return Err(SyncError::Synchronizer { message: reason });
+            }
+            if !inner.alive[peer] {
+                let message = format!(
+                    "reference data-parallel rank {peer} is gone; fail-stop instead of hanging rank {rank}"
+                );
+                inner.poison = Some(message.clone());
+                self.shared.cond.notify_all();
+                return Err(SyncError::Synchronizer { message });
+            }
+            if inner.pending[peer].is_some() {
+                let mine = inner.pending[rank]
+                    .as_ref()
+                    .expect("this rank deposited above");
+                let theirs = inner.pending[peer]
+                    .as_ref()
+                    .expect("peer deposit checked above");
+                if mine.len() != theirs.len() {
+                    let message = format!(
+                        "reference data-parallel ranks diverged: rank {rank} stepped {} \
+                         tensor(s) while rank {peer} stepped {}; models must be identical",
+                        mine.len(),
+                        theirs.len()
+                    );
+                    inner.poison = Some(message.clone());
+                    self.shared.cond.notify_all();
+                    return Err(SyncError::Synchronizer { message });
+                }
+                let mut mismatch = None;
+                for (position, (local, remote)) in mine.iter().zip(theirs.iter()).enumerate() {
+                    if local.len() != remote.len() {
+                        mismatch = Some((position, local.len(), remote.len()));
+                        break;
+                    }
+                }
+                if let Some((position, local, remote)) = mismatch {
+                    let message = format!(
+                        "reference data-parallel ranks disagree on gradient {position}: \
+                         {local} element(s) on rank {rank}, {remote} on rank {peer}; \
+                         models must be identical"
+                    );
+                    inner.poison = Some(message.clone());
+                    self.shared.cond.notify_all();
+                    return Err(SyncError::Synchronizer { message });
+                }
+                if rank == REFERENCE_BUCKET_LEADER {
+                    let policy = self.shared.policy;
+                    let mine = inner.pending[rank].take().expect("deposited above");
+                    let theirs = inner.pending[peer].take().expect("checked above");
+                    let lens: Vec<usize> = mine.iter().map(Vec::len).collect();
+                    let chunks = chunk_bucket(policy, &lens);
+                    let drop_peer = inner.drop_peer_once;
+                    inner.drop_peer_once = false;
+                    let mut full = [Vec::new(), Vec::new()];
+                    let deposits_seen = inner.deposits_seen;
+                    for (chunk_index, (start, count)) in chunks.iter().enumerate() {
+                        let bucket = inner.closed_buckets;
+                        let flat0: Vec<f64> = mine[*start..*start + *count]
+                            .iter()
+                            .flatten()
+                            .copied()
+                            .collect();
+                        let flat1: Vec<f64> = theirs[*start..*start + *count]
+                            .iter()
+                            .flatten()
+                            .copied()
+                            .collect();
+                        let group = GroupId::new(bucket as u64 + 1, 2).map_err(|error| {
+                            SyncError::Synchronizer {
+                                message: format!("reference data-parallel group refused: {error}"),
+                            }
+                        })?;
+                        // The error-injection hook fires on the round's
+                        // first bucket: one payload instead of two, so the
+                        // reference transport itself refuses with
+                        // `InputCount`.
+                        let inputs = if drop_peer && chunk_index == 0 {
+                            Vec::from([f64_buffer(flat0)])
+                        } else {
+                            Vec::from([f64_buffer(flat0), f64_buffer(flat1)])
+                        };
+                        inner.transport_calls += 1;
+                        let reduced = match ReferenceTransport.all_reduce::<f64>(
+                            group,
+                            &inputs,
+                            ReduceOp::Mean,
+                            REFERENCE_GRADIENT_STREAM,
+                        ) {
+                            Ok(output) => output,
+                            Err(error) => {
+                                let message = format!(
+                                    "reference transport all_reduce refused bucket {bucket}: {error}"
+                                );
+                                inner.poison = Some(message.clone());
+                                self.shared.cond.notify_all();
+                                return Err(SyncError::Synchronizer { message });
+                            }
+                        };
+                        let (buffers, _) = reduced.into_parts();
+                        let chunk_lens = &lens[*start..*start + *count];
+                        let elements: usize = chunk_lens.iter().sum();
+                        for (side, buffer) in buffers.iter().enumerate() {
+                            let ReferenceValues::F64(mean) = buffer.values() else {
+                                let message = format!(
+                                    "reference transport returned a non-f64 payload for bucket {bucket}"
+                                );
+                                inner.poison = Some(message.clone());
+                                self.shared.cond.notify_all();
+                                return Err(SyncError::Synchronizer { message });
+                            };
+                            let mut offset = 0;
+                            for len in chunk_lens {
+                                full[side].push(mean[offset..offset + len].to_vec());
+                                offset += len;
+                            }
+                        }
+                        inner.launches.push(BucketLaunch {
+                            bucket,
+                            tensors: *count,
+                            elements,
+                            deposits_seen,
+                        });
+                        inner.closed_buckets += 1;
+                    }
+                    inner.ready[0] = Some(full[0].drain(..).collect());
+                    inner.ready[1] = Some(full[1].drain(..).collect());
+                    self.shared.cond.notify_all();
+                    continue;
+                }
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let (guard, timed_out) = self
+                .shared
+                .cond
+                .wait_timeout(inner, remaining)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            inner = guard;
+            if timed_out.timed_out() {
+                let message = format!(
+                    "reference data-parallel rank {rank} waited {timeout:?} for rank {peer}; \
+                     fail-stop instead of hanging"
+                );
+                inner.poison = Some(message.clone());
+                self.shared.cond.notify_all();
+                return Err(SyncError::Synchronizer { message });
+            }
+        }
+
+        /// Chunks tensor lengths into `(start, count)` buckets under the
+        /// policy, in order. The trailing partial bucket always closes:
+        /// the batch is the whole step, so every tensor launches and a
+        /// one-tensor batch always progresses.
+        fn chunk_bucket(policy: BucketPolicy, lens: &[usize]) -> Vec<(usize, usize)> {
+            let mut chunks = Vec::new();
+            let mut start = 0;
+            let mut count = 0;
+            let mut bytes = 0;
+            let budget = |count: usize, bytes: usize| match policy {
+                BucketPolicy::SingleTensor => true,
+                BucketPolicy::Bytes { max_bytes } => bytes >= max_bytes,
+                BucketPolicy::Count { max_tensors } => count >= max_tensors,
+                // `BucketPolicy` is non-exhaustive: a future variant this
+                // code does not know chunks one tensor per bucket rather
+                // than launching a collective with unknown boundaries.
+                _ => true,
+            };
+            for (position, len) in lens.iter().enumerate() {
+                count += 1;
+                bytes += len * core::mem::size_of::<f64>();
+                if budget(count, bytes) {
+                    chunks.push((start, count));
+                    start = position + 1;
+                    count = 0;
+                    bytes = 0;
+                }
+            }
+            if count > 0 {
+                chunks.push((start, count));
+            }
+            chunks
+        }
+
+        fn f64_buffer(values: Vec<f64>) -> ReferenceBuffer<f64> {
+            ReferenceBuffer::try_new(ReferenceValues::F64(values), core::marker::PhantomData)
+                .expect("f64 values always match the f64 buffer dtype")
+        }
     }
 }
 

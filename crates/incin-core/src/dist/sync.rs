@@ -24,8 +24,13 @@
 //!   [`GradientSynchronizer`] implementation; none ships wired to NCCL,
 //!   MPI, or any other wire protocol.
 //! - **Host round-trip per tensor.** Gradients are read into `f64` host
-//!   vectors, reduced, and encoded back; bucketed, overlapped,
-//!   device-resident all-reduce is not implemented.
+//!   vectors, reduced, and encoded back; device-resident all-reduce is not
+//!   implemented. Bucketing across the step's gradients is available
+//!   through [`all_reduce_mean_batch`](GradientSynchronizer::all_reduce_mean_batch)
+//!   overrides - the default loops one collective per tensor - and the
+//!   reference-transport rendezvous in `incin`'s trainer uses it; overlap
+//!   with the backward pass itself needs autograd streaming hooks that do
+//!   not exist yet.
 //! - **No per-rank data sharding.** Each rank must be handed its own data
 //!   shard by the caller; this protocol only reduces the gradients those
 //!   shards produce.
@@ -181,9 +186,19 @@ pub enum SyncError {
 /// keep values on the device belong behind an implementation of this
 /// trait, not in this protocol.
 ///
+/// [`all_reduce_model_gradients`] reads the whole step's gradients, calls
+/// [`all_reduce_mean_batch`](Self::all_reduce_mean_batch) once, and writes
+/// the reduced values back. The default batch implementation loops
+/// [`all_reduce_mean`](Self::all_reduce_mean) in order, so existing
+/// implementations keep their one-collective-per-tensor behavior;
+/// overriding it is how a transport buckets several tensors into one
+/// collective.
+///
 /// # Hardware-gated gap
 ///
-/// No transport-backed implementation ships with this crate: wiring a
+/// The in-process two-rank transport adapter lives in `incin`'s trainer
+/// (`ReferenceDataParallel` under the `distributed-reference` feature -
+/// outside this crate so the core stays transport-neutral); wiring a
 /// real NCCL (or other collective) adapter through
 /// [`all_reduce_model_gradients`] is `DST-005`'s work and is not runnable
 /// on this project's current hardware. The interface, the single-rank
@@ -206,6 +221,26 @@ pub trait GradientSynchronizer: core::fmt::Debug + Send + Sync {
     /// mean; on failure the whole synchronization round fails and the
     /// training step is refused.
     fn all_reduce_mean(&self, values: &mut [f64]) -> core::result::Result<(), SyncError>;
+
+    /// Replaces every tensor's values with their element-wise means.
+    ///
+    /// Called once per step with the whole step's gradients in
+    /// [`VisitParameters`] traversal order. On success each tensor must
+    /// hold its mean; on failure the whole round fails and the training
+    /// step is refused.
+    ///
+    /// The default loops [`all_reduce_mean`](Self::all_reduce_mean) in
+    /// order, which is exactly the one-collective-per-tensor behavior the
+    /// scripted-peer tests pin. Override it to bucket several tensors
+    /// into fewer transport collectives: the batch is the whole step, so
+    /// a trailing partial bucket always closes and a one-tensor batch
+    /// always progresses.
+    fn all_reduce_mean_batch(&self, batch: &mut [Vec<f64>]) -> core::result::Result<(), SyncError> {
+        for values in batch.iter_mut() {
+            self.all_reduce_mean(values)?;
+        }
+        Ok(())
+    }
 }
 
 /// One rank's view of the FSDP collectives: reduce-scatter and all-gather.
@@ -325,13 +360,13 @@ impl ShardedGradients {
 /// Synchronizes a backward pass's gradients through `sync`.
 ///
 /// Walks `model` in [`VisitParameters`] order - the same order every rank
-/// with the same model walks - and for each parameter that has a gradient
-/// in `grads`: reads it to a host `f64` vector, calls
-/// [`all_reduce_mean`](GradientSynchronizer::all_reduce_mean), encodes the
-/// reduced values back into the parameter's dtype, and replaces the
-/// gradient. Parameters without a gradient are skipped without a
-/// collective; see the module docs for why ranks must agree on which
-/// those are.
+/// with the same model walks - reads every gradient that exists into host
+/// `f64` vectors, reduces the whole step with one
+/// [`all_reduce_mean_batch`](GradientSynchronizer::all_reduce_mean_batch)
+/// call, and encodes the reduced values back into the parameters' dtypes.
+/// Parameters without a gradient are skipped without contributing to the
+/// batch; see the module docs for why ranks must agree on which those
+/// are.
 ///
 /// Call it after `backward()` and before the optimizer step.
 ///
@@ -339,9 +374,10 @@ impl ShardedGradients {
 ///
 /// [`SyncError::RankOutOfRange`] when `sync`'s rank is outside its world,
 /// [`SyncError::UnsupportedDType`] for a gradient dtype outside
-/// `f32`/`f64`/`f16`/`bf16`, [`SyncError::Synchronizer`] when the
-/// synchronizer refuses, and [`SyncError::Backend`] when the backend
-/// cannot read, rebuild, or write a gradient.
+/// `f32`/`f64`/`f16`/`bf16` - checked on the read pass, before any
+/// collective runs - [`SyncError::Synchronizer`] when the synchronizer
+/// refuses, and [`SyncError::Backend`] when the backend cannot read,
+/// rebuild, or write a gradient.
 pub fn all_reduce_model_gradients<B, M>(
     model: &M,
     grads: &mut Gradients<B>,
@@ -357,32 +393,45 @@ where
         return Err(SyncError::RankOutOfRange { rank, world_size });
     }
 
-    let mut visitor = SyncVisitor {
+    let mut values = {
+        let mut reader = ReadVisitor {
+            grads: grads.as_backend_mut(),
+            values: Vec::new(),
+            failure: None,
+        };
+        if let Err(error) = model.visit_parameters(&StatePath::root(), &mut reader) {
+            return Err(reader.failure.unwrap_or_else(|| SyncError::Backend {
+                message: error.to_string(),
+            }));
+        }
+        reader.values
+    };
+
+    sync.all_reduce_mean_batch(&mut values)?;
+
+    let mut writer = WriteVisitor {
         grads: grads.as_backend_mut(),
-        sync,
+        values,
+        index: 0,
         failure: None,
     };
-    match model.visit_parameters(&StatePath::root(), &mut visitor) {
+    match model.visit_parameters(&StatePath::root(), &mut writer) {
         Ok(()) => Ok(()),
-        Err(error) => Err(visitor.failure.unwrap_or_else(|| SyncError::Backend {
+        Err(error) => Err(writer.failure.unwrap_or_else(|| SyncError::Backend {
             message: error.to_string(),
         })),
     }
 }
 
-/// The per-parameter read-reduce-write worker.
-///
-/// Sync-class failures ([`SyncError::UnsupportedDType`], the
-/// synchronizer's own refusal) are stashed in `failure` and surfaced as a
-/// traversal error so the driver can return the typed reason; ordinary
-/// backend errors propagate as `Err` and become [`SyncError::Backend`].
-struct SyncVisitor<'a, B: VariableBackend + AutogradBackend + HostInterop> {
+/// The read pass: gradient tensors to host `f64` vectors, in traversal
+/// order, refusing unsupported dtypes before any collective runs.
+struct ReadVisitor<'a, B: VariableBackend + AutogradBackend + HostInterop> {
     grads: &'a mut B::Grads,
-    sync: &'a dyn GradientSynchronizer,
+    values: Vec<Vec<f64>>,
     failure: Option<SyncError>,
 }
 
-impl<B> SyncVisitor<'_, B>
+impl<B> ReadVisitor<'_, B>
 where
     B: VariableBackend + AutogradBackend + HostInterop,
 {
@@ -395,7 +444,7 @@ where
     }
 }
 
-impl<B> ParameterVisitor<B> for SyncVisitor<'_, B>
+impl<B> ParameterVisitor<B> for ReadVisitor<'_, B>
 where
     B: VariableBackend + AutogradBackend + HostInterop,
 {
@@ -418,9 +467,9 @@ where
             })?;
         let key = B::var_as_tensor::<K>(variable)?;
 
-        // A parameter with no gradient has nothing to reduce: frozen
-        // weights and unused branches skip their collective here. Ranks
-        // must skip the same parameters (module docs).
+        // A parameter with no gradient contributes nothing to the batch:
+        // frozen weights and unused branches skip here. Ranks must skip
+        // the same parameters (module docs).
         let Some(grad) = B::get_grad::<K>(&key, &*self.grads)? else {
             return Ok(());
         };
@@ -430,11 +479,77 @@ where
             return Err(self.fail(error));
         }
 
-        let mut values = B::float_to_vec1::<K>(&grad)?;
-        if let Err(error) = self.sync.all_reduce_mean(&mut values) {
-            return Err(self.fail(error));
+        self.values.push(B::float_to_vec1::<K>(&grad)?);
+        Ok(())
+    }
+}
+
+/// The write pass: reduced `f64` vectors back over the gradients, in the
+/// same traversal order the read pass took them in.
+struct WriteVisitor<'a, B: VariableBackend + AutogradBackend + HostInterop> {
+    grads: &'a mut B::Grads,
+    values: Vec<Vec<f64>>,
+    index: usize,
+    failure: Option<SyncError>,
+}
+
+impl<B> WriteVisitor<'_, B>
+where
+    B: VariableBackend + AutogradBackend + HostInterop,
+{
+    fn fail(&mut self, error: SyncError) -> Error {
+        let message = format!("{error}");
+        self.failure = Some(error);
+        Error::Msg(message)
+    }
+}
+
+impl<B> ParameterVisitor<B> for WriteVisitor<'_, B>
+where
+    B: VariableBackend + AutogradBackend + HostInterop,
+{
+    fn visit_param<S, K, Train>(
+        &mut self,
+        _path: &StatePath,
+        param: &Param<S, B, K, Train>,
+    ) -> Result<()>
+    where
+        S: Shape,
+        K: DType,
+        Train: TrainState,
+    {
+        let variable = param
+            .variable_any()
+            .downcast_ref::<B::Var<K>>()
+            .ok_or_else(|| Error::InternalInvariant {
+                operation: "synchronize gradients",
+                reason: "backend variable type did not match the parameter dtype",
+            })?;
+        let key = B::var_as_tensor::<K>(variable)?;
+
+        let Some(grad) = B::get_grad::<K>(&key, &*self.grads)? else {
+            return Ok(());
+        };
+
+        let Some(reduced) = self.values.get(self.index) else {
+            return Err(self.fail(SyncError::Backend {
+                message: "gradient count changed between the synchronization read and write passes"
+                    .to_string(),
+            }));
+        };
+        self.index += 1;
+        let expected = B::float_to_vec1::<K>(&grad)?.len();
+        if reduced.len() != expected {
+            return Err(self.fail(SyncError::Synchronizer {
+                message: format!(
+                    "gradient synchronizer returned {} element(s) for a gradient of \
+                     {expected} element(s); the batch contract keeps lengths",
+                    reduced.len(),
+                ),
+            }));
         }
 
+        let dtype = param.dtype_descriptor();
         let shape = B::host_shape(&grad);
         let Some(device) = B::host_storage_device(&grad) else {
             return Err(self.fail(SyncError::Backend {
@@ -443,12 +558,12 @@ where
                 ),
             }));
         };
-        let bytes = match encode_reduced(dtype, &values) {
+        let bytes = match encode_reduced(dtype, reduced) {
             Ok(bytes) => bytes,
             Err(error) => return Err(self.fail(error)),
         };
-        let reduced = B::from_bytes::<K>(&bytes, shape.as_ref(), dtype, &device)?;
-        B::set_grad::<K>(&key, self.grads, reduced)?;
+        let rebuilt = B::from_bytes::<K>(&bytes, shape.as_ref(), dtype, &device)?;
+        B::set_grad::<K>(&key, self.grads, rebuilt)?;
         Ok(())
     }
 }
