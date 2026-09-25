@@ -12,6 +12,36 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
+    "site": "crates/incin/src/train.rs:1761",
+    "code": ".expect(\"this rank deposited above\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin/src/train.rs:1764",
+    "code": ".expect(\"peer deposit checked above\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin/src/train.rs:1795",
+    "code": "let mine = inner.pending[rank].take().expect(\"deposited above\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin/src/train.rs:1796",
+    "code": "let theirs = inner.pending[peer].take().expect(\"checked above\");",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
+    "site": "crates/incin/src/train.rs:1932",
+    "code": ".expect(\"f64 values always match the f64 buffer dtype\")",
+    "disposition": "statically proven internal transition",
+    "evidence": "FND-003 classification and focused crate tests"
+  },
+  {
     "site": "crates/incin-backends/src/codegen/ir.rs:1046",
     "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
     "disposition": "infallible String formatting",
