@@ -23,7 +23,7 @@ use incin_core::dist::mesh::{
     BindError, CollectiveGroups, Data, DeviceIdentity, DeviceMesh, LinkClass, MeshAxis, MeshSpec,
     Pipeline, ProcessLayout, TensorParallel, TopologyProbe, TransportVersion, ValidMesh,
 };
-use incin_core::prelude::DeviceId;
+use incin_core::prelude::{DeviceId, DeviceKey};
 use incin_core::typenum::{U1, U2, U3, U6};
 
 /// A machine assembled by a test rather than by a vendor.
@@ -439,4 +439,89 @@ fn the_fingerprint_records_the_links_the_groups_need() {
     assert_eq!(links.len(), 8);
     assert!(!links.iter().any(|&(from, to, _)| (from, to) == (0, 3)));
     assert!(links.iter().all(|&(_, _, class)| class.reaches()));
+}
+
+/// Third-party devices bind like first-class ones, and their structured key
+/// reaches the plan digest: same name plus a different namespace (or version)
+/// is a different machine, not the same digest (D-110, issue #96).
+#[test]
+fn external_devices_bind_and_carry_their_key_into_the_digest() {
+    fn machine_for(key: DeviceKey) -> FakeMachine {
+        FakeMachine {
+            devices: vec![
+                (
+                    DeviceId::external(key, 0),
+                    "ACME-0".to_string(),
+                    "acme-1".to_string(),
+                ),
+                (
+                    DeviceId::external(key, 1),
+                    "ACME-1".to_string(),
+                    "acme-1".to_string(),
+                ),
+            ],
+            severed: Vec::new(),
+            layout: ProcessLayout::SingleProcess,
+        }
+    }
+
+    let key = DeviceKey::new("acme", "npu", 1);
+    let devices = vec![DeviceId::external(key, 0), DeviceId::external(key, 1)];
+    let bound = DeviceMesh::<MeshSpec<Data<U2>>>::bind(&devices, &machine_for(key))
+        .expect("one external family binds");
+    assert_eq!(bound.device(0).unwrap().device(), devices[0]);
+
+    // Same short name, different namespace: different family, different digest.
+    let other = DeviceKey::new("emca", "npu", 1);
+    let rebound = DeviceMesh::<MeshSpec<Data<U2>>>::bind(
+        &[DeviceId::external(other, 0), DeviceId::external(other, 1)],
+        &machine_for(other),
+    )
+    .unwrap();
+    assert_ne!(
+        bound.fingerprint().digest(),
+        rebound.fingerprint().digest(),
+        "the namespace is digest identity, not decoration"
+    );
+
+    // Same namespace and name, bumped version: also a different digest, so an
+    // old plan refuses on mismatch instead of misreading.
+    let bumped = DeviceKey::new("acme", "npu", 2);
+    let rebumped = DeviceMesh::<MeshSpec<Data<U2>>>::bind(
+        &[DeviceId::external(bumped, 0), DeviceId::external(bumped, 1)],
+        &machine_for(bumped),
+    )
+    .unwrap();
+    assert_ne!(
+        bound.fingerprint().digest(),
+        rebumped.fingerprint().digest()
+    );
+}
+
+/// Same short device name, two namespaces: `bind` sees two families, because
+/// `DeviceKind` equality compares the whole key (D-110).
+#[test]
+fn two_external_namespaces_sharing_a_name_are_different_families() {
+    let acme = DeviceKey::new("acme", "npu", 1);
+    let emca = DeviceKey::new("emca", "npu", 1);
+    let machine = FakeMachine {
+        devices: vec![
+            (
+                DeviceId::external(acme, 0),
+                "ACME-0".to_string(),
+                "acme-1".to_string(),
+            ),
+            (
+                DeviceId::external(emca, 0),
+                "EMCA-0".to_string(),
+                "emca-1".to_string(),
+            ),
+        ],
+        severed: Vec::new(),
+        layout: ProcessLayout::SingleProcess,
+    };
+    let devices = vec![DeviceId::external(acme, 0), DeviceId::external(emca, 0)];
+
+    let err = DeviceMesh::<MeshSpec<Data<U2>>>::bind(&devices, &machine).unwrap_err();
+    assert!(matches!(err, BindError::MixedBackendFamily { rank: 1, .. }));
 }

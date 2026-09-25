@@ -294,9 +294,11 @@ A custom logical dtype is definable outside the workspace today: implement
 `TensorMeta`, capability queries (`CapabilityQuery.dtype`), the operation
 catalog, and the postcard state envelope all carry `DTypeDescriptor` and
 accept it unchanged. Devices likewise have an open identity:
-`DeviceKind::Custom(namespace)` and `DeviceId::custom(namespace, ordinal)`
-let a downstream backend name hardware Incin has never heard of; Incin does
-not interpret the namespace key.
+`DeviceKind::External(DeviceKey)` and `DeviceId::external(key, ordinal)`
+let a downstream backend name hardware Incin has never heard of with a
+versioned namespace/name key (D-110, issue #96); Incin interprets the key
+only for equality, digest, and refuse-on-mismatch. Maintained backends
+keep first-class `DeviceKind` variants.
 
 The surfaces that still carry the closed built-in `DTypeId` vocabulary as a
 `const` require the `BuiltinDType` bound explicitly, so a custom dtype is
@@ -311,9 +313,11 @@ refused at compile time rather than coerced onto a built-in's key (issue
 
 Two more sites match the closed builtin-ID set at runtime and return a typed
 error for `builtin_id() == None` instead: the backend kernel-table lookup and
-the `safetensors` snapshot export. `TensorElement` stays sealed (`SEC-005`):
-a custom dtype cannot supply its own Rust element type, so `PlainDType` and
-the typed target-layer constructors remain built-in-only. Each of these is a
-documented compile-time or typed-runtime refusal, never a silent fallback;
+the `safetensors` snapshot export. `TensorElement` is open under the POD
+bound (D-110, issue #96): a downstream POD newtype gets element access
+(slicing, typed construction, host interop) while the four closed
+subsystems above keep their `BuiltinDType` gates, so execution on
+unadvertised dtypes still refuses loudly. Each of these is a documented
+compile-time or typed-runtime refusal, never a silent fallback;
 descriptor-keying the remaining sites is tracked as a future phase under
 issue #96.

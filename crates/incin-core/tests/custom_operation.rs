@@ -16,7 +16,7 @@ use incin_core::exec::{
     Capabilities, ExecutionContext, OperationIdentity, ProofLevel, SupportLevel, op,
 };
 use incin_core::prelude::{
-    BackendError, Cpu, DTypeId, Device, DeviceId, Local, ShapeBuf, ShapeValue,
+    BackendError, Cpu, DTypeId, Device, DeviceId, DeviceKey, Local, ShapeBuf, ShapeValue,
 };
 use incin_core::tensor::tracing::{TracingBackend, extract_graph};
 
@@ -64,7 +64,10 @@ impl Device for CompanyDevice {
     }
 
     fn to_incin(_: &Self::Field) -> incin_core::prelude::Result<DeviceId> {
-        Ok(DeviceId::custom(0x434f_4d50_414e_5901, 7))
+        Ok(DeviceId::external(
+            DeviceKey::new("company.example", "npu", 1),
+            7,
+        ))
     }
 }
 
@@ -403,7 +406,10 @@ fn downstream_executor_receives_the_exact_shape_type() {
 #[test]
 fn downstream_device_implementation_keeps_custom_identity() {
     let identity = CompanyDevice::to_incin(&PhantomData).unwrap();
-    assert_eq!(identity.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+    assert_eq!(
+        identity.kind().external_key(),
+        Some(DeviceKey::new("company.example", "npu", 1))
+    );
     assert_eq!(identity.ordinal(), 7);
 }
 

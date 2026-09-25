@@ -649,9 +649,22 @@ impl TopologyFingerprint {
 
         digest = digest.number(self.devices.len() as u64);
         for identity in &self.devices {
+            let kind = identity.device.kind();
             digest = digest
-                .text(identity.device.kind().name())
-                .number(identity.device.ordinal() as u64)
+                .text(kind.name())
+                .number(identity.device.ordinal() as u64);
+            // The short `name()` is a diagnostic label, not an identity: two
+            // vendors can both ship an "npu". External families additionally
+            // hash their namespace and version, so a backend that bumps its
+            // topology encoding produces a different digest and old plans
+            // refuse on mismatch (D-110). Built-in families hash exactly what
+            // they always hashed.
+            if let Some(key) = kind.external_key() {
+                digest = digest
+                    .text(key.namespace())
+                    .number(u64::from(key.version()));
+            }
+            digest = digest
                 .text(&identity.persistent)
                 .text(&identity.architecture);
         }

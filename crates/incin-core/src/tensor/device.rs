@@ -417,9 +417,92 @@ impl Device for Cpu {
 // DeviceId and DeviceKind - runtime device identity
 // ============================================================================
 
+/// A stable, extensible device key for third-party backends.
+///
+/// Logical device identity is independent of any Rust type or any
+/// [`DeviceKind`] variant. Two devices are the same backend family when they
+/// have the same `DeviceKey`, paralleling [`DTypeKey`](crate::tensor::dtype::DTypeKey)
+/// (namespace + name + version).
+///
+/// Built-in Incin backends use first-class [`DeviceKind`] variants, not this
+/// type. Custom devices should use a project-specific namespace to avoid
+/// collisions; a backend that changes its topology encoding bumps the version
+/// so old plans refuse on mismatch instead of misreading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DeviceKey {
+    namespace: &'static str,
+    name: &'static str,
+    version: u32,
+}
+
+impl serde::Serialize for DeviceKey {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        (self.namespace, self.name, self.version).serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DeviceKey {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let (namespace, name, version) =
+            <(alloc::string::String, alloc::string::String, u32)>::deserialize(deserializer)?;
+        // The wire owns its strings; the key must be `'static`. Unlike
+        // `DTypeKey`, there is no device registry to recover canonical
+        // `&'static str` from, so the owned components are interned by
+        // leaking. One small allocation per deserialized key is the cost of
+        // an open device namespace without a central registry.
+        Ok(Self {
+            namespace: alloc::boxed::Box::leak(namespace.into_boxed_str()),
+            name: alloc::boxed::Box::leak(name.into_boxed_str()),
+            version,
+        })
+    }
+}
+
+impl DeviceKey {
+    /// Constructs a new `DeviceKey` from its three components.
+    ///
+    /// The combination of `(namespace, name, version)` must be unique across
+    /// all backends you use together. The `"incin"` namespace is reserved for
+    /// built-in Incin backends.
+    pub const fn new(namespace: &'static str, name: &'static str, version: u32) -> Self {
+        Self {
+            namespace,
+            name,
+            version,
+        }
+    }
+
+    /// The namespace component (e.g. `"acme"` for a third-party backend).
+    pub const fn namespace(self) -> &'static str {
+        self.namespace
+    }
+
+    /// The device name component (e.g. `"npu"`).
+    pub const fn name(self) -> &'static str {
+        self.name
+    }
+
+    /// The version component. Start at `1`; increment when the topology or
+    /// placement encoding changes in an incompatible way.
+    pub const fn version(self) -> u32 {
+        self.version
+    }
+}
+
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 /// The runtime-identifiable backend family a `DeviceId` belongs to.
+///
+/// Maintained backends get first-class variants. Third-party backends name
+/// themselves with [`DeviceKind::External`], which carries a [`DeviceKey`]
+/// owned by the external backend, so adding a backend does not require
+/// changing this enum (D-110, issue #96).
 pub enum DeviceKind {
     /// The CPU backend family.
     Cpu,
@@ -429,16 +512,23 @@ pub enum DeviceKind {
     Wgpu,
     /// The Metal backend family for Apple Silicon.
     Metal,
-    /// An externally defined backend family identified by a stable namespace key.
+    /// An externally defined backend family identified by a stable
+    /// namespace key.
     ///
     /// The key is owned by the external backend. Incin does not interpret it,
     /// so adding a backend does not require changing this enum.
-    Custom(u64),
+    External(DeviceKey),
 }
 
 impl DeviceKind {
     /// The lowercase name used in diagnostics, generated documentation, and
     /// `cargo incin doctor`'s report.
+    ///
+    /// External backends report their key's device name (e.g. `"npu"` for
+    /// `DeviceKey::new("acme", "npu", 1)`), so diagnostics name names instead
+    /// of opaque integers. The name alone is not an identity: plan digests
+    /// additionally hash the namespace and version (see
+    /// `dist::mesh::TopologyFingerprint::digest`).
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -446,14 +536,15 @@ impl DeviceKind {
             Self::Cuda => "cuda",
             Self::Wgpu => "wgpu",
             Self::Metal => "metal",
-            Self::Custom(_) => "custom",
+            Self::External(key) => key.name(),
         }
     }
 
-    /// Returns the external namespace key, if this is a custom backend kind.
-    pub const fn custom_key(self) -> Option<u64> {
+    /// Returns the external device key, if this is an externally defined
+    /// backend family.
+    pub const fn external_key(self) -> Option<DeviceKey> {
         match self {
-            Self::Custom(key) => Some(key),
+            Self::External(key) => Some(key),
             _ => None,
         }
     }
@@ -526,12 +617,12 @@ impl DeviceId {
 
     /// An externally defined backend device at ordinal `ord`.
     ///
-    /// `namespace` must be a stable key chosen by the external backend. The
-    /// key is carried through metadata and serialization without requiring
-    /// Incin to know the backend's type.
-    pub const fn custom(namespace: u64, ord: usize) -> Self {
+    /// `key` must be a stable [`DeviceKey`] chosen by the external backend
+    /// (namespace + name + version). The key is carried through metadata and
+    /// serialization without requiring Incin to know the backend's type.
+    pub const fn external(key: DeviceKey, ord: usize) -> Self {
         Self {
-            kind: DeviceKind::Custom(namespace),
+            kind: DeviceKind::External(key),
             ordinal: ord,
         }
     }
@@ -960,9 +1051,47 @@ mod tests {
 
     #[test]
     fn external_device_identity_is_open_and_stable() {
-        let id = DeviceId::custom(0x434f_4d50_414e_5901, 7);
-        assert_eq!(id.kind().name(), "custom");
-        assert_eq!(id.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+        let key = DeviceKey::new("acme", "npu", 1);
+        let id = DeviceId::external(key, 7);
+        assert_eq!(id.kind(), DeviceKind::External(key));
+        assert_eq!(id.kind().name(), "npu");
+        assert_eq!(id.kind().external_key(), Some(key));
         assert_eq!(id.ordinal(), 7);
+        assert_eq!(key.namespace(), "acme");
+        assert_eq!(key.name(), "npu");
+        assert_eq!(key.version(), 1);
+    }
+
+    #[test]
+    fn external_keys_distinguish_namespaces_sharing_a_name() {
+        // Two vendors shipping an "npu" are different families: digests and
+        // device sets must tell them apart even though `name()` reports the
+        // same short device name for both.
+        let acme = DeviceKey::new("acme", "npu", 1);
+        let emca = DeviceKey::new("emca", "npu", 1);
+        assert_ne!(acme, emca);
+        assert_eq!(DeviceId::external(acme, 0).kind().name(), "npu");
+        let set = DeviceSet::new([DeviceId::external(acme, 0), DeviceId::external(emca, 0)]);
+        assert_eq!(
+            set,
+            Err(DeviceSetError::Mixed {
+                first: DeviceKind::External(acme),
+                found: DeviceKind::External(emca),
+            })
+        );
+        // Same key at two ordinals is one family and a valid set.
+        let pair = DeviceSet::new([DeviceId::external(acme, 0), DeviceId::external(acme, 1)])
+            .expect("two ordinals of one external family are a valid set");
+        assert_eq!(pair.kind(), Some(DeviceKind::External(acme)));
+    }
+
+    #[test]
+    fn external_device_identity_round_trips_through_serde() {
+        let id = DeviceId::external(DeviceKey::new("acme", "npu", 2), 3);
+        let wire = serde_json::to_string(&id).expect("a device id always serializes");
+        let recovered: DeviceId =
+            serde_json::from_str(&wire).expect("an external device id reads back");
+        assert_eq!(recovered, id);
+        assert_eq!(recovered.kind().name(), "npu");
     }
 }

@@ -267,6 +267,35 @@ fixtures in `crates/incin-core/tests/compile_fail/`
 `rust-version = "1.88"`, verified by a CI job pinned to exactly that toolchain
 rather than asserted. 1.87 is refused by the dependency graph.
 
+### External device identity replaces the opaque custom key (#96)
+
+`DeviceKind::Custom(u64)`, `DeviceId::custom(namespace, ord)`, and
+`DeviceKind::custom_key()` are removed (breaking is accepted pre-1.0, D-110).
+Third-party backends now name themselves with
+`DeviceKind::External(DeviceKey)`, a structured namespace + name + version
+key paralleling `DTypeKey`:
+
+```rust,ignore
+// before
+let id = DeviceId::custom(0x434f_4d50_414e_5901, 7);
+let key: Option<u64> = id.kind().custom_key();
+// after
+let key = DeviceKey::new("acme", "npu", 1);
+let id = DeviceId::external(key, 7);
+let recovered: Option<DeviceKey> = id.kind().external_key();
+```
+
+`DeviceKey`, `DeviceId::external`, and `DeviceKind::external_key` are exported
+from the `incin` root and prelude. `DeviceKind::name()` reports the key's
+device name (e.g. `"npu"`) instead of `"custom"`. Plan digests hash the
+namespace and version beside the name, so two vendors shipping an `"npu"`
+(or one vendor bumping its topology version) produce different digests and
+old plans refuse on mismatch. Device sets, mesh binding, and `to_device`
+compare the whole key: two namespaces sharing a name are different families
+(`DeviceSetError::Mixed` / `BindError::MixedBackendFamily`). The public-api
+baseline drift from the removal is recorded with the change, not regenerated
+here.
+
 ## R1 execution-policy migration
 
 `ExecutionPolicy` now defaults to `FallbackPolicy::AllowComposition`: operations
@@ -286,10 +315,14 @@ it was not a general execution guarantee.
 
 `DType` and `ConstDType` remain extensible for downstream logical dtypes that
 provide their own `DTypeDescriptor`; no `DTypeId` variant is required. The
-`TensorElement` marker is intentionally different: its implementation set is
-sealed to Incin's built-in scalar element types. Downstream code must not
-implement `TensorElement` for a custom Rust type. Block-quantized logical dtypes
-such as `Q8_0` likewise do not implement `PlainDType` or `TensorElement`.
+`TensorElement` marker is open since D-110 (issue #96): any plain-old-data
+newtype satisfying `bytemuck::NoUninit + Zeroable + Copy + Debug + Send +
+Sync + 'static` implements `TensorElement` through the blanket impl,
+including types from downstream crates. Block-quantized logical dtypes
+such as `Q8_0` still do not implement `PlainDType` or `TensorElement`, and
+the closed subsystems (distributed static planners/digests, kernel-table
+fast paths, catalog exact rules, the `safetensors` export) still require
+`BuiltinDType` or refuse unknown descriptors with a typed error.
 
 ---
 

@@ -1,5 +1,4 @@
 use super::*;
-use crate::tensor::dtype::traits::sealed;
 
 // ============================================================================
 // Q8_0 logical dtype marker
@@ -35,8 +34,6 @@ pub struct Q8_0;
 
 macro_rules! impl_plain_builtin_dtype {
     ($repr:ident, $t:ty, $kind:expr, $encoding:expr, $name:expr) => {
-        impl sealed::TensorElementSealed for $t {}
-
         impl DType for $t {
             /// No argument needed - the dtype is fixed by the Rust type itself.
             type Arg = ();
@@ -159,8 +156,6 @@ impl ConstDType for bool {
 impl BuiltinDType for bool {
     const DTYPE: DTypeId = DTypeId::Bool;
 }
-
-impl sealed::TensorElementSealed for bool {}
 
 impl PlainDType for bool {
     type Elem = bool;

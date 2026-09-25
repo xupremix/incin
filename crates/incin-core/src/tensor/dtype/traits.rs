@@ -88,7 +88,7 @@ pub trait ConstDType: DType<Arg = ()> {
 /// (state/postcard serialization, registry-backed dtype descriptors,
 /// descriptor-keyed capability and catalog layers).
 ///
-/// See issue #96 and `PROPOSALS.md` (TensorElement seal decision) for the
+/// See issue #96 and `PROPOSALS.md` (D-110 TensorElement seal decision) for the
 /// record of which surfaces stay closed and why.
 pub trait BuiltinDType: ConstDType {
     /// The built-in `DTypeId` for this dtype.
@@ -99,39 +99,32 @@ pub trait BuiltinDType: ConstDType {
 // TensorElement - ordinary Rust POD scalar element
 // ============================================================================
 
-pub(super) mod sealed {
-    pub trait TensorElementSealed {}
-}
-
-/// Marker trait enforcing that a tensor element type is POD, Zeroable, safe,
-/// and sealed (`SEC-005`). The set of implementors is limited to Incin's
-/// built-in scalar element types; custom logical [`DType`] implementations
-/// remain supported, but cannot provide a custom [`TensorElement`].
+/// Marker trait enforcing that a tensor element type is plain old data:
+/// every byte pattern the backend stores for values of this type must read
+/// back as a valid value of this type through host extraction.
+///
+/// The set of implementors is open (D-110, issue #96): any type satisfying
+/// the bounds below implements [`TensorElement`] through the blanket impl,
+/// including types from downstream crates. `f16`/`bf16` (foreign `half`-crate
+/// types) are the precedent that non-primitive POD types already qualify.
 ///
 /// Only scalar (non-block) dtypes have a `TensorElement`. Block-quantized
 /// dtypes such as `Q8_0` do NOT implement this - their physical representation
 /// is backend-specific and carries no per-element Rust type.
+///
+/// Closed consumers keep their own gates: distributed static planners and
+/// plan digests, the backend kernel-table fast paths, the catalog exact
+/// rules, and the `safetensors` export still require [`BuiltinDType`] or
+/// refuse unknown descriptors with a typed error. Opening this bound admits
+/// element access (slicing, typed construction, host interop); it does not
+/// admit execution on backends that never advertised the dtype.
 pub trait TensorElement:
-    sealed::TensorElementSealed
-    + bytemuck::NoUninit
-    + bytemuck::Zeroable
-    + Copy
-    + Debug
-    + Send
-    + Sync
-    + 'static
+    bytemuck::NoUninit + bytemuck::Zeroable + Copy + Debug + Send + Sync + 'static
 {
 }
 
 impl<T> TensorElement for T where
-    T: sealed::TensorElementSealed
-        + bytemuck::NoUninit
-        + bytemuck::Zeroable
-        + Copy
-        + Debug
-        + Send
-        + Sync
-        + 'static
+    T: bytemuck::NoUninit + bytemuck::Zeroable + Copy + Debug + Send + Sync + 'static
 {
 }
 

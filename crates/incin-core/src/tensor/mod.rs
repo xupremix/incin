@@ -47,7 +47,8 @@ pub mod prelude {
     pub use super::base::PlacedTensorError;
     pub use super::base::Tensor;
     pub use super::device::{
-        ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+        ConstDevice, Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet,
+        DeviceSetError,
     };
     #[cfg(feature = "cuda")]
     pub use super::device::{Cuda, CudaN};

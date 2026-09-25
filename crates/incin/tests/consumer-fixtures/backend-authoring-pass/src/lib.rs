@@ -7,7 +7,7 @@ use incin::backend_authoring::{
     ExecutionDescriptor, ExecutionRequest, Operation, OperationKey, ShapeBuf, StorageBackend,
     StorageTransfer, SupportLevel, SupportsDType, TensorBackend, TensorMeta, VariableBackend,
 };
-use incin::prelude::{BackendError, Cpu, DType, DTypeDescriptor, DTypeId, DeviceId};
+use incin::prelude::{BackendError, Cpu, DType, DTypeDescriptor, DTypeId, DeviceId, DeviceKey};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CompanyAttributes {
@@ -335,8 +335,9 @@ where
 }
 
 pub fn external_device_identity_contract() -> DeviceId {
-    let device = DeviceId::custom(0x434f_4d50_414e_5901, 7);
-    assert_eq!(device.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+    let key = DeviceKey::new("acme", "npu", 1);
+    let device = DeviceId::external(key, 7);
+    assert_eq!(device.kind().external_key(), Some(key));
     assert_eq!(device.ordinal(), 7);
     device
 }

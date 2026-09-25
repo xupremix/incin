@@ -217,6 +217,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// parameter to get wrong. The untyped `to_vec1` remains for `Dyn`-dtype
     /// tensors, whose element type is only known at runtime.
     ///
+    /// Element types the untyped extractor names (the built-ins) take exactly
+    /// the path they always took, including `bool`'s per-byte validation.
+    /// Any other `TensorElement` - post-D-110 this includes downstream POD
+    /// newtypes - is read through a size contract against the descriptor's
+    /// encoding instead: the chunk width must equal both `size_of::<Elem>()`
+    /// and the encoding's scalar width. Cross-type reinterpretation is
+    /// impossible here because the compiler pins the output to `K::Elem`;
+    /// what the size contract cannot check is whether a backend fabricated
+    /// byte patterns that are not valid values of a niche-carrying `Elem`,
+    /// which is why [`TensorElement`](crate::tensor::dtype::TensorElement)
+    /// documents the valid-value round-trip
+    /// as the implementor's proof obligation.
+    ///
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
@@ -232,7 +245,54 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         B: HostInterop,
         K: crate::tensor::dtype::PlainDType,
     {
-        self.to_vec1::<K::Elem>()
+        if is_valid_scalar_type::<K::Elem>() {
+            return self.to_vec1::<K::Elem>();
+        }
+        let bytes = B::to_bytes(&self.inner)?;
+        let num_elements = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Storage,
+        )?;
+        let dtype = self.dtype();
+        let elem_size = core::mem::size_of::<K::Elem>();
+        let expected_elem_size = dtype.encoding().scalar_bytes().ok_or_else(|| {
+            crate::err::Error::Msg(alloc::format!(
+                "Element extraction requires a scalar encoding. Tensor dtype {:?} is block-packed and has no per-element Rust type",
+                dtype,
+            ))
+        })?;
+        if elem_size != expected_elem_size {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Element size mismatch converting to vec. Tensor dtype {:?} element size {} vs element type {} size {}",
+                dtype,
+                expected_elem_size,
+                core::any::type_name::<K::Elem>(),
+                elem_size,
+            )));
+        }
+        let expected_bytes = num_elements.checked_mul(elem_size).ok_or(
+            crate::shapes::error::ShapeError::ArithmeticOverflow {
+                operation: crate::shapes::error::OperationKind::Storage,
+                expression: "element count * element size",
+            },
+        )?;
+        if bytes.len() != expected_bytes {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",
+                bytes.len(),
+                expected_bytes,
+            )));
+        }
+        let mut out = alloc::vec::Vec::with_capacity(num_elements);
+        for chunk in bytes.chunks_exact(elem_size) {
+            // SAFETY: `chunk` is exactly `size_of::<K::Elem>()` bytes, and
+            // `K::Elem` is this dtype's own stored element type (pinned by
+            // the `PlainDType` bound, not chosen by the caller), whose
+            // implementor upholds `TensorElement`'s valid-value round-trip.
+            let val = unsafe { core::ptr::read_unaligned(chunk.as_ptr() as *const K::Elem) };
+            out.push(val);
+        }
+        Ok(out)
     }
 
     /// Extracts a 1D vector of scalars from this tensor.
