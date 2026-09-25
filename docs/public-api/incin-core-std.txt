@@ -46,6 +46,16 @@
 #[non_exhaustive] pub enum incin_core::tensor::prelude::DeviceKind
 #[non_exhaustive] pub enum incin_core::tensor::prelude::DevicePreference
 #[non_exhaustive] pub enum incin_core::tensor::prelude::DeviceSetError
+#[repr(transparent)] pub struct incin_core::prelude::F8E4M3(_)
+#[repr(transparent)] pub struct incin_core::prelude::F8E5M2(_)
+#[repr(transparent)] pub struct incin_core::tensor::dtype::F8E4M3(_)
+#[repr(transparent)] pub struct incin_core::tensor::dtype::F8E5M2(_)
+#[repr(transparent)] pub struct incin_core::tensor::prelude::F8E4M3(_)
+#[repr(transparent)] pub struct incin_core::tensor::prelude::F8E5M2(_)
+impl bytemuck::no_uninit::NoUninit for incin_core::prelude::F8E4M3
+impl bytemuck::no_uninit::NoUninit for incin_core::prelude::F8E5M2
+impl bytemuck::zeroable::Zeroable for incin_core::prelude::F8E4M3
+impl bytemuck::zeroable::Zeroable for incin_core::prelude::F8E5M2
 impl core::cmp::Eq for incin_core::exec::precision::LossScaling
 impl core::cmp::PartialEq<&[usize]> for incin_core::shapes::ShapeBuf
 impl core::cmp::PartialEq<alloc::vec::Vec<usize>> for incin_core::shapes::ShapeBuf
@@ -74,6 +84,8 @@ impl core::convert::From<incin_core::exec::catalog::DescriptorError> for incin_c
 impl core::convert::From<incin_core::exec::dispatch::CanonicalError> for incin_core::error::Error
 impl core::convert::From<incin_core::exec::meta::MetaError> for incin_core::error::Error
 impl core::convert::From<incin_core::prelude::DTypeId> for incin_core::prelude::DTypeDescriptor
+impl core::convert::From<incin_core::prelude::F8E4M3> for f32
+impl core::convert::From<incin_core::prelude::F8E5M2> for f32
 impl core::convert::From<incin_core::shapes::ShapeBuf> for alloc::vec::Vec<usize>
 impl core::convert::From<incin_core::shapes::ShapeError> for incin_core::exec::catalog::DescriptorError
 impl core::convert::From<incin_core::shapes::ShapeError> for incin_core::exec::meta::MetaError
@@ -102,6 +114,8 @@ impl core::error::Error for incin_core::tensor::device::DeviceSetError
 impl core::fmt::Debug for incin_core::error::Error
 impl core::fmt::Debug for incin_core::error::ErrorMessage
 impl core::fmt::Debug for incin_core::exec::request::TensorHandle<'_>
+impl core::fmt::Debug for incin_core::prelude::F8E4M3
+impl core::fmt::Debug for incin_core::prelude::F8E5M2
 impl core::fmt::Debug for incin_core::shapes::ShapeBuf
 impl core::fmt::Debug for incin_core::shapes::StrideBuf
 impl core::fmt::Display for incin_core::error::ConversionFailure
@@ -728,6 +742,8 @@ impl incin_core::prelude::BuiltinDType for f64
 impl incin_core::prelude::BuiltinDType for half::bfloat::bf16
 impl incin_core::prelude::BuiltinDType for half::binary16::f16
 impl incin_core::prelude::BuiltinDType for i64
+impl incin_core::prelude::BuiltinDType for incin_core::prelude::F8E4M3
+impl incin_core::prelude::BuiltinDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::BuiltinDType for incin_core::prelude::Q8_0
 impl incin_core::prelude::BuiltinDType for u32
 impl incin_core::prelude::BuiltinDType for u8
@@ -737,6 +753,8 @@ impl incin_core::prelude::ConstDType for f64
 impl incin_core::prelude::ConstDType for half::bfloat::bf16
 impl incin_core::prelude::ConstDType for half::binary16::f16
 impl incin_core::prelude::ConstDType for i64
+impl incin_core::prelude::ConstDType for incin_core::prelude::F8E4M3
+impl incin_core::prelude::ConstDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::ConstDType for incin_core::prelude::Q8_0
 impl incin_core::prelude::ConstDType for u32
 impl incin_core::prelude::ConstDType for u8
@@ -746,6 +764,8 @@ impl incin_core::prelude::DType for f64
 impl incin_core::prelude::DType for half::bfloat::bf16
 impl incin_core::prelude::DType for half::binary16::f16
 impl incin_core::prelude::DType for i64
+impl incin_core::prelude::DType for incin_core::prelude::F8E4M3
+impl incin_core::prelude::DType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::DType for incin_core::prelude::Q8_0
 impl incin_core::prelude::DType for incin_core::shapes::Dyn
 impl incin_core::prelude::DType for u32
@@ -754,10 +774,14 @@ impl incin_core::prelude::DTypeDescriptor
 impl incin_core::prelude::DTypeId
 impl incin_core::prelude::DTypeKey
 impl incin_core::prelude::DTypeRegistry
+impl incin_core::prelude::F8E4M3
+impl incin_core::prelude::F8E5M2
 impl incin_core::prelude::FloatDType for f32
 impl incin_core::prelude::FloatDType for f64
 impl incin_core::prelude::FloatDType for half::bfloat::bf16
 impl incin_core::prelude::FloatDType for half::binary16::f16
+impl incin_core::prelude::FloatDType for incin_core::prelude::F8E4M3
+impl incin_core::prelude::FloatDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::IntDType for i64
 impl incin_core::prelude::IntDType for u32
 impl incin_core::prelude::IntDType for u8
@@ -767,6 +791,8 @@ impl incin_core::prelude::PlainDType for f64
 impl incin_core::prelude::PlainDType for half::bfloat::bf16
 impl incin_core::prelude::PlainDType for half::binary16::f16
 impl incin_core::prelude::PlainDType for i64
+impl incin_core::prelude::PlainDType for incin_core::prelude::F8E4M3
+impl incin_core::prelude::PlainDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::PlainDType for u32
 impl incin_core::prelude::PlainDType for u8
 impl incin_core::prelude::QuantDType for incin_core::prelude::Q8_0
@@ -875,6 +901,7 @@ impl incin_core::tensor::device::DeviceKey
 impl incin_core::tensor::device::DeviceKind
 impl incin_core::tensor::device::DeviceSet
 impl incin_core::tensor::device::MetalDevice
+impl incin_core::tensor::device::RocmDevice
 impl incin_core::tensor::device::WgpuDevice
 impl incin_core::tensor::dtype::StorageEncoding
 impl incin_core::tensor::grad::ConstRequiresGrad for incin_core::tensor::grad::Grad
@@ -3006,6 +3033,10 @@ pub const fn incin_core::prelude::DTypeKey::name(self) -> &'static str
 pub const fn incin_core::prelude::DTypeKey::namespace(self) -> &'static str
 pub const fn incin_core::prelude::DTypeKey::new(&'static str, &'static str, u32) -> Self
 pub const fn incin_core::prelude::DTypeKey::version(self) -> u32
+pub const fn incin_core::prelude::F8E4M3::from_bits(u8) -> Self
+pub const fn incin_core::prelude::F8E4M3::to_bits(self) -> u8
+pub const fn incin_core::prelude::F8E5M2::from_bits(u8) -> Self
+pub const fn incin_core::prelude::F8E5M2::to_bits(self) -> u8
 pub const fn incin_core::shapes::AxisKey::name(self) -> &'static str
 pub const fn incin_core::shapes::AxisKey::new(&'static str, &'static str) -> Self
 pub const fn incin_core::shapes::AxisKey::schema(self) -> &'static str
@@ -3029,9 +3060,11 @@ pub const fn incin_core::tensor::device::DeviceKey::version(self) -> u32
 pub const fn incin_core::tensor::device::DeviceKind::external_key(self) -> core::option::Option<incin_core::tensor::device::DeviceKey>
 pub const fn incin_core::tensor::device::DeviceKind::name(self) -> &'static str
 pub const fn incin_core::tensor::device::MetalDevice::ordinal(self) -> usize
+pub const fn incin_core::tensor::device::RocmDevice::ordinal(self) -> usize
 pub const fn incin_core::tensor::device::WgpuDevice::ordinal(self) -> usize
 pub const fn incin_core::tensor::device::cuda_is_available() -> bool
 pub const fn incin_core::tensor::device::metal_is_available() -> bool
+pub const fn incin_core::tensor::device::rocm_is_available() -> bool
 pub const fn incin_core::tensor::device::wgpu_is_available() -> bool
 pub const fn incin_core::tensor::dtype::StorageEncoding::alignment(self) -> usize
 pub const fn incin_core::tensor::dtype::StorageEncoding::block(usize, usize, usize) -> Self
@@ -3445,6 +3478,14 @@ pub const incin_core::prelude::Dim::NAME: core::option::Option<&'static str>
 pub const incin_core::prelude::Dim::STATIC: incin_core::shapes::StaticExtent
 pub const incin_core::prelude::Dim::STATIC_SIZE: bool
 pub const incin_core::prelude::Dim::STATIC_VALID: ()
+pub const incin_core::prelude::F8E4M3::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
+pub const incin_core::prelude::F8E4M3::DTYPE: incin_core::prelude::DTypeId
+pub const incin_core::prelude::F8E4M3::MAX: Self
+pub const incin_core::prelude::F8E4M3::NAN: Self
+pub const incin_core::prelude::F8E5M2::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
+pub const incin_core::prelude::F8E5M2::DTYPE: incin_core::prelude::DTypeId
+pub const incin_core::prelude::F8E5M2::MAX: Self
+pub const incin_core::prelude::F8E5M2::NAN: Self
 pub const incin_core::prelude::INLINE_RANK: usize
 pub const incin_core::prelude::Layout::PROOF: incin_core::exec::ProofLevel
 pub const incin_core::prelude::Layout::STATIC_OFFSET: core::option::Option<usize>
@@ -4975,6 +5016,8 @@ pub fn core::option::Option<T>::summary_with_stats(&self, u64) -> alloc::string:
 pub fn core::option::Option<T>::to_device(self, &<NewD as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self::Output>
 pub fn core::option::Option<T>::train(&mut self)
 pub fn f32::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
+pub fn f32::from(incin_core::prelude::F8E4M3) -> Self
+pub fn f32::from(incin_core::prelude::F8E5M2) -> Self
 pub fn f32::init(Self::Arg) -> Self::Field
 pub fn f32::into_arg(self) -> f32
 pub fn f64::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
@@ -7714,6 +7757,23 @@ pub fn incin_core::prelude::DynShape::checked_numel(&incin_core::shapes::ShapeBu
 pub fn incin_core::prelude::DynShape::numel(&incin_core::shapes::ShapeBuf) -> usize
 pub fn incin_core::prelude::DynShape::rank(&incin_core::shapes::ShapeBuf) -> usize
 pub fn incin_core::prelude::EmbeddingShape::build_args((<Self::Vocab as incin_core::shapes::Dim>::Arg, <Self::Embed as incin_core::shapes::Dim>::Arg)) -> Self::BuildArg
+pub fn incin_core::prelude::F8E4M3::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
+pub fn incin_core::prelude::F8E4M3::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_core::prelude::F8E4M3::from_f32(f32) -> Self
+pub fn incin_core::prelude::F8E4M3::from_f64(f64) -> Self
+pub fn incin_core::prelude::F8E4M3::init(Self::Arg) -> Self::Field
+pub fn incin_core::prelude::F8E4M3::is_nan(self) -> bool
+pub fn incin_core::prelude::F8E4M3::to_f32(self) -> f32
+pub fn incin_core::prelude::F8E4M3::to_f64(self) -> f64
+pub fn incin_core::prelude::F8E5M2::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
+pub fn incin_core::prelude::F8E5M2::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn incin_core::prelude::F8E5M2::from_f32(f32) -> Self
+pub fn incin_core::prelude::F8E5M2::from_f64(f64) -> Self
+pub fn incin_core::prelude::F8E5M2::init(Self::Arg) -> Self::Field
+pub fn incin_core::prelude::F8E5M2::is_infinite(self) -> bool
+pub fn incin_core::prelude::F8E5M2::is_nan(self) -> bool
+pub fn incin_core::prelude::F8E5M2::to_f32(self) -> f32
+pub fn incin_core::prelude::F8E5M2::to_f64(self) -> f64
 pub fn incin_core::prelude::GradJoin::join_field(&<Self as incin_core::tensor::grad::RequiresGrad>::Field, &<Rhs as incin_core::tensor::grad::RequiresGrad>::Field) -> <<Self as incin_core::tensor::grad::GradJoin<Rhs>>::Output as incin_core::tensor::grad::RequiresGrad>::Field where Self: incin_core::tensor::grad::RequiresGrad
 pub fn incin_core::prelude::LRScheduler::get_lr(&self) -> f64
 pub fn incin_core::prelude::LRScheduler::step(&mut self)
@@ -7843,6 +7903,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::floor(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where K: incin_core::tensor::ops::quantization::FloatCapable, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Floor>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Floor>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::frac(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where K: incin_core::tensor::ops::quantization::FloatCapable, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Frac>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Frac>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::from_bytes<A>(&[u8], A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromBytes> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromBytes>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::from_dtype_scaled<T2>(&self, f32) -> incin_core::error::Result<incin_core::shapes::layout::Dense<S, B, T2, G, incin_core::dist::placement::Local>> where K: incin_core::prelude::FloatDType, T2: incin_core::prelude::FloatDType, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::from_raw<A>(<B as incin_core::backend_authoring::StorageBackend>::Storage, A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::from_slice<A>(&[<K as incin_core::prelude::PlainDType>::Elem], A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, K: incin_core::prelude::PlainDType, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromData> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TensorFromData>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::full<Sc: core::convert::Into<incin_core::tensor::backend::ScalarValue>, A>(Sc, A) -> incin_core::error::Result<Self> where A: incin_core::tensor::arg_into::ArgInto<<(S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G) as incin_core::tensor::arg::TensorArgs<S, K, <B as incin_core::backend_authoring::StorageBackend>::Device, G>>::Args>, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Full>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
@@ -7912,6 +7973,7 @@ pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Loca
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::tan(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where K: incin_core::tensor::ops::quantization::FloatCapable, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tan>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tan>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::tanh(&self) -> incin_core::error::Result<incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, incin_core::shapes::layout::RowMajor>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tanh>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tanh>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::to_dtype<T2: incin_core::prelude::DType<Arg = ()>>(&self) -> incin_core::error::Result<incin_core::shapes::layout::Dense<S, B, T2, G, incin_core::dist::placement::Local>> where B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::to_dtype_scaled<T2>(&self, f32) -> incin_core::error::Result<incin_core::shapes::layout::Dense<S, B, T2, G, incin_core::dist::placement::Local>> where K: incin_core::prelude::FloatDType, T2: incin_core::prelude::FloatDType, B: incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::DivScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType> + incin_core::exec::capability::Capabilities, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::DivScalar>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::to_scalar<E: core::marker::Copy + 'static>(&self) -> incin_core::error::Result<E> where B: incin_core::backend_authoring::HostInterop
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::to_vec1<E: core::marker::Copy + 'static>(&self) -> incin_core::error::Result<alloc::vec::Vec<E>> where B: incin_core::backend_authoring::HostInterop
 pub fn incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>::to_vec_elem(&self) -> incin_core::error::Result<alloc::vec::Vec<<K as incin_core::prelude::PlainDType>::Elem>> where B: incin_core::backend_authoring::HostInterop, K: incin_core::prelude::PlainDType
@@ -8360,6 +8422,7 @@ pub fn incin_core::tensor::device::DeviceId::cuda(usize) -> Self
 pub fn incin_core::tensor::device::DeviceId::default() -> Self
 pub fn incin_core::tensor::device::DeviceId::into_arg(self) -> incin_core::tensor::device::DeviceId
 pub fn incin_core::tensor::device::DeviceId::metal(usize) -> Self
+pub fn incin_core::tensor::device::DeviceId::rocm(usize) -> Self
 pub fn incin_core::tensor::device::DeviceId::wgpu(usize) -> Self
 pub fn incin_core::tensor::device::DeviceKey::deserialize<D>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error> where D: serde_core::de::Deserializer<'de>
 pub fn incin_core::tensor::device::DeviceKey::serialize<S>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error> where S: serde_core::ser::Serializer
@@ -8376,6 +8439,7 @@ pub fn incin_core::tensor::device::DeviceSet::primary(&self) -> incin_core::tens
 pub fn incin_core::tensor::device::DeviceSet::wgpu(impl core::iter::traits::collect::IntoIterator<Item = usize>) -> core::result::Result<Self, incin_core::tensor::device::DeviceSetError>
 pub fn incin_core::tensor::device::DeviceSetError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn incin_core::tensor::device::MetalDevice::new(usize) -> Self
+pub fn incin_core::tensor::device::RocmDevice::new(usize) -> Self
 pub fn incin_core::tensor::device::WgpuDevice::new(usize) -> Self
 pub fn incin_core::tensor::dtype::DType::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
 pub fn incin_core::tensor::dtype::DType::init(Self::Arg) -> Self::Field
@@ -10620,6 +10684,8 @@ pub incin_core::prelude::DTypeId::Bool
 pub incin_core::prelude::DTypeId::F16
 pub incin_core::prelude::DTypeId::F32
 pub incin_core::prelude::DTypeId::F64
+pub incin_core::prelude::DTypeId::F8E4M3
+pub incin_core::prelude::DTypeId::F8E5M2
 pub incin_core::prelude::DTypeId::I64
 pub incin_core::prelude::DTypeId::Q8_0
 pub incin_core::prelude::DTypeId::U32
@@ -10635,6 +10701,7 @@ pub incin_core::prelude::DeviceKind::Cpu
 pub incin_core::prelude::DeviceKind::Cuda
 pub incin_core::prelude::DeviceKind::External(incin_core::tensor::device::DeviceKey)
 pub incin_core::prelude::DeviceKind::Metal
+pub incin_core::prelude::DeviceKind::Rocm
 pub incin_core::prelude::DeviceKind::Wgpu
 pub incin_core::prelude::DevicePreference::Cpu
 pub incin_core::prelude::DevicePreference::Exactly(incin_core::tensor::device::DeviceSet)
@@ -11997,6 +12064,7 @@ pub incin_core::tensor::device::DeviceKind::Cpu
 pub incin_core::tensor::device::DeviceKind::Cuda
 pub incin_core::tensor::device::DeviceKind::External(incin_core::tensor::device::DeviceKey)
 pub incin_core::tensor::device::DeviceKind::Metal
+pub incin_core::tensor::device::DeviceKind::Rocm
 pub incin_core::tensor::device::DeviceKind::Wgpu
 pub incin_core::tensor::device::DevicePreference::Cpu
 pub incin_core::tensor::device::DevicePreference::Exactly(incin_core::tensor::device::DeviceSet)
@@ -12012,6 +12080,8 @@ pub incin_core::tensor::dtype::DTypeId::Bool
 pub incin_core::tensor::dtype::DTypeId::F16
 pub incin_core::tensor::dtype::DTypeId::F32
 pub incin_core::tensor::dtype::DTypeId::F64
+pub incin_core::tensor::dtype::DTypeId::F8E4M3
+pub incin_core::tensor::dtype::DTypeId::F8E5M2
 pub incin_core::tensor::dtype::DTypeId::I64
 pub incin_core::tensor::dtype::DTypeId::Q8_0
 pub incin_core::tensor::dtype::DTypeId::U32
@@ -12038,6 +12108,8 @@ pub incin_core::tensor::prelude::DTypeId::Bool
 pub incin_core::tensor::prelude::DTypeId::F16
 pub incin_core::tensor::prelude::DTypeId::F32
 pub incin_core::tensor::prelude::DTypeId::F64
+pub incin_core::tensor::prelude::DTypeId::F8E4M3
+pub incin_core::tensor::prelude::DTypeId::F8E5M2
 pub incin_core::tensor::prelude::DTypeId::I64
 pub incin_core::tensor::prelude::DTypeId::Q8_0
 pub incin_core::tensor::prelude::DTypeId::U32
@@ -12053,6 +12125,7 @@ pub incin_core::tensor::prelude::DeviceKind::Cpu
 pub incin_core::tensor::prelude::DeviceKind::Cuda
 pub incin_core::tensor::prelude::DeviceKind::External(incin_core::tensor::device::DeviceKey)
 pub incin_core::tensor::prelude::DeviceKind::Metal
+pub incin_core::tensor::prelude::DeviceKind::Rocm
 pub incin_core::tensor::prelude::DeviceKind::Wgpu
 pub incin_core::tensor::prelude::DevicePreference::Cpu
 pub incin_core::tensor::prelude::DevicePreference::Exactly(incin_core::tensor::device::DeviceSet)
@@ -12192,6 +12265,7 @@ pub mod incin_core::tensor::grad
 pub mod incin_core::tensor::matmul
 pub mod incin_core::tensor::ops
 pub mod incin_core::tensor::ops::binary
+pub mod incin_core::tensor::ops::fp8
 pub mod incin_core::tensor::ops::index
 pub mod incin_core::tensor::ops::loss
 pub mod incin_core::tensor::ops::manipulation
@@ -13602,6 +13676,7 @@ pub struct incin_core::tensor::device::DeviceId
 pub struct incin_core::tensor::device::DeviceKey
 pub struct incin_core::tensor::device::DeviceSet
 pub struct incin_core::tensor::device::MetalDevice
+pub struct incin_core::tensor::device::RocmDevice
 pub struct incin_core::tensor::device::WgpuDevice
 pub struct incin_core::tensor::dtype::DTypeDescriptor
 pub struct incin_core::tensor::dtype::DTypeKey
@@ -14807,6 +14882,12 @@ pub type incin_core::prelude::EmbeddingShape::BuildArg: incin_core::tensor::arg_
 pub type incin_core::prelude::EmbeddingShape::Embed: incin_core::shapes::Dim
 pub type incin_core::prelude::EmbeddingShape::Vocab: incin_core::shapes::Dim
 pub type incin_core::prelude::EmbeddingShape::WeightShape: incin_core::shapes::Shape<Arg = Self::BuildArg> + incin_core::shapes::DynShape
+pub type incin_core::prelude::F8E4M3::Arg = ()
+pub type incin_core::prelude::F8E4M3::Elem = incin_core::prelude::F8E4M3
+pub type incin_core::prelude::F8E4M3::Field = core::marker::PhantomData<incin_core::prelude::F8E4M3>
+pub type incin_core::prelude::F8E5M2::Arg = ()
+pub type incin_core::prelude::F8E5M2::Elem = incin_core::prelude::F8E5M2
+pub type incin_core::prelude::F8E5M2::Field = core::marker::PhantomData<incin_core::prelude::F8E5M2>
 pub type incin_core::prelude::FlatDim<A, B> = typenum::operator_aliases::Prod<A, B>
 pub type incin_core::prelude::GradJoin::Output: incin_core::tensor::grad::RequiresGrad
 pub type incin_core::prelude::JoinedGrad<L, R> = <L as incin_core::tensor::grad::GradJoin<R>>::Output

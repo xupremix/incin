@@ -32,6 +32,8 @@ declare -A explained=(
     [crates/incin-backends/src/cuda/backend/elementwise.rs]=1
     [crates/incin-core/src/nn/state.rs]=1
     [crates/incin-core/src/serialize.rs]=1
+    [crates/incin-backends/src/cpu/ops/shape_ops/tests.rs]=1
+    [crates/incin-core/src/tensor/device.rs]=1
 )
 
 mapfile -t actual < <(

@@ -953,6 +953,7 @@ pub incin_backends::capability::BackendCoverageRow::cpu_rules: usize
 pub incin_backends::capability::BackendCoverageRow::cuda_rules: usize
 pub incin_backends::capability::BackendCoverageRow::metal_rules: usize
 pub incin_backends::capability::BackendCoverageRow::operation: incin_core::shapes::error::OperationKind
+pub incin_backends::capability::BackendCoverageRow::rocm_rules: usize
 pub incin_backends::capability::BackendCoverageRow::wgpu_rules: usize
 pub incin_backends::codegen::CpuJitKernel::definition: incin_backends::codegen::ir::KernelDefinition
 pub incin_backends::codegen::IrBinaryOp::Add
@@ -1144,6 +1145,8 @@ pub incin_backends::cpu::CpuBuffer::Bool(alloc::vec::Vec<u8>)
 pub incin_backends::cpu::CpuBuffer::F16(alloc::vec::Vec<half::binary16::f16>)
 pub incin_backends::cpu::CpuBuffer::F32(alloc::vec::Vec<f32>)
 pub incin_backends::cpu::CpuBuffer::F64(alloc::vec::Vec<f64>)
+pub incin_backends::cpu::CpuBuffer::F8E4M3(alloc::vec::Vec<incin_core::tensor::dtype::fp8::F8E4M3>)
+pub incin_backends::cpu::CpuBuffer::F8E5M2(alloc::vec::Vec<incin_core::tensor::dtype::fp8::F8E5M2>)
 pub incin_backends::cpu::CpuBuffer::I64(alloc::vec::Vec<i64>)
 pub incin_backends::cpu::CpuBuffer::Q8_0(alloc::vec::Vec<incin_backends::quant::BlockQ8_0>)
 pub incin_backends::cpu::CpuBuffer::U32(alloc::vec::Vec<u32>)
@@ -1194,6 +1197,7 @@ pub mod incin_backends::target
 pub static incin_backends::capability::CPU_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
 pub static incin_backends::capability::CUDA_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
 pub static incin_backends::capability::METAL_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
+pub static incin_backends::capability::ROCM_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
 pub static incin_backends::capability::WGPU_CAPABILITIES: &[incin_core::exec::capability::CapabilityRule]
 pub struct incin_backends::DispatchBackend<D>(_)
 pub struct incin_backends::capability::BackendCoverageRow
