@@ -151,6 +151,11 @@ pub mod wgpu;
 #[cfg(feature = "metal")]
 pub mod metal;
 
+/// ROCm backend scaffolding (issue #6): identity, detection stub, storage
+/// shells, and the exact empty capability table. No HIP bindings yet.
+#[cfg(feature = "rocm")]
+pub mod rocm;
+
 /// The registry-driven conformance oracle: every capability row a backend
 /// advertises, expanded into tuples and executed.
 ///

@@ -53,8 +53,8 @@ pub trait ConstDType: DType<Arg = ()> {
 
 /// A [`ConstDType`] that additionally has a current built-in [`DTypeId`].
 ///
-/// All current Incin built-in dtypes (`f32`, `f64`, `f16`, `bf16`, `u8`,
-/// `u32`, `i64`, `Q8_0`) implement this.
+/// All current Incin built-in dtypes (`f32`, `f64`, `f16`, `bf16`, `f8e4m3`,
+/// `f8e5m2`, `u8`, `u32`, `i64`, `Q8_0`) implement this.
 ///
 /// # Where this bound is (and is not) required
 ///
@@ -150,7 +150,7 @@ pub trait PlainDType: ConstDType {
 // Semantic marker traits
 // ============================================================================
 
-/// Marker for floating-point dtypes (`f32`/`f64`/`f16`/`bf16`).
+/// Marker for floating-point dtypes (`f32`/`f64`/`f16`/`bf16`/`f8e4m3`/`f8e5m2`).
 pub trait FloatDType: PlainDType {}
 /// Marker for integer dtypes (`u8`/`u32`/`i64`).
 pub trait IntDType: PlainDType {}

@@ -231,6 +231,8 @@ impl MnistTargetExt for incin_data::vision::mnist::MnistDataset {
 pub use incin_core::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "metal")]
 pub use incin_core::tensor::device::{Metal, MetalN};
+#[cfg(feature = "rocm")]
+pub use incin_core::tensor::device::{Rocm, RocmN};
 #[cfg(feature = "wgpu")]
 pub use incin_core::tensor::device::{Wgpu, WgpuN};
 
@@ -816,6 +818,8 @@ pub mod prelude {
     pub use incin_core::tensor::device::{Cuda, CudaN};
     #[cfg(feature = "metal")]
     pub use incin_core::tensor::device::{Metal, MetalN};
+    #[cfg(feature = "rocm")]
+    pub use incin_core::tensor::device::{Rocm, RocmN};
     #[cfg(feature = "wgpu")]
     pub use incin_core::tensor::device::{Wgpu, WgpuN};
 

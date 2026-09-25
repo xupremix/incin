@@ -61,6 +61,10 @@ impl TapeStorage for CpuStorage {
             CpuBuffer::F64(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::F16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::BF16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+            // E4M3 has no infinities (overflow saturates); NaN is still an
+            // overflow signal for the adaptive-scale loop.
+            CpuBuffer::F8E4M3(v) => v.iter().any(|x| x.is_nan()),
+            CpuBuffer::F8E5M2(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             // An integer buffer has no non-finite representation to find.
             _ => false,
         })
@@ -509,6 +513,18 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
         CpuBuffer::I64(_) => reduce_variant!(I64, |v: f64| v as i64),
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
+
+        // Reductions stay f32-only per the capability rows: no arithmetic
+        // is implemented on the fp8 element types, so summing into one
+        // would have to round per-add with no contract. Typed refusal,
+        // mirroring Q8_0 below.
+        CpuBuffer::F8E4M3(_) | CpuBuffer::F8E5M2(_) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: storage.buffer.descriptor(),
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
 
         CpuBuffer::Q8_0(_) => {
             return Err(incin_core::error::Error::UnsupportedDType {

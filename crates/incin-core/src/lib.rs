@@ -182,6 +182,7 @@ pub mod prelude {
         NonFiniteSite, Result, convert_f64_to_i64,
     };
     pub use crate::SeqTy;
+    pub use crate::tensor::dtype::{F8E4M3, F8E5M2};
     pub use half::{bf16, f16};
 
     pub use crate::dim;
