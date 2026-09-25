@@ -276,6 +276,10 @@ pub mod __macro_support {
 
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
+    /// Dropless grouped-GEMM mixture-of-experts prototype (issue #102,
+    /// PROPOSALS.md D-111): P1 target path, CPU. Prototype-implemented,
+    /// pending maintainer ratification.
+    pub use incin_core::experimental::{DroplessMoE, DroplessMoEBackend, ExpertMlp, GroupedExpert};
     /// Partial, fail-closed model import macros.
     pub use incin_macros::{autotune, import_model, model};
     #[cfg(feature = "distributed")]

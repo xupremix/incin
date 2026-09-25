@@ -24,6 +24,10 @@ pub mod exec;
 /// Capture-level graph representation shared by import and compiled previews.
 pub mod graph;
 mod graph_recording;
+/// Dropless grouped-GEMM MoE prototype (issue #102). The single public path
+/// is `experimental::moe`; this declaration stays private so the prototype
+/// cannot be reached outside the experimental namespace.
+mod moe_dropless;
 
 /// Bounded model-file readers (GGUF metadata, format inspection).
 pub mod io;
@@ -81,6 +85,10 @@ pub mod loss {
 
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
+    /// Dropless grouped-GEMM mixture-of-experts prototype (issue #102,
+    /// PROPOSALS.md D-111): P1 target path, CPU. Prototype-implemented,
+    /// pending maintainer ratification.
+    pub use crate::moe_dropless::{DroplessMoE, DroplessMoEBackend, ExpertMlp, GroupedExpert};
     #[cfg(feature = "compiled")]
     /// Preview graph plans and symbolic guards. The matching
     /// `incin-backends/compiled` feature supplies a CPU reference evaluator;
