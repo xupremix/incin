@@ -88,6 +88,7 @@ impl core::default::Default for incin_core::exec::precision::PrecisionRequest
 impl core::default::Default for incin_core::exec::precision::RuntimePrecisionPolicy
 impl core::default::Default for incin_core::exec::spec::AxisSet
 impl core::default::Default for incin_core::nn::attention::AttentionConfig
+impl core::default::Default for incin_core::nn::attention::AttentionCrossover
 impl core::default::Default for incin_core::nn::transformer::TransformerConfig
 impl core::default::Default for incin_core::prelude::DTypeDescriptor
 impl core::default::Default for incin_core::resource::ResourceLimits
@@ -194,6 +195,7 @@ impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog:
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::EpsilonAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::FlattenAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::FullAttributes
+impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::FusedAttentionAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::GroupNormAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::IndexReductionAttributes
 impl incin_core::exec::catalog::AttributeContract for incin_core::exec::catalog::LayerNormAttributes
@@ -282,6 +284,7 @@ impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Fmod
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Frac
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Full
+impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::FusedAttention
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Gather
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::Gelu
 impl incin_core::exec::catalog::CanonicalOperation for incin_core::exec::catalog::op::GroupNorm
@@ -465,6 +468,7 @@ impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Flo
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Fmod
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Frac
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Full
+impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::FusedAttention
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Gather
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::Gelu
 impl incin_core::exec::catalog::Operation for incin_core::exec::catalog::op::GroupNorm
@@ -637,6 +641,9 @@ impl incin_core::metrics::Precision
 impl incin_core::metrics::Recall
 impl incin_core::nn::activation::Softmax
 impl incin_core::nn::attention::AttentionConfig
+impl incin_core::nn::attention::AttentionCrossover
+impl incin_core::nn::attention::AttentionPath
+impl incin_core::nn::attention::AttentionSelectionSource
 impl incin_core::nn::batch_norm::BatchNormShape for incin_core::shapes::Dyn
 impl incin_core::nn::dropout::Dropout
 impl incin_core::nn::embedding::EmbeddingShape for incin_core::shapes::Dyn
@@ -1212,6 +1219,7 @@ impl<K: incin_core::prelude::ConstDType + incin_core::prelude::FloatDType> core:
 impl<K: incin_core::prelude::ConstDType + incin_core::prelude::FloatDType> incin_core::exec::precision::PrecisionSpec for incin_core::exec::precision::precision::Exact<K>
 impl<K: incin_core::prelude::ConstDType + incin_core::prelude::FloatDType> incin_core::exec::precision::precision::Exact<K>
 impl<K: incin_core::prelude::DType, B> incin_core::nn::attention::AttentionBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention>
+impl<K: incin_core::prelude::DType, B> incin_core::nn::attention::FusedAttentionBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FusedAttention> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <B as incin_core::backend_authoring::StorageBackend>::Storage>
 impl<K: incin_core::prelude::DType, B> incin_core::nn::attention::RotaryBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Arange> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>
 impl<K: incin_core::prelude::DType, B> incin_core::nn::feed_forward::FeedForwardBackend<K> for B where B: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>
 impl<K: incin_core::prelude::DType, B> incin_core::nn::moe::MoEBackend<K> for B where B: incin_core::nn::moe::RouterBackend<K> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::OneHot> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ToDType> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::SumDim> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Bincount> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cumsum> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sub> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Zeros> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact>
@@ -2919,6 +2927,10 @@ pub const fn incin_core::exec::spec::DescriptorSchemaVersion::is_compatible_with
 pub const fn incin_core::exec::spec::DescriptorSchemaVersion::new(u32) -> Self
 pub const fn incin_core::exec::tape::Tape<S>::new() -> Self
 pub const fn incin_core::exec::tape::TensorId::get(self) -> u64
+pub const fn incin_core::nn::attention::AttentionCrossover::measured(usize) -> Self
+pub const fn incin_core::nn::attention::AttentionCrossover::unknown() -> Self
+pub const fn incin_core::nn::attention::AttentionPath::as_str(self) -> &'static str
+pub const fn incin_core::nn::attention::AttentionSelectionSource::as_str(self) -> &'static str
 pub const fn incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::d_model(&self) -> usize
 pub const fn incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::head_dim() -> usize
 pub const fn incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::heads_per_group(&self) -> usize
@@ -3140,6 +3152,8 @@ pub const incin_core::exec::catalog::op::Frac::ID: incin_core::shapes::Operation
 pub const incin_core::exec::catalog::op::Frac::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Full::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Full::KEY: incin_core::exec::catalog::OperationKey
+pub const incin_core::exec::catalog::op::FusedAttention::ID: incin_core::shapes::OperationKind
+pub const incin_core::exec::catalog::op::FusedAttention::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Gather::ID: incin_core::shapes::OperationKind
 pub const incin_core::exec::catalog::op::Gather::KEY: incin_core::exec::catalog::OperationKey
 pub const incin_core::exec::catalog::op::Gelu::ID: incin_core::shapes::OperationKind
@@ -3659,6 +3673,9 @@ pub enum incin_core::io::QuantScheme
 pub enum incin_core::io::gguf::GgufValue
 pub enum incin_core::io::gguf::QuantScheme
 pub enum incin_core::loss::Reduction
+pub enum incin_core::nn::AttentionPath
+pub enum incin_core::nn::AttentionPreference
+pub enum incin_core::nn::AttentionSelectionSource
 pub enum incin_core::nn::FeedForwardKind
 pub enum incin_core::nn::Init
 pub enum incin_core::nn::InitPlan
@@ -3666,6 +3683,9 @@ pub enum incin_core::nn::NormPlacement
 pub enum incin_core::nn::ParameterRole
 pub enum incin_core::nn::PositionEncoding
 pub enum incin_core::nn::StateRole
+pub enum incin_core::nn::attention::AttentionPath
+pub enum incin_core::nn::attention::AttentionPreference
+pub enum incin_core::nn::attention::AttentionSelectionSource
 pub enum incin_core::nn::attention::PositionEncoding
 pub enum incin_core::nn::feed_forward::FeedForwardKind
 pub enum incin_core::nn::init::Init
@@ -5024,6 +5044,7 @@ pub fn incin_core::backend_authoring::tracing_graph_snapshot() -> core::option::
 pub fn incin_core::dist::FsdpSynchronizer::all_gather(&self, &[f64]) -> core::result::Result<alloc::vec::Vec<f64>, incin_core::dist::sync::SyncError>
 pub fn incin_core::dist::FsdpSynchronizer::reduce_scatter_mean(&self, &[f64]) -> core::result::Result<alloc::vec::Vec<f64>, incin_core::dist::sync::SyncError>
 pub fn incin_core::dist::GradientSynchronizer::all_reduce_mean(&self, &mut [f64]) -> core::result::Result<(), incin_core::dist::sync::SyncError>
+pub fn incin_core::dist::GradientSynchronizer::all_reduce_mean_batch(&self, &mut [alloc::vec::Vec<f64>]) -> core::result::Result<(), incin_core::dist::sync::SyncError>
 pub fn incin_core::dist::GradientSynchronizer::rank(&self) -> usize
 pub fn incin_core::dist::GradientSynchronizer::world_size(&self) -> usize
 pub fn incin_core::dist::Placement::rank(&Self::Field) -> usize
@@ -5039,6 +5060,7 @@ pub fn incin_core::dist::reduce_scatter_model_gradients<B, M>(&M, &mut incin_cor
 pub fn incin_core::dist::sync::FsdpSynchronizer::all_gather(&self, &[f64]) -> core::result::Result<alloc::vec::Vec<f64>, incin_core::dist::sync::SyncError>
 pub fn incin_core::dist::sync::FsdpSynchronizer::reduce_scatter_mean(&self, &[f64]) -> core::result::Result<alloc::vec::Vec<f64>, incin_core::dist::sync::SyncError>
 pub fn incin_core::dist::sync::GradientSynchronizer::all_reduce_mean(&self, &mut [f64]) -> core::result::Result<(), incin_core::dist::sync::SyncError>
+pub fn incin_core::dist::sync::GradientSynchronizer::all_reduce_mean_batch(&self, &mut [alloc::vec::Vec<f64>]) -> core::result::Result<(), incin_core::dist::sync::SyncError>
 pub fn incin_core::dist::sync::GradientSynchronizer::rank(&self) -> usize
 pub fn incin_core::dist::sync::GradientSynchronizer::world_size(&self) -> usize
 pub fn incin_core::dist::sync::ShardedGradients::parameter_count(&self) -> usize
@@ -5470,6 +5492,18 @@ pub fn incin_core::exec::catalog::FullAttributes::optional_bias(&self) -> core::
 pub fn incin_core::exec::catalog::FullAttributes::shape_transform(&self) -> core::option::Option<ShapeTransform<'_>>
 pub fn incin_core::exec::catalog::FullAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
 pub fn incin_core::exec::catalog::FullAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::axis(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::bins(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::declared_dtype(&self) -> core::option::Option<incin_core::prelude::DTypeDescriptor>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::declared_shape(&self) -> core::option::Option<&[usize]>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::depth(&self) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::expected_output_count(&self, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::option::Option<usize>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::loss_reduction(&self) -> core::option::Option<incin_core::exec::catalog::LossReduction>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::optional_bias(&self) -> core::option::Option<bool>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::shape_transform(&self) -> core::option::Option<ShapeTransform<'_>>
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::trace_attributes(&self) -> core::result::Result<alloc::collections::btree::map::BTreeMap<alloc::string::String, incin_core::graph::AttributeValue>, &'static str> where Self: serde_core::ser::Serialize
+pub fn incin_core::exec::catalog::FusedAttentionAttributes::validate(&self, incin_core::shapes::OperationKind, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<(), incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::GroupNormAttributes::axis(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::GroupNormAttributes::bins(&self) -> core::option::Option<usize>
 pub fn incin_core::exec::catalog::GroupNormAttributes::declared_device(&self) -> core::option::Option<incin_core::tensor::device::DeviceId>
@@ -5995,6 +6029,9 @@ pub fn incin_core::exec::catalog::op::Frac::infer_outputs(&Self::Attributes, &[i
 pub fn incin_core::exec::catalog::op::Full::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Full::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Full::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::FusedAttention::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::FusedAttention::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
+pub fn incin_core::exec::catalog::op::FusedAttention::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Gather::infer_invocation(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Gather::infer_invocation_typed<E: incin_core::shapes::ExpectedShapes>(Self::Attributes, alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, &E) -> core::result::Result<incin_core::exec::catalog::ValidatedInvocation<Self>, incin_core::exec::catalog::DescriptorError>
 pub fn incin_core::exec::catalog::op::Gather::infer_outputs(&Self::Attributes, &[incin_core::exec::catalog::LogicalTensorMeta]) -> core::result::Result<alloc::vec::Vec<incin_core::exec::catalog::LogicalTensorMeta>, incin_core::exec::catalog::DescriptorError>
@@ -6736,6 +6773,7 @@ pub fn incin_core::nn::attention::AttentionConfig::causal() -> Self
 pub fn incin_core::nn::attention::AttentionConfig::default() -> Self
 pub fn incin_core::nn::attention::AttentionConfig::with_dropout(self, f32) -> Self
 pub fn incin_core::nn::attention::AttentionConfig::with_rotary(self, f64, usize) -> Self
+pub fn incin_core::nn::attention::AttentionCrossover::default() -> Self
 pub fn incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::eval(&mut self)
 pub fn incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::flat_width() -> usize where Self: core::marker::Sized
 pub fn incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::forward(&self, (incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local, L>, incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local, LM>)) -> core::result::Result<Self::Output, incin_core::error::Error>
@@ -6777,6 +6815,8 @@ pub fn incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEAD
 pub fn incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::visit_state_mut<V: incin_core::nn::state::StateMutVisitor<B>>(&mut self, &incin_core::nn::state::StatePath, &mut V) -> incin_core::error::Result<()>
 pub fn incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::visit_state_mut_flat<V: incin_core::nn::state::StateMutVisitor<B>>(&mut self, &incin_core::nn::state::StatePath, usize, &mut V) -> incin_core::error::Result<()> where Self: core::marker::Sized
 pub fn incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, incin_core::nn::param::Trainable>::build(incin_core::nn::attention::AttentionConfig, <K as incin_core::prelude::DType>::Arg, <<B as incin_core::backend_authoring::StorageBackend>::Device as incin_core::tensor::device::Device>::Arg) -> incin_core::error::Result<Self>
+pub fn incin_core::nn::attention::fused_or_composed_attention<B, K, G>(&incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, bool, core::option::Option<f64>, incin_core::nn::attention::AttentionPreference, incin_core::nn::attention::AttentionCrossover) -> incin_core::error::Result<incin_core::nn::attention::FusedAttentionOutput<B, K, G>> where B: incin_core::nn::attention::FusedAttentionBackend<K> + incin_core::backend_authoring::SupportsDType<K>, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FusedAttention>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
+pub fn incin_core::nn::attention::select_attention_path(usize, bool, incin_core::nn::attention::AttentionPreference, incin_core::nn::attention::AttentionCrossover) -> incin_core::nn::attention::AttentionSelection
 pub fn incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>::compute_stats(&self, u64) -> incin_core::nn::stats::LayerStats
 pub fn incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>::eval(&mut self)
 pub fn incin_core::nn::avg_pool2d::AvgPool2d<K, S, P, D>::flat_width() -> usize where Self: core::marker::Sized
@@ -6952,6 +6992,7 @@ pub fn incin_core::nn::flatten::FlattenAxes::visit_parameters_flat<V: incin_core
 pub fn incin_core::nn::flatten::StructuralFlatten<Start, End>::forward(&self, incin_core::prelude::Tensor<S, B, K, G, incin_core::dist::placement::Local, L>) -> incin_core::error::Result<Self::Output>
 pub fn incin_core::nn::format_layer_summary(&[incin_core::nn::module::LayerNode]) -> alloc::string::String
 pub fn incin_core::nn::format_layer_summary_with_stats(&[incin_core::nn::module::LayerNode], incin_core::nn::stats::ModelStats) -> alloc::string::String
+pub fn incin_core::nn::fused_or_composed_attention<B, K, G>(&incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, &incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, bool, core::option::Option<f64>, incin_core::nn::attention::AttentionPreference, incin_core::nn::attention::AttentionCrossover) -> incin_core::error::Result<incin_core::nn::attention::FusedAttentionOutput<B, K, G>> where B: incin_core::nn::attention::FusedAttentionBackend<K> + incin_core::backend_authoring::SupportsDType<K>, K: incin_core::prelude::DType, G: incin_core::tensor::grad::RequiresGrad, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FusedAttention>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>, <B as incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact>>::Output: core::convert::Into<<B as incin_core::backend_authoring::StorageBackend>::Storage>
 pub fn incin_core::nn::gru::GRU<S, B, BiasIh, BiasHh, K, Train>::flat_width() -> usize where Self: core::marker::Sized
 pub fn incin_core::nn::gru::GRU<S, B, BiasIh, BiasHh, K, Train>::forward(&self, (incin_core::prelude::Tensor<incin_core::shapes::DimCons<Batch, incin_core::shapes::DimCons<Seq, incin_core::shapes::DimCons<<S as incin_core::nn::gru::GruShape>::In, incin_core::shapes::Nil>>>, B, K, G>, incin_core::prelude::Tensor<incin_core::shapes::DimCons<Batch, incin_core::shapes::DimCons<<S as incin_core::nn::gru::GruShape>::Out, incin_core::shapes::Nil>>, B, K, G>)) -> core::result::Result<Self::Output, incin_core::error::Error>
 pub fn incin_core::nn::gru::GRU<S, B, BiasIh, BiasHh, K, Train>::freeze(self) -> incin_core::nn::gru::GRU<S, B, BiasIh, BiasHh, K, incin_core::nn::param::Frozen>
@@ -7430,6 +7471,7 @@ pub fn incin_core::nn::save::slice_bytes_for_rank(&[u8], &[usize], incin_core::p
 pub fn incin_core::nn::save_checkpoint<B, M, P>(&M, P, usize) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::VariableBackend, M: incin_core::nn::state::VisitState<B>, P: core::convert::AsRef<std::path::Path>
 pub fn incin_core::nn::save_checkpoint_manifest<P: core::convert::AsRef<std::path::Path>>(&incin_core::nn::save::GlobalCheckpointManifest, P) -> incin_core::error::Result<()>
 pub fn incin_core::nn::save_safetensors<B, M, P>(&M, P) -> incin_core::error::Result<()> where B: incin_core::backend_authoring::VariableBackend, M: incin_core::nn::state::VisitState<B>, P: core::convert::AsRef<std::path::Path>
+pub fn incin_core::nn::select_attention_path(usize, bool, incin_core::nn::attention::AttentionPreference, incin_core::nn::attention::AttentionCrossover) -> incin_core::nn::attention::AttentionSelection
 pub fn incin_core::nn::slice_bytes_for_rank(&[u8], &[usize], incin_core::prelude::DTypeDescriptor, usize, usize, usize) -> incin_core::error::Result<(alloc::vec::Vec<u8>, alloc::vec::Vec<usize>)>
 pub fn incin_core::nn::state::StateMutVisitor::visit_buffer<S, K>(&mut self, &incin_core::nn::state::StatePath, &mut incin_core::nn::param::Buffer<S, B, K>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop
 pub fn incin_core::nn::state::StateMutVisitor::visit_param<S, K, Train>(&mut self, &incin_core::nn::state::StatePath, &mut incin_core::nn::param::Param<S, B, K, Train>) -> incin_core::error::Result<()> where S: incin_core::shapes::Shape, K: incin_core::prelude::DType<Arg = ()>, B: incin_core::backend_authoring::SupportsDType<K> + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::HostInterop, Train: incin_core::nn::param::TrainState
@@ -9581,6 +9623,8 @@ pub incin_core::exec::catalog::FullAttributes::device: incin_core::tensor::devic
 pub incin_core::exec::catalog::FullAttributes::dtype: incin_core::prelude::DTypeDescriptor
 pub incin_core::exec::catalog::FullAttributes::shape: alloc::vec::Vec<usize>
 pub incin_core::exec::catalog::FullAttributes::value: f64
+pub incin_core::exec::catalog::FusedAttentionAttributes::causal: bool
+pub incin_core::exec::catalog::FusedAttentionAttributes::scale: core::option::Option<f64>
 pub incin_core::exec::catalog::GradientRule::Defined
 pub incin_core::exec::catalog::GradientRule::None
 pub incin_core::exec::catalog::GradientRule::Piecewise
@@ -9993,6 +10037,18 @@ pub incin_core::nn::AttentionConfig::causal: bool
 pub incin_core::nn::AttentionConfig::dropout: f32
 pub incin_core::nn::AttentionConfig::position: incin_core::nn::attention::PositionEncoding
 pub incin_core::nn::AttentionConfig::scale: core::option::Option<f64>
+pub incin_core::nn::AttentionCrossover::fused_min_seq_len: core::option::Option<usize>
+pub incin_core::nn::AttentionPath::Composed
+pub incin_core::nn::AttentionPath::Fused
+pub incin_core::nn::AttentionPreference::Auto
+pub incin_core::nn::AttentionPreference::ForceComposed
+pub incin_core::nn::AttentionPreference::ForceFused
+pub incin_core::nn::AttentionSelection::path: incin_core::nn::attention::AttentionPath
+pub incin_core::nn::AttentionSelection::source: incin_core::nn::attention::AttentionSelectionSource
+pub incin_core::nn::AttentionSelectionSource::AboveCrossover
+pub incin_core::nn::AttentionSelectionSource::BelowCrossover
+pub incin_core::nn::AttentionSelectionSource::Forced
+pub incin_core::nn::AttentionSelectionSource::FusedUnavailable
 pub incin_core::nn::BatchNorm2d::bias: incin_core::nn::param::Param<<S as incin_core::nn::batch_norm::BatchNormShape>::ParamShape, B, K, Train>
 pub incin_core::nn::BatchNorm2d::eps: f32
 pub incin_core::nn::BatchNorm2d::momentum: f32
@@ -10195,6 +10251,18 @@ pub incin_core::nn::attention::AttentionConfig::causal: bool
 pub incin_core::nn::attention::AttentionConfig::dropout: f32
 pub incin_core::nn::attention::AttentionConfig::position: incin_core::nn::attention::PositionEncoding
 pub incin_core::nn::attention::AttentionConfig::scale: core::option::Option<f64>
+pub incin_core::nn::attention::AttentionCrossover::fused_min_seq_len: core::option::Option<usize>
+pub incin_core::nn::attention::AttentionPath::Composed
+pub incin_core::nn::attention::AttentionPath::Fused
+pub incin_core::nn::attention::AttentionPreference::Auto
+pub incin_core::nn::attention::AttentionPreference::ForceComposed
+pub incin_core::nn::attention::AttentionPreference::ForceFused
+pub incin_core::nn::attention::AttentionSelection::path: incin_core::nn::attention::AttentionPath
+pub incin_core::nn::attention::AttentionSelection::source: incin_core::nn::attention::AttentionSelectionSource
+pub incin_core::nn::attention::AttentionSelectionSource::AboveCrossover
+pub incin_core::nn::attention::AttentionSelectionSource::BelowCrossover
+pub incin_core::nn::attention::AttentionSelectionSource::Forced
+pub incin_core::nn::attention::AttentionSelectionSource::FusedUnavailable
 pub incin_core::nn::attention::CrossAttention::config: incin_core::nn::attention::AttentionConfig
 pub incin_core::nn::attention::CrossAttention::dropout: incin_core::nn::dropout::Dropout
 pub incin_core::nn::attention::CrossAttention::key: incin_core::nn::linear::Linear<incin_core::shapes::Dyn, B, incin_core::nn::optional::True, K, Train>
@@ -10758,6 +10826,7 @@ pub incin_core::prelude::OperationKind::Floor
 pub incin_core::prelude::OperationKind::Fmod
 pub incin_core::prelude::OperationKind::Frac
 pub incin_core::prelude::OperationKind::Full
+pub incin_core::prelude::OperationKind::FusedAttention
 pub incin_core::prelude::OperationKind::Gather
 pub incin_core::prelude::OperationKind::Gelu
 pub incin_core::prelude::OperationKind::GroupNorm
@@ -11125,6 +11194,7 @@ pub incin_core::shapes::OperationKind::Floor
 pub incin_core::shapes::OperationKind::Fmod
 pub incin_core::shapes::OperationKind::Frac
 pub incin_core::shapes::OperationKind::Full
+pub incin_core::shapes::OperationKind::FusedAttention
 pub incin_core::shapes::OperationKind::Gather
 pub incin_core::shapes::OperationKind::Gelu
 pub incin_core::shapes::OperationKind::GroupNorm
@@ -11393,6 +11463,7 @@ pub incin_core::shapes::error::OperationKind::Floor
 pub incin_core::shapes::error::OperationKind::Fmod
 pub incin_core::shapes::error::OperationKind::Frac
 pub incin_core::shapes::error::OperationKind::Full
+pub incin_core::shapes::error::OperationKind::FusedAttention
 pub incin_core::shapes::error::OperationKind::Gather
 pub incin_core::shapes::error::OperationKind::Gelu
 pub incin_core::shapes::error::OperationKind::GroupNorm
@@ -11655,6 +11726,7 @@ pub incin_core::shapes::prelude::OperationKind::Floor
 pub incin_core::shapes::prelude::OperationKind::Fmod
 pub incin_core::shapes::prelude::OperationKind::Frac
 pub incin_core::shapes::prelude::OperationKind::Full
+pub incin_core::shapes::prelude::OperationKind::FusedAttention
 pub incin_core::shapes::prelude::OperationKind::Gather
 pub incin_core::shapes::prelude::OperationKind::Gelu
 pub incin_core::shapes::prelude::OperationKind::GroupNorm
@@ -12160,6 +12232,7 @@ pub struct incin_core::backend_authoring::op::Floor
 pub struct incin_core::backend_authoring::op::Fmod
 pub struct incin_core::backend_authoring::op::Frac
 pub struct incin_core::backend_authoring::op::Full
+pub struct incin_core::backend_authoring::op::FusedAttention
 pub struct incin_core::backend_authoring::op::Gather
 pub struct incin_core::backend_authoring::op::Gelu
 pub struct incin_core::backend_authoring::op::GroupNorm
@@ -12396,6 +12469,7 @@ pub struct incin_core::backend_authoring::operations::op::Floor
 pub struct incin_core::backend_authoring::operations::op::Fmod
 pub struct incin_core::backend_authoring::operations::op::Frac
 pub struct incin_core::backend_authoring::operations::op::Full
+pub struct incin_core::backend_authoring::operations::op::FusedAttention
 pub struct incin_core::backend_authoring::operations::op::Gather
 pub struct incin_core::backend_authoring::operations::op::Gelu
 pub struct incin_core::backend_authoring::operations::op::GroupNorm
@@ -12599,6 +12673,7 @@ pub struct incin_core::exec::catalog::DropoutAttributes
 pub struct incin_core::exec::catalog::EpsilonAttributes
 pub struct incin_core::exec::catalog::FlattenAttributes
 pub struct incin_core::exec::catalog::FullAttributes
+pub struct incin_core::exec::catalog::FusedAttentionAttributes
 pub struct incin_core::exec::catalog::GroupNormAttributes
 pub struct incin_core::exec::catalog::IndexReductionAttributes
 pub struct incin_core::exec::catalog::LayerNormAttributes
@@ -12692,6 +12767,7 @@ pub struct incin_core::exec::catalog::op::Floor
 pub struct incin_core::exec::catalog::op::Fmod
 pub struct incin_core::exec::catalog::op::Frac
 pub struct incin_core::exec::catalog::op::Full
+pub struct incin_core::exec::catalog::op::FusedAttention
 pub struct incin_core::exec::catalog::op::Gather
 pub struct incin_core::exec::catalog::op::Gelu
 pub struct incin_core::exec::catalog::op::GroupNorm
@@ -12880,6 +12956,7 @@ pub struct incin_core::exec::op::Floor
 pub struct incin_core::exec::op::Fmod
 pub struct incin_core::exec::op::Frac
 pub struct incin_core::exec::op::Full
+pub struct incin_core::exec::op::FusedAttention
 pub struct incin_core::exec::op::Gather
 pub struct incin_core::exec::op::Gelu
 pub struct incin_core::exec::op::GroupNorm
@@ -13061,6 +13138,8 @@ pub struct incin_core::metrics::Precision
 pub struct incin_core::metrics::Recall
 pub struct incin_core::nn::AdaptiveAvgPool2d<HOut: typenum::marker_traits::Unsigned, WOut: typenum::marker_traits::Unsigned>
 pub struct incin_core::nn::AttentionConfig
+pub struct incin_core::nn::AttentionCrossover
+pub struct incin_core::nn::AttentionSelection
 pub struct incin_core::nn::AvgPool2d<K: typenum::marker_traits::Unsigned, S: typenum::marker_traits::Unsigned, P: typenum::marker_traits::Unsigned, D: typenum::marker_traits::Unsigned>
 pub struct incin_core::nn::BCEWithLogitsLoss<R: incin_core::tensor::reduction::ReductionMode>(_)
 pub struct incin_core::nn::BatchNorm2d<S: incin_core::nn::batch_norm::BatchNormShape, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
@@ -13146,6 +13225,8 @@ pub struct incin_core::nn::activation::Swish
 pub struct incin_core::nn::activation::Tanh
 pub struct incin_core::nn::adaptive_avg_pool2d::AdaptiveAvgPool2d<HOut: typenum::marker_traits::Unsigned, WOut: typenum::marker_traits::Unsigned>
 pub struct incin_core::nn::attention::AttentionConfig
+pub struct incin_core::nn::attention::AttentionCrossover
+pub struct incin_core::nn::attention::AttentionSelection
 pub struct incin_core::nn::attention::CrossAttention<const D_MODEL: usize, const N_HEADS: usize, const N_KV_HEADS: usize, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::attention::MultiHeadAttention<const D_MODEL: usize, const N_HEADS: usize, const N_KV_HEADS: usize, B: incin_core::backend_authoring::VariableBackend, K: incin_core::prelude::DType, Train: incin_core::nn::param::TrainState>
 pub struct incin_core::nn::avg_pool2d::AvgPool2d<K: typenum::marker_traits::Unsigned, S: typenum::marker_traits::Unsigned, P: typenum::marker_traits::Unsigned, D: typenum::marker_traits::Unsigned>
@@ -13567,6 +13648,7 @@ pub trait incin_core::nn::Conv2dShape: incin_core::shapes::Shape + incin_core::s
 pub trait incin_core::nn::EmbeddingShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::nn::FeedForwardBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Relu> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Gelu> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Swish> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul>
 pub trait incin_core::nn::FreezeExpert: core::marker::Sized
+pub trait incin_core::nn::FusedAttentionBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FusedAttention> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <Self as incin_core::backend_authoring::StorageBackend>::Storage>
 pub trait incin_core::nn::GruShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::nn::LayerNormShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::nn::LinearShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
@@ -13591,6 +13673,7 @@ pub trait incin_core::nn::VisitParameters<B: incin_core::backend_authoring::Vari
 pub trait incin_core::nn::VisitState<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::VisitStateMut<B: incin_core::backend_authoring::VariableBackend>
 pub trait incin_core::nn::attention::AttentionBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MatMulExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::TransposeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <Self as incin_core::backend_authoring::StorageBackend>::Storage> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Softmax> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Add> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Neg> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Dropout> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention>
+pub trait incin_core::nn::attention::FusedAttentionBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::FusedAttention> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ScaledDotProductAttention> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Ones> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Tril> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Log> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Narrow> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::UnsqueezeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs, Output = <Self as incin_core::backend_authoring::StorageBackend>::Storage>
 pub trait incin_core::nn::attention::RotaryBackend<K: incin_core::prelude::DType>: incin_core::backend_authoring::VariableBackend + incin_core::exec::capability::Capabilities + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Arange> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::MulScalar> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Exp> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Sin> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Cos> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::Mul> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::BroadcastAs> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ReshapeExact> + incin_core::backend_authoring::Execute<incin_core::exec::catalog::op::ConcatExact>
 pub trait incin_core::nn::batch_norm::BatchNormShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
 pub trait incin_core::nn::conv1d::Conv1dShape: incin_core::shapes::Shape + incin_core::shapes::DynShape
@@ -14170,6 +14253,7 @@ pub type incin_core::exec::catalog::op::Floor::Attributes = incin_core::exec::ca
 pub type incin_core::exec::catalog::op::Fmod::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Frac::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::Full::Attributes = incin_core::exec::catalog::FullAttributes
+pub type incin_core::exec::catalog::op::FusedAttention::Attributes = incin_core::exec::catalog::FusedAttentionAttributes
 pub type incin_core::exec::catalog::op::Gather::Attributes = incin_core::exec::catalog::AxisAttributes
 pub type incin_core::exec::catalog::op::Gelu::Attributes = incin_core::exec::catalog::NoAttributes
 pub type incin_core::exec::catalog::op::GroupNorm::Attributes = incin_core::exec::catalog::GroupNormAttributes
@@ -14365,6 +14449,7 @@ pub type incin_core::nn::EmbeddingShape::Embed: incin_core::shapes::Dim
 pub type incin_core::nn::EmbeddingShape::Vocab: incin_core::shapes::Dim
 pub type incin_core::nn::EmbeddingShape::WeightShape: incin_core::shapes::Shape<Arg = Self::BuildArg> + incin_core::shapes::DynShape
 pub type incin_core::nn::FreezeExpert::Frozen: incin_core::nn::module::NamedLayers + incin_core::nn::module::ShapeInfo + incin_core::nn::module::TrainMode + incin_core::nn::stats::ComputeStats
+pub type incin_core::nn::FusedAttentionOutput<B, K, G> = (incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, incin_core::nn::attention::AttentionSelection)
 pub type incin_core::nn::GruShape::HhShape: incin_core::nn::linear::LinearShape<InF = Self::Out, OutF = Self::Out>
 pub type incin_core::nn::GruShape::IhShape: incin_core::nn::linear::LinearShape<InF = Self::In, OutF = Self::Out>
 pub type incin_core::nn::GruShape::In: incin_core::shapes::Dim
@@ -14425,6 +14510,7 @@ pub type incin_core::nn::adaptive_avg_pool2d::AdaptiveAvgPool2d<HOut, WOut>::Out
 pub type incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::Error = incin_core::error::Error
 pub type incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::Output = incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, <B as incin_core::backend_authoring::StorageTransfer<__NewD>>::Output, K, Train>
 pub type incin_core::nn::attention::CrossAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::Output = incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, <G as incin_core::tensor::grad::GradJoin<<Train as incin_core::nn::param::TrainState>::TensorGrad>>::Output>
+pub type incin_core::nn::attention::FusedAttentionOutput<B, K, G> = (incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, G, incin_core::dist::placement::Local>, incin_core::nn::attention::AttentionSelection)
 pub type incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::Error = incin_core::error::Error
 pub type incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::Output = incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, <B as incin_core::backend_authoring::StorageTransfer<__NewD>>::Output, K, Train>
 pub type incin_core::nn::attention::MultiHeadAttention<D_MODEL, N_HEADS, N_KV_HEADS, B, K, Train>::Output = incin_core::prelude::Tensor<incin_core::shapes::Dyn, B, K, <G as incin_core::tensor::grad::GradJoin<<Train as incin_core::nn::param::TrainState>::TensorGrad>>::Output>
