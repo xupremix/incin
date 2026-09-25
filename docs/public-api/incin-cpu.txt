@@ -257,6 +257,10 @@ pub use incin::data::Downloader
 pub use incin::data::MnistBatchTarget
 pub use incin::data::vision
 pub use incin::dim
+pub use incin::experimental::DroplessMoE
+pub use incin::experimental::DroplessMoEBackend
+pub use incin::experimental::ExpertMlp
+pub use incin::experimental::GroupedExpert
 pub use incin::experimental::autotune
 pub use incin::experimental::import_model
 pub use incin::experimental::model
