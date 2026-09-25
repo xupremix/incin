@@ -46,6 +46,7 @@
 //! three modules would be three copies of one dataflow.
 
 use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::dist::Local;
 use crate::err::{Error, ErrorMessage, Result};
