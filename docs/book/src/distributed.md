@@ -13,11 +13,23 @@ plus a parameter all-gather after every optimizer step, through
 protocol proven on the CPU: scripted two-rank arithmetic, a byte
 measurement showing reduce-scatter retains `1/N` of the gradient bytes an
 all-reduce would, and a two-rank trajectory equal to the single-device
-full-batch reference. ZeRO-3 is refused at plan build
+full-batch reference. ZeRO ranks can also persist their owned flat slices
+plus a manifest and gather-load them back into a full module with
+byte-identical parameters (typed refusals on world or shape mismatch);
+that loader is test-scoped - the product checkpoint API is a later
+milestone. ZeRO-3 is refused at plan build
 (`TrainError::UnsupportedShardingStage`): parameter-sharded execution does not
 exist, and an unimplemented stage fails closed rather than approximating a
-different one. Tensor- and pipeline-parallel execution, optimizer-state
-sharding memory (`1/N` state), and checkpoint recomputation remain planning
+different one. Two narrow execution proofs cover the other #99 tiers, both
+in-process over the reference transport with real CPU kernels: a
+column-parallel partitioned matmul (per-rank shard matmuls, `AllGather`
+through the plan's descriptor, kernel concat) and a 1F1B microbatch
+pipeline (stage modules, `send_recv` activation handoffs, driven
+clock-by-clock from the plan's schedule with its bubble slots observed).
+Both match their single-device references exactly on this machine.
+Row-parallel and head-parallel tensor execution, the pipeline backward
+handoff (no autograd cross-graph support), optimizer-state sharding
+memory (`1/N` state), and checkpoint recomputation remain planning
 only.
 
 For plain (replicated) data parallel, `ReferenceDataParallel` pairs two rank

@@ -155,6 +155,9 @@ jobs:
       run: |
         cargo test -p incin --features train,distributed --test trainer
         cargo test -p incin --features train,distributed,distributed-reference --test dp2_network
+        cargo test -p incin --features train,distributed,distributed-reference --test fsdp2_reference
+        cargo test -p incin --features distributed,distributed-reference --test tp2_reference
+        cargo test -p incin --features distributed,distributed-reference --test pp2_reference
         cargo test -p incin-core --features distributed --test mesh_compile
         cargo test -p incin-core --features distributed --test mesh_bind
         cargo test -p incin-core --features distributed --test placement_rules

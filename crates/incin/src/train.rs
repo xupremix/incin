@@ -1383,6 +1383,16 @@ impl FsdpSynchronizer for SingleRankSynchronizer {
 const REFERENCE_GRADIENT_STREAM: incin_backends::dist::StreamId =
     incin_backends::dist::StreamId::new(0);
 
+/// Stream every reference-transport FSDP single collective launches on.
+///
+/// Kept distinct from [`REFERENCE_GRADIENT_STREAM`] so launch evidence can
+/// tell a bucketed all-reduce from a reduce-scatter or parameter
+/// all-gather: the transport is stateless per call, so the stream is
+/// bookkeeping, not routing.
+#[cfg(feature = "distributed-reference")]
+const REFERENCE_SHARD_STREAM: incin_backends::dist::StreamId =
+    incin_backends::dist::StreamId::new(1);
+
 /// The rank that runs each bucket's reference-transport collective.
 ///
 /// Both ranks deposit every tensor of a bucket; rank 1's arrival on a
@@ -1471,6 +1481,15 @@ struct ReferenceInner {
     pending: [Option<Vec<Vec<f64>>>; 2],
     /// Published reduced steps per rank, in walk order.
     ready: [Option<Vec<Vec<f64>>>; 2],
+    /// One rank's deposit at the in-flight FSDP single collective, if any.
+    ///
+    /// Unlike buckets, reduce-scatter and all-gather pair exactly one
+    /// deposit per rank per collective, in the model's traversal order, so
+    /// no chunking policy applies - only an op-and-length agreement check.
+    pending_single: [Option<SingleDeposit>; 2],
+    /// Published single-collective results per rank: this rank's mean shard
+    /// after a reduce-scatter, the full replica after an all-gather.
+    ready_single: [Option<Vec<f64>>; 2],
     /// A rank clears its flag when its handle drops. A waiter that sees a
     /// dead peer fail-stops immediately instead of running out the timeout.
     alive: [bool; 2],
@@ -1483,14 +1502,43 @@ struct ReferenceInner {
     drop_peer_once: bool,
     /// How many `all_reduce` calls the reference transport ran.
     transport_calls: usize,
+    /// How many FSDP single collectives (reduce-scatter plus all-gather)
+    /// the reference transport ran.
+    single_calls: usize,
     /// Buckets launched so far; also the next group token.
     closed_buckets: usize,
     /// Total per-tensor deposits both ranks made.
     deposits_seen: u64,
+    /// FSDP single collectives completed so far; the next single group
+    /// token derives from it, in a disjoint range from bucket tokens so
+    /// launch evidence never aliases a bucket with a single.
+    closed_singles: u64,
     /// Launch record, in launch order.
     launches: Vec<BucketLaunch>,
 }
 
+/// Which FSDP single collective a deposit belongs to.
+///
+/// The reduce-scatter and all-gather walks interleave one collective per
+/// parameter in traversal order; both ranks walk identical models, so the
+/// leader pairs deposits in arrival order and refuses a pair whose
+/// operations disagree rather than running the wrong collective.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SingleOp {
+    /// ZeRO-2 gradient reduce-scatter: pair for the mean's shards.
+    ReduceScatter,
+    /// Post-step parameter all-gather: pair for the full replica.
+    AllGather,
+}
+
+/// One rank's deposit at a single-collective rendezvous.
+#[cfg(feature = "distributed-reference")]
+#[derive(Debug, Clone, PartialEq)]
+struct SingleDeposit {
+    op: SingleOp,
+    values: Vec<f64>,
+}
 /// In-process two-rank data-parallel rendezvous over the reference transport.
 ///
 /// `pair` returns a controller plus one [`ReferenceRankSynchronizer`] per
@@ -1568,12 +1616,16 @@ impl ReferenceDataParallel {
                 mutex: Mutex::new(ReferenceInner {
                     pending: [None, None],
                     ready: [None, None],
+                    pending_single: [None, None],
+                    ready_single: [None, None],
                     alive: [true, true],
                     poison: None,
                     drop_peer_once: false,
                     transport_calls: 0,
+                    single_calls: 0,
                     closed_buckets: 0,
                     deposits_seen: 0,
+                    closed_singles: 0,
                     launches: Vec::new(),
                 }),
                 cond: Condvar::new(),
@@ -1601,6 +1653,14 @@ impl ReferenceDataParallel {
     #[must_use]
     pub fn transport_calls(&self) -> usize {
         self.lock().transport_calls
+    }
+
+    /// How many reference-transport FSDP single collectives
+    /// (reduce-scatter plus all-gather) were attempted so far, failures
+    /// included.
+    #[must_use]
+    pub fn single_transport_calls(&self) -> usize {
+        self.lock().single_calls
     }
 
     /// Bucket launches in launch order: the overlap-order evidence.
@@ -1649,6 +1709,15 @@ impl ReferenceDataParallel {
 /// A one-tensor call forms its own bucket and always progresses. Dropping
 /// the handle marks the rank dead, which fail-stops its peer's in-flight
 /// collective at once.
+///
+/// Also implements [`FsdpSynchronizer`](incin_core::dist::sync::FsdpSynchronizer)
+/// for ZeRO-sharded steps: each reduce-scatter and parameter all-gather
+/// pairs exactly one deposit per rank through the same poison latch,
+/// liveness flags, and wait-timeout backstop, with the leader running the
+/// matching reference-transport collective (`reduce_scatter` with
+/// [`Mean`](incin_core::exec::ReduceOp::Mean), `all_gather`). Attach it
+/// with [`with_fsdp_synchronizer`](Trainer::with_fsdp_synchronizer) and run
+/// the two ranks on two threads over identical models.
 #[cfg(feature = "distributed-reference")]
 #[derive(Debug)]
 pub struct ReferenceRankSynchronizer {
@@ -1931,6 +2000,221 @@ impl GradientSynchronizer for ReferenceRankSynchronizer {
             ReferenceBuffer::try_new(ReferenceValues::F64(values), core::marker::PhantomData)
                 .expect("f64 values always match the f64 buffer dtype")
         }
+    }
+}
+
+#[cfg(feature = "distributed-reference")]
+impl ReferenceRankSynchronizer {
+    /// Pairs one FSDP single collective with the peer rank.
+    ///
+    /// Both ranks deposit `(op, values)`; once both deposits agree on the
+    /// operation and the length, the leader runs the matching
+    /// reference-transport collective and publishes each rank's result: its
+    /// mean shard after a reduce-scatter, the full replica after an
+    /// all-gather. An op or length disagreement means the models diverged,
+    /// and the pair fail-stops rather than running the wrong collective.
+    /// Same poison latch, liveness flags, and wait-timeout backstop as the
+    /// bucketed path.
+    fn rendezvous_single(&self, op: SingleOp, values: Vec<f64>) -> Result<Vec<f64>, SyncError> {
+        use incin_backends::dist::{
+            CollectiveBackend, GroupId, ReferenceBuffer, ReferenceTransport, ReferenceValues,
+        };
+        use incin_core::exec::ReduceOp;
+
+        let rank = self.rank;
+        let peer = 1 - rank;
+        let timeout = self.shared.timeout;
+        let deadline = Instant::now() + timeout;
+        let mut inner = self
+            .shared
+            .mutex
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        if inner.pending_single[rank].is_some() {
+            // The walks issue exactly one collective at a time per rank; a
+            // second deposit from the same rank means the call sequence
+            // diverged.
+            let message = format!(
+                "reference FSDP rank {rank} deposited twice without collecting; \
+                 the collective call sequence diverged"
+            );
+            inner.poison = Some(message.clone());
+            self.shared.cond.notify_all();
+            return Err(SyncError::Synchronizer { message });
+        }
+        inner.pending_single[rank] = Some(SingleDeposit { op, values });
+        self.shared.cond.notify_all();
+
+        loop {
+            if let Some(result) = inner.ready_single[rank].take() {
+                return Ok(result);
+            }
+            if let Some(reason) = inner.poison.clone() {
+                return Err(SyncError::Synchronizer { message: reason });
+            }
+            if !inner.alive[peer] {
+                let message = format!(
+                    "reference FSDP rank {peer} is gone; fail-stop instead of hanging rank {rank}"
+                );
+                inner.poison = Some(message.clone());
+                self.shared.cond.notify_all();
+                return Err(SyncError::Synchronizer { message });
+            }
+            if let (Some(mine), Some(theirs)) = (
+                inner.pending_single[rank].as_ref(),
+                inner.pending_single[peer].as_ref(),
+            ) {
+                if mine.op != theirs.op {
+                    let message = format!(
+                        "reference FSDP ranks diverged: rank {rank} issued {:?} while rank {peer} \
+                         issued {:?}; models must walk the same collectives",
+                        mine.op, theirs.op,
+                    );
+                    inner.poison = Some(message.clone());
+                    self.shared.cond.notify_all();
+                    return Err(SyncError::Synchronizer { message });
+                }
+                if mine.values.len() != theirs.values.len() {
+                    let message = format!(
+                        "reference FSDP ranks disagree on a {:?} of {} element(s) on rank \
+                         {rank} vs {} on rank {peer}; models must be identical",
+                        mine.op,
+                        mine.values.len(),
+                        theirs.values.len(),
+                    );
+                    inner.poison = Some(message.clone());
+                    self.shared.cond.notify_all();
+                    return Err(SyncError::Synchronizer { message });
+                }
+                if rank == REFERENCE_BUCKET_LEADER {
+                    // Both deposits were borrowed above under this same
+                    // lock, so a missing take here means the pairing
+                    // itself is corrupt - refused, never unwrapped.
+                    let (Some(mine), Some(theirs)) = (
+                        inner.pending_single[rank].take(),
+                        inner.pending_single[peer].take(),
+                    ) else {
+                        let message = format!(
+                            "reference FSDP deposits vanished under their own lock on rank {rank}; \
+                             the pairing is corrupt"
+                        );
+                        inner.poison = Some(message.clone());
+                        self.shared.cond.notify_all();
+                        return Err(SyncError::Synchronizer { message });
+                    };
+                    // Disjoint token space from bucket groups (which count
+                    // from 1), so launch evidence never aliases a bucket
+                    // with a single. The transport is stateless per call;
+                    // the token is bookkeeping, not routing.
+                    let token = (1_u64 << 32) + inner.closed_singles + 1;
+                    let group =
+                        GroupId::new(token, 2).map_err(|error| SyncError::Synchronizer {
+                            message: format!("reference FSDP group refused: {error}"),
+                        })?;
+                    let (rank_zero, rank_one) = if rank == 0 {
+                        (mine, theirs)
+                    } else {
+                        (theirs, mine)
+                    };
+                    // `f64` values always match the `f64` buffer dtype, so
+                    // this refusal is unreachable through the walks above -
+                    // typed, like every other transport refusal here.
+                    let inputs = match (f64_buffer(rank_zero.values), f64_buffer(rank_one.values)) {
+                        (Ok(zero), Ok(one)) => Vec::from([zero, one]),
+                        _ => {
+                            let message = format!(
+                                "reference transport refused an f64 payload for a {op:?} single"
+                            );
+                            inner.poison = Some(message.clone());
+                            self.shared.cond.notify_all();
+                            return Err(SyncError::Synchronizer { message });
+                        }
+                    };
+                    inner.single_calls += 1;
+                    inner.transport_calls += 1;
+                    let output = match op {
+                        SingleOp::ReduceScatter => ReferenceTransport.reduce_scatter::<f64>(
+                            group,
+                            &inputs,
+                            ReduceOp::Mean,
+                            REFERENCE_SHARD_STREAM,
+                        ),
+                        SingleOp::AllGather => ReferenceTransport.all_gather::<f64>(
+                            group,
+                            &inputs,
+                            REFERENCE_SHARD_STREAM,
+                        ),
+                    };
+                    let output = match output {
+                        Ok(output) => output,
+                        Err(error) => {
+                            let message =
+                                format!("reference transport refused a {op:?} single: {error}");
+                            inner.poison = Some(message.clone());
+                            self.shared.cond.notify_all();
+                            return Err(SyncError::Synchronizer { message });
+                        }
+                    };
+                    let (buffers, _) = output.into_parts();
+                    for (side, buffer) in buffers.iter().enumerate() {
+                        let ReferenceValues::F64(found) = buffer.values() else {
+                            let message = format!(
+                                "reference transport returned a non-f64 payload for a {op:?} single"
+                            );
+                            inner.poison = Some(message.clone());
+                            self.shared.cond.notify_all();
+                            return Err(SyncError::Synchronizer { message });
+                        };
+                        // Reduce-scatter yields one shard per rank;
+                        // all-gather yields the full replica on every rank.
+                        // Either way this rank consumes its own slot.
+                        inner.ready_single[side] = Some(found.clone());
+                    }
+                    inner.closed_singles += 1;
+                    self.shared.cond.notify_all();
+                    continue;
+                }
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let (guard, timed_out) = self
+                .shared
+                .cond
+                .wait_timeout(inner, remaining)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            inner = guard;
+            if timed_out.timed_out() {
+                let message = format!(
+                    "reference FSDP rank {rank} waited {timeout:?} for rank {peer}; \
+                     fail-stop instead of hanging"
+                );
+                inner.poison = Some(message.clone());
+                self.shared.cond.notify_all();
+                return Err(SyncError::Synchronizer { message });
+            }
+        }
+
+        fn f64_buffer(values: Vec<f64>) -> Result<ReferenceBuffer<f64>, SyncError> {
+            ReferenceBuffer::try_new(ReferenceValues::F64(values), core::marker::PhantomData)
+                .map_err(|error| SyncError::Synchronizer {
+                    message: format!("reference FSDP f64 buffer refused: {error}"),
+                })
+        }
+    }
+}
+
+#[cfg(feature = "distributed-reference")]
+impl FsdpSynchronizer for ReferenceRankSynchronizer {
+    /// This rank's shard of the two-rank mean, via the reference
+    /// transport's `reduce_scatter`.
+    fn reduce_scatter_mean(&self, values: &[f64]) -> Result<Vec<f64>, SyncError> {
+        self.rendezvous_single(SingleOp::ReduceScatter, values.to_vec())
+    }
+
+    /// The full rank-ordered replica, via the reference transport's
+    /// `all_gather`.
+    fn all_gather(&self, shard: &[f64]) -> Result<Vec<f64>, SyncError> {
+        self.rendezvous_single(SingleOp::AllGather, shard.to_vec())
     }
 }
 
