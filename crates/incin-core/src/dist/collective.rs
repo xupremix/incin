@@ -63,7 +63,10 @@ pub const fn validate_collective_dtype(dtype: DTypeId) -> Result<(), CollectiveE
         // device-bound); the honest path is dequantize-first, so the
         // collective admits no fp8 gradient rather than reducing it
         // in-place at 8-bit precision.
-        DTypeId::Q8_0 | DTypeId::F8E4M3 | DTypeId::F8E5M2 => {
+        // Issue #95: block fp4 refuses like Q8_0 — block/layout-aware
+        // message contracts are out of scope for the scalar collective
+        // interface; dequantize first.
+        DTypeId::Q8_0 | DTypeId::F8E4M3 | DTypeId::F8E5M2 | DTypeId::NVFP4 | DTypeId::MXFP4 => {
             Err(CollectiveError::UnsupportedDType { dtype })
         }
     }

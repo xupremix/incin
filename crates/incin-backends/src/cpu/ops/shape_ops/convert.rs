@@ -158,6 +158,22 @@ pub(crate) fn tensor_to_dtype_storage(
                 backend: "Cpu",
             });
         }
+        // Issue #95: entering block-FP4 storage goes through `quantize`,
+        // not `to_dtype` — packing nibbles is not an elementwise cast.
+        // (The reverse direction needs no arm: `t.get()` decodes FP4
+        // blocks, so an FP4 *source* casts out through the generic path.)
+        Some(DTypeId::NVFP4) => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(NVFP4)",
+                backend: "Cpu",
+            });
+        }
+        Some(DTypeId::MXFP4) => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(MXFP4)",
+                backend: "Cpu",
+            });
+        }
         _ => {
             return Err(Error::UnsupportedBackendOperation {
                 op: "tensor_to_dtype(unknown)",

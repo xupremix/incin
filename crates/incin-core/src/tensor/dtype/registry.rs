@@ -48,6 +48,8 @@ impl<'de> serde::Deserialize<'de> for DTypeKey {
                 ("bf16", 1) => return Ok(<half::bf16 as ConstDType>::DESCRIPTOR.key()),
                 ("f8e4m3", 1) => return Ok(<F8E4M3 as ConstDType>::DESCRIPTOR.key()),
                 ("f8e5m2", 1) => return Ok(<F8E5M2 as ConstDType>::DESCRIPTOR.key()),
+                ("nvfp4", 1) => return Ok(<NVFP4 as ConstDType>::DESCRIPTOR.key()),
+                ("mxfp4", 1) => return Ok(<MXFP4 as ConstDType>::DESCRIPTOR.key()),
                 ("f32", 1) => return Ok(<f32 as ConstDType>::DESCRIPTOR.key()),
                 ("f64", 1) => return Ok(<f64 as ConstDType>::DESCRIPTOR.key()),
                 ("bool", 1) => return Ok(<bool as ConstDType>::DESCRIPTOR.key()),
@@ -515,6 +517,21 @@ pub enum DTypeId {
     /// Logical: 32 values per block. Physical: one `f16` scale + 32 `i8`
     /// quants = 34 bytes per block.
     Q8_0,
+    /// NVFP4 block-scaled 4-bit float (issue #95).
+    ///
+    /// Logical: 16 E2M1 values per block. Physical: one FP8-E4M3 scale byte
+    /// plus 16 packed 4-bit values (8 bytes) = 9 bytes per block, interleaved
+    /// scale-first.
+    ///
+    /// The optional per-tensor FP32 global scale is data beside
+    /// the tensor, not part of this encoding.
+    NVFP4,
+    /// MXFP4 block-scaled 4-bit float (issue #95, OCP MX).
+    ///
+    /// Logical: 32 E2M1 values per block. Physical: one E8M0 scale byte +
+    /// 32 packed 4-bit values (16 bytes) = 17 bytes per block, interleaved
+    /// scale-first.
+    MXFP4,
     /// 8-bit logical boolean.
     Bool,
 }
@@ -587,6 +604,21 @@ impl DTypeId {
                 DTypeKind::Quantized,
                 // 32 logical i8 values + 1 f16 scale = 34 bytes, 2-byte aligned.
                 StorageEncoding::block(32, 34, 2),
+            ),
+            DTypeId::NVFP4 => DTypeDescriptor::builtin(
+                DTypeId::NVFP4,
+                DTypeKey::new("incin", "nvfp4", 1),
+                DTypeKind::Quantized,
+                // 16 logical E2M1 values + 1 FP8-E4M3 scale byte = 9 bytes.
+                // 9 is odd, so alignment is 1 (audit: 93-block-generalization).
+                StorageEncoding::block(16, 9, 1),
+            ),
+            DTypeId::MXFP4 => DTypeDescriptor::builtin(
+                DTypeId::MXFP4,
+                DTypeKey::new("incin", "mxfp4", 1),
+                DTypeKind::Quantized,
+                // 32 logical E2M1 values + 1 E8M0 scale byte = 17 bytes.
+                StorageEncoding::block(32, 17, 1),
             ),
             DTypeId::Bool => DTypeDescriptor::builtin(
                 DTypeId::Bool,
@@ -674,6 +706,9 @@ impl DTypeId {
     pub fn element_size(&self) -> usize {
         match self {
             DTypeId::U8 | DTypeId::Q8_0 | DTypeId::Bool | DTypeId::F8E4M3 | DTypeId::F8E5M2 => 1,
+            // Block dtypes have no scalar width; like Q8_0 above this arm is
+            // the documented-wrong compatibility value, never sizing truth.
+            DTypeId::NVFP4 | DTypeId::MXFP4 => 1,
             DTypeId::F16 | DTypeId::BF16 => 2,
             DTypeId::F32 | DTypeId::U32 => 4,
             DTypeId::F64 | DTypeId::I64 => 8,

@@ -153,6 +153,16 @@ pub(crate) fn sum_axis_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuS
                 op: "sum_axis_keepdim",
             });
         }
+
+        // Issue #95: reducing packed nibbles in place would need a wider
+        // scaled policy; dequantize first. Same refusal as Q8_0 above.
+        CpuBuffer::NVFP4(_) | CpuBuffer::MXFP4(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: storage.buffer.descriptor(),
+                backend: "cpu",
+                op: "sum_axis_keepdim",
+            });
+        }
     };
 
     Ok(CpuStorage::from_contiguous(new_buffer, &out_shape))
@@ -206,6 +216,23 @@ pub(super) fn fill_like(
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
                     dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "reduction gradient fill",
+                });
+            }
+
+            // Issue #95: a block-quantized gradient has no ones-like seed;
+            // refusal, not a silently requantized fill.
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "reduction gradient fill",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
                     backend: "cpu",
                     op: "reduction gradient fill",
                 });

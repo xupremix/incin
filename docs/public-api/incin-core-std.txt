@@ -745,6 +745,8 @@ impl incin_core::prelude::BuiltinDType for i64
 impl incin_core::prelude::BuiltinDType for incin_core::prelude::F8E4M3
 impl incin_core::prelude::BuiltinDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::BuiltinDType for incin_core::prelude::Q8_0
+impl incin_core::prelude::BuiltinDType for incin_core::tensor::dtype::MXFP4
+impl incin_core::prelude::BuiltinDType for incin_core::tensor::dtype::NVFP4
 impl incin_core::prelude::BuiltinDType for u32
 impl incin_core::prelude::BuiltinDType for u8
 impl incin_core::prelude::ConstDType for bool
@@ -756,6 +758,8 @@ impl incin_core::prelude::ConstDType for i64
 impl incin_core::prelude::ConstDType for incin_core::prelude::F8E4M3
 impl incin_core::prelude::ConstDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::ConstDType for incin_core::prelude::Q8_0
+impl incin_core::prelude::ConstDType for incin_core::tensor::dtype::MXFP4
+impl incin_core::prelude::ConstDType for incin_core::tensor::dtype::NVFP4
 impl incin_core::prelude::ConstDType for u32
 impl incin_core::prelude::ConstDType for u8
 impl incin_core::prelude::DType for bool
@@ -768,6 +772,8 @@ impl incin_core::prelude::DType for incin_core::prelude::F8E4M3
 impl incin_core::prelude::DType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::DType for incin_core::prelude::Q8_0
 impl incin_core::prelude::DType for incin_core::shapes::Dyn
+impl incin_core::prelude::DType for incin_core::tensor::dtype::MXFP4
+impl incin_core::prelude::DType for incin_core::tensor::dtype::NVFP4
 impl incin_core::prelude::DType for u32
 impl incin_core::prelude::DType for u8
 impl incin_core::prelude::DTypeDescriptor
@@ -796,6 +802,8 @@ impl incin_core::prelude::PlainDType for incin_core::prelude::F8E5M2
 impl incin_core::prelude::PlainDType for u32
 impl incin_core::prelude::PlainDType for u8
 impl incin_core::prelude::QuantDType for incin_core::prelude::Q8_0
+impl incin_core::prelude::QuantDType for incin_core::tensor::dtype::MXFP4
+impl incin_core::prelude::QuantDType for incin_core::tensor::dtype::NVFP4
 impl incin_core::resource::ResourceLimits
 impl incin_core::shapes::AddOneRank for incin_core::shapes::Dyn
 impl incin_core::shapes::AddOneRank for incin_core::shapes::Nil
@@ -3074,6 +3082,7 @@ pub const fn incin_core::tensor::dtype::StorageEncoding::is_scalar(self) -> bool
 pub const fn incin_core::tensor::dtype::StorageEncoding::logical_elements_per_block(self) -> usize
 pub const fn incin_core::tensor::dtype::StorageEncoding::scalar(usize, usize) -> Self
 pub const fn incin_core::tensor::dtype::StorageEncoding::scalar_bytes(self) -> core::option::Option<usize>
+pub const fn incin_core::tensor::dtype::fp4::e2m1_to_f32(u8) -> f32
 pub const half::bfloat::bf16::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
 pub const half::bfloat::bf16::DTYPE: incin_core::prelude::DTypeId
 pub const half::binary16::f16::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
@@ -3620,6 +3629,11 @@ pub const incin_core::shapes::shape::Shape::STATIC_VALID: ()
 pub const incin_core::tensor::device::DeviceId::CPU: Self
 pub const incin_core::tensor::dtype::BuiltinDType::DTYPE: incin_core::prelude::DTypeId
 pub const incin_core::tensor::dtype::ConstDType::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
+pub const incin_core::tensor::dtype::MXFP4::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
+pub const incin_core::tensor::dtype::MXFP4::DTYPE: incin_core::prelude::DTypeId
+pub const incin_core::tensor::dtype::NVFP4::DESCRIPTOR: incin_core::prelude::DTypeDescriptor
+pub const incin_core::tensor::dtype::NVFP4::DTYPE: incin_core::prelude::DTypeId
+pub const incin_core::tensor::dtype::fp4::E2M1_MAX: f32
 pub const incin_core::tensor::grad::ConstRequiresGrad::REQUIRES_GRAD: bool
 pub const incin_core::tensor::grad::Grad::REQUIRES_GRAD: bool
 pub const incin_core::tensor::grad::NoGrad::REQUIRES_GRAD: bool
@@ -8443,8 +8457,24 @@ pub fn incin_core::tensor::device::RocmDevice::new(usize) -> Self
 pub fn incin_core::tensor::device::WgpuDevice::new(usize) -> Self
 pub fn incin_core::tensor::dtype::DType::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
 pub fn incin_core::tensor::dtype::DType::init(Self::Arg) -> Self::Field
+pub fn incin_core::tensor::dtype::MXFP4::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
+pub fn incin_core::tensor::dtype::MXFP4::init(Self::Arg) -> Self::Field
+pub fn incin_core::tensor::dtype::NVFP4::descriptor(&Self::Field) -> incin_core::prelude::DTypeDescriptor
+pub fn incin_core::tensor::dtype::NVFP4::init(Self::Arg) -> Self::Field
 pub fn incin_core::tensor::dtype::StorageEncoding::deserialize<D>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error> where D: serde_core::de::Deserializer<'de>
 pub fn incin_core::tensor::dtype::StorageEncoding::size_bytes(self, usize, incin_core::shapes::OperationKind) -> core::result::Result<usize, incin_core::shapes::ShapeError>
+pub fn incin_core::tensor::dtype::fp4::decode_mxfp4_block(u8, &[u8; 16]) -> [f32; 32]
+pub fn incin_core::tensor::dtype::fp4::decode_nvfp4_block(u8, &[u8; 8]) -> [f32; 16]
+pub fn incin_core::tensor::dtype::fp4::e2m1_from_f32(f32) -> u8
+pub fn incin_core::tensor::dtype::fp4::e2m1_from_f64(f64) -> u8
+pub fn incin_core::tensor::dtype::fp4::e8m0_from_f32(f32) -> u8
+pub fn incin_core::tensor::dtype::fp4::e8m0_to_f32(u8) -> f32
+pub fn incin_core::tensor::dtype::fp4::encode_mxfp4_block(&[f32; 32]) -> (u8, [u8; 16])
+pub fn incin_core::tensor::dtype::fp4::encode_nvfp4_block(&[f32; 16]) -> (u8, [u8; 8])
+pub fn incin_core::tensor::dtype::fp4::pack_nibbles(&[u8; 16]) -> [u8; 8]
+pub fn incin_core::tensor::dtype::fp4::pack_nibbles32(&[u8; 32]) -> [u8; 16]
+pub fn incin_core::tensor::dtype::fp4::unpack_nibbles(&[u8; 8]) -> [u8; 16]
+pub fn incin_core::tensor::dtype::fp4::unpack_nibbles32(&[u8; 16]) -> [u8; 32]
 pub fn incin_core::tensor::grad::Grad::grad_mode(&Self::Field) -> incin_core::exec::policy::GradMode
 pub fn incin_core::tensor::grad::Grad::init(Self::Arg) -> Self::Field
 pub fn incin_core::tensor::grad::Grad::into_arg(self) -> incin_core::tensor::grad::Grad
@@ -10687,6 +10717,8 @@ pub incin_core::prelude::DTypeId::F64
 pub incin_core::prelude::DTypeId::F8E4M3
 pub incin_core::prelude::DTypeId::F8E5M2
 pub incin_core::prelude::DTypeId::I64
+pub incin_core::prelude::DTypeId::MXFP4
+pub incin_core::prelude::DTypeId::NVFP4
 pub incin_core::prelude::DTypeId::Q8_0
 pub incin_core::prelude::DTypeId::U32
 pub incin_core::prelude::DTypeId::U8
@@ -12083,6 +12115,8 @@ pub incin_core::tensor::dtype::DTypeId::F64
 pub incin_core::tensor::dtype::DTypeId::F8E4M3
 pub incin_core::tensor::dtype::DTypeId::F8E5M2
 pub incin_core::tensor::dtype::DTypeId::I64
+pub incin_core::tensor::dtype::DTypeId::MXFP4
+pub incin_core::tensor::dtype::DTypeId::NVFP4
 pub incin_core::tensor::dtype::DTypeId::Q8_0
 pub incin_core::tensor::dtype::DTypeId::U32
 pub incin_core::tensor::dtype::DTypeId::U8
@@ -12111,6 +12145,8 @@ pub incin_core::tensor::prelude::DTypeId::F64
 pub incin_core::tensor::prelude::DTypeId::F8E4M3
 pub incin_core::tensor::prelude::DTypeId::F8E5M2
 pub incin_core::tensor::prelude::DTypeId::I64
+pub incin_core::tensor::prelude::DTypeId::MXFP4
+pub incin_core::tensor::prelude::DTypeId::NVFP4
 pub incin_core::tensor::prelude::DTypeId::Q8_0
 pub incin_core::tensor::prelude::DTypeId::U32
 pub incin_core::tensor::prelude::DTypeId::U8
@@ -12261,6 +12297,7 @@ pub mod incin_core::tensor::base
 pub mod incin_core::tensor::conv2d
 pub mod incin_core::tensor::device
 pub mod incin_core::tensor::dtype
+pub mod incin_core::tensor::dtype::fp4
 pub mod incin_core::tensor::grad
 pub mod incin_core::tensor::matmul
 pub mod incin_core::tensor::ops
@@ -13681,6 +13718,8 @@ pub struct incin_core::tensor::device::WgpuDevice
 pub struct incin_core::tensor::dtype::DTypeDescriptor
 pub struct incin_core::tensor::dtype::DTypeKey
 pub struct incin_core::tensor::dtype::DTypeRegistry
+pub struct incin_core::tensor::dtype::MXFP4
+pub struct incin_core::tensor::dtype::NVFP4
 pub struct incin_core::tensor::dtype::Q8_0
 pub struct incin_core::tensor::dtype::StorageEncoding
 pub struct incin_core::tensor::grad::Grad
@@ -13696,6 +13735,8 @@ pub struct incin_core::tensor::prelude::DeviceSet
 pub struct incin_core::tensor::prelude::Dyn(_)
 pub struct incin_core::tensor::prelude::Grad
 pub struct incin_core::tensor::prelude::Gradients<B: incin_core::backend_authoring::Backend + incin_core::backend_authoring::AutogradBackend>(_)
+pub struct incin_core::tensor::prelude::MXFP4
+pub struct incin_core::tensor::prelude::NVFP4
 pub struct incin_core::tensor::prelude::NoGrad
 pub struct incin_core::tensor::prelude::Q8_0
 pub struct incin_core::tensor::prelude::StorageEncoding
@@ -15337,6 +15378,10 @@ pub type incin_core::tensor::device::Device::Arg: core::clone::Clone
 pub type incin_core::tensor::device::Device::Field: core::fmt::Debug + core::clone::Clone + core::default::Default
 pub type incin_core::tensor::dtype::DType::Arg
 pub type incin_core::tensor::dtype::DType::Field: core::fmt::Debug + core::clone::Clone + core::default::Default
+pub type incin_core::tensor::dtype::MXFP4::Arg = ()
+pub type incin_core::tensor::dtype::MXFP4::Field = core::marker::PhantomData<incin_core::tensor::dtype::MXFP4>
+pub type incin_core::tensor::dtype::NVFP4::Arg = ()
+pub type incin_core::tensor::dtype::NVFP4::Field = core::marker::PhantomData<incin_core::tensor::dtype::NVFP4>
 pub type incin_core::tensor::dtype::PlainDType::Elem: incin_core::prelude::TensorElement
 pub type incin_core::tensor::grad::Grad::Arg = ()
 pub type incin_core::tensor::grad::Grad::Field = core::marker::PhantomData<incin_core::tensor::grad::Grad>

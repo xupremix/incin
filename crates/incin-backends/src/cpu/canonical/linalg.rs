@@ -12,7 +12,10 @@ use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::matmul::grouped_matmul_impl;
-use crate::cpu::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
+use crate::cpu::ops::quant::{
+    dequantize_storage, quantize_mxfp4_storage, quantize_nvfp4_storage, quantize_storage,
+    quantized_matmul_storage,
+};
 use crate::cpu::ops::shape_ops::{
     addmm_storage, reshape_storage, transpose_storage, unsqueeze_storage,
 };
@@ -197,14 +200,24 @@ impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype != DTypeId::Q8_0.descriptor() {
+        // Issue #95: the target block dtype rides the `Quantize` attribute
+        // (same descriptor the capability row admits). Unreachable until the
+        // catalog + capability rows admit FP4 — but the routing is what makes
+        // that admission light up CPU execution with no further code change.
+        let output = if dtype == DTypeId::Q8_0.descriptor() {
+            quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))?
+        } else if dtype == DTypeId::NVFP4.descriptor() {
+            quantize_nvfp4_storage(input)
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))?
+        } else if dtype == DTypeId::MXFP4.descriptor() {
+            quantize_mxfp4_storage(input)
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))?
+        } else {
             return Err(BackendError::unsupported(
                 CPU_NAME,
                 UnsupportedReason::DType { operation, dtype },
             ));
-        }
-        let output =
-            quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        };
         // Straight-through estimator (issue #93, Decision 2): the forward is
         // the true block-quantized value, and the backward passes the
         // cotangent through unchanged - `grad_in = grad_out` - rather than

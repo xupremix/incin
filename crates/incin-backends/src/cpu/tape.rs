@@ -379,6 +379,23 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> Result<CpuStorage> {
                 op: "autograd accumulate",
             });
         }
+        // Issue #95: accumulating into packed nibbles is not elementwise
+        // addition; same refusal as Q8_0 (a same-dtype FP4 pair must not
+        // fall through to the DTypeMismatch arm below).
+        (CpuBuffer::NVFP4(_), _) | (_, CpuBuffer::NVFP4(_)) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: "autograd accumulate",
+            });
+        }
+        (CpuBuffer::MXFP4(_), _) | (_, CpuBuffer::MXFP4(_)) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::MXFP4.descriptor(),
+                backend: "cpu",
+                op: "autograd accumulate",
+            });
+        }
         _ => {
             return Err(incin_core::error::Error::DTypeMismatch {
                 operation: "autograd accumulate",
@@ -529,6 +546,23 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
         CpuBuffer::Q8_0(_) => {
             return Err(incin_core::error::Error::UnsupportedDType {
                 dtype: incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
+
+        // Issue #95: no unbroadcast-reduction over packed nibbles;
+        // dequantize first. Mirrors Q8_0 above.
+        CpuBuffer::NVFP4(_) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
+        CpuBuffer::MXFP4(_) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::MXFP4.descriptor(),
                 backend: "cpu",
                 op: "autograd unbroadcast",
             });

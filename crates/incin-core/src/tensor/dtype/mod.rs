@@ -9,7 +9,9 @@
 //! `FloatDType`, `IntDType`, `BoolDType`, `QuantDType`); `builtin` is every
 //! concrete implementation (`Q8_0`, the `impl_plain_builtin_dtype!` macro
 //! and its generated impls, the manual `bool`/`Q8_0`/`Dyn` impls); `fp8` is
-//! the OCP E4M3/E5M2 element types plus their conversion contract.
+//! the OCP E4M3/E5M2 element types plus their conversion contract; `fp4` is
+//! the NVFP4/MXFP4 block codecs (E2M1 + E8M0, nibble packing, block
+//! encode/decode) behind the `NVFP4`/`MXFP4` block markers.
 
 use crate::shapes::Dyn;
 use crate::shapes::error::{OperationKind, ShapeError};
@@ -18,13 +20,14 @@ use core::{fmt::Debug, marker::PhantomData};
 pub use half::{bf16, f16};
 
 mod builtin;
+pub mod fp4;
 mod fp8;
 mod registry;
 #[cfg(test)]
 mod tests;
 mod traits;
 
-pub use builtin::Q8_0;
+pub use builtin::{MXFP4, NVFP4, Q8_0};
 pub use fp8::{F8E4M3, F8E5M2};
 pub use registry::{DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, DTypeRegistry, StorageEncoding};
 pub use traits::{

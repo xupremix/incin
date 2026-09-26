@@ -195,6 +195,16 @@ fn dtype_to_onnx(dt: DTypeId) -> Result<onnx::tensor_proto::DataType, Error> {
             backend: "ONNX",
             op: "export_onnx",
         }),
+        // Issue #95: block-scaled FP4 has no ONNX data type (FLOAT4E2M1
+        // exists only behind the SPV_EXT_ocp_microscaling_types extension,
+        // not as a TensorProto data type); refuse like Q8_0 — dequantize
+        // first. Split scale/data storage would not survive the export
+        // either way.
+        DTypeId::NVFP4 | DTypeId::MXFP4 => Err(Error::UnsupportedDType {
+            dtype: dt.descriptor(),
+            backend: "ONNX",
+            op: "export_onnx",
+        }),
     }
 }
 

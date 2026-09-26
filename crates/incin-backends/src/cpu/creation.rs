@@ -106,6 +106,15 @@ fn fill_buffer(
                 backend: "Cpu Q8_0",
             });
         }
+        // Issue #95: block dtypes have no scalar fill value — a `full`
+        // over packed nibbles is quantization, not a fill. Same refusal
+        // as Q8_0 above.
+        DTypeId::NVFP4 | DTypeId::MXFP4 => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: operation,
+                backend: "Cpu block-fp4",
+            });
+        }
         _ => {
             return Err(Error::UnsupportedBackendOperation {
                 op: operation,

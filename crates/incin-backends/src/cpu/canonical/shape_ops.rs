@@ -774,7 +774,13 @@ impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype == DTypeId::Q8_0.descriptor() {
+        // Issue #95: entering block storage goes through `quantize`, not
+        // `to_dtype` — same guard as Q8_0 (the kernel holds a second,
+        // identical refusal).
+        if dtype == DTypeId::Q8_0.descriptor()
+            || dtype == DTypeId::NVFP4.descriptor()
+            || dtype == DTypeId::MXFP4.descriptor()
+        {
             return Err(BackendError::unsupported(
                 CPU_NAME,
                 UnsupportedReason::DType { operation, dtype },

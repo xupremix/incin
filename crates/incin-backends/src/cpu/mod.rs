@@ -130,6 +130,8 @@ pub(crate) fn validate_cpu_dtype(
                 | DTypeId::U32
                 | DTypeId::I64
                 | DTypeId::Q8_0
+                | DTypeId::NVFP4
+                | DTypeId::MXFP4
                 | DTypeId::Bool
         )
     {
@@ -264,6 +266,16 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                         .chain(block.qs.iter().map(|value| *value as u8))
                 })
                 .collect()),
+            // Issue #95: block bytes are all `u8` (scale + packed nibbles),
+            // so the wire order is the field order — no endianness step.
+            storage::CpuBuffer::NVFP4(v) => Ok(v
+                .iter()
+                .flat_map(|block| core::iter::once(block.scale).chain(block.data.iter().copied()))
+                .collect()),
+            storage::CpuBuffer::MXFP4(v) => Ok(v
+                .iter()
+                .flat_map(|block| core::iter::once(block.scale).chain(block.data.iter().copied()))
+                .collect()),
         }
     }
     /// `from_bytes`.
@@ -353,6 +365,35 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                         storage::BlockQ8_0 {
                             d: half::f16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])),
                             qs,
+                        }
+                    })
+                    .collect(),
+            ),
+            // Issue #95: scale-first interleaved wire order (see
+            // `to_bytes` above): byte 0 is the block scale, the rest the
+            // packed nibbles. Lengths are pre-checked by `size_bytes`.
+            DTypeId::NVFP4 => storage::CpuBuffer::NVFP4(
+                bytes
+                    .chunks_exact(9)
+                    .map(|chunk| {
+                        let mut data = [0u8; 8];
+                        data.copy_from_slice(&chunk[1..]);
+                        storage::BlockNVFP4 {
+                            scale: chunk[0],
+                            data,
+                        }
+                    })
+                    .collect(),
+            ),
+            DTypeId::MXFP4 => storage::CpuBuffer::MXFP4(
+                bytes
+                    .chunks_exact(17)
+                    .map(|chunk| {
+                        let mut data = [0u8; 16];
+                        data.copy_from_slice(&chunk[1..]);
+                        storage::BlockMXFP4 {
+                            scale: chunk[0],
+                            data,
                         }
                     })
                     .collect(),

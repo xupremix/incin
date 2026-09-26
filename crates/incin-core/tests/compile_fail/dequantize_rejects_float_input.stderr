@@ -4,11 +4,22 @@ error[E0277]: the trait bound `f32: QuantCapable` is not satisfied
 10 |     let _ = t.dequantize::<f32>();
    |               ^^^^^^^^^^ the trait `QuantDType` is not implemented for `f32`
    |
-help: the trait `QuantDType` is implemented for `incin::prelude::Q8_0`
+help: the following other types implement trait `QuantDType`
   --> src/tensor/dtype/builtin.rs
    |
    | impl QuantDType for Q8_0 {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^
+   | ^^^^^^^^^^^^^^^^^^^^^^^^ `incin::prelude::Q8_0`
+...
+   |         impl QuantDType for $t {}
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         `incin::tensor::dtype::MXFP4`
+   |         `incin::tensor::dtype::NVFP4`
+...
+   | impl_block_builtin_dtype!(NVFP4, NVFP4, "nvfp4", StorageEncoding::block(16, 9, 1));
+   | ---------------------------------------------------------------------------------- in this macro invocation
+   | impl_block_builtin_dtype!(MXFP4, MXFP4, "mxfp4", StorageEncoding::block(32, 17, 1));
+   | ----------------------------------------------------------------------------------- in this macro invocation
    = note: required for `f32` to implement `QuantCapable`
 note: required by a bound in `quantization::<impl incin::prelude::Tensor<S, B, K, G, incin::dist::Local, L>>::dequantize`
   --> src/tensor/ops/quantization.rs
@@ -18,3 +29,4 @@ note: required by a bound in `quantization::<impl incin::prelude::Tensor<S, B, K
    |     where
    |         K: QuantCapable,
    |            ^^^^^^^^^^^^ required by this bound in `quantization::<impl Tensor<S, B, K, G, Local, L>>::dequantize`
+   = note: this error originates in the macro `impl_block_builtin_dtype` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -75,6 +75,15 @@ pub(super) enum KernelDType {
     /// as [`F8E4M3`](Self::F8E4M3).
     #[allow(dead_code)]
     F8E5M2,
+    /// NVFP4 block storage tag (`__nv_fp4_e2m1`, per cudarc 0.19.8's
+    /// `cuda_type!(float4::F4E2M1, "__nv_fp4_e2m1")`). Compile-only like the
+    /// fp8 pair: no kernel reads block-FP4 storage, so
+    /// [`from_id`](Self::from_id) refuses it with a typed error until #85
+    /// lands a cuBLASLt path that does. The scale mode (per-16 E4M3 vs
+    /// per-32 E8M0) is a matmul-descriptor fact, not a kernel-key fact, so
+    /// both dtypes share the one element tag.
+    #[allow(dead_code)]
+    FP4E2M1,
 }
 
 impl KernelDType {
@@ -92,6 +101,12 @@ impl KernelDType {
             // it: advertising would claim execution that does not exist.
             DTypeId::F8E4M3 | DTypeId::F8E5M2 => Err(Error::Msg(format!(
                 "dtype {dtype:?} has a kernel-key tag but no kernel reads it yet (issues #85/#90)"
+            ))),
+            // Issue #95: same compile-only status for block FP4 — the tag
+            // names the CUDA element type, but no kernel reads blocks yet
+            // (needs the #85 cuBLASLt path + a Blackwell device).
+            DTypeId::NVFP4 | DTypeId::MXFP4 => Err(Error::Msg(format!(
+                "dtype {dtype:?} has a kernel-key tag but no kernel reads it yet (issues #85/#95)"
             ))),
             _ => Err(Error::Msg(format!(
                 "dtype {dtype:?} has no kernel-key encoding"
@@ -121,6 +136,7 @@ impl KernelDType {
             Self::Q8_0 => "q8_0",
             Self::F8E4M3 => "__nv_fp8_e4m3",
             Self::F8E5M2 => "__nv_fp8_e5m2",
+            Self::FP4E2M1 => "__nv_fp4_e2m1",
         }
     }
 }
@@ -456,6 +472,23 @@ mod tests {
         }
         // The established dtypes still resolve.
         assert_eq!(KernelDType::from_id(DTypeId::F32).unwrap().tag(), "f32");
+    }
+
+    /// Issue #95, same compile-only slice as fp8 above: the block-FP4 tag
+    /// names the real CUDA element type (`__nv_fp4_e2m1`, per cudarc
+    /// 0.19.8), shared by both dtypes (the scale mode is a matmul-descriptor
+    /// fact, not a kernel-key fact), but resolving either dtype refuses.
+    #[test]
+    fn fp4_has_a_tag_but_no_kernel() {
+        assert_eq!(KernelDType::FP4E2M1.tag(), "__nv_fp4_e2m1");
+        for dtype in [DTypeId::NVFP4, DTypeId::MXFP4] {
+            let err = KernelDType::from_id(dtype).unwrap_err();
+            let msg = err.to_string();
+            assert!(
+                msg.contains("no kernel reads it yet"),
+                "fp4 must be refused with the kernel reason, got: {msg}"
+            );
+        }
     }
 }
 

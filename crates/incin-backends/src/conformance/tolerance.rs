@@ -150,6 +150,27 @@ pub const fn for_dtype(dtype: DTypeId) -> Tolerance {
                      rounds by half a step of scale/127, plus the scale's own \
                      f16 rounding, for fixture magnitudes below 8",
         },
+        // NVFP4 shares one E4M3 scale across 16 E2M1 values: the widest
+        // half step is 1.0 (the 4→6 binade) times the block scale
+        // (≈ block_amax/6), plus the E4M3 scale's own ≤1/16 relative
+        // rounding — under a quarter of the block's own amax (issue #95).
+        DTypeId::NVFP4 => Tolerance {
+            absolute: 0.25,
+            relative: 0.25,
+            reason: "NVFP4 quantizes to a 1-mantissa-bit grid under one E4M3 \
+                     scale per 16 values; the worst half step is 1.0 times \
+                     the block scale, under a quarter of the block amax",
+        },
+        // MXFP4 shares one exact power-of-two E8M0 scale across 32 E2M1
+        // values: same grid, no scale-rounding term, scale at most twice
+        // block_amax/6 — under half the block's own amax (issue #95).
+        DTypeId::MXFP4 => Tolerance {
+            absolute: 0.5,
+            relative: 0.5,
+            reason: "MXFP4 quantizes to a 1-mantissa-bit grid under one exact \
+                     power-of-two scale per 32 values; the worst half step \
+                     is 1.0 times the block scale, under half the block amax",
+        },
         // Custom dtypes are fail-closed exact. An unknown format has no error
         // terms this table can budget for, so any deviation fails loudly
         // rather than passing under a guessed bound; the fix is a real row
@@ -215,6 +236,8 @@ mod tests {
             DTypeId::F32,
             DTypeId::F64,
             DTypeId::Q8_0,
+            DTypeId::NVFP4,
+            DTypeId::MXFP4,
         ] {
             let tolerance = for_dtype(dtype);
             assert!(

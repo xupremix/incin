@@ -30,6 +30,7 @@ use crate::cpu::stride;
 pub use incin_core::exec::TensorId;
 
 pub use crate::quant::BlockQ8_0;
+pub use crate::quant::{BlockMXFP4, BlockNVFP4};
 
 #[derive(Debug, Clone, PartialEq)]
 /// Implementation of `CpuBuffer` for the respective backend..
@@ -54,6 +55,10 @@ pub enum CpuBuffer {
     F8E5M2(Vec<F8E5M2>),
     /// `Q8_0`.
     Q8_0(Vec<BlockQ8_0>),
+    /// `NVFP4` (16 E2M1 values + E4M3 scale per 9-byte block).
+    NVFP4(Vec<BlockNVFP4>),
+    /// `MXFP4` (32 E2M1 values + E8M0 scale per 17-byte block).
+    MXFP4(Vec<BlockMXFP4>),
     /// `Bool`.
     Bool(Vec<u8>),
 }
@@ -71,6 +76,8 @@ impl CpuBuffer {
             Self::F8E4M3(_) => DTypeId::F8E4M3,
             Self::F8E5M2(_) => DTypeId::F8E5M2,
             Self::Q8_0(_) => DTypeId::Q8_0,
+            Self::NVFP4(_) => DTypeId::NVFP4,
+            Self::MXFP4(_) => DTypeId::MXFP4,
             Self::Bool(_) => DTypeId::Bool,
         }
     }
@@ -91,6 +98,8 @@ impl CpuBuffer {
             Self::F8E4M3(_) => Alignment::of::<F8E4M3>(),
             Self::F8E5M2(_) => Alignment::of::<F8E5M2>(),
             Self::Q8_0(_) => Alignment::of::<BlockQ8_0>(),
+            Self::NVFP4(_) => Alignment::of::<BlockNVFP4>(),
+            Self::MXFP4(_) => Alignment::of::<BlockMXFP4>(),
             Self::Bool(_) => Alignment::of::<u8>(),
         }
     }
@@ -109,6 +118,8 @@ impl CpuBuffer {
             CpuBuffer::F8E4M3(v) => v.len(),
             CpuBuffer::F8E5M2(v) => v.len(),
             CpuBuffer::Q8_0(v) => v.len() * 32,
+            CpuBuffer::NVFP4(v) => v.len() * 16,
+            CpuBuffer::MXFP4(v) => v.len() * 32,
             CpuBuffer::Bool(v) => v.len(),
         }
     }
@@ -153,6 +164,14 @@ impl CpuBuffer {
                 CpuBuffer::Q8_0(v) => core::slice::from_raw_parts(
                     v.as_ptr() as *const u8,
                     v.len() * core::mem::size_of::<BlockQ8_0>(),
+                ),
+                CpuBuffer::NVFP4(v) => core::slice::from_raw_parts(
+                    v.as_ptr() as *const u8,
+                    v.len() * core::mem::size_of::<BlockNVFP4>(),
+                ),
+                CpuBuffer::MXFP4(v) => core::slice::from_raw_parts(
+                    v.as_ptr() as *const u8,
+                    v.len() * core::mem::size_of::<BlockMXFP4>(),
                 ),
                 CpuBuffer::Bool(v) => v.as_slice(),
             }
@@ -202,6 +221,20 @@ impl CpuBuffer {
                     op: "construct arithmetic result",
                 });
             }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "construct arithmetic result",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
+                    backend: "cpu",
+                    op: "construct arithmetic result",
+                });
+            }
         })
     }
 
@@ -229,6 +262,29 @@ impl CpuBuffer {
             CpuBuffer::Q8_0(v) => {
                 let block = &v[i / 32];
                 block.d.to_f64() * f64::from(block.qs[i % 32])
+            }
+            CpuBuffer::NVFP4(v) => {
+                use incin_core::tensor::dtype::fp4;
+                let block = &v[i / 16];
+                let byte = block.data[(i % 16) / 2];
+                let nibble = if i.is_multiple_of(2) {
+                    byte & 0x0F
+                } else {
+                    byte >> 4
+                };
+                f64::from(fp4::e2m1_to_f32(nibble))
+                    * f64::from(incin_core::tensor::dtype::F8E4M3::from_bits(block.scale).to_f32())
+            }
+            CpuBuffer::MXFP4(v) => {
+                use incin_core::tensor::dtype::fp4;
+                let block = &v[i / 32];
+                let byte = block.data[(i % 32) / 2];
+                let nibble = if i.is_multiple_of(2) {
+                    byte & 0x0F
+                } else {
+                    byte >> 4
+                };
+                f64::from(fp4::e2m1_to_f32(nibble)) * f64::from(fp4::e8m0_to_f32(block.scale))
             }
         }
     }
@@ -333,6 +389,20 @@ impl CpuStorage {
                     op: "autograd seed",
                 });
             }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "autograd seed",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
+                    backend: "cpu",
+                    op: "autograd seed",
+                });
+            }
         };
 
         Ok(CpuStorage::from_contiguous(new_buffer, &other.shape))
@@ -357,6 +427,20 @@ impl CpuStorage {
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
                     dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "zeros_like",
+                });
+            }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "zeros_like",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
                     backend: "cpu",
                     op: "zeros_like",
                 });
@@ -463,6 +547,16 @@ impl CpuStorage {
             ),
             CpuBuffer::Q8_0(_) => Err(Error::UnsupportedDType {
                 dtype: DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: operation,
+            }),
+            CpuBuffer::NVFP4(_) => Err(Error::UnsupportedDType {
+                dtype: DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: operation,
+            }),
+            CpuBuffer::MXFP4(_) => Err(Error::UnsupportedDType {
+                dtype: DTypeId::MXFP4.descriptor(),
                 backend: "cpu",
                 op: operation,
             }),
@@ -653,6 +747,20 @@ impl CpuStorage {
                     op: "materialize non-contiguous storage",
                 });
             }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "materialize non-contiguous storage",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
+                    backend: "cpu",
+                    op: "materialize non-contiguous storage",
+                });
+            }
         };
 
         Ok(CpuStorage::from_contiguous(new_buffer, &self.shape))
@@ -756,6 +864,20 @@ pub(crate) fn scatter_into_zeros(
         CpuBuffer::Q8_0(_) => {
             return Err(Error::UnsupportedDType {
                 dtype: DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: "scatter gradient",
+            });
+        }
+        CpuBuffer::NVFP4(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: "scatter gradient",
+            });
+        }
+        CpuBuffer::MXFP4(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::MXFP4.descriptor(),
                 backend: "cpu",
                 op: "scatter gradient",
             });

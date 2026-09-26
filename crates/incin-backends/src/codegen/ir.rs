@@ -1045,6 +1045,11 @@ impl KernelDefinition {
             // 1-byte storage. Capability rows never route fp8 here.
             DTypeId::F8E4M3 => "__nv_fp8_e4m3",
             DTypeId::F8E5M2 => "__nv_fp8_e5m2",
+            // Issue #95: same fail-loud mapping for block FP4. A block
+            // dtype must never render as `float` (that would re-read packed
+            // nibbles as f32); the element tag fails NVRTC instead, and no
+            // row routes FP4 here until #85 lands the cuBLASLt path.
+            DTypeId::NVFP4 | DTypeId::MXFP4 => "__nv_fp4_e2m1",
             _ => "float",
         };
 
@@ -1091,6 +1096,8 @@ impl KernelDefinition {
             // 1-byte storage. Capability rows never route fp8 here.
             DTypeId::F8E4M3 => "__nv_fp8_e4m3",
             DTypeId::F8E5M2 => "__nv_fp8_e5m2",
+            // Issue #95: same fail-loud mapping as the forward renderer.
+            DTypeId::NVFP4 | DTypeId::MXFP4 => "__nv_fp4_e2m1",
             _ => "float",
         };
 

@@ -50,7 +50,8 @@ pub const fn validate_tensor_parallel_dtype(dtype: DTypeId) -> Result<(), Tensor
             Err(TensorParallelError::UnsupportedTensorDType { dtype })
         }
         // Issue #94: fp8 shards refuse like Q8_0 (see collective.rs).
-        DTypeId::F8E4M3 | DTypeId::F8E5M2 => {
+        // Issue #95: block fp4 refuses likewise.
+        DTypeId::F8E4M3 | DTypeId::F8E5M2 | DTypeId::NVFP4 | DTypeId::MXFP4 => {
             Err(TensorParallelError::UnsupportedTensorDType { dtype })
         }
     }

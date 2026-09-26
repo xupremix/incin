@@ -54,7 +54,7 @@ pub trait ConstDType: DType<Arg = ()> {
 /// A [`ConstDType`] that additionally has a current built-in [`DTypeId`].
 ///
 /// All current Incin built-in dtypes (`f32`, `f64`, `f16`, `bf16`, `f8e4m3`,
-/// `f8e5m2`, `u8`, `u32`, `i64`, `Q8_0`) implement this.
+/// `f8e5m2`, `u8`, `u32`, `i64`, `Q8_0`, `NVFP4`, `MXFP4`) implement this.
 ///
 /// # Where this bound is (and is not) required
 ///
