@@ -679,7 +679,12 @@ fn host_f32(shape: &[usize], values: Vec<f32>) -> HostStorage {
 fn host_values(storage: &HostStorage) -> Vec<f64> {
     let total: usize = storage.shape.iter().product::<usize>().max(1);
     let mut out = Vec::with_capacity(total);
-    let mut index = vec![0usize; storage.shape.len().max(1)];
+    // Exactly one index per axis: a scalar (rank 0) reads once with the
+    // empty index. `len().max(1)` would hand `get` a one-element index
+    // for a zero-rank shape and trip its rank assert - which is how the
+    // scalar-reduction parity tests died in the reference reader rather
+    // than in any backend under test.
+    let mut index = vec![0usize; storage.shape.len()];
     for _ in 0..total {
         out.push(storage.get(&index));
         for (i, extent) in index.iter_mut().zip(storage.shape.iter()).rev() {
