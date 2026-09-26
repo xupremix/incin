@@ -2329,10 +2329,21 @@ pub(crate) fn launch_scatter_add_ordered(
             reason: "scatter_add axis is outside the operand's rank",
         }));
     }
-    if index.shape != input.shape || src.shape != input.shape {
+    if index.shape.len() != rank || src.shape.len() != rank {
         return Err(Error::Backend(BackendError::InvalidInput {
             operation: OperationKind::ScatterAdd,
-            reason: "scatter_add expects the index and source operands to share the input's shape",
+            reason: "scatter_add index and source ranks must match the input rank",
+        }));
+    }
+    // The index names one destination per source element, so the two share
+    // a shape - but that shape is the iteration domain, not the input's:
+    // CPU walks the index positions and drops out-of-range destinations,
+    // and the map kernel below decodes positions with the index's own
+    // contiguous strides for the same reason.
+    if index.shape != src.shape {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::ScatterAdd,
+            reason: "scatter_add expects the index and source operands to share a shape",
         }));
     }
 
@@ -2351,7 +2362,14 @@ pub(crate) fn launch_scatter_add_ordered(
         .to_vec();
     let out_contig_dev = dev_i32_arg(&stream, &out_contig, "stride")?;
     let in_strides_dev = dev_i32_arg(&stream, input.strides.strides(), "stride")?;
-    let idx_contig_dev = dev_i32_arg(&stream, &out_contig, "stride")?;
+    // The iteration domain is the index/source shape, which may differ
+    // from the input's: decode positions with the index's own contiguous
+    // strides, not the output's. (When the shapes coincide this is the
+    // same vector as `out_contig`, so admitted rows are unaffected.)
+    let idx_contig = crate::layout::contiguous_strides(&index.shape)
+        .strides()
+        .to_vec();
+    let idx_contig_dev = dev_i32_arg(&stream, &idx_contig, "stride")?;
     let idx_strides_dev = dev_i32_arg(&stream, index.strides.strides(), "stride")?;
     let src_strides_dev = dev_i32_arg(&stream, src.strides.strides(), "stride")?;
     let out_shape_dev = dev_i32_arg(&stream, &out_shape, "shape")?;
