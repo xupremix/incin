@@ -1471,11 +1471,18 @@ fn batch_norm_training_without_affine_ignores_running_statistics() {
     assert_close(&dx, &expected_dx, 1e-4, "no-affine dx");
     // Nothing else was an operand, so nothing else may carry a gradient:
     // a stray dw/db entry would mean the backward wrote the absent
-    // parameter scratch and the tape attached it to something.
+    // parameter scratch and the tape attached it to something. The walk
+    // always retains the seeded loss entry itself (`tape::backward`
+    // inserts `loss.id()`), so the map holds exactly the output and the
+    // input - two entries, not one.
     assert_eq!(
         grads.len(),
-        1,
-        "only the input operand exists; no other gradient may appear"
+        2,
+        "only the output seed and the input gradient may appear; no other gradient may appear"
+    );
+    assert!(
+        grads.get(out.id).is_some(),
+        "the walk retains the seeded loss entry"
     );
 }
 
