@@ -722,6 +722,17 @@ extern "C" __global__ void incin_cuda_diag_2d_to_1d(
 // (contiguous - the launcher supplies it); `in_strides` are the input's
 // physical strides, so a strided input reads through them, offset by
 // `input_offset`.
+//
+// The axis fold is deliberately branchless with respect to the decode loop:
+// folding `coord / repeats` under an `if (d == axis)` inside the loop
+// miscompiles under NVVM 7.0.1 (CUDA 12.6, observed on sm_75): the
+// range-splitting transform fast-forwards iterations below `min(axis, rank)`
+// as remainder-only steps, dropping their accumulation, so every row past
+// the first re-reads the first tile. The loop below is straight-line; the
+// axis correction is a single post-pass over loop-invariant values, which
+// leaves the faulty transform nothing to split on. Pinned by the hardware
+// tests `repeat_interleave_places_copies_adjacently` and
+// `repeat_interleave_reads_through_a_strided_view`.
 extern "C" __global__ void incin_cuda_repeat_interleave(
     const float* __restrict__ input,
     float* __restrict__ output,
@@ -740,9 +751,17 @@ extern "C" __global__ void incin_cuda_repeat_interleave(
     for (int d = 0; d < rank; d++) {
         int coord = rem / out_strides[d];
         rem = rem % out_strides[d];
-        if (d == axis) coord /= repeats;
         in_flat += coord * in_strides[d];
     }
+    // Each group of `repeats` adjacent output elements along `axis` shares
+    // one source element: fold that axis coordinate back down, replacing
+    // its contribution. `axis_dim` is recovered from the contiguous output
+    // strides (`stride[d - 1] == dim[d] * stride[d]`); `repeats >= 1` - the
+    // launcher refuses 0 - so the division is exact and total.
+    int axis_stride = out_strides[axis];
+    int axis_dim = (axis == 0 ? numel_out : out_strides[axis - 1]) / axis_stride;
+    int axis_coord = (idx / axis_stride) % axis_dim;
+    in_flat += (axis_coord / repeats - axis_coord) * in_strides[axis];
     output[idx] = input[in_flat];
 }
 
