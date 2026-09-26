@@ -491,11 +491,13 @@ pub(super) const fn descriptor_min_rank(operation: OperationKind) -> usize {
         OperationKind::Addmm => 1,
         OperationKind::ScaledDotProductAttention => 2,
         // Matched to the descriptor, not to the kernel. `group_norm` needs a
-        // channel axis and `instance_norm` needs the full [N, C, H, W] layout;
-        // the CPU kernels accept less than that, but a row wider than what the
-        // descriptor validates advertises requests that can never reach it.
-        OperationKind::GroupNorm => 2,
-        OperationKind::InstanceNorm | OperationKind::PixelShuffle => 4,
+        // channel axis and `instance_norm` needs the same channel axis (it
+        // is the rank-agnostic `group_norm(channels)` rewrite on every
+        // backend); the CPU kernels accept less than that, but a row wider
+        // than what the descriptor validates advertises requests that can
+        // never reach it.
+        OperationKind::GroupNorm | OperationKind::InstanceNorm => 2,
+        OperationKind::PixelShuffle => 4,
         // The weight table is always rank two; the index operand carries
         // whatever batch geometry addresses it, down to a single-axis vector
         // of indices - a scalar index is not accepted. One is therefore the

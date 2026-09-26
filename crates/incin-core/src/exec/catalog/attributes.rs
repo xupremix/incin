@@ -875,11 +875,16 @@ impl AttributeContract for EpsilonAttributes {
         validate_epsilon(operation, self.epsilon)?;
         match operation {
             OperationKind::InstanceNorm => {
-                if first_shape(inputs).is_some_and(|shape| shape.len() != 4) {
+                // One group per channel, so the operand needs a channel
+                // axis - `[batch, channels, ...]` with rank ≥ 2 - but no
+                // spatial axes: every backend implements this as the
+                // rank-agnostic `group_norm(channels)` rewrite, and CPU
+                // parity holds down to rank two.
+                if first_shape(inputs).is_some_and(|shape| shape.len() < 2) {
                     return Err(invalid(
                         operation,
                         "rank",
-                        "instance norm requires [batch, channels, height, width]",
+                        "instance norm requires a channel axis [batch, channels, ...]",
                     ));
                 }
             }

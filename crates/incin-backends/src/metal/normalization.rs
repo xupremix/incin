@@ -427,9 +427,9 @@ impl<D: Device> MetalBackendImpl<D> {
     /// `groups = channels` — CUDA's `cuda_instance_norm_storage` and CPU's
     /// instance-norm path both spell it that way. The channels axis is
     /// `shape[1]` when the operand has rank ≥ 2 (the descriptor requires
-    /// rank 4 for `InstanceNorm`, so this is always the channel axis on
-    /// admitted requests); a rank-0/1 operand falls back to one channel so
-    /// the helper stays total, matching CUDA's guard.
+    /// a channel axis for `InstanceNorm`, so this is always the channel
+    /// axis on admitted requests); a rank-0/1 operand falls back to one
+    /// channel so the helper stays total, matching CUDA's guard.
     pub(crate) fn instance_norm<K: DType>(
         input: &<Self as StorageBackend>::Storage<K>,
         epsilon: f64,

@@ -390,7 +390,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `mse_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `l1_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `bce_with_logits_loss` | `f32` | `contiguous`, `strided` | any | yes | composed |
-| `instance_norm` | `f32` | `contiguous`, `strided` | 4 | yes | composed |
+| `instance_norm` | `f32` | `contiguous`, `strided` | 2–4 | yes | composed |
 | `var_all` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `var_dim` | `f32` | `contiguous`, `strided` | any | yes | composed |
 | `var_keepdim` | `f32` | `contiguous`, `strided` | any | yes | composed |
@@ -617,7 +617,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `mse_loss` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
 | `l1_loss` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
 | `bce_with_logits_loss` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
-| `instance_norm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 4 | yes | composed |
+| `instance_norm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 2–4 | yes | composed |
 | `norm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
 | `bmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 3+ | yes | composed |
 | `addmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | composed |
@@ -790,7 +790,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `std_dim` | `f32` | `contiguous` | any | yes | composed |
 | `std_keepdim` | `f32` | `contiguous` | any | yes | composed |
 | `norm` | `f32` | `contiguous` | any | yes | composed |
-| `instance_norm` | `f32` | `contiguous` | 4 | yes | composed |
+| `instance_norm` | `f32` | `contiguous` | 2–4 | yes | composed |
 | `cross_entropy_loss` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | composed |
 
 ## `metal`
@@ -925,7 +925,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `std_dim` | `f32` | `contiguous` | any | yes | composed |
 | `std_keepdim` | `f32` | `contiguous` | any | yes | composed |
 | `norm` | `f32` | `contiguous` | any | yes | composed |
-| `instance_norm` | `f32` | `contiguous` | 4 | yes | composed |
+| `instance_norm` | `f32` | `contiguous` | 2–4 | yes | composed |
 | `cross_entropy_loss` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | composed |
 
 ## Reading this
