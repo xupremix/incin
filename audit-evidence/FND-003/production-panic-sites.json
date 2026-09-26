@@ -12,31 +12,31 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1830",
+    "site": "crates/incin/src/train.rs:1834",
     "code": ".expect(\"this rank deposited above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1833",
+    "site": "crates/incin/src/train.rs:1837",
     "code": ".expect(\"peer deposit checked above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1864",
+    "site": "crates/incin/src/train.rs:1868",
     "code": "let mine = inner.pending[rank].take().expect(\"deposited above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1865",
+    "site": "crates/incin/src/train.rs:1869",
     "code": "let theirs = inner.pending[peer].take().expect(\"checked above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:2001",
+    "site": "crates/incin/src/train.rs:2005",
     "code": ".expect(\"f64 values always match the f64 buffer dtype\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
