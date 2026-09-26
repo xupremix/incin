@@ -1909,6 +1909,16 @@ impl<D: Device> Execute<op::Conv1dExact> for CudaBackendImpl<D> {
         };
         let (cout, cin_g, k_len) = (weight.shape[0], weight.shape[1], weight.shape[2]);
 
+        // conv1d records ONE tape entry for the whole conv2d composition.
+        // The reshapes and the conv2d pieces push their entries while the
+        // forward runs; the entries this composition added (everything past
+        // `before`, so an enclosing graph keeps its own) are then drained
+        // off and folded into a single entry that replays them with the
+        // output cotangent. Values and gradients are identical to the
+        // recorded composition - the same closures run, only collapsed one
+        // level - which is what the tape-depth contract pins.
+        let recording = incin_core::exec::GradMode::current().records();
+        let before = crate::cuda::tape::depth();
         let act_2d =
             crate::cuda::backend::shape_ops::cuda_reshape_storage(activation, &[b, cin, 1, len])
                 .map_err(wrap)?;
@@ -1927,13 +1937,63 @@ impl<D: Device> Execute<op::Conv1dExact> for CudaBackendImpl<D> {
         .map_err(wrap)?;
 
         let out_len = out_2d.shape[3];
-        if unbatched {
+        let out = if unbatched {
             crate::cuda::backend::shape_ops::cuda_reshape_storage(&out_2d, &[cout, out_len])
-                .map_err(wrap)
+                .map_err(wrap)?
         } else {
             crate::cuda::backend::shape_ops::cuda_reshape_storage(&out_2d, &[b, cout, out_len])
-                .map_err(wrap)
+                .map_err(wrap)?
+        };
+        let out_2d_shape = out_2d.shape.to_vec();
+        let composed = {
+            let mut prefix = crate::cuda::tape::drain_all();
+            let mine = prefix.split_off(before);
+            for entry in prefix {
+                crate::cuda::tape::push(entry);
+            }
+            mine
+        };
+        if !recording || composed.is_empty() {
+            // No entry, mirroring an unrecorded op: without a recording
+            // grad mode there is nothing to replay, and an empty capture
+            // would make the replay fail closed instead of running.
+            return Ok(out);
         }
+        let (act_id, weight_id, out_id) = (activation.id, weight.id, out.id);
+        let mut input_ids = alloc::vec![act_id, weight_id];
+        if let Some(bias) = bias {
+            input_ids.push(bias.id);
+        }
+        let composed = std::sync::Mutex::new(Some(composed));
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: input_ids.clone(),
+            backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                // The capture runs once per drain, like any tape node: the
+                // walk drains entries, so a second walk never reaches this
+                // closure with nodes still inside. Take them out here; a
+                // missing capture fails closed as a consumed graph.
+                let nodes = composed
+                    .lock()
+                    .map_err(|_| Error::Msg("conv1d replay lock poisoned".into()))?
+                    .take()
+                    .ok_or(incin_core::error::BackwardError::GraphConsumed)?;
+                let grad_out_2d =
+                    crate::cuda::backend::shape_ops::cuda_reshape_storage(grad_out, &out_2d_shape)?;
+                let grads =
+                    incin_core::exec::tape::backward_with_seed(nodes, &out_2d, &grad_out_2d)?;
+                let mut contributions = alloc::vec::Vec::with_capacity(input_ids.len());
+                for id in &input_ids {
+                    contributions.push(grads.get(*id).cloned().ok_or_else(|| {
+                        Error::Msg(
+                            "conv1d replay reached no gradient for a declared operand".into(),
+                        )
+                    })?);
+                }
+                Ok(contributions)
+            }),
+        });
+        Ok(out)
     }
 }
 

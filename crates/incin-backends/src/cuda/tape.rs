@@ -134,6 +134,18 @@ pub fn depth() -> usize {
     TAPE.with(|t| t.borrow().depth())
 }
 
+/// Drain every entry off the tape, returning them in push order.
+///
+/// The narrow primitive behind op-level collapsing: a composed forward
+/// (`conv1d` via `conv2d`) runs its pieces normally, then the caller
+/// re-pushes the entries that predate its own (`split_off` at a
+/// previously recorded [`depth`]) and folds the remainder into the one
+/// entry it records. Entries keep their identities, so the backward
+/// walk is unaffected; only the entry count changes.
+pub(crate) fn drain_all() -> alloc::vec::Vec<TapeEntry> {
+    TAPE.with(|t| t.borrow_mut().drain())
+}
+
 /// The CUDA backend's gradient container (`Backend::Grads`).
 pub struct CudaGrads {
     pub(crate) grads: GradientMap<CudaStorage>,
