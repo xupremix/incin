@@ -253,6 +253,45 @@ fn sum_dim_squeeze(storage: &CudaStorage, axis: usize) -> Result<CudaStorage> {
     Ok(CudaStorage::new(reduced.buffer.clone(), new_shape))
 }
 
+/// Rewrap a gradient that a squeeze-reducing forward (`sum_dim`,
+/// `mean_dim`, `prod_dim`) produced back to the keepdim form of the
+/// forward input's shape, so [`unbroadcast`] can expand it.
+///
+/// A squeeze reduction drops axis `dim` from the output shape (`[2, 3]`
+/// over dim 1 arrives as `[2]`), so the cotangent is one rank short with
+/// no marker of which axis went missing. The generic [`unbroadcast`]
+/// right-aligns, which misreads `[2]` against `[2, 3]` (`2 != 3`) and
+/// refuses a gradient that is perfectly defined. The axis is reinserted
+/// here, positionally, as size 1 (`[2, 1]`), and the tail broadcast
+/// expands it to the target. Metadata-only: same numel, same
+/// offset-zero element order - the same assumption the Welford walk in
+/// `backend/reduce.rs` already makes when it rewraps squeezed grads
+/// inline, and the same reinsertion the CPU `sum_dim` backward performs
+/// before broadcasting.
+///
+/// Fail-closed: when the shapes do not line up exactly (wrong numel,
+/// axis outside the target rank), the gradient passes through untouched
+/// and [`unbroadcast`] refuses as before, rather than a mis-shaped
+/// rewrap reaching accumulation.
+pub(crate) fn unsqueeze_squeezed_grad(
+    grad_out: &CudaStorage,
+    t_shape: &[usize],
+    dim: usize,
+) -> CudaStorage {
+    let mut keepdim_shape = t_shape.to_vec();
+    if dim >= keepdim_shape.len() {
+        return grad_out.clone();
+    }
+    keepdim_shape[dim] = 1;
+    let keepdim_numel: usize = keepdim_shape.iter().product();
+    let grad_numel: usize = grad_out.shape.iter().product();
+    if grad_out.shape != keepdim_shape && grad_numel == keepdim_numel {
+        CudaStorage::new(grad_out.buffer.clone(), keepdim_shape)
+    } else {
+        grad_out.clone()
+    }
+}
+
 /// Sum one axis, keeping it.
 ///
 /// Fallible rather than unwrapping the launch. Every CUDA recipe with a

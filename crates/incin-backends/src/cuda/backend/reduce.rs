@@ -56,7 +56,10 @@ impl<D: Device> CudaBackendImpl<D> {
         let out = crate::cuda::ops::reduce::launch_reduce_op("sum", t, dim, false)?;
         let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            crate::cuda::tape::unbroadcast(grad_out, &t_shape)
+            // The forward squeezed `dim` away, so the cotangent arrives
+            // one rank short; rewrap it to keepdim before unbroadcasting.
+            let grad_out = crate::cuda::tape::unsqueeze_squeezed_grad(grad_out, &t_shape, dim);
+            crate::cuda::tape::unbroadcast(&grad_out, &t_shape)
         });
         Ok(out)
     }
@@ -84,7 +87,10 @@ impl<D: Device> CudaBackendImpl<D> {
         };
         let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let unb = crate::cuda::tape::unbroadcast(grad_out, &t_shape)?;
+            // Same squeeze as `sum_dim`: rewrap before unbroadcasting,
+            // then scale by the axis length.
+            let grad_out = crate::cuda::tape::unsqueeze_squeezed_grad(grad_out, &t_shape, dim);
+            let unb = crate::cuda::tape::unbroadcast(&grad_out, &t_shape)?;
             if axis_len > 0.0 {
                 let expr = format!("x * ({:.8}f)", (1.0 / axis_len) as f32);
                 crate::cuda::ops::elementwise::launch_unary_op("mul_scalar", &expr, &unb)
@@ -154,7 +160,12 @@ impl<D: Device> CudaBackendImpl<D> {
         let out_capture = out.clone();
         let t_shape = t.shape.to_vec();
         push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            let unb_grad = crate::cuda::tape::unbroadcast(grad_out, &t_shape)?;
+            // Both the cotangent and the captured forward output are
+            // squeeze-reduced; rewrap each to keepdim before unbroadcasting.
+            let grad_out = crate::cuda::tape::unsqueeze_squeezed_grad(grad_out, &t_shape, dim);
+            let out_capture =
+                crate::cuda::tape::unsqueeze_squeezed_grad(&out_capture, &t_shape, dim);
+            let unb_grad = crate::cuda::tape::unbroadcast(&grad_out, &t_shape)?;
             let unb_prod = crate::cuda::tape::unbroadcast(&out_capture, &t_shape)?;
             let grad_scaled = crate::cuda::backend::cuda_mul_storage(
                 &unb_grad,
