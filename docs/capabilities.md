@@ -611,8 +611,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `scaled_dot_product_attention` | `f32` | `contiguous` | 2+ | yes | composed |
 | `dot` | `f32` | `contiguous` | 1+ | yes | composed |
 | `outer` | `f32` | `contiguous` | 1+ | yes | composed |
-| `quantize` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | no | native |
-| `dequantize` | `q8_0` | `contiguous` | any | no | native |
+| `quantize` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | native |
+| `dequantize` | `q8_0` | `contiguous` | any | yes | native |
 | `quantized_matmul` | `q8_0` | `contiguous` | 2+ | no | native |
 | `mse_loss` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
 | `l1_loss` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |

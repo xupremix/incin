@@ -363,12 +363,13 @@ fn the_cpu_matmul_rows_admit_every_float_and_refuse_the_rest() {
 ///
 /// CPU's `quantize`/`dequantize` kernels push the straight-through entry and
 /// the catalog backs that with [`GradientRule::StraightThrough`], so those two
-/// rows admit training. `quantized_matmul` has [`GradientRule::None`] and
-/// records nothing on any backend, so its row stays `false` everywhere.
-/// CUDA's executor pushes no tape for the boundary either, and WGPU/Metal do
-/// not advertise the groups at all - fail-closed in both directions: a row
-/// claims training only where the implementation that must answer for it
-/// exists, and the catalog's gradient rule and the row never disagree.
+/// rows admit training. CUDA's executor records the same STE entry (verified
+/// on hardware), so its two rows admit training as well.
+/// `quantized_matmul` has [`GradientRule::None`] and records nothing on any
+/// backend, so its row stays `false` everywhere. WGPU/Metal do not advertise
+/// the groups at all - fail-closed in both directions: a row claims training
+/// only where the implementation that must answer for it exists, and the
+/// catalog's gradient rule and the row never disagree.
 #[test]
 fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
     use incin_core::shapes::error::OperationKind as K;
@@ -409,9 +410,10 @@ fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
     );
 
     // Every other backend: whatever it advertises of the three stays
-    // training-false until an executor there records a tape entry. A backend
-    // that does not advertise one of them at all is fine - `None` is the
-    // fail-closed answer too.
+    // training-false until an executor there records a tape entry, except
+    // CUDA's quantize/dequantize pair, whose executor records the same STE
+    // entry as CPU's (hardware-verified). A backend that does not advertise
+    // one of them at all is fine - `None` is the fail-closed answer too.
     for (device, rules) in [
         (DeviceKind::Cuda, CUDA_CAPABILITIES),
         (DeviceKind::Wgpu, WGPU_CAPABILITIES),
@@ -419,10 +421,11 @@ fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
     ] {
         for operation in [K::Quantize, K::Dequantize, K::QuantizedMatMul] {
             if let Some(training) = training_of(rules, operation) {
-                assert!(
-                    !training,
-                    "{device:?} advertises {operation:?} with training = true, but its \
-                     executor records no tape for it"
+                let expect_training = device == DeviceKind::Cuda && operation != K::QuantizedMatMul;
+                assert_eq!(
+                    training, expect_training,
+                    "{device:?} advertises {operation:?} with training = {training}, but its \
+                     executor records a tape for it: {expect_training}"
                 );
             }
         }

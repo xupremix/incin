@@ -461,6 +461,8 @@ pub(super) const fn entry(
             // values: which positions are non-zero is a discrete property
             // the tape cannot perturb, the same reason `OneHot` sits here.
             | OperationKind::NonZero
+            // Integer-index-in/integer-count-out has no meaningful cotangent, same reason as `OneHot`/`NonZero`.
+            | OperationKind::Bincount
     ) {
         gradient = GradientRule::None;
     } else if matches!(operation, OperationKind::ToDevice) {

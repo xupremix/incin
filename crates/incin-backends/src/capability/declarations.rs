@@ -483,15 +483,13 @@ macro_rules! cuda_descriptor_operations {
             // to FLOAT_DTYPES - same Composed kind, Contiguous layouts,
             // rank bounds and training; only the dtype set differed.
             composed_matmul_bias = [],
-            // All three `training` flags are `false` here, unlike CPU's: the
-            // CUDA executor's quantize/dequantize paths
-            // (`cuda/executor.rs` around the `Execute<op::Quantize>` impls,
-            // down to `cuda/ops/quant.rs`) launch a kernel and return without
-            // pushing a `cuda::tape` entry, so no training invocation could
-            // ever be answered with a gradient. Fail-closed: the row claims
-            // training only when the recording implementation exists.
-            quantizing = [(Quantize, false)],
-            quantized = [(Dequantize, false), (QuantizedMatMul, false)],
+            // `Quantize`/`Dequantize` are `training = true` like CPU's: the
+            // CUDA executor's quantize/dequantize paths push the issue #93
+            // straight-through `cuda::tape` entry, so a training invocation
+            // is answered with a gradient. `QuantizedMatMul` stays `false`:
+            // it records nothing and has `GradientRule::None`.
+            quantizing = [(Quantize, true)],
+            quantized = [(Dequantize, true), (QuantizedMatMul, false)],
             composed_reduction = [
                 MseLoss, L1Loss, BceWithLogitsLoss,
                 InstanceNorm,

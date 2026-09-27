@@ -1710,6 +1710,23 @@ impl<D: Device> Execute<op::Quantize> for CudaBackendImpl<D> {
         }
         crate::cuda::ops::quant::launch_quantize_q8_0(input)
             .map_err(|e| kernel_error("Cuda", operation, e))
+            .inspect(|output| {
+                // Straight-through estimator (issue #93, Decision 2), mirroring
+                // CPU's `quantize_storage` recipe: the forward is the true
+                // block-quantized value and the backward passes the cotangent
+                // to the float source unchanged (`grad_in = grad_out`).
+                // Shapes match (the launcher preserves `input.shape`), so a
+                // clone is correctly shaped; the single input is the float
+                // source, not a scale/param.
+                let (input_id, output_id) = (input.id, output.id);
+                crate::cuda::tape::record_with(|| crate::cuda::tape::TapeEntry {
+                    output_id,
+                    input_ids: alloc::vec![input_id],
+                    backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                        Ok(alloc::vec![grad_out.clone()])
+                    }),
+                });
+            })
     }
 }
 
@@ -1734,6 +1751,21 @@ impl<D: Device> Execute<op::Dequantize> for CudaBackendImpl<D> {
         }
         crate::cuda::ops::quant::launch_dequantize_q8_0(input)
             .map_err(|e| kernel_error("Cuda", operation, e))
+            .inspect(|output| {
+                // Dual of `quantize`'s straight-through node: decoding a block
+                // encoding has no derivative either, so the cotangent passes
+                // to the quantized operand unchanged. Together the two
+                // identity recipes make `dequantize(quantize(x))` backward
+                // exactly the identity (issue #93, Decision 2).
+                let (input_id, output_id) = (input.id, output.id);
+                crate::cuda::tape::record_with(|| crate::cuda::tape::TapeEntry {
+                    output_id,
+                    input_ids: alloc::vec![input_id],
+                    backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                        Ok(alloc::vec![grad_out.clone()])
+                    }),
+                });
+            })
     }
 }
 

@@ -14,9 +14,9 @@ use incin_backends::cuda::{
 use incin_core::backend_authoring::{AutogradBackend, StorageBackend};
 use incin_core::exec::catalog::{
     AdaptivePool2dAttributes, Conv1dAttributes, ConvTranspose2dAttributes, DTypeAttributes,
-    QuantizationAttributes,
+    NoAttributes, QuantizationAttributes,
 };
-use incin_core::exec::{ExecutionContext, TapeStorage, TensorHandle, dispatch, op};
+use incin_core::exec::{ExecutionContext, GradMode, TapeStorage, TensorHandle, dispatch, op};
 use incin_core::prelude::{CudaN, DTypeId, Local};
 use incin_core::typenum::U0;
 
@@ -578,5 +578,208 @@ fn quantize_refuses_non_q8_0_target_by_name() {
     assert!(
         message.contains("quantize"),
         "the refusal must name the operation: {message}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// quantize / dequantize straight-through estimator (issue #93, Decision 2)
+// ---------------------------------------------------------------------------
+
+/// Mirrors the CPU `quantize_ste` tape-depth probe on CUDA: the forward is
+/// the true Q8_0 block encoding, and under `GradMode::Enabled` each half of
+/// the boundary records exactly one STE tape node; under Disabled, none.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn quantize_records_one_ste_node_when_recording_and_none_when_disabled() {
+    require_cuda();
+    let ctx = context();
+    let values: Vec<f32> = (0..32).map(|index| index as f32 - 8.0).collect();
+    let input = upload_f32_shaped(&[32], &values);
+
+    let before = tape_depth();
+    GradMode::Enabled.scope(|| {
+        let blocks = dispatch::execute::<op::Quantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::Q8_0.descriptor(),
+            },
+            &[handle(&input)],
+        )
+        .expect("quantize executes");
+        assert_eq!(blocks.dtype(), DTypeId::Q8_0.descriptor());
+    });
+    assert_eq!(
+        tape_depth() - before,
+        1,
+        "quantize must record exactly one STE tape node under GradMode::Enabled"
+    );
+
+    let before = tape_depth();
+    GradMode::Disabled.scope(|| {
+        dispatch::execute::<op::Quantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::Q8_0.descriptor(),
+            },
+            &[handle(&input)],
+        )
+        .expect("quantize executes");
+    });
+    assert_eq!(
+        tape_depth() - before,
+        0,
+        "quantize under GradMode::Disabled must record nothing"
+    );
+
+    let before = tape_depth();
+    GradMode::Enabled.scope(|| {
+        let blocks = dispatch::execute::<op::Quantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::Q8_0.descriptor(),
+            },
+            &[handle(&input)],
+        )
+        .expect("quantize executes");
+        let restored = dispatch::execute::<op::Dequantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::F32.descriptor(),
+            },
+            &[handle(&blocks)],
+        )
+        .expect("dequantize executes");
+        assert_eq!(restored.dtype(), DTypeId::F32.descriptor());
+    });
+    assert_eq!(
+        tape_depth() - before,
+        2,
+        "both halves of the boundary must record their identity recipe"
+    );
+}
+
+/// STE says the cotangent passes to the float source unchanged: seed the
+/// quantized output with 2.0s and every input element must see 2.0.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn quantize_backward_passes_the_cotangent_through_unchanged() {
+    require_cuda();
+    let ctx = context();
+    let values: Vec<f32> = (0..32).map(|index| index as f32 - 8.0).collect();
+    let input = upload_f32_shaped(&[32], &values);
+    let input_id = TapeStorage::id(&input);
+
+    let blocks = GradMode::Enabled.scope(|| {
+        dispatch::execute::<op::Quantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::Q8_0.descriptor(),
+            },
+            &[handle(&input)],
+        )
+        .expect("quantize executes")
+    });
+
+    let seed = upload_f32_shaped(&[32], &[2.0; 32]);
+    let grads = <TestBackend as AutogradBackend>::backward_with::<f32>(&blocks, &seed)
+        .expect("the seeded walk reaches the STE node");
+    let grad = <TestBackend as AutogradBackend>::get_grad::<f32>(&input, &grads)
+        .expect("gradient map returned")
+        .expect("the quantized operand's input received a gradient");
+    assert_eq!(grad.shape.to_vec(), vec![32]);
+    let got = download_f32(&grad);
+    for (index, value) in got.iter().enumerate() {
+        assert_eq!(
+            *value, 2.0,
+            "STE must pass the cotangent through unchanged at element {index}"
+        );
+    }
+    let _ = input_id;
+}
+
+/// The two identity recipes compose: `sum_all(dequantize(quantize(x)))`
+/// backward plants all-ones, which must arrive at the input unchanged.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn quantize_dequantize_roundtrip_backward_is_the_identity_on_the_gradient() {
+    require_cuda();
+    let ctx = context();
+    let values: Vec<f32> = (0..32).map(|index| index as f32 - 8.0).collect();
+    let input = upload_f32_shaped(&[32], &values);
+    let input_id = TapeStorage::id(&input);
+
+    let loss = GradMode::Enabled.scope(|| {
+        let blocks = dispatch::execute::<op::Quantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::Q8_0.descriptor(),
+            },
+            &[handle(&input)],
+        )
+        .expect("quantize executes");
+        let restored = dispatch::execute::<op::Dequantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::F32.descriptor(),
+            },
+            &[handle(&blocks)],
+        )
+        .expect("dequantize executes");
+        dispatch::execute::<op::SumAll, _>(&ctx, NoAttributes, &[handle(&restored)])
+            .expect("sum_all executes")
+    });
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("roundtrip backward walks");
+    let grad = <TestBackend as AutogradBackend>::get_grad::<f32>(&input, &grads)
+        .expect("gradient map returned")
+        .expect("the input received a gradient");
+    assert_eq!(grad.shape.to_vec(), vec![32]);
+    let got = download_f32(&grad);
+    for (index, value) in got.iter().enumerate() {
+        assert_eq!(
+            *value, 1.0,
+            "an all-ones seed must arrive at the input unchanged at element {index}"
+        );
+    }
+    let _ = input_id;
+}
+
+/// A training-mode context admits both halves of the boundary and records
+/// one STE node per half; `quantized_matmul` still refuses training.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn training_context_admits_the_quantize_boundary_and_records_both_entries() {
+    require_cuda();
+    let ctx = ExecutionContext::new(TestBackend::new()).with_training(true);
+    let values: Vec<f32> = (0..32).map(|index| index as f32 - 8.0).collect();
+    let input = upload_f32_shaped(&[32], &values);
+
+    let before = tape_depth();
+    let blocks = GradMode::Enabled.scope(|| {
+        dispatch::execute::<op::Quantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::Q8_0.descriptor(),
+            },
+            &[handle(&input)],
+        )
+        .expect("quantize executes under training")
+    });
+    assert_eq!(blocks.dtype(), DTypeId::Q8_0.descriptor());
+    let restored = GradMode::Enabled.scope(|| {
+        dispatch::execute::<op::Dequantize, _>(
+            &ctx,
+            QuantizationAttributes {
+                dtype: DTypeId::F32.descriptor(),
+            },
+            &[handle(&blocks)],
+        )
+        .expect("dequantize executes under training")
+    });
+    assert_eq!(restored.dtype(), DTypeId::F32.descriptor());
+    assert_eq!(
+        tape_depth() - before,
+        2,
+        "training mode must record one STE node per half of the boundary"
     );
 }
