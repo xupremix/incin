@@ -67,10 +67,14 @@ pub mod attention;
 pub mod avg_pool2d;
 /// `batch_norm`.
 pub mod batch_norm;
+/// `batch_norm1d`.
+pub mod batch_norm1d;
 /// `conv1d`.
 pub mod conv1d;
 /// `conv2d`.
 pub mod conv2d;
+/// `conv_transpose2d`.
+pub mod conv_transpose2d;
 /// Randomly zeroes activations during training.
 pub mod dropout;
 /// `embedding`.
@@ -79,10 +83,14 @@ pub mod embedding;
 pub mod feed_forward;
 /// `flatten`.
 pub mod flatten;
+/// `group_norm`.
+pub mod group_norm;
 /// The gated recurrent unit, alongside `rnn` and `lstm`.
 pub mod gru;
 /// `init`.
 pub mod init;
+/// `instance_norm`.
+pub mod instance_norm;
 /// Typed preallocated key/value cache for incremental decoding (issue #104).
 pub mod kv_cache;
 /// `layer_norm`.
@@ -119,6 +127,8 @@ pub mod state;
 pub mod stats;
 /// Transformer encoder and decoder layers.
 pub mod transformer;
+/// `upsample`.
+pub mod upsample;
 
 pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
 pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
@@ -130,18 +140,22 @@ pub use attention::{
 };
 pub use avg_pool2d::AvgPool2d;
 pub use batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
+pub use batch_norm1d::{BatchNorm1d, BatchNorm1dShape};
+pub use conv_transpose2d::{ConvTranspose2d, ConvTranspose2dShape, transpose_out_size};
 pub use conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d};
 pub use conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d};
 pub use dropout::Dropout;
 pub use embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding};
 pub use feed_forward::{FeedForward, FeedForwardBackend, FeedForwardKind};
 pub use flatten::{Flatten, FlattenAxes, StructuralFlatten};
+pub use group_norm::{GroupNorm, GroupNormShape};
 pub use gru::{GRU, GRUBuilder, GRUCell, GRUCellBuilder, GruShape, gru, gru_cell};
 pub use init::{
     Fan, Init, InitContext, InitPlan, ParameterRole, constant, kaiming_normal,
     kaiming_normal_with_a, kaiming_uniform, kaiming_uniform_with_a, normal, ones, rand, randn,
     uniform, xavier_normal, xavier_uniform, zeros,
 };
+pub use instance_norm::{InstanceNorm, InstanceNormShape};
 pub use kv_cache::KvCache;
 pub use layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm};
 pub use linear::{Linear, LinearBuilder, LinearShape, linear};
@@ -177,3 +191,4 @@ pub use transformer::{
     AttentionDirection, Bidirectional, Causal, NormPlacement, TransformerBackend,
     TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer, TransformerLayer,
 };
+pub use upsample::{Upsample, UpsampleMode};
