@@ -43,7 +43,11 @@ pub(crate) mod serialize;
 #[cfg(feature = "std")]
 /// Named serialization surface for applications that do not use the prelude.
 pub mod serialization {
-    pub use crate::serialize::{Format, ModelExt, STATE_FORMAT_VERSION};
+    pub use crate::serialize::{
+        CheckpointError, CheckpointSection, Format, ModelExt, STATE_FORMAT_VERSION, SchedulerState,
+        TRAINING_CHECKPOINT_VERSION, TrainingCheckpoint, load_training_checkpoint,
+        optimizer_tensors_to_snapshot, save_training_checkpoint, snapshot_to_optimizer_tensors,
+    };
 }
 #[cfg(feature = "std")]
 /// ONNX import and export helpers for graph interchange.

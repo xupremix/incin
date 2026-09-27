@@ -3,11 +3,19 @@ use crate::err::{Error, ErrorMessage, Result};
 #[cfg(feature = "std")]
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
 #[cfg(feature = "std")]
+use crate::shapes::Dyn;
+#[cfg(feature = "std")]
 use crate::shapes::ShapeBuf;
 #[cfg(feature = "std")]
 use crate::tensor::backend::Backend;
 #[cfg(feature = "std")]
-use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::tensor::backend::HostInterop;
+#[cfg(feature = "std")]
+use crate::tensor::base::Tensor;
+#[cfg(feature = "std")]
+use crate::tensor::device::DeviceId;
+#[cfg(feature = "std")]
+use crate::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 #[cfg(feature = "std")]
 use crate::tensor::prelude::Device;
 #[cfg(feature = "std")]
@@ -885,6 +893,397 @@ struct StateWireEntry {
     role: StateRole,
 }
 
+// ---------------------------------------------------------------------------
+// Training checkpoints.
+//
+// A training checkpoint is one file holding everything a run needs to
+// resume: the model state, the optimizer state, the scheduler position, and
+// the epoch count. It is a postcard envelope like
+// `serialize_snapshot_postcard`, but with its own magic and version, so a
+// model state file can never be misread as a checkpoint or the reverse. The
+// optimizer section stores the same [`StateValue`]s a model snapshot holds;
+// [`optimizer_tensors_to_snapshot`] and [`snapshot_to_optimizer_tensors`]
+// translate between those values and a concrete optimizer's
+// `BTreeMap<String, Tensor<Dyn, B, K>>` state dictionaries.
+// ---------------------------------------------------------------------------
+
+/// Magic heading every training checkpoint file (`"CKPT"`).
+///
+/// A postcard payload is not self-describing, so without this a model state
+/// file could decode as a checkpoint envelope (or fail deep inside one).
+/// The magic is checked before the version, and a mismatch is refused by
+/// name.
+//
+#[cfg(feature = "std")]
+const TRAINING_CHECKPOINT_MAGIC: u32 = 0x434B5054;
+
+/// Schema version of the training checkpoint envelope.
+///
+/// Bumped under the same rule as [`STATE_FORMAT_VERSION`]: when a reader of
+/// the previous version would misread a file rather than fail to parse it.
+#[cfg(feature = "std")]
+pub const TRAINING_CHECKPOINT_VERSION: u32 = 1;
+
+/// Which half of a [`TrainingCheckpoint`] an entry belongs to.
+///
+/// Carried by [`CheckpointError::Entry`] so a failure names the section it
+/// came from, not just the entry.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CheckpointSection {
+    /// The model state snapshot.
+    Model,
+    /// The optimizer state snapshot.
+    Optimizer,
+}
+
+#[cfg(feature = "std")]
+impl core::fmt::Display for CheckpointSection {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Model => f.write_str("model"),
+            Self::Optimizer => f.write_str("optimizer"),
+        }
+    }
+}
+
+/// Minimal serializable scheduler position for a training checkpoint.
+///
+/// The schedulers in `crate::optim` carry no serialization of their own, and
+/// this envelope must not reach into their private step counters. Instead the
+/// trainer's per-epoch scheduler hook counts the steps it took and records
+/// the last learning rate it observed; resuming a decay schedule means
+/// rebuilding the scheduler and advancing it `steps` times, which this state
+/// makes exact. `kind` names the scheduler family (e.g. `"linear"`) so a
+/// checkpoint restored against the wrong schedule fails by inspection rather
+/// than by silently continuing a different decay.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SchedulerState {
+    /// The scheduler family name, chosen by the caller.
+    pub kind: String,
+    /// How many scheduler steps had been taken when the checkpoint saved.
+    pub steps: u64,
+    /// The learning rate observed after the last step, if any was taken.
+    pub last_lr: Option<f64>,
+}
+
+#[cfg(feature = "std")]
+impl SchedulerState {
+    /// Records an explicit scheduler position.
+    pub fn new(kind: impl Into<String>, steps: u64, last_lr: Option<f64>) -> Self {
+        Self {
+            kind: kind.into(),
+            steps,
+            last_lr,
+        }
+    }
+
+    /// The position before any scheduler step: zero steps, no observed rate.
+    pub fn initial(kind: impl Into<String>) -> Self {
+        Self::new(kind, 0, None)
+    }
+}
+
+/// Why a training checkpoint could not be written or read back.
+///
+/// Every variant is typed: a version refusal names both versions, a section
+/// failure names the section and entry, and an optimizer restore against the
+/// wrong dtype names the entry and both descriptors.
+#[cfg(feature = "std")]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CheckpointError {
+    /// The checkpoint file could not be opened, read, or written.
+    #[error("training checkpoint file failed: {message}")]
+    Io {
+        /// What the filesystem refused.
+        message: String,
+    },
+    /// The file is not a training checkpoint envelope: not postcard, wrong
+    /// magic, or an entry that fails [`StateValue`] validation.
+    #[error("training checkpoint is not a checkpoint envelope: {message}")]
+    Codec {
+        /// What the decode refused.
+        message: String,
+    },
+    /// The file declares a format version this build cannot read.
+    #[error(
+        "training checkpoint declares format version {found}, but this build reads at most \
+         version {supported}; upgrade incin to read it"
+    )]
+    UnsupportedVersion {
+        /// The version the file declares.
+        found: u32,
+        /// The newest version this build reads.
+        supported: u32,
+    },
+    /// An optimizer entry's dtype does not match the dtype the caller
+    /// restores into.
+    #[error(
+        "training checkpoint optimizer entry `{name}` has dtype {found:?} but restores into \
+         `{expected:?}`"
+    )]
+    OptimizerDtypeMismatch {
+        /// The entry that disagrees.
+        name: String,
+        /// The dtype the caller asked to restore.
+        expected: DTypeDescriptor,
+        /// The dtype the file carries.
+        found: DTypeDescriptor,
+    },
+    /// One entry of one section failed to convert.
+    #[error("training checkpoint {section} entry `{name}` is invalid: {message}")]
+    Entry {
+        /// Which half of the checkpoint the entry belongs to.
+        section: CheckpointSection,
+        /// The entry that failed.
+        name: String,
+        /// What the conversion refused.
+        message: String,
+    },
+}
+
+#[cfg(feature = "std")]
+impl From<CheckpointError> for Error {
+    fn from(error: CheckpointError) -> Self {
+        Error::Msg(error.to_string())
+    }
+}
+
+/// Everything a training run needs to resume, as owned backend-neutral
+/// state.
+///
+/// `model` restores through `crate::nn::load_state`; `optimizer` restores
+/// through [`snapshot_to_optimizer_tensors`] followed by the optimizer's own
+/// `load_state_dict`, which re-validates every entry against the live
+/// parameters. `epoch` counts completed epochs, so resuming starts at
+/// `epoch`; `scheduler` is the hook-observed position documented on
+/// [`SchedulerState`].
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingCheckpoint {
+    /// Completed epochs when the checkpoint saved.
+    pub epoch: u64,
+    /// The scheduler position when the checkpoint saved.
+    pub scheduler: SchedulerState,
+    /// The model state snapshot.
+    pub model: StateSnapshot,
+    /// The optimizer state snapshot (see [`optimizer_tensors_to_snapshot`]).
+    pub optimizer: StateSnapshot,
+}
+
+#[cfg(feature = "std")]
+impl TrainingCheckpoint {
+    /// Assembles a checkpoint from its pieces.
+    pub fn new(
+        epoch: u64,
+        scheduler: SchedulerState,
+        model: StateSnapshot,
+        optimizer: StateSnapshot,
+    ) -> Self {
+        Self {
+            epoch,
+            scheduler,
+            model,
+            optimizer,
+        }
+    }
+}
+
+/// The postcard payload's outermost record. `magic` is first so a model state
+/// file offered as a checkpoint is refused on the marker rather than decoded
+/// as a shifted envelope; `version` is second so a newer checkpoint is
+/// refused on the number rather than on a field this build cannot interpret.
+#[cfg(feature = "std")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct TrainingCheckpointEnvelope {
+    magic: u32,
+    version: u32,
+    epoch: u64,
+    scheduler: SchedulerState,
+    model: StateSnapshot,
+    optimizer: StateSnapshot,
+}
+
+/// Writes `checkpoint` to `path` as one postcard envelope file.
+#[cfg(feature = "std")]
+pub fn save_training_checkpoint(
+    path: &std::path::Path,
+    checkpoint: &TrainingCheckpoint,
+) -> core::result::Result<(), CheckpointError> {
+    let envelope = TrainingCheckpointEnvelope {
+        magic: TRAINING_CHECKPOINT_MAGIC,
+        version: TRAINING_CHECKPOINT_VERSION,
+        epoch: checkpoint.epoch,
+        scheduler: checkpoint.scheduler.clone(),
+        model: checkpoint.model.clone(),
+        optimizer: checkpoint.optimizer.clone(),
+    };
+    let bytes = postcard::to_stdvec(&envelope).map_err(|error| CheckpointError::Codec {
+        message: alloc::format!("training checkpoint envelope does not encode: {error}"),
+    })?;
+    std::fs::write(path, bytes).map_err(|error| CheckpointError::Io {
+        message: alloc::format!(
+            "writing training checkpoint file {} failed: {error}",
+            path.display()
+        ),
+    })
+}
+
+/// Reads one [`save_training_checkpoint`] file back into its pieces.
+///
+/// The envelope's magic and version are proven before any entry is trusted;
+/// entry validation itself happens in the [`StateSnapshot`] deserialization,
+/// which refuses a malformed entry with its byte-length reason.
+#[cfg(feature = "std")]
+pub fn load_training_checkpoint(
+    path: &std::path::Path,
+) -> core::result::Result<TrainingCheckpoint, CheckpointError> {
+    let bytes = std::fs::read(path).map_err(|error| CheckpointError::Io {
+        message: alloc::format!(
+            "reading training checkpoint file {} failed: {error}",
+            path.display()
+        ),
+    })?;
+    let envelope: TrainingCheckpointEnvelope =
+        postcard::from_bytes(&bytes).map_err(|error| CheckpointError::Codec {
+            message: alloc::format!(
+                "training checkpoint file {} is not a checkpoint envelope: {error}",
+                path.display()
+            ),
+        })?;
+    if envelope.magic != TRAINING_CHECKPOINT_MAGIC {
+        return Err(CheckpointError::Codec {
+            message: alloc::format!(
+                "training checkpoint file {} carries an unrecognized marker; it was not written \
+                 by save_training_checkpoint",
+                path.display()
+            ),
+        });
+    }
+    if envelope.version > TRAINING_CHECKPOINT_VERSION {
+        return Err(CheckpointError::UnsupportedVersion {
+            found: envelope.version,
+            supported: TRAINING_CHECKPOINT_VERSION,
+        });
+    }
+    Ok(TrainingCheckpoint::new(
+        envelope.epoch,
+        envelope.scheduler,
+        envelope.model,
+        envelope.optimizer,
+    ))
+}
+
+/// Persists one optimizer state dictionary as snapshot entries, through the
+/// same [`StateValue`]s (and therefore the same tensor serialization) the
+/// model checkpoint path uses.
+///
+/// Entries travel under their dictionary keys with [`StateRole::Buffer`]:
+/// optimizer state is not a learnable parameter, and the role keeps the two
+/// halves of a checkpoint from ever merging silently. The per-tensor bytes
+/// come from [`HostInterop::to_bytes`], the dtype from the storage when the
+/// backend exposes one and from `K` otherwise.
+#[cfg(feature = "std")]
+pub fn optimizer_tensors_to_snapshot<B, K>(
+    dict: &BTreeMap<String, Tensor<Dyn, B, K>>,
+) -> core::result::Result<StateSnapshot, CheckpointError>
+where
+    B: Backend + HostInterop,
+    K: DType,
+{
+    let mut snapshot = StateSnapshot::new();
+    for (name, tensor) in dict {
+        let storage = tensor.inner();
+        let shape = B::shape(storage);
+        let dtype =
+            B::storage_dtype(storage).unwrap_or_else(|| K::descriptor(&K::Field::default()));
+        let bytes = B::to_bytes(storage).map_err(|error| CheckpointError::Entry {
+            section: CheckpointSection::Optimizer,
+            name: name.clone(),
+            message: error.to_string(),
+        })?;
+        let value = StateValue::new(shape, dtype, bytes, StateRole::Buffer).map_err(|error| {
+            CheckpointError::Entry {
+                section: CheckpointSection::Optimizer,
+                name: name.clone(),
+                message: error.to_string(),
+            }
+        })?;
+        snapshot
+            .insert(
+                StatePath::new(name).map_err(|error| CheckpointError::Entry {
+                    section: CheckpointSection::Optimizer,
+                    name: name.clone(),
+                    message: error.to_string(),
+                })?,
+                value,
+            )
+            .map_err(|error| CheckpointError::Entry {
+                section: CheckpointSection::Optimizer,
+                name: name.clone(),
+                message: error.to_string(),
+            })?;
+    }
+    Ok(snapshot)
+}
+
+/// Rebuilds an optimizer state dictionary from snapshot entries, for the
+/// optimizer's own `load_state_dict` to validate against the live
+/// parameters.
+///
+/// Every entry must carry `K`'s dtype: anything else is an
+/// [`CheckpointError::OptimizerDtypeMismatch`] naming the entry and both
+/// descriptors, never a silent reinterpretation. `device` names where the
+/// restored storages live and must agree with the backend (for example
+/// `DeviceId::cpu()` on the CPU backend); the optimizer's `load_state_dict`
+/// then re-checks shape, dtype, and placement against each live parameter,
+/// so a checkpoint restored onto a different model is refused there rather
+/// than applied.
+#[cfg(feature = "std")]
+pub fn snapshot_to_optimizer_tensors<B, K>(
+    snapshot: &StateSnapshot,
+    device: &DeviceId,
+) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B, K>>, CheckpointError>
+where
+    B: Backend + HostInterop,
+    K: DType,
+{
+    let expected_dtype = K::descriptor(&K::Field::default());
+    let mut dict = BTreeMap::new();
+    for (path, value) in snapshot.iter() {
+        let name = path.as_str().to_string();
+        if value.dtype() != expected_dtype {
+            return Err(CheckpointError::OptimizerDtypeMismatch {
+                name,
+                expected: expected_dtype,
+                found: value.dtype(),
+            });
+        }
+        let storage = B::from_bytes(value.bytes(), value.shape().dims(), value.dtype(), device)
+            .map_err(|error| CheckpointError::Entry {
+                section: CheckpointSection::Optimizer,
+                name: name.clone(),
+                message: error.to_string(),
+            })?;
+        let tensor = Tensor::<Dyn, B, K>::from_parts(
+            storage,
+            value.shape().clone(),
+            K::Field::default(),
+            <B::Device as Device>::Field::default(),
+            core::marker::PhantomData,
+        )
+        .map_err(|error| CheckpointError::Entry {
+            section: CheckpointSection::Optimizer,
+            name: name.clone(),
+            message: error.to_string(),
+        })?;
+        dict.insert(name, tensor);
+    }
+    Ok(dict)
+}
+
 /// A [`crate::nn::state::StateStream`] over safetensors files: the `path` is
 /// either a sharded-checkpoint index or a single safetensors file, and every
 /// payload reaches the caller one tensor at a time.
@@ -1721,4 +2120,423 @@ mod tests {
     // end. It cannot live here: unit tests inside `src/` cannot link the
     // `incin_backends` dev-dependency (it cycles back into this crate's
     // rlib).
+
+    // ------------------------------------------------------------------
+    // Training checkpoint tests.
+    //
+    // The envelope round-trips use plain snapshots (no backend involved).
+    // The optimizer tensor helpers are generic over a backend, so they run
+    // against a minimal in-test fake implementing exactly the surface the
+    // helpers need: `StorageBackend` metadata, `HostInterop` byte movement,
+    // and the `Backend`/`Capabilities` markers `Tensor` construction
+    // requires. Nothing executes; the fake only stores bytes.
+    // ------------------------------------------------------------------
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    struct CheckpointTestDeviceField;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    struct CheckpointTestDevice;
+
+    impl crate::tensor::device::Device for CheckpointTestDevice {
+        type Arg = ();
+        type Field = CheckpointTestDeviceField;
+
+        fn init(_arg: ()) -> CheckpointTestDeviceField {
+            CheckpointTestDeviceField
+        }
+
+        fn to_incin(_dev: &CheckpointTestDeviceField) -> Result<DeviceId> {
+            Ok(DeviceId::cpu())
+        }
+    }
+
+    #[derive(Debug, Clone, Default)]
+    struct CheckpointTestBackend;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct CheckpointTestStorage<K> {
+        meta: crate::exec::TensorMeta,
+        bytes: Vec<u8>,
+        _marker: core::marker::PhantomData<K>,
+    }
+
+    impl crate::tensor::backend::StorageBackend for CheckpointTestBackend {
+        const BACKEND_NAME: &'static str = "checkpoint-test";
+
+        type Storage<K: DType> = CheckpointTestStorage<K>;
+        type Device = CheckpointTestDevice;
+
+        fn metadata<K: DType>(storage: &Self::Storage<K>) -> &crate::exec::TensorMeta {
+            &storage.meta
+        }
+    }
+
+    impl crate::exec::Capabilities for CheckpointTestBackend {
+        fn support(&self, _query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
+            crate::exec::SupportLevel::Unsupported(crate::exec::UnsupportedReason::Operation {
+                operation: crate::shapes::error::OperationKind::Storage,
+            })
+        }
+    }
+
+    impl crate::tensor::backend::Backend for CheckpointTestBackend {
+        type InnerBackend = Self;
+    }
+
+    impl crate::tensor::backend::HostReadback for CheckpointTestBackend {
+        fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
+            if K::descriptor(&K::Field::default()) != DTypeId::F32.descriptor() {
+                return Err(Error::InvalidModuleState {
+                    operation: "checkpoint-test float_to_vec1",
+                    reason: ErrorMessage::new("the test backend only reads f32"),
+                });
+            }
+            if storage.bytes.len() % 4 != 0 {
+                return Err(Error::InvalidByteLength {
+                    expected: storage.bytes.len() / 4 * 4,
+                    got: storage.bytes.len(),
+                });
+            }
+            Ok(storage
+                .bytes
+                .chunks_exact(4)
+                .map(|chunk| f32::from_le_bytes(chunk.try_into().expect("exact chunks")) as f64)
+                .collect())
+        }
+
+        fn int_to_vec1<K: DType>(_storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+            Err(Error::InvalidModuleState {
+                operation: "checkpoint-test int_to_vec1",
+                reason: ErrorMessage::new("the test backend holds no integers"),
+            })
+        }
+    }
+
+    impl HostInterop for CheckpointTestBackend {
+        fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> Result<Vec<u8>> {
+            Ok(storage.bytes.clone())
+        }
+
+        fn from_bytes<K: DType>(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            if *device != DeviceId::cpu() {
+                return Err(Error::InvalidModuleState {
+                    operation: "checkpoint-test from_bytes",
+                    reason: ErrorMessage::new("the test backend only places on cpu:0"),
+                });
+            }
+            let mut elements = 1usize;
+            for dim in shape {
+                elements = elements.checked_mul(*dim).ok_or(Error::InvalidByteLength {
+                    expected: usize::MAX,
+                    got: bytes.len(),
+                })?;
+            }
+            let expected =
+                dtype.size_bytes(elements, crate::shapes::error::OperationKind::Storage)?;
+            if bytes.len() != expected {
+                return Err(Error::InvalidByteLength {
+                    expected,
+                    got: bytes.len(),
+                });
+            }
+            let meta = crate::exec::TensorMeta::contiguous(
+                ShapeBuf::from_slice(shape),
+                dtype,
+                *device,
+                crate::exec::Alignment::BYTE,
+                elements,
+            )
+            .map_err(|error| Error::InvalidModuleState {
+                operation: "checkpoint-test from_bytes",
+                reason: ErrorMessage::new(error.to_string()),
+            })?;
+            Ok(CheckpointTestStorage {
+                meta,
+                bytes: bytes.to_vec(),
+                _marker: core::marker::PhantomData,
+            })
+        }
+    }
+
+    fn checkpoint_test_tensor(
+        values: &[f32],
+        shape: &[usize],
+    ) -> Tensor<Dyn, CheckpointTestBackend, f32> {
+        let mut bytes = Vec::with_capacity(values.len() * 4);
+        for value in values {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let storage = CheckpointTestBackend::from_bytes(
+            &bytes,
+            shape,
+            DTypeId::F32.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .expect("test tensor bytes are well formed");
+        Tensor::<Dyn, CheckpointTestBackend, f32>::from_parts(
+            storage,
+            ShapeBuf::from_slice(shape),
+            Default::default(),
+            Default::default(),
+            core::marker::PhantomData,
+        )
+        .expect("test tensor parts are consistent")
+    }
+
+    fn checkpoint_scratch(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("incin-training-{name}-{}", std::process::id()))
+    }
+
+    fn checkpoint_fixture_snapshot(prefix: &str) -> StateSnapshot {
+        let mut snapshot = StateSnapshot::new();
+        for (index, shape) in [vec![2, 2], vec![3]].into_iter().enumerate() {
+            let numel: usize = shape.iter().product();
+            let bytes: Vec<u8> = (0..numel * 4).map(|byte| (byte + index) as u8).collect();
+            snapshot
+                .insert(
+                    StatePath::new(format!("{prefix}.entry_{index}"))
+                        .expect("fixture path is canonical"),
+                    StateValue::new(
+                        ShapeBuf::from_slice(&shape),
+                        DTypeId::F32.descriptor(),
+                        bytes,
+                        if prefix == "model" {
+                            StateRole::Parameter
+                        } else {
+                            StateRole::Buffer
+                        },
+                    )
+                    .expect("fixture value is valid"),
+                )
+                .expect("fixture paths are unique");
+        }
+        snapshot
+    }
+
+    #[test]
+    fn training_checkpoint_round_trips_model_optimizer_scheduler_and_epoch() {
+        let path = checkpoint_scratch("roundtrip.ckpt");
+        let expected = TrainingCheckpoint::new(
+            7,
+            SchedulerState::new("linear", 6, Some(0.05)),
+            checkpoint_fixture_snapshot("model"),
+            checkpoint_fixture_snapshot("optim"),
+        );
+        save_training_checkpoint(&path, &expected).expect("checkpoint saves");
+        let actual = load_training_checkpoint(&path).expect("checkpoint loads");
+        assert_eq!(actual, expected);
+        assert_eq!(actual.epoch, 7);
+        assert_eq!(actual.scheduler.steps, 6);
+        assert_eq!(actual.scheduler.last_lr, Some(0.05));
+        assert_eq!(actual.model.len(), 2);
+        assert_eq!(actual.optimizer.len(), 2);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_with_no_scheduler_steps_round_trips() {
+        let path = checkpoint_scratch("initial.ckpt");
+        let expected = TrainingCheckpoint::new(
+            0,
+            SchedulerState::initial("constant"),
+            StateSnapshot::new(),
+            StateSnapshot::new(),
+        );
+        save_training_checkpoint(&path, &expected).expect("checkpoint saves");
+        assert_eq!(
+            load_training_checkpoint(&path).expect("checkpoint loads"),
+            expected
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_model_state_file_by_marker() {
+        // A model state file is valid postcard but not a checkpoint
+        // envelope: loading it as a checkpoint must fail as a non-envelope,
+        // never decode into shifted fields.
+        let path = checkpoint_scratch("not-a-checkpoint.postcard");
+        serialize_snapshot_postcard(&checkpoint_fixture_snapshot("model"), &path)
+            .expect("state file is written");
+        let error = load_training_checkpoint(&path).expect_err("a state file is not a checkpoint");
+        assert!(
+            matches!(error, CheckpointError::Codec { .. }),
+            "the refusal must name the envelope, got: {error}"
+        );
+        assert!(
+            error.to_string().contains("not a checkpoint envelope"),
+            "got: {error}"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_decodable_file_with_a_wrong_marker() {
+        // Same envelope layout, wrong magic: proves the marker check fires
+        // for payloads that postcard *can* decode, not just for garbage.
+        #[derive(serde::Serialize)]
+        struct WrongMagicEnvelope {
+            magic: u32,
+            version: u32,
+            epoch: u64,
+            scheduler: SchedulerState,
+            model: StateSnapshot,
+            optimizer: StateSnapshot,
+        }
+        let path = checkpoint_scratch("wrong-magic.ckpt");
+        let envelope = WrongMagicEnvelope {
+            magic: 0xDEAD,
+            version: TRAINING_CHECKPOINT_VERSION,
+            epoch: 3,
+            scheduler: SchedulerState::initial("constant"),
+            model: StateSnapshot::new(),
+            optimizer: StateSnapshot::new(),
+        };
+        std::fs::write(
+            &path,
+            postcard::to_stdvec(&envelope).expect("encode envelope"),
+        )
+        .expect("fixture file is written");
+        let error = load_training_checkpoint(&path).expect_err("a wrong marker must be refused");
+        assert!(
+            matches!(error, CheckpointError::Codec { .. }),
+            "got: {error}"
+        );
+        assert!(error.to_string().contains("marker"), "got: {error}");
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_newer_version_with_both_numbers() {
+        let path = checkpoint_scratch("future.ckpt");
+        let envelope = TrainingCheckpointEnvelope {
+            magic: TRAINING_CHECKPOINT_MAGIC,
+            version: TRAINING_CHECKPOINT_VERSION + 1,
+            epoch: 0,
+            scheduler: SchedulerState::initial("constant"),
+            model: StateSnapshot::new(),
+            optimizer: StateSnapshot::new(),
+        };
+        std::fs::write(
+            &path,
+            postcard::to_stdvec(&envelope).expect("encode envelope"),
+        )
+        .expect("fixture file is written");
+        let error = load_training_checkpoint(&path).expect_err("a future version must be refused");
+        assert_eq!(
+            error,
+            CheckpointError::UnsupportedVersion {
+                found: TRAINING_CHECKPOINT_VERSION + 1,
+                supported: TRAINING_CHECKPOINT_VERSION,
+            }
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_garbage_as_a_non_envelope() {
+        let path = checkpoint_scratch("garbage.ckpt");
+        std::fs::write(&path, [0xffu8; 32]).expect("fixture file is written");
+        let error = load_training_checkpoint(&path).expect_err("garbage must be refused");
+        assert!(
+            matches!(error, CheckpointError::Codec { .. }),
+            "got: {error}"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_missing_file_as_io() {
+        let error =
+            load_training_checkpoint(std::path::Path::new("/nonexistent-incin-dir/missing.ckpt"))
+                .expect_err("a missing file must be refused");
+        assert!(matches!(error, CheckpointError::Io { .. }), "got: {error}");
+    }
+
+    #[test]
+    fn optimizer_state_survives_a_snapshot_round_trip_byte_exact() {
+        let mut dict = BTreeMap::new();
+        dict.insert(
+            "m.weight".to_string(),
+            checkpoint_test_tensor(&[1.0, 2.0, 3.0, 4.0], &[2, 2]),
+        );
+        dict.insert(
+            "v.bias".to_string(),
+            checkpoint_test_tensor(&[0.5, -0.5, 1.5], &[3]),
+        );
+
+        let snapshot = optimizer_tensors_to_snapshot(&dict).expect("optimizer state persists");
+        assert_eq!(snapshot.len(), 2);
+        for (_, value) in snapshot.iter() {
+            assert_eq!(value.role(), StateRole::Buffer);
+            assert_eq!(value.dtype(), DTypeId::F32.descriptor());
+        }
+
+        let restored: BTreeMap<String, Tensor<Dyn, CheckpointTestBackend, f32>> =
+            snapshot_to_optimizer_tensors(&snapshot, &DeviceId::cpu())
+                .expect("optimizer state restores");
+        assert_eq!(restored.len(), 2);
+        for (name, tensor) in &restored {
+            let expected =
+                CheckpointTestBackend::to_bytes(dict[name].inner()).expect("expected bytes read");
+            assert_eq!(
+                CheckpointTestBackend::to_bytes(tensor.inner()).expect("restored bytes read"),
+                expected,
+                "entry {name} must restore byte-exact"
+            );
+        }
+    }
+
+    #[test]
+    fn optimizer_restore_refuses_a_dtype_mismatch_by_name() {
+        let mut snapshot = StateSnapshot::new();
+        snapshot
+            .insert(
+                StatePath::new("m.weight").expect("canonical path"),
+                StateValue::new(
+                    ShapeBuf::from_slice(&[2]),
+                    DTypeId::F64.descriptor(),
+                    vec![0u8; 16],
+                    StateRole::Buffer,
+                )
+                .expect("f64 fixture is valid"),
+            )
+            .expect("unique path");
+
+        let error = snapshot_to_optimizer_tensors::<CheckpointTestBackend, f32>(
+            &snapshot,
+            &DeviceId::cpu(),
+        )
+        .expect_err("an f64 entry must not restore into f32 tensors");
+        assert_eq!(
+            error,
+            CheckpointError::OptimizerDtypeMismatch {
+                name: "m.weight".to_string(),
+                expected: DTypeId::F32.descriptor(),
+                found: DTypeId::F64.descriptor(),
+            }
+        );
+    }
+
+    #[test]
+    fn optimizer_restore_refuses_a_foreign_device() {
+        let mut dict = BTreeMap::new();
+        dict.insert("m.weight".to_string(), checkpoint_test_tensor(&[1.0], &[1]));
+        let snapshot = optimizer_tensors_to_snapshot(&dict).expect("persists");
+        let error = snapshot_to_optimizer_tensors::<CheckpointTestBackend, f32>(
+            &snapshot,
+            &DeviceId::cuda(0),
+        )
+        .expect_err("a cuda device must not restore on the test backend");
+        assert!(
+            matches!(error, CheckpointError::Entry { ref name, .. } if name == "m.weight"),
+            "the failure must name the entry, got: {error}"
+        );
+    }
 }

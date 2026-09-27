@@ -69,9 +69,12 @@ pub use dataset::Dataset;
 pub use downloader::Downloader;
 pub use loader::{
     BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, DefaultCollate,
-    DistributedSampler, RemainderPolicy,
+    DistributedSampler, EpochBatches, EpochError, RemainderPolicy,
 };
-pub use transforms::{CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform};
+pub use transforms::{
+    CenterCrop, Compose, Normalize, RandomCrop, RandomHorizontalFlip, Resize, Scale, ToTensor,
+    Transform,
+};
 
 /// Prelude.
 pub mod prelude {

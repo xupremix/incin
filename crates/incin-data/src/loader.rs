@@ -72,6 +72,126 @@ pub enum DataError {
 /// A batch result returned by [`DataLoaderIter`].
 pub type BatchResult<T> = core::result::Result<T, DataError>;
 
+/// A batch-stream failure pinned to the epoch and batch position where it
+/// happened.
+///
+/// [`DataLoaderIter`] yields [`BatchResult`]s, which a training loop cannot
+/// consume directly: an `Err` batch must fail the epoch loudly rather than be
+/// silently skipped. [`EpochBatches`] converts each `Err` into this error,
+/// attaching the epoch the loader was set to (see [`DataLoader::set_epoch`])
+/// and the zero-based batch index inside that epoch, so the trainer can report
+/// *which* epoch failed instead of only *what* failed.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("epoch {epoch}, batch {batch}: {source}")]
+pub struct EpochError {
+    /// The epoch the failing iterator was opened for.
+    epoch: u64,
+    /// The zero-based batch index inside that epoch.
+    batch: usize,
+    /// The data-pipeline failure that ended the epoch.
+    source: DataError,
+}
+
+impl EpochError {
+    /// Pins `source` to `epoch` and `batch`.
+    pub fn new(epoch: u64, batch: usize, source: DataError) -> Self {
+        Self {
+            epoch,
+            batch,
+            source,
+        }
+    }
+
+    /// The epoch the failing iterator was opened for.
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    /// The zero-based batch index inside that epoch.
+    #[must_use]
+    pub fn batch(&self) -> usize {
+        self.batch
+    }
+
+    /// The data-pipeline failure that ended the epoch.
+    #[must_use]
+    pub fn source(&self) -> &DataError {
+        &self.source
+    }
+
+    /// Consumes the wrapper, returning the underlying failure.
+    #[must_use]
+    pub fn into_source(self) -> DataError {
+        self.source
+    }
+}
+
+/// Adapter turning a fallible batch stream into the batch stream a trainer
+/// consumes.
+///
+/// Wraps any `Iterator<Item = BatchResult<T>>` - in practice a
+/// [`DataLoaderIter`] - and yields `Ok` batches unchanged. The first `Err`
+/// becomes an [`EpochError`] naming the epoch and batch position, and the
+/// adapter is fused after that: later `next` calls return `None`, matching the
+/// underlying iterator, which already terminates the epoch on its first error
+/// rather than resuming mid-epoch.
+pub struct EpochBatches<I> {
+    inner: I,
+    epoch: u64,
+    next_batch: usize,
+    failed: bool,
+}
+
+impl<I> EpochBatches<I> {
+    /// Wraps `inner`, tagging failures with `epoch`.
+    pub fn new(inner: I, epoch: u64) -> Self {
+        Self {
+            inner,
+            epoch,
+            next_batch: 0,
+            failed: false,
+        }
+    }
+
+    /// The epoch failures are tagged with.
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+
+    /// How many `Ok` batches have been yielded so far.
+    #[must_use]
+    pub fn batches_yielded(&self) -> usize {
+        self.next_batch
+    }
+}
+
+impl<I, T> Iterator for EpochBatches<I>
+where
+    I: Iterator<Item = BatchResult<T>>,
+{
+    /// A batch, or the [`EpochError`] that ended the epoch.
+    type Item = core::result::Result<T, EpochError>;
+
+    /// Next.
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.failed {
+            return None;
+        }
+        match self.inner.next()? {
+            Ok(batch) => {
+                self.next_batch += 1;
+                Some(Ok(batch))
+            }
+            Err(source) => {
+                self.failed = true;
+                Some(Err(EpochError::new(self.epoch, self.next_batch, source)))
+            }
+        }
+    }
+}
+
 /// How a [`DistributedSampler`] handles a dataset whose length is not an
 /// exact multiple of the world size.
 ///
@@ -436,6 +556,19 @@ where
     /// run sees fresh partitions without any communication.
     pub fn set_epoch(&mut self, epoch: u64) {
         self.epoch = epoch;
+    }
+
+    /// Opens one training epoch: sets the loader's epoch (see
+    /// [`set_epoch`](Self::set_epoch)) and returns the epoch's batches
+    /// through the [`EpochBatches`] adapter.
+    ///
+    /// A trainer calls this once per epoch with the epoch index, so
+    /// shuffling advances every pass without the caller remembering to set
+    /// the epoch first, and a failed batch surfaces as an [`EpochError`]
+    /// naming the epoch rather than a silent skip.
+    pub fn epoch_batches(&mut self, epoch: u64) -> EpochBatches<DataLoaderIter<C::Output>> {
+        self.set_epoch(epoch);
+        EpochBatches::new((&*self).into_iter(), epoch)
     }
 
     /// With num workers.
@@ -1187,5 +1320,80 @@ mod tests {
         let second = collect_with_timeout((&second_loader).into_iter());
         assert_eq!(first, second);
         assert_eq!(first.iter().map(Vec::len).sum::<usize>(), 9);
+    }
+
+    /// A dataset that fails deterministically at one index, so the adapter
+    /// test below meets its error mid-epoch rather than on the first batch.
+    struct FailAtDataset {
+        len: usize,
+        fail_at: usize,
+    }
+
+    impl Dataset for FailAtDataset {
+        type Item = i32;
+
+        fn len(&self) -> usize {
+            self.len
+        }
+
+        fn get(&self, index: usize) -> BatchResult<Option<Self::Item>> {
+            if index == self.fail_at {
+                Err(DataError::Dataset("fixture failure".into()))
+            } else {
+                Ok((index < self.len).then_some(index as i32))
+            }
+        }
+    }
+
+    #[test]
+    fn epoch_batches_maps_a_failed_batch_to_a_failed_epoch() {
+        let loader = DataLoader::new(FailAtDataset { len: 6, fail_at: 3 }, VecCollate, 2).unwrap();
+        let mut adapted = EpochBatches::new((&loader).into_iter(), 7);
+
+        // Index 3 sits in the second batch, so the first batch is fine and
+        // the failure lands at batch 1, tagged with the epoch.
+        assert_eq!(adapted.next().unwrap().unwrap(), vec![0, 1]);
+        assert_eq!(adapted.batches_yielded(), 1);
+        let error = adapted.next().unwrap().expect_err("index 3 fails");
+        assert_eq!(error.epoch(), 7);
+        assert_eq!(error.batch(), 1);
+        assert_eq!(
+            error.source(),
+            &DataError::Dataset("fixture failure".into())
+        );
+        assert_eq!(
+            error.into_source(),
+            DataError::Dataset("fixture failure".into())
+        );
+        // The adapter fuses after the first error, like the iterator it wraps.
+        assert!(adapted.next().is_none());
+    }
+
+    #[test]
+    fn epoch_batches_passes_ok_batches_through_untouched() {
+        let loader = DataLoader::new(RangeDataset(5), VecCollate, 2).unwrap();
+        let adapted = EpochBatches::new((&loader).into_iter(), 0);
+        let batches: Vec<Vec<i32>> = adapted.map(|result| result.unwrap()).collect();
+        assert_eq!(batches, vec![vec![0, 1], vec![2, 3], vec![4]]);
+    }
+
+    #[test]
+    fn loader_epoch_batches_sets_the_epoch_for_shuffled_iteration() {
+        let mut loader = DataLoader::new(RangeDataset(20), VecCollate, 4)
+            .unwrap()
+            .with_shuffle(true)
+            .with_seed(9);
+        let via_helper: Vec<Vec<i32>> = loader
+            .epoch_batches(5)
+            .map(|result| result.unwrap())
+            .collect();
+        let expected = DataLoader::new(RangeDataset(20), VecCollate, 4)
+            .unwrap()
+            .with_shuffle(true)
+            .with_seed(9)
+            .with_epoch(5);
+        let via_setter: Vec<Vec<i32>> = collect_with_timeout((&expected).into_iter());
+        assert_eq!(via_helper, via_setter);
+        assert_eq!(via_helper.iter().map(Vec::len).sum::<usize>(), 20);
     }
 }

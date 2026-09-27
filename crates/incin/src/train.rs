@@ -78,10 +78,13 @@ use incin_core::exec::{
     ExecutionPolicy, LossScaleState, LossScaling, PrecisionChoice, RuntimePrecisionPolicy,
 };
 use incin_core::nn::VisitParameters;
-use incin_core::optim::{Optimizer, ScaledOptimizer};
+use incin_core::nn::{StateSnapshot, VisitState, VisitStateMut, collect_state, load_state};
+use incin_core::optim::{LRScheduler, Optimizer, ScaledOptimizer};
 use incin_core::tensor::base::Tensor;
 use incin_core::tensor::device::{DeviceId, DeviceKind, DevicePreference, DeviceSet};
 use incin_core::tensor::dtype::{ConstDType, DTypeDescriptor, f16};
+use incin_data::dataset::Dataset;
+use incin_data::loader::{BatchResult, Collate, DataError, DataLoader};
 use std::sync::Arc;
 #[cfg(feature = "distributed-reference")]
 use std::sync::{Condvar, Mutex};
@@ -437,6 +440,44 @@ pub enum TrainError {
         /// What the underlying operation reported.
         message: String,
     },
+    /// A training batch stream failed.
+    ///
+    /// [`fit_with_config`](Trainer::fit_with_config) reads training data
+    /// through [`DataLoader::epoch_batches`](incin_data::loader::DataLoader::epoch_batches),
+    /// whose adapter turns a failed batch into a failed epoch rather than a
+    /// silent skip. This variant is that failure, pinned to the epoch and
+    /// batch position with the pipeline's own error preserved for matching.
+    Data {
+        /// The epoch the failure happened in, counting from zero.
+        epoch: usize,
+        /// The batch within that epoch, counting from zero.
+        batch: usize,
+        /// The data-pipeline failure that ended the epoch.
+        source: DataError,
+    },
+    /// A validation batch stream or the validation configuration failed.
+    ///
+    /// The validation closure's own errors, a failed validation batch, and
+    /// a configuration that names validation monitoring without validation
+    /// data all surface here rather than as [`Step`](Self::Step): the
+    /// training step did not fail, the evaluation of it did.
+    Validation {
+        /// The epoch the failure happened in, counting from zero.
+        epoch: usize,
+        /// What the validation pass or configuration reported.
+        message: String,
+    },
+    /// A checkpoint hook failed.
+    ///
+    /// Either collecting the model state for a [`CheckpointEvent`] or the
+    /// caller's `on_checkpoint` hook itself refused. Restoring the best
+    /// parameters after early stopping reports here as well.
+    Checkpoint {
+        /// The epoch the failure happened in, counting from zero.
+        epoch: usize,
+        /// What the checkpoint path reported.
+        message: String,
+    },
 }
 
 impl core::fmt::Display for TrainError {
@@ -494,6 +535,17 @@ impl core::fmt::Display for TrainError {
                 batch,
                 message,
             } => write!(f, "epoch {epoch}, batch {batch}: {message}"),
+            Self::Data {
+                epoch,
+                batch,
+                source,
+            } => write!(f, "epoch {epoch}, batch {batch}: {source}"),
+            Self::Validation { epoch, message } => {
+                write!(f, "validation failed in epoch {epoch}: {message}")
+            }
+            Self::Checkpoint { epoch, message } => {
+                write!(f, "checkpoint failed in epoch {epoch}: {message}")
+            }
         }
     }
 }
@@ -852,6 +904,265 @@ pub struct FitOutcome {
     pub final_loss: Option<f32>,
 }
 
+// ============================================================================
+// Configured runs: validation, early stopping, checkpoints, schedulers
+// ============================================================================
+
+/// Which epoch metric [`Trainer::fit_with_config`] monitors for early
+/// stopping and best-checkpoint decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Monitor {
+    /// The mean validation metric over the epoch.
+    ///
+    /// Requires validation data: a run that monitors validation without
+    /// providing any is refused with [`TrainError::Validation`] rather than
+    /// monitored on something else.
+    #[default]
+    Validation,
+    /// The mean training loss over the epoch.
+    TrainLoss,
+}
+
+/// Early stopping on a worsening monitored metric.
+///
+/// `patience` counts consecutive epochs without improvement; the run stops
+/// once it exceeds `patience`. Improvement for a minimizing metric (a loss)
+/// means falling by more than `min_delta`, and for a maximizing metric (an
+/// accuracy) means rising by more than `min_delta`. With `restore_best` the
+/// stop restores the parameters that produced the best observed metric.
+///
+/// A non-finite metric never counts as an improvement: it consumes patience
+/// like any other non-improving epoch rather than becoming the baseline.
+/// The first update only establishes the baseline, so a finite first metric
+/// never triggers a stop, whatever `patience` is.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EarlyStopping {
+    /// Consecutive non-improving epochs tolerated before stopping.
+    pub patience: usize,
+    /// The minimum change that counts as an improvement.
+    pub min_delta: f32,
+    /// Whether larger monitored values are better.
+    pub maximize: bool,
+    /// Whether stopping restores the best parameters.
+    pub restore_best: bool,
+    /// The best metric observed so far, if any observation was finite.
+    best: Option<f32>,
+    /// Consecutive non-improving updates since the baseline.
+    wait: usize,
+}
+
+impl EarlyStopping {
+    /// Stops after `patience` consecutive epochs without any improvement,
+    /// minimizing the monitored metric and keeping the final parameters.
+    pub fn new(patience: usize) -> Self {
+        Self {
+            patience,
+            min_delta: 0.0,
+            maximize: false,
+            restore_best: false,
+            best: None,
+            wait: 0,
+        }
+    }
+
+    /// Requires an improvement larger than `min_delta` to reset patience.
+    #[must_use]
+    pub fn with_min_delta(mut self, min_delta: f32) -> Self {
+        self.min_delta = min_delta;
+        self
+    }
+
+    /// Maximizes the monitored metric instead of minimizing it.
+    #[must_use]
+    pub fn maximizing(mut self) -> Self {
+        self.maximize = true;
+        self
+    }
+
+    /// Restores the best parameters when stopping.
+    #[must_use]
+    pub fn with_restore_best(mut self) -> Self {
+        self.restore_best = true;
+        self
+    }
+
+    /// Records one epoch's metric, returning whether it improved on the
+    /// baseline.
+    pub fn update(&mut self, metric: f32) -> bool {
+        let improved = is_improvement(self.best, metric, self.maximize, self.min_delta);
+        if improved {
+            self.best = Some(metric);
+            self.wait = 0;
+        } else {
+            self.wait += 1;
+        }
+        improved
+    }
+
+    /// Whether the run should stop: at least one non-improving epoch has
+    /// been observed and patience is exhausted.
+    #[must_use]
+    pub fn should_stop(&self) -> bool {
+        self.wait > 0 && self.wait >= self.patience
+    }
+
+    /// The best metric observed so far, if any observation was finite.
+    #[must_use]
+    pub fn best(&self) -> Option<f32> {
+        self.best
+    }
+}
+
+/// Whether `metric` improves on `best` under the given direction.
+///
+/// With no baseline (`None`) only a finite metric establishes one; after
+/// that, a minimizing metric must fall by more than `min_delta` and a
+/// maximizing one must rise by more than `min_delta`. Non-finite metrics
+/// never improve, so they can neither establish nor move the baseline.
+fn is_improvement(best: Option<f32>, metric: f32, maximize: bool, min_delta: f32) -> bool {
+    match best {
+        None => metric.is_finite(),
+        Some(best) if maximize => metric > best + min_delta,
+        Some(best) => metric < best - min_delta,
+    }
+}
+
+/// What one finished epoch of [`Trainer::fit_with_config`] observed.
+///
+/// Passed to the `on_epoch_end` hook after the scheduler step, so the hook
+/// sees the learning rate the next epoch will train under. The hook is also
+/// where a caller applies that rate to its optimizer (for example through
+/// `SGD::step_scheduler`); the trainer steps the schedule but never assumes
+/// which optimizer it belongs to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EpochEnd {
+    /// The finished epoch, counting from zero.
+    pub epoch: usize,
+    /// The mean training loss over the epoch's batches, if there was one.
+    pub train_loss: Option<f32>,
+    /// The mean validation metric over the epoch, if validation ran with
+    /// at least one batch.
+    pub val_metric: Option<f32>,
+    /// The learning rate observed after this epoch's scheduler step, if a
+    /// scheduler is attached.
+    pub scheduler_lr: Option<f64>,
+}
+
+/// A checkpoint save the trainer decided to make.
+///
+/// Fired when the monitored metric improves (if `checkpoint_best` is set)
+/// and every `checkpoint_every` epochs (if non-zero). The hook persists the
+/// pieces: `model` is the trainer-collected snapshot, the optimizer state
+/// comes from the `&mut O` the hook also receives (through the optimizer's
+/// own `state_dict`), and the scheduler pieces assemble the serializable
+/// scheduler state. See `incin_core`'s training checkpoint envelope for the
+/// file format the pieces are meant for.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckpointEvent {
+    /// The finished epoch being saved, counting from zero.
+    pub epoch: usize,
+    /// Whether this epoch improved the monitored metric.
+    pub is_best: bool,
+    /// The monitored metric value this epoch, if there was one to monitor.
+    pub metric: Option<f32>,
+    /// The model state at save time.
+    pub model: StateSnapshot,
+    /// The scheduler family name from [`FitConfig::scheduler_kind`].
+    pub scheduler_kind: String,
+    /// How many scheduler steps had been taken at save time.
+    pub scheduler_steps: u64,
+    /// The learning rate observed after the last scheduler step, if any.
+    pub scheduler_lr: Option<f64>,
+}
+
+/// How [`Trainer::fit_with_config`] runs.
+///
+/// Plain data with public fields and a [`Default`] implementation: the
+/// zero value trains to the plan's epoch count, monitors nothing, saves
+/// nothing, and steps no scheduler, which makes every addition opt-in.
+/// Attach validation data through the `fit_with_config` argument itself
+/// (both halves are required together, so a metric without data cannot be
+/// configured); everything else lives here.
+pub struct FitConfig<'a, CF, EF> {
+    /// Stops the run on a worsening monitored metric. Absent by default.
+    pub early_stopping: Option<EarlyStopping>,
+    /// Which epoch metric early stopping and best-checkpointing monitor.
+    /// Defaults to [`Monitor::Validation`].
+    pub monitor: Monitor,
+    /// Fires `on_checkpoint` when the monitored metric improves.
+    pub checkpoint_best: bool,
+    /// Fires `on_checkpoint` every this many epochs; `0` disables.
+    pub checkpoint_every: usize,
+    /// Persists a [`CheckpointEvent`]; receives the optimizer alongside it
+    /// so the hook can add the optimizer's `state_dict` to the file.
+    pub on_checkpoint: Option<CF>,
+    /// Observes every finished epoch; receives an [`EpochEnd`].
+    pub on_epoch_end: Option<EF>,
+    /// Stepped once per finished epoch. The trainer owns the counting and
+    /// records the observed rates; applying them stays with the caller.
+    pub scheduler: Option<&'a mut dyn LRScheduler>,
+    /// The scheduler family name recorded in checkpoint events.
+    pub scheduler_kind: &'a str,
+}
+
+impl<CF, EF> Default for FitConfig<'_, CF, EF> {
+    fn default() -> Self {
+        Self {
+            early_stopping: None,
+            monitor: Monitor::default(),
+            checkpoint_best: false,
+            checkpoint_every: 0,
+            on_checkpoint: None,
+            on_epoch_end: None,
+            scheduler: None,
+            scheduler_kind: "unknown",
+        }
+    }
+}
+
+impl<CF, EF> core::fmt::Debug for FitConfig<'_, CF, EF> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FitConfig")
+            .field("early_stopping", &self.early_stopping)
+            .field("monitor", &self.monitor)
+            .field("checkpoint_best", &self.checkpoint_best)
+            .field("checkpoint_every", &self.checkpoint_every)
+            .field("has_on_checkpoint", &self.on_checkpoint.is_some())
+            .field("has_on_epoch_end", &self.on_epoch_end.is_some())
+            .field("has_scheduler", &self.scheduler.is_some())
+            .field("scheduler_kind", &self.scheduler_kind)
+            .finish()
+    }
+}
+
+impl<CF, EF> FitConfig<'_, CF, EF> {
+    /// Starts from [`Default`] explicitly, for call sites that prefer a
+    /// named constructor to `FitConfig::default()`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// What a completed [`Trainer::fit_with_config`] observed, beyond the
+/// [`FitOutcome`] it carries.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FitReport {
+    /// Epochs run, batches stepped, and the last batch loss, as in
+    /// [`Trainer::fit`]. `epochs` counts the epochs that actually ran, so
+    /// an early stop reports fewer than the plan's count.
+    pub outcome: FitOutcome,
+    /// How many epochs ran, including the stopping epoch.
+    pub epochs_run: usize,
+    /// The best monitored metric observed, if any epoch produced one.
+    pub best_metric: Option<f32>,
+    /// Whether early stopping ended the run before the plan's epochs.
+    pub stopped_early: bool,
+    /// How many scheduler steps were taken.
+    pub scheduler_steps: u64,
+    /// The learning rate observed after the last scheduler step, if any.
+    pub last_lr: Option<f64>,
+}
+
 /// The automatic trainer from §2.
 ///
 /// Owns the loop for forward, loss, backward, and step, plus the [`Plan`] that says
@@ -1028,6 +1339,105 @@ impl Trainer {
         }
     }
 
+    /// Resolves the FSDP synchronizer a sharded plan executes against.
+    ///
+    /// Returns `None` for an unsharded plan (or when the `distributed`
+    /// feature is off, where sharding does not exist). A sharded plan with
+    /// no attached synchronizer is refused here, before the first batch,
+    /// exactly as [`validate_synchronizer`](Self::validate_synchronizer)
+    /// promises.
+    #[cfg(feature = "distributed")]
+    fn fsdp_for_run(&self) -> Result<Option<(ZeROStage, &dyn FsdpSynchronizer)>, TrainError> {
+        match self.plan.sharding {
+            Some(ShardingSpec::Fsdp { stage }) => Ok(Some((
+                stage,
+                self.fsdp.as_deref().ok_or(TrainError::FsdpUnavailable {
+                    devices: self.plan.devices.len(),
+                })?,
+            ))),
+            None => Ok(None),
+        }
+    }
+
+    /// Runs one plain (unscaled) training step for an already-computed
+    /// loss, returning that loss as a host scalar.
+    ///
+    /// Backward, gradient synchronization (or the FSDP reduce/step/gather
+    /// walk when the plan is sharded), optimizer step, and loss readback.
+    /// Shared by [`fit`](Self::fit) and
+    /// [`fit_with_config`](Self::fit_with_config) so the two loops cannot
+    /// diverge on collectives; [`fit_scaled`](Self::fit_scaled) keeps its
+    /// own scaled walk.
+    #[allow(clippy::too_many_arguments)]
+    fn step_plain_batch<B, M, O>(
+        &self,
+        model: &mut M,
+        optimizer: &mut O,
+        value: Tensor<incin_core::shapes::Nil, B, f32, incin_core::tensor::grad::Grad>,
+        epoch: usize,
+        batch: usize,
+    ) -> Result<f32, TrainError>
+    where
+        B: Backend
+            + VariableBackend
+            + AutogradBackend
+            + HostInterop
+            + incin_core::exec::autocast::AutocastBackend,
+        M: VisitParameters<B>,
+        O: Optimizer<B>,
+    {
+        let mut grads = at(epoch, batch, value.backward())?;
+        #[cfg(feature = "distributed")]
+        let mut sharded_step = false;
+        #[cfg(not(feature = "distributed"))]
+        let sharded_step = false;
+        #[cfg(feature = "distributed")]
+        if let Some((stage, fsdp)) = self.fsdp_for_run()? {
+            let reduced = match stage {
+                ZeROStage::ZeRO1 => all_reduce_model_gradients(model, &mut grads, fsdp)
+                    .and_then(|()| mask_gradients_to_owned_shard(model, &mut grads, fsdp)),
+                ZeROStage::ZeRO2 => {
+                    reduce_scatter_model_gradients(model, &mut grads, fsdp).map(|_owned| ())
+                }
+                // `build` refuses this stage; the second
+                // check keeps a future construction path
+                // from running it as ZeRO-2.
+                ZeROStage::ZeRO3 => {
+                    return Err(TrainError::UnsupportedShardingStage { stage });
+                }
+            };
+            if let Err(error) = reduced {
+                return Err(TrainError::Step {
+                    epoch,
+                    batch,
+                    message: error.to_string(),
+                });
+            }
+            at(epoch, batch, optimizer.step(&grads))?;
+            if let Err(error) = all_gather_model_parameters(model, fsdp) {
+                return Err(TrainError::Step {
+                    epoch,
+                    batch,
+                    message: error.to_string(),
+                });
+            }
+            sharded_step = true;
+        }
+        if !sharded_step {
+            if let Some(sync) = self.synchronizer.as_deref()
+                && let Err(error) = all_reduce_model_gradients(model, &mut grads, sync)
+            {
+                return Err(TrainError::Step {
+                    epoch,
+                    batch,
+                    message: error.to_string(),
+                });
+            }
+            at(epoch, batch, optimizer.step(&grads))?;
+        }
+        at(epoch, batch, value.to_scalar::<f32>())
+    }
+
     /// Runs the training loop.
     ///
     /// `data` is re-iterated once per epoch, which is why it is `Clone`. A
@@ -1091,16 +1501,6 @@ impl Trainer {
         >,
     {
         self.validate_synchronizer()?;
-        #[cfg(feature = "distributed")]
-        let fsdp = match self.plan.sharding {
-            Some(ShardingSpec::Fsdp { stage }) => Some((
-                stage,
-                self.fsdp.as_deref().ok_or(TrainError::FsdpUnavailable {
-                    devices: self.plan.devices.len(),
-                })?,
-            )),
-            None => None,
-        };
 
         let _autocast = incin_core::exec::autocast::install::<B>();
         ExecutionPolicy::current()
@@ -1111,61 +1511,8 @@ impl Trainer {
                 for epoch in 0..self.plan.epochs {
                     for (batch, item) in data.clone().into_iter().enumerate() {
                         let value = at(epoch, batch, loss(model, item))?;
-                        let mut grads = at(epoch, batch, value.backward())?;
-                        #[cfg(feature = "distributed")]
-                        let mut sharded_step = false;
-                        #[cfg(not(feature = "distributed"))]
-                        let sharded_step = false;
-                        #[cfg(feature = "distributed")]
-                        if let Some((stage, fsdp)) = fsdp {
-                            let reduced = match stage {
-                                ZeROStage::ZeRO1 => {
-                                    all_reduce_model_gradients(model, &mut grads, fsdp).and_then(
-                                        |()| mask_gradients_to_owned_shard(model, &mut grads, fsdp),
-                                    )
-                                }
-                                ZeROStage::ZeRO2 => {
-                                    reduce_scatter_model_gradients(model, &mut grads, fsdp)
-                                        .map(|_owned| ())
-                                }
-                                // `build` refuses this stage; the second
-                                // check keeps a future construction path
-                                // from running it as ZeRO-2.
-                                ZeROStage::ZeRO3 => {
-                                    return Err(TrainError::UnsupportedShardingStage { stage });
-                                }
-                            };
-                            if let Err(error) = reduced {
-                                return Err(TrainError::Step {
-                                    epoch,
-                                    batch,
-                                    message: error.to_string(),
-                                });
-                            }
-                            at(epoch, batch, optimizer.step(&grads))?;
-                            if let Err(error) = all_gather_model_parameters(model, fsdp) {
-                                return Err(TrainError::Step {
-                                    epoch,
-                                    batch,
-                                    message: error.to_string(),
-                                });
-                            }
-                            sharded_step = true;
-                        }
-                        if !sharded_step {
-                            if let Some(sync) = self.synchronizer.as_deref()
-                                && let Err(error) =
-                                    all_reduce_model_gradients(model, &mut grads, sync)
-                            {
-                                return Err(TrainError::Step {
-                                    epoch,
-                                    batch,
-                                    message: error.to_string(),
-                                });
-                            }
-                            at(epoch, batch, optimizer.step(&grads))?;
-                        }
-                        final_loss = Some(at(epoch, batch, value.to_scalar::<f32>())?);
+                        final_loss =
+                            Some(self.step_plain_batch(model, optimizer, value, epoch, batch)?);
                         batches += 1;
                     }
                 }
@@ -1329,6 +1676,265 @@ impl Trainer {
                     epochs: self.plan.epochs,
                     batches,
                     final_loss,
+                })
+            })
+    }
+
+    /// Runs the training loop over a [`DataLoader`], with per-epoch
+    /// validation, early stopping, checkpoint hooks, and scheduler stepping.
+    ///
+    /// This is [`fit`](Self::fit) with a [`FitConfig`]: the per-batch step
+    /// (backward, synchronization, optimizer step) is the shared
+    /// [`step_plain_batch`](Self::step_plain_batch), so a model that trains
+    /// under `fit` trains identically here. What this adds, per finished
+    /// epoch and in this order:
+    ///
+    /// 1. Training batches stream through
+    ///    [`DataLoader::epoch_batches`](incin_data::loader::DataLoader::epoch_batches),
+    ///    which sets the loader's epoch before iterating (so shuffling
+    ///    advances every pass) and turns a failed batch into a
+    ///    [`TrainError::Data`] naming the epoch, never a silent skip.
+    /// 2. Validation batches stream from `validation`, if any, through the
+    ///    `validation_loss` closure without any backward pass; the epoch's
+    ///    mean is the validation metric. A failed validation batch or
+    ///    closure is [`TrainError::Validation`].
+    /// 3. The attached scheduler, if any, steps once, and the observed rate
+    ///    is recorded for checkpoints and the epoch-end hook.
+    /// 4. The `on_epoch_end` hook observes an [`EpochEnd`].
+    /// 5. The `on_checkpoint` hook fires with a [`CheckpointEvent`] when
+    ///    the monitored metric improves (if `checkpoint_best`) or every
+    ///    `checkpoint_every` epochs (if non-zero). The hook receives the
+    ///    optimizer alongside the event, so it can add the optimizer's own
+    ///    `state_dict` to whatever it persists; the event's model snapshot
+    ///    and scheduler pieces are the trainer-collected halves of a
+    ///    training checkpoint envelope.
+    /// 6. Early stopping ends the run once patience is exhausted, restoring
+    ///    the best parameters first when `restore_best` is set.
+    ///
+    /// The monitored metric is the validation mean under
+    /// [`Monitor::Validation`] (the default) and the training-loss mean
+    /// under [`Monitor::TrainLoss`]. An epoch with no batches to average
+    /// produces no metric and updates neither the baseline nor patience;
+    /// monitoring validation without providing validation data is refused
+    /// up front with [`TrainError::Validation`].
+    ///
+    /// # Errors
+    ///
+    /// As [`fit`](Self::fit) for planning and stepping, plus
+    /// [`TrainError::Data`] for a failed training batch,
+    /// [`TrainError::Validation`] for validation failures and validation
+    /// misconfiguration, and [`TrainError::Checkpoint`] for state
+    /// collection, hook, and best-restore failures.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fit_with_config<B, M, O, D, C, Batch, VD, VBatch, F, VF, CF, EF>(
+        &self,
+        model: &mut M,
+        optimizer: &mut O,
+        loader: &mut DataLoader<D, C>,
+        mut validation: Option<(VD, VF)>,
+        mut loss: F,
+        mut config: FitConfig<'_, CF, EF>,
+    ) -> Result<FitReport, TrainError>
+    where
+        B: Backend
+            + VariableBackend
+            + AutogradBackend
+            + HostInterop
+            + incin_core::exec::autocast::AutocastBackend,
+        M: VisitParameters<B> + VisitState<B> + VisitStateMut<B>,
+        O: Optimizer<B>,
+        D: Dataset + 'static,
+        C: Collate<D::Item, Output = Batch> + 'static,
+        VD: IntoIterator<Item = BatchResult<VBatch>> + Clone,
+        F: FnMut(
+            &mut M,
+            Batch,
+        ) -> incin_core::error::Result<
+            Tensor<incin_core::shapes::Nil, B, f32, incin_core::tensor::grad::Grad>,
+        >,
+        VF: FnMut(
+            &mut M,
+            VBatch,
+        ) -> incin_core::error::Result<
+            Tensor<incin_core::shapes::Nil, B, f32, incin_core::tensor::grad::Grad>,
+        >,
+        CF: FnMut(&mut O, CheckpointEvent) -> Result<(), TrainError>,
+        EF: FnMut(&EpochEnd),
+    {
+        self.validate_synchronizer()?;
+        if matches!(config.monitor, Monitor::Validation) && validation.is_none() {
+            return Err(TrainError::Validation {
+                epoch: 0,
+                message: "fit_with_config monitors the validation metric but no validation \
+                          data was provided"
+                    .to_string(),
+            });
+        }
+        // Improvement direction for best-checkpointing comes from the early
+        // stopping configuration when there is one; without it, any
+        // decrease of the monitored metric counts.
+        let (maximize, min_delta) = match &config.early_stopping {
+            Some(early) => (early.maximize, early.min_delta),
+            None => (false, 0.0),
+        };
+
+        let _autocast = incin_core::exec::autocast::install::<B>();
+        ExecutionPolicy::current()
+            .with_precision(self.plan.precision)
+            .scope(|| {
+                let mut batches = 0;
+                let mut final_loss = None;
+                let mut best_metric: Option<f32> = None;
+                let mut best_model: Option<StateSnapshot> = None;
+                let mut stopped_early = false;
+                let mut scheduler_steps = 0u64;
+                let mut last_lr = None;
+                let mut epochs_run = 0;
+
+                for epoch in 0..self.plan.epochs {
+                    let mut train_sum = 0.0f64;
+                    let mut train_count = 0;
+                    for (batch, item) in loader.epoch_batches(epoch as u64).enumerate() {
+                        let item = item.map_err(|error| TrainError::Data {
+                            epoch,
+                            batch: error.batch(),
+                            source: error.into_source(),
+                        })?;
+                        let value = at(epoch, batch, loss(model, item))?;
+                        let batch_loss =
+                            self.step_plain_batch(model, optimizer, value, epoch, batch)?;
+                        train_sum += f64::from(batch_loss);
+                        train_count += 1;
+                        final_loss = Some(batch_loss);
+                        batches += 1;
+                    }
+                    let train_loss =
+                        (train_count > 0).then_some((train_sum / f64::from(train_count)) as f32);
+
+                    let mut val_metric = None;
+                    if let Some((ref validation_data, ref mut validation_loss)) = validation {
+                        let mut sum = 0.0f64;
+                        let mut count = 0;
+                        for (validation_batch, item) in
+                            validation_data.clone().into_iter().enumerate()
+                        {
+                            let item = item.map_err(|error| TrainError::Validation {
+                                epoch,
+                                message: format!("validation batch {validation_batch}: {error}"),
+                            })?;
+                            let value = validation_loss(model, item).map_err(|error| {
+                                TrainError::Validation {
+                                    epoch,
+                                    message: error.to_string(),
+                                }
+                            })?;
+                            let scalar = value.to_scalar::<f32>().map_err(|error| {
+                                TrainError::Validation {
+                                    epoch,
+                                    message: error.to_string(),
+                                }
+                            })?;
+                            sum += f64::from(scalar);
+                            count += 1;
+                        }
+                        val_metric = (count > 0).then_some((sum / f64::from(count)) as f32);
+                    }
+
+                    if let Some(scheduler) = config.scheduler.as_deref_mut() {
+                        scheduler.step();
+                        scheduler_steps += 1;
+                        last_lr = Some(scheduler.get_lr());
+                    }
+
+                    if let Some(on_epoch_end) = config.on_epoch_end.as_mut() {
+                        on_epoch_end(&EpochEnd {
+                            epoch,
+                            train_loss,
+                            val_metric,
+                            scheduler_lr: last_lr,
+                        });
+                    }
+
+                    let monitored = match config.monitor {
+                        Monitor::Validation => val_metric,
+                        Monitor::TrainLoss => train_loss,
+                    };
+                    let mut improved = false;
+                    if let Some(metric) = monitored
+                        && is_improvement(best_metric, metric, maximize, min_delta)
+                    {
+                        improved = true;
+                        best_metric = Some(metric);
+                        if config
+                            .early_stopping
+                            .as_ref()
+                            .is_some_and(|early| early.restore_best)
+                        {
+                            best_model = Some(collect_state::<B, _>(model).map_err(|error| {
+                                TrainError::Checkpoint {
+                                    epoch,
+                                    message: error.to_string(),
+                                }
+                            })?);
+                        }
+                    }
+                    let periodic =
+                        config.checkpoint_every > 0 && (epoch + 1) % config.checkpoint_every == 0;
+                    if ((improved && config.checkpoint_best) || periodic)
+                        && let Some(on_checkpoint) = config.on_checkpoint.as_mut()
+                    {
+                        let model_snapshot = collect_state::<B, _>(model).map_err(|error| {
+                            TrainError::Checkpoint {
+                                epoch,
+                                message: error.to_string(),
+                            }
+                        })?;
+                        on_checkpoint(
+                            optimizer,
+                            CheckpointEvent {
+                                epoch,
+                                is_best: improved,
+                                metric: monitored,
+                                model: model_snapshot,
+                                scheduler_kind: config.scheduler_kind.to_string(),
+                                scheduler_steps,
+                                scheduler_lr: last_lr,
+                            },
+                        )?;
+                    }
+
+                    epochs_run = epoch + 1;
+                    if let Some(early) = config.early_stopping.as_mut() {
+                        if let Some(metric) = monitored {
+                            early.update(metric);
+                        }
+                        if early.should_stop() {
+                            stopped_early = true;
+                            break;
+                        }
+                    }
+                }
+
+                if stopped_early && let Some(snapshot) = best_model {
+                    load_state::<B, _>(model, &snapshot).map_err(|error| {
+                        TrainError::Checkpoint {
+                            epoch: epochs_run.saturating_sub(1),
+                            message: error.to_string(),
+                        }
+                    })?;
+                }
+
+                Ok(FitReport {
+                    outcome: FitOutcome {
+                        epochs: epochs_run,
+                        batches,
+                        final_loss,
+                    },
+                    epochs_run,
+                    best_metric,
+                    stopped_early,
+                    scheduler_steps,
+                    last_lr,
                 })
             })
     }
@@ -2244,5 +2850,464 @@ mod device_order_tests {
     #[test]
     fn metal_names_its_feature() {
         assert_eq!(feature_for(DeviceKind::Metal), "metal");
+    }
+}
+
+#[cfg(test)]
+mod fit_config_tests {
+    use super::*;
+
+    #[test]
+    fn early_stopping_triggers_on_a_worsening_metric() {
+        let mut early = EarlyStopping::new(2);
+        assert!(
+            early.update(1.0),
+            "the first metric establishes the baseline"
+        );
+        assert!(!early.should_stop());
+        assert!(!early.update(1.5));
+        assert!(!early.should_stop(), "one bad epoch is within patience");
+        assert!(!early.update(2.0));
+        assert!(
+            early.should_stop(),
+            "two consecutive worsening epochs exhaust patience 2"
+        );
+        assert_eq!(early.best(), Some(1.0));
+    }
+
+    #[test]
+    fn early_stopping_improvement_resets_patience() {
+        let mut early = EarlyStopping::new(1);
+        assert!(early.update(1.0));
+        assert!(!early.update(2.0));
+        assert!(early.update(0.5), "a new best resets the wait");
+        assert!(!early.should_stop());
+        assert!(!early.update(0.6));
+        assert!(early.should_stop());
+        assert_eq!(early.best(), Some(0.5));
+    }
+
+    #[test]
+    fn early_stopping_min_delta_ignores_noise() {
+        let mut early = EarlyStopping::new(1).with_min_delta(0.1);
+        assert!(early.update(1.0));
+        assert!(
+            !early.update(0.95),
+            "0.05 of progress is noise at delta 0.1"
+        );
+        assert!(early.update(0.85), "0.15 of progress counts");
+    }
+
+    #[test]
+    fn early_stopping_maximize_tracks_rising_metrics() {
+        let mut early = EarlyStopping::new(1).maximizing();
+        assert!(early.update(0.5));
+        assert!(
+            !early.update(0.4),
+            "a falling accuracy is not an improvement"
+        );
+        assert!(early.update(0.6));
+        assert_eq!(early.best(), Some(0.6));
+    }
+
+    #[test]
+    fn early_stopping_never_improves_on_non_finite_metrics() {
+        let mut early = EarlyStopping::new(2);
+        assert!(!early.update(f32::NAN), "NaN establishes no baseline");
+        assert_eq!(early.best(), None);
+        assert!(!early.should_stop(), "nothing to be patient about yet");
+        assert!(early.update(1.0));
+        assert!(!early.update(f32::INFINITY), "infinity never improves");
+        assert_eq!(early.best(), Some(1.0));
+    }
+
+    /// Backend-backed coverage: full configured runs on the CPU.
+    #[cfg(feature = "cpu")]
+    mod cpu_tests {
+        use super::*;
+        use incin_core::nn::Linear;
+        use incin_core::nn::module::Module;
+        use incin_core::optim::{LinearWarmup, SGD};
+        use incin_core::shapes::{Dyn, Nil};
+        use incin_core::tensor::base::Tensor;
+        use incin_core::tensor::grad::Grad;
+        use incin_data::loader::{DataError, DefaultCollate};
+        use incin_data::{DataLoader, Dataset};
+
+        type Backend = crate::DefaultBackend;
+        type Model = Linear<Dyn, Backend>;
+        /// The scalar loss every loss closure returns, exactly as `fit`
+        /// requires it.
+        type Loss = Tensor<Nil, Backend, f32, Grad>;
+        /// One collated batch: the two sides stacked separately.
+        type Batch = (Tensor<Dyn, Backend>, Tensor<Dyn, Backend>);
+        /// Explicit hook types for configurations that leave a hook
+        /// detached: a bare `None` leaves the hook type open.
+        type CkptHook = fn(&mut SGD<Backend>, CheckpointEvent) -> Result<(), TrainError>;
+        /// Explicit hook types for configurations that leave a hook
+        /// detached: a bare `None` leaves the hook type open.
+        type EpochHook = fn(&EpochEnd);
+        /// Explicit validation halves for runs without validation data: a
+        /// bare `None` leaves both types open.
+        type NoValidation<'a> = (
+            &'a DataLoader<MemDataset, DefaultCollate>,
+            fn(&mut Model, Batch) -> incin_core::error::Result<Loss>,
+        );
+
+        /// Eight single-sample batches of a trivial regression problem.
+        struct MemDataset {
+            inputs: Vec<Tensor<Dyn, Backend>>,
+            targets: Vec<Tensor<Dyn, Backend>>,
+        }
+
+        impl MemDataset {
+            fn regression(len: usize) -> Self {
+                let mut inputs = Vec::with_capacity(len);
+                let mut targets = Vec::with_capacity(len);
+                for index in 0..len {
+                    inputs.push(
+                        Tensor::<Dyn, Backend>::from_slice(&[index as f32, 0.0, 0.0, 0.0], vec![4])
+                            .expect("input sample builds"),
+                    );
+                    targets.push(
+                        Tensor::<Dyn, Backend>::from_slice(&[index as f32, 0.0], vec![2])
+                            .expect("target sample builds"),
+                    );
+                }
+                Self { inputs, targets }
+            }
+        }
+
+        impl Dataset for MemDataset {
+            type Item = Batch;
+
+            fn len(&self) -> usize {
+                self.inputs.len()
+            }
+
+            fn get(&self, index: usize) -> incin_data::loader::BatchResult<Option<Self::Item>> {
+                if index < self.len() {
+                    Ok(Some((
+                        self.inputs[index].clone(),
+                        self.targets[index].clone(),
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+
+        fn trainer(epochs: usize) -> Trainer {
+            Trainer::new(
+                Trainer::plan()
+                    .devices(DeviceSet::cpu())
+                    .epochs(epochs)
+                    .build()
+                    .expect("the CPU is there"),
+            )
+        }
+
+        fn train_loss(
+            model: &mut Model,
+            (input, target): Batch,
+        ) -> incin_core::error::Result<Loss> {
+            model.forward(input)?.mse_loss(&target)
+        }
+
+        #[test]
+        fn fit_with_config_validates_every_epoch_and_reports() {
+            let mut model = Model::build((4, 2)).expect("the model builds");
+            let mut optimizer =
+                SGD::<Backend>::from_module(&model, 0.01).expect("optimizer builds");
+            let mut loader =
+                DataLoader::from_dataset(MemDataset::regression(8), 2).expect("loader builds");
+            let val_loader =
+                DataLoader::from_dataset(MemDataset::regression(4), 2).expect("loader builds");
+
+            let mut epoch_ends = 0;
+            let report = trainer(3)
+                .fit_with_config(
+                    &mut model,
+                    &mut optimizer,
+                    &mut loader,
+                    Some((&val_loader, train_loss)),
+                    train_loss,
+                    FitConfig {
+                        on_epoch_end: Some(|_: &EpochEnd| {
+                            epoch_ends += 1;
+                        }),
+                        on_checkpoint: None::<CkptHook>,
+                        ..FitConfig::default()
+                    },
+                )
+                .expect("configured training succeeds");
+
+            assert_eq!(epoch_ends, 3, "the hook fires once per finished epoch");
+            assert_eq!(report.epochs_run, 3);
+            assert!(!report.stopped_early);
+            assert_eq!(report.outcome.epochs, 3);
+            assert_eq!(report.outcome.batches, 12, "3 epochs of 4 batches");
+            assert!(
+                report.outcome.final_loss.is_some_and(f32::is_finite),
+                "got {:?}",
+                report.outcome.final_loss
+            );
+            assert!(
+                report.best_metric.is_some_and(f32::is_finite),
+                "validation ran every epoch, got {:?}",
+                report.best_metric
+            );
+            assert_eq!(report.scheduler_steps, 0);
+        }
+
+        #[test]
+        fn fit_with_config_early_stops_on_a_worsening_validation_metric() {
+            let mut model = Model::build((4, 2)).expect("the model builds");
+            let mut optimizer =
+                SGD::<Backend>::from_module(&model, 0.01).expect("optimizer builds");
+            let mut loader =
+                DataLoader::from_dataset(MemDataset::regression(8), 2).expect("loader builds");
+            let val_loader =
+                DataLoader::from_dataset(MemDataset::regression(4), 2).expect("loader builds");
+            let initial = collect_state::<Backend, _>(&model).expect("state collects");
+
+            // A validation metric that worsens by 100 every call, whatever
+            // the model does: the metronome early stopping is tested
+            // against. Training still runs for real underneath, so
+            // restore-best has moved parameters to put back.
+            let mut calls = 0usize;
+            let worsening =
+                |model: &mut Model, (input, target): Batch| -> incin_core::error::Result<Loss> {
+                    calls += 1;
+                    let shifted = target.add_scalar(calls as f64 * 100.0)?;
+                    model.forward(input)?.mse_loss(&shifted)
+                };
+
+            let mut val_means = Vec::new();
+            let mut best_snapshots = Vec::new();
+            let report = trainer(5)
+                .fit_with_config(
+                    &mut model,
+                    &mut optimizer,
+                    &mut loader,
+                    Some((&val_loader, worsening)),
+                    train_loss,
+                    FitConfig {
+                        early_stopping: Some(EarlyStopping::new(1).with_restore_best()),
+                        checkpoint_best: true,
+                        on_checkpoint: Some(|_: &mut SGD<Backend>, event: CheckpointEvent| {
+                            if event.is_best {
+                                best_snapshots.push(event.model.clone());
+                            }
+                            Ok(())
+                        }),
+                        on_epoch_end: Some(|end: &EpochEnd| {
+                            val_means.push(end.val_metric);
+                        }),
+                        ..FitConfig::default()
+                    },
+                )
+                .expect("configured training succeeds");
+
+            assert!(report.stopped_early, "the metric worsens every epoch");
+            assert_eq!(report.epochs_run, 2, "baseline epoch plus one bad epoch");
+            assert_eq!(report.outcome.epochs, 2);
+            assert_eq!(val_means.len(), 2, "validation ran in every finished epoch");
+            let [first, second] = val_means[..] else {
+                panic!("two finished epochs produce two means");
+            };
+            assert!(
+                first.is_some_and(f32::is_finite) && second.is_some_and(f32::is_finite),
+                "got {val_means:?}"
+            );
+            assert!(second > first, "the metronome worsens, got {val_means:?}");
+            assert_eq!(report.best_metric, first);
+            assert_eq!(
+                best_snapshots.len(),
+                1,
+                "exactly the baseline epoch was best"
+            );
+            assert_ne!(
+                collect_state::<Backend, _>(&model).expect("state collects"),
+                initial,
+                "training ran for real underneath the metronome"
+            );
+            assert_eq!(
+                collect_state::<Backend, _>(&model).expect("state collects"),
+                best_snapshots[0],
+                "restore-best puts the baseline parameters back"
+            );
+        }
+
+        #[test]
+        fn fit_with_config_checkpoint_hook_fires_best_and_periodic() {
+            let mut model = Model::build((4, 2)).expect("the model builds");
+            let mut optimizer =
+                SGD::<Backend>::from_module(&model, 0.01).expect("optimizer builds");
+            let mut loader =
+                DataLoader::from_dataset(MemDataset::regression(8), 2).expect("loader builds");
+
+            let mut events: Vec<(usize, bool, usize)> = Vec::new();
+            let report = trainer(4)
+                .fit_with_config(
+                    &mut model,
+                    &mut optimizer,
+                    &mut loader,
+                    None::<NoValidation<'_>>,
+                    train_loss,
+                    FitConfig {
+                        monitor: Monitor::TrainLoss,
+                        checkpoint_best: true,
+                        checkpoint_every: 2,
+                        on_checkpoint: Some(|_: &mut SGD<Backend>, event: CheckpointEvent| {
+                            events.push((event.epoch, event.is_best, event.model.len()));
+                            assert_eq!(event.scheduler_kind, "test-schedule");
+                            Ok(())
+                        }),
+                        on_epoch_end: None::<EpochHook>,
+                        scheduler_kind: "test-schedule",
+                        ..FitConfig::default()
+                    },
+                )
+                .expect("configured training succeeds");
+
+            assert!(!report.stopped_early);
+            let epochs: Vec<usize> = events.iter().map(|(epoch, _, _)| *epoch).collect();
+            assert!(
+                epochs.contains(&1) && epochs.contains(&3),
+                "periodic saves fire every 2 epochs, got {epochs:?}"
+            );
+            assert!(
+                events
+                    .iter()
+                    .any(|(epoch, is_best, _)| *epoch == 0 && *is_best),
+                "the first epoch always improves the empty baseline, got {events:?}"
+            );
+            assert!(
+                events.iter().all(|(_, _, entries)| *entries > 0),
+                "every event carries the model snapshot"
+            );
+        }
+
+        #[test]
+        fn fit_with_config_steps_the_scheduler_each_epoch() {
+            let mut model = Model::build((4, 2)).expect("the model builds");
+            let mut optimizer =
+                SGD::<Backend>::from_module(&model, 0.01).expect("optimizer builds");
+            let mut loader =
+                DataLoader::from_dataset(MemDataset::regression(8), 2).expect("loader builds");
+            let mut scheduler = LinearWarmup::new(0.1, 4);
+
+            let report = trainer(2)
+                .fit_with_config(
+                    &mut model,
+                    &mut optimizer,
+                    &mut loader,
+                    None::<NoValidation<'_>>,
+                    train_loss,
+                    FitConfig {
+                        monitor: Monitor::TrainLoss,
+                        scheduler: Some(&mut scheduler),
+                        scheduler_kind: "warmup",
+                        on_checkpoint: None::<CkptHook>,
+                        on_epoch_end: None::<EpochHook>,
+                        ..FitConfig::default()
+                    },
+                )
+                .expect("configured training succeeds");
+
+            assert_eq!(report.scheduler_steps, 2);
+            assert_eq!(report.last_lr, Some(0.05));
+            assert_eq!(
+                scheduler.get_lr(),
+                0.05,
+                "the trainer stepped the caller's scheduler"
+            );
+        }
+
+        #[test]
+        fn fit_with_config_turns_a_loader_error_into_a_failed_epoch() {
+            struct FailAt {
+                inner: MemDataset,
+                fail_at: usize,
+            }
+
+            impl Dataset for FailAt {
+                type Item = Batch;
+
+                fn len(&self) -> usize {
+                    self.inner.len()
+                }
+
+                fn get(&self, index: usize) -> incin_data::loader::BatchResult<Option<Self::Item>> {
+                    if index == self.fail_at {
+                        Err(DataError::Dataset("fixture failure".into()))
+                    } else {
+                        self.inner.get(index)
+                    }
+                }
+            }
+
+            let mut model = Model::build((4, 2)).expect("the model builds");
+            let mut optimizer =
+                SGD::<Backend>::from_module(&model, 0.01).expect("optimizer builds");
+            let mut loader = DataLoader::new(
+                FailAt {
+                    inner: MemDataset::regression(8),
+                    fail_at: 3,
+                },
+                DefaultCollate,
+                2,
+            )
+            .expect("loader builds");
+
+            let error = trainer(3)
+                .fit_with_config(
+                    &mut model,
+                    &mut optimizer,
+                    &mut loader,
+                    None::<NoValidation<'_>>,
+                    train_loss,
+                    FitConfig {
+                        monitor: Monitor::TrainLoss,
+                        on_checkpoint: None::<CkptHook>,
+                        on_epoch_end: None::<EpochHook>,
+                        ..FitConfig::default()
+                    },
+                )
+                .expect_err("index 3 fails mid-epoch");
+            assert_eq!(
+                error,
+                TrainError::Data {
+                    epoch: 0,
+                    batch: 1,
+                    source: DataError::Dataset("fixture failure".into()),
+                }
+            );
+        }
+
+        #[test]
+        fn fit_with_config_refuses_validation_monitoring_without_data() {
+            let mut model = Model::build((4, 2)).expect("the model builds");
+            let mut optimizer =
+                SGD::<Backend>::from_module(&model, 0.01).expect("optimizer builds");
+            let mut loader =
+                DataLoader::from_dataset(MemDataset::regression(8), 2).expect("loader builds");
+
+            let error = trainer(2)
+                .fit_with_config(
+                    &mut model,
+                    &mut optimizer,
+                    &mut loader,
+                    None::<NoValidation<'_>>,
+                    train_loss,
+                    FitConfig::<CkptHook, EpochHook>::default(),
+                )
+                .expect_err("monitoring validation without data must be refused");
+            assert!(
+                matches!(error, TrainError::Validation { epoch: 0, .. }),
+                "got {error:?}"
+            );
+        }
     }
 }

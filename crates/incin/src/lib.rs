@@ -398,8 +398,9 @@ pub mod experimental {
         #[cfg(feature = "distributed-reference")]
         pub use crate::train::{BucketLaunch, ReferenceDataParallel, ReferenceRankSynchronizer};
         pub use crate::train::{
-            Decision, FitOutcome, HostMachine, Machine, Plan, SingleRankSynchronizer, TrainError,
-            Trainer, TrainerBuilder,
+            CheckpointEvent, Decision, EarlyStopping, EpochEnd, FitConfig, FitOutcome, FitReport,
+            HostMachine, Machine, Monitor, Plan, SingleRankSynchronizer, TrainError, Trainer,
+            TrainerBuilder,
         };
         pub use incin_core::dist::sync::{
             FsdpSynchronizer, GradientSynchronizer, ShardedGradients, SyncError,
