@@ -842,13 +842,10 @@ impl<
                 expression: "flattened batch-times-sequence product",
             })
         })?;
-        let flat_pred = self
-            .clone()
-            .into_dyn()
-            .reshape_infer(crate::shapes::InferShape::<crate::shapes::Dyn>::new(vec![
-                Some(rows),
-                None,
-            ]))?;
+        let flat_pred =
+            self.clone().into_dyn().reshape_infer(
+                crate::shapes::InferShape::<crate::shapes::Dyn>::new(vec![Some(rows), None]),
+            )?;
         let flat_target = target
             .clone()
             .into_dyn()
@@ -882,13 +879,10 @@ impl<
             // takes, spelled out because the target geometry is fully
             // known); wrapping the [rows] storage with a [B, T] claim
             // directly would fail `from_parts`' exact-shape check.
-            let out_buf = shape_buf_from_dims::<crate::shapes::Dyn>(
-                OperationKind::Reduction,
-                &[batch, seq],
-            )?;
-            let out_shape =
-                crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(out_buf)
-                    .map_err(crate::err::Error::Shape)?;
+            let out_buf =
+                shape_buf_from_dims::<crate::shapes::Dyn>(OperationKind::Reduction, &[batch, seq])?;
+            let out_shape = crate::shapes::ShapeValue::<crate::shapes::Dyn>::try_new(out_buf)
+                .map_err(crate::err::Error::Shape)?;
             let input = TensorHandle::from_storage::<B, K, Local>(&storage);
             let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
             let inner = G::grad_mode(&self._grad)
@@ -912,8 +906,7 @@ impl<
                 self._grad.clone(),
             );
         }
-        let out_shape =
-            shape_buf_from_dims::<crate::shapes::Dyn>(OperationKind::Reduction, &[])?;
+        let out_shape = shape_buf_from_dims::<crate::shapes::Dyn>(OperationKind::Reduction, &[])?;
         Tensor::from_parts(
             storage,
             out_shape,
