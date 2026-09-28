@@ -1,4 +1,7 @@
 impl core::default::Default for incin_data::transforms::RandomHorizontalFlip
+impl incin_data::dataset::Dataset for incin_data::vision::cifar::Cifar100Dataset
+impl incin_data::dataset::Dataset for incin_data::vision::cifar::Cifar10Dataset
+impl incin_data::dataset::Dataset for incin_data::vision::fashion_mnist::FashionMnistDataset
 impl incin_data::dataset::Dataset for incin_data::vision::mnist::MnistDataset
 impl incin_data::downloader::Downloader
 impl incin_data::loader::Collate<alloc::string::String> for incin_data::loader::DefaultCollate
@@ -15,14 +18,23 @@ impl incin_data::loader::Collate<u32> for incin_data::loader::DefaultCollate
 impl incin_data::loader::Collate<u64> for incin_data::loader::DefaultCollate
 impl incin_data::loader::Collate<u8> for incin_data::loader::DefaultCollate
 impl incin_data::loader::Collate<usize> for incin_data::loader::DefaultCollate
+impl incin_data::loader::EpochError
 impl incin_data::transforms::CenterCrop
 impl incin_data::transforms::Normalize
+impl incin_data::transforms::RandomCrop
 impl incin_data::transforms::RandomHorizontalFlip
+impl incin_data::transforms::Resize
 impl incin_data::transforms::Scale
 impl incin_data::transforms::Transform for incin_data::transforms::CenterCrop
 impl incin_data::transforms::Transform for incin_data::transforms::Normalize
+impl incin_data::transforms::Transform for incin_data::transforms::RandomCrop
 impl incin_data::transforms::Transform for incin_data::transforms::RandomHorizontalFlip
+impl incin_data::transforms::Transform for incin_data::transforms::Resize
 impl incin_data::transforms::Transform for incin_data::transforms::Scale
+impl incin_data::transforms::Transform for incin_data::transforms::ToTensor
+impl incin_data::vision::cifar::Cifar100Dataset
+impl incin_data::vision::cifar::Cifar10Dataset
+impl incin_data::vision::fashion_mnist::FashionMnistDataset
 impl incin_data::vision::mnist::MnistDataset
 impl<A, B, C> incin_data::loader::Collate<(A, B, C)> for incin_data::loader::DefaultCollate where A: core::marker::Send + 'static, B: core::marker::Send + 'static, C: core::marker::Send + 'static, incin_data::loader::DefaultCollate: incin_data::loader::Collate<A> + incin_data::loader::Collate<B> + incin_data::loader::Collate<C>
 impl<A, B> incin_data::loader::Collate<(A, B)> for incin_data::loader::DefaultCollate where A: core::marker::Send + 'static, B: core::marker::Send + 'static, incin_data::loader::DefaultCollate: incin_data::loader::Collate<A> + incin_data::loader::Collate<B>
@@ -30,16 +42,24 @@ impl<D, C> core::iter::traits::collect::IntoIterator for &incin_data::loader::Da
 impl<D, C> incin_data::loader::DataLoader<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 impl<D, C> incin_data::loader::DataLoaderBuilder<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 impl<D> incin_data::loader::DataLoader<D, incin_data::loader::DefaultCollate> where D: incin_data::dataset::Dataset + 'static, <D as incin_data::dataset::Dataset>::Item: core::marker::Send + 'static, incin_data::loader::DefaultCollate: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item>
+impl<I, T> core::iter::traits::iterator::Iterator for incin_data::loader::EpochBatches<I> where I: core::iter::traits::iterator::Iterator<Item = incin_data::loader::BatchResult<T>>
+impl<I> incin_data::loader::EpochBatches<I>
 impl<S, B, K, G> incin_data::loader::Collate<incin_core::tensor::base::types::Tensor<S, B, K, G>> for incin_data::loader::DefaultCollate where S: incin_core::shapes::shape::Shape + incin_core::shapes::shape::DynShape, B: incin_core::tensor::backend::Backend + incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::StackExact> + incin_core::exec::capability::Capabilities, K: incin_core::tensor::dtype::traits::DType, G: incin_core::tensor::grad::RequiresGrad, incin_core::tensor::base::types::Tensor<S, B, K, G>: core::marker::Send + 'static, <B as incin_core::tensor::backend::execute::Execute<incin_core::exec::catalog::descriptor::op::StackExact>>::Output: core::convert::Into<<B as incin_core::tensor::backend::execute::StorageBackend>::Storage>, <B as incin_core::tensor::backend::execute::StorageBackend>::Storage: core::marker::Send + 'static, <K as incin_core::tensor::dtype::traits::DType>::Field: core::marker::Send + 'static, <<B as incin_core::tensor::backend::execute::StorageBackend>::Device as incin_core::tensor::device::Device>::Field: core::marker::Send + 'static
 impl<T: core::marker::Send + 'static> incin_data::loader::Collate<alloc::vec::Vec<T>> for incin_data::loader::DefaultCollate
 impl<T: incin_data::dataset::Dataset + ?core::marker::Sized> incin_data::dataset::Dataset for alloc::sync::Arc<T>
 impl<T> core::default::Default for incin_data::transforms::Compose<T>
 impl<T> core::iter::traits::iterator::Iterator for incin_data::loader::DataLoaderIter<T>
 impl<T> core::ops::drop::Drop for incin_data::loader::DataLoaderIter<T>
+impl<T> incin_data::loader::Collate<(alloc::vec::Vec<f32>, u8)> for incin_data::vision::cifar::CifarCollate<T> where T: incin_data::vision::mnist::MnistBatchTarget
 impl<T> incin_data::loader::Collate<(alloc::vec::Vec<f32>, u8)> for incin_data::vision::mnist::TensorCollate<T> where T: incin_data::vision::mnist::MnistBatchTarget
 impl<T> incin_data::transforms::Compose<T>
 impl<T> incin_data::transforms::Transform for incin_data::transforms::Compose<T>
+impl<T> incin_data::vision::cifar::CifarCollate<T>
 impl<T> incin_data::vision::mnist::TensorCollate<T>
+pub const fn incin_data::vision::cifar::Cifar100Dataset::is_training(&self) -> bool
+pub const fn incin_data::vision::cifar::Cifar10Dataset::is_training(&self) -> bool
+pub const fn incin_data::vision::cifar::CifarCollate<T>::new(T) -> Self
+pub const fn incin_data::vision::fashion_mnist::FashionMnistDataset::is_training(&self) -> bool
 pub const fn incin_data::vision::mnist::MnistDataset::is_training(&self) -> bool
 pub const fn incin_data::vision::mnist::TensorCollate<T>::new(T) -> Self
 pub enum incin_data::DataError
@@ -64,6 +84,7 @@ pub fn incin_data::downloader::Downloader::download(&str, &std::path::Path, &str
 pub fn incin_data::downloader::Downloader::download_and_extract_gz(&str, &std::path::Path, &str) -> incin_core::err::Result<std::path::PathBuf>
 pub fn incin_data::loader::Collate::collate(&self, alloc::vec::Vec<T>) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::loader::DataLoader<D, C>::builder_with_collate(D, C) -> incin_data::loader::DataLoaderBuilder<D, C>
+pub fn incin_data::loader::DataLoader<D, C>::epoch_batches(&mut self, u64) -> incin_data::loader::EpochBatches<incin_data::loader::DataLoaderIter<<C as incin_data::loader::Collate>::Output>>
 pub fn incin_data::loader::DataLoader<D, C>::new(D, C, usize) -> incin_core::err::Result<Self>
 pub fn incin_data::loader::DataLoader<D, C>::set_epoch(&mut self, u64)
 pub fn incin_data::loader::DataLoader<D, C>::with_drop_last(self, bool) -> Self
@@ -106,6 +127,15 @@ pub fn incin_data::loader::DefaultCollate::collate(&self, alloc::vec::Vec<u32>) 
 pub fn incin_data::loader::DefaultCollate::collate(&self, alloc::vec::Vec<u64>) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::loader::DefaultCollate::collate(&self, alloc::vec::Vec<u8>) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::loader::DefaultCollate::collate(&self, alloc::vec::Vec<usize>) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::loader::EpochBatches<I>::batches_yielded(&self) -> usize
+pub fn incin_data::loader::EpochBatches<I>::epoch(&self) -> u64
+pub fn incin_data::loader::EpochBatches<I>::new(I, u64) -> Self
+pub fn incin_data::loader::EpochBatches<I>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn incin_data::loader::EpochError::batch(&self) -> usize
+pub fn incin_data::loader::EpochError::epoch(&self) -> u64
+pub fn incin_data::loader::EpochError::into_source(self) -> incin_data::loader::DataError
+pub fn incin_data::loader::EpochError::new(u64, usize, incin_data::loader::DataError) -> Self
+pub fn incin_data::loader::EpochError::source(&self) -> &incin_data::loader::DataError
 pub fn incin_data::prelude::Collate::collate(&self, alloc::vec::Vec<T>) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::prelude::Transform::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::transforms::CenterCrop::new(usize, usize) -> Self
@@ -117,12 +147,40 @@ pub fn incin_data::transforms::Compose<T>::transform(&self, Self::Input) -> inci
 pub fn incin_data::transforms::Normalize::imagenet() -> Self
 pub fn incin_data::transforms::Normalize::new(alloc::vec::Vec<f32>, alloc::vec::Vec<f32>) -> Self
 pub fn incin_data::transforms::Normalize::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::transforms::RandomCrop::new(usize, usize) -> Self
+pub fn incin_data::transforms::RandomCrop::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::transforms::RandomCrop::with_padding(self, usize) -> Self
 pub fn incin_data::transforms::RandomHorizontalFlip::default() -> Self
 pub fn incin_data::transforms::RandomHorizontalFlip::new(f64) -> Self
 pub fn incin_data::transforms::RandomHorizontalFlip::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::transforms::Resize::new(usize, usize) -> Self
+pub fn incin_data::transforms::Resize::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::transforms::Scale::new(f32) -> Self
 pub fn incin_data::transforms::Scale::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::transforms::ToTensor::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::transforms::Transform::transform(&self, Self::Input) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::vision::cifar::Cifar100Dataset::get(&self, usize) -> core::result::Result<core::option::Option<Self::Item>, incin_data::loader::DataError>
+pub fn incin_data::vision::cifar::Cifar100Dataset::image_bytes(&self) -> &[u8]
+pub fn incin_data::vision::cifar::Cifar100Dataset::is_empty(&self) -> bool
+pub fn incin_data::vision::cifar::Cifar100Dataset::labels(&self) -> &[u8]
+pub fn incin_data::vision::cifar::Cifar100Dataset::len(&self) -> usize
+pub fn incin_data::vision::cifar::Cifar100Dataset::loader<T>(self, T) -> incin_data::loader::DataLoaderBuilder<Self, incin_data::vision::mnist::TensorCollate<T>> where T: incin_data::vision::mnist::MnistBatchTarget
+pub fn incin_data::vision::cifar::Cifar100Dataset::new<P: core::convert::AsRef<std::path::Path>>(P, bool) -> incin_core::err::Result<Self>
+pub fn incin_data::vision::cifar::Cifar10Dataset::get(&self, usize) -> core::result::Result<core::option::Option<Self::Item>, incin_data::loader::DataError>
+pub fn incin_data::vision::cifar::Cifar10Dataset::image_bytes(&self) -> &[u8]
+pub fn incin_data::vision::cifar::Cifar10Dataset::is_empty(&self) -> bool
+pub fn incin_data::vision::cifar::Cifar10Dataset::labels(&self) -> &[u8]
+pub fn incin_data::vision::cifar::Cifar10Dataset::len(&self) -> usize
+pub fn incin_data::vision::cifar::Cifar10Dataset::loader<T>(self, T) -> incin_data::loader::DataLoaderBuilder<Self, incin_data::vision::mnist::TensorCollate<T>> where T: incin_data::vision::mnist::MnistBatchTarget
+pub fn incin_data::vision::cifar::Cifar10Dataset::new<P: core::convert::AsRef<std::path::Path>>(P, bool) -> incin_core::err::Result<Self>
+pub fn incin_data::vision::cifar::CifarCollate<T>::collate(&self, alloc::vec::Vec<(alloc::vec::Vec<f32>, u8)>) -> incin_data::loader::BatchResult<Self::Output>
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::get(&self, usize) -> core::result::Result<core::option::Option<Self::Item>, incin_data::loader::DataError>
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::image_bytes(&self) -> &[u8]
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::is_empty(&self) -> bool
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::labels(&self) -> &[u8]
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::len(&self) -> usize
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::loader<T>(self, T) -> incin_data::loader::DataLoaderBuilder<Self, incin_data::vision::mnist::TensorCollate<T>> where T: incin_data::vision::mnist::MnistBatchTarget
+pub fn incin_data::vision::fashion_mnist::FashionMnistDataset::new<P: core::convert::AsRef<std::path::Path>>(P, bool) -> incin_core::err::Result<Self>
 pub fn incin_data::vision::mnist::MnistBatchTarget::batch(&self, alloc::vec::Vec<f32>, alloc::vec::Vec<u8>, usize) -> incin_data::loader::BatchResult<(Self::Images, Self::Labels)>
 pub fn incin_data::vision::mnist::MnistDataset::get(&self, usize) -> core::result::Result<core::option::Option<Self::Item>, incin_data::loader::DataError>
 pub fn incin_data::vision::mnist::MnistDataset::image_bytes(&self) -> &[u8]
@@ -153,9 +211,14 @@ pub incin_data::DistributedSampler::remainder: incin_data::loader::RemainderPoli
 pub incin_data::DistributedSampler::world_size: usize
 pub incin_data::Normalize::mean: alloc::vec::Vec<f32>
 pub incin_data::Normalize::std: alloc::vec::Vec<f32>
+pub incin_data::RandomCrop::crop_h: usize
+pub incin_data::RandomCrop::crop_w: usize
+pub incin_data::RandomCrop::padding: usize
 pub incin_data::RandomHorizontalFlip::p: f64
 pub incin_data::RemainderPolicy::Drop
 pub incin_data::RemainderPolicy::Pad
+pub incin_data::Resize::new_h: usize
+pub incin_data::Resize::new_w: usize
 pub incin_data::Scale::factor: f32
 pub incin_data::loader::DataError::CollatePanicked
 pub incin_data::loader::DataError::CollatePanicked::worker_id: usize
@@ -205,7 +268,12 @@ pub incin_data::transforms::CenterCrop::crop_h: usize
 pub incin_data::transforms::CenterCrop::crop_w: usize
 pub incin_data::transforms::Normalize::mean: alloc::vec::Vec<f32>
 pub incin_data::transforms::Normalize::std: alloc::vec::Vec<f32>
+pub incin_data::transforms::RandomCrop::crop_h: usize
+pub incin_data::transforms::RandomCrop::crop_w: usize
+pub incin_data::transforms::RandomCrop::padding: usize
 pub incin_data::transforms::RandomHorizontalFlip::p: f64
+pub incin_data::transforms::Resize::new_h: usize
+pub incin_data::transforms::Resize::new_w: usize
 pub incin_data::transforms::Scale::factor: f32
 pub mod incin_data
 pub mod incin_data::dataset
@@ -214,6 +282,8 @@ pub mod incin_data::loader
 pub mod incin_data::prelude
 pub mod incin_data::transforms
 pub mod incin_data::vision
+pub mod incin_data::vision::cifar
+pub mod incin_data::vision::fashion_mnist
 pub mod incin_data::vision::mnist
 pub struct incin_data::CenterCrop
 pub struct incin_data::Compose<T>
@@ -222,15 +292,22 @@ pub struct incin_data::DataLoaderBuilder<D, C> where D: incin_data::dataset::Dat
 pub struct incin_data::DefaultCollate
 pub struct incin_data::DistributedSampler
 pub struct incin_data::Downloader
+pub struct incin_data::EpochBatches<I>
+pub struct incin_data::EpochError
 pub struct incin_data::Normalize
+pub struct incin_data::RandomCrop
 pub struct incin_data::RandomHorizontalFlip
+pub struct incin_data::Resize
 pub struct incin_data::Scale
+pub struct incin_data::ToTensor
 pub struct incin_data::downloader::Downloader
 pub struct incin_data::loader::DataLoader<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::loader::DataLoaderBuilder<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
 pub struct incin_data::loader::DataLoaderIter<T>
 pub struct incin_data::loader::DefaultCollate
 pub struct incin_data::loader::DistributedSampler
+pub struct incin_data::loader::EpochBatches<I>
+pub struct incin_data::loader::EpochError
 pub struct incin_data::prelude::CenterCrop
 pub struct incin_data::prelude::Compose<T>
 pub struct incin_data::prelude::DataLoader<D, C> where D: incin_data::dataset::Dataset + 'static, C: incin_data::loader::Collate<<D as incin_data::dataset::Dataset>::Item> + 'static
@@ -244,8 +321,15 @@ pub struct incin_data::prelude::Scale
 pub struct incin_data::transforms::CenterCrop
 pub struct incin_data::transforms::Compose<T>
 pub struct incin_data::transforms::Normalize
+pub struct incin_data::transforms::RandomCrop
 pub struct incin_data::transforms::RandomHorizontalFlip
+pub struct incin_data::transforms::Resize
 pub struct incin_data::transforms::Scale
+pub struct incin_data::transforms::ToTensor
+pub struct incin_data::vision::cifar::Cifar100Dataset
+pub struct incin_data::vision::cifar::Cifar10Dataset
+pub struct incin_data::vision::cifar::CifarCollate<T>(_)
+pub struct incin_data::vision::fashion_mnist::FashionMnistDataset
 pub struct incin_data::vision::mnist::MnistDataset
 pub struct incin_data::vision::mnist::TensorCollate<T>(_)
 pub trait incin_data::Collate<T>: core::marker::Send + core::marker::Sync
@@ -287,6 +371,7 @@ pub type incin_data::loader::DefaultCollate::Output = alloc::vec::Vec<u64>
 pub type incin_data::loader::DefaultCollate::Output = alloc::vec::Vec<u8>
 pub type incin_data::loader::DefaultCollate::Output = alloc::vec::Vec<usize>
 pub type incin_data::loader::DefaultCollate::Output = incin_core::tensor::base::types::Tensor<incin_core::shapes::dynamic::Dyn, B, K, G>
+pub type incin_data::loader::EpochBatches<I>::Item = core::result::Result<T, incin_data::loader::EpochError>
 pub type incin_data::prelude::BatchResult<T> = core::result::Result<T, incin_data::loader::DataError>
 pub type incin_data::prelude::Collate::Output: core::marker::Send + 'static
 pub type incin_data::prelude::Transform::Input
@@ -297,12 +382,22 @@ pub type incin_data::transforms::Compose<T>::Input = T
 pub type incin_data::transforms::Compose<T>::Output = T
 pub type incin_data::transforms::Normalize::Input = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
 pub type incin_data::transforms::Normalize::Output = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
+pub type incin_data::transforms::RandomCrop::Input = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
+pub type incin_data::transforms::RandomCrop::Output = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
 pub type incin_data::transforms::RandomHorizontalFlip::Input = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
 pub type incin_data::transforms::RandomHorizontalFlip::Output = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
+pub type incin_data::transforms::Resize::Input = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
+pub type incin_data::transforms::Resize::Output = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
 pub type incin_data::transforms::Scale::Input = alloc::vec::Vec<f32>
 pub type incin_data::transforms::Scale::Output = alloc::vec::Vec<f32>
+pub type incin_data::transforms::ToTensor::Input = (alloc::vec::Vec<u8>, alloc::vec::Vec<usize>)
+pub type incin_data::transforms::ToTensor::Output = (alloc::vec::Vec<f32>, alloc::vec::Vec<usize>)
 pub type incin_data::transforms::Transform::Input
 pub type incin_data::transforms::Transform::Output
+pub type incin_data::vision::cifar::Cifar100Dataset::Item = (alloc::vec::Vec<f32>, u8)
+pub type incin_data::vision::cifar::Cifar10Dataset::Item = (alloc::vec::Vec<f32>, u8)
+pub type incin_data::vision::cifar::CifarCollate<T>::Output = (<T as incin_data::vision::mnist::MnistBatchTarget>::Images, <T as incin_data::vision::mnist::MnistBatchTarget>::Labels)
+pub type incin_data::vision::fashion_mnist::FashionMnistDataset::Item = (alloc::vec::Vec<f32>, u8)
 pub type incin_data::vision::mnist::MnistBatchTarget::Images: core::marker::Send + 'static
 pub type incin_data::vision::mnist::MnistBatchTarget::Labels: core::marker::Send + 'static
 pub type incin_data::vision::mnist::MnistDataset::Item = (alloc::vec::Vec<f32>, u8)
