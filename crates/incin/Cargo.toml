@@ -155,6 +155,10 @@ harness = false
 required-features = ["cpu"]
 
 [[example]]
+name = "tensor_parallel_split"
+required-features = ["cpu"]
+
+[[example]]
 name = "batched_matmul"
 required-features = ["cpu"]
 
