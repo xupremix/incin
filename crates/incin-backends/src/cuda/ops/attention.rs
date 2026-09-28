@@ -201,12 +201,12 @@ fn launch_config(rows: u64, head_dim: usize) -> Result<cudarc::driver::LaunchCon
         })?;
     let block = checked_u32(head_dim, "attention head_dim")?;
     let shared = checked_u32(
-        head_dim.checked_mul(8).ok_or(
-            incin_core::shapes::ShapeError::ArithmeticOverflow {
+        head_dim
+            .checked_mul(8)
+            .ok_or(incin_core::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::FusedAttention,
                 expression: "attention reduction scratch overflows u32",
-            },
-        )?,
+            })?,
         "attention reduction scratch",
     )?;
     Ok(cudarc::driver::LaunchConfig {
