@@ -1,25 +1,6 @@
 use crate::loader::{BatchResult, Collate, DataError};
-use incin_core::error::{Error, ErrorMessage, Result};
-use std::fs::File;
-use std::io::Read;
+use incin_core::error::{Error, Result};
 use std::path::Path;
-
-/// Wraps an I/O failure with the operation that produced it.
-fn io_error(operation: &'static str, source: std::io::Error) -> Error {
-    Error::Io {
-        operation,
-        message: ErrorMessage::new(source.to_string()),
-    }
-}
-
-/// Reports malformed archive content under the bounded artifact category.
-fn malformed(artifact: &'static str, reason: impl AsRef<str>) -> Error {
-    Error::MalformedArtifact {
-        operation: "load mnist",
-        artifact,
-        reason: ErrorMessage::new(reason),
-    }
-}
 
 /// Mnist dataset.
 pub struct MnistDataset {
@@ -147,7 +128,7 @@ impl MnistDataset {
                     reason: "label archive name is not gzip-compressed",
                 })?;
 
-        std::fs::create_dir_all(dir).map_err(|e| io_error("load mnist", e))?;
+        std::fs::create_dir_all(dir).map_err(|e| super::idx::io_error("load mnist", e))?;
 
         // Fetching the archives is the `download` feature's job. Without it the
         // rest of this function still works against files already on disk, so
@@ -184,28 +165,7 @@ impl MnistDataset {
 
     fn try_from_parts(images: Vec<u8>, labels: Vec<u8>, train: bool) -> Result<Self> {
         const PIXELS_PER_IMAGE: usize = 28 * 28;
-        if labels.iter().any(|&label| label > 9) {
-            return Err(malformed(
-                "label data",
-                "MNIST labels must be decimal digits in the range 0..=9",
-            ));
-        }
-        let expected_images = labels.len().checked_mul(PIXELS_PER_IMAGE).ok_or({
-            Error::ArithmeticOverflow {
-                operation: "load mnist",
-                expression: "label count * pixels per image",
-            }
-        })?;
-        if images.len() != expected_images {
-            return Err(malformed(
-                "image archive",
-                format!(
-                    "MNIST images/labels mismatch: {} image bytes for {} labels",
-                    images.len(),
-                    labels.len()
-                ),
-            ));
-        }
+        super::idx::check_image_label_parts(&images, &labels, PIXELS_PER_IMAGE, 9, "load mnist")?;
         Ok(Self {
             images,
             labels,
@@ -233,148 +193,12 @@ impl MnistDataset {
 
     /// Parse images.
     fn parse_images(path: &Path) -> Result<Vec<u8>> {
-        const OPERATION: &str = "load mnist";
-        let mut f = File::open(path).map_err(|e| io_error(OPERATION, e))?;
-        let mut magic = [0u8; 4];
-        let mut count = [0u8; 4];
-        let mut rows = [0u8; 4];
-        let mut cols = [0u8; 4];
-
-        f.read_exact(&mut magic)
-            .map_err(|e| io_error(OPERATION, e))?;
-        f.read_exact(&mut count)
-            .map_err(|e| io_error(OPERATION, e))?;
-        f.read_exact(&mut rows)
-            .map_err(|e| io_error(OPERATION, e))?;
-        f.read_exact(&mut cols)
-            .map_err(|e| io_error(OPERATION, e))?;
-
-        let magic_val = u32::from_be_bytes(magic);
-        if magic_val != 2051 {
-            return Err(malformed(
-                "image archive",
-                format!(
-                    "Invalid IDX magic number for MNIST images: expected 2051, got {magic_val}"
-                ),
-            ));
-        }
-
-        // A u32 header field fits a usize on every target that can hold the
-        // pixel data it describes; a narrower usize is an overflow, not a
-        // malformed file.
-        let count =
-            usize::try_from(u32::from_be_bytes(count)).map_err(|_| Error::ArithmeticOverflow {
-                operation: OPERATION,
-                expression: "image header count",
-            })?;
-        let rows =
-            usize::try_from(u32::from_be_bytes(rows)).map_err(|_| Error::ArithmeticOverflow {
-                operation: OPERATION,
-                expression: "image header rows",
-            })?;
-        let cols =
-            usize::try_from(u32::from_be_bytes(cols)).map_err(|_| Error::ArithmeticOverflow {
-                operation: OPERATION,
-                expression: "image header cols",
-            })?;
-
-        if count > 100_000 {
-            return Err(Error::ResourceLimit {
-                operation: OPERATION,
-                resource: "image count",
-                actual: count as u64,
-                limit: 100_000,
-            });
-        }
-        if rows > 1000 || cols > 1000 {
-            return Err(Error::ResourceLimit {
-                operation: OPERATION,
-                resource: "image dimensions",
-                actual: (rows.max(cols)) as u64,
-                limit: 1000,
-            });
-        }
-        if rows != 28 || cols != 28 {
-            return Err(malformed(
-                "image archive",
-                format!("MNIST images must be 28x28, got {rows}x{cols}"),
-            ));
-        }
-
-        let num_bytes = count
-            .checked_mul(rows)
-            .and_then(|v| v.checked_mul(cols))
-            .ok_or(Error::ArithmeticOverflow {
-                operation: OPERATION,
-                expression: "image data size",
-            })?;
-
-        let mut data = vec![0u8; num_bytes];
-        f.read_exact(&mut data)
-            .map_err(|e| io_error(OPERATION, e))?;
-        if f.read(&mut [0u8; 1]).map_err(|e| io_error(OPERATION, e))? != 0 {
-            return Err(malformed(
-                "image archive",
-                "MNIST image file contains trailing bytes",
-            ));
-        }
-
-        Ok(data)
+        super::idx::read_idx_images(path, 28, 28, 100_000, 1000, "load mnist")
     }
 
     /// Parse labels.
     fn parse_labels(path: &Path) -> Result<Vec<u8>> {
-        const OPERATION: &str = "load mnist";
-        let mut f = File::open(path).map_err(|e| io_error(OPERATION, e))?;
-        let mut magic = [0u8; 4];
-        let mut count = [0u8; 4];
-
-        f.read_exact(&mut magic)
-            .map_err(|e| io_error(OPERATION, e))?;
-        f.read_exact(&mut count)
-            .map_err(|e| io_error(OPERATION, e))?;
-
-        let magic_val = u32::from_be_bytes(magic);
-        if magic_val != 2049 {
-            return Err(malformed(
-                "label archive",
-                format!(
-                    "Invalid IDX magic number for MNIST labels: expected 2049, got {magic_val}"
-                ),
-            ));
-        }
-
-        let count =
-            usize::try_from(u32::from_be_bytes(count)).map_err(|_| Error::ArithmeticOverflow {
-                operation: OPERATION,
-                expression: "label header count",
-            })?;
-        if count > 100_000 {
-            return Err(Error::ResourceLimit {
-                operation: OPERATION,
-                resource: "label count",
-                actual: count as u64,
-                limit: 100_000,
-            });
-        }
-
-        let mut data = vec![0u8; count];
-        f.read_exact(&mut data)
-            .map_err(|e| io_error(OPERATION, e))?;
-        if data.iter().any(|&label| label > 9) {
-            return Err(malformed(
-                "label archive",
-                "MNIST labels must be decimal digits in the range 0..=9",
-            ));
-        }
-        if f.read(&mut [0u8; 1]).map_err(|e| io_error(OPERATION, e))? != 0 {
-            return Err(malformed(
-                "label archive",
-                "MNIST label file contains trailing bytes",
-            ));
-        }
-
-        Ok(data)
+        super::idx::read_idx_labels(path, 9, 100_000, "load mnist")
     }
 }
 
@@ -397,15 +221,7 @@ impl crate::dataset::Dataset for MnistDataset {
         }
         let label = self.labels[index];
         const PIXELS_PER_IMAGE: usize = 28 * 28;
-        let start = index.checked_mul(PIXELS_PER_IMAGE).ok_or_else(|| {
-            crate::loader::DataError::Dataset("MNIST image offset overflow".into())
-        })?;
-        let end = start.checked_add(PIXELS_PER_IMAGE).ok_or_else(|| {
-            crate::loader::DataError::Dataset("MNIST image end offset overflow".into())
-        })?;
-        let img = self.images.get(start..end).ok_or_else(|| {
-            crate::loader::DataError::Dataset("MNIST image buffer is truncated".into())
-        })?;
+        let img = super::idx::image_window(&self.images, index, PIXELS_PER_IMAGE, "MNIST")?;
         let mut img_f32 = Vec::with_capacity(28 * 28);
         for &b in img {
             img_f32.push(b as f32 / 255.0);
