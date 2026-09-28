@@ -201,21 +201,31 @@ pub mod prelude {
 
     pub use super::exec::{AxisSet, RankSupport};
     pub use super::tensor::matmul::{StaticDim, StaticOrNamedDim};
-    pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
+    pub use crate::metrics::{
+        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall, TopKAccuracy,
+    };
     pub use crate::nn::{
-        activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        activation::{GELU, LeakyReLU, LogSoftmax, ReLU, Sigmoid, Softmax, Swish, Tanh},
         avg_pool2d::AvgPool2d,
         batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d},
+        batch_norm1d::{BatchNorm1d, BatchNorm1dShape},
+        conv_transpose2d::{ConvTranspose2d, ConvTranspose2dShape},
         conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d},
         conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d},
         dropout::Dropout,
         embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding},
         flatten::{Flatten, FlattenAxes, StructuralFlatten},
-        init::{self, Fan, Init, InitContext, InitPlan, ParameterRole},
+        group_norm::{GroupNorm, GroupNormShape},
+        init::{
+            self, Fan, Init, InitContext, InitPlan, ParameterRole, orthogonal_,
+            orthogonal_with_gain, trunc_normal_, trunc_normal_with,
+        },
+        instance_norm::{InstanceNorm, InstanceNormShape},
         layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm},
         linear::{Linear, LinearBuilder, LinearShape, linear},
         loss::{
-            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
+            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NLLLoss, NoneReduction,
+            Reduction, ReductionMode, SmoothL1Loss, Sum,
         },
         lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell},
         max_pool2d::MaxPool2d,
@@ -232,6 +242,7 @@ pub mod prelude {
             StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
         },
         stats::{ComputeStats, LayerStats, ModelStats},
+        upsample::{Upsample, UpsampleMode},
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
@@ -276,10 +287,11 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use crate::onnx::{OnnxExporter, OnnxImporter, export_to_onnx};
     pub use crate::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
+        Adam, AdamW, ConstantLR, ExponentialLR, Gradients, LRScheduler, LinearLR, LinearWarmup,
+        Optimizer, ParameterGroup, RMSprop, SGD,
     };
     #[cfg(feature = "std")]
-    pub use crate::optim::{CosineAnnealingLR, StepLR};
+    pub use crate::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
     pub use crate::tensor::ops::reduce::ReduceSelector;

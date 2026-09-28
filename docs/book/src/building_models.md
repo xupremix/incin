@@ -48,7 +48,9 @@ let x = Tensor::<s![2, 4], B>::ones(())?;
 let a = ReLU.forward(x.clone())?;
 let b = GELU.forward(x.clone())?;
 let c = Sigmoid.forward(x.clone())?;
-let d = Tanh.forward(x)?;
+let d = Tanh.forward(x.clone())?;
+let e = LeakyReLU::new().forward(x.clone())?;
+let f = LogSoftmax::new(1).forward(x)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -78,7 +80,6 @@ assert_eq!(h.dims().as_ref(), &[1, 4, 3, 3]);
 one-element shape tuple, `(Channels,)`, and their `build` arguments are
 whatever the static shape didn't already fix: an epsilon (and, for batch
 norm, a momentum):
-
 ```rust,no_run
 use incin::prelude::*;
 type B = DefaultBackend;
@@ -90,6 +91,33 @@ let h = bn.forward(x)?;
 let ln = LayerNorm::<s![8], B>::build(1e-5_f32)?; // eps
 let x2 = Tensor::<s![2, 8], B>::ones(())?;
 let h2 = ln.forward(x2)?;
+# Ok::<(), incin::Error>(())
+```
+
+`GroupNorm` takes `(Groups, Channels)` plus epsilon, `InstanceNorm` takes
+`(Channels,)` plus epsilon (one group per channel), and `BatchNorm1d`
+mirrors `BatchNorm2d` for rank-2 `[N, C]` and rank-3 `[N, C, L]` inputs
+with `(eps, momentum, affine, track_running_stats)` build arguments.
+`ConvTranspose2d` inverts a convolution's downsampling (stride, padding,
+output padding, dilation and groups per the op contract), and `Upsample`
+resizes spatially (nearest-neighbor):
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let gn = GroupNorm::<Dyn, B>::build((4usize, 2usize, 1e-5_f32, true))?;
+let x = Tensor::<s![1, 4, 8, 8], B>::ones(())?;
+let h = gn.forward(x)?;
+
+let bn1 = BatchNorm1d::<s![4], B>::build((1e-5_f32, 0.1_f32, true, true))?;
+let x = Tensor::<s![2, 4, 8], B>::ones(())?;
+let h = bn1.forward(x)?;
+
+let up = Upsample::nearest(2, 2)?;
+let x = Tensor::<s![1, 1, 4, 4], B>::ones(())?;
+let h = up.forward(x)?;
+assert_eq!(h.dims().as_ref(), &[1, 1, 8, 8]);
 # Ok::<(), incin::Error>(())
 ```
 

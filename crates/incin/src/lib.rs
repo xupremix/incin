@@ -140,10 +140,11 @@ pub use incin_core::nn::state::{
     VisitStateMut,
 };
 pub use incin_core::optim::{
-    Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, OptimizerBackend, SGD,
+    Adam, AdamW, ConstantLR, ExponentialLR, LRScheduler, LinearLR, LinearWarmup, Optimizer,
+    OptimizerBackend, RMSprop, SGD,
 };
 #[cfg(feature = "std")]
-pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+pub use incin_core::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
 pub use incin_core::shapes::{Dyn, DynShape, Shape};
 pub use incin_core::tensor::device::{
     Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
@@ -486,24 +487,27 @@ pub mod test_utils {
 pub mod nn {
     pub use incin_core::nn::loss::{
         BCEWithLogitsShape, CrossEntropyReductionShape, CrossEntropyShape, L1ReductionShape,
-        L1Shape, MSEShape, Mean, NoneReduction, Reduction, ReductionMode, Sum,
+        L1Shape, MSEShape, Mean, NLLLoss, NoneReduction, Reduction, ReductionMode, SmoothL1Loss,
+        Sum,
     };
     pub use incin_core::nn::param;
     pub use incin_core::nn::{
         AdaptiveAvgPool2d, AttentionBackend, AttentionConfig, AttentionDirection, AvgPool2d,
-        BCEWithLogitsLoss, BatchNorm2d, BatchNormShape, Bidirectional, Buffer, Causal,
-        ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossAttention, CrossEntropyLoss,
-        Dropout, ELU, Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend,
-        FeedForwardKind, Flatten, GELU, GRU, GRUCell, GruShape, Init, KvCache, L1Loss, LSTM,
-        LSTMCell, LayerNode, LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape,
-        MSELoss, MaxPool2d, Mish, MoE, MoEBackend, ModelStats, Module, MultiHeadAttention,
-        NamedLayers, NormPlacement, OptionalField, Param, ParameterVisitor, PositionEncoding,
-        RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape, RotaryBackend, Router, RouterBackend,
-        Routing, Sequential, Sigmoid, Softmax, Swish, Tanh, TrainMode, TrainState,
-        TransformerBackend, TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer,
-        TransformerLayer, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding,
-        format_layer_summary, format_layer_summary_with_stats, gru, gru_cell, layer_norm, linear,
-        lstm, rms_norm, rnn, sum_stats,
+        BCEWithLogitsLoss, BatchNorm1d, BatchNorm1dShape, BatchNorm2d, BatchNormShape,
+        Bidirectional, Buffer, Causal, ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape,
+        ConvTranspose2d, ConvTranspose2dShape, CrossAttention, CrossEntropyLoss, Dropout, ELU,
+        Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend, FeedForwardKind,
+        Flatten, GELU, GRU, GRUCell, GroupNorm, GroupNormShape, GruShape, Init, InstanceNorm,
+        InstanceNormShape, KvCache, L1Loss, LSTM, LSTMCell, LayerNode, LayerNorm, LayerNormShape,
+        LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d, Mish, MoE, MoEBackend,
+        ModelStats, Module, MultiHeadAttention, NamedLayers, NormPlacement, OptionalField, Param,
+        ParameterVisitor, PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape,
+        RotaryBackend, Router, RouterBackend, Routing, Sequential, Sigmoid, Softmax, Swish, Tanh,
+        TrainMode, TrainState, TransformerBackend, TransformerConfig, TransformerDecoderLayer,
+        TransformerEncoderLayer, TransformerLayer, True, Upsample, UpsampleMode, VisitParameters,
+        batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        format_layer_summary_with_stats, gru, gru_cell, layer_norm, linear, lstm, rms_norm, rnn,
+        sum_stats,
     };
     #[cfg(feature = "distributed")]
     pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
@@ -513,17 +517,17 @@ pub mod nn {
 /// Optimization algorithms, loss functions, and learning rate schedulers.
 pub mod optim {
     pub use incin_core::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, OptimizerBackend,
-        ParameterGroup, SGD, clip_grad_norm, clip_grad_value,
+        Adam, AdamW, ConstantLR, ExponentialLR, Gradients, LRScheduler, LinearLR, LinearWarmup,
+        Optimizer, OptimizerBackend, ParameterGroup, RMSprop, SGD, clip_grad_norm, clip_grad_value,
     };
     #[cfg(feature = "std")]
-    pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+    pub use incin_core::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
 }
 
 /// Evaluation metrics (Accuracy, Precision, Recall, F1Score, MSE, ConfusionMatrix).
 pub mod metrics {
     pub use incin_core::metrics::{
-        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall,
+        Accuracy, ConfusionMatrix, F1Score, MSE, Mean, Metric, Precision, Recall, TopKAccuracy,
     };
 }
 
@@ -534,13 +538,15 @@ pub mod data {
     pub use incin_data::vision::mnist::MnistBatchTarget;
     pub use incin_data::{
         BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, Dataset, Downloader,
+        EpochBatches, EpochError,
     };
 }
 
 /// Data transformations and augmentation pipeline.
 pub mod transforms {
     pub use incin_data::transforms::{
-        CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform,
+        CenterCrop, Compose, Normalize, RandomCrop, RandomHorizontalFlip, Resize, Scale, ToTensor,
+        Transform,
     };
 }
 
@@ -853,16 +859,17 @@ pub mod prelude {
     };
 
     pub use incin_core::nn::{
-        activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        activation::{GELU, LeakyReLU, LogSoftmax, ReLU, Sigmoid, Softmax, Swish, Tanh},
         attention::{AttentionConfig, CrossAttention, MultiHeadAttention, PositionEncoding},
         avg_pool2d::AvgPool2d,
         dropout::Dropout,
         feed_forward::{FeedForward, FeedForwardKind},
         flatten::{Flatten, FlattenAxes, StructuralFlatten},
         gru::{GRU, GRUCell},
-        init::Init,
+        init::{Init, orthogonal_, orthogonal_with_gain, trunc_normal_, trunc_normal_with},
         loss::{
-            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
+            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NLLLoss, NoneReduction,
+            Reduction, SmoothL1Loss, Sum,
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
@@ -876,18 +883,22 @@ pub mod prelude {
     };
 
     #[cfg(feature = "std")]
-    pub use incin_core::serialization::{Format, ModelExt, STATE_FORMAT_VERSION};
+    pub use incin_core::serialization::{
+        CheckpointError, Format, ModelExt, STATE_FORMAT_VERSION, SchedulerState,
+        TRAINING_CHECKPOINT_VERSION, TrainingCheckpoint, load_training_checkpoint,
+        save_training_checkpoint,
+    };
 
     pub use incin_core::exec::{LossScaleState, LossScaling};
     pub use incin_core::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
-        ScaledOptimizer,
+        Adam, AdamW, ConstantLR, ExponentialLR, Gradients, LRScheduler, LinearLR, LinearWarmup,
+        Optimizer, ParameterGroup, RMSprop, SGD, ScaledOptimizer,
     };
     #[cfg(feature = "std")]
-    pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+    pub use incin_core::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
 
     pub use incin_core::metrics::{
-        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall,
+        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall, TopKAccuracy,
     };
 
     #[cfg(feature = "distributed")]

@@ -23,24 +23,25 @@ of repeating a number that won't.
   e2e including a training smoke that `backward`s to finite non-zero
   projection gradients (`0623e762`), and cross-entropy with backward
   (`wgpu_cross_entropy.rs`). Every-PR CI runs that software-adapter suite
-  (job `wgpu`, lavapipe on ubuntu). CUDA remains compile-gated: hundreds of
-  `#[ignore = "requires CUDA hardware"]` value tests (cuBLASLt, matmul
-  dtypes, losses, train ops) pass only on a machine with a device, and the
-  weekly matrix's CUDA job is still skipped because `HARDWARE_CUDA_RUNNER`
-  is unset (issues #82 and #83). Metal's host-side suites run on any OS but
+  (job `wgpu`, lavapipe on ubuntu). CUDA value tests are `#[ignore]`d
+  pending `HARDWARE_CUDA_RUNNER`, but they are hardware-proven on real
+  NVIDIA devices: matmul parity, losses, fused attention, quantize STE
+  and the two-rank NCCL harness all run green outside CI (the weekly
+  matrix's CUDA job is still skipped because `HARDWARE_CUDA_RUNNER` is
+  unset, issues #82 and #83). Metal's host-side suites run on any OS but
   do not prove a Metal device; the macOS Apple-Silicon hardware job is the
   device run. Verified training in this book's
   [Building models](./building_models.md) chapter is still CPU-first.
-- **Attention still has no online-softmax/flash kernel.** Evaluation and
-  zero-dropout inference route through the catalog's composed
-  `scaled_dot_product_attention` row (a single descriptor dispatch; the CPU
-  backend materializes scores the same way the old hand-composed path did).
-  WGPU and Metal advertise that composed row too; WGPU has e2e forward and
-  training-smoke coverage for it. Training with attention-weight dropout
-  keeps the manual score/softmax chain on CPU because the fused row has no
-  dropout operand. A typed [`KvCache`] handles incremental decode
-  (`MultiHeadAttention::forward_with_cache`); what remains for #104 is a
-  true flash-style kernel with block-sparse causal skipping.
+- **Attention has a native online-softmax kernel on CPU and CUDA.**
+  Evaluation and zero-dropout inference can route through the catalog's
+  `fused_attention` row (single descriptor dispatch, single tape entry,
+  recompute backward, GQA + causal); the composed
+  `scaled_dot_product_attention` row remains for backends without the
+  kernel. Training with attention-weight dropout keeps the manual
+  score/softmax chain on CPU because the fused row has no dropout
+  operand. A typed [`KvCache`] handles incremental decode
+  (`MultiHeadAttention::forward_with_cache`); what remains for #104 is
+  block-sparse causal skipping and tensor-core tiling.
 
 [`KvCache`]: https://docs.rs/incin/latest/incin/nn/struct.KvCache.html
 
@@ -81,15 +82,18 @@ of repeating a number that won't.
   `MetalBackendImpl`, and `DispatchBackend` are `pub(crate)` (or absent):
   they are not part of the public surface. Use the descriptor path described
   in [The target API and canonical dispatch](./target_api.md).
-- **Distributed training** has one executed tier and the rest is planning.
+- **Distributed training** has executed tiers and the rest is planning.
   FSDP/ZeRO-1 and ZeRO-2 lower onto the trainer's synchronizer seam (#99),
   proven on CPU against scripted peers; ZeRO-3 (parameter sharding),
   tensor-parallel execution (waiting on partitioned matmul, #85/#90), and
-  pipeline-parallel schedule execution are planning surfaces only. No
-  NCCL-wired synchronizer ships (`HARDWARE_CUDA_RUNNER` unset, #82), the
-  host-side collectives round-trip every tensor, optimizer state stays
-  full-size per rank (owned-slice authority, not `1/N` memory), and global
-  gradient clipping is unsupported while gradients are masked.
+  pipeline-parallel schedule execution are planning surfaces only. The
+  NCCL transport is hardware-proven (single-process two-GPU loopback plus
+  the two-process two-rank harness, including a heterogeneous pair), and
+  meshes bind mixed architectures by decision; multi-host training itself
+  remains ungated ambition, and the host-side collectives round-trip every
+  tensor, optimizer state stays full-size per rank (owned-slice authority,
+  not `1/N` memory), and global gradient clipping is unsupported while
+  gradients are masked.
 - **The automatic `Trainer`** (`incin::experimental::training`, `train`
   feature) has a real single-device training loop (`fit`), a
   `GradientSynchronizer` seam for data-parallel mean-reduction (#97), and
@@ -113,7 +117,8 @@ of repeating a number that won't.
   runs a WGPU **software-adapter** job (lavapipe on ubuntu), so WGPU has
   execution coverage without NVIDIA hardware. The native CUDA backend is
   compile-checked in CI; its value tests stay `#[ignore]`d until
-  `HARDWARE_CUDA_RUNNER` exists. This is the mechanism behind
+  `HARDWARE_CUDA_RUNNER` exists, but they carry real-device evidence from
+  hardware runs outside CI. This is the mechanism behind
   [Backends](./backends.md) calling CPU the only backend verified across
   the complete catalog, and WGPU the only accelerator with automated
   execution evidence for its subset.

@@ -111,8 +111,22 @@ model-ready image and integer-label tensors with `NoGrad` markers.
 ## Transforms
 
 `incin_data::transforms` has the common image-augmentation set:
-`CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, and `Scale`,
-implementing a shared `Transform` trait, composable with `Compose`.
+`CenterCrop`, `Compose`, `Normalize`, `RandomCrop`, `RandomHorizontalFlip`,
+`Resize`, `Scale` and `ToTensor`, implementing a shared `Transform` trait,
+composable with `Compose` (`ToTensor` casts without rescaling; pair it with
+`Scale` for `[0, 1]`).
+
+## Catalog datasets
+
+Besides MNIST (`vision::mnist::MnistDataset`), the catalog ships
+`vision::fashion_mnist::FashionMnistDataset` (same 28x28 IDX layout,
+clothing articles) and `vision::cifar::{Cifar10Dataset, Cifar100Dataset}`
+(32x32 RGB binary records, channel-major). All three yield
+`(Vec<f32>, u8)` items normalized to `[0, 1]` with `NoGrad` labels, so the
+same target adapters batch any of them; CIFAR stacks `[batch, 3, 32, 32]`
+through `CifarCollate`. CIFAR reads the extracted official tarballs from
+disk (the downloader only fetches single `.gz` members, so `new` names the
+files it needs instead of pretending to fetch a tarball).
 
 ## Data-parallel sampling
 

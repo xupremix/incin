@@ -223,6 +223,44 @@ if let Err(err) = logits.sum_all()?.backward() {
 returns, including on error, so a scoped inference pass cannot leak into the
 next training step.
 
+## 6. Validate, stop early, and checkpoint with `fit_with_config`
+
+The manual loop above is the whole contract, but `Trainer::fit_with_config`
+bundles the production wrap: per-epoch validation, early stopping on a
+monitored metric (validation mean by default, training-loss mean under
+`Monitor::TrainLoss`), best/periodic checkpoint events, and a per-epoch
+scheduler hook. `fit`/`fit_scaled` keep working unchanged; the config
+version adds behavior without changing stepping semantics:
+
+```rust,no_run
+use incin::prelude::*;
+use incin::training::{EarlyStopping, FitConfig, Monitor};
+
+let mut sched = CosineAnnealingLR::new(1e-2, 1e-4, 10);
+let mut config = FitConfig::default();
+config.monitor = Monitor::Validation;
+config.early_stopping = Some(
+    EarlyStopping::new(5).with_min_delta(1e-4),
+);
+config.checkpoint_best = true;
+config.checkpoint_every = 10;
+config.on_epoch_end = Some(|end: &incin::training::EpochEnd| {
+    println!("epoch {}: train={:?} valid={:?}", end.epoch, end.train_loss, end.val_metric);
+});
+config.scheduler = Some(&mut sched);
+```
+
+Validation runs forward-only; an epoch with no batches produces no metric
+and touches neither baseline nor patience. Early stopping restores the
+best parameters first when `restore_best` is set. The checkpoint hook
+receives the optimizer alongside each event, so it can persist the
+optimizer's own `state_dict` next to the trainer-collected model and
+scheduler halves — that assembled file is the training checkpoint
+envelope from [Save and load](./howto_save_load.md). Monitoring
+validation without providing validation data is refused up front, and a
+failed training batch fails the epoch as `TrainError::Data` rather than
+skipping silently.
+
 ## Common mistakes
 
 - **Looking for `zero_grad`.** There is nothing to clear: each `backward()`

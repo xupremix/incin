@@ -14,11 +14,11 @@ claim that every named test has run on the reader's current checkout.
 | Core tensor execution | Stable CPU tensor methods use exact operation descriptors, validated metadata, and canonical dispatch. | Generated capability and operation-semantics documents; focused and workspace tests. |
 | CPU backend | Backend-executable catalog operations have canonical CPU executors. | `audit-evidence/FND-005/cpu-migration-status.md`; accelerator hardware is not implied. |
 | Shapes and invariant types | Static, mixed, and dynamic shapes use checked construction. State paths allow an empty root; `try_child` rejects empty or dotted components. | `docs/INVARIANT_TYPES.md`; core state tests and macro compile-fail test. |
-| Autograd and optimizers | Forward, backward, typed gradients, AdamW updates, rollback, and optimizer state restore are supported on CPU. | `crates/incin/tests/optim_tests.rs` and `transformer_block.rs`. |
-| Neural-network layers | Linear, normalization, recurrent, convolutional, activation, loss, and container layers are available at their documented feature tiers. | Layer tests and rustdoc examples. |
+| Autograd and optimizers | Forward, backward, typed gradients, SGD (momentum/Nesterov), Adam/AdamW/RMSprop updates, per-parameter learning rates, warmup schedulers, rollback, and optimizer state restore are supported on CPU. | `crates/incin/tests/optim_tests.rs` and `transformer_block.rs`; optimizer doctests. |
+| Neural-network layers | Linear, normalization (incl. GroupNorm/InstanceNorm/BatchNorm1d), recurrent, convolutional (incl. transposed), activation (incl. LeakyReLU/LogSoftmax), loss (incl. SmoothL1/NLL/token-CE), upsampling and container layers are available at their documented feature tiers. | Layer tests and rustdoc examples. |
 | Transformer layers | `MultiHeadAttention` (grouped-query, rotary), `FeedForward`, and the encoder/decoder layer pair compose into a decoder-only model that trains on CPU. The earlier hand-composed block remains as the oracle they are checked against. | `crates/incin/tests/gpt_decoder_model.rs`, `transformer_layers.rs`, and `transformer_block.rs`; compile benchmark includes the last. |
-| Data loading | Zero-worker iteration is lazy and fetches only the next batch; worker-backed loading remains available. | `incin-data` tests. |
-| State and serialization | Typed state traversal supports exact snapshots and transactional restore. | State tests and Transformer round-trip proof. |
+| Data loading | Zero-worker iteration is lazy and fetches only the next batch; worker-backed loading remains available. Catalog datasets: MNIST, Fashion-MNIST, CIFAR-10/100; augmentation transforms compose. | `incin-data` tests. |
+| State and serialization | Typed state traversal supports exact snapshots and transactional restore. Training checkpoints persist model, optimizer, scheduler and epoch in one envelope. | State tests, Transformer round-trip proof, checkpoint round-trip tests. |
 | Exported snapshots | Export validation includes source coverage, dependency checks, public API checks, and a minimal Cargo check. | `tools/export-snapshot.sh`; generated output policy is documented below. |
 | Documentation | Rustdoc, Book examples, and generated operation/capability documents are checked against source. | `docs/README.md`, `mdbook build docs/book`, and project validation commands. |
 | Test backends | Every test that needs a backend uses a real one. There is no shape-only stand-in, so a passing test implies the operation both exists and computes. | `crates/incin/tests/consumer-fixtures/dummy-backend-absent`; `crates/incin-core/tests/distributions.rs`. |
@@ -28,16 +28,16 @@ claim that every named test has run on the reader's current checkout.
 
 ## Feature boundaries
 
-- The catalog currently has 179 canonical operations, 169 of them
+- The catalog currently has 180 canonical operations, 170 of them
   backend-executable and 10 non-backend execution sites. Those counts are
   generated in `docs/operation-coverage.md` and
   `audit-evidence/FND-005/cpu-migration-status.md`; completeness does not mean
   every dtype, layout, or training combination is supported.
-- CPU has executors for every backend-executable catalog operation (169 of
-  169 advertised in the `docs/capabilities.md` matrix); completeness does not
+- CPU has executors for every backend-executable catalog operation (170 of
+  170 advertised in the `docs/capabilities.md` matrix); completeness does not
   mean every dtype, layout, or training combination is supported.
 - CUDA, WGPU, and Metal are previews with different operation subsets. The
-  current matrix advertises 167 / 137 / 107 operations respectively (CPU 169).
+  current matrix advertises 169 / 146 / 117 operations respectively (CPU 170).
   `docs/capabilities.md` is generated from the registrations and records the
   exact dtype, layout, rank, and training restrictions. These are capability
   declarations, not evidence of hardware execution. In particular, Metal's
@@ -46,18 +46,21 @@ claim that every named test has run on the reader's current checkout.
   scheduled/manual hardware matrix configures Metal execution on macOS runners
   (`HARDWARE_METAL_RUNNER` is optional; the `macos-latest` fallback is real
   Apple Silicon). CUDA execution requires `HARDWARE_CUDA_RUNNER`; scheduled
-  CUDA jobs skip when it is unset. Workflow configuration alone does not
-  establish successful hardware execution.
+  CUDA jobs skip when it is unset. The CUDA value tests additionally carry
+  real-device evidence from hardware runs outside CI (matmul parity, fused
+  attention incl. f16/bf16, quantize STE, two-rank NCCL incl. a
+  heterogeneous pair). Workflow configuration alone does not establish
+  successful hardware execution.
 - Building the workspace does not require `protoc`. The ONNX protobuf module is
   checked in and regenerated with `cargo xtask onnx`.
 - `incin::test_utils` gates deterministic fault injection only. The shape-only
   `DummyBackend` is removed, including from the feature that used to carry it.
 - The declared MSRV is 1.88, held by a CI job pinned to that toolchain.
-- CUDA and Metal are feature-compiled where dependencies permit, but no
-  hardware execution claim is made without the device. Many CUDA value tests
-  are `#[ignore = "requires CUDA hardware"]` and only compile-checked in CI.
-  Metal's host-side suites run on any OS; real Metal device execution needs
-  macOS Apple Silicon (the scheduled `metal` job).
+- CUDA and Metal are feature-compiled where dependencies permit. Many CUDA
+  value tests are `#[ignore = "requires CUDA hardware"]` and only
+  compile-checked in CI, but they are hardware-proven on real NVIDIA
+  devices outside CI. Metal's host-side suites run on any OS; real Metal
+  device execution needs macOS Apple Silicon (the scheduled `metal` job).
 - WGPU has a supported software-adapter path for its documented subset, and
   every-PR CI job `wgpu` ("WGPU Software Adapter Tests") runs that path on
   ubuntu with lavapipe/mesa. WGPU compute (including `matmul`) is still
@@ -69,7 +72,9 @@ claim that every named test has run on the reader's current checkout.
   `incin::experimental::compiled`; its plan snapshots are not a deployment
   format or portable ABI.
 - Quantized operations are backend-authoring functionality, not a stable
-  `Tensor` method surface, and training through them is not claimed.
+  `Tensor` method surface. Straight-through training through
+  quantize/dequantize is claimed on CPU and CUDA (one tape entry each);
+  `quantized_matmul` has no backward rule anywhere by design.
 
 ## Hardware runs
 
@@ -93,9 +98,12 @@ the `cuda`, `wgpu-native`, `dist2-network`, and `multinode` jobs conclude
 *skipped, not success* rather than letting it read as a pass. Registering a
 self-hosted runner and setting those two variables is repository-settings
 work outside this tree (step-by-step procedure in `CONTRIBUTING.md`); until
-that happens there is no dated CUDA,
+that happens there is no dated CI-artifact CUDA,
 native-WGPU, or multi-rank execution run to name here, and this file does
-not claim one. `HARDWARE_METAL_RUNNER` is deliberately optional: while unset
+not claim one. Separately, the CUDA suites (default, hardware-ignored,
+tensor-meta, NCCL loopback and two-rank) run green on real NVIDIA hardware
+outside CI; those runs are branch evidence, not matrix artifacts.
+`HARDWARE_METAL_RUNNER` is deliberately optional: while unset
 the `metal` job falls back to `macos-latest`, which is real Apple Silicon.
 The suites that do run on GitHub-hosted hardware every
 schedule - `wgpu-software` (lavapipe) and `metal` (Apple Silicon) - publish

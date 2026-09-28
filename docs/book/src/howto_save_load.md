@@ -243,8 +243,39 @@ runs at startup, before anything that mentions the dtype is read. The same
 rule covers an encoding that disagrees with the registered dtype — the
 checkpoint loses, the registry wins.
 
-## Common mistakes
+## 6. Save and resume a whole training run
 
+Model weights alone do not resume training: the optimizer moments, the
+scheduler position and the epoch travel with them in one training
+checkpoint envelope. The trainer's checkpoint hook hands you the pieces;
+`save_training_checkpoint` assembles them and `load_training_checkpoint`
+returns them with typed mismatch errors (wrong magic, newer version,
+optimizer dtype mismatches):
+
+```rust,no_run
+use incin::prelude::{
+    TrainingCheckpoint, load_training_checkpoint, save_training_checkpoint,
+};
+
+// Inside the checkpoint hook (or at the end of an epoch), assemble the
+// envelope from the trainer-collected model and scheduler halves plus
+// the optimizer's own state_dict, then persist it:
+// save_training_checkpoint(path, &checkpoint)?;
+
+// Resume: read the envelope back and load each part where it belongs.
+let checkpoint: TrainingCheckpoint = load_training_checkpoint(path)?;
+assert_eq!(checkpoint.epoch, 10);
+# Ok::<(), incin::Error>(())
+```
+
+`load_training_checkpoint` is in `incin::prelude` next to `ModelExt`. The
+scheduler half is a small `SchedulerState` (family name, steps taken, last
+rate): schedulers restore from it rather than from an opaque blob, so a
+run resumed under a renamed schedule fails loudly instead of continuing a
+different decay. Optimizer state round-trips byte-exactly (same shapes,
+dtypes and device placement) or the load is refused.
+
+## Common mistakes
 - **Loading into a freshly built module of a different size.** You get
   *"shape or dtype mismatch at weight"*; the destination type is the spec.
 - **Nesting a module and expecting old paths to resolve.** Renaming a field

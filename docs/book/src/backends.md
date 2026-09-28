@@ -24,10 +24,10 @@ backend registrations rather than written by hand:
 
 | Backend | Operations advertised | Tier |
 |---|---:|---|
-| CPU | 169 | complete, and the only one verified across the full catalog |
-| CUDA | 167 | preview, compile-gated (no automated device run) |
-| WGPU | 137 | preview, software-adapter execution evidence |
-| Metal | 107 | preview, host-verified + macOS Apple-Silicon job |
+| CPU | 170 | complete, and the only one verified across the full catalog |
+| CUDA | 169 | preview, hardware-proven on NVIDIA GPUs (see below) |
+| WGPU | 146 | preview, software-adapter execution evidence |
+| Metal | 117 | preview, host-verified + macOS Apple-Silicon job |
 
 Those are counts from the `Element types by operation and backend` matrix, so
 they say what each backend *advertises*, which is not the same as what it has
@@ -65,15 +65,21 @@ What the accelerator previews still lack relative to CPU:
   select ops.
 - **WGPU:** compute (including `matmul`) is `f32`-only even though storage
   accepts `u8`/`u32`/`i64`/`bool`.
-- **CUDA:** still no automated device execution in this repository — value
-  tests are `#[ignore]`d pending `HARDWARE_CUDA_RUNNER`.
+- **CUDA:** the `#[ignore]`d hardware suites run on real NVIDIA hardware:
+  matmul dtype parity, quantized matmul, losses, pointwise, reductions,
+  indexing, conv/pool/cast, batch-norm, fused attention (native
+  online-softmax, f32/f64/f16/bf16), quantize/dequantize STE, and the
+  two-rank NCCL harness (proven on a heterogeneous sm_50+sm_75 pair).
+  No automated runner is registered in CI yet (`HARDWARE_CUDA_RUNNER`).
 
 Concretely: you can allocate tensors, run matrix arithmetic, apply
-activations, losses, and normalization on a GPU today, and train attention
-on WGPU. Advertised is not the same as hardware-proven: every-PR CI runs a
-WGPU **software** adapter (lavapipe) suite, but the CUDA training path
-remains declared capability awaiting NVIDIA-device evidence (issues #82 and
-#83). CPU remains where verified training happens for the complete catalog.
+activations, losses, and normalization on a GPU today, train attention
+on WGPU, and run fused attention plus NCCL collectives on CUDA.
+Advertised is not the same as hardware-proven everywhere: every-PR CI
+runs a WGPU **software** adapter (lavapipe) suite, and the CUDA training
+path additionally carries real-device evidence (issues #82 and #83
+track the automated runner). CPU remains where verified training happens
+for the complete catalog.
 
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with
@@ -98,11 +104,39 @@ configuration in which an epilogue is requested and a kernel that omits it
 is allowed to run. The epilogue surface is therefore strictly narrower than
 the plain-product surface.
 
-**Verification status:** compile-gated. Six host-side dispatch-policy unit
-tests pass without hardware; six value tests are `#[ignore = "requires CUDA
-hardware"]` in `cuda/backend/tests.rs`. This box has no CUDA device, so the
-cuBLASLt numerics are compile-verified only — treat them as declared
-capability awaiting the #82 runner, not as runtime-proven results.
+**Verification status:** hardware-proven. The vendor-vs-native agreement
+test plus six value tests run on NVIDIA hardware (GTX 1650 SUPER); the
+cuBLASLt numerics match the native kernel where both claim the shape.
+
+### Fused attention on CUDA (#104)
+
+CUDA ships a native single-pass online-softmax kernel: forward over query
+rows with GQA head mapping and causal masking, one tape entry whose
+backward recomputes weights from stored per-row statistics — no score
+matrix, no atomics. `f32`/`f64`/`f16`/`bf16` over contiguous rank-4
+(double accumulation, single rounding at store). Verified against the CPU
+twin on hardware: multi-head and grouped-query causal decode forward,
+`f64` forward, `f32` backward gradients, one-entry tape depth, and typed
+refusals (rank, scale, head divisibility, strided operands, dtype mixes).
+Observed half drift stays an order of magnitude inside the test bounds.
+The kernel loops carry no axis conditionals: an `if (d == axis)` decode
+form was proven to miscompile under NVVM 7.0.1 on sm_75 (range-splitting
+dropping accumulation), so new kernels must keep the decode loop
+straight-line — see `repeat_interleave`'s comment in `cuda/ops/shape.rs`.
+
+### NCCL loopback and heterogeneous meshes (#97, #99)
+
+The two-process two-rank harness (static `f32` plus dynamic `f64`
+all-reduce, cursor accounting, divergent-plan rejection) runs green on a
+heterogeneous sm_50+sm_75 pair: NCCL 2.18.1 builds an SHM ring (no P2P
+between the cards) and the sums are bit-correct on both ranks. A
+single-process two-GPU loopback test pins the transport half wherever two
+GPUs and libnccl exist. Meshes bind mixed architectures by decision —
+per-rank architectures stay in the fingerprint, but the bind no longer
+refuses them, since kernels launch per-rank and collectives ride whatever
+transport the library negotiates. Running the harness needs `libnccl.so`
+visible to the dynamic loader (a pip install ships only `libnccl.so.2`;
+symlink it) plus two CUDA ordinals.
 
 ### WGPU runtime evidence: Batches A–C, attention, cross-entropy (#91)
 

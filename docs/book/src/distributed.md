@@ -48,12 +48,20 @@ the same path is hardware-gated (issue #82).
 
 `distributed-reference` provides a deterministic in-process transport for
 conformance and local plan development. `distributed-nccl` provides the
-two-host CUDA transport. The preview trainer refuses a multi-device plan when
-collectives are unavailable instead of silently executing a local approximation.
+CUDA transport: single-process two-GPU loopback and the two-process
+two-rank harness (`nccl_two_rank`, static f32 + dynamic f64 all-reduce,
+cursor accounting, divergent-plan rejection) are both proven on real
+hardware - including a heterogeneous sm_50+sm_75 pair, where NCCL 2.18.1
+builds an SHM ring (no P2P) and the sums are bit-correct on both ranks.
+The preview trainer refuses a multi-device plan when collectives are
+unavailable instead of silently executing a local approximation.
 
-The current limitation is deliberate: there is no promise that a model can be
-trained across hosts. The lowerings above run in-process against the
-reference transport or a caller-supplied synchronizer - no NCCL-wired
-implementation ships here - and the rest of the planning APIs validate typed
-plans and inspect their requirements rather than replace a distributed
-runtime.
+Meshes bind heterogeneous architectures: per-rank architectures stay in
+the fingerprint, but the bind no longer refuses mixed pairs, since
+kernels launch per-rank and collectives ride whatever transport the
+library negotiates. The current limitation is deliberate: there is no
+promise that a model can be trained across hosts. The lowerings above run
+in-process against the reference transport, a caller-supplied
+synchronizer, or NCCL loopback - and the rest of the planning APIs
+validate typed plans and inspect their requirements rather than replace
+a distributed runtime.

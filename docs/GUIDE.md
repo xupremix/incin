@@ -497,3 +497,10 @@ completeness. Metal already has `DispatchStorage`, `DispatchVar`, and
 operation or verified hardware execution. Check `docs/capabilities.md` for
 the exact operation, dtype, layout, and training restrictions before choosing
 a backend.
+
+For end-to-end training, see the book's [training
+loop](book/src/howto_training_loop.md) (validation, early stopping,
+checkpoints via `Trainer::fit_with_config`), [saving and
+loading](book/src/howto_save_load.md) (training checkpoint envelopes),
+and [data loading](book/src/data_loading.md) (MNIST/Fashion-MNIST/CIFAR
+catalog datasets) chapters.
