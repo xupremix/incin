@@ -103,6 +103,7 @@ output padding, dilation and groups per the op contract), and `Upsample`
 resizes spatially (nearest-neighbor):
 
 ```rust,no_run
+use incin::nn::{BatchNorm1d, GroupNorm, Upsample};
 use incin::prelude::*;
 type B = DefaultBackend;
 

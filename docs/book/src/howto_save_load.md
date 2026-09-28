@@ -263,6 +263,7 @@ use incin::prelude::{
 // save_training_checkpoint(path, &checkpoint)?;
 
 // Resume: read the envelope back and load each part where it belongs.
+let path = std::path::Path::new("checkpoint.bin");
 let checkpoint: TrainingCheckpoint = load_training_checkpoint(path)?;
 assert_eq!(checkpoint.epoch, 10);
 # Ok::<(), incin::Error>(())

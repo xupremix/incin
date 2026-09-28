@@ -233,18 +233,24 @@ scheduler hook. `fit`/`fit_scaled` keep working unchanged; the config
 version adds behavior without changing stepping semantics:
 
 ```rust,no_run
+use incin::experimental::training::{
+    CheckpointEvent, EarlyStopping, EpochEnd, FitConfig, Monitor,
+};
 use incin::prelude::*;
-use incin::training::{EarlyStopping, FitConfig, Monitor};
 
 let mut sched = CosineAnnealingLR::new(1e-2, 1e-4, 10);
-let mut config = FitConfig::default();
+let mut config: FitConfig<
+    '_,
+    fn(&mut SGD<DefaultBackend>, CheckpointEvent),
+    fn(&EpochEnd),
+> = FitConfig::default();
 config.monitor = Monitor::Validation;
 config.early_stopping = Some(
     EarlyStopping::new(5).with_min_delta(1e-4),
 );
 config.checkpoint_best = true;
 config.checkpoint_every = 10;
-config.on_epoch_end = Some(|end: &incin::training::EpochEnd| {
+config.on_epoch_end = Some(|end: &incin::experimental::training::EpochEnd| {
     println!("epoch {}: train={:?} valid={:?}", end.epoch, end.train_loss, end.val_metric);
 });
 config.scheduler = Some(&mut sched);
