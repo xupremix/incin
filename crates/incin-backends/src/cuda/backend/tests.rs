@@ -2388,6 +2388,42 @@ fn scatter_add_accumulates_in_order_and_drops_out_of_range_targets() {
 
 #[test]
 #[ignore = "requires CUDA hardware"]
+fn scatter_add_along_a_nonzero_axis_with_a_narrower_index_domain() {
+    // axis = 1, rank = 2, index/source [2, 2] against input [2, 3]: the
+    // map kernel decodes positions with the index's own strides, and the
+    // source-gradient kernel decodes recorded destinations with the
+    // output's strides (not the source's). This is the first hardware
+    // run of the scatter_add pair off the rank-1 axis-0 path.
+    // Destinations: (0,2)+=1, (0,0)+=2, (1,0)+=4, (1,1)+=8.
+    let t = cuda_f32(&[2, 3], vec![0.0; 6]);
+    let index_bytes: Vec<u8> = [2i64, 0, 0, 1]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let index =
+        crate::cuda::backend::cuda_from_bytes(&[2, 2], DTypeId::I64.into(), 0, &index_bytes)
+            .unwrap();
+    let src = cuda_f32(&[2, 2], vec![1.0, 2.0, 4.0, 8.0]);
+    let out = B::scatter_add::<f32>(&t, 1, &index, &src).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    assert_eq!(
+        download_f32_host(&out).unwrap(),
+        vec![2.0, 0.0, 1.0, 4.0, 8.0, 0.0]
+    );
+
+    let grads = crate::cuda::tape::backward(&out).unwrap();
+    let grad_t = download_f32_host(grads.get(t.id).unwrap()).unwrap();
+    assert_eq!(grad_t, vec![1.0; 6]);
+    let grad_src = download_f32_host(grads.get(src.id).unwrap()).unwrap();
+    assert_eq!(grad_src, vec![1.0; 4]);
+    assert!(
+        grads.get(index.id).is_none(),
+        "the integer index operand must stay off the tape, as on CPU"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
 fn scatter_add_refuses_last_write_wins_with_the_cpus_wording() {
     use incin_core::exec::catalog::{DuplicateIndexRule, ScatterAttributes};
     use incin_core::exec::{ExecutionContext, TensorHandle, dispatch, op};

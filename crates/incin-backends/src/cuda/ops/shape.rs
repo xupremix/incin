@@ -2512,7 +2512,7 @@ pub(crate) fn launch_scatter_add_backward_src(
     let function = dispatcher.get_function("index_ops", "incin_cuda_scatter_add_backward")?;
     let stream = grad_out.buffer.device.default_stream();
 
-    let out_contig = crate::layout::contiguous_strides(source_shape)
+    let out_contig = crate::layout::contiguous_strides(&grad_out.shape)
         .strides()
         .to_vec();
     let out_contig_dev = dev_i32_arg(&stream, &out_contig, "stride")?;
