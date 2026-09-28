@@ -159,6 +159,52 @@ name = "tensor_parallel_split"
 required-features = ["cpu", "distributed-reference"]
 
 [[example]]
+name = "optimizer_showdown"
+required-features = ["cpu"]
+
+[[example]]
+name = "scheduler_trace"
+required-features = ["cpu"]
+
+[[example]]
+name = "checkpoint_resume"
+required-features = ["cpu"]
+
+[[example]]
+name = "custom_dtype_walkthrough"
+required-features = ["cpu"]
+[[example]]
+name = "device_selection"
+required-features = ["cpu"]
+[[example]]
+name = "dtypes"
+required-features = ["cpu"]
+[[example]]
+name = "generate_gpt"
+required-features = ["cpu"]
+[[example]]
+name = "idx_demo"
+required-features = ["cpu"]
+[[example]]
+name = "quantization_qat"
+required-features = ["cpu"]
+[[example]]
+name = "save_load_roundtrip"
+required-features = ["cpu"]
+[[example]]
+name = "training_loop_from_scratch"
+required-features = ["cpu"]
+[[example]]
+name = "trace_test"
+required-features = ["cpu"]
+[[example]]
+name = "moe_dropless_grouped"
+required-features = ["cpu"]
+[[example]]
+name = "hub_import"
+required-features = ["cpu"]
+
+[[example]]
 name = "batched_matmul"
 required-features = ["cpu"]
 
