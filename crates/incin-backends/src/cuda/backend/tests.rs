@@ -2143,8 +2143,8 @@ fn sort_orders_each_axis_slice_and_returns_a_replaying_permutation() {
     let input = [3.0f32, 1.0, 2.0, 6.0, 4.0, 5.0];
     let t = cuda_f32(&[2, 3], input.to_vec());
     let handle = TensorHandle::from_storage::<B, f32, _>(&t);
-    // index_dtype is what the frontend sends; the CUDA row returns i64
-    // indices physically, the same convention Argsort/TopK already use.
+    // The requested u32 index dtype is what the row returns physically;
+    // reading it at any other width aliases adjacent positions.
     let (values, indices) = dispatch::execute::<op::Sort, _>(
         &context,
         ArgsortAttributes {
@@ -2167,7 +2167,7 @@ fn sort_orders_each_axis_slice_and_returns_a_replaying_permutation() {
         .default_stream()
         .clone_dtoh(&*indices.buffer.data)
         .unwrap();
-    let index_values: Vec<i64> = bytemuck::cast_slice::<u8, i64>(&index_bytes).to_vec();
+    let index_values: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&index_bytes).to_vec();
     assert_eq!(index_values, vec![1, 2, 0, 1, 2, 0]);
     // The permutation replays to the sorted values.
     let sorted = download_f32_host(&values).unwrap();
@@ -2201,7 +2201,7 @@ fn sort_orders_each_axis_slice_and_returns_a_replaying_permutation() {
         .default_stream()
         .clone_dtoh(&*indices.buffer.data)
         .unwrap();
-    let index_values: Vec<i64> = bytemuck::cast_slice::<u8, i64>(&index_bytes).to_vec();
+    let index_values: Vec<u32> = bytemuck::cast_slice::<u8, u32>(&index_bytes).to_vec();
     assert_eq!(index_values, vec![0, 2, 1, 0, 2, 1]);
 }
 

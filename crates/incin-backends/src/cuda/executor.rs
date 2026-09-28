@@ -1646,8 +1646,41 @@ impl<D: Device> Execute<op::Lerp> for CudaBackendImpl<D> {
     }
 }
 
-macro_rules! impl_cuda_index_reduction {
-    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+/// Dispatches an index-width-typed CUDA reduction on the descriptor's
+/// requested index dtype, mirroring the CPU `dispatch_index_dtype` set
+/// (u8/u32/i64). Anything else is refused with the backend named: the
+/// kernels write exactly the selected width, and launching any other
+/// width into the allocated buffer would mis-shape the output (this is
+/// what the hardcoded i64 below used to do to every u32 request).
+macro_rules! dispatch_cuda_index_dtype {
+    ($operation:expr, $dtype:expr, |$index:ident| $body:expr) => {{
+        let operation = $operation;
+        let desc: incin_core::tensor::dtype::DTypeDescriptor = $dtype;
+        match desc.builtin_id() {
+            Some(DTypeId::U8) => {
+                type $index = u8;
+                $body
+            }
+            Some(DTypeId::U32) => {
+                type $index = u32;
+                $body
+            }
+            Some(DTypeId::I64) => {
+                type $index = i64;
+                $body
+            }
+            _ => Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: desc,
+                },
+            )),
+        }
+    }};
+}
+
+macro_rules! impl_cuda_index_reduction {    ($(($op:ident, $method:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
             fn execute(
@@ -1660,11 +1693,10 @@ macro_rules! impl_cuda_index_reduction {
                 };
                 let input = downcast(input, operation, "input is not CUDA storage")?;
                 let attrs = request.operation.descriptor().attributes();
-                match attrs.axis {
-                    Some(axis) => CudaBackendImpl::<D>::$method::<i64>(input, Some(axis)),
-                    None => CudaBackendImpl::<D>::$method::<i64>(input, None),
-                }
-                .map_err(|e| kernel_error("Cuda", operation, e))
+                dispatch_cuda_index_dtype!(operation, attrs.dtype, |KIndex| {
+                    CudaBackendImpl::<D>::$method::<KIndex>(input, attrs.axis)
+                        .map_err(|e| kernel_error("Cuda", operation, e))
+                })
             }
         }
     )*};
@@ -1684,8 +1716,10 @@ impl<D: Device> Execute<op::TopK> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
-        CudaBackendImpl::<D>::topk::<i64>(input, attrs.k, attrs.axis, attrs.largest)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        dispatch_cuda_index_dtype!(operation, attrs.index_dtype, |KIndex| {
+            CudaBackendImpl::<D>::topk::<KIndex>(input, attrs.k, attrs.axis, attrs.largest)
+                .map_err(|e| kernel_error("Cuda", operation, e))
+        })
     }
 }
 
@@ -2855,8 +2889,10 @@ impl<D: Device> Execute<op::Argsort> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
-        CudaBackendImpl::<D>::argsort::<i64>(input, attrs.axis, attrs.descending)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        dispatch_cuda_index_dtype!(operation, attrs.index_dtype, |KIndex| {
+            CudaBackendImpl::<D>::argsort::<KIndex>(input, attrs.axis, attrs.descending)
+                .map_err(|e| kernel_error("Cuda", operation, e))
+        })
     }
 }
 
@@ -2879,14 +2915,12 @@ impl<D: Device> Execute<op::Sort> for CudaBackendImpl<D> {
         // `topk` with `k = axis length` IS the sort: it returns every value
         // ordered plus the permutation, exactly the pair `Sort` owes, so no
         // gather (and no tape entry - `Sort`'s row is training=false) is
-        // needed. `descending` maps to `largest`. Indices are physically
-        // i64, the same convention `Execute<op::Argsort>` and
-        // `Execute<op::TopK>` above already use: the frontend's requested
-        // `index_dtype` is what dispatch would have validated on input
-        // handles only, and no existing CUDA row post-checks its output
-        // index tag.
-        CudaBackendImpl::<D>::topk::<i64>(input, dim_len, attrs.axis, attrs.descending)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        // needed. `descending` maps to `largest`. The index width follows
+        // the requested `index_dtype` like every other index reduction.
+        dispatch_cuda_index_dtype!(operation, attrs.index_dtype, |KIndex| {
+            CudaBackendImpl::<D>::topk::<KIndex>(input, dim_len, attrs.axis, attrs.descending)
+                .map_err(|e| kernel_error("Cuda", operation, e))
+        })
     }
 }
 

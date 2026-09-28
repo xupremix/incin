@@ -327,9 +327,17 @@ pub(crate) fn launch_reduce_op(
 const REDUCE_OPS_SRC: &str = r#"
 typedef long long int64_t;
 
-extern "C" __global__ void incin_cuda_argmax_argmin(
+// Index reductions over one axis. The winning position is tracked in
+// int64 throughout (shuffle lanes and the shared spill are 64-bit);
+// only the final store narrows to the requested index width, so u8/u32
+// entry points share the exact selection order of the i64 one. A dim
+// wider than the output width wraps on store, matching the CPU
+// `index_buffer` cast rather than refusing a contract the descriptor
+// already admitted.
+template <typename Idx>
+__device__ void incin_cuda_argmax_argmin_impl(
     const float* __restrict__ input,
-    int64_t* __restrict__ output,
+    Idx* __restrict__ output,
     int in_offset,
     int reduce_dim_size,
     int slice_stride,
@@ -429,9 +437,48 @@ extern "C" __global__ void incin_cuda_argmax_argmin(
             }
         }
         if (lane == 0) {
-            output[out_idx] = best_idx;
+            output[out_idx] = (Idx)best_idx;
         }
     }
+}
+
+extern "C" __global__ void incin_cuda_argmax_argmin_u8(
+    const float* __restrict__ input,
+    unsigned char* __restrict__ output,
+    int in_offset,
+    int reduce_dim_size,
+    int slice_stride,
+    int out_numel,
+    int is_argmin)
+{
+    incin_cuda_argmax_argmin_impl<unsigned char>(
+        input, output, in_offset, reduce_dim_size, slice_stride, out_numel, is_argmin);
+}
+
+extern "C" __global__ void incin_cuda_argmax_argmin_u32(
+    const float* __restrict__ input,
+    unsigned int* __restrict__ output,
+    int in_offset,
+    int reduce_dim_size,
+    int slice_stride,
+    int out_numel,
+    int is_argmin)
+{
+    incin_cuda_argmax_argmin_impl<unsigned int>(
+        input, output, in_offset, reduce_dim_size, slice_stride, out_numel, is_argmin);
+}
+
+extern "C" __global__ void incin_cuda_argmax_argmin_i64(
+    const float* __restrict__ input,
+    int64_t* __restrict__ output,
+    int in_offset,
+    int reduce_dim_size,
+    int slice_stride,
+    int out_numel,
+    int is_argmin)
+{
+    incin_cuda_argmax_argmin_impl<int64_t>(
+        input, output, in_offset, reduce_dim_size, slice_stride, out_numel, is_argmin);
 }
 
 struct WelfordTuple {
@@ -552,10 +599,11 @@ extern "C" __global__ void incin_cuda_cumsum(
     }
 }
 
-extern "C" __global__ void incin_cuda_topk(
+template <typename Idx>
+__device__ void incin_cuda_topk_impl(
     const float* __restrict__ input,
     float* __restrict__ out_vals,
-    int64_t* __restrict__ out_indices,
+    Idx* __restrict__ out_indices,
     int in_offset,
     int dim_len,
     int num_slices,
@@ -565,24 +613,24 @@ extern "C" __global__ void incin_cuda_topk(
 {
     int slice_idx = blockIdx.x;
     if (slice_idx >= num_slices) return;
-    
+
     int in_base = in_offset + (slice_idx / slice_stride) * (dim_len * slice_stride) + (slice_idx % slice_stride);
     int out_base = (slice_idx / slice_stride) * (k * slice_stride) + (slice_idx % slice_stride);
-    
+
     for (int step = 0; step < k; step++) {
         float best_v = largest ? -1e38f : 1e38f;
         int best_pos = -1;
-        
+
         for (int j = 0; j < dim_len; j++) {
             bool already_picked = false;
             for (int s = 0; s < step; s++) {
-                if (out_indices[out_base + s * slice_stride] == (int64_t)j) {
+                if ((int)out_indices[out_base + s * slice_stride] == j) {
                     already_picked = true;
                     break;
                 }
             }
             if (already_picked) continue;
-            
+
             float v = input[in_base + j * slice_stride];
             if (best_pos < 0) {
                 best_v = v;
@@ -599,12 +647,89 @@ extern "C" __global__ void incin_cuda_topk(
                 }
             }
         }
-        
+
         out_vals[out_base + step * slice_stride] = best_v;
-        out_indices[out_base + step * slice_stride] = (int64_t)best_pos;
+        out_indices[out_base + step * slice_stride] = (Idx)best_pos;
     }
 }
+
+extern "C" __global__ void incin_cuda_topk_u8(
+    const float* __restrict__ input,
+    float* __restrict__ out_vals,
+    unsigned char* __restrict__ out_indices,
+    int in_offset,
+    int dim_len,
+    int num_slices,
+    int slice_stride,
+    int k,
+    int largest)
+{
+    incin_cuda_topk_impl<unsigned char>(
+        input, out_vals, out_indices, in_offset, dim_len, num_slices, slice_stride, k, largest);
+}
+
+extern "C" __global__ void incin_cuda_topk_u32(
+    const float* __restrict__ input,
+    float* __restrict__ out_vals,
+    unsigned int* __restrict__ out_indices,
+    int in_offset,
+    int dim_len,
+    int num_slices,
+    int slice_stride,
+    int k,
+    int largest)
+{
+    incin_cuda_topk_impl<unsigned int>(
+        input, out_vals, out_indices, in_offset, dim_len, num_slices, slice_stride, k, largest);
+}
+
+extern "C" __global__ void incin_cuda_topk_i64(
+    const float* __restrict__ input,
+    float* __restrict__ out_vals,
+    int64_t* __restrict__ out_indices,
+    int in_offset,
+    int dim_len,
+    int num_slices,
+    int slice_stride,
+    int k,
+    int largest)
+{
+    incin_cuda_topk_impl<int64_t>(
+        input, out_vals, out_indices, in_offset, dim_len, num_slices, slice_stride, k, largest);
+}
 "#;
+
+/// Entry-point suffix for an index width the reduction kernels serve.
+/// Mirrors the CPU `dispatch_index_dtype` set (u8/u32/i64); anything else
+/// is refused with the backend named rather than launched into a buffer
+/// whose element width the kernel does not write.
+fn index_entry_point(family: &'static str, index_dtype: DTypeId) -> Result<&'static str> {
+    let suffix = match index_dtype {
+        DTypeId::U8 => "u8",
+        DTypeId::U32 => "u32",
+        DTypeId::I64 => "i64",
+        _ => {
+            return Err(Error::UnsupportedDType {
+                dtype: index_dtype.descriptor(),
+                backend: "Cuda",
+                op: family,
+            });
+        }
+    };
+    Ok(match (family, suffix) {
+        ("argmax", "u8") => "incin_cuda_argmax_argmin_u8",
+        ("argmax", "u32") => "incin_cuda_argmax_argmin_u32",
+        ("argmax", "i64") => "incin_cuda_argmax_argmin_i64",
+        ("topk", "u8") => "incin_cuda_topk_u8",
+        ("topk", "u32") => "incin_cuda_topk_u32",
+        ("topk", "i64") => "incin_cuda_topk_i64",
+        _ => {
+            return Err(Error::Msg(alloc::format!(
+                "unknown CUDA index-reduction family {family}"
+            )));
+        }
+    })
+}
 
 #[cfg(feature = "cuda")]
 fn ensure_reduce_ops_loaded(device_id: usize) -> Result<()> {
@@ -627,7 +752,8 @@ pub(crate) fn launch_argmax_argmin_op(
     let device_id = buffer.device_id;
     ensure_reduce_ops_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("reduce_ops", "incin_cuda_argmax_argmin")?;
+    let function =
+        dispatcher.get_function("reduce_ops", index_entry_point("argmax", index_dtype)?)?;
     let stream = buffer.device.default_stream();
 
     let (_reduce_axis, _keepdim_shape, final_shape, reduce_dim_size, slice_stride) = match axis {
@@ -910,7 +1036,8 @@ pub(crate) fn launch_topk_op(
     let device_id = buffer.device_id;
     ensure_reduce_ops_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("reduce_ops", "incin_cuda_topk")?;
+    let function =
+        dispatcher.get_function("reduce_ops", index_entry_point("topk", index_dtype)?)?;
     let stream = buffer.device.default_stream();
 
     let mut out_shape = storage.shape.to_vec();

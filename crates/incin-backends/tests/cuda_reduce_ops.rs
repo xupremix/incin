@@ -28,13 +28,14 @@
 use incin_backends::cuda::{
     CudaBackendImpl, tape_depth,
     testing::{
-        argmax_argmin, cumsum, download_f32, download_i64, reduce, require_cuda, topk,
-        upload_f32_shaped, var_std,
+        argmax_argmin, cumsum, download_bytes, download_f32, download_i64, reduce, require_cuda,
+        topk, upload_f32_shaped, var_std,
     },
 };
 use incin_core::backend_authoring::{AutogradBackend, Execute, StorageBackend};
 use incin_core::exec::catalog::{
-    ArgsortAttributes, AxisVarianceAttributes, NormAttributes, VarianceAttributes,
+    ArgsortAttributes, AxisVarianceAttributes, IndexReductionAttributes, NormAttributes,
+    TopKAttributes, VarianceAttributes,
 };
 use incin_core::exec::{
     CanonicalOperation, ExecutionContext, TapeStorage, TensorHandle, dispatch, op,
@@ -63,6 +64,16 @@ fn read_f32(storage: &TestStorage) -> Vec<f64> {
     download_f32(storage)
         .iter()
         .map(|&v| f64::from(v))
+        .collect()
+}
+
+/// Reads a u32 index storage as host values. The index reductions honor
+/// the requested width, so dispatched u32 results arrive as 4-byte
+/// elements - not as the i64 the kernels used to write unconditionally.
+fn read_u32(storage: &TestStorage) -> Vec<u32> {
+    download_bytes(storage)
+        .chunks_exact(4)
+        .map(|c| u32::from_le_bytes(c.try_into().expect("4-byte chunk")))
         .collect()
 }
 
@@ -426,7 +437,7 @@ fn argsort_returns_a_permutation_that_addresses_the_input() {
     let (idx, recorded) = run1::<op::Argsort, _>(&input, ascending);
     // Argsort is training = false: no tape entry is owed.
     assert_eq!(recorded, 0, "argsort must not record a tape entry");
-    let idx = download_i64(&idx);
+    let idx = read_u32(&idx);
     // row 0: [3, 1, 4, 1.5] -> 1, 1.5, 3, 4 at [1, 3, 0, 2]
     // row 1: [-2, 5, 0.5, -3] -> -3, -2, 0.5, 5 at [3, 0, 2, 1]
     assert_eq!(idx, vec![1, 3, 0, 2, 3, 0, 2, 1], "argsort ascending");
@@ -452,9 +463,91 @@ fn argsort_returns_a_permutation_that_addresses_the_input() {
         index_dtype: DTypeId::U32.descriptor(),
     };
     let (idx, _) = run1::<op::Argsort, _>(&input, descending);
-    let idx = download_i64(&idx);
+    let idx = read_u32(&idx);
     // row 0: [4, 3, 1.5, 1] at [2, 0, 3, 1]; row 1: [5, 0.5, -2, -3] at [1, 2, 0, 3].
     assert_eq!(idx, vec![2, 0, 3, 1, 1, 2, 0, 3], "argsort descending");
+}
+
+/// Index reductions honor the requested output width.
+///
+/// The Tensor surface contracts u32 indices, but the kernels used to write
+/// i64 unconditionally: a u32 request allocated 4-byte elements the kernel
+/// filled 8 bytes at a time, and the u32 conversion refused the result.
+/// Dispatches argmax, argmin, topk, argsort and sort with u32 and checks
+/// positions, values, and the 4-byte element width end to end.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn index_reductions_honor_u32_output() {
+    require_cuda();
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+    // row 0: [3, 1, 4, 1.5]; row 1: [-2, 5, 0.5, -3].
+    let context = ExecutionContext::new(TestBackend::new());
+
+    let max_idx = read_u32(
+        &dispatch::execute::<op::ArgMax, TestBackend>(
+            &context,
+            IndexReductionAttributes {
+                axis: Some(1),
+                dtype: DTypeId::U32.descriptor(),
+            },
+            &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+        )
+        .expect("argmax dispatches"),
+    );
+    assert_eq!(max_idx, vec![2, 1], "argmax u32 positions");
+    let min_idx = read_u32(
+        &dispatch::execute::<op::ArgMin, TestBackend>(
+            &context,
+            IndexReductionAttributes {
+                axis: Some(1),
+                dtype: DTypeId::U32.descriptor(),
+            },
+            &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+        )
+        .expect("argmin dispatches"),
+    );
+    assert_eq!(min_idx, vec![1, 3], "argmin u32 positions");
+
+    let (top_vals, top_idx) = dispatch::execute::<op::TopK, TestBackend>(
+        &context,
+        TopKAttributes {
+            k: 2,
+            axis: 1,
+            largest: true,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+    )
+    .expect("topk dispatches");
+    let top_vals = read_f32(&top_vals);
+    let top_idx = read_u32(&top_idx);
+    assert_eq!(top_idx, vec![2, 0, 1, 2], "topk u32 indices");
+    assert_close(&top_vals, &[4.0, 3.0, 5.0, 0.5], 1e-5, "topk values");
+
+    let (sort_vals, sort_idx) = dispatch::execute::<op::Sort, TestBackend>(
+        &context,
+        ArgsortAttributes {
+            axis: 1,
+            descending: false,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+    )
+    .expect("sort dispatches");
+    let sort_vals = read_f32(&sort_vals);
+    let sort_idx = read_u32(&sort_idx);
+    assert_eq!(
+        sort_idx,
+        vec![1, 3, 0, 2, 3, 0, 2, 1],
+        "sort u32 permutation"
+    );
+    assert_close(
+        &sort_vals,
+        &[1.0, 1.5, 3.0, 4.0, -3.0, -2.0, 0.5, 5.0],
+        1e-5,
+        "sort values",
+    );
 }
 
 /// Issue #87: the composed `Norm` rows match L1/L2 and record.
