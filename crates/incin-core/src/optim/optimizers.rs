@@ -13,8 +13,9 @@ use super::scheduler::LRScheduler;
 use super::support::{
     commit_parameter_updates, load_adam_state, load_adam_step, load_state_buffers,
     prepare_adam_update, prepare_rmsprop_update, prepare_sgd_update,
-    require_full_gradient_coverage, require_gradients_reached_the_group, save_adam_step,
-    save_state_buffers, validate_adam_config, validate_rmsprop_config, validate_sgd_config,
+    require_full_gradient_coverage, require_gradients_reached_the_group, resolve_param_lr,
+    save_adam_step, save_state_buffers, validate_adam_config, validate_param_lr,
+    validate_rmsprop_config, validate_sgd_config,
 };
 use super::traits::{Optimizer, OptimizerBackend, ScaledOptimizer};
 use crate::autograd::Gradients;
@@ -84,6 +85,14 @@ pub struct SGD<B: VariableBackend, K: DType = f32> {
     >,
     /// `lr`.
     pub lr: f64,
+    /// Per-parameter learning-rate overrides keyed by parameter-path
+    /// prefix, resolved by [`lr_for`](Self::lr_for) with longest-prefix
+    /// matching. Empty by default (every parameter trains at
+    /// [`lr`](Self::lr)). Overrides are absolute rates, not multipliers:
+    /// [`set_lr`](Self::set_lr) and [`step_scheduler`](Self::step_scheduler)
+    /// move only the base rate; pinned rates stay put. Not part of
+    /// `state_dict` (like `lr` itself): re-apply after loading.
+    pub lr_overrides: alloc::collections::BTreeMap<String, f64>,
     /// Classical momentum coefficient in `[0, +∞)`, `0.0` disables momentum.
     /// Typical values are `0.9` or `0.99`; takes effect on the next step.
     ///
@@ -360,6 +369,7 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
         Self {
             params,
             lr,
+            lr_overrides: alloc::collections::BTreeMap::new(),
             momentum: 0.0,
             weight_decay: 0.0,
             nesterov: false,
@@ -392,6 +402,75 @@ impl<B: VariableBackend, K: DType> SGD<B, K> {
     /// error rather than corrupting the assignment.
     pub fn set_lr(&mut self, lr: f64) {
         self.lr = lr;
+    }
+
+    /// Resolves the learning rate for one parameter: longest-prefix
+    /// match over [`lr_overrides`](Self::lr_overrides), else the base
+    /// [`lr`](Self::lr).
+    pub fn lr_for(&self, param: &str) -> f64 {
+        resolve_param_lr(&self.lr_overrides, self.lr, param)
+    }
+
+    /// Pins a learning rate for a parameter subtree: every parameter whose
+    /// dotted path equals `prefix` or starts with `prefix + "."` trains at
+    /// `lr` instead of the base rate. Checked (finite, non-negative) at
+    /// the next step, naming the parameter on refusal.
+    ///
+    /// Overrides are absolute, not multipliers: [`set_lr`](Self::set_lr)
+    /// and [`step_scheduler`](Self::step_scheduler) move only the base
+    /// rate, so a scheduler ramp never lifts a pinned group. Not part of
+    /// `state_dict` (like `lr` itself): re-apply after loading.
+    ///
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # fn main() -> incin::prelude::Result<()> {
+    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::nn::state::StateSnapshot;
+    /// use incin::optim::{LinearWarmup, SGD};
+    /// use incin::prelude::*;
+    ///
+    /// fn entry(snap: &StateSnapshot, name: &str) -> Vec<u8> {
+    ///     snap.iter()
+    ///         .find(|(p, _)| format!("{p:?}").contains(name))
+    ///         .map(|(_, v)| v.bytes().to_vec())
+    ///         .unwrap()
+    /// }
+    ///
+    /// let model = Linear::<s![2, 2], DefaultBackend>::build(())?;
+    /// let x = Cpu.ones(shape![2, 2])?.require_grad();
+    /// let y = Cpu.zeros(shape![2, 2])?;
+    /// // Pin the weight at lr 0: it freezes while the bias trains.
+    /// let mut sgd = SGD::<DefaultBackend>::from_module(&model, 0.1)?;
+    /// sgd.set_param_lr("weight", 0.0);
+    /// assert_eq!(sgd.lr_for("weight"), 0.0);
+    /// assert_eq!(sgd.lr_for("bias"), 0.1);
+    /// let before = collect_state::<DefaultBackend, _>(&model)?;
+    /// let loss = model.forward(x.clone())?.mse_loss(&y)?;
+    /// sgd.step(&loss.backward()?)?;
+    /// let after = collect_state::<DefaultBackend, _>(&model)?;
+    /// let (w0, b0) = (entry(&before, "weight"), entry(&before, "bias"));
+    /// let (w1, b1) = (entry(&after, "weight"), entry(&after, "bias"));
+    /// assert_eq!(w0, w1, "pinned weight must not move");
+    /// assert_ne!(b0, b1, "unpinned bias must move");
+    /// // A scheduler ramp moves the base only; the pin stays put.
+    /// let mut scheduler = LinearWarmup::new(0.2, 4);
+    /// sgd.step_scheduler(&scheduler);
+    /// assert_eq!(sgd.lr, 0.0);
+    /// assert_eq!(sgd.lr_for("weight"), 0.0);
+    /// sgd.clear_param_lrs();
+    /// assert_eq!(sgd.lr_for("weight"), sgd.lr);
+    /// # Ok(()) }
+    /// ```
+    pub fn set_param_lr(&mut self, prefix: impl Into<String>, lr: f64) {
+        self.lr_overrides.insert(prefix.into(), lr);
+    }
+
+    /// Drops all per-parameter overrides; every parameter trains at the
+    /// base rate again.
+    pub fn clear_param_lrs(&mut self) {
+        self.lr_overrides.clear();
     }
 
     /// Applies a scheduler's current learning rate to this optimizer.
@@ -564,6 +643,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> SGD<B, K> {
         )?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, velocity) = prepare_sgd_update::<B, K>(
@@ -571,7 +654,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> SGD<B, K> {
                     &t,
                     &grad,
                     self.velocity.get(name),
-                    self.lr,
+                    lr,
                     self.momentum,
                     self.weight_decay,
                     self.nesterov,
@@ -609,6 +692,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
         )?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, velocity) = prepare_sgd_update::<B, K>(
@@ -616,7 +703,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for SGD<B,
                     &t,
                     &grad,
                     self.velocity.get(name),
-                    self.lr,
+                    lr,
                     self.momentum,
                     self.weight_decay,
                     self.nesterov,
@@ -692,6 +779,14 @@ pub struct AdamW<B: VariableBackend, K: DType = f32> {
     >,
     /// `lr`.
     pub lr: f64,
+    /// Per-parameter learning-rate overrides keyed by parameter-path
+    /// prefix, resolved by [`lr_for`](Self::lr_for) with longest-prefix
+    /// matching. Empty by default (every parameter trains at
+    /// [`lr`](Self::lr)). Overrides are absolute rates, not multipliers:
+    /// [`set_lr`](Self::set_lr) and [`step_scheduler`](Self::step_scheduler)
+    /// move only the base rate; pinned rates stay put. Not part of
+    /// `state_dict` (like `lr` itself): re-apply after loading.
+    pub lr_overrides: alloc::collections::BTreeMap<String, f64>,
     /// `beta1`.
     pub beta1: f64,
     /// `beta2`.
@@ -717,6 +812,7 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
         Self {
             params,
             lr,
+            lr_overrides: alloc::collections::BTreeMap::new(),
             beta1: 0.9,
             beta2: 0.999,
             eps: 1e-8,
@@ -761,6 +857,27 @@ impl<B: VariableBackend, K: DType> AdamW<B, K> {
     /// error rather than corrupting the assignment.
     pub fn set_lr(&mut self, lr: f64) {
         self.lr = lr;
+    }
+
+    /// Resolves the learning rate for one parameter: longest-prefix
+    /// match over [`lr_overrides`](Self::lr_overrides), else the base
+    /// [`lr`](Self::lr).
+    pub fn lr_for(&self, param: &str) -> f64 {
+        resolve_param_lr(&self.lr_overrides, self.lr, param)
+    }
+
+    /// Pins a learning rate for a parameter subtree: every parameter whose
+    /// dotted path equals `prefix` or starts with `prefix + "."` trains at
+    /// `lr` instead of the base rate. Checked (finite, non-negative) at
+    /// the next step, naming the parameter on refusal.
+    pub fn set_param_lr(&mut self, prefix: impl Into<String>, lr: f64) {
+        self.lr_overrides.insert(prefix.into(), lr);
+    }
+
+    /// Drops all per-parameter overrides; every parameter trains at the
+    /// base rate again.
+    pub fn clear_param_lrs(&mut self) {
+        self.lr_overrides.clear();
     }
 
     /// Applies a scheduler's current learning rate to this optimizer.
@@ -867,6 +984,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> AdamW<B, K> {
         })?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
@@ -875,7 +996,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> AdamW<B, K> {
                     &grad,
                     self.m.get(name),
                     self.v.get(name),
-                    self.lr,
+                    lr,
                     self.beta1,
                     self.beta2,
                     self.eps,
@@ -932,6 +1053,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
         })?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
@@ -940,7 +1065,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for AdamW<
                     &grad,
                     self.m.get(name),
                     self.v.get(name),
-                    self.lr,
+                    lr,
                     self.beta1,
                     self.beta2,
                     self.eps,
@@ -1034,6 +1159,14 @@ pub struct Adam<B: VariableBackend, K: DType = f32> {
     >,
     /// `lr`.
     pub lr: f64,
+    /// Per-parameter learning-rate overrides keyed by parameter-path
+    /// prefix, resolved by [`lr_for`](Self::lr_for) with longest-prefix
+    /// matching. Empty by default (every parameter trains at
+    /// [`lr`](Self::lr)). Overrides are absolute rates, not multipliers:
+    /// [`set_lr`](Self::set_lr) and [`step_scheduler`](Self::step_scheduler)
+    /// move only the base rate; pinned rates stay put. Not part of
+    /// `state_dict` (like `lr` itself): re-apply after loading.
+    pub lr_overrides: alloc::collections::BTreeMap<String, f64>,
     /// `beta1`.
     pub beta1: f64,
     /// `beta2`.
@@ -1113,6 +1246,7 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
         Self {
             params,
             lr,
+            lr_overrides: alloc::collections::BTreeMap::new(),
             beta1: 0.9,
             beta2: 0.999,
             eps: 1e-8,
@@ -1157,6 +1291,27 @@ impl<B: VariableBackend, K: DType> Adam<B, K> {
     /// error rather than corrupting the assignment.
     pub fn set_lr(&mut self, lr: f64) {
         self.lr = lr;
+    }
+
+    /// Resolves the learning rate for one parameter: longest-prefix
+    /// match over [`lr_overrides`](Self::lr_overrides), else the base
+    /// [`lr`](Self::lr).
+    pub fn lr_for(&self, param: &str) -> f64 {
+        resolve_param_lr(&self.lr_overrides, self.lr, param)
+    }
+
+    /// Pins a learning rate for a parameter subtree: every parameter whose
+    /// dotted path equals `prefix` or starts with `prefix + "."` trains at
+    /// `lr` instead of the base rate. Checked (finite, non-negative) at
+    /// the next step, naming the parameter on refusal.
+    pub fn set_param_lr(&mut self, prefix: impl Into<String>, lr: f64) {
+        self.lr_overrides.insert(prefix.into(), lr);
+    }
+
+    /// Drops all per-parameter overrides; every parameter trains at the
+    /// base rate again.
+    pub fn clear_param_lrs(&mut self) {
+        self.lr_overrides.clear();
     }
 
     /// Applies a scheduler's current learning rate to this optimizer.
@@ -1263,6 +1418,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Adam<B, K> {
         })?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
@@ -1271,7 +1430,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Adam<B, K> {
                     &grad,
                     self.m.get(name),
                     self.v.get(name),
-                    self.lr,
+                    lr,
                     self.beta1,
                     self.beta2,
                     self.eps,
@@ -1328,6 +1487,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B
         })?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, m_t, v_t) = prepare_adam_update::<B, K>(
@@ -1336,7 +1499,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for Adam<B
                     &grad,
                     self.m.get(name),
                     self.v.get(name),
-                    self.lr,
+                    lr,
                     self.beta1,
                     self.beta2,
                     self.eps,
@@ -1446,6 +1609,14 @@ pub struct RMSprop<B: VariableBackend, K: DType = f32> {
     >,
     /// `lr`.
     pub lr: f64,
+    /// Per-parameter learning-rate overrides keyed by parameter-path
+    /// prefix, resolved by [`lr_for`](Self::lr_for) with longest-prefix
+    /// matching. Empty by default (every parameter trains at
+    /// [`lr`](Self::lr)). Overrides are absolute rates, not multipliers:
+    /// [`set_lr`](Self::set_lr) and [`step_scheduler`](Self::step_scheduler)
+    /// move only the base rate; pinned rates stay put. Not part of
+    /// `state_dict` (like `lr` itself): re-apply after loading.
+    pub lr_overrides: alloc::collections::BTreeMap<String, f64>,
     /// Smoothing constant for the squared-gradient average, in `[0, 1)`.
     /// Typical value is `0.99`; takes effect on the next step.
     pub alpha: f64,
@@ -1477,6 +1648,7 @@ impl<B: VariableBackend, K: DType> RMSprop<B, K> {
         Self {
             params,
             lr,
+            lr_overrides: alloc::collections::BTreeMap::new(),
             alpha: 0.99,
             eps: 1e-8,
             momentum: 0.0,
@@ -1510,6 +1682,27 @@ impl<B: VariableBackend, K: DType> RMSprop<B, K> {
     /// error rather than corrupting the assignment.
     pub fn set_lr(&mut self, lr: f64) {
         self.lr = lr;
+    }
+
+    /// Resolves the learning rate for one parameter: longest-prefix
+    /// match over [`lr_overrides`](Self::lr_overrides), else the base
+    /// [`lr`](Self::lr).
+    pub fn lr_for(&self, param: &str) -> f64 {
+        resolve_param_lr(&self.lr_overrides, self.lr, param)
+    }
+
+    /// Pins a learning rate for a parameter subtree: every parameter whose
+    /// dotted path equals `prefix` or starts with `prefix + "."` trains at
+    /// `lr` instead of the base rate. Checked (finite, non-negative) at
+    /// the next step, naming the parameter on refusal.
+    pub fn set_param_lr(&mut self, prefix: impl Into<String>, lr: f64) {
+        self.lr_overrides.insert(prefix.into(), lr);
+    }
+
+    /// Drops all per-parameter overrides; every parameter trains at the
+    /// base rate again.
+    pub fn clear_param_lrs(&mut self) {
+        self.lr_overrides.clear();
     }
 
     /// Applies a scheduler's current learning rate to this optimizer.
@@ -1645,6 +1838,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> RMSprop<B, K> {
         )?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, square_avg, momentum_buffer) = prepare_rmsprop_update::<B, K>(
@@ -1653,7 +1850,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> RMSprop<B, K> {
                     &grad,
                     self.square_avg.get(name),
                     self.momentum_buffer.get(name),
-                    self.lr,
+                    lr,
                     self.alpha,
                     self.eps,
                     self.momentum,
@@ -1700,6 +1897,10 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for RMSpro
         )?;
         let mut updates = alloc::vec::Vec::new();
         for (name, var) in &self.params {
+            let lr = self.lr_for(name);
+            if lr != self.lr {
+                validate_param_lr(OPERATION, name, lr)?;
+            }
             let t = B::var_as_tensor::<K>(var)?;
             if let Some(grad) = B::get_grad::<K>(&t, grads.as_backend())? {
                 let (updated, square_avg, momentum_buffer) = prepare_rmsprop_update::<B, K>(
@@ -1708,7 +1909,7 @@ impl<B: OptimizerBackend<K> + AutogradBackend, K: DType> Optimizer<B> for RMSpro
                     &grad,
                     self.square_avg.get(name),
                     self.momentum_buffer.get(name),
-                    self.lr,
+                    lr,
                     self.alpha,
                     self.eps,
                     self.momentum,
@@ -1843,6 +2044,49 @@ mod tests {
         assert_invalid(
             validate_adam_config("test", 0.01, 0.9, 0.999, 1e-8, Some(-0.5)),
             "negative Adam weight decay",
+        );
+    }
+
+    fn overrides(pairs: &[(&str, f64)]) -> alloc::collections::BTreeMap<String, f64> {
+        pairs
+            .iter()
+            .map(|(k, v)| (alloc::string::ToString::to_string(k), *v))
+            .collect()
+    }
+
+    #[test]
+    fn resolve_param_lr_matches_exact_prefix_and_base() {
+        let map = overrides(&[("encoder", 0.01)]);
+        assert_eq!(resolve_param_lr(&map, 0.1, "encoder"), 0.01);
+        assert_eq!(resolve_param_lr(&map, 0.1, "encoder.layer.0"), 0.01);
+        assert_eq!(resolve_param_lr(&map, 0.1, "decoder"), 0.1);
+        assert_eq!(
+            resolve_param_lr(&overrides(&[]), 0.1, "anything.at.all"),
+            0.1
+        );
+    }
+
+    #[test]
+    fn resolve_param_lr_prefers_longest_segment_aware_prefix() {
+        let map = overrides(&[("a", 0.01), ("a.b", 0.02)]);
+        assert_eq!(resolve_param_lr(&map, 0.1, "a.b.c"), 0.02);
+        assert_eq!(resolve_param_lr(&map, 0.1, "a.c"), 0.01);
+        // Segment-aware: "enc" must not match "encoder".
+        let map = overrides(&[("enc", 0.05)]);
+        assert_eq!(resolve_param_lr(&map, 0.1, "encoder"), 0.1);
+        // An empty prefix matches nothing, not everything.
+        let map = overrides(&[("", 0.05)]);
+        assert_eq!(resolve_param_lr(&map, 0.1, "encoder"), 0.1);
+    }
+
+    #[test]
+    fn validate_param_lr_names_the_parameter() {
+        assert!(validate_param_lr("test", "head", 0.01).is_ok());
+        let err = validate_param_lr("test", "head", -0.5).unwrap_err();
+        let msg = alloc::format!("{err:?}");
+        assert!(
+            msg.contains("head"),
+            "refusal must name the parameter, got {msg}"
         );
     }
 }

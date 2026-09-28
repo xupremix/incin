@@ -93,6 +93,53 @@ pub(super) fn validate_learning_rate(operation: &'static str, lr: f64) -> Result
     Ok(())
 }
 
+/// Resolve one parameter's learning rate: longest-prefix match over
+/// per-parameter overrides, falling back to the optimizer base rate.
+///
+/// Overrides are keyed by parameter-path prefix (`"encoder.layer.0"` pins
+/// a whole subtree); the longest matching prefix wins so a general rule
+/// and a specific exception compose. Matching is segment-aware: a prefix
+/// matches the parameter itself or a leading dotted segment (`"enc"`
+/// does not match `"encoder"`). An empty map changes nothing, so existing
+/// optimizers behave exactly as before until an override is set.
+pub(super) fn resolve_param_lr(
+    overrides: &alloc::collections::BTreeMap<String, f64>,
+    base_lr: f64,
+    param: &str,
+) -> f64 {
+    let mut best_len = 0usize;
+    let mut lr = base_lr;
+    for (prefix, &rate) in overrides {
+        if prefix.is_empty() {
+            continue;
+        }
+        let hit = param == prefix.as_str()
+            || param
+                .strip_prefix(prefix.as_str())
+                .is_some_and(|rest| rest.starts_with('.'));
+        if hit && prefix.len() > best_len {
+            best_len = prefix.len();
+            lr = rate;
+        }
+    }
+    lr
+}
+
+/// Validate a resolved per-parameter rate, naming the parameter.
+///
+/// The base rate is already validated by the optimizer's config check;
+/// this runs only when an override actually changed the value, so the
+/// refusal names the override that caused it rather than the config.
+pub(super) fn validate_param_lr(operation: &'static str, param: &str, lr: f64) -> Result<()> {
+    if !lr.is_finite() || lr < 0.0 {
+        return Err(Error::Msg(alloc::format!(
+            "{operation} refusing step: learning rate for parameter {param} must be finite \
+             and non-negative, got {lr}"
+        )));
+    }
+    Ok(())
+}
+
 pub(super) fn validate_adam_config(
     operation: &'static str,
     lr: f64,
