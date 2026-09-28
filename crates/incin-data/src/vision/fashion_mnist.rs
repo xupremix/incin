@@ -5,6 +5,8 @@
 
 use super::idx;
 use super::mnist::{MnistBatchTarget, TensorCollate};
+#[cfg(not(feature = "download"))]
+use incin_core::error::ErrorMessage;
 use incin_core::error::{Error, Result};
 use std::path::Path;
 

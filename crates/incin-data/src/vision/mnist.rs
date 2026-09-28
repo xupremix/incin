@@ -1,4 +1,6 @@
 use crate::loader::{BatchResult, Collate, DataError};
+#[cfg(not(feature = "download"))]
+use incin_core::error::ErrorMessage;
 use incin_core::error::{Error, Result};
 use std::path::Path;
 

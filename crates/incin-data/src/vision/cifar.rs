@@ -124,7 +124,7 @@ pub struct Cifar100Dataset {
 }
 
 macro_rules! cifar_dataset {
-    ($name:ident, $op:literal, $train_files:expr, $test_file:expr, $record_len:expr, $label_at:expr, $max_label:expr) => {
+    ($name:ident, $op:literal, $train_files:expr, $test_file:expr, $record_len:expr, $label_at:expr, $max_label:expr, $url:literal, $tarball:literal, $topdir:literal) => {
         impl $name {
             /// Starts a model-ready loader using `target` as the explicit target.
             ///
@@ -144,8 +144,35 @@ macro_rules! cifar_dataset {
             /// docs for the download URL).
             pub fn new<P: AsRef<Path>>(dir: P, train: bool) -> Result<Self> {
                 let dir = dir.as_ref();
-                let files: &[&str] = if train { &$train_files } else { &[$test_file] };
-                let split = read_records(dir, files, $record_len, $label_at, $max_label, $op)?;
+                let wanted: &[&str] = if train { &$train_files } else { &[$test_file] };
+                // Files straight in `dir` win: tests and pre-extracted
+                // trees never touch the network. Otherwise, with the
+                // `download` feature, fetch the tarball once and read
+                // from inside its top directory.
+                let base: std::path::PathBuf;
+                if wanted.iter().all(|f| dir.join(f).is_file()) {
+                    base = dir.to_path_buf();
+                } else {
+                    #[cfg(feature = "download")]
+                    {
+                        base = crate::downloader::Downloader::download_and_extract_tar_gz(
+                            $url, dir, $tarball, $topdir,
+                        )?;
+                    }
+                    #[cfg(not(feature = "download"))]
+                    {
+                        return Err(Error::Io {
+                            operation: $op,
+                            message: ErrorMessage::new(format!(
+                                "CIFAR split files are missing from {} and this build cannot fetch \
+                                 them: enable the `download` feature of incin-data, or extract the \
+                                 official binary tarball into that directory yourself",
+                                dir.display()
+                            )),
+                        });
+                    }
+                }
+                let split = read_records(&base, wanted, $record_len, $label_at, $max_label, $op)?;
                 Ok(Self {
                     images: split.images,
                     labels: split.labels,
@@ -214,7 +241,10 @@ cifar_dataset!(
     "test_batch.bin",
     3073,
     0,
-    9
+    9,
+    "https://cave.cs.toronto.edu/kriz/cifar-10-binary.tar.gz",
+    "cifar-10-binary.tar.gz",
+    "cifar-10-batches-bin"
 );
 
 cifar_dataset!(
@@ -224,7 +254,10 @@ cifar_dataset!(
     "test.bin",
     3074,
     1,
-    99
+    99,
+    "https://cave.cs.toronto.edu/kriz/cifar-100-binary.tar.gz",
+    "cifar-100-binary.tar.gz",
+    "cifar-100-binary"
 );
 
 /// `TensorCollate` serves MNIST-shaped batches only; CIFAR batches stack
