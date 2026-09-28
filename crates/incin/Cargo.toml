@@ -171,6 +171,10 @@ name = "checkpoint_resume"
 required-features = ["cpu"]
 
 [[example]]
+name = "galaxy_classifier"
+required-features = ["cpu"]
+
+[[example]]
 name = "custom_dtype_walkthrough"
 required-features = ["cpu"]
 [[example]]
