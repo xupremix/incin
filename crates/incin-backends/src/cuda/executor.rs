@@ -2762,6 +2762,36 @@ impl<D: Device> Execute<op::CrossEntropyLoss> for CudaBackendImpl<D> {
     }
 }
 
+impl<D: Device> Execute<op::FusedAttention> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::FusedAttention, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::FusedAttention;
+        let [query, key, value] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "fused attention expects exactly query, key and value",
+            ));
+        };
+        let query = downcast(query, operation, "query is not CUDA storage")?;
+        let key = downcast(key, operation, "key is not CUDA storage")?;
+        let value = downcast(value, operation, "value is not CUDA storage")?;
+        let attributes = request.operation.descriptor().attributes();
+        let wrap = |e| kernel_error("Cuda", operation, e);
+        crate::cuda::backend::nn::fused_attention_storage(
+            query,
+            key,
+            value,
+            attributes.causal,
+            attributes.scale,
+        )
+        .map_err(wrap)
+    }
+}
+
 impl<D: Device> Execute<op::Norm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
 

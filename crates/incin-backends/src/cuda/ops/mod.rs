@@ -1,3 +1,4 @@
+pub(crate) mod attention;
 pub(crate) mod cast;
 pub(crate) mod compare;
 pub(crate) mod conv;

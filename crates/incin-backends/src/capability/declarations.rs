@@ -403,10 +403,12 @@ macro_rules! cuda_descriptor_operations {
             // and dropped out-of-range writes live in the executor, as do
             // `GroupedMatMul`'s i64 offsets tile.
             embedding = [EmbeddingExact, OneHot, Bincount, ScatterAdd, GroupedMatMul],
-            // No fused-attention kernel on CUDA yet (issue #104); empty
-            // until one ships.
-            fused_attention = [],
-            // Issue #87: `TopK` leaves `reduction` and the six Welford
+            // Native single-pass online-softmax attention kernel ships on
+            // CUDA (issue #104): forward over query rows with GQA mapping
+            // and causal masking, one tape entry whose backward recomputes
+            // weights from stored per-row statistics - no score matrix, no
+            // atomics. f32/f64 over contiguous rank-4 operands.
+            fused_attention = [FusedAttention],            // Issue #87: `TopK` leaves `reduction` and the six Welford
             // `var`/`std` rows leave `composed_reduction` because both now
             // sit on f32-only kernels (`incin_cuda_topk`,
             // `incin_cuda_welford` take `const float* input`). A group is a

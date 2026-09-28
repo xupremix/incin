@@ -260,3 +260,38 @@ impl<D: Device> CudaBackendImpl<D> {
         Ok(out)
     }
 }
+
+/// Native single-pass online-softmax attention (issue #104): forward over
+/// query rows with GQA head mapping and causal masking, one tape entry
+/// whose backward recomputes weights from the stored per-row `(m, l)`
+/// through three row-parallel kernels - no score matrix is ever stored,
+/// mirroring the CPU kernel's contract. `scale` defaults to
+/// `1/sqrt(head_dim)` like the CPU geometry when `None`.
+pub(crate) fn fused_attention_storage(
+    q: &CudaStorage,
+    k: &CudaStorage,
+    v: &CudaStorage,
+    causal: bool,
+    scale: Option<f64>,
+) -> Result<CudaStorage> {
+    let (out, ml) = crate::cuda::ops::attention::launch_attention_forward(q, k, v, causal, scale)?;
+    let g = crate::cuda::ops::attention::geometry(q, k, v, scale)?;
+    let (q_saved, k_saved, v_saved, o_saved, ml_saved) =
+        (q.clone(), k.clone(), v.clone(), out.clone(), ml);
+    let (q_id, k_id, v_id, out_id) = (q.id, k.id, v.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: alloc::vec![q_id, k_id, v_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let delta = crate::cuda::ops::attention::launch_attention_delta(grad_out, &o_saved)?;
+            let dq = crate::cuda::ops::attention::launch_attention_dq(
+                &q_saved, &k_saved, &v_saved, grad_out, &ml_saved, &delta, &g, causal,
+            )?;
+            let (dk, dv) = crate::cuda::ops::attention::launch_attention_dkv(
+                &q_saved, &k_saved, &v_saved, grad_out, &ml_saved, &delta, &g, causal,
+            )?;
+            Ok(alloc::vec![dq, dk, dv])
+        }),
+    });
+    Ok(out)
+}
