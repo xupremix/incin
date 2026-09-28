@@ -24,7 +24,7 @@ pub(crate) struct Geometry {
     groups: usize,
     kv_lead: usize,
     scale: f64,
-    is_f64: bool,
+    dtype: DTypeId,
 }
 
 pub(crate) fn geometry(
@@ -125,9 +125,10 @@ pub(crate) fn geometry(
             });
         }
     }
-    let is_f64 = match q_dtype {
-        Some(DTypeId::F32) => false,
-        Some(DTypeId::F64) => true,
+    let dtype = match q_dtype {
+        Some(DTypeId::F32) | Some(DTypeId::F64) | Some(DTypeId::F16) | Some(DTypeId::BF16) => {
+            q_dtype.expect("matched arm is always Some")
+        }
         _ => {
             return Err(Error::UnsupportedDType {
                 dtype: q.buffer.dtype,
@@ -146,7 +147,49 @@ pub(crate) fn geometry(
         groups: qs[1] / ks[1],
         kv_lead: ks[2].saturating_sub(qs[2]),
         scale: scale.unwrap_or_else(|| 1.0 / (qs[3] as f64).sqrt()),
-        is_f64,
+        dtype,
+    })
+}
+
+/// Entry-point name for one kernel family and storage dtype: the `.cu`
+/// file exports `<family>_f32/f64/f16/bf16`, selected by the validated
+/// operand dtype so a buffer can never reach a mistyped kernel.
+fn attn_entry(family: &'static str, dtype: DTypeId) -> Result<&'static str> {
+    let suffix = match dtype {
+        DTypeId::F32 => "f32",
+        DTypeId::F64 => "f64",
+        DTypeId::F16 => "f16",
+        DTypeId::BF16 => "bf16",
+        _ => {
+            return Err(Error::UnsupportedDType {
+                dtype: dtype.descriptor(),
+                backend: "Cuda",
+                op: "fused_attention",
+            });
+        }
+    };
+    Ok(match (family, suffix) {
+        ("attn_fwd", "f32") => "attn_fwd_f32",
+        ("attn_fwd", "f64") => "attn_fwd_f64",
+        ("attn_fwd", "f16") => "attn_fwd_f16",
+        ("attn_fwd", "bf16") => "attn_fwd_bf16",
+        ("attn_delta", "f32") => "attn_delta_f32",
+        ("attn_delta", "f64") => "attn_delta_f64",
+        ("attn_delta", "f16") => "attn_delta_f16",
+        ("attn_delta", "bf16") => "attn_delta_bf16",
+        ("attn_dq", "f32") => "attn_dq_f32",
+        ("attn_dq", "f64") => "attn_dq_f64",
+        ("attn_dq", "f16") => "attn_dq_f16",
+        ("attn_dq", "bf16") => "attn_dq_bf16",
+        ("attn_dkv", "f32") => "attn_dkv_f32",
+        ("attn_dkv", "f64") => "attn_dkv_f64",
+        ("attn_dkv", "f16") => "attn_dkv_f16",
+        ("attn_dkv", "bf16") => "attn_dkv_bf16",
+        _ => {
+            return Err(Error::Msg(alloc::format!(
+                "unknown attention kernel family {family}"
+            )));
+        }
     })
 }
 
@@ -227,15 +270,11 @@ pub(crate) fn launch_attention_forward(
     scale: Option<f64>,
 ) -> Result<(CudaStorage, CudaStorage)> {
     let g = geometry(q, k, v, scale)?;
-    let dtype = if g.is_f64 { DTypeId::F64 } else { DTypeId::F32 };
+    let dtype = g.dtype;
     let device_id = q.buffer.device_id;
     ensure_attention_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let entry = if g.is_f64 {
-        "attn_fwd_f64"
-    } else {
-        "attn_fwd_f32"
-    };
+    let entry = attn_entry("attn_fwd", g.dtype)?;
     let function = dispatcher.get_function("attention", entry)?;
     let stream = q.buffer.device.default_stream();
 
@@ -344,15 +383,23 @@ pub(crate) fn launch_attention_forward(
 pub(crate) fn launch_attention_delta(grad: &CudaStorage, out: &CudaStorage) -> Result<CudaStorage> {
     let shape = grad.shape.to_vec();
     let (b, hq, sq, d) = (shape[0], shape[1], shape[2], shape[3]);
-    let is_f64 = grad.buffer.dtype.builtin_id() == Some(DTypeId::F64);
+    let grad_dtype = grad.buffer.dtype.builtin_id().ok_or(Error::Msg(
+        "attention delta needs a builtin grad dtype".into(),
+    ))?;
+    if !matches!(
+        grad_dtype,
+        DTypeId::F32 | DTypeId::F64 | DTypeId::F16 | DTypeId::BF16
+    ) {
+        return Err(Error::UnsupportedDType {
+            dtype: grad.buffer.dtype,
+            backend: "Cuda",
+            op: "fused_attention",
+        });
+    }
     let device_id = grad.buffer.device_id;
     ensure_attention_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let entry = if is_f64 {
-        "attn_delta_f64"
-    } else {
-        "attn_delta_f32"
-    };
+    let entry = attn_entry("attn_delta", grad_dtype)?;
     let function = dispatcher.get_function("attention", entry)?;
     let stream = grad.buffer.device.default_stream();
     let rows = (b as u64) * (hq as u64) * (sq as u64);
@@ -420,15 +467,11 @@ pub(crate) fn launch_attention_dq(
     g: &Geometry,
     causal: bool,
 ) -> Result<CudaStorage> {
-    let dtype = if g.is_f64 { DTypeId::F64 } else { DTypeId::F32 };
+    let dtype = g.dtype;
     let device_id = q.buffer.device_id;
     ensure_attention_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let entry = if g.is_f64 {
-        "attn_dq_f64"
-    } else {
-        "attn_dq_f32"
-    };
+    let entry = attn_entry("attn_dq", g.dtype)?;
     let function = dispatcher.get_function("attention", entry)?;
     let stream = q.buffer.device.default_stream();
     let numel = g.batch * g.heads_q * g.seq_q * g.head_dim;
@@ -519,15 +562,11 @@ pub(crate) fn launch_attention_dkv(
     g: &Geometry,
     causal: bool,
 ) -> Result<(CudaStorage, CudaStorage)> {
-    let dtype = if g.is_f64 { DTypeId::F64 } else { DTypeId::F32 };
+    let dtype = g.dtype;
     let device_id = q.buffer.device_id;
     ensure_attention_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let entry = if g.is_f64 {
-        "attn_dkv_f64"
-    } else {
-        "attn_dkv_f32"
-    };
+    let entry = attn_entry("attn_dkv", g.dtype)?;
     let function = dispatcher.get_function("attention", entry)?;
     let stream = q.buffer.device.default_stream();
     let numel = g.batch * g.heads_kv * g.seq_kv * g.head_dim;

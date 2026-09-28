@@ -10,6 +10,7 @@
 //! the contract under test is parity with the reference implementation.
 #![cfg(feature = "cuda")]
 
+use half::{bf16, f16};
 use incin_backends::cuda::{
     CudaBackendImpl, tape_depth,
     testing::{
@@ -24,6 +25,7 @@ use incin_core::exec::{
 };
 use incin_core::prelude::{CudaN, DTypeId};
 use incin_core::shapes::error::OperationKind;
+use incin_core::tensor::dtype::DType;
 use incin_core::typenum::U0;
 
 type TestBackend = CudaBackendImpl<CudaN<U0>>;
@@ -50,6 +52,34 @@ fn read_f32(storage: &TestStorage) -> Vec<f64> {
 
 fn f64_bytes(values: &[f64]) -> Vec<u8> {
     values.iter().flat_map(|&v| v.to_le_bytes()).collect()
+}
+
+fn f16_bytes(values: &[f32]) -> Vec<u8> {
+    values
+        .iter()
+        .flat_map(|&v| f16::from_f32(v).to_bits().to_le_bytes())
+        .collect()
+}
+
+fn bf16_bytes(values: &[f32]) -> Vec<u8> {
+    values
+        .iter()
+        .flat_map(|&v| bf16::from_f32(v).to_bits().to_le_bytes())
+        .collect()
+}
+
+fn decode_f16(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(2)
+        .map(|c| f16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32())
+        .collect()
+}
+
+fn decode_bf16(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(2)
+        .map(|c| bf16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32())
+        .collect()
 }
 
 fn decode_f64(bytes: &[u8]) -> Vec<f64> {
@@ -134,22 +164,24 @@ fn cpu_read_f32(storage: &<Cpu as StorageBackend>::Storage<f32>) -> Vec<f64> {
 
 #[test]
 fn fused_attention_row_is_native_training_on_cuda() {
-    let level = incin_backends::capability::support(
-        incin_core::tensor::device::DeviceKind::Cuda,
-        &CapabilityQuery {
-            operation: OperationIdentity::Builtin(OperationKind::FusedAttention),
-            dtype: DTypeId::F32.descriptor(),
-            layout: LayoutClass::Contiguous,
-            rank: 4,
-            training: true,
-            math_mode: MathMode::default(),
-        },
-    );
-    assert_eq!(
-        level,
-        SupportLevel::Native,
-        "fused attention ships a native CUDA kernel, so rank 4 must be Native with training"
-    );
+    for dtype in [DTypeId::F32, DTypeId::F64, DTypeId::F16, DTypeId::BF16] {
+        let level = incin_backends::capability::support(
+            incin_core::tensor::device::DeviceKind::Cuda,
+            &CapabilityQuery {
+                operation: OperationIdentity::Builtin(OperationKind::FusedAttention),
+                dtype: dtype.descriptor(),
+                layout: LayoutClass::Contiguous,
+                rank: 4,
+                training: true,
+                math_mode: MathMode::default(),
+            },
+        );
+        assert_eq!(
+            level,
+            SupportLevel::Native,
+            "{dtype:?} fused attention ships a native CUDA kernel, so rank 4 must be Native with training"
+        );
+    }
 }
 
 #[test]
@@ -318,6 +350,130 @@ fn cpu_read_f64(storage: &<Cpu as StorageBackend>::Storage<f64>) -> Vec<f64> {
     <Cpu as HostReadback>::float_to_vec1::<f64>(storage).expect("reading the CPU twin must succeed")
 }
 
+/// Three half-dtype inputs through `dispatch`: the handle element type
+/// carries the storage dtype, so f16 and bf16 need one monomorphic call
+/// each.
+fn run_half<K: DType>(
+    context: &ExecutionContext<TestBackend>,
+    q: &TestStorage,
+    k: &TestStorage,
+    v: &TestStorage,
+) -> (
+    Result<TestStorage, incin_core::exec::dispatch::CanonicalError>,
+    usize,
+) {
+    let before = tape_depth();
+    let out = dispatch::execute::<op::FusedAttention, TestBackend>(
+        context,
+        FusedAttentionAttributes {
+            scale: None,
+            causal: false,
+        },
+        &[
+            TensorHandle::from_storage::<TestBackend, K, _>(q),
+            TensorHandle::from_storage::<TestBackend, K, _>(k),
+            TensorHandle::from_storage::<TestBackend, K, _>(v),
+        ],
+    );
+    (out, tape_depth() - before)
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn fused_forward_f16_bf16_match_f32_within_half_tolerance() {
+    require_cuda();
+    // B=1, H=1, Sq=2, Skv=2, D=2, non-causal. Values are exactly
+    // representable in both half formats, so the only error is the
+    // half rounding of intermediates against the f32 twin.
+    let qv = [0.5, -1.0, 2.0, 0.25];
+    let kv = [1.0, 0.5, -0.5, 1.5];
+    let vv = [0.25, 1.0, -1.0, 0.5];
+    let context = ExecutionContext::new(TestBackend::new());
+    for (dtype, bytes) in [
+        (
+            DTypeId::F16,
+            (f16_bytes(&qv), f16_bytes(&kv), f16_bytes(&vv)),
+        ),
+        (
+            DTypeId::BF16,
+            (bf16_bytes(&qv), bf16_bytes(&kv), bf16_bytes(&vv)),
+        ),
+    ] {
+        let (qb, kb, vb) = bytes;
+        let q = upload_bytes(&[1, 1, 2, 2], dtype, &qb);
+        let k = upload_bytes(&[1, 1, 2, 2], dtype, &kb);
+        let v = upload_bytes(&[1, 1, 2, 2], dtype, &vb);
+        let before = tape_depth();
+        let out = if dtype == DTypeId::F16 {
+            run_half::<f16>(&context, &q, &k, &v)
+        } else {
+            run_half::<bf16>(&context, &q, &k, &v)
+        };
+        let (out, recorded) = (out.0.expect("half fused attention must execute"), out.1);
+        assert_eq!(
+            tape_depth() - before,
+            1,
+            "fused attention records one tape entry"
+        );
+        assert_eq!(out.shape, vec![1, 1, 2, 2]);
+        let got_bytes = download_bytes(&out);
+        let got: Vec<f64> = if dtype == DTypeId::F16 {
+            decode_f16(&got_bytes)
+                .iter()
+                .map(|&v| f64::from(v))
+                .collect()
+        } else {
+            decode_bf16(&got_bytes)
+                .iter()
+                .map(|&v| f64::from(v))
+                .collect()
+        };
+        #[cfg(feature = "cpu")]
+        {
+            let context = ExecutionContext::new(Cpu::new());
+            let hq = <Cpu as HostInterop>::from_bytes::<f32>(
+                bytemuck::cast_slice(&qv),
+                &[1, 1, 2, 2],
+                DTypeId::F32.descriptor(),
+                &incin_core::tensor::device::DeviceId::cpu(),
+            )
+            .unwrap();
+            let hk = <Cpu as HostInterop>::from_bytes::<f32>(
+                bytemuck::cast_slice(&kv),
+                &[1, 1, 2, 2],
+                DTypeId::F32.descriptor(),
+                &incin_core::tensor::device::DeviceId::cpu(),
+            )
+            .unwrap();
+            let hv = <Cpu as HostInterop>::from_bytes::<f32>(
+                bytemuck::cast_slice(&vv),
+                &[1, 1, 2, 2],
+                DTypeId::F32.descriptor(),
+                &incin_core::tensor::device::DeviceId::cpu(),
+            )
+            .unwrap();
+            let want = dispatch::execute::<op::FusedAttention, Cpu>(
+                &context,
+                FusedAttentionAttributes {
+                    scale: None,
+                    causal: false,
+                },
+                &[
+                    TensorHandle::from_storage::<Cpu, f32, _>(&hq),
+                    TensorHandle::from_storage::<Cpu, f32, _>(&hk),
+                    TensorHandle::from_storage::<Cpu, f32, _>(&hv),
+                ],
+            )
+            .expect("CPU reference f32 fused attention executes");
+            let want = cpu_read_f32(&want);
+            let gotf: Vec<f64> = got;
+            // Observed maxima on GTX 1650S: F16 1.4e-4, BF16 8.4e-4;
+            // the 1e-2 bound leaves an order of magnitude for
+            // driver/hardware variance.
+            assert_close(&gotf, &want, 1e-2, &format!("{dtype:?} forward"));
+        }
+    }
+}
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn fused_backward_matches_the_cpu_twin() {

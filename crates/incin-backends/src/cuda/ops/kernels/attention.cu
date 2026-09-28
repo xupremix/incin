@@ -6,7 +6,8 @@
 // nothing but per-row `(m, l)` and recomputes weights from them in three
 // row-parallel kernels (delta, dq, dkv), so concurrent blocks never share
 // an output row and no atomics are needed. Accumulation is in double for
-// both float and double operands; stores round once.
+// every storage dtype (f32/f64/f16/bf16 convert on load, round once on
+// store), matching CPU's f64 intermediates within test tolerance.
 //
 // GQA maps query head `hq` to key/value head `hq / groups` by integer
 // division; causal masking keeps key `j` for query `i` iff
@@ -19,6 +20,38 @@
 // straight-line over the key index with the causal test on `j` only -
 // never an `if (d == axis)`-style loop-carried conditional (see
 // repeat_interleave's NVVM range-split note).
+
+#include <cuda_fp16.h>
+#include <cuda_bf16.h>
+
+// Load/store arithmetic per storage dtype: everything substantial runs
+// in double, conversions happen once at the buffer edge.
+template <typename T>
+struct AttnArit;
+template <>
+struct AttnArit<float> {
+    static __device__ __forceinline__ double load(float v) { return (double)v; }
+    static __device__ __forceinline__ float store(double v) { return (float)v; }
+};
+template <>
+struct AttnArit<double> {
+    static __device__ __forceinline__ double load(double v) { return v; }
+    static __device__ __forceinline__ double store(double v) { return v; }
+};
+template <>
+struct AttnArit<__half> {
+    static __device__ __forceinline__ double load(__half v) { return (double)__half2float(v); }
+    static __device__ __forceinline__ __half store(double v) { return __float2half((float)v); }
+};
+template <>
+struct AttnArit<__nv_bfloat16> {
+    static __device__ __forceinline__ double load(__nv_bfloat16 v) {
+        return (double)__bfloat162float(v);
+    }
+    static __device__ __forceinline__ __nv_bfloat16 store(double v) {
+        return __float2bfloat16((float)v);
+    }
+};
 
 // Block-wide sum over blockDim.x doubles in `red` (size blockDim.x).
 // Handles non-power-of-two widths via the bounds check.
@@ -72,7 +105,7 @@ __device__ void attn_fwd_row(
     int hkv = hq / groups;
 
     long long q_row = q_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
-    double qd = (double)q[q_row + tid];
+    double qd = AttnArit<T>::load(q[q_row + tid]);
 
     double m = -1e300;
     double l = 0.0;
@@ -82,24 +115,24 @@ __device__ void attn_fwd_row(
             break;
         }
         long long k_row = k_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
-        double s = scale * block_reduce_sum(qd * (double)k[k_row + tid], red);
+        double s = scale * block_reduce_sum(qd * AttnArit<T>::load(k[k_row + tid]), red);
         double m_new = m > s ? m : s;
         double w_old = exp(m - m_new);
         double w_new = exp(s - m_new);
         l = l * w_old + w_new;
         long long v_row = v_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
-        acc = acc * w_old + w_new * (double)v[v_row + tid];
+        acc = acc * w_old + w_new * AttnArit<T>::load(v[v_row + tid]);
         m = m_new;
     }
     long long o_row = o_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
     if (l == 0.0) {
         // Fully masked row (only an empty key extent can do this): zeros,
         // matching the CPU kernel's documented rule.
-        o[o_row + tid] = (T)0.0;
+        o[o_row + tid] = AttnArit<T>::store(0.0);
         ml[2 * row] = -1e300;
         ml[2 * row + 1] = 0.0;
     } else {
-        o[o_row + tid] = (T)(acc / l);
+        o[o_row + tid] = AttnArit<T>::store(acc / l);
         ml[2 * row] = m;
         ml[2 * row + 1] = l;
     }
@@ -133,7 +166,7 @@ __device__ void attn_delta_row(
     long long g_row = g_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
     long long o_row = o_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
     double d = block_reduce_sum(
-        (double)grad[g_row + tid] * (double)o[o_row + tid], red);
+        AttnArit<T>::load(grad[g_row + tid]) * AttnArit<T>::load(o[o_row + tid]), red);
     if (tid == 0) {
         delta[row] = d;
     }
@@ -195,18 +228,18 @@ __device__ void attn_dq_row(
             long long v_row =
                 v_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
             double s = scale * block_reduce_sum(
-                (double)q[q_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D + tid] *
-                    (double)k[k_row + tid],
+                AttnArit<T>::load(q[q_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D + tid]) *
+                    AttnArit<T>::load(k[k_row + tid]),
                 red);
             double p = exp(s - m) / l;
             double dot_dv = block_reduce_sum(
-                (double)grad[g_row + tid] * (double)v[v_row + tid], red);
+                AttnArit<T>::load(grad[g_row + tid]) * AttnArit<T>::load(v[v_row + tid]), red);
             double ds = p * (dot_dv - dl);
-            dq_d += scale * ds * (double)k[k_row + tid];
+            dq_d += scale * ds * AttnArit<T>::load(k[k_row + tid]);
         }
     }
     long long dq_row = dq_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
-    dq[dq_row + tid] = (T)dq_d;
+    dq[dq_row + tid] = AttnArit<T>::store(dq_d);
 }
 
 // dk/dv rows are each owned by one (b, hkv, j) block: loop the query rows
@@ -261,8 +294,8 @@ __device__ void attn_dkv_row(
     }
     long long k_row = k_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
     long long v_row = v_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
-    double kd = (double)k[k_row + tid];
-    double vd = (double)v[v_row + tid];
+    double kd = AttnArit<T>::load(k[k_row + tid]);
+    double vd = AttnArit<T>::load(v[v_row + tid]);
     for (int i = i_start; i < Sq; i++) {
         for (int h = 0; h < groups; h++) {
             int hq = hkv * groups + h;
@@ -274,20 +307,20 @@ __device__ void attn_dkv_row(
             }
             long long q_row = q_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
             long long g_row = g_off + ((long long)b * Hq + hq) * Sq * D + (long long)i * D;
-            double s = scale * block_reduce_sum((double)q[q_row + tid] * kd, red);
+            double s = scale * block_reduce_sum(AttnArit<T>::load(q[q_row + tid]) * kd, red);
             double p = exp(s - m) / l;
-            double dot_dv = block_reduce_sum((double)grad[g_row + tid] * vd, red);
+            double dot_dv = block_reduce_sum(AttnArit<T>::load(grad[g_row + tid]) * vd, red);
             double ds = p * (dot_dv - delta[qgrow]);
-            double qd = (double)q[q_row + tid];
-            double gd = (double)grad[g_row + tid];
+            double qd = AttnArit<T>::load(q[q_row + tid]);
+            double gd = AttnArit<T>::load(grad[g_row + tid]);
             dk_d += scale * ds * qd;
             dv_d += p * gd;
         }
     }
     long long dk_row = dk_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
     long long dv_row = dv_off + ((long long)b * Hkv + hkv) * Skv * D + (long long)j * D;
-    dk[dk_row + tid] = (T)dk_d;
-    dv[dv_row + tid] = (T)dv_d;
+    dk[dk_row + tid] = AttnArit<T>::store(dk_d);
+    dv[dv_row + tid] = AttnArit<T>::store(dv_d);
 }
 
 // Exported entry points, one pair per storage dtype the capability row
@@ -382,6 +415,104 @@ extern "C" __global__ void attn_dkv_f64(
     long long dk_off, long long dv_off) {
     extern __shared__ double red[];
     attn_dkv_row<double>(
+        q, k, v, grad, ml, delta, dk, dv, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, g_off, dk_off, dv_off, red);
+}
+
+// Half-precision entry points (f16/bf16 storage, double arithmetic):
+// same templates instantiated at the two half types.
+
+extern "C" __global__ void attn_fwd_f16(
+    const __half *__restrict__ q, const __half *__restrict__ k, const __half *__restrict__ v,
+    __half *__restrict__ o, double *__restrict__ ml,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_fwd_row<__half>(
+        q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, o_off, red);
+}
+
+extern "C" __global__ void attn_fwd_bf16(
+    const __nv_bfloat16 *__restrict__ q, const __nv_bfloat16 *__restrict__ k,
+    const __nv_bfloat16 *__restrict__ v, __nv_bfloat16 *__restrict__ o, double *__restrict__ ml,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_fwd_row<__nv_bfloat16>(
+        q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, o_off, red);
+}
+
+extern "C" __global__ void attn_delta_f16(
+    const __half *__restrict__ grad, const __half *__restrict__ o, double *__restrict__ delta,
+    int B, int Hq, int Sq, int D, long long g_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_delta_row<__half>(grad, o, delta, B, Hq, Sq, D, g_off, o_off, red);
+}
+
+extern "C" __global__ void attn_delta_bf16(
+    const __nv_bfloat16 *__restrict__ grad, const __nv_bfloat16 *__restrict__ o,
+    double *__restrict__ delta,
+    int B, int Hq, int Sq, int D, long long g_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_delta_row<__nv_bfloat16>(grad, o, delta, B, Hq, Sq, D, g_off, o_off, red);
+}
+
+extern "C" __global__ void attn_dq_f16(
+    const __half *__restrict__ q, const __half *__restrict__ k, const __half *__restrict__ v,
+    const __half *__restrict__ grad, const double *__restrict__ ml, const double *__restrict__ delta,
+    __half *__restrict__ dq,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long g_off, long long dq_off) {
+    extern __shared__ double red[];
+    attn_dq_row<__half>(
+        q, k, v, grad, ml, delta, dq, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, g_off, dq_off, red);
+}
+
+extern "C" __global__ void attn_dq_bf16(
+    const __nv_bfloat16 *__restrict__ q, const __nv_bfloat16 *__restrict__ k,
+    const __nv_bfloat16 *__restrict__ v, const __nv_bfloat16 *__restrict__ grad,
+    const double *__restrict__ ml, const double *__restrict__ delta,
+    __nv_bfloat16 *__restrict__ dq,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long g_off, long long dq_off) {
+    extern __shared__ double red[];
+    attn_dq_row<__nv_bfloat16>(
+        q, k, v, grad, ml, delta, dq, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, g_off, dq_off, red);
+}
+
+extern "C" __global__ void attn_dkv_f16(
+    const __half *__restrict__ q, const __half *__restrict__ k, const __half *__restrict__ v,
+    const __half *__restrict__ grad, const double *__restrict__ ml, const double *__restrict__ delta,
+    __half *__restrict__ dk, __half *__restrict__ dv,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long g_off,
+    long long dk_off, long long dv_off) {
+    extern __shared__ double red[];
+    attn_dkv_row<__half>(
+        q, k, v, grad, ml, delta, dk, dv, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, g_off, dk_off, dv_off, red);
+}
+
+extern "C" __global__ void attn_dkv_bf16(
+    const __nv_bfloat16 *__restrict__ q, const __nv_bfloat16 *__restrict__ k,
+    const __nv_bfloat16 *__restrict__ v, const __nv_bfloat16 *__restrict__ grad,
+    const double *__restrict__ ml, const double *__restrict__ delta,
+    __nv_bfloat16 *__restrict__ dk, __nv_bfloat16 *__restrict__ dv,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long g_off,
+    long long dk_off, long long dv_off) {
+    extern __shared__ double red[];
+    attn_dkv_row<__nv_bfloat16>(
         q, k, v, grad, ml, delta, dk, dv, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
         q_off, k_off, v_off, g_off, dk_off, dv_off, red);
 }

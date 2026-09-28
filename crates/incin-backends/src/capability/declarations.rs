@@ -407,7 +407,8 @@ macro_rules! cuda_descriptor_operations {
             // CUDA (issue #104): forward over query rows with GQA mapping
             // and causal masking, one tape entry whose backward recomputes
             // weights from stored per-row statistics - no score matrix, no
-            // atomics. f32/f64 over contiguous rank-4 operands.
+            // atomics. Every float storage dtype over contiguous rank-4
+            // (double accumulation, single rounding at store).
             fused_attention = [FusedAttention],            // Issue #87: `TopK` leaves `reduction` and the six Welford
             // `var`/`std` rows leave `composed_reduction` because both now
             // sit on f32-only kernels (`incin_cuda_topk`,

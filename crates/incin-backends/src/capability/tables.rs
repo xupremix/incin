@@ -203,9 +203,10 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     matmul = F32_ONLY,
     normalization_dtypes = F32_ONLY,
     embedding_dtypes = INDEX_AND_F32_DTYPES,
-    // Empty `fused_attention` group on CUDA; the dtype set rides along
-    // unused, per the file's convention for empty groups.
-    fused_attention_dtypes = F32_AND_F64,
+    // `fused_attention` on CUDA serves every float storage dtype: the
+    // kernels convert to double on load, accumulate there, and round once
+    // on store, so f16/bf16 ride the same entry points as f32/f64.
+    fused_attention_dtypes = FLOAT_DTYPES,
     // Same measured set as the `broadcast` row above, for the reason stated
     // there: the training path moves the same bytes.
     broadcast_training = CUDA_BOOL_SAFE_STORAGE_DTYPES,

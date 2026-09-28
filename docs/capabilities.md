@@ -89,7 +89,7 @@ run time.
 | `fmod` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `frac` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `full` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
-| `fused_attention` | `f32`, `f64` | `f32`, `f64` | — | — |
+| `fused_attention` | `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | — | — |
 | `gather` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` |
 | `gelu` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `group_norm` | `f32` | `f32` | `f32` | `f32` |
@@ -557,7 +557,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `batch_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `rms_norm` | `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `group_norm` | `f32` | `contiguous`, `strided` | 2+ | yes | native |
-| `fused_attention` | `f32`, `f64` | `contiguous` | 4+ | yes | native |
+| `fused_attention` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 4+ | yes | native |
 | `embedding` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | 1+ | yes | native |
 | `one_hot` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | any | yes | native |
 | `bincount` | `u8`, `u32`, `i64`, `f32` | `contiguous`, `strided` | any | yes | native |
