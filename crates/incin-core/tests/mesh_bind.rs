@@ -221,21 +221,17 @@ fn a_mesh_spanning_two_backend_families_is_rejected() {
     assert!(matches!(err, BindError::MixedBackendFamily { rank: 1, .. }));
 }
 
-/// Same family, different architecture - the case a family check alone misses.
+/// Same family, different architecture: binds fine. Architectures are
+/// recorded per rank (fingerprint, plan validation) but never refused:
+/// heterogeneous meshes run collectives over whatever transport the
+/// library negotiates, proven on sm_50+sm_75 hardware via SHM fallback.
 #[test]
-fn a_mesh_spanning_two_architectures_is_rejected() {
+fn a_mesh_spanning_two_architectures_binds() {
     let machine = FakeMachine::cuda(3).identify(2, DeviceId::cuda(2), "GPU-2", "sm_80");
 
-    let err = DeviceMesh::<MeshSpec<Data<U3>>>::bind(&ordinals(3), &machine).unwrap_err();
-
-    assert_eq!(
-        err,
-        BindError::MixedArchitecture {
-            expected: "sm_90".to_string(),
-            found: "sm_80".to_string(),
-            rank: 2,
-        }
-    );
+    let mesh = DeviceMesh::<MeshSpec<Data<U3>>>::bind(&ordinals(3), &machine)
+        .expect("mixed architectures must bind");
+    let _ = mesh;
 }
 
 /// §2.11 requires "agreement on rank/process/communicator identity". A

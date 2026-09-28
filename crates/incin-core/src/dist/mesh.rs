@@ -864,20 +864,6 @@ pub enum BindError {
         rank: usize,
     },
 
-    #[error("rank 0 is architecture {expected} but rank {rank} is {found}")]
-    /// The mesh spans more than one compute architecture.
-    ///
-    /// Same family, different capabilities: the ranks do not agree on which
-    /// kernels exist, and a collective is a place where they all have to.
-    MixedArchitecture {
-        /// The architecture rank 0 established.
-        expected: String,
-        /// The architecture this rank has.
-        found: String,
-        /// The first rank that disagreed.
-        rank: usize,
-    },
-
     #[error("process layout {layout} does not describe a {world}-rank mesh")]
     /// The launcher's idea of the world disagrees with the type's.
     UnsupportedProcessLayout {
@@ -967,21 +953,21 @@ impl<M: ValidMesh> DeviceMesh<M> {
                 });
             }
 
-            if let Some(head) = identities.first() {
-                if head.device.kind() != identity.device.kind() {
-                    return Err(BindError::MixedBackendFamily {
-                        expected: head.device.kind(),
-                        found: identity.device.kind(),
-                        rank,
-                    });
-                }
-                if head.architecture != identity.architecture {
-                    return Err(BindError::MixedArchitecture {
-                        expected: head.architecture.clone(),
-                        found: identity.architecture,
-                        rank,
-                    });
-                }
+            if let Some(head) = identities.first()
+                && head.device.kind() != identity.device.kind()
+            {
+                return Err(BindError::MixedBackendFamily {
+                    expected: head.device.kind(),
+                    found: identity.device.kind(),
+                    rank,
+                });
+                // Architectures are recorded per rank (fingerprint, plan
+                // validation) but never refused: heterogeneous meshes run
+                // collectives over whatever transport the library
+                // negotiates (SHM/PCIe fallback where P2P is absent),
+                // proven on sm_50+sm_75 hardware. Kernels are launched
+                // per-rank against each rank's own device, so a mixed
+                // pair needs no shared kernel set.
             }
 
             identities.push(identity);
