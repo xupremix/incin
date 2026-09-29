@@ -175,7 +175,7 @@ name = "galaxy_classifier"
 required-features = ["cpu"]
 
 [[example]]
-name = "fashion_live"
+name = "vision_live"
 required-features = ["cpu"]
 
 [[example]]

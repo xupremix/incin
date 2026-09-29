@@ -459,6 +459,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Tests: trybuild `compile_fail` 4/4, `quantized_tensor_ops` 10/10,
   `checkpoint_block_quant` 9/9, `quantize_ste` 6/6.
 
+- **`vision_live`: a live training dashboard over both ten-way vision
+  corpora.** One example, `--dataset fashion|cifar` (default `fashion`),
+  serving the training state per request on a loopback port: loss curve,
+  test accuracy and a gallery that names the classes instead of printing
+  indices. Both corpora are ten-way, so the model and the loop are the same
+  code; only geometry, class names and the training budget differ. The
+  shared shape is also what found a bug: Fashion-MNIST has one input
+  channel, which hid a classifier width that multiplied by the channel
+  count, so the first CIFAR-10 run failed with a typed `matmul: axis 'k'
+  mismatch: 1024 vs 3072` instead of training. CIFAR-10's tarball extracts
+  through `Cifar10Dataset::new` (the crate's own traversal-guarded
+  extractor) into `cifar-10-batches-bin`, giving 50000/10000 images, labels
+  0..9, and channel planes at offsets 0/1024/2048; the run prints all three
+  facts before it trains, because a dashboard is not evidence. Measured on
+  a 4-core CPU: Fashion-MNIST 6 epochs over 3000 images at Adam 1e-3, loss
+  2.1354 -> 0.8695 and accuracy 0.49 -> 0.72; CIFAR-10 8 epochs
+  over 4000 images at Adam 2e-3, about twenty minutes, loss 2.2615 ->
+  1.7837 and accuracy 0.16 -> 0.29 against 0.10 chance. The run refuses to
+  report PASS when the final accuracy does not beat chance. The CIFAR
+  number is capacity-bound rather than budget-bound, which three budgets
+  show: 1500 images for 6 epochs gives 0.26, 1500 for 12 gives 0.28-0.29,
+  and 4000 for 8 gives 0.29, all against the same 0.10 chance. Widening
+  this two-convolution network is the next step, not a longer schedule.
+
 ### Changed
 
 - **CUDA fused attention tiles the query axis above eight rows (#104).**
