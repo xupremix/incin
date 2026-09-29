@@ -40,8 +40,20 @@ of repeating a number that won't.
   kernel. Training with attention-weight dropout keeps the manual
   score/softmax chain on CPU because the fused row has no dropout
   operand. A typed [`KvCache`] handles incremental decode
-  (`MultiHeadAttention::forward_with_cache`); what remains for #104 is
-  block-sparse causal skipping and tensor-core tiling.
+  (`MultiHeadAttention::forward_with_cache`). Above eight query rows the
+  CUDA forward covers four of them per block, sharing one key/value load
+  and one block reduction per key, so global key/value streaming and the
+  reduction count both fall by four and a causal block stops at the last
+  row's key bound. What that is worth is measured, not assumed: on a
+  GTX 1650 SUPER (CC 7.5) a 1x4x512x4096x64 forward takes 0.449/0.451 ms
+  tiled against 0.473/0.478 ms one-row-per-block, about 5%, because the
+  kernel accumulates in `f64` to match the CPU twin and is bound by
+  double-precision arithmetic rather than by the traffic the tiling
+  removes. What remains for #104 is fine-grained
+  block-sparse causal skipping and tensor-core tiling - and the latter
+  needs a decision this framework has not made, because CC 7.5 tensor
+  cores have no `f64` path and the current parity guarantee rests on the
+  `f64` intermediate.
 
 [`KvCache`]: https://docs.rs/incin/latest/incin/nn/struct.KvCache.html
 

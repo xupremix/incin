@@ -108,7 +108,10 @@ pub(crate) fn geometry(
         });
     }
     // One thread per head-dim element: blockDim.x covers head_dim, so an
-    // absurd width is refused instead of truncating the row.
+    // absurd width is refused instead of truncating the row. The ceiling
+    // also bounds the tiled forward's reduction scratch at
+    // QBLOCK * 1024 * 8 = 32 KiB, inside the 48 KiB available without an
+    // opt-in carveout.
     if qs[3] > 1024 {
         return Err(Error::Backend(BackendError::InvalidInput {
             operation: OperationKind::FusedAttention,
@@ -173,6 +176,10 @@ fn attn_entry(family: &'static str, dtype: DTypeId) -> Result<&'static str> {
         ("attn_fwd", "f64") => "attn_fwd_f64",
         ("attn_fwd", "f16") => "attn_fwd_f16",
         ("attn_fwd", "bf16") => "attn_fwd_bf16",
+        ("attn_fwd_tiled", "f32") => "attn_fwd_tiled_f32",
+        ("attn_fwd_tiled", "f64") => "attn_fwd_tiled_f64",
+        ("attn_fwd_tiled", "f16") => "attn_fwd_tiled_f16",
+        ("attn_fwd_tiled", "bf16") => "attn_fwd_tiled_bf16",
         ("attn_delta", "f32") => "attn_delta_f32",
         ("attn_delta", "f64") => "attn_delta_f64",
         ("attn_delta", "f16") => "attn_delta_f16",
@@ -236,7 +243,35 @@ fn as_i64(value: usize, field: &'static str) -> Result<i64> {
     })
 }
 
-fn launch_config(rows: u64, head_dim: usize) -> Result<cudarc::driver::LaunchConfig> {
+/// Query rows per block in the tiled forward, mirroring `ATTN_QBLOCK` in
+/// `kernels/attention.cu`. The host has to know the tile size to size the
+/// grid and the kernel has to know it to decompose `blockIdx`, so the two
+/// definitions must stay in step; `cuda_fused_attention.rs` covers the
+/// tiled path against the CPU twin.
+const QBLOCK: usize = 4;
+
+/// Below this many query rows the forward stays on the one-row-per-block
+/// kernel. Tiling trades blocks for traffic, so a short sequence (and the
+/// `Sq == 1` decode step in particular) would lose more parallelism than
+/// it saves bytes.
+const QBLOCK_MIN_ROWS: usize = 2 * QBLOCK;
+
+/// True when the tiled forward is the right kernel for this geometry.
+///
+/// Only the sequence length decides it. The tiled reduction scratch is
+/// `QBLOCK * head_dim` doubles, which the `head_dim <= 1024` ceiling in
+/// `geometry` already bounds at 32 KiB - under the 48 KiB every CUDA
+/// architecture offers - so there is no launch that needs to fall back
+/// for shared memory.
+fn tiled_forward(seq_q: usize) -> bool {
+    seq_q >= QBLOCK_MIN_ROWS
+}
+
+fn launch_config(
+    rows: u64,
+    head_dim: usize,
+    scratch_rows: usize,
+) -> Result<cudarc::driver::LaunchConfig> {
     let grid =
         u32::try_from(rows).map_err(|_| incin_core::shapes::ShapeError::ArithmeticOverflow {
             operation: OperationKind::FusedAttention,
@@ -245,7 +280,8 @@ fn launch_config(rows: u64, head_dim: usize) -> Result<cudarc::driver::LaunchCon
     let block = checked_u32(head_dim, "attention head_dim")?;
     let shared = checked_u32(
         head_dim
-            .checked_mul(8)
+            .checked_mul(scratch_rows)
+            .and_then(|lanes| lanes.checked_mul(8))
             .ok_or(incin_core::shapes::ShapeError::ArithmeticOverflow {
                 operation: OperationKind::FusedAttention,
                 expression: "attention reduction scratch overflows u32",
@@ -274,7 +310,9 @@ pub(crate) fn launch_attention_forward(
     let device_id = q.buffer.device_id;
     ensure_attention_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let entry = attn_entry("attn_fwd", g.dtype)?;
+    let tiled = tiled_forward(g.seq_q);
+    let family = if tiled { "attn_fwd_tiled" } else { "attn_fwd" };
+    let entry = attn_entry(family, g.dtype)?;
     let function = dispatcher.get_function("attention", entry)?;
     let stream = q.buffer.device.default_stream();
 
@@ -309,7 +347,15 @@ pub(crate) fn launch_attention_forward(
             ),
         ));
     }
-    let config = launch_config(rows, g.head_dim)?;
+    // The tiled kernel covers QBLOCK query rows per block, so the grid is
+    // the per-head tile count rounded up, not the row count.
+    let tiles = if tiled {
+        g.seq_q.div_ceil(QBLOCK)
+    } else {
+        g.seq_q
+    };
+    let blocks = (g.batch as u64) * (g.heads_q as u64) * (tiles as u64);
+    let config = launch_config(blocks, g.head_dim, if tiled { QBLOCK } else { 1 })?;
     let (b, hq, hkv, sq, skv, d) = (
         checked_i32(g.batch, "batch")?,
         checked_i32(g.heads_q, "query heads")?,
@@ -417,7 +463,7 @@ pub(crate) fn launch_attention_delta(grad: &CudaStorage, out: &CudaStorage) -> R
             alloc::vec![b, hq, sq],
         ));
     }
-    let config = launch_config(rows, d)?;
+    let config = launch_config(rows, d, 1)?;
     let (b32, hq32, sq32, d32) = (
         checked_i32(b, "batch")?,
         checked_i32(hq, "query heads")?,
@@ -490,7 +536,7 @@ pub(crate) fn launch_attention_dq(
             alloc::vec![g.batch, g.heads_q, g.seq_q, g.head_dim],
         ));
     }
-    let config = launch_config(rows, g.head_dim)?;
+    let config = launch_config(rows, g.head_dim, 1)?;
     let (b, hq, hkv, sq, skv, d) = (
         checked_i32(g.batch, "batch")?,
         checked_i32(g.heads_q, "query heads")?,
@@ -599,7 +645,7 @@ pub(crate) fn launch_attention_dkv(
             ),
         ));
     }
-    let config = launch_config(rows, g.head_dim)?;
+    let config = launch_config(rows, g.head_dim, 1)?;
     let (b, hq, hkv, sq, skv, d) = (
         checked_i32(g.batch, "batch")?,
         checked_i32(g.heads_q, "query heads")?,

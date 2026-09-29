@@ -409,7 +409,7 @@ fn fused_forward_f16_bf16_match_f32_within_half_tolerance() {
         } else {
             run_half::<bf16>(&context, &q, &k, &v)
         };
-        let (out, recorded) = (out.0.expect("half fused attention must execute"), out.1);
+        let (out, _recorded) = (out.0.expect("half fused attention must execute"), out.1);
         assert_eq!(
             tape_depth() - before,
             1,
@@ -474,6 +474,272 @@ fn fused_forward_f16_bf16_match_f32_within_half_tolerance() {
         }
     }
 }
+/// Deterministic pseudo-random values in `[-1, 1)`: the parity geometries
+/// below are too large to hand-write, and a fixed LCG keeps the CPU twin
+/// and the GPU run on identical inputs.
+fn lcg(seed: u64, n: usize) -> Vec<f32> {
+    let mut state = seed;
+    (0..n)
+        .map(|_| {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((state >> 33) as f32 / 2147483648.0) - 1.0
+        })
+        .collect()
+}
+
+/// Query lengths that exercise the tiled forward: an exact multiple of the
+/// tile, a ragged tail of 2 live rows, a ragged tail of 1, and the
+/// smallest length the launcher is allowed to tile.
+const TILED_SEQ_Q: [usize; 4] = [8, 10, 9, 8];
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn tiled_forward_matches_the_cpu_kernel_across_tile_tails() {
+    require_cuda();
+    // B=2, Hq=4 over Hkv=2 (GQA), D=8. Every listed query length is at
+    // least two tiles, so the launcher must pick the tiled kernel; the
+    // ragged ones (10 -> 2+2+... tiles of 4, 9 -> 4+4+1) are the cases a
+    // tile decomposition gets wrong.
+    let (b, hq, hkv, d) = (2usize, 4usize, 2usize, 8usize);
+    for &sq in &TILED_SEQ_Q {
+        let skv = sq;
+        let attributes = FusedAttentionAttributes {
+            scale: None,
+            causal: true,
+        };
+        let qv = lcg(0x51ed_0000 + sq as u64, b * hq * sq * d);
+        let kv = lcg(0x51ed_1000 + sq as u64, b * hkv * skv * d);
+        let vv = lcg(0x51ed_2000 + sq as u64, b * hkv * skv * d);
+        let context = ExecutionContext::new(TestBackend::new());
+        let q = upload_f32_shaped(&[b, hq, sq, d], &qv);
+        let k = upload_f32_shaped(&[b, hkv, skv, d], &kv);
+        let v = upload_f32_shaped(&[b, hkv, skv, d], &vv);
+        let (out, recorded) = run_fused(&context, &q, &k, &v, attributes);
+        assert_eq!(recorded, 1, "tiled fused attention records one tape entry");
+        assert_eq!(out.shape, vec![b, hq, sq, d]);
+        #[cfg(feature = "cpu")]
+        {
+            let want = cpu_fused(
+                &[b, hq, sq, d],
+                &qv,
+                &[b, hkv, skv, d],
+                &kv,
+                &vv,
+                FusedAttentionAttributes {
+                    scale: None,
+                    causal: true,
+                },
+            );
+            assert_close(
+                &read_f32(&out),
+                &want,
+                1e-4,
+                &format!("tiled causal forward sq={sq}"),
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn tiled_forward_decode_geometry_matches_the_cpu_kernel() {
+    require_cuda();
+    // A short prefill over a longer cached prefix: Skv > Sq, so
+    // kv_lead = Skv - Sq > 0 and every query row sees keys past itself.
+    // Tiled, because the query length is.
+    let (b, hq, hkv, sq, skv, d) = (1usize, 2usize, 2usize, 8usize, 20usize, 4usize);
+    let attributes = FusedAttentionAttributes {
+        scale: Some(0.25),
+        causal: true,
+    };
+    let qv = lcg(0xdec0_de01, b * hq * sq * d);
+    let kv = lcg(0xdec0_de02, b * hkv * skv * d);
+    let vv = lcg(0xdec0_de03, b * hkv * skv * d);
+    let context = ExecutionContext::new(TestBackend::new());
+    let q = upload_f32_shaped(&[b, hq, sq, d], &qv);
+    let k = upload_f32_shaped(&[b, hkv, skv, d], &kv);
+    let v = upload_f32_shaped(&[b, hkv, skv, d], &vv);
+    let (out, _) = run_fused(&context, &q, &k, &v, attributes);
+    assert_eq!(out.shape, vec![b, hq, sq, d]);
+    #[cfg(feature = "cpu")]
+    {
+        let want = cpu_fused(
+            &[b, hq, sq, d],
+            &qv,
+            &[b, hkv, skv, d],
+            &kv,
+            &vv,
+            FusedAttentionAttributes {
+                scale: Some(0.25),
+                causal: true,
+            },
+        );
+        assert_close(&read_f32(&out), &want, 1e-4, "tiled prefill with kv_lead");
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn tiled_backward_matches_the_cpu_twin() {
+    require_cuda();
+    // Same tiled geometry, gradients included: the forward tiling must not
+    // change the statistics the recompute backward reads back.
+    let (b, hq, hkv, sq, skv, d) = (2usize, 4usize, 2usize, 10usize, 10usize, 8usize);
+    let attributes = FusedAttentionAttributes {
+        scale: None,
+        causal: true,
+    };
+    let qv = lcg(0xba5e_0001, b * hq * sq * d);
+    let kv = lcg(0xba5e_0002, b * hkv * skv * d);
+    let vv = lcg(0xba5e_0003, b * hkv * skv * d);
+    let context = ExecutionContext::new(TestBackend::new());
+    let q = upload_f32_shaped(&[b, hq, sq, d], &qv);
+    let k = upload_f32_shaped(&[b, hkv, skv, d], &kv);
+    let v = upload_f32_shaped(&[b, hkv, skv, d], &vv);
+    let (q_id, k_id, v_id) = (
+        TapeStorage::id(&q),
+        TapeStorage::id(&k),
+        TapeStorage::id(&v),
+    );
+    let (out, _) = run_fused(&context, &q, &k, &v, attributes);
+    let loss = dispatch::execute::<op::SumAll, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(&out)],
+    )
+    .expect("sum_all executes");
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("backward runs");
+    #[cfg(feature = "cpu")]
+    {
+        let hq_in = <Cpu as HostInterop>::from_bytes::<f32>(
+            bytemuck::cast_slice(&qv),
+            &[b, hq, sq, d],
+            DTypeId::F32.descriptor(),
+            &incin_core::tensor::device::DeviceId::cpu(),
+        )
+        .unwrap();
+        let hk_in = <Cpu as HostInterop>::from_bytes::<f32>(
+            bytemuck::cast_slice(&kv),
+            &[b, hkv, skv, d],
+            DTypeId::F32.descriptor(),
+            &incin_core::tensor::device::DeviceId::cpu(),
+        )
+        .unwrap();
+        let hv_in = <Cpu as HostInterop>::from_bytes::<f32>(
+            bytemuck::cast_slice(&vv),
+            &[b, hkv, skv, d],
+            DTypeId::F32.descriptor(),
+            &incin_core::tensor::device::DeviceId::cpu(),
+        )
+        .unwrap();
+        let (hq_id, hk_id, hv_id) = (
+            TapeStorage::id(&hq_in),
+            TapeStorage::id(&hk_in),
+            TapeStorage::id(&hv_in),
+        );
+        let context = ExecutionContext::new(Cpu::new());
+        let hout = dispatch::execute::<op::FusedAttention, Cpu>(
+            &context,
+            FusedAttentionAttributes {
+                scale: None,
+                causal: true,
+            },
+            &[
+                TensorHandle::from_storage::<Cpu, f32, _>(&hq_in),
+                TensorHandle::from_storage::<Cpu, f32, _>(&hk_in),
+                TensorHandle::from_storage::<Cpu, f32, _>(&hv_in),
+            ],
+        )
+        .expect("CPU reference tiled fused attention executes");
+        let hloss = dispatch::execute::<op::SumAll, _>(
+            &context,
+            incin_core::exec::catalog::NoAttributes,
+            &[TensorHandle::from_storage::<Cpu, f32, _>(&hout)],
+        )
+        .expect("CPU sum_all executes");
+        let hgrads = <Cpu as AutogradBackend>::backward::<f32>(&hloss).expect("CPU backward runs");
+        assert_close(
+            &read_f32(grads.get(q_id).expect("query receives a gradient")),
+            &cpu_read_f32(hgrads.get(hq_id).unwrap()),
+            1e-4,
+            "tiled dq",
+        );
+        assert_close(
+            &read_f32(grads.get(k_id).expect("key receives a gradient")),
+            &cpu_read_f32(hgrads.get(hk_id).unwrap()),
+            1e-4,
+            "tiled dk",
+        );
+        assert_close(
+            &read_f32(grads.get(v_id).expect("value receives a gradient")),
+            &cpu_read_f32(hgrads.get(hv_id).unwrap()),
+            1e-4,
+            "tiled dv",
+        );
+    }
+}
+
+/// Wall-clock for the forward at transformer-shaped geometries, tiled.
+/// Prints rather than asserts: the useful question is how the tiled
+/// kernel compares with the one-row-per-block kernel at the same
+/// geometry, and a threshold in a test would only encode this machine's
+/// clocks. The `wide` row is the interesting one - its key/value working
+/// set is larger than L2, so the 4x cut in streamed bytes shows up; the
+/// `square` row is small enough to sit in cache, where it cannot.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn tiled_forward_timing_across_geometries() {
+    require_cuda();
+    const REPEATS: u32 = 20;
+    let attributes = FusedAttentionAttributes {
+        scale: None,
+        causal: false,
+    };
+    for (label, (b, hq, sq, skv, d)) in [
+        ("square", (1usize, 8usize, 256usize, 256usize, 64usize)),
+        ("wide", (1usize, 4usize, 512usize, 4096usize, 64usize)),
+    ] {
+        let qv = lcg(0x71_0001, b * hq * sq * d);
+        let kv = lcg(0x71_0002, b * hq * skv * d);
+        let vv = lcg(0x71_0003, b * hq * skv * d);
+        let context = ExecutionContext::new(TestBackend::new());
+        let q = upload_f32_shaped(&[b, hq, sq, d], &qv);
+        let k = upload_f32_shaped(&[b, hq, skv, d], &kv);
+        let v = upload_f32_shaped(&[b, hq, skv, d], &vv);
+        // Warm up: module load, JIT, and the first allocation are not the
+        // steady state being measured.
+        let (out, _) = run_fused(&context, &q, &k, &v, attributes.clone());
+        assert_eq!(out.shape, vec![b, hq, sq, d]);
+        std::hint::black_box(download_bytes(&out));
+        let start = std::time::Instant::now();
+        for _ in 0..REPEATS {
+            let (out, _) = run_fused(&context, &q, &k, &v, attributes.clone());
+            std::hint::black_box(out);
+        }
+        // The readback is on the same stream, so it is also the sync point.
+        let last = run_fused(&context, &q, &k, &v, attributes.clone()).0;
+        std::hint::black_box(download_bytes(&last));
+        let elapsed = start.elapsed();
+        let per_iter = elapsed.as_secs_f64() / f64::from(REPEATS);
+        // Every key row is D floats, streamed once per query row without
+        // tiling and once per query *block* with it.
+        let row_bytes = (b * hq * skv * d * std::mem::size_of::<f32>()) as f64;
+        println!(
+            "{label} forward B={b} Hq={hq} Sq={sq} Skv={skv} D={d}: {per_iter:.3} ms/iter \
+             ({REPEATS} iters in {:.3} s); K+V bytes per query row {row_bytes:.0}, \
+             per query tile {:.0}",
+            elapsed.as_secs_f64(),
+            row_bytes / 4.0,
+        );
+        assert!(
+            per_iter.is_finite() && per_iter > 0.0,
+            "a timing run must produce a positive duration, got {per_iter}"
+        );
+    }
+}
+
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn fused_backward_matches_the_cpu_twin() {

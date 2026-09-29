@@ -20,9 +20,19 @@
 // straight-line over the key index with the causal test on `j` only -
 // never an `if (d == axis)`-style loop-carried conditional (see
 // repeat_interleave's NVVM range-split note).
+//
+// Above a small sequence length the forward also runs the tiled variant
+// below (`ATTN_QBLOCK` query rows per block), which is where the
+// remaining global-memory traffic went. Same arithmetic in the same
+// order: only the K/V loads are shared.
 
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
+
+// Query rows per block in the tiled forward. Each thread keeps this many
+// (q, m, l, acc) tuples in registers and streams the key/value rows once
+// for all of them, so global K/V traffic drops by this factor.
+#define ATTN_QBLOCK 4
 
 // Load/store arithmetic per storage dtype: everything substantial runs
 // in double, conversions happen once at the buffer edge.
@@ -67,6 +77,41 @@ __device__ double block_reduce_sum(double val, double *red) {
         __syncthreads();
     }
     return red[0];
+}
+
+// The same reduction for `QB` independent values at once: one tree walk,
+// `log2(n)` barriers, instead of `QB` walks. `red` is `QB * blockDim.x`
+// doubles, one slice per value. This is what makes a query tile pay off -
+// sharing the key/value loads alone leaves the barrier count (and so the
+// time) flat, because a block-wide reduction per key is what the kernel
+// actually spends its cycles on.
+//
+// The leading barrier is load-bearing: every thread reads the previous
+// call's totals out of `red` after that call's final barrier, so without
+// it a thread that races ahead could overwrite `red[0]` before a slower
+// peer has read it. (`block_reduce_sum`, above, has that latent race; it
+// is left as it is because the one-row kernel's barrier count is its
+// decode-path cost.)
+template <int QB>
+__device__ void block_reduce_sum_q(double (&val)[QB], double *red) {
+    int tid = threadIdx.x;
+    int n = blockDim.x;
+    __syncthreads();
+    for (int r = 0; r < QB; r++) {
+        red[r * n + tid] = val[r];
+    }
+    __syncthreads();
+    for (int s = (n + 1) / 2; s > 0; s >>= 1) {
+        if (tid < s && tid + s < n) {
+            for (int r = 0; r < QB; r++) {
+                red[r * n + tid] += red[r * n + tid + s];
+            }
+        }
+        __syncthreads();
+    }
+    for (int r = 0; r < QB; r++) {
+        val[r] = red[r * n];
+    }
 }
 
 template <typename T>
@@ -135,6 +180,126 @@ __device__ void attn_fwd_row(
         o[o_row + tid] = AttnArit<T>::store(acc / l);
         ml[2 * row] = m;
         ml[2 * row + 1] = l;
+    }
+}
+
+// Tiled forward: one block per `QB` query rows of one (b, hq) head, so
+// the key/value row a thread loads for key `j` is reused by every query
+// row in the block and global K/V traffic falls by `QB`. The tile lives
+// in a register, not shared memory: `blockDim.x` already spans the whole
+// head dim, so one element per key per thread is the entire tile.
+//
+// The arithmetic is unchanged and, with one exception below, so is its
+// order: a query row still sees keys 0..min(Skv-1, i + kv_lead) in
+// ascending order through the same online-softmax recurrence, so the
+// output is bit-identical to `attn_fwd_row`. The exception is that a
+// causal block now walks keys up to the *last* row's bound and masks the
+// rows below it. A masked key is excluded from its row's dot product and
+// then given a score of -1e300, which leaves `m` untouched (the running
+// max is always at least a real score once key 0 is reached, and key 0 is
+// never masked), contributes `exp(-1e300 - m) == 0.0` to `l`, and
+// contributes `0.0 * v` to `acc` - so it is arithmetically inert rather
+// than skipped.
+//
+// The j loop is straight-line and its bound is computed before the loop
+// from the block's last query row, which also skips the fully-masked tail
+// of a causal block (block-sparse causal skipping, coarsely).
+template <typename T, int QB>
+__device__ void attn_fwd_qblock(
+    const T *__restrict__ q,
+    const T *__restrict__ k,
+    const T *__restrict__ v,
+    T *__restrict__ o,
+    double *__restrict__ ml,
+    int B,
+    int Hq,
+    int Hkv,
+    int Sq,
+    int Skv,
+    int D,
+    int groups,
+    int kv_lead,
+    double scale,
+    int causal,
+    long long q_off,
+    long long k_off,
+    long long v_off,
+    long long o_off,
+    double *red) {
+    int tid = threadIdx.x;
+    if (tid >= D) {
+        return;
+    }
+    // blockIdx enumerates (b, hq, tile) - decomposed against the *tiled*
+    // row count so a sequence length that is not a multiple of QB still
+    // maps to the right tile.
+    int tiles = (Sq + QB - 1) / QB;
+    long long block = (long long)blockIdx.x;
+    int tmp = (int)(block / tiles);
+    int i0 = (int)(block - (long long)tmp * tiles) * QB;
+    int hq = tmp % Hq;
+    int b = tmp / Hq;
+    int hkv = hq / groups;
+
+    // Ragged last tile: rows past Sq contribute nothing and are not stored.
+    int live = Sq - i0;
+    if (live > QB) {
+        live = QB;
+    }
+    long long head_q = ((long long)b * Hq + hq) * Sq;
+    long long head_kv = ((long long)b * Hkv + hkv) * Skv;
+
+    double qd[QB], m[QB], l[QB], acc[QB];
+    for (int r = 0; r < QB; r++) {
+        m[r] = -1e300;
+        l[r] = 0.0;
+        acc[r] = 0.0;
+        qd[r] = (r < live) ? AttnArit<T>::load(q[q_off + (head_q + i0 + r) * D + tid])
+                           : 0.0;
+    }
+
+    int j_hi = Skv - 1;
+    if (causal && i0 + live - 1 + kv_lead < j_hi) {
+        j_hi = i0 + live - 1 + kv_lead;
+    }
+    for (int j = 0; j <= j_hi; j++) {
+        // One global load per (block, key): every query row in the block
+        // reuses both values from registers.
+        long long kv_row = (head_kv + j) * D;
+        double kd = AttnArit<T>::load(k[k_off + kv_row + tid]);
+        double vd = AttnArit<T>::load(v[v_off + kv_row + tid]);
+        // Causal rows below this key contribute nothing to their own dot,
+        // so they contribute nothing to the shared reduction either; the
+        // running maximum then leaves them untouched below.
+        double scores[QB];
+        for (int r = 0; r < QB; r++) {
+            scores[r] = (causal && j > i0 + r + kv_lead) ? 0.0 : qd[r] * kd;
+        }
+        block_reduce_sum_q<QB>(scores, red);
+        for (int r = 0; r < QB; r++) {
+            double s = (causal && j > i0 + r + kv_lead) ? -1e300 : scale * scores[r];
+            double m_new = m[r] > s ? m[r] : s;
+            double w_old = exp(m[r] - m_new);
+            double w_new = exp(s - m_new);
+            l[r] = l[r] * w_old + w_new;
+            acc[r] = acc[r] * w_old + w_new * vd;
+            m[r] = m_new;
+        }
+    }
+    for (int r = 0; r < QB; r++) {
+        if (r >= live) {
+            break;
+        }
+        long long row = head_q + i0 + r;
+        if (l[r] == 0.0) {
+            o[o_off + row * D + tid] = AttnArit<T>::store(0.0);
+            ml[2 * row] = -1e300;
+            ml[2 * row + 1] = 0.0;
+        } else {
+            o[o_off + row * D + tid] = AttnArit<T>::store(acc[r] / l[r]);
+            ml[2 * row] = m[r];
+            ml[2 * row + 1] = l[r];
+        }
     }
 }
 
@@ -351,6 +516,30 @@ extern "C" __global__ void attn_fwd_f64(
         q_off, k_off, v_off, o_off, red);
 }
 
+extern "C" __global__ void attn_fwd_tiled_f32(
+    const float *__restrict__ q, const float *__restrict__ k, const float *__restrict__ v,
+    float *__restrict__ o, double *__restrict__ ml,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_fwd_qblock<float, ATTN_QBLOCK>(
+        q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, o_off, red);
+}
+
+extern "C" __global__ void attn_fwd_tiled_f64(
+    const double *__restrict__ q, const double *__restrict__ k, const double *__restrict__ v,
+    double *__restrict__ o, double *__restrict__ ml,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_fwd_qblock<double, ATTN_QBLOCK>(
+        q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, o_off, red);
+}
+
 extern "C" __global__ void attn_delta_f32(
     const float *__restrict__ grad, const float *__restrict__ o, double *__restrict__ delta,
     int B, int Hq, int Sq, int D, long long g_off, long long o_off) {
@@ -442,6 +631,30 @@ extern "C" __global__ void attn_fwd_bf16(
     long long q_off, long long k_off, long long v_off, long long o_off) {
     extern __shared__ double red[];
     attn_fwd_row<__nv_bfloat16>(
+        q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, o_off, red);
+}
+
+extern "C" __global__ void attn_fwd_tiled_f16(
+    const __half *__restrict__ q, const __half *__restrict__ k, const __half *__restrict__ v,
+    __half *__restrict__ o, double *__restrict__ ml,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_fwd_qblock<__half, ATTN_QBLOCK>(
+        q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
+        q_off, k_off, v_off, o_off, red);
+}
+
+extern "C" __global__ void attn_fwd_tiled_bf16(
+    const __nv_bfloat16 *__restrict__ q, const __nv_bfloat16 *__restrict__ k,
+    const __nv_bfloat16 *__restrict__ v, __nv_bfloat16 *__restrict__ o, double *__restrict__ ml,
+    int B, int Hq, int Hkv, int Sq, int Skv, int D, int groups,
+    int kv_lead, double scale, int causal,
+    long long q_off, long long k_off, long long v_off, long long o_off) {
+    extern __shared__ double red[];
+    attn_fwd_qblock<__nv_bfloat16, ATTN_QBLOCK>(
         q, k, v, o, ml, B, Hq, Hkv, Sq, Skv, D, groups, kv_lead, scale, causal,
         q_off, k_off, v_off, o_off, red);
 }

@@ -461,6 +461,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **CUDA fused attention tiles the query axis above eight rows (#104).**
+  The forward gained a second entry family, `attn_fwd_tiled_*`, covering
+  `ATTN_QBLOCK = 4` query rows per block: one key/value load per (block,
+  key) instead of per (query row, key), and one block-wide reduction tree
+  for all four rows' scores instead of four of them
+  (`block_reduce_sum_q`). Global key/value streaming and the reduction
+  count both fall by four, and a causal block stops at its last row's key
+  bound, which is coarse block-sparse skipping. The arithmetic and its
+  order are unchanged - a masked key is excluded from its own row's dot
+  and then given a score of `-1e300`, which is arithmetically inert
+  rather than skipped - so the output is bit-identical to the one-row
+  kernel and the `1e-4`/`1e-9`/`1e-2` parity tolerances are untouched.
+  Short sequences, including the `Sq == 1` decode step, stay on the
+  one-row kernel: tiling trades blocks for traffic, and the tiled
+  reduction scratch (`QBLOCK * head_dim` doubles) degrades to it above
+  48 KiB rather than asking for a carveout. `ATTN_QBLOCK` in the `.cu`
+  and `QBLOCK` in the launcher are the same number written twice, since
+  the host has to size the grid and the kernel has to decompose
+  `blockIdx`. Measured on a GTX 1650 SUPER (CC 7.5), two runs of 20
+  iterations each: a 1x4x512x4096x64 forward takes 0.473 and 0.478 ms
+  one-row-per-block against 0.449 and 0.451 ms tiled (about 5%), and a
+  cache-resident 1x8x256x256x64 forward 0.032/0.029 ms against
+  0.029/0.030 ms, which is inside run-to-run noise. The traffic and
+  reduction cuts are real and the wall clock barely moves, because the
+  kernel accumulates in `f64` to match the CPU twin and is bound by
+  double-precision arithmetic on a consumer part. That is
+  also why the tensor-core path stays unstarted: CC 7.5 tensor cores have
+  no `f64` accumulate, so it is a contract decision, not a kernel one.
+  `block_reduce_sum` (the one-row reduction) has a latent read-after-write
+  race on `red[0]` between the final barrier and the next call's first
+  store; it is left alone because its barrier count is the decode path's
+  cost, and the new multi-value reduction carries a leading barrier that
+  does not. Tests: `cuda_fused_attention` hardware set 10/10, four of them
+  new (tile tails 8/10/9/8, a `kv_lead` prefill, a tiled backward, and a
+  two-geometry timing print).
+
 - **`transpose` materialises on every backend and states `RowMajor` (#113).**
   The split brain is settled: CPU's `TransposeExact` used to return a view
   where CUDA returned a copy, so no type could honestly describe the result.
