@@ -489,10 +489,11 @@ fn lcg(seed: u64, n: usize) -> Vec<f32> {
         .collect()
 }
 
-/// Query lengths that exercise the tiled forward: an exact multiple of the
-/// tile, a ragged tail of 2 live rows, a ragged tail of 1, and the
-/// smallest length the launcher is allowed to tile.
-const TILED_SEQ_Q: [usize; 4] = [8, 10, 9, 8];
+/// Query lengths that exercise the tiled forward: the smallest length the
+/// launcher is allowed to tile, two ragged tails (1 and 2 live rows in
+/// the last tile), and a longer exact multiple so more than three tiles
+/// are in flight.
+const TILED_SEQ_Q: [usize; 4] = [8, 9, 10, 32];
 
 #[test]
 #[ignore = "requires CUDA hardware"]
@@ -500,8 +501,8 @@ fn tiled_forward_matches_the_cpu_kernel_across_tile_tails() {
     require_cuda();
     // B=2, Hq=4 over Hkv=2 (GQA), D=8. Every listed query length is at
     // least two tiles, so the launcher must pick the tiled kernel; the
-    // ragged ones (10 -> 2+2+... tiles of 4, 9 -> 4+4+1) are the cases a
-    // tile decomposition gets wrong.
+    // ragged ones (9 -> 4+4+1, 10 -> 4+4+2) are the cases a tile
+    // decomposition gets wrong.
     let (b, hq, hkv, d) = (2usize, 4usize, 2usize, 8usize);
     for &sq in &TILED_SEQ_Q {
         let skv = sq;
@@ -544,7 +545,7 @@ fn tiled_forward_matches_the_cpu_kernel_across_tile_tails() {
 
 #[test]
 #[ignore = "requires CUDA hardware"]
-fn tiled_forward_decode_geometry_matches_the_cpu_kernel() {
+fn tiled_forward_prefill_over_cache_matches_the_cpu_kernel() {
     require_cuda();
     // A short prefill over a longer cached prefix: Skv > Sq, so
     // kv_lead = Skv - Sq > 0 and every query row sees keys past itself.
