@@ -175,6 +175,10 @@ name = "galaxy_classifier"
 required-features = ["cpu"]
 
 [[example]]
+name = "fashion_live"
+required-features = ["cpu"]
+
+[[example]]
 name = "custom_dtype_walkthrough"
 required-features = ["cpu"]
 [[example]]
