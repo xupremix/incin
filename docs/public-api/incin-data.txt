@@ -82,6 +82,7 @@ pub fn incin_data::dataset::Dataset::is_empty(&self) -> bool
 pub fn incin_data::dataset::Dataset::len(&self) -> usize
 pub fn incin_data::downloader::Downloader::download(&str, &std::path::Path, &str) -> incin_core::err::Result<std::path::PathBuf>
 pub fn incin_data::downloader::Downloader::download_and_extract_gz(&str, &std::path::Path, &str) -> incin_core::err::Result<std::path::PathBuf>
+pub fn incin_data::downloader::Downloader::download_and_extract_tar_gz(&str, &std::path::Path, &str, &str) -> incin_core::err::Result<std::path::PathBuf>
 pub fn incin_data::loader::Collate::collate(&self, alloc::vec::Vec<T>) -> incin_data::loader::BatchResult<Self::Output>
 pub fn incin_data::loader::DataLoader<D, C>::builder_with_collate(D, C) -> incin_data::loader::DataLoaderBuilder<D, C>
 pub fn incin_data::loader::DataLoader<D, C>::epoch_batches(&mut self, u64) -> incin_data::loader::EpochBatches<incin_data::loader::DataLoaderIter<<C as incin_data::loader::Collate>::Output>>
