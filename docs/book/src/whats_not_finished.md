@@ -98,6 +98,17 @@ of repeating a number that won't.
   convolutions, which is what sets the model sizes and epoch counts any
   example can afford. A default-build conv2d on a blocked GEMM is the
   remaining step, and it is a kernel change rather than a feature flag.
+- **A module parameter's gradient has no public read path.** `Gradients`
+  is keyed by a storage identity, and the only way to name one from user
+  code is to hold the `Tensor` you built it from - which is fine for an
+  input you created, and impossible for a `Param` inside a `seq![]` chain,
+  since `Param::as_tensor` is reachable but the type it returns is not the
+  layout the gradient API is declared against and there is no mapping from
+  a `StatePath` to a storage. So a model's parameters cannot be checked
+  against a numeric derivative, only its inputs and hand-built weights.
+  `gradcheck_model` works around this by checking gradients of `Tensor`
+  operations, and says so in its own docs. Closing it means either a
+  layout-agnostic gradient read, or a `StatePath -> Tensor` accessor.
 - **Scoped gradient policy** is intentionally explicit through
   `incin_core::exec::GradMode::Disabled.scope` and has no facade alias.
 - **The lower-level `save_safetensors`/`load_safetensors` helpers** remain

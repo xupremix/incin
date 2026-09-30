@@ -93,6 +93,40 @@ pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
 ///
 /// Formula: `((t - rm) / sqrt(rv + eps)) * weight + bias`, all broadcast.
 #[allow(clippy::extra_unused_type_parameters)]
+/// Expands a per-channel parameter `[C]` to `bcast_shape` along a path the
+/// tape can walk back.
+///
+/// Two steps, both recorded, and both necessary:
+///
+/// * `broadcast_as` expands axes within a rank, so `[C]` has to become
+///   `[1, C, 1, ..., 1]` first. `reshape` is its own inverse, which is the
+///   right rule for that step - nothing is being summed.
+/// * `broadcast_as` then fills in the batch and spatial axes, and *its*
+///   inverse is `unbroadcast`, the sum over the axes it expanded. That is
+///   what turns the `[B, C, H, W]` gradient into the per-channel sum a
+///   `[C]` parameter needs.
+///
+/// The defect this replaced: both call sites used the inherent
+/// `CpuStorage::reshape`, which records no node at all. The parameter was
+/// therefore not reachable from the graph, so `backward` produced no
+/// gradient for it - and no error either, since a missing gradient is only
+/// visible to something that asks for one. The affine scale and shift of
+/// every batch norm on this backend stayed at their initialization.
+fn bcast_param(s: &CpuStorage, channel_dim: usize, bcast_shape: &[usize]) -> Result<CpuStorage> {
+    if s.shape.dims() == bcast_shape {
+        return Ok(s.clone());
+    }
+    let mut middle = alloc::vec![1usize; bcast_shape.len()];
+    middle[channel_dim] = s.shape[0];
+    let middle = crate::cpu::ops::shape_ops::reshape_storage(s, &middle)?;
+    crate::cpu::ops::shape_ops::broadcast_as_storage(&middle, bcast_shape)
+}
+
+/// The device and dtype parameters are part of this kernel family's shape and
+/// are unused here, exactly as in `batch_norm_training_impl` below; the
+/// attribute is on the function rather than the lint so the reason travels
+/// with it.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
@@ -118,10 +152,15 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
         CpuStorage::from_contiguous(CpuBuffer::F32(vec![fill; n]), bcast_shape.clone())
     };
 
-    // Reshape a provided storage to bcast_shape (it arrives as a flat [C] vector).
-    // CpuStorage::reshape is the inherent method (not tape-tracked here -
-    // these are treated as fixed parameters, not differentiated inputs).
+    // The running statistics arrive as a flat [C] vector and are fixed
+    // parameters, not differentiated inputs, so the inherent reshape is the
+    // right tool for them: it records nothing, and nothing wants recording.
     let reshape_to_bcast = |s: &CpuStorage| -> Result<CpuStorage> { s.reshape(&bcast_shape) };
+
+    // `weight` and `bias` are `Param`s and *are* differentiated, so they go
+    // through the tape-tracked path. See `bcast_param`.
+    let broadcast_to_bcast =
+        |s: &CpuStorage| -> Result<CpuStorage> { bcast_param(s, channel_dim, &bcast_shape) };
 
     let rm_s;
     let rm_ref: CpuStorage = match rm {
@@ -144,7 +183,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     let w_s;
     let w_ref: CpuStorage = match w {
         Some(s) => {
-            w_s = reshape_to_bcast(s)?;
+            w_s = broadcast_to_bcast(s)?;
             w_s
         }
         None => make_buf(1.0),
@@ -153,7 +192,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     let b_s;
     let b_ref: CpuStorage = match b {
         Some(s) => {
-            b_s = reshape_to_bcast(s)?;
+            b_s = broadcast_to_bcast(s)?;
             b_s
         }
         None => make_buf(0.0),
@@ -244,16 +283,19 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::tensor::device::Device, K:
     let std = crate::cpu::ops::elementwise::canonical_sqrt(&variance_eps)?;
     let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
 
+    // The affine scale and shift are differentiated, so they take the
+    // tape-tracked expansion. See `bcast_param` for what was wrong with the
+    // inherent reshape that used to stand here.
     let scaled = match w {
         Some(weight) => {
-            let weight = weight.reshape(&bcast_shape)?;
+            let weight = bcast_param(weight, channel_dim, &bcast_shape)?;
             crate::cpu::ops::elementwise::mul_storage(&normalized, &weight)?
         }
         None => normalized,
     };
     match b {
         Some(bias) => {
-            let bias = bias.reshape(&bcast_shape)?;
+            let bias = bcast_param(bias, channel_dim, &bcast_shape)?;
             crate::cpu::ops::elementwise::add_storage(&scaled, &bias)
         }
         None => Ok(scaled),

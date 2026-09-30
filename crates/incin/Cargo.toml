@@ -179,6 +179,10 @@ name = "vision_live"
 required-features = ["cpu"]
 
 [[example]]
+name = "gradcheck_model"
+required-features = ["cpu"]
+
+[[example]]
 name = "custom_dtype_walkthrough"
 required-features = ["cpu"]
 [[example]]

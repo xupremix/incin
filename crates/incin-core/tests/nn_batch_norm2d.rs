@@ -26,6 +26,7 @@ type C2 = DimCons<U2, Nil>;
 type N2332 = DimCons<U2, DimCons<U2, DimCons<U3, DimCons<U2, Nil>>>>;
 /// `[1, 2, 1, 2]`: the smallest rank-4 tensor with two channels.
 type N1212 = DimCons<U1, DimCons<U2, DimCons<U1, DimCons<U2, Nil>>>>;
+/// `[1, 4]`: the `[1, 2, 1, 2]` feature map flattened for the head.
 type BN = BatchNorm2d<C2, B>;
 
 fn module() -> BN {

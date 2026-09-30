@@ -10,6 +10,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`gradcheck_model`: a central-difference gradient oracle for whole
+  compositions.** Every per-operation gradient test in this repository
+  checks one backward recipe against a hand-computed answer, which leaves
+  the thing that actually breaks untested: the composition. Six
+  individually-correct recipes wired together in the wrong order, or with
+  one axis transposed, train to a loss that decreases and means nothing -
+  it just decreases a little more slowly than it should, which no
+  "the loss went down" threshold can catch. This example perturbs one
+  weight element, re-runs the forward, and compares the slope against the
+  analytic gradient: an oracle that never asks the framework what the
+  derivative is, so it is a stranger to a transposed operand, a dropped
+  term, a sign or a constant factor, and the report names the element that
+  disagreed. Five cases - `matmul -> relu -> sum_all`, `batch_norm ->
+  relu -> sum_all` (the only step among them whose gradient is a reduction
+  over its own input), a broadcast multiply and reduce, `index_select`
+  with a thrice-repeated index so a scatter that overwrites instead of
+  accumulating fails loudly, and a matmul followed by a broadcast. It
+  found the CPU batch-norm gradient defect below on its first run. Two
+  coverage limits are named in the example rather than papered over:
+  `conv2d` at the `Tensor` level admits only fully static input and weight
+  shapes, and a module's parameters are not reachable either, so a
+  parameter gradient of a `seq![]` stack has no public read path today.
+
 - **WGPU comparison and logical operations (#91 Tier-3).** The six
   numeric comparisons (`cmp_eq`..`cmp_ge`) and the three logicals
   (`logical_and`, `logical_or`, `logical_not`) now have WGPU `Execute`
