@@ -10,6 +10,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`gradcheck_ops`: ask every operation the same mechanical question.**
+  `gradcheck_model` checks compositions; this checks the operation surface
+  one row at a time - 47 rows covering axis reductions, structural moves
+  whose backward is a scatter (narrow, pad, expand, concat, stack, split,
+  repeat, unfold, gather), the elementwise derivatives, whole-tensor
+  reductions, both norms and all three losses. A per-operation test pins the
+  operation someone thought to test against an answer someone wrote down; a
+  sweep asks instead whether each gradient *is* the derivative of the
+  function it claims to differentiate, which finds what nobody thought to
+  look for. It found none on this pass, which is worth saying plainly - but
+  it also had to be shown capable of failing, and that is the part worth
+  keeping. Two CPU kernels were broken on purpose: `reverse_cumsum` scanning
+  forward instead of backward (the prefix/suffix confusion `cumsum`'s
+  Jacobian turns on) failed exactly 1 of 47 rows while the other 46 stayed
+  green, naming all four bad elements at 175% relative error; and
+  `tape::unbroadcast` returning the cotangent unreduced - the shape of the
+  batch-norm defect below - failed loudly. The tolerances are derived from
+  the loss's own f32 roundoff amplified by the step rather than guessed, and
+  the step is near the central difference's balance point, which is worth
+  noting because the obvious `1e-3` is ten times too small for f32 and
+  reports a `tanh` element as failing by 5% when both sides are `2e-3` and
+  differ only by noise. The example also records what this class of oracle
+  structurally cannot see: a uniform factor of two anywhere in a backward
+  recipe scales the analytic and numeric gradients alike, so it is invisible
+  to any central difference and has to be caught by a loss value or a
+  training run instead.
+
 - **`numerical_edge_cases`: what the framework does at zero, at infinity,
   and at the boundary.** Every other example stays comfortably inside the
   reals, which is the right way to demonstrate a framework and the wrong
