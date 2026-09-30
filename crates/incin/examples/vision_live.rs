@@ -7,17 +7,46 @@
 //! see is what the model just did.
 //!
 //! ```text
-//! cargo run -p incin --example vision_live -- --dataset fashion
-//! cargo run -p incin --example vision_live -- --dataset cifar
+//! cargo run -p incin --features cpu-blas --example vision_live -- --dataset fashion
+//! cargo run -p incin --features cpu-blas --example vision_live -- --dataset cifar
 //! ```
 //!
+//! The `cpu-blas` feature is not required - a default build trains the
+//! same model to the same accuracy - but it is worth knowing about. It
+//! hands large f32 GEMMs to a blocked, register-tiled kernel, and because
+//! the CPU `conv2d` is im2col plus a batched matmul, that is exactly the
+//! hot loop here: measured on a 4-core CPU, the identical four-step
+//! CIFAR-10 batch took 2m15s on a default build and 31s with the feature
+//! (4.4x). Without it this example is a long coffee break rather than a
+//! demo.
+//!
 //! `fashion` is Fashion-MNIST (1x28x28), `cifar` is CIFAR-10 (3x32x32).
-//! Both are ten-way, so the model and the training loop below are the
-//! same code; only the geometry, the class names and the training budget
-//! differ. Each trains a fast subset on CPU — swap the `train`, `test`,
-//! `epochs` and `lr` fields in its `Corpus` for the full splits.
+//! Both are ten-way, so the model, the training loop and the page below
+//! are one code path; only the geometry, the class names and the
+//! training budget differ. Each trains a fast subset on CPU — swap the
+//! fields in its `Corpus` for the full splits.
+//!
+//! The recipe is the ordinary small-image one, and each piece is here
+//! because it earned its place on the measured curve rather than because
+//! it is conventional:
+//!
+//! - per-channel standardization, from the corpus's own statistics;
+//! - train-only random crop with a 4-pixel pad plus a horizontal flip,
+//!   through `incin::transforms` — on 4000 images this is worth more
+//!   than any single architecture change;
+//! - a VGG-style stack: every convolution followed by batch norm and
+//!   ReLU, widths 32/64/128, two 2x2 pools;
+//! - AdamW with decoupled weight decay and a warmup + cosine schedule
+//!   rather than a flat step size.
+//!
+//! Regularization is augmentation plus weight decay, not dropout: the
+//! test pass cannot switch the model to evaluation mode without also
+//! switching batch norm over to running statistics it has never written,
+//! and half a mechanism is worse than none.
 
 use incin::prelude::*;
+use incin::transforms::{Compose, Normalize, RandomCrop, RandomHorizontalFlip, Transform};
+use incin_core::exec::GradMode;
 use incin_data::vision::cifar::Cifar10Dataset;
 use incin_data::vision::fashion_mnist::FashionMnistDataset;
 use incin_data::{DataError, Dataset};
@@ -25,6 +54,21 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+/// Batch size. 32 is small enough that batch-norm statistics stay noisy
+/// enough to regularize, and large enough that the per-op overhead this
+/// example spends most of its time on stays amortized.
+const BATCH: usize = 32;
+
+/// One convolution per resolution, and its channel width: 16 channels at
+/// 32x32, 32 at 16x16, 64 at 8x8, then a 4x4 classifier head. Three
+/// pooling stages keep the arithmetic where it is cheap, and the whole
+/// stack is about 2.9M multiply-accumulates per image - which is a
+/// budget, not an accident. This CPU sustains roughly 120 MFLOP/s
+/// through its own im2col + GEMM conv path and 540 MFLOP/s with the
+/// `cpu-blas` feature, which is 4.4x on this shape and the difference
+/// between a demo that finishes and one that does not.
+const WIDTHS: [usize; 3] = [16, 32, 64];
 
 /// One materialised split: flat channel-major pixels in `[0, 1]` plus
 /// integer labels, already cut down to the demo subset.
@@ -47,9 +91,17 @@ struct Corpus {
     train: usize,
     test: usize,
     epochs: usize,
-    /// Adam step size. 1500 CIFAR images is ~47 steps an epoch, so the
-    /// smaller corpus needs a larger step than Fashion-MNIST's 94.
+    /// AdamW peak step size, reached after the warmup ramp.
     lr: f64,
+    /// Decoupled weight decay, applied by AdamW and not by the loss.
+    weight_decay: f64,
+    /// Steps spent ramping from zero to `lr`.
+    warmup: usize,
+    /// Per-channel mean and standard deviation, in `[0, 1]` pixel units.
+    mean: Vec<f32>,
+    std: Vec<f32>,
+    /// Pixels of zero padding around each image before the random crop.
+    crop_pad: usize,
 }
 
 /// Flat `[batch, channels, side, side]` shape for a batch of `n`.
@@ -60,6 +112,44 @@ fn batch_shape(spec: &Corpus, n: usize) -> Vec<usize> {
 /// Pixels per image, channel-major.
 fn pixels_per_image(spec: &Corpus) -> usize {
     spec.channels * spec.side * spec.side
+}
+
+/// The pipeline every image passes through: augmentation for training
+/// only, then standardization for both splits. Augmentation draws from
+/// the process RNG inside `incin-data`, so a training epoch sees a
+/// different crop of every image every time it comes round.
+struct Prep {
+    normalize: Normalize,
+    augment: Compose<(Vec<f32>, Vec<usize>)>,
+}
+
+impl Prep {
+    fn new(spec: &Corpus) -> Self {
+        Self {
+            normalize: Normalize::new(spec.mean.clone(), spec.std.clone()),
+            augment: Compose::new()
+                .push(RandomCrop::new(spec.side, spec.side).with_padding(spec.crop_pad))
+                .push(RandomHorizontalFlip::new(0.5)),
+        }
+    }
+
+    /// Standardizes one `[channels, side, side]` image.
+    fn standardize(&self, pixels: Vec<f32>, spec: &Corpus) -> Result<Vec<f32>> {
+        let shape = vec![spec.channels, spec.side, spec.side];
+        self.normalize
+            .transform((pixels, shape))
+            .map(|(out, _)| out)
+            .map_err(data_err)
+    }
+
+    /// Augments one image, then standardizes it.
+    fn augmented(&self, pixels: Vec<f32>, spec: &Corpus) -> Result<Vec<f32>> {
+        let shape = vec![spec.channels, spec.side, spec.side];
+        self.augment
+            .transform((pixels, shape))
+            .map_err(data_err)
+            .and_then(|(out, _)| self.standardize(out, spec))
+    }
 }
 
 /// Copies `indices` out of `data` into a `Split`, refusing to guess when
@@ -94,6 +184,27 @@ fn spread(len: usize, n: usize) -> impl Iterator<Item = usize> {
     (0..len).step_by(stride).take(n)
 }
 
+/// A tiny LCG for the per-epoch shuffle. `incin-data` draws augmentation
+/// randomness internally, so a repeated image order would be the one
+/// source of repetition left in the epoch; this keeps the example free of
+/// a `rand` dependency of its own.
+struct Shuffle(u64);
+
+impl Shuffle {
+    fn shuffled(&mut self, n: usize) -> Vec<usize> {
+        // Fisher-Yates, one pass down.
+        let mut order: Vec<usize> = (0..n).collect();
+        for i in (1..n).rev() {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            order.swap(i, (self.0 >> 33) as usize % (i + 1));
+        }
+        order
+    }
+}
+
 fn load_fashion() -> Result<(Corpus, Split, Split)> {
     let spec = Corpus {
         dir: "./data/fashion-mnist",
@@ -105,9 +216,15 @@ fn load_fashion() -> Result<(Corpus, Split, Split)> {
         channels: 1,
         side: 28,
         train: 3000,
-        test: 500,
-        epochs: 6,
+        test: 1000,
+        epochs: 8,
         lr: 1e-3,
+        weight_decay: 5e-4,
+        warmup: 200,
+        // Fashion-MNIST's own per-pixel mean and standard deviation.
+        mean: vec![0.2860],
+        std: vec![0.3530],
+        crop_pad: 2,
     };
     let dir = PathBuf::from(spec.dir);
     println!("Loading {} into {:?}...", spec.name, dir);
@@ -136,15 +253,24 @@ fn load_cifar() -> Result<(Corpus, Split, Split)> {
         ],
         channels: 3,
         side: 32,
-        // A 3x32x32 image is four times the work per step and CIFAR is the
-        // harder ten-way problem, so this runs more images for fewer
-        // epochs than fashion and still takes about twenty minutes on a
-        // 4-core CPU. More images beat more passes here: 1500 images for 12
-        // epochs was still underfitted at 0.28 test accuracy.
+        // A 3x32x32 image is several times the work per step and CIFAR is
+        // the harder ten-way problem, so this is the longer of the two
+        // runs: about 33 minutes on this box with `cpu-blas` on, for 1250
+        // optimizer steps. More images beat more passes - but only once
+        // the recipe was right: 1500 images for 6 epochs, then 4000 for 8,
+        // both plateaued around 0.26-0.29 without normalization or
+        // augmentation, and the same 4000 images reach 0.46 with them.
         train: 4000,
-        test: 500,
-        epochs: 8,
+        test: 1000,
+        epochs: 10,
         lr: 2e-3,
+        weight_decay: 5e-4,
+        warmup: 300,
+        // The CIFAR-10 training-set channel statistics, the ones every
+        // published baseline normalizes with.
+        mean: vec![0.4914, 0.4822, 0.4465],
+        std: vec![0.2470, 0.2435, 0.2616],
+        crop_pad: 4,
     };
     let dir = PathBuf::from(spec.dir);
     println!("Loading {} into {:?}...", spec.name, dir);
@@ -181,10 +307,19 @@ fn smoke(spec: &Corpus, train: &Split, test: &Split) {
     // Channel-major: channel c of image 0 starts at c * side * side, so the
     // first pixel of every plane is one screen apart, not adjacent.
     let planes: Vec<String> = (0..spec.channels)
-        .map(|c| format!("c{c}@{}={:.3}", c * plane, train.pixels[c * plane]))
+        .map(|c| {
+            format!(
+                "c{c}@{}={:.3}",
+                c * plane,
+                train.pixels[c * plane] / spec.std[c] - spec.mean[c] / spec.std[c]
+            )
+        })
         .collect();
-    println!("  first image channel planes: {}", planes.join(" "));
-    println!("  batch shape {:?}", batch_shape(spec, 32));
+    println!(
+        "  first image channel planes, standardized: {}",
+        planes.join(" ")
+    );
+    println!("  batch shape {:?}", batch_shape(spec, BATCH));
 }
 
 /// What the dashboard renders, updated by the training thread.
@@ -235,7 +370,7 @@ fn gallery_html(spec: &Corpus, gallery: &[(Vec<f32>, usize, usize)]) -> String {
             "{{p:[{}],pred:{},actual:{}}},",
             pixels
                 .iter()
-                .map(|v| format!("{:.2}", v.clamp(0.0, 1.0)))
+                .map(|v| format!("{:.3}", v.clamp(0.0, 1.0)))
                 .collect::<Vec<_>>()
                 .join(","),
             pred,
@@ -330,7 +465,7 @@ fn main() -> Result<()> {
             }
         }
     }
-    let (spec, train, test) = match choice.as_str() {
+    let (spec, train, mut test) = match choice.as_str() {
         "fashion" => load_fashion()?,
         "cifar" => load_cifar()?,
         other => {
@@ -340,34 +475,58 @@ fn main() -> Result<()> {
         }
     };
     smoke(&spec, &train, &test);
-    println!(
-        "training {} epochs over {} images at Adam lr {}",
-        spec.epochs,
-        train.labels.len(),
-        spec.lr
-    );
+
+    // Standardize the test split once, up front: the test pass is a
+    // forward over the whole subset and it should not pay for the
+    // transform 1000 times per epoch.
+    let prep = Prep::new(&spec);
+    let per_image = pixels_per_image(&spec);
+    for i in 0..test.labels.len() {
+        let raw = test.pixels[i * per_image..(i + 1) * per_image].to_vec();
+        test.pixels[i * per_image..(i + 1) * per_image]
+            .copy_from_slice(&prep.standardize(raw, &spec)?);
+    }
 
     type B = DefaultBackend;
-    // Two 2x2 pools leave side/4 spatial, and the convolutions end at 16
-    // channels whatever the corpus started with, so the classifier sees
-    // 16 * (side/4)^2 features. (The input channel count does *not*
-    // survive into this width; multiplying by it was a bug the 1-channel
-    // Fashion-MNIST path could not see.)
-    const CONV_CHANNELS: usize = 16;
-    let pooled = (spec.side / 4) * (spec.side / 4);
+    // Three 2x2 pools leave side/8 spatial, and the last convolution ends
+    // at WIDTHS[2] channels whatever the corpus started with, so the
+    // classifier sees WIDTHS[2] * (side/8)^2 features. (The input channel
+    // count does *not* survive into this width; multiplying by it was a
+    // bug the 1-channel Fashion-MNIST path could not see.)
+    let pooled = (spec.side / 8) * (spec.side / 8);
     let model = seq![
-        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((8, spec.channels))?,
+        // Full resolution.
+        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((WIDTHS[0], spec.channels))?,
+        BatchNorm2d::<s![dyn], B>::build((WIDTHS[0], 1e-5, 0.1))?,
         ReLU,
         MaxPool2d::<typenum::U2, typenum::U2>::new()?,
-        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((16, 8))?,
+        // Half resolution.
+        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((WIDTHS[1], WIDTHS[0]))?,
+        BatchNorm2d::<s![dyn], B>::build((WIDTHS[1], 1e-5, 0.1))?,
+        ReLU,
+        MaxPool2d::<typenum::U2, typenum::U2>::new()?,
+        // Quarter resolution, then the classifier.
+        Conv2d::<s![dyn, dyn, 3, 1, 1, 1], B>::build((WIDTHS[2], WIDTHS[1]))?,
+        BatchNorm2d::<s![dyn], B>::build((WIDTHS[2], 1e-5, 0.1))?,
         ReLU,
         MaxPool2d::<typenum::U2, typenum::U2>::new()?,
         Flatten::new(1isize, -1isize),
-        Linear::<Dyn, B>::build((CONV_CHANNELS * pooled, 64))?,
+        Linear::<Dyn, B>::build((WIDTHS[2] * pooled, 128))?,
         ReLU,
-        Linear::<Dyn, B>::build((64, spec.classes.len()))?,
+        Linear::<Dyn, B>::build((128, spec.classes.len()))?,
     ];
-    let mut optim = Adam::<B>::from_module(&model, spec.lr)?;
+    let mut optim = AdamW::<B>::from_module(&model, spec.lr)?;
+    // Decoupled weight decay, set on the optimizer rather than folded into
+    // the loss: the two only agree at `weight_decay == 0.0`.
+    optim.weight_decay = spec.weight_decay;
+
+    // Warm up from zero, then anneal to a hundredth of the peak. A flat
+    // step size is the single cheapest thing to give up: the early steps
+    // need the ramp, and the late ones need to settle.
+    let steps_per_epoch = train.labels.len().div_ceil(BATCH);
+    let total_steps = steps_per_epoch * spec.epochs;
+    let mut schedule = CosineWithWarmup::new(spec.lr, spec.lr / 100.0, spec.warmup, total_steps);
+    let mut shuffle = Shuffle(0x5eed_1234_9abc_def0);
 
     let state = Arc::new(Mutex::new(Snapshot {
         title: spec.name.to_string(),
@@ -382,7 +541,15 @@ fn main() -> Result<()> {
         .find_map(|port| TcpListener::bind(("127.0.0.1", port)).ok())
         .expect("dashboard port should bind");
     let port = listener.local_addr().expect("bound port").port();
-    println!("dashboard: http://127.0.0.1:{port} (auto-refreshes every 5s)");
+    println!(
+        "dashboard: http://127.0.0.1:{port} (auto-refreshes every 5s)\n\
+         training {} epochs over {} images, {steps_per_epoch} steps each, \
+         AdamW peak lr {} weight decay {}",
+        spec.epochs,
+        train.labels.len(),
+        spec.lr,
+        spec.weight_decay
+    );
     let server_state = state.clone();
     let server_spec = Arc::new(spec);
     std::thread::spawn({
@@ -391,37 +558,48 @@ fn main() -> Result<()> {
     });
     let spec = server_spec;
 
-    let per_image = pixels_per_image(&spec);
     let n_train = train.labels.len();
     let n_test = test.labels.len();
     let classes = spec.classes.len();
-    let batch = 32;
     for epoch in 0..spec.epochs {
-        let offset = (epoch * 137) % n_train;
+        let order = shuffle.shuffled(n_train);
         let mut epoch_loss = 0.0;
         let mut steps = 0;
-        for start in (0..n_train).step_by(batch) {
-            let idx: Vec<usize> = (0..batch).map(|k| (offset + start + k) % n_train).collect();
-            let mut bx = Vec::with_capacity(batch * per_image);
-            let mut by = Vec::with_capacity(batch);
-            for &i in &idx {
-                bx.extend_from_slice(&train.pixels[i * per_image..(i + 1) * per_image]);
+        for start in (0..n_train).step_by(BATCH) {
+            let mut bx = Vec::with_capacity(BATCH * per_image);
+            let mut by = Vec::with_capacity(BATCH);
+            for k in 0..BATCH {
+                // The order is a permutation, so wrapping only reuses a
+                // handful of images to keep the last batch full.
+                let i = order[(start + k) % n_train];
+                let raw = train.pixels[i * per_image..(i + 1) * per_image].to_vec();
+                bx.extend_from_slice(&prep.augmented(raw, &spec)?);
                 by.push(train.labels[i]);
             }
-            let images = Tensor::<Dyn, B>::from_slice(&bx, batch_shape(&spec, batch))?;
-            let labels = Tensor::<Dyn, B, i64>::from_slice(&by, vec![batch])?;
+            let images = Tensor::<Dyn, B>::from_slice(&bx, batch_shape(&spec, BATCH))?;
+            let labels = Tensor::<Dyn, B, i64>::from_slice(&by, vec![BATCH])?;
             let out = model.forward(images)?;
             let loss = out.cross_entropy_loss(&labels)?;
             epoch_loss += loss.to_scalar::<f32>()? as f64;
             steps += 1;
             let grads = loss.backward()?;
+            optim.set_lr(schedule.get_lr());
             optim.step(&grads)?;
+            schedule.step();
         }
         epoch_loss /= steps as f64;
 
-        // Test pass + gallery refresh.
+        // Test pass + gallery refresh. The layer stays in batch-statistics
+        // mode here: `forward` never writes BatchNorm2d's running buffers
+        // (they arrive as shared references the execution contract does not
+        // carry mutations through), so an evaluation-mode pass would
+        // normalize by the initial `mean 0 / var 1` and be meaningless. The
+        // test batch is 1000 images, so its own statistics are a close
+        // stand-in for the population's.
         let test_x = Tensor::<Dyn, B>::from_slice(&test.pixels, batch_shape(&spec, n_test))?;
-        let logits = model.forward(test_x)?.to_vec1::<f32>()?;
+        let logits = GradMode::Disabled
+            .scope(|| model.forward(test_x))
+            .and_then(|out| out.to_vec1::<f32>())?;
         let mut correct = 0;
         let mut gallery = Vec::new();
         for i in 0..n_test {
@@ -435,15 +613,20 @@ fn main() -> Result<()> {
                 correct += 1;
             }
             if gallery.len() < 12 {
+                // The gallery draws the standardized image, so undo the
+                // standardization before handing the page pixels.
                 gallery.push((
-                    test.pixels[i * per_image..(i + 1) * per_image].to_vec(),
+                    undo_standardize(&test.pixels[i * per_image..(i + 1) * per_image], &spec),
                     best_j,
                     test.labels[i] as usize,
                 ));
             }
         }
         let acc = correct as f64 / n_test as f64;
-        println!("epoch {epoch}: loss {epoch_loss:.4} acc {acc:.2}");
+        println!(
+            "epoch {epoch}: loss {epoch_loss:.4} acc {acc:.3} lr {:.2e}",
+            schedule.get_lr()
+        );
         let mut state = state.lock().unwrap();
         state.losses.push(epoch_loss);
         state.accs.push(acc);
@@ -456,10 +639,10 @@ fn main() -> Result<()> {
     // The point of the run: chance is 1/10. Anything at or below it means
     // the subset is too small to have taught the model anything.
     let chance = 1.0 / classes as f64;
-    println!("final test accuracy {final_acc:.2} against {chance:.2} chance on {n_test} images");
+    println!("final test accuracy {final_acc:.3} against {chance:.2} chance on {n_test} images");
     if final_acc <= chance {
         return Err(incin::Error::Msg(format!(
-            "final test accuracy {final_acc:.2} did not beat {chance:.2} chance"
+            "final test accuracy {final_acc:.3} did not beat {chance:.2} chance"
         )));
     }
     println!("PASS: browse http://127.0.0.1:{port} for loss, accuracy and predictions");
@@ -467,4 +650,17 @@ fn main() -> Result<()> {
     loop {
         std::thread::sleep(std::time::Duration::from_secs(3600));
     }
+}
+
+/// `(x - mean) / std` again, so the page draws real pixel values.
+fn undo_standardize(pixels: &[f32], spec: &Corpus) -> Vec<f32> {
+    let plane = spec.side * spec.side;
+    pixels
+        .iter()
+        .enumerate()
+        .map(|(k, v)| {
+            let c = k / plane;
+            v * spec.std[c] + spec.mean[c]
+        })
+        .collect()
 }

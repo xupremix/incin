@@ -460,30 +460,69 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `checkpoint_block_quant` 9/9, `quantize_ste` 6/6.
 
 - **`vision_live`: a live training dashboard over both ten-way vision
-  corpora.** One example, `--dataset fashion|cifar` (default `fashion`),
-  serving the training state per request on a loopback port: loss curve,
-  test accuracy and a gallery that names the classes instead of printing
-  indices. Both corpora are ten-way, so the model and the loop are the same
-  code; only geometry, class names and the training budget differ. The
-  shared shape is also what found a bug: Fashion-MNIST has one input
-  channel, which hid a classifier width that multiplied by the channel
-  count, so the first CIFAR-10 run failed with a typed `matmul: axis 'k'
-  mismatch: 1024 vs 3072` instead of training. CIFAR-10's tarball extracts
-  through `Cifar10Dataset::new` (the crate's own traversal-guarded
-  extractor) into `cifar-10-batches-bin`, giving 50000/10000 images, labels
-  0..9, and channel planes at offsets 0/1024/2048; the run prints all three
-  facts before it trains, because a dashboard is not evidence. Measured on
-  a 4-core CPU: Fashion-MNIST 6 epochs over 3000 images at Adam 1e-3, loss
-  2.1354 -> 0.8695 and accuracy 0.49 -> 0.72; CIFAR-10 8 epochs
-  over 4000 images at Adam 2e-3, about twenty minutes, loss 2.2615 ->
-  1.7837 and accuracy 0.16 -> 0.29 against 0.10 chance. The run refuses to
-  report PASS when the final accuracy does not beat chance. The CIFAR
-  number is capacity-bound rather than budget-bound, which three budgets
-  show: 1500 images for 6 epochs gives 0.26, 1500 for 12 gives 0.28-0.29,
-  and 4000 for 8 gives 0.29, all against the same 0.10 chance. Widening
-  this two-convolution network is the next step, not a longer schedule.
+  corpora, and a CIFAR-10 recipe that actually learns.** One example,
+  `--dataset fashion|cifar` (default `fashion`), serving the live training
+  state per request on a loopback port: loss curve, test accuracy, and a
+  gallery that names the classes instead of printing indices. Both corpora
+  are ten-way, so the model, the loop and the page are one code path; only
+  the geometry, the class names and the budget differ. CIFAR-10's tarball
+  extracts through `Cifar10Dataset::new` (the crate's own
+  traversal-guarded extractor) into `cifar-10-batches-bin`, giving
+  50000/10000 images, labels 0..9 and channel planes at offsets
+  0/1024/2048; the run prints all three facts before it trains, because a
+  dashboard is not evidence.
+
+  The recipe is the ordinary small-image one and every piece is load-
+  bearing: per-channel standardization from each corpus's own statistics;
+  train-only random crop with a 4-pixel pad plus a horizontal flip, through
+  `incin::transforms` rather than hand-rolled; a VGG-style stack of
+  convolution + batch norm + ReLU with widths 16/32/64 and three 2x2 pools;
+  AdamW with decoupled weight decay, a 300-step warmup and cosine annealing
+  to a hundredth of the peak; a Fisher-Yates shuffle per epoch from a
+  six-line LCG, because the example takes no `rand` dependency of its own.
+  Dropout is deliberately absent - the test pass cannot switch the model to
+  evaluation mode without also switching batch norm onto running statistics
+  `forward` has never written, and half a mechanism is worse than none.
+
+  Measured on a 4-core CPU, `cpu-blas` on, ten epochs over 4000 CIFAR-10
+  training images and 1250 total optimizer steps: loss 2.1181 -> 1.4492 and
+  test accuracy 0.294 -> **0.460** on a 1000-image test subset, against 0.10
+  chance. That is 0.29 -> 0.46 for the same training subset, and the gain is
+  not a longer schedule - the previous three-budget experiment (0.26 /
+  0.28-0.29 / 0.29) had already shown the budget was not the binding
+  constraint. The previous network had no normalization, no augmentation and
+  a flat learning rate. Fashion-MNIST moved the same way on the same recipe - eight epochs over
+  3000 images and 752 optimizer steps, about sixteen minutes: loss 1.8271 ->
+  0.5409 and test accuracy 0.714 -> **0.822** on a 1000-image test subset,
+  from 0.72 for the previous network. Accuracy before the first epoch is
+  already 0.714 because batch norm plus standardization let the first
+  hundred steps do real work, where the previous network was still at 0.49
+  after six.
+
+  The example's `[[example]]` entry still requires only `cpu`, and a
+  default build trains the same model to the same accuracy - just slowly.
+  The CPU `conv2d` is im2col plus a batched matmul, so the optional
+  `cpu-blas` feature lands squarely on the hot loop: the same four-step
+  CIFAR-10 batch measured 2m15s on a default build and 31s with it (4.4x) on
+  a 4-core CPU, which is the difference between a demo that finishes and
+  one that does not. The doc comment says so and gives the flagged command.
 
 ### Changed
+
+- **`vision_live` runs its evaluation pass under a disabled gradient
+  scope, and stops growing without bound.** An evaluation forward that is
+  never followed by a `backward` has nothing to drain its autograd tape,
+  so every saved tensor the forward's recipes captured stayed alive: the
+  example's memory grew by roughly 600 MB per epoch, linearly, and a
+  twelve-epoch run reached 8.5 GB before the box took it. The fix is the
+  framework's own `incin_core::exec::GradMode::Disabled.scope`, which is
+  documented to record nothing and retain no backward-only tensor, and
+  which is also the semantically right thing for a test pass. Measured over
+  the same eight epochs of a 128-image run with a 1000-image test subset,
+  peak resident memory fell from 5448 MB to 684 MB and stopped being linear
+  in the epoch count. The scoped gradient policy has no facade alias by
+  design, so the example names the `incin_core` path; that is the same
+  choice the book already documents.
 
 - **CUDA fused attention tiles the query axis above eight rows (#104).**
   The forward gained a second entry family, `attn_fwd_tiled_*`, covering

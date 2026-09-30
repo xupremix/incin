@@ -72,6 +72,23 @@ of repeating a number that won't.
   sound when the evaluation batch is large enough for its statistics to
   stand in for the population's. `vision_live` takes the second route
   deliberately, because its test pass is one forward over 1000 images.
+- **An evaluation forward pass leaks its autograd tape until something
+  drains it.** A forward that is never followed by a `backward` has no
+  `backward` to drain the graph it recorded, so every saved tensor its
+  recipes captured stays alive for the life of the thread. This is not
+  hypothetical and it is not a small leak: `vision_live`'s evaluation pass
+  over a 1000-image CIFAR-10 subset grew resident memory by about 600 MB per
+  epoch, monotonically, until the machine ran out. The documented way out is
+  `incin_core::exec::GradMode::Disabled.scope(..)`, which records nothing and
+  retains nothing (peak fell from 5448 MB to 684 MB over eight epochs), and
+  which the example now uses. What is still missing is ergonomics: the one
+  function that drains a thread's tape is `pub` inside
+  `incin-backends/src/cpu/tape.rs` but is not re-exported from the backend
+  module, and its own doc comment disclaims exactly this use ("not for
+  training code"), on the assumption that every forward is followed by a
+  backward. An inference server, a validation pass, or any loop that poses
+  forwards and calls `backward` on only some of them has no release valve
+  short of a disabled gradient scope.
 - **The CPU `conv2d` is the throughput ceiling for a training example.**
   It is im2col plus a batched matmul, which is the right shape, and the
   optional `cpu-blas` feature hands large f32 GEMMs to a blocked,
