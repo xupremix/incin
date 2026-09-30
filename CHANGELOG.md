@@ -587,6 +587,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **`BatchNorm2d` was a fixed per-channel affine, not batch normalization.**
+  `Module::forward` passed `training: false` into `BatchNormAttributes` and
+  `with_training(false)` on every call, with no field to change it and no
+  `TrainMode` impl. The layer therefore always normalized by
+  `running_mean = 0` and `running_var = 1` - the values its builder
+  initializes them to - making it `weight * x + bias`, i.e. a per-channel
+  scale and shift with no normalization at all, and identical whether the
+  model was training or evaluating. `BatchNorm1d` has had
+  `is_training`/`TrainMode` and a batch-statistics path throughout, and its
+  own doc comment named the 2d layer as the exception. This closes that:
+  `is_training: bool` defaults to `true`, `TrainMode::set_training` moves
+  it, and `forward` now normalizes by the batch's own mean and variance in
+  training mode and by the running buffers in evaluation mode - passing the
+  running buffers as operands only in the latter case, which is the operand
+  discipline `BatchNorm1d` already used. New `crates/incin-core/tests/nn_batch_norm2d.rs`
+  (6 tests) pins the hand-computed batch statistics, per-channel
+  normalization against a whole-tensor one, the train/eval split on one
+  input, the mode surviving `freeze`/`unfreeze`, and that a built layer
+  starts in training mode.
+  One limitation is unchanged and is *not* fixed here: `forward` still never
+  writes `running_mean`/`running_var`, because they arrive as shared
+  references the execution contract does not carry mutations through. A
+  layer trained and then switched to evaluation mode therefore needs its
+  running statistics supplied from outside, or should be left in training
+  mode when the evaluation batch is large enough for its statistics to
+  stand in for the population's. That gap is now recorded in
+  `whats_not_finished.md` rather than only in a doc comment.
+
 - **`Dyn × Dyn` matmul broadcasts its batch dims (#91).** The frontend
   shape rule took `lhs[..len-1]` and appended `n`, dropping `rhs`'s batch
   entirely, while the structural impl and the catalog's `OutputRule::MatMul`

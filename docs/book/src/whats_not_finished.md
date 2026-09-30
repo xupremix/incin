@@ -59,6 +59,28 @@ of repeating a number that won't.
 
 ## Facade gaps (the functionality exists, but not through `incin`)
 
+- **`BatchNorm2d` cannot carry its running statistics out of a forward
+  pass.** The layer now has both modes - it normalizes by the batch's own
+  mean and variance in training mode and by `running_mean`/`running_var` in
+  evaluation mode, which is what `BatchNorm1d` has always done - but
+  `forward` never *writes* those buffers. They reach the layer as shared
+  references, and the execution contract does not carry mutations through
+  them, so the `momentum` argument is currently read and never spent. A
+  model that trains and then switches to evaluation mode therefore needs its
+  running statistics supplied from outside (a checkpoint, or a
+  `collect_state`/restore pass) or should stay in training mode, which is
+  sound when the evaluation batch is large enough for its statistics to
+  stand in for the population's. `vision_live` takes the second route
+  deliberately, because its test pass is one forward over 1000 images.
+- **The CPU `conv2d` is the throughput ceiling for a training example.**
+  It is im2col plus a batched matmul, which is the right shape, and the
+  optional `cpu-blas` feature hands large f32 GEMMs to a blocked,
+  register-tiled kernel: the same four-step CIFAR-10 batch measured 2m15s on
+  a default build and 31s with the feature (4.4x) on a 4-core CPU. Without
+  `cpu-blas` the CPU sustains roughly 120 MFLOP/s through these
+  convolutions, which is what sets the model sizes and epoch counts any
+  example can afford. A default-build conv2d on a blocked GEMM is the
+  remaining step, and it is a kernel change rather than a feature flag.
 - **Scoped gradient policy** is intentionally explicit through
   `incin_core::exec::GradMode::Disabled.scope` and has no facade alias.
 - **The lower-level `save_safetensors`/`load_safetensors` helpers** remain

@@ -5,7 +5,7 @@ use crate::exec::catalog::{BatchNormAttributes, op};
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
 use crate::exec::request::TensorHandle;
-use crate::nn::{Buffer, Module, Param};
+use crate::nn::{Buffer, Module, Param, TrainMode};
 use crate::shapes::Layout;
 use crate::shapes::{Dim, Dyn, DynShape, HasChannels2D, Shape, ShapeValue};
 use crate::tensor::backend::Execute;
@@ -51,8 +51,6 @@ impl BatchNormShape for Dyn {
 
 use crate::nn::param::{Frozen, TrainState, Trainable};
 
-#[derive(Debug, Clone)]
-#[incin_macros::module(internal)]
 /// A 2D Batch Normalization layer, as described in [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167).
 ///
 /// Normalizes the input tensor across the batch and spatial dimensions for each channel independently,
@@ -60,9 +58,24 @@ use crate::nn::param::{Frozen, TrainState, Trainable};
 ///
 /// The type parameter `S` is the shape marker.
 ///
+/// ## Training and evaluation
+/// This layer honors [`TrainMode`]: in training mode it normalizes by the
+/// batch's own mean and variance, in evaluation mode by `running_mean` and
+/// `running_var`. It starts in training mode.
+///
 /// ## Running Statistics
-/// `running_mean` and `running_var` are non-trainable buffers updated during training (training mode
-/// must be handled at the backend level). During inference, these stored statistics are used.
+/// As with [`BatchNorm1d`](crate::nn::BatchNorm1d), `forward` never mutates
+/// `running_mean`/`running_var`: they arrive as shared references the
+/// execution contract does not carry mutations through. A layer trained and
+/// then evaluated therefore needs its running statistics supplied from
+/// outside (a checkpoint, or a `collect_state`/restore pass) - or it should
+/// be left in training mode, which is sound whenever the batch it is
+/// evaluated on is large enough for its statistics to stand in for the
+/// population's. Before this layer honored `TrainMode` it normalized by
+/// `running_mean = 0` and `running_var = 1` on every call, which made it a
+/// fixed per-channel affine rather than batch normalization.
+#[derive(Debug, Clone)]
+#[incin_macros::module(internal, no_train_mode)]
 pub struct BatchNorm2d<
     S: BatchNormShape,
     B: crate::tensor::backend::VariableBackend,
@@ -81,8 +94,12 @@ pub struct BatchNorm2d<
     /// Small epsilon added to the denominator for numerical stability.
     pub eps: f32,
     #[module(ignore)]
-    /// Momentum factor for updating running statistics.
+    /// Momentum factor for running statistics.
     pub momentum: f32,
+    #[module(ignore)]
+    /// Whether `forward` normalizes by batch statistics (`true`) or by
+    /// `running_mean`/`running_var` (`false`).
+    pub is_training: bool,
     #[module(ignore)]
     _phantom: PhantomData<(B, K, Train)>,
 }
@@ -90,7 +107,7 @@ pub struct BatchNorm2d<
 impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
     BatchNorm2d<S, B, K, Train>
 {
-    /// Constructs a BatchNorm2d from raw parts.
+    /// Constructs a BatchNorm2d from raw parts. Starts in training mode.
     pub fn from_raw_parts(
         weight: Param<S::ParamShape, B, K, Train>,
         bias: Param<S::ParamShape, B, K, Train>,
@@ -106,6 +123,7 @@ impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Tr
             running_var,
             eps,
             momentum,
+            is_training: true,
             _phantom: PhantomData,
         }
     }
@@ -119,6 +137,7 @@ impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Tr
             running_var: self.running_var,
             eps: self.eps,
             momentum: self.momentum,
+            is_training: self.is_training,
             _phantom: PhantomData,
         }
     }
@@ -132,8 +151,19 @@ impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Tr
             running_var: self.running_var,
             eps: self.eps,
             momentum: self.momentum,
+            is_training: self.is_training,
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<S: BatchNormShape, B: crate::tensor::backend::VariableBackend, K: DType, Train: TrainState>
+    TrainMode for BatchNorm2d<S, B, K, Train>
+{
+    /// Directly sets `is_training`, which selects batch statistics
+    /// (`true`) or running statistics (`false`) in the next `forward`.
+    fn set_training(&mut self, training: bool) {
+        self.is_training = training;
     }
 }
 
@@ -266,6 +296,7 @@ where
             running_var,
             eps,
             momentum,
+            is_training: true,
             _phantom: PhantomData,
         })
     }
@@ -303,24 +334,35 @@ where
         let running_mean = self.running_mean.as_tensor()?.into_dyn();
         let running_var = self.running_var.as_tensor()?.into_dyn();
 
-        let inputs = [
+        // Training mode normalizes by the batch's own statistics, so the
+        // running buffers are not operands at all - the same operand
+        // discipline BatchNorm1d uses. Evaluation mode hands them over and
+        // asks the kernel to use them.
+        let training = self.is_training;
+        let mut inputs = alloc::vec![
             TensorHandle::from_storage::<B, K, Local>(x.inner()),
             TensorHandle::from_storage::<B, K, Local>(weight.inner()),
             TensorHandle::from_storage::<B, K, Local>(bias.inner()),
-            TensorHandle::from_storage::<B, K, Local>(running_mean.inner()),
-            TensorHandle::from_storage::<B, K, Local>(running_var.inner()),
         ];
-        let context = ExecutionContext::from_scope(B::default()).with_training(false);
+        if !training {
+            inputs.push(TensorHandle::from_storage::<B, K, Local>(
+                running_mean.inner(),
+            ));
+            inputs.push(TensorHandle::from_storage::<B, K, Local>(
+                running_var.inner(),
+            ));
+        }
+        let context = ExecutionContext::from_scope(B::default()).with_training(training);
         let out = dispatch::execute_shaped::<op::BatchNorm, B, InS>(
             &context,
             BatchNormAttributes {
                 epsilon: self.eps as f64,
                 momentum: self.momentum as f64,
-                training: false,
+                training,
                 has_weight: true,
                 has_bias: true,
-                has_running_mean: true,
-                has_running_variance: true,
+                has_running_mean: !training,
+                has_running_variance: !training,
             },
             &inputs,
             &x._shape,
