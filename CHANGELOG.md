@@ -10,6 +10,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`numerical_edge_cases`: what the framework does at zero, at infinity,
+  and at the boundary.** Every other example stays comfortably inside the
+  reals, which is the right way to demonstrate a framework and the wrong
+  way to find out what it does where a kernel's special-case handling
+  lives - which is exactly where an optimization that speeds up the common
+  case can quietly change the uncommon one. This pins both halves of the
+  contract, with the reasoning for each. The guarded half:
+  `NanPolicy::Reject` and the `check_gradients` shorthand turn a non-finite
+  gradient into a typed error naming the tensor and the recipe, while a
+  plain `backward` returns the infinities - an asymmetry that is
+  deliberate and worth stating, because a run that silently poisoned its
+  weights looks exactly like a run with a bad learning rate. The
+  unguarded half: division by zero, `log(0)`, `sqrt` of a negative and
+  `inf - inf` all produce the IEEE answer and no error, because a model
+  that legitimately computes `log(0)` during a warmup should not be
+  stopped by the type system - the cost is that a NaN has to be looked
+  for, and the guarded gradient pass is the cheap place to look. Also
+  pinned, because both surprise people: `x^0 == 1` even at `x == 0` and
+  `(-1)^-1 == -1`, a power with a non-integer exponent is `NaN` on a
+  negative base, reductions propagate a NaN rather than skipping it, and
+  `softmax`/`log_softmax` stay stable at `[1000, -1000]`.
+
 - **`trainer_fit`: the automatic `Trainer` driven end to end.** Every
   other training example writes the loop out by hand, which is the right
   way to learn the framework and the wrong way to check that a loop is

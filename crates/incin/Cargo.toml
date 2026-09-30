@@ -187,6 +187,10 @@ name = "trainer_fit"
 required-features = ["cpu", "train"]
 
 [[example]]
+name = "numerical_edge_cases"
+required-features = ["cpu"]
+
+[[example]]
 name = "custom_dtype_walkthrough"
 required-features = ["cpu"]
 [[example]]
