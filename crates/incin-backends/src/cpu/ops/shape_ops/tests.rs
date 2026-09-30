@@ -1299,3 +1299,124 @@ fn scaled_fp8_training_step_converges_like_bf16() {
         );
     }
 }
+
+/// A deterministic ramp: distinct and non-symmetric, so a gradient that is
+/// merely permuted lands on different values and is caught rather than
+/// hiding behind a repeated pattern.
+fn ramp(n: usize) -> Vec<f32> {
+    (0..n)
+        .map(|i| ((i * 7 + 3) % 13) as f32 * 0.09 - 0.54)
+        .collect()
+}
+
+fn ramped(shape: Vec<usize>) -> CpuStorage {
+    let elements: usize = shape.iter().product();
+    matrix(ramp(elements), *shape.last().unwrap(), 1)
+        .reshape(&shape)
+        .unwrap()
+}
+
+/// Scaled dot-product attention is the one composition in the backend with
+/// four differentiable inputs, a scale, a softmax Jacobian and an optional
+/// mask, and nothing checked any of it numerically. The existing coverage
+/// asserts only that training produces *finite non-zero* gradients - which a
+/// wrong gradient passes, since a factor-of-two Jacobian is still finite and
+/// still non-zero, and still trains.
+///
+/// So all three projections are swept against central differences.
+///
+/// The risk this covers is a *composition* gap rather than a miswritten
+/// formula. There is no hand-written softmax backward here: the softmax is
+/// assembled from recorded `max_keepdim`, `sub`, `exp`, `sum_keepdim`, `log`
+/// and `sub` steps, so its Jacobian is emergent and correct exactly when all
+/// six are. A tape-silent step among them would leave every gradient finite,
+/// non-zero and the right shape - which is what the existing assertions
+/// check - and wrong.
+#[test]
+fn scaled_dot_product_attention_gradcheck_all_three_projections() {
+    let q = ramped(vec![1, 2, 3, 4]);
+    let k = ramped(vec![1, 2, 3, 4]);
+    let v = ramped(vec![1, 2, 3, 4]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
+            &inputs[0], &inputs[1], &inputs[2], None, None,
+        )
+        .unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let max_rel_err =
+        crate::cpu::gradcheck::gradcheck(op, &[q, k, v], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "attention gradcheck too high: {max_rel_err:.6}"
+    );
+}
+
+/// The same with an additive mask, which is the form every decoder uses. The
+/// mask enters through a recorded `add` into the scores, and the diagonal is
+/// pushed far enough down that the masked positions carry an exponentially
+/// small share of the cotangent - so a mask that reached the forward but not
+/// the backward, or not at all, is a disagreement rather than a rounding
+/// detail.
+#[test]
+fn scaled_dot_product_attention_gradcheck_with_mask() {
+    let q = ramped(vec![1, 2, 3, 4]);
+    let k = ramped(vec![1, 2, 3, 4]);
+    let v = ramped(vec![1, 2, 3, 4]);
+    // A mask shaped like the scores, as an additive -inf-style bias in
+    // miniature: large negative on the diagonal, so the masked positions
+    // receive an exponentially small share and a missing mask gradient shows
+    // up rather than cancelling.
+    let mut mask_values = vec![0.0f32; 3 * 3];
+    for i in 0..3 {
+        mask_values[i * 3 + i] = -3.0;
+    }
+    let mask =
+        crate::cpu::ops::shape_ops::broadcast_as_storage(&matrix(mask_values, 3, 3), &[1, 2, 3, 3])
+            .unwrap();
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
+            &inputs[0],
+            &inputs[1],
+            &inputs[2],
+            Some(&mask),
+            None,
+        )
+        .unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let max_rel_err =
+        crate::cpu::gradcheck::gradcheck(op, &[q, k, v], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "masked attention gradcheck too high: {max_rel_err:.6}"
+    );
+}
+
+/// With an explicit scale. The default is `1/sqrt(d_k)`, and a kernel that
+/// applied it twice, or dropped the `sqrt`, would still produce finite
+/// non-zero gradients from the check above - it would just be attending at
+/// the wrong temperature.
+#[test]
+fn scaled_dot_product_attention_gradcheck_explicit_scale() {
+    let q = ramped(vec![1, 2, 3, 4]);
+    let k = ramped(vec![1, 2, 3, 4]);
+    let v = ramped(vec![1, 2, 3, 4]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
+            &inputs[0],
+            &inputs[1],
+            &inputs[2],
+            None,
+            Some(0.125),
+        )
+        .unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let max_rel_err =
+        crate::cpu::gradcheck::gradcheck(op, &[q, k, v], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "scaled attention gradcheck too high: {max_rel_err:.6}"
+    );
+}

@@ -10,6 +10,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Added: numerical gradient coverage for attention, which had only ever been
+  checked for being finite.** Scaled dot-product attention is the one
+  composition in the CPU backend with three differentiable projections, a
+  scale, a softmax and an optional additive mask, and no check ever compared
+  any of it to a derivative. The existing coverage asserts that training
+  produces *finite non-zero* gradients - which a wrong gradient passes, since
+  a factor-of-two Jacobian is still finite, still non-zero, and still trains.
+  Three checks now sweep all three projections against central differences:
+  bare, with an additive mask pushed far enough down that the masked
+  positions carry an exponentially small share, and with an explicit scale so
+  a kernel applying the `1/sqrt(d_k)` default twice would be caught. All
+  three pass, so the composition was already correct - the value being that
+  it is now checked rather than assumed.
+
+  What this covers is a *composition* gap rather than a miswritten formula:
+  there is no hand-written softmax backward here, since the softmax is
+  assembled from six recorded steps and its Jacobian is emergent. A
+  tape-silent step among the six would leave every gradient finite,
+  non-zero and correctly shaped - precisely what the old assertions looked
+  at.
+
+  The checks were validated by dropping the negation on `sub`'s right-hand
+  cotangent, which fails all three while the conv checks correctly ignore it.
+  Worth recording the injection that did *not* fail them: scaling the scores
+  by a constant, a real forward fault that changes the attention
+  distribution, leaves every gradient check green. A central difference
+  validates the backward against its own forward, so a wrong forward moves
+  both sides together. That is the same blind spot `gradcheck_ops` documents,
+  and the reason a forward still needs a value test.
+
 - **Fixed: the CPU batch-norm parity tests were checking a formula instead of
   the kernel.** Five CUDA parity tests take their CPU reference from
   `cpu_batch_norm_training_grads`, which could not read `dw` and `db` off the
