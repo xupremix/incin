@@ -1239,3 +1239,44 @@ fn dispatch_refuses_a_mixed_dtype_matmul_at_the_descriptor() {
         "the refusal must name the same-dtype reason, not just fail: {message}"
     );
 }
+
+/// RMS norm's weight is a `Param` reached through a tracked `mul`, so it
+/// should receive a gradient. Nothing checked that: the only RMS norm
+/// gradient coverage in the tree was on `Linear`'s promoted row, and the
+/// norm itself was checked for its forward and its shape. An RMS norm whose
+/// weight silently stopped training would satisfy every test here, so the
+/// weight is put through the numeric sweep like the conv biases were.
+///
+/// The loss is a ramp over the output rather than a sum: a uniform seed makes
+/// the weight gradient the row sums of the seed, which is insensitive to
+/// *which* output element each weight entry was paired with.
+#[test]
+fn rms_norm_weight_receives_a_gradient_matching_a_central_difference() {
+    let context = context();
+    let input = storage(&[1.0, 2.0, 3.0, 4.0], &[1, 4]);
+    let weight = storage(&[0.5, 1.5, -0.5, 2.0], &[4]);
+
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = dispatch::execute::<op::RmsNorm, _>(
+            &context,
+            EpsilonAttributes { epsilon: 0.0 },
+            &[handle(&inputs[0]), handle(&inputs[1])],
+        )
+        .expect("rms_norm executes");
+        let elements = crate::cpu::stride::validated_numel(out.shape.dims());
+        let seed: Vec<f32> = (0..elements)
+            .map(|i| ((i * 7 + 3) % 13) as f32 * 0.11 - 0.6)
+            .collect();
+        let seed = CpuStorage::from_contiguous(CpuBuffer::F32(seed), out.shape.dims());
+        let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed)
+            .expect("the seed multiplies onto the norm output");
+        dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&weighted)])
+            .expect("sum_all executes")
+    };
+
+    let max_rel_err = gradcheck(op, &[input, weight], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "rms_norm weight gradcheck too high: {max_rel_err:.6}"
+    );
+}

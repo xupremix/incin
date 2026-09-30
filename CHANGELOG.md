@@ -10,15 +10,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Fixed: the CPU batch-norm parity tests were checking a formula instead of
+  the kernel.** Five CUDA parity tests take their CPU reference from
+  `cpu_batch_norm_training_grads`, which could not read `dw` and `db` off the
+  CPU tape and so substituted a closed-form per-channel sum for them - the
+  comparison was CUDA against a formula in a test file, and the host guard
+  that validated the formula with finite differences validated nothing about
+  the backend. Now that the CPU affine is on the tape, the helper reads all
+  four gradients from the tape, so those five tests compare two independent
+  implementations of the same derivative, and the host guard checks the tape
+  itself. Worth noting the guard *passes*: it was written when the CPU tape
+  path did not exist, and the real tape agrees with the formula it replaced,
+  which is independent confirmation of the batch-norm fix above.
+
+- **Corrected the account of why the convolution bias lost its gradient.**
+  `a4b9a6e7` attributed it to `add_storage` being untracked. It is not -
+  `add_storage` is recorded and its backward unbroadcasts both operands,
+  which is exactly the bias gradient. The defect was solely the inherent
+  `reshape` ahead of it: that form returns a fresh storage under a new id and
+  records no node, so the recorded add keyed its cotangent on the temporary
+  and the parameter's own id appeared in no tape node. Same single root cause
+  as the batch-norm affine, which makes the two fixes one bug found twice
+  rather than two. The fix and the tests were right; the explanation was not,
+  and a wrong explanation in a doc comment is a trap for the next reader.
+
+- **Added: gradient coverage for the normalization affine, which had only ever
+  been checked on the input.** `layer_norm_gradcheck` closes over its weight
+  and bias and differentiates only the input, so it says nothing about the two
+  parameters - which for a normalization layer is the half that actually
+  learns. Two checks now put both on the tape (`gradcheck` requires a gradient
+  for every input it is handed), one biased and one not, since the no-bias path
+  builds a zero buffer that reaches the same tracked add and a backward that
+  assumed a bias was present would pass the first and fail the second. RMS
+  norm's weight had no gradient coverage at all - only a forward test and a
+  shape test - so an RMS norm whose weight stopped training would have
+  satisfied the entire suite; it is now swept against a central difference.
+  All three pass: unlike the conv bias, the CPU implementations hand their
+  affine straight to a tracked `mul`/`add` with no reshape in between, and
+  they were already correct.
+
 - **Fixed: the convolution bias got no gradient at all on the CPU backend.**
   `conv1d`, `conv2d` and `conv_transpose2d` each folded a per-channel bias
-  into the output with an inherent `reshape` followed by an untracked
-  `add_storage`. Neither step records anything: the inherent reshape hands
-  back a fresh storage under a new id, and `add_storage` pushes no node
-  (`add_storage_with_shape` is the recorded variant). The bias was therefore
-  unreachable from the tape, and `backward` produced *no gradient and no
-  error* for it - a missing gradient being visible only to something that
-  asks for one. Every biased convolution on this backend trained with its
+  into the output by reaching the add through the *inherent* `reshape`:
+  `bias.reshape(&[1, cout, 1, 1])`. The add was never the problem - `add_storage`
+  is recorded and its backward unbroadcasts both operands, which is exactly
+  the bias gradient. The reshape was: the inherent form returns a fresh
+  storage under a **new id** and records no node, so the recorded add keyed
+  its bias cotangent on the temporary's id and the parameter's own id
+  appeared in no tape node anywhere. `backward` produced *no gradient and no
+  error* for the bias - a missing gradient being visible only to something
+  that asks for one. Every biased convolution on this backend trained with its
   bias frozen at its initialization, and because the forward was always
   correct, nothing about the loss curve would have said so. This was also a
   cross-backend disagreement rather than a local mistake: WGPU reached the
@@ -26,11 +67,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   returned different gradients for the same model. The bias gradient is a
   sum over the non-channel axes, which is exactly what the backward of a
   broadcast produces - so the fix routes the bias through recorded steps
-  (`reshape_storage`, then `broadcast_as_storage`, then
-  `add_storage_with_shape`), with both steps needed because a broadcast
-  cannot raise rank. `conv1d`'s module doc had claimed the bias gradient was
-  "free via composition"; the composition it had in mind was not happening,
-  because the helpers it named record nothing.
+  (`reshape_storage`, then `broadcast_as_storage`, then the add), with both
+  steps needed because a broadcast cannot raise rank. Same root cause as the
+  batch-norm affine above: an inherent reshape severing a parameter's id.
+  `conv1d`'s module doc had claimed the bias gradient was "free via
+  composition"; the composition it had in mind was not happening, because
+  the reshape it relied on records nothing.
 
 - **Added: gradient coverage for the convolution geometry that was
   unexercised.** Both existing convolution gradchecks used `[1,1,4,4]`

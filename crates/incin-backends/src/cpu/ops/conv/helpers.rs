@@ -165,33 +165,43 @@ pub(super) fn without_batch_axis(storage: CpuStorage, added: bool) -> Result<Cpu
     }
 }
 
-/// Adds a per-output-channel convolution bias with the bias *on the tape*.
+/// Adds a per-output-channel convolution bias, keeping the bias reachable
+/// from the graph.
 ///
 /// The gradient of a bias is the sum of the output cotangent over every
-/// axis except the channel axis - which is exactly what the backward of a
-/// broadcast produces. So the bias has to reach the output through steps
-/// that are recorded, and the obvious spelling of them records nothing:
+/// axis except the channel axis, and the recorded `add` already produces
+/// exactly that: `add_storage`'s backward unbroadcasts both operands. So
+/// the add was never the problem.
 ///
-/// - `CpuStorage::reshape` is inherent. It hands back a fresh storage with a
-///   new id and pushes no node, so the parameter is no longer reachable from
-///   the graph by that name.
-/// - `add_storage` is likewise untracked. `add_storage_with_shape` is the
-///   recorded variant; using the untracked one leaves the broadcast with no
-///   consumer to hand its cotangent to.
+/// The problem was how the bias reached it. All three conv kernels wrote:
 ///
-/// With both untracked, `backward` produced **no gradient at all** for the
-/// bias of `conv1d`, `conv2d` and `conv_transpose2d` on this backend, and
-/// produced no error either, since a missing gradient is only visible to
-/// something that asks for one. The convolution forward was always right,
-/// so the symptom is a model that trains with its bias frozen at
-/// initialization. This is worse than a local numerical mistake: WGPU adds
-/// the same bias through a recorded reshape, broadcast and add, so the two
-/// backends disagreed about a gradient for the same model.
+/// ```text
+/// let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
+/// add_storage(&conv_out, &bias_shaped)
+/// ```
 ///
-/// `bcast_shape` places the bias's channel axis correctly for the output's
-/// rank - `[cout, 1, ..]` when the result is unbatched, `[1, cout, 1, ..]`
-/// otherwise. Both steps below are the recorded variants, and both are
-/// needed: a broadcast cannot raise rank, so the reshape has to come first.
+/// `CpuStorage::reshape` is the *inherent* one: it returns a fresh storage
+/// under a **new id** and records no node. The add is recorded, but it keys
+/// its bias cotangent on the id of the temporary it was handed - so the
+/// parameter's own id appeared in no tape node anywhere, and `backward` had
+/// nothing to report under it. No gradient, and no error either, since a
+/// missing gradient is visible only to something that asks for one.
+///
+/// Every biased convolution on this backend therefore trained with its bias
+/// frozen at initialization, with a forward that was always correct and so a
+/// loss curve that said nothing about it. This was a cross-backend
+/// disagreement rather than a local mistake: WGPU reaches the same forward
+/// through a recorded reshape, broadcast and add, so the two backends
+/// returned different gradients for the same model.
+///
+/// `conv1d`'s module doc had claimed the bias gradient was "free via
+/// composition"; the composition it described was not happening, because
+/// the reshape it relied on records nothing.
+///
+/// The fix replaces the inherent reshape with `reshape_storage`, which is
+/// recorded and keeps the parameter's id in the chain, and broadcasts
+/// explicitly rather than letting the add infer it. Both steps are needed:
+/// a broadcast cannot raise rank, so the reshape has to come first.
 pub(crate) fn add_conv_bias_tracked(
     conv_out: &CpuStorage,
     bias: &CpuStorage,

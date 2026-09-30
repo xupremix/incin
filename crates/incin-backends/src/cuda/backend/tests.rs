@@ -995,16 +995,20 @@ fn bn_bias() -> CudaStorage {
 
 /// CPU training forward plus its composed backward, on the same values the
 /// CUDA side runs: the reference the parity tests below compare against.
-/// Mirrors `cpu_layer_norm_grads` above for the output and dx; dw and db are
-/// summed in closed form here instead, because the CPU composition reshapes
-/// weight/bias into a broadcast copy with a fresh `TensorId` the tape never
-/// links back (its reshape is deliberately silent -- parameters are treated
-/// as fixed inputs there, which is also why `batch_norm_training_gradcheck`
-/// only covers the input path). The backward runs with the `BN_GOUT` seed
-/// every CUDA-side comparison uses too: under the default ones seed
-/// `dw = sum(xhat)` is identically ~0 (xhat is mean-centered), which would
-/// make the affine comparison noise-blind. `xhat` is reconstructed in f64
-/// from the raw fixture values and their per-channel statistics.
+///
+/// Every gradient here comes off the CPU tape, including `dw` and `db`. That
+/// was not always so: the CPU composition reshaped weight and bias into a
+/// broadcast copy under a fresh `TensorId` the tape never linked back, so
+/// this helper substituted a closed-form per-channel sum for the two affine
+/// gradients and the five parity tests below compared CUDA against that
+/// formula instead of against the CPU kernel. `51123813` routed the affine
+/// through recorded steps, so the substitution is gone and the comparison is
+/// now between two independent implementations of the same derivative.
+///
+/// The backward runs with the `BN_GOUT` seed every CUDA-side comparison uses
+/// too: under the default ones seed `dw = sum(xhat)` is identically ~0
+/// (xhat is mean-centered), which would make the affine comparison
+/// noise-blind.
 #[cfg(feature = "cpu")]
 fn cpu_batch_norm_training_grads(
     input: &[f32],
@@ -1026,45 +1030,33 @@ fn cpu_batch_norm_training_grads(
     let grads = crate::cpu::tape::backward_with(&out, &seed).unwrap();
     let dx = host_values(grads.get(t.id).unwrap());
     let out_values = host_values(&out);
-    // The affine gradients come from closed-form per-channel sums over the
-    // same [2, 2, 2] fixture: channel = (flat / spatial) % C, where spatial
-    // is the product of the axes after the channel one (H here, 2) --
-    // the same split `batch_norm_geometry` uses, not elements-per-channel.
-    let num_channels = weight.len();
-    let spatial: usize = t.shape[2..].iter().product();
-    let batch_elements = input.len() / num_channels;
-    let mut mean = vec![0f64; num_channels];
-    let mut variance = vec![0f64; num_channels];
-    for (flat, value) in input.iter().enumerate() {
-        mean[flat / spatial % num_channels] += f64::from(*value);
-    }
-    for channel in &mut mean {
-        *channel /= batch_elements as f64;
-    }
-    for (flat, value) in input.iter().enumerate() {
-        let centered = f64::from(*value) - mean[flat / spatial % num_channels];
-        variance[flat / spatial % num_channels] += centered * centered;
-    }
-    for channel in &mut variance {
-        *channel /= batch_elements as f64;
-    }
-    let mut dw = vec![0f64; num_channels];
-    let mut db = vec![0f64; num_channels];
-    for flat in 0..input.len() {
-        let channel = flat / spatial % num_channels;
-        let xhat = (f64::from(input[flat]) - mean[channel])
-            / (variance[channel] + f64::from(BN_EPS)).sqrt();
-        db[channel] += f64::from(BN_GOUT[flat]);
-        dw[channel] += f64::from(BN_GOUT[flat]) * xhat;
-    }
+    // The affine gradients are read from the tape like `dx` is. The expect
+    // messages name the regression rather than the symptom: before `51123813`
+    // these lookups returned nothing at all, and a missing gradient is only
+    // visible to something that asks for one.
+    let dw = host_values(
+        grads
+            .get(w.id)
+            .expect("CPU batch norm records a gradient for the affine weight"),
+    );
+    let db = host_values(
+        grads
+            .get(b.id)
+            .expect("CPU batch norm records a gradient for the affine bias"),
+    );
     (out_values, dx, dw, db)
 }
 
-/// The affine reference in `cpu_batch_norm_training_grads` is closed-form
-/// code standing in for a tape path the CPU composition does not have, so
-/// it gets its own check: central finite differences of the CPU forward
-/// under the same `BN_GOUT` seed direction (loss = sum(out * g)). Runs on
-/// the host as a guard for every hardware test that leans on it.
+/// Central finite differences of the CPU forward under the same `BN_GOUT`
+/// seed direction (loss = sum(out * g)), compared against the affine
+/// gradients the CPU tape now produces. Runs on the host as a guard for
+/// every hardware test that leans on `cpu_batch_norm_training_grads`.
+///
+/// This used to check a closed-form formula that stood in for a tape path
+/// the CPU composition did not have, which meant the parity tests above
+/// leaned on a formula nobody had compared to the kernel. It now checks the
+/// tape itself, so a regression in the affine path fails here on the host
+/// rather than only against hardware.
 #[cfg(feature = "cpu")]
 #[test]
 fn batch_norm_affine_reference_matches_finite_differences() {

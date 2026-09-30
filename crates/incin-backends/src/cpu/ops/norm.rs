@@ -473,6 +473,83 @@ mod tests {
     }
 
     #[test]
+    /// `layer_norm_gradcheck_weight_and_bias`.
+    ///
+    /// The check above closes over `weight` and `bias` and differentiates only
+    /// the input, so it says nothing about the two parameters - which is the
+    /// half that a normalization layer actually learns through, and the half
+    /// that was silently missing from CPU batch norm in `51123813` and from
+    /// all three conv biases in `a4b9a6e7`. Here both are inputs to the
+    /// sweep, so `gradcheck` requires a gradient for each.
+    ///
+    /// The loss is seeded per output element rather than summed, for the
+    /// reason the conv checks document: under a uniform seed the weight
+    /// gradient is dominated by the mean-removal term and a broadcast
+    /// misrouting is easy to miss.
+    fn layer_norm_gradcheck_weight_and_bias() {
+        let eps = 1e-5f32;
+        let max_rel_err = gradcheck(
+            |inputs: &[CpuStorage]| -> CpuStorage {
+                let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+                    &inputs[0],
+                    &inputs[1],
+                    Some(&inputs[2]),
+                    eps,
+                )
+                .unwrap();
+                // Inputs are ramped rather than constant, so every entry of
+                // the seed differs and no row's cotangent pattern is degenerate.
+                let elements = crate::cpu::stride::validated_numel(out.shape.dims());
+                let seed: Vec<f32> = (0..elements)
+                    .map(|i| ((i * 7 + 3) % 13) as f32 * 0.11 - 0.6)
+                    .collect();
+                let seed = CpuStorage::from_contiguous(CpuBuffer::F32(seed), out.shape.dims());
+                let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed).unwrap();
+                crate::cpu::ops::reduce::sum_all(&weighted).unwrap()
+            },
+            &[
+                matrix(vec![0.5f32, -1.0, 2.0, 1.0, 0.0, -0.5], 2, 3),
+                vec1(vec![2.0f32, 1.0, 0.5]),
+                vec1(vec![0.1f32, -0.1, 0.2]),
+            ],
+            F32_STEP,
+        );
+        assert!(
+            max_rel_err < GRAD_TOL,
+            "layer_norm affine gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
+    /// `layer_norm_gradcheck_weight_without_bias`.
+    ///
+    /// The no-bias path builds a zero-filled buffer the shape of the weight,
+    /// which reaches the same tracked `add` as a real bias. A backward that
+    /// assumed a bias was present would pass the biased case and fail here,
+    /// so the two are pinned separately.
+    fn layer_norm_gradcheck_weight_without_bias() {
+        let eps = 1e-5f32;
+        let max_rel_err = gradcheck(
+            |inputs: &[CpuStorage]| -> CpuStorage {
+                let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+                    &inputs[0], &inputs[1], None, eps,
+                )
+                .unwrap();
+                crate::cpu::ops::reduce::sum_all(&out).unwrap()
+            },
+            &[
+                matrix(vec![0.5f32, -1.0, 2.0, 1.0, 0.0, -0.5], 2, 3),
+                vec1(vec![2.0f32, 1.0, 0.5]),
+            ],
+            F32_STEP,
+        );
+        assert!(
+            max_rel_err < GRAD_TOL,
+            "layer_norm weight-only gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
     /// `layer_norm_rank3_normalizes_per_batch_seq_position`.
     fn layer_norm_rank3_normalizes_per_batch_seq_position() {
         // t shape [2, 2, 4]: batch=2, seq=2, hidden=4
