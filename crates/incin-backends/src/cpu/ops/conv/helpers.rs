@@ -164,3 +164,45 @@ pub(super) fn without_batch_axis(storage: CpuStorage, added: bool) -> Result<Cpu
         Ok(storage)
     }
 }
+
+/// Adds a per-output-channel convolution bias with the bias *on the tape*.
+///
+/// The gradient of a bias is the sum of the output cotangent over every
+/// axis except the channel axis - which is exactly what the backward of a
+/// broadcast produces. So the bias has to reach the output through steps
+/// that are recorded, and the obvious spelling of them records nothing:
+///
+/// - `CpuStorage::reshape` is inherent. It hands back a fresh storage with a
+///   new id and pushes no node, so the parameter is no longer reachable from
+///   the graph by that name.
+/// - `add_storage` is likewise untracked. `add_storage_with_shape` is the
+///   recorded variant; using the untracked one leaves the broadcast with no
+///   consumer to hand its cotangent to.
+///
+/// With both untracked, `backward` produced **no gradient at all** for the
+/// bias of `conv1d`, `conv2d` and `conv_transpose2d` on this backend, and
+/// produced no error either, since a missing gradient is only visible to
+/// something that asks for one. The convolution forward was always right,
+/// so the symptom is a model that trains with its bias frozen at
+/// initialization. This is worse than a local numerical mistake: WGPU adds
+/// the same bias through a recorded reshape, broadcast and add, so the two
+/// backends disagreed about a gradient for the same model.
+///
+/// `bcast_shape` places the bias's channel axis correctly for the output's
+/// rank - `[cout, 1, ..]` when the result is unbatched, `[1, cout, 1, ..]`
+/// otherwise. Both steps below are the recorded variants, and both are
+/// needed: a broadcast cannot raise rank, so the reshape has to come first.
+pub(crate) fn add_conv_bias_tracked(
+    conv_out: &CpuStorage,
+    bias: &CpuStorage,
+    bcast_shape: &[usize],
+) -> Result<CpuStorage> {
+    let reshaped = crate::cpu::ops::shape_ops::reshape_storage(bias, bcast_shape)?;
+    let stretched =
+        crate::cpu::ops::shape_ops::broadcast_as_storage(&reshaped, conv_out.shape.dims())?;
+    crate::cpu::ops::elementwise::add_storage_with_shape(
+        conv_out,
+        &stretched,
+        conv_out.shape.dims(),
+    )
+}

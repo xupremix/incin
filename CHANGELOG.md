@@ -10,6 +10,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Fixed: the convolution bias got no gradient at all on the CPU backend.**
+  `conv1d`, `conv2d` and `conv_transpose2d` each folded a per-channel bias
+  into the output with an inherent `reshape` followed by an untracked
+  `add_storage`. Neither step records anything: the inherent reshape hands
+  back a fresh storage under a new id, and `add_storage` pushes no node
+  (`add_storage_with_shape` is the recorded variant). The bias was therefore
+  unreachable from the tape, and `backward` produced *no gradient and no
+  error* for it - a missing gradient being visible only to something that
+  asks for one. Every biased convolution on this backend trained with its
+  bias frozen at its initialization, and because the forward was always
+  correct, nothing about the loss curve would have said so. This was also a
+  cross-backend disagreement rather than a local mistake: WGPU reached the
+  same forward through a recorded reshape, broadcast and add, so CPU and GPU
+  returned different gradients for the same model. The bias gradient is a
+  sum over the non-channel axes, which is exactly what the backward of a
+  broadcast produces - so the fix routes the bias through recorded steps
+  (`reshape_storage`, then `broadcast_as_storage`, then
+  `add_storage_with_shape`), with both steps needed because a broadcast
+  cannot raise rank. `conv1d`'s module doc had claimed the bias gradient was
+  "free via composition"; the composition it had in mind was not happening,
+  because the helpers it named record nothing.
+
+- **Added: gradient coverage for the convolution geometry that was
+  unexercised.** Both existing convolution gradchecks used `[1,1,4,4]`
+  against a `[1,1,2,2]` kernel with stride 1, no padding, no dilation and one
+  group, and seeded the backward with `sum_all`. That is the single
+  configuration in which conv's index arithmetic cannot go wrong: with one
+  channel in and out and unit stride, no padding and no dilation, every
+  window starts at `(y * kh + ky, x * kw + kx)` - one offset term - and
+  every weight element is used equally often. Fifteen new rows vary stride,
+  padding, dilation, grouping, asymmetric stride/padding, and a batched
+  multi-channel case with all of them at once. They also seed the backward
+  with a distinct ramp per output element instead of a uniform one, which
+  matters for the weight gradient in particular: under a uniform seed it is
+  just the number of times each weight element is used, so two elements
+  mispaired between positions of equal count agree however wrongly they were
+  paired. All fifteen passed on the first run, so the stride, padding,
+  dilation and grouping arithmetic was already correct - which is the useful
+  outcome, and the reason the missing bias gradient stands out against it.
+
 - **`gradcheck_ops`: ask every operation the same mechanical question.**
   `gradcheck_model` checks compositions; this checks the operation surface
   one row at a time - 47 rows covering axis reductions, structural moves
