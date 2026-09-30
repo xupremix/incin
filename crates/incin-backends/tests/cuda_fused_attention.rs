@@ -335,12 +335,7 @@ fn fused_forward_f64_matches_within_double_tolerance() {
         )
         .expect("CPU reference f64 fused attention executes");
         let want = cpu_read_f64(&want);
-        assert_close(
-            &got.iter().copied().collect::<Vec<f64>>(),
-            &want,
-            1e-9,
-            "f64 forward",
-        );
+        assert_close(&got, &want, 1e-9, "f64 forward");
     }
 }
 
@@ -848,9 +843,9 @@ fn fused_backward_matches_the_cpu_twin() {
 fn fused_attention_refusals_are_typed() {
     require_cuda();
     let context = ExecutionContext::new(TestBackend::new());
-    let q = upload_f32_shaped(&[1, 2, 3, 4], &vec![0.5; 24]);
-    let k = upload_f32_shaped(&[1, 2, 3, 4], &vec![0.5; 24]);
-    let v = upload_f32_shaped(&[1, 2, 3, 4], &vec![0.5; 24]);
+    let q = upload_f32_shaped(&[1, 2, 3, 4], &[0.5; 24]);
+    let k = upload_f32_shaped(&[1, 2, 3, 4], &[0.5; 24]);
+    let v = upload_f32_shaped(&[1, 2, 3, 4], &[0.5; 24]);
     let handles = || {
         [
             TensorHandle::from_storage::<TestBackend, f32, _>(&q),
@@ -872,7 +867,7 @@ fn fused_attention_refusals_are_typed() {
         "non-positive scale must be refused"
     );
     // Rank-3 operands are refused by the descriptor, before launch.
-    let flat = upload_f32_shaped(&[2, 12], &vec![0.5; 24]);
+    let flat = upload_f32_shaped(&[2, 12], &[0.5; 24]);
     assert!(
         dispatch::execute::<op::FusedAttention, TestBackend>(
             &context,
@@ -890,8 +885,8 @@ fn fused_attention_refusals_are_typed() {
         "rank-3 query must be refused"
     );
     // Query heads must be a multiple of kv heads.
-    let k3 = upload_f32_shaped(&[1, 3, 3, 4], &vec![0.5; 36]);
-    let v3 = upload_f32_shaped(&[1, 3, 3, 4], &vec![0.5; 36]);
+    let k3 = upload_f32_shaped(&[1, 3, 3, 4], &[0.5; 36]);
+    let v3 = upload_f32_shaped(&[1, 3, 3, 4], &[0.5; 36]);
     assert!(
         dispatch::execute::<op::FusedAttention, TestBackend>(
             &context,
@@ -928,7 +923,7 @@ fn fused_attention_refusals_are_typed() {
         "strided query must be refused"
     );
     // Mixed dtypes are refused by the launcher, not silently bit-cast.
-    let kf = upload_bytes(&[1, 2, 3, 4], DTypeId::F64, &f64_bytes(&vec![0.5; 24]));
+    let kf = upload_bytes(&[1, 2, 3, 4], DTypeId::F64, &f64_bytes(&[0.5; 24]));
     assert!(
         dispatch::execute::<op::FusedAttention, TestBackend>(
             &context,
