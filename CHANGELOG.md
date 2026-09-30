@@ -10,6 +10,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Added: a numeric gradient check for the embedding table, because a uniform
+  seed cannot tell "the right number of terms" from "the right terms".** The
+  embedding backward already had `backward_repeated_index_accumulates_not_
+  overwrites`, which pins the headline risk exactly: with a uniform seed it
+  asserts `2.0` for a row addressed twice against `1.0` for one addressed
+  once, which an overwrite cannot produce. What a uniform seed *cannot*
+  distinguish is a backward that accumulates the correct number of
+  contributions from the wrong output positions - and that is demonstrated,
+  not asserted: injecting a backward that gives every row the cotangent of
+  output position 0 leaves both hand-written tests green while failing both
+  new ones. So the two new checks seed the loss with a distinct value per
+  output position, which turns the expected answer from a count into a
+  specific sum, and hold both index ranks to a central difference rather than
+  one being held by proxy. The 2-D index shape is included because the
+  backward walks leading axes with an odometer, and a 2-D index is the only
+  thing that makes that walk mean anything; the existing repeated-index test
+  uses a 1-D index, where the walk never runs.
+
 - **Added: numerical gradient coverage for attention, which had only ever been
   checked for being finite.** Scaled dot-product attention is the one
   composition in the CPU backend with three differentiable projections, a

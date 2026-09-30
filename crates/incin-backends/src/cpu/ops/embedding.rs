@@ -160,6 +160,88 @@ mod tests {
     }
 
     #[test]
+    /// `weight_table_gradient_matches_central_differences_with_repeats`.
+    ///
+    /// `backward_repeated_index_accumulates_not_overwrites` already pins the
+    /// headline risk: with a uniform seed it asserts `2.0` for a row addressed
+    /// twice and `1.0` for one addressed once, which an overwrite cannot
+    /// produce. This is not a replacement for that; it covers what a uniform
+    /// seed cannot.
+    ///
+    /// Ones make every output position's cotangent identical, so a backward
+    /// that pairs the *wrong* output position with a row - accumulating the
+    /// right number of terms, from the wrong places - satisfies any assertion
+    /// that only counts. Distinguishing those two failures needs the seed to
+    /// vary by position, so the loss here weights the output distinctly and
+    /// the answer becomes a specific sum rather than a count. That is also
+    /// why the check is a central difference rather than another hand-written
+    /// expectation: with the value pinned numerically, a table-wide
+    /// misrouting - a transposed row/column, a wrong hidden stride - shows up
+    /// without someone having to predict the right numbers first.
+    ///
+    /// The indices repeat rows 0 and 2, leave row 1 alone and never touch row
+    /// 3, so accumulation, single-addressing and the zero row are all in one
+    /// case. The shape is 2-D, which the existing repeated-index test does not
+    /// use - the backward walks leading axes with an odometer, and a 2-D index
+    /// is what makes that walk mean anything.
+    fn weight_table_gradient_matches_central_differences_with_repeats() {
+        let table = CpuStorage::from_contiguous(
+            CpuBuffer::F32(vec![0.3, -0.7, 1.1, 0.2, -0.4, 0.9, 0.6, 0.8]),
+            vec![4, 2],
+        );
+        // Rows 0 and 2 are each looked up twice; row 1 once; row 3 not at all.
+        // Row 3 is included so an untouched row is also checked for staying
+        // at zero rather than accumulating something.
+        let idx = indices_i64(vec![0, 1, 2, 0, 2, 3], vec![2, 3]);
+        let op = |inputs: &[CpuStorage]| -> CpuStorage {
+            let out = embedding_impl::<Cpu, f32, i64>(&idx, &inputs[0]).unwrap();
+            let elements = crate::cpu::stride::validated_numel(out.shape.dims());
+            let seed: Vec<f32> = (0..elements)
+                .map(|i| ((i * 5 + 1) % 11) as f32 * 0.13 - 0.65)
+                .collect();
+            let seed = CpuStorage::from_contiguous(CpuBuffer::F32(seed), out.shape.dims());
+            let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed).unwrap();
+            crate::cpu::ops::reduce::sum_all(&weighted).unwrap()
+        };
+        let max_rel_err =
+            crate::cpu::gradcheck::gradcheck(op, &[table], crate::cpu::gradcheck::F32_STEP);
+        assert!(
+            max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+            "embedding table gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    /// The same sweep over a 1-D index tensor, so both index ranks are held to
+    /// a derivative rather than one being held to it by proxy. A 1-D index has
+    /// no leading axes, so the odometer is never stepped and the row-major
+    /// reading of the output is never exercised - a different traversal, and
+    /// the one the hand-written accumulation test above uses.
+    #[test]
+    fn weight_table_gradient_matches_central_differences_on_a_1d_index() {
+        let table = CpuStorage::from_contiguous(
+            CpuBuffer::F32(vec![0.3, -0.7, 1.1, 0.2, -0.4, 0.9]),
+            vec![3, 2],
+        );
+        let idx = indices_i64(vec![0, 2, 0, 2, 1, 2], vec![6]);
+        let op = |inputs: &[CpuStorage]| -> CpuStorage {
+            let out = embedding_impl::<Cpu, f32, i64>(&idx, &inputs[0]).unwrap();
+            let elements = crate::cpu::stride::validated_numel(out.shape.dims());
+            let seed: Vec<f32> = (0..elements)
+                .map(|i| ((i * 3 + 2) % 7) as f32 * 0.21 - 0.63)
+                .collect();
+            let seed = CpuStorage::from_contiguous(CpuBuffer::F32(seed), out.shape.dims());
+            let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed).unwrap();
+            crate::cpu::ops::reduce::sum_all(&weighted).unwrap()
+        };
+        let max_rel_err =
+            crate::cpu::gradcheck::gradcheck(op, &[table], crate::cpu::gradcheck::F32_STEP);
+        assert!(
+            max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+            "embedding 1-d index gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
     /// `forward_1d_indices_gathers_correct_rows_with_repeats`.
     fn forward_1d_indices_gathers_correct_rows_with_repeats() {
         // weight [3,2]: row0=[1,2], row1=[3,4], row2=[5,6]
