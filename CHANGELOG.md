@@ -10,6 +10,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **`trainer_fit`: the automatic `Trainer` driven end to end.** Every
+  other training example writes the loop out by hand, which is the right
+  way to learn the framework and the wrong way to check that a loop is
+  correct - a loop bug and a working loop produce the same falling loss.
+  This one drives `Trainer::fit` on a small synthetic classification
+  problem and checks three things, in increasing order of how much they
+  would catch. That the run trains: the loss of a fixed probe batch is
+  taken from the *same model instance* before and after, since
+  `Linear::build` initializes randomly and two instances differ for
+  reasons that have nothing to do with the optimizer - a finite
+  `final_loss` proves nothing, because a loop that ran the forward and
+  never stepped would produce one. That the bookkeeping is exact:
+  `epochs` and `batches` are counted by the trainer, and a count that
+  drifts by one is invisible in a loss curve. And that a plan for
+  hardware which does not exist is *refused* rather than silently
+  narrowed to the CPU - the same model, batches and optimizer, asked for
+  three absent GPUs, which is the sentence the `Trainer` exists to make
+  true ("easy" must not mean "silently ran on the CPU instead"). Which of
+  the two refusals fires - at planning, when the backend family is not
+  compiled in, or at the first batch, when it is - is printed rather than
+  assumed, because the difference is the difference between "you need a
+  Cargo feature" and "that device is not there". An empty dataset is
+  checked too: zero batches and no loss say so honestly, where a loss of
+  `0.0` would be an invention.
+
 - **`gradcheck_model`: a central-difference gradient oracle for whole
   compositions.** Every per-operation gradient test in this repository
   checks one backward recipe against a hand-computed answer, which leaves

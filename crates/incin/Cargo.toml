@@ -183,6 +183,10 @@ name = "gradcheck_model"
 required-features = ["cpu"]
 
 [[example]]
+name = "trainer_fit"
+required-features = ["cpu", "train"]
+
+[[example]]
 name = "custom_dtype_walkthrough"
 required-features = ["cpu"]
 [[example]]
