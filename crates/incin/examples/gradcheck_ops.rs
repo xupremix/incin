@@ -780,6 +780,68 @@ fn main() -> Result<()> {
         );
     }
     {
+        // layer_norm's backward mixes a mean and a variance reduction with
+        // the input, and the affine is a broadcast like batch norm's - so
+        // this row pins the input path through the same broadcast_as /
+        // unbroadcast machinery the batch-norm affine fix introduced. The
+        // weight and bias are tracked only because the signature requires
+        // every operand to share the input's grad mode; their gradients
+        // accumulate unread, like the second operand of the lerp row.
+        let weight = tracked(&ramp(3, 0.25), vec![3])?;
+        let bias = tracked(&ramp(3, 0.15), vec![3])?;
+        let weights = tensor(&ramp(2 * 3, 0.3), vec![2, 3])?;
+        row!(
+            "layer_norm with affine then weighted sum_all",
+            &ramp(2 * 3, 0.4),
+            vec![2, 3],
+            |x: T| Ok(x
+                .layer_norm(&weight, &bias, 1e-5)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+    {
+        // batch_norm in training mode normalizes by batch statistics, so
+        // every output depends on every input of its channel - the gradient
+        // is dense within a channel, and a reduction over the wrong axis
+        // gives the right shape with the wrong values. The running
+        // statistics are rebuilt per evaluation, so the central difference
+        // sees the same starting point both times.
+        let weight = tracked(&ramp(3, 0.25), vec![3])?;
+        let bias = tracked(&ramp(3, 0.15), vec![3])?;
+        let running_mean = tracked(&vec![0.0f32; 3], vec![3])?;
+        let running_var = tracked(&vec![1.0f32; 3], vec![3])?;
+        let weights = tensor(&ramp(4 * 3, 0.3), vec![4, 3])?;
+        row!(
+            "batch_norm (training) then weighted sum_all",
+            &ramp(4 * 3, 0.4),
+            vec![4, 3],
+            |x: T| Ok(x
+                .batch_norm(&weight, &bias, &running_mean, &running_var, 1e-5)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+    {
+        // Standalone softmax: the cross-entropy row covers the composition,
+        // but a missing off-diagonal Jacobian term there hides inside the
+        // loss. Here the Jacobian is the whole test, weighted so no two
+        // rows of it coincide.
+        let weights = tensor(&ramp(2 * 4, 0.3), vec![2, 4])?;
+        row!(
+            "softmax over axis 1 then weighted sum_all",
+            &ramp(2 * 4, 0.4),
+            vec![2, 4],
+            |x: T| Ok(x
+                .softmax(1isize)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+    {
         // Cross entropy is the one loss where a subtly wrong gradient still
         // trains: softmax's Jacobian is the interesting part, and a missing
         // off-diagonal term makes it worse rather than broken.
