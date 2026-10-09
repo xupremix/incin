@@ -77,6 +77,7 @@
 //! like a learning rate twice as large as the one that was asked for.
 
 use incin::prelude::*;
+use incin::typenum::{U0, U1, U2};
 // The facade prelude does not export the rank-0 shape a loss has to be, the
 // placement parameter every `Tensor` type spells, or the scoped gradient
 // policy - so a helper that takes a loss has to name all three itself.
@@ -810,8 +811,8 @@ fn main() -> Result<()> {
         // sees the same starting point both times.
         let weight = tracked(&ramp(3, 0.25), vec![3])?;
         let bias = tracked(&ramp(3, 0.15), vec![3])?;
-        let running_mean = tracked(&vec![0.0f32; 3], vec![3])?;
-        let running_var = tracked(&vec![1.0f32; 3], vec![3])?;
+        let running_mean = tracked(&[0.0f32; 3], vec![3])?;
+        let running_var = tracked(&[1.0f32; 3], vec![3])?;
         let weights = tensor(&ramp(4 * 3, 0.3), vec![4, 3])?;
         row!(
             "batch_norm (training) then weighted sum_all",
@@ -866,6 +867,69 @@ fn main() -> Result<()> {
             |x: T| Ok(x
                 .matmul(&middle)?
                 .matmul(&out)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+
+    // ===================================================== spatial ops
+    // Convolution and pooling are the two spatial backward paths, and both
+    // scatter: a convolution's input gradient is itself a convolution with
+    // a flipped kernel, and a max pool routes the whole cotangent to the
+    // argmax element. Both shapes work on `Dyn` - `KernelConv2dShape` and
+    // `Pool2dShape` each have a dynamic impl - so these rows need no
+    // static-shape harness.
+    {
+        // Stride 1, no padding: [1, 2, 4, 4] under a [3, 2, 2, 2] kernel
+        // gives [1, 3, 3, 3]. The kernel is tracked only because the
+        // signature requires every operand to share the input's grad mode;
+        // its gradient accumulates unread - this row asks only about the
+        // input.
+        let kernel = tracked(&ramp(3 * 2 * 2 * 2, 0.25), vec![3, 2, 2, 2])?;
+        let weights = tensor(&ramp(3 * 3 * 3, 0.3), vec![1, 3, 3, 3])?;
+        row!(
+            "conv2d then weighted sum_all",
+            &ramp(2 * 4 * 4, 0.4),
+            vec![1, 2, 4, 4],
+            |x: T| Ok(x
+                .conv2d::<U1, U0, Dyn>(&kernel, None)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+    {
+        // The bias variant: the bias got no gradient at all on CPU until
+        // recently, and its broadcast is per-channel like the norms' - so
+        // this row keeps the input path honest with the bias present. The
+        // bias is tracked only because the signature requires it; its
+        // gradient accumulates unread.
+        let kernel = tracked(&ramp(3 * 2 * 2 * 2, 0.25), vec![3, 2, 2, 2])?;
+        let bias = tracked(&ramp(3, 0.2), vec![3])?;
+        let weights = tensor(&ramp(3 * 3 * 3, 0.3), vec![1, 3, 3, 3])?;
+        row!(
+            "conv2d with bias then weighted sum_all",
+            &ramp(2 * 4 * 4, 0.4),
+            vec![1, 2, 4, 4],
+            |x: T| Ok(x
+                .conv2d::<U1, U0, Dyn>(&kernel, Some(&bias))?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+    {
+        // A 2x2 stride-2 max pool over [1, 1, 4, 4]: each output's whole
+        // cotangent must land on exactly one input element, and the ramp
+        // values are all distinct so a tie-break cannot hide a misroute.
+        let weights = tensor(&ramp(2 * 2, 0.3), vec![1, 1, 2, 2])?;
+        row!(
+            "max_pool2d then weighted sum_all",
+            &ramp(4 * 4, 0.4),
+            vec![1, 1, 4, 4],
+            |x: T| Ok(x
+                .max_pool2d::<U2, U2, U0, U1>()?
                 .broadcast_mul(&weights)?
                 .sum_all()?
                 .forget_layout())
