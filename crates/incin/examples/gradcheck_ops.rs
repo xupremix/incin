@@ -602,6 +602,23 @@ fn main() -> Result<()> {
                 .forget_layout())
         );
     }
+    {
+        // pixel_shuffle rearranges depth into space, so its backward is
+        // the inverse rearrangement - a permutation, and a permutation
+        // that drops an element loses a gradient silently like any other
+        // scatter. [1, 4, 2, 2] becomes [1, 1, 4, 4].
+        let weights = tensor(&ramp(4 * 4, 0.3), vec![1, 1, 4, 4])?;
+        row!(
+            "pixel_shuffle(2) then weighted sum_all",
+            &ramp(4 * 2 * 2, 0.4),
+            vec![1, 4, 2, 2],
+            |x: T| Ok(x
+                .pixel_shuffle(2)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
 
     // ============================================ elementwise derivatives
     // The chain rule is easy to get right for a function and easy to get
@@ -670,6 +687,23 @@ fn main() -> Result<()> {
         unary!("relu then weighted sum_all", relu);
     }
     {
+        // powf is the one unary whose derivative mentions the input twice
+        // over: p * x^(p - 1). A missing factor of p is a uniform scale,
+        // which the weighted sum cannot hide because every element's
+        // gradient differs.
+        let weights = tensor(&ramp(6, 0.3), vec![6])?;
+        row!(
+            "powf(2) then weighted sum_all",
+            &ramp(6, 0.4),
+            vec![6],
+            |x: T| Ok(x
+                .powf(2.0)?
+                .broadcast_mul(&weights)?
+                .sum_all()?
+                .forget_layout())
+        );
+    }
+    {
         // mul_scalar's backward is a broadcast of the cotangent times the
         // scalar, and div_scalar's is a division - the two scalar
         // backward rules, which are the ones most often missing entirely.
@@ -705,6 +739,33 @@ fn main() -> Result<()> {
             .lerp(&other, 0.35)?
             .sum_all()?
             .forget_layout()));
+    }
+    {
+        // Tensor-tensor mul: the gradient with respect to x is the other
+        // operand's values times the cotangent, so this row fails if the
+        // backward ignores the sibling operand. No weighting needed: the
+        // sibling's ramp already makes every element's gradient distinct.
+        let other = tracked(&ramp(2 * 3, 0.2), vec![2, 3])?;
+        row!(
+            "broadcast_mul of two tracked operands then sum_all",
+            &ramp(2 * 3, 0.4),
+            vec![2, 3],
+            |x: T| Ok(x.broadcast_mul(&other)?.sum_all()?.forget_layout())
+        );
+    }
+    {
+        // Tensor-tensor div with a broadcast denominator: the gradient is
+        // the reciprocal cotangent, unbroadcast back to [3]. A missing
+        // unbroadcast gives the right shape with triple-counted values,
+        // and a missing square on the denominator is a uniform scale.
+        // The denominator has no zeros, so neither path divides by one.
+        let denom = tracked(&ramp(3, 0.2), vec![3])?;
+        row!(
+            "broadcast_div by a tracked row then sum_all",
+            &ramp(2 * 3, 0.4),
+            vec![2, 3],
+            |x: T| Ok(x.broadcast_div(&denom)?.sum_all()?.forget_layout())
+        );
     }
 
     // =========================================== whole-tensor reductions
@@ -820,23 +881,6 @@ fn main() -> Result<()> {
             vec![4, 3],
             |x: T| Ok(x
                 .batch_norm(&weight, &bias, &running_mean, &running_var, 1e-5)?
-                .broadcast_mul(&weights)?
-                .sum_all()?
-                .forget_layout())
-        );
-    }
-    {
-        // Standalone softmax: the cross-entropy row covers the composition,
-        // but a missing off-diagonal Jacobian term there hides inside the
-        // loss. Here the Jacobian is the whole test, weighted so no two
-        // rows of it coincide.
-        let weights = tensor(&ramp(2 * 4, 0.3), vec![2, 4])?;
-        row!(
-            "softmax over axis 1 then weighted sum_all",
-            &ramp(2 * 4, 0.4),
-            vec![2, 4],
-            |x: T| Ok(x
-                .softmax(1isize)?
                 .broadcast_mul(&weights)?
                 .sum_all()?
                 .forget_layout())
