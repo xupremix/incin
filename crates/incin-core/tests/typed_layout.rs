@@ -288,10 +288,11 @@ fn shape_changing_operations_produce_dense_results() {
     assert_dense("mean", &t.mean(ForwardAxis::<Here>::default()).unwrap());
     assert_dense("neg", &t.neg().unwrap());
 
-    // `transpose` is a view on every backend now -- that was issue #113,
+    // `transpose` is a view on CPU under the views-everywhere contract -- that was issue #113,
     // decided views-everywhere following PyTorch: the result shares the
     // input's buffer with permuted strides, and densifying is explicit via
-    // `into_row_major`. Strides [1, 4] are the input's [4, 1] swapped for
+    // `into_row_major`. (CUDA's `TransposeExact` still materialises as a tracked
+    // deviation; this CPU test pins the contract side.) Strides [1, 4] are the input's [4, 1] swapped for
     // shape [4, 3]; [3, 1] would mean a backend quietly went back to copying.
     let transposed = t
         .transpose_structural::<Here, incin_core::shapes::idx::Next<Here>>()

@@ -12,6 +12,224 @@ use alloc::{boxed::Box, format, string::String, vec::Vec};
 use core::fmt::Write;
 use incin_core::tensor::dtype::DTypeId;
 
+// Scalar `f64` math that works with and without `std`, mirroring
+// `incin-core/src/math.rs` (which is `pub(crate)` to that crate, so this
+// module carries its own copies): the inherent methods live in `std`, so each
+// transcendental helper calls the inherent method under `std` — bit-identical
+// to what the CPU executor and the folding tests use — and `libm`, which is
+// pure Rust and `no_std`-compatible, otherwise. The rounding helpers are
+// exact integer-domain operations, so they call `libm` unconditionally.
+#[inline]
+fn exp_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.exp()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::exp(v)
+    }
+}
+
+#[inline]
+fn ln_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.ln()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::log(v)
+    }
+}
+
+#[inline]
+fn sin_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.sin()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sin(v)
+    }
+}
+
+#[inline]
+fn cos_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.cos()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::cos(v)
+    }
+}
+
+#[inline]
+fn sqrt_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.sqrt()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sqrt(v)
+    }
+}
+
+#[inline]
+fn tanh_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.tanh()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::tanh(v)
+    }
+}
+
+#[inline]
+fn tan_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.tan()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::tan(v)
+    }
+}
+
+#[inline]
+fn asin_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.asin()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::asin(v)
+    }
+}
+
+#[inline]
+fn acos_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.acos()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::acos(v)
+    }
+}
+
+#[inline]
+fn atan_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.atan()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::atan(v)
+    }
+}
+
+#[inline]
+fn sinh_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.sinh()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::sinh(v)
+    }
+}
+
+#[inline]
+fn cosh_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.cosh()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::cosh(v)
+    }
+}
+
+#[inline]
+fn asinh_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.asinh()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::asinh(v)
+    }
+}
+
+#[inline]
+fn acosh_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.acosh()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::acosh(v)
+    }
+}
+
+#[inline]
+fn atanh_f64(v: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        v.atanh()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::atanh(v)
+    }
+}
+
+/// Exact cube, no `powi` needed: multiplication is exact-domain and identical
+/// on every target, unlike the transcendental helpers above.
+#[inline]
+fn cube_f64(v: f64) -> f64 {
+    v * v * v
+}
+
+#[inline]
+fn pow_f64(l: f64, r: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        l.powf(r)
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::pow(l, r)
+    }
+}
+
+#[inline]
+fn atan2_f64(l: f64, r: f64) -> f64 {
+    #[cfg(feature = "std")]
+    {
+        l.atan2(r)
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        libm::atan2(l, r)
+    }
+}
+
 /// Unary operators supported in the IR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IrUnaryOp {
@@ -94,12 +312,12 @@ impl IrUnaryOp {
     pub fn apply(self, v: f64) -> f64 {
         match self {
             Self::Abs => v.abs(),
-            Self::Exp => v.exp(),
-            Self::Log => v.ln(),
-            Self::Sin => v.sin(),
-            Self::Cos => v.cos(),
-            Self::Sqrt => v.sqrt(),
-            Self::Rsqrt => 1.0 / v.sqrt(),
+            Self::Exp => exp_f64(v),
+            Self::Log => ln_f64(v),
+            Self::Sin => sin_f64(v),
+            Self::Cos => cos_f64(v),
+            Self::Sqrt => sqrt_f64(v),
+            Self::Rsqrt => 1.0 / sqrt_f64(v),
             Self::Neg => -v,
             Self::Relu => v.max(0.0),
             Self::Step => {
@@ -111,25 +329,25 @@ impl IrUnaryOp {
             }
             Self::Square => v * v,
             Self::Reciprocal => 1.0 / v,
-            Self::Tanh => v.tanh(),
-            Self::Sigmoid => 1.0 / (1.0 + (-v).exp()),
-            Self::Silu => v / (1.0 + (-v).exp()),
+            Self::Tanh => tanh_f64(v),
+            Self::Sigmoid => 1.0 / (1.0 + exp_f64(-v)),
+            Self::Silu => v / (1.0 + exp_f64(-v)),
             Self::Gelu => {
                 // The tanh approximation, matching what the CUDA literal and
                 // the CPU kernel both compute.
                 let k = 0.797_884_560_802_865_4; // sqrt(2 / pi)
-                let cdf = 0.5 * (1.0 + (k * (v + 0.044715 * v.powi(3))).tanh());
+                let cdf = 0.5 * (1.0 + tanh_f64(k * (v + 0.044715 * cube_f64(v))));
                 v * cdf
             }
-            Self::Tan => v.tan(),
-            Self::Asin => v.asin(),
-            Self::Acos => v.acos(),
-            Self::Atan => v.atan(),
-            Self::Sinh => v.sinh(),
-            Self::Cosh => v.cosh(),
-            Self::Asinh => v.asinh(),
-            Self::Acosh => v.acosh(),
-            Self::Atanh => v.atanh(),
+            Self::Tan => tan_f64(v),
+            Self::Asin => asin_f64(v),
+            Self::Acos => acos_f64(v),
+            Self::Atan => atan_f64(v),
+            Self::Sinh => sinh_f64(v),
+            Self::Cosh => cosh_f64(v),
+            Self::Asinh => asinh_f64(v),
+            Self::Acosh => acosh_f64(v),
+            Self::Atanh => atanh_f64(v),
             // No `f64::erf` on stable, so this is the Abramowitz and Stegun
             // 7.1.26 rational approximation, accurate to about 1.5e-7. It is
             // the host-side reference for folding and testing only: the
@@ -144,13 +362,13 @@ impl IrUnaryOp {
                         * t
                         + 0.254_829_592)
                         * t
-                        * (-x * x).exp();
+                        * exp_f64(-x * x);
                 sign * y
             }
-            Self::Floor => v.floor(),
-            Self::Ceil => v.ceil(),
-            Self::Round => v.round(),
-            Self::Trunc => v.trunc(),
+            Self::Floor => libm::floor(v),
+            Self::Ceil => libm::ceil(v),
+            Self::Round => libm::round(v),
+            Self::Trunc => libm::trunc(v),
         }
     }
 }
@@ -192,10 +410,10 @@ impl IrBinaryOp {
             Self::Sub => l - r,
             Self::Mul => l * r,
             Self::Div => l / r,
-            Self::Pow => l.powf(r),
+            Self::Pow => pow_f64(l, r),
             Self::Max => l.max(r),
             Self::Min => l.min(r),
-            Self::Atan2 => l.atan2(r),
+            Self::Atan2 => atan2_f64(l, r),
         }
     }
 }

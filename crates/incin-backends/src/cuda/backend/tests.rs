@@ -90,7 +90,8 @@ fn transpose_2d_swaps_shape() {
     assert_eq!(
         out.strides().as_ref(),
         &[2, 1],
-        "TransposeExact materialises dense row-major on every backend (issue #113)"
+        "TransposeExact materialises dense row-major on CUDA (tracked deviation, issue #113); \
+         the contract is views everywhere, so CPU serves permuted strides here"
     );
 }
 
