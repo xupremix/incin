@@ -101,6 +101,54 @@ fn a_single_head_module_reproduces_attention_composed_by_hand() -> Result<()> {
     Ok(())
 }
 
+/// #101 slice 2: `MultiHeadAttention<8, 1, 1>` reproduces the
+/// `crates/incin/tests/transformer_block.rs` oracle.
+///
+/// The oracle forward (`TransformerBlock::forward`) computes single-head
+/// attention as `softmax(Q @ Kᵀ / sqrt(8)) @ V` followed by the output
+/// projection, from its own query/key/value/projection `Linear` layers.
+/// This test builds the module and replays that exact composition from the
+/// module's own weights (identical params by construction) on a fixed
+/// input, asserting output identity within 1e-5.
+#[test]
+fn single_head_module_matches_transformer_block_oracle() -> Result<()> {
+    let width = 8;
+    let attention = MultiHeadAttention::<8, 1, 1, Cpu>::build(AttentionConfig::default(), (), ())?;
+    let x = ramp(vec![1, 4, width])?;
+
+    let from_module = attention.forward(x.clone())?;
+
+    // Identical weights: replay the oracle from the module's own params.
+    let (wq, bq) = weights(&attention.query)?;
+    let (wk, bk) = weights(&attention.key)?;
+    let (wv, bv) = weights(&attention.value)?;
+    let (wo, bo) = weights(&attention.output)?;
+    let query = linear_apply(&x, &wq, &bq)?;
+    let key = linear_apply(&x, &wk, &bk)?;
+    let value = linear_apply(&x, &wv, &bv)?;
+    // transformer_block.rs: `query.matmul(&key.transpose(..)).mul_scalar(1/sqrt(8))`,
+    // `softmax`, `matmul(&value)`, then `projection`. Rank-3 here
+    // (`[1, 4, 8]`) so the sequence axes are 1/2 rather than the oracle's
+    // rank-2 axes 0/1; the arithmetic is the same.
+    let scores = query
+        .matmul(&key.transpose(1isize, 2isize)?.forget_layout())?
+        .forget_layout()
+        .mul_scalar(1.0_f64 / (8.0_f64).sqrt())?
+        .forget_layout();
+    let weights = scores.softmax(2)?.forget_layout();
+    let attended = weights.matmul(&value)?.forget_layout();
+    let oracle = linear_apply(&attended, &wo, &bo)?;
+
+    assert_eq!(from_module.dims().dims(), &[1, 4, width]);
+    assert_eq!(oracle.dims().dims(), &[1, 4, width]);
+    let diff = max_abs_diff(&from_module.to_vec1::<f32>()?, &oracle.to_vec1::<f32>()?);
+    assert!(
+        diff < 1e-5,
+        "MultiHeadAttention<8, 1, 1> and the transformer_block oracle disagree by {diff:e}"
+    );
+    Ok(())
+}
+
 /// Pins the head split: head `h` reads columns `h*head_dim .. (h+1)*head_dim`
 /// of each projection, and the heads are re-joined in the same order.
 ///
