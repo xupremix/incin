@@ -9,20 +9,25 @@
 //! way `concat`/`shape_op` are, keeps that machinery untouched and keeps
 //! this one narrow enough to read start to finish.
 //!
-//! Only `f32`, and only the contiguous, identically-shaped case: the
+//! Only the contiguous, identically-shaped case, and every float
+//! storage dtype the kernel exports an entry point for
+//! (`f32`/`f64`/`f16`/`bf16`, issue #90 slice 4), selected by the
+//! fail-closed map below so a buffer can never reach a kernel typed for a
+//! different dtype - the same shape `select.rs` took in slice 3. The
 //! executor broadcasts both operands to a common shape with
-//! `CudaBackendImpl::broadcast_as` first, which always materializes a fresh
-//! contiguous buffer, so this launcher never has to reason about strides or
-//! offsets the way the general elementwise path does. Widening past `f32`
-//! would mean widening `kernels/compare.cu`'s hardcoded `float*` signature
-//! first, the same `bytemuck`-style byte-width trap this session already
-//! found and fixed for `broadcast_as` itself.
+//! `shape::launch_broadcast` first, which is width-parametric and moves
+//! bytes for every dtype, so this launcher never has to reason about
+//! strides or offsets the way the general elementwise path does.
+//!
+//! The WGPU twin (`wgpu/backend/compare.rs`, f32 re-checked by name) and
+//! Metal (no comparison kernel at all) stay exactly as they are: widening
+//! them is out of scope, and their `F32_ONLY` rows keep stating it.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::shapes::error::OperationKind;
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 #[cfg(feature = "cuda")]
 const COMPARE_SRC: &str = include_str!("kernels/compare.cu");
@@ -61,6 +66,27 @@ fn ensure_compare_loaded(device_id: usize) -> Result<()> {
     Ok(())
 }
 
+/// The kernel entry point for an operand dtype, or a typed refusal for
+/// anything `compare.cu` does not export a name for. Fail-closed by
+/// construction: the launcher launches exactly this name, so a dtype
+/// without an entry can never reach a buffer reinterpreted as the wrong
+/// type. Same contract as `where_cond_entry_point` in
+/// `cuda/ops/select.rs`.
+#[cfg(feature = "cuda")]
+fn compare_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok("compare_op"),
+        Some(DTypeId::F64) => Ok("compare_op_f64"),
+        Some(DTypeId::F16) => Ok("compare_op_f16"),
+        Some(DTypeId::BF16) => Ok("compare_op_bf16"),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op: "compare",
+        }),
+    }
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_compare(
     op: CompareOp,
@@ -80,7 +106,9 @@ pub(crate) fn launch_compare(
             got: rhs_b.dtype,
         });
     }
-    crate::cuda::backend::cuda_require_f32(lhs_b.dtype, "compare")?;
+    // Selects the entry point and refuses every dtype without one, before
+    // any buffer is reinterpreted.
+    let entry_point = compare_entry_point(lhs_b.dtype)?;
     if lhs_b.device_id != rhs_b.device_id {
         return Err(Error::DeviceMismatch {
             left: incin_core::tensor::device::DeviceId::cuda(lhs_b.device_id),
@@ -92,7 +120,7 @@ pub(crate) fn launch_compare(
     let device_id = lhs_b.device_id;
     ensure_compare_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("compare", "compare_op")?;
+    let function = dispatcher.get_function("compare", entry_point)?;
     let stream = lhs_b.device.default_stream();
 
     let bool_dtype = DTypeId::Bool.descriptor();
@@ -125,6 +153,10 @@ pub(crate) fn launch_compare(
 
     // SAFETY: numel and launch dimensions were checked above; out_b is freshly
     // allocated, so its unique u8 storage can be passed to this typed kernel.
+    // The operand views pass through as byte buffers - the driver only needs
+    // the device address, the kernel is typed by the entry point, and
+    // `compare_entry_point` above established that the entry's type really
+    // is these buffers' dtype.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {
@@ -157,5 +189,60 @@ mod tests {
         assert_eq!(CompareOp::Le.mode(), 3);
         assert_eq!(CompareOp::Gt.mode(), 4);
         assert_eq!(CompareOp::Ge.mode(), 5);
+    }
+}
+
+/// Pure entry-point selection: runs wherever the `cuda` feature is on,
+/// with no device required. The launcher launches exactly the name
+/// `compare_entry_point` returns, so proving the mapping here is proving
+/// a buffer can never reach a kernel typed for a different dtype.
+#[cfg(all(test, feature = "cuda"))]
+mod compare_entry_point_tests {
+    use super::compare_entry_point;
+    use incin_core::error::Error;
+    use incin_core::tensor::dtype::DTypeId;
+
+    #[test]
+    fn compare_entry_point_maps_each_float_and_refuses_the_rest() {
+        assert_eq!(
+            compare_entry_point(DTypeId::F32.descriptor()).unwrap(),
+            "compare_op"
+        );
+        assert_eq!(
+            compare_entry_point(DTypeId::F64.descriptor()).unwrap(),
+            "compare_op_f64"
+        );
+        assert_eq!(
+            compare_entry_point(DTypeId::F16.descriptor()).unwrap(),
+            "compare_op_f16"
+        );
+        assert_eq!(
+            compare_entry_point(DTypeId::BF16.descriptor()).unwrap(),
+            "compare_op_bf16"
+        );
+
+        for id in [
+            DTypeId::I64,
+            DTypeId::Bool,
+            DTypeId::U8,
+            DTypeId::U32,
+            DTypeId::Q8_0,
+        ] {
+            let error = match compare_entry_point(id.descriptor()) {
+                Ok(name) => panic!("{id:?} must be refused, got entry point {name:?}"),
+                Err(error) => error,
+            };
+            assert!(
+                matches!(
+                    error,
+                    Error::UnsupportedDType {
+                        backend: "Cuda",
+                        op: "compare",
+                        ..
+                    }
+                ),
+                "{id:?}: expected UnsupportedDType naming Cuda/compare, got {error:?}"
+            );
+        }
     }
 }

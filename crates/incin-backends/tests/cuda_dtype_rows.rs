@@ -201,15 +201,70 @@ fn tensor_to_bytes_admits_the_dense_set_while_tohost_refuses_half() {
     }
 }
 
+/// Issue #90 slice 4: the six comparisons moved off the honest-f32
+/// `native_tensor` group onto standalone `FLOAT_DTYPES` rows. Every one
+/// must admit every float dtype contiguous with `training = false` (a
+/// comparison pushes no tape entry), and must still refuse a non-float
+/// operand by dtype - the row states its operands' dtypes, and `bool` is
+/// only ever the output.
+#[test]
+fn comparison_rows_admit_every_float_dtype() {
+    for operation in [
+        K::CmpEq,
+        K::CmpNe,
+        K::CmpLt,
+        K::CmpLe,
+        K::CmpGt,
+        K::CmpGe,
+    ] {
+        for dtype in [
+            DTypeId::BF16,
+            DTypeId::F16,
+            DTypeId::F32,
+            DTypeId::F64,
+        ] {
+            assert!(
+                admits(operation, dtype, LayoutClass::Contiguous, false),
+                "CUDA: {operation:?} must admit {dtype:?} contiguous with \
+                 training=false (standalone FLOAT_DTYPES row), got {:?}",
+                query(
+                    operation,
+                    dtype,
+                    LayoutClass::Contiguous,
+                    cuda_rule(operation).min_rank.max(1),
+                    false
+                ),
+            );
+        }
+        let level = query(
+            operation,
+            DTypeId::Bool,
+            LayoutClass::Contiguous,
+            cuda_rule(operation).min_rank.max(1),
+            false,
+        );
+        assert!(
+            matches!(
+                level,
+                SupportLevel::Unsupported(UnsupportedReason::DType { .. })
+            ),
+            "CUDA: {operation:?} must refuse bool by dtype (float operands \
+             only), got {level:?}",
+        );
+    }
+}
+
 /// Refusal pins: the honest-f32 native_tensor members this session left
 /// narrow must refuse `f16` by `UnsupportedReason::DType`. The dtype flag is
 /// set before the training flag in `CapabilityRegistry::support`, so the
-/// reason is DType regardless of the training bit; all eight are single-rule
+/// reason is DType regardless of the training bit; all seven are single-rule
 /// honest-f32 rows, so the first-match `cuda_rule` is the whole story.
+/// (`CmpEq` left this list in issue #90 slice 4: its standalone
+/// `FLOAT_DTYPES` row admits half now, pinned by
+/// `comparison_rows_admit_every_float_dtype` above.)
 #[test]
 fn honest_f32_rows_refuse_f16_by_dtype() {
     for operation in [
-        K::CmpEq,
         K::Cumsum,
         K::ArgMax,
         K::TopK,

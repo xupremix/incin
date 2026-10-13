@@ -439,15 +439,18 @@ macro_rules! cuda_descriptor_operations {
             //   `launch_pad`, `launch_repeat`);
             // - `repeat_interleave` refuses any non-`f32` operand outright
             //   (`launch_repeat_interleave`'s `UnsupportedDType`);
-            // - the comparisons gate on `cuda_require_f32`
-            //   (`cuda/ops/compare.rs`).
+            // - the comparisons answer every float storage dtype through
+            //   `compare_entry_point`'s fail-closed map
+            //   (`cuda/ops/compare.rs`, issue #90 slice 4), with standalone
+            //   `FLOAT_DTYPES` rows in `tables.rs` beside this group row.
             // Members whose claim is wider than `F32_ONLY` say so with a
             // standalone row in `tables.rs` that renders before this group
             // row: the measured movement identities
             // (`transpose*`/`narrow`/`concat`), the indexed ones
             // (`gather`/`scatter`/`index_select`), the mask consumers
             // (`where_cond`/`masked_fill` at `FLOAT_AND_BOOL` since #90
-            // slice 3), and -
+            // slice 3), the comparisons (`cmp_*` at `FLOAT_DTYPES` since
+            // #90 slice 4), and -
             // like the composed identities below - `pixel_shuffle`/`unfold`,
             // whose executors are pure reshape/transpose/narrow chains over
             // those same byte-movement kernels.

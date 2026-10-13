@@ -613,6 +613,69 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
             accelerator_max_rank(OperationKind::MaskedFill),
             true,
         ),
+        // The six numeric comparisons (`cuda/ops/compare.rs`): both operands
+        // carry the same float dtype and the result is `bool`, which
+        // admission never checks - a row states its *operands'* dtypes (see
+        // the WGPU `native_tensor` group's note that the row cannot state
+        // an output dtype), so the existing `FLOAT_DTYPES` constant is
+        // exactly the honest claim and no new union is needed. Unlike
+        // `where_cond`/`masked_fill` there is no `bool` operand to union
+        // against, and unlike the movement rows no integer index either.
+        // `dispatch::execute` applies this one set to every operand in
+        // turn; the same-dtype split it cannot express is enforced
+        // fail-closed inside the launcher (`DTypeStorageMismatch` before
+        // any entry point is selected, then `compare_entry_point` refusing
+        // every dtype without a `compare.cu` entry). `training = false`:
+        // a comparison pushes no tape entry, and `descriptor_training`
+        // already resolves all six that way for the group row.
+        native_ranked(
+            OperationKind::CmpEq,
+            FLOAT_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::CmpEq),
+            accelerator_max_rank(OperationKind::CmpEq),
+            false,
+        ),
+        native_ranked(
+            OperationKind::CmpNe,
+            FLOAT_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::CmpNe),
+            accelerator_max_rank(OperationKind::CmpNe),
+            false,
+        ),
+        native_ranked(
+            OperationKind::CmpLt,
+            FLOAT_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::CmpLt),
+            accelerator_max_rank(OperationKind::CmpLt),
+            false,
+        ),
+        native_ranked(
+            OperationKind::CmpLe,
+            FLOAT_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::CmpLe),
+            accelerator_max_rank(OperationKind::CmpLe),
+            false,
+        ),
+        native_ranked(
+            OperationKind::CmpGt,
+            FLOAT_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::CmpGt),
+            accelerator_max_rank(OperationKind::CmpGt),
+            false,
+        ),
+        native_ranked(
+            OperationKind::CmpGe,
+            FLOAT_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::CmpGe),
+            accelerator_max_rank(OperationKind::CmpGe),
+            false,
+        ),
         // `gather`/`scatter`/`index_select`: each takes an integer index
         // operand beside `f32` data, and `dispatch::execute`'s
         // `admit_invocation` checks every operand against the one resolved

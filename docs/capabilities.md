@@ -57,12 +57,12 @@ run time.
 | `ceil` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `chunk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — |
 | `clamp` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `cmp_eq` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
-| `cmp_ge` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
-| `cmp_gt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
-| `cmp_le` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
-| `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
-| `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
+| `cmp_eq` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `cmp_ge` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `cmp_gt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `cmp_le` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `conv1d` | `f32` | `f32` | — | — |
 | `conv2d` | `f32` | `f32` | `f32` | — |
@@ -446,6 +446,12 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `where_cond` | `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | 0–6 | yes | native |
 | `masked_fill` | `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | 0–6 | yes | native |
+| `cmp_eq` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 0–6 | no | native |
+| `cmp_ne` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 0–6 | no | native |
+| `cmp_lt` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 0–6 | no | native |
+| `cmp_le` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 0–6 | no | native |
+| `cmp_gt` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 0–6 | no | native |
+| `cmp_ge` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 0–6 | no | native |
 | `gather` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `scatter` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `index_select` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |

@@ -142,6 +142,109 @@ fn compare_rejects_mismatched_shapes() {
     assert!(launch_compare(CompareOp::Lt, &lhs, &rhs).is_err());
 }
 
+/// Issue #90 slice 4: `cmp_eq` over `f64` operands. Byte-exact rather than
+/// `download_f32_host`, which is `f32`-only by contract
+/// (`cuda/backend/contract.rs`): `[1,2,3,4]` vs `[1,0,3,5]` must read
+/// `[1,0,1,0]`.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn compare_eq_over_f64_is_byte_exact() {
+    use crate::cuda::ops::compare::{CompareOp, launch_compare};
+    let lhs_bytes: Vec<u8> = [1.0f64, 2.0, 3.0, 4.0]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let rhs_bytes: Vec<u8> = [1.0f64, 0.0, 3.0, 5.0]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let lhs =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &lhs_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let rhs =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &rhs_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let out = launch_compare(CompareOp::Eq, &lhs, &rhs).unwrap();
+    assert_eq!(out.shape, vec![4]);
+    assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
+    assert_eq!(
+        crate::cuda::testing::download_bytes(&out),
+        vec![1, 0, 1, 0]
+    );
+}
+
+/// Issue #90 slice 4: `cmp_lt` over `f16` operands, compared as raw bytes
+/// for the same `download_f32_host`-is-`f32`-only reason. Every value is a
+/// small integer, exactly representable in `f16`, so the comparison is
+/// exact rather than a tolerance window: `[1,5,3]` vs `[4,2,7]` must read
+/// `[1,0,1]`.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn compare_lt_over_f16_is_byte_exact() {
+    use crate::cuda::ops::compare::{CompareOp, launch_compare};
+    let encode = |values: &[f32]| {
+        values
+            .iter()
+            .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
+            .collect::<Vec<u8>>()
+    };
+    let lhs =
+        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::F16.into(), 0, &encode(&[1.0, 5.0, 3.0]))
+            .expect("f16 storage is CUDA-admissible");
+    let rhs =
+        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::F16.into(), 0, &encode(&[4.0, 2.0, 7.0]))
+            .expect("f16 storage is CUDA-admissible");
+    let out = launch_compare(CompareOp::Lt, &lhs, &rhs).unwrap();
+    assert_eq!(out.shape, vec![3]);
+    assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
+    assert_eq!(crate::cuda::testing::download_bytes(&out), vec![1, 0, 1]);
+}
+
+/// Issue #90 slice 4: `cmp_ge` over `bf16` operands. Small integers stay
+/// exact in `bf16` (exact to 256), so `[1,5,3]` vs `[4,2,7]` must read
+/// `[0,1,0]`.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn compare_ge_over_bf16_is_byte_exact() {
+    use crate::cuda::ops::compare::{CompareOp, launch_compare};
+    let encode = |values: &[f32]| {
+        values
+            .iter()
+            .flat_map(|&v| half::bf16::from_f32(v).to_bits().to_le_bytes())
+            .collect::<Vec<u8>>()
+    };
+    let lhs =
+        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::BF16.into(), 0, &encode(&[1.0, 5.0, 3.0]))
+            .expect("bf16 storage is CUDA-admissible");
+    let rhs =
+        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::BF16.into(), 0, &encode(&[4.0, 2.0, 7.0]))
+            .expect("bf16 storage is CUDA-admissible");
+    let out = launch_compare(CompareOp::Ge, &lhs, &rhs).unwrap();
+    assert_eq!(out.shape, vec![3]);
+    assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
+    assert_eq!(crate::cuda::testing::download_bytes(&out), vec![0, 1, 0]);
+}
+
+/// One typed kernel reads both operands, so an `f32`/`f64` pair fails on
+/// the host side before any buffer is reinterpreted - the same
+/// `DTypeStorageMismatch` contract the shape check beside it keeps.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn compare_refuses_a_mixed_dtype_operand_pair() {
+    use crate::cuda::ops::compare::{CompareOp, launch_compare};
+    let lhs = cuda_f32(&[2, 2], vec![1.0; 4]);
+    let rhs_bytes: Vec<u8> = [1.0f64; 4].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let rhs =
+        crate::cuda::backend::cuda_from_bytes(&[2, 2], DTypeId::F64.into(), 0, &rhs_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let error =
+        launch_compare(CompareOp::Eq, &lhs, &rhs).expect_err("f32/f64 compare must be refused");
+    assert!(
+        matches!(error, Error::DTypeStorageMismatch { .. }),
+        "mixed-dtype compare must fail as a storage mismatch, got {error:?}"
+    );
+}
+
 fn cuda_bool(shape: &[usize], values: Vec<u8>) -> CudaStorage {
     cuda_from_bytes(shape, DTypeId::Bool.descriptor(), 0, &values).unwrap()
 }
