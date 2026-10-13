@@ -1477,6 +1477,27 @@ impl Trainer {
     /// [`TrainError::Step`] carrying the epoch and batch if a forward
     /// pass, backward pass, gradient synchronization, parameter
     /// all-gather, or optimizer step fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin::experimental::training::Trainer;
+    /// use incin::prelude::*;
+    ///
+    /// let trainer = Trainer::new(
+    ///     Trainer::plan().devices(DeviceSet::cpu()).epochs(1).build().unwrap(),
+    /// );
+    /// let mut model = Linear::<s![4, 2]>::build(()).unwrap();
+    /// let mut optimizer = SGD::<DefaultBackend>::from_module(&model, 0.05).unwrap();
+    /// let input = Tensor::<s![1, 4]>::ones(()).unwrap();
+    /// let outcome = trainer
+    ///     .fit(&mut model, &mut optimizer, [input], |model, input| {
+    ///         Ok(model.forward(input)?.sum_all()?.forget_layout())
+    ///     })
+    ///     .unwrap();
+    /// assert_eq!(outcome.batches, 1);
+    /// assert!(outcome.final_loss.is_some_and(f32::is_finite));
+    /// ```
     pub fn fit<B, M, O, D, Batch, F>(
         &self,
         model: &mut M,

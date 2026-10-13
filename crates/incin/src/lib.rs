@@ -625,6 +625,15 @@ pub type DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::devic
 /// alias could only ever describe unproven tensors, and the operations that
 /// return a proof would have no writable return type on this side of the crate
 /// boundary. [`Dense`] is the shorthand for the row-major case.
+///
+/// # Examples
+///
+/// ```rust
+/// use incin::prelude::*;
+///
+/// let t = Tensor::<s![2, 3]>::zeros(()).unwrap();
+/// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![0.0; 6]);
+/// ```
 pub type Tensor<
     S,
     B = DefaultBackend,
@@ -680,6 +689,20 @@ pub type Dense<
 // `Tensor` above and `DefaultBackend` itself.
 #[cfg(feature = "cpu")]
 /// Linear.
+///
+/// A fully connected layer `y = x @ Wᵀ + b` over `s![InF, OutF]`, built with
+/// the default initialization policy.
+///
+/// # Examples
+///
+/// ```rust
+/// use incin::prelude::*;
+///
+/// let layer = Linear::<s![4, 2]>::build(()).unwrap();
+/// let x = Tensor::<s![2, 4]>::ones(()).unwrap();
+/// let out = layer.forward(x).unwrap();
+/// assert_eq!(out.dims().dims(), &[2, 2]);
+/// ```
 pub type Linear<S, B = DefaultBackend> = incin_core::nn::Linear<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Linear.
