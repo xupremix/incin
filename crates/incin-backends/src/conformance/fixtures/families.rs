@@ -16,7 +16,7 @@ use incin_core::exec::catalog::{
     AddmmAttributes, ArgsortAttributes, AttentionAttributes, AxisAttributes,
     AxisVarianceAttributes, BincountAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes,
     DiagonalAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
-    FlattenAttributes, GroupNormAttributes, IndexReductionAttributes, LerpAttributes,
+    FlattenAttributes, FusedAttentionAttributes, GroupNormAttributes, IndexReductionAttributes, LerpAttributes,
     LinearAttributes, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
     NormAttributes, OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes,
     RepeatInterleaveAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes,
@@ -627,6 +627,32 @@ typed_family!(
     [ScaledDotProductAttention]
 );
 
+// `fused_attention` reads three rank-4 operands under one GQA geometry: the
+// query shares its batch with key/value, key and value share
+// `[batch, kv_heads, seq_kv, head_dim]`, and the query head count is a
+// multiple of the key/value one. The plain ladder already satisfies all
+// three at rank four (`[2, 3, 2, 2]` thrice: batch two against two, key
+// against value exactly, three heads against three), and the transpose every
+// other `Tuple` operand takes under the strided layout preserves the
+// agreement, so no per-operand role is needed. Unmasked and unscaled: the
+// default scale is `1/sqrt(head_dim)`, and a kernel ignoring the attributes
+// still has to run the geometry to produce anything.
+constant_attribute_shim!(
+    unmasked_unscaled_attention,
+    FusedAttentionAttributes,
+    FusedAttentionAttributes {
+        scale: None,
+        causal: false
+    }
+);
+
+family!(
+    attending_fused,
+    Operands::Triple,
+    unmasked_unscaled_attention,
+    [FusedAttention]
+);
+
 // `linear` projects the input's final extent through a `[out, in]` weight and
 // adds one value per output feature, which is the same bias shape a
 // convolution reads.
@@ -736,6 +762,13 @@ typed_family!(
     counting_three,
     [Bincount]
 );
+
+// One integer operand in, one `[count, rank]` coordinate table out, and the
+// count is a property of the values no attribute names. The plain unary
+// ladder serves: every element is non-zero, so the scan always has rows to
+// report, and the all-zero input is a kernel unit test (`routing_primitives`)
+// rather than a tuple this harness must pose.
+family!(locating_nonzero, Operands::Unary, plain, [NonZero]);
 
 // The two halves of the block compression. Each names the representation it
 // *produces* rather than the one it reads, which is what `verify_outputs`
