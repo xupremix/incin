@@ -126,6 +126,31 @@ fn run_ce_with(
     (out, tape_depth() - before)
 }
 
+/// Elementwise losses (`mse_loss`, `l1_loss`, `bce_with_logits_loss`):
+/// f32 prediction against an f32 target, explicit reduction.
+fn run_pair_with<O>(
+    context: &ExecutionContext<TestBackend>,
+    pred: &TestStorage,
+    target: &TestStorage,
+    reduction: LossReduction,
+) -> (TestStorage, usize)
+where
+    O: CanonicalOperation<Attributes = LossAttributes>,
+    TestBackend: Execute<O, Output = TestStorage>,
+{
+    let before = tape_depth();
+    let out = dispatch::execute::<O, TestBackend>(
+        context,
+        LossAttributes { reduction },
+        &[
+            TensorHandle::from_storage::<TestBackend, f32, _>(pred),
+            TensorHandle::from_storage::<TestBackend, f32, _>(target),
+        ],
+    )
+    .expect("an advertised two-input CUDA loss must execute");
+    (out, tape_depth() - before)
+}
+
 /// `cross_entropy_loss`: f32 logits, i64 class indices.
 fn run_ce(
     context: &ExecutionContext<TestBackend>,
@@ -424,4 +449,107 @@ fn cross_entropy_matches_cpu_across_reductions() {
             &format!("cross_entropy dx ({what})"),
         );
     }
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn mse_l1_bce_match_cpu_across_reductions() {
+    // Second #84 slice: CUDA `mse_loss`, `l1_loss` and
+    // `bce_with_logits_loss` forward + input-grad parity against the CPU
+    // oracle for every reduction mode, following the `cross_entropy`
+    // slice above. One shared `[2, 3]` pair keeps every loss exact:
+    // targets lie in `[0, 1]` so the BCE stable path is valid, and index
+    // 4 is an exact hit (`pred == target == 0.0`) so `l1_loss`'s
+    // `sign(0) = 0` slope and `mse_loss`'s zero error surface. `backward`
+    // on an unreduced output seeds ones, exactly like the twin above, so
+    // the `none` gradient is the per-element local gradient.
+    require_cuda();
+    const PRED: [f32; 6] = [1.0, -0.5, 0.25, 2.0, 0.0, -1.0];
+    const TARG: [f32; 6] = [0.0, 1.0, 0.5, 1.0, 0.0, 1.0];
+    const SHAPE: [usize; 2] = [2, 3];
+
+    let context = ExecutionContext::new(TestBackend::new());
+    let cpu_context = ExecutionContext::new(Cpu::new());
+
+    macro_rules! check_pair_loss {
+        ($op:ty, $name:literal) => {
+            for reduction in [
+                LossReduction::Mean,
+                LossReduction::Sum,
+                LossReduction::None,
+            ] {
+                let what = match reduction {
+                    LossReduction::Mean => "mean",
+                    LossReduction::Sum => "sum",
+                    LossReduction::None => "none",
+                };
+
+                let pred = upload_f32_shaped(&SHAPE, &PRED);
+                let targ = upload_f32_shaped(&SHAPE, &TARG);
+                let pred_id = TapeStorage::id(&pred);
+                let (out, recorded) = run_pair_with::<$op>(&context, &pred, &targ, reduction);
+                assert!(
+                    recorded >= 1,
+                    "{} advertises training = true ({what}), recorded {recorded}",
+                    $name,
+                );
+                let grads = <TestBackend as AutogradBackend>::backward::<f32>(&out)
+                    .expect(&format!("{} backward on CUDA", $name));
+                let gx = grads
+                    .get(pred_id)
+                    .expect(&format!("{} pred receives a gradient", $name));
+
+                let cpu_pred = <Cpu as HostInterop>::from_bytes::<f32>(
+                    bytemuck::cast_slice(&PRED),
+                    &SHAPE,
+                    DTypeId::F32.descriptor(),
+                    &DeviceId::cpu(),
+                )
+                .expect("uploading the CPU pred must succeed");
+                let cpu_targ = <Cpu as HostInterop>::from_bytes::<f32>(
+                    bytemuck::cast_slice(&TARG),
+                    &SHAPE,
+                    DTypeId::F32.descriptor(),
+                    &DeviceId::cpu(),
+                )
+                .expect("uploading the CPU target must succeed");
+                let cpu_out = dispatch::execute::<$op, _>(
+                    &cpu_context,
+                    LossAttributes { reduction },
+                    &[
+                        TensorHandle::from_storage::<Cpu, f32, _>(&cpu_pred),
+                        TensorHandle::from_storage::<Cpu, f32, _>(&cpu_targ),
+                    ],
+                )
+                .expect(&format!("CPU reference {} executes", $name));
+                let cpu_grads = <Cpu as AutogradBackend>::backward::<f32>(&cpu_out)
+                    .expect(&format!("{} backward on CPU", $name));
+                let cpu_gx = cpu_grads
+                    .get(TapeStorage::id(&cpu_pred))
+                    .expect("CPU reference is missing a gradient");
+
+                let want_fwd = <Cpu as HostReadback>::float_to_vec1::<f32>(&cpu_out)
+                    .expect("reading the CPU forward back");
+                assert_close(
+                    &read_f32(&out),
+                    &want_fwd,
+                    1e-5,
+                    &format!("{} forward ({what})", $name),
+                );
+                let want_dx = <Cpu as HostReadback>::float_to_vec1::<f32>(cpu_gx)
+                    .expect("reading the CPU gradient back");
+                assert_close(
+                    &read_f32(gx),
+                    &want_dx,
+                    1e-5,
+                    &format!("{} dx ({what})", $name),
+                );
+            }
+        };
+    }
+
+    check_pair_loss!(op::MseLoss, "mse_loss");
+    check_pair_loss!(op::L1Loss, "l1_loss");
+    check_pair_loss!(op::BceWithLogitsLoss, "bce_with_logits_loss");
 }
