@@ -321,6 +321,8 @@ mod reference_run {
     use incin::experimental::training::{Machine, ReferenceDataParallel, TrainError, Trainer};
     use incin::prelude::*;
     use incin::state::{StateSnapshot, collect_state, load_state};
+    use incin_data::loader::Collate;
+    use incin_data::{DataLoader, Dataset, DistributedSampler, RemainderPolicy};
     use std::time::{Duration, Instant};
 
     type Backend = incin::DefaultBackend;
@@ -389,6 +391,87 @@ mod reference_run {
                 ))
             })
             .collect()
+    }
+
+    /// Eight rank-interleaved shard samples: each global batch split in
+    /// two, pushed shard-0 then shard-1, so stride-2 slicing reproduces
+    /// [`shard_batches`] exactly.
+    #[derive(Clone)]
+    struct ShardDataset {
+        shards: Vec<Batch>,
+    }
+
+    impl ShardDataset {
+        fn from_global(global: &[Batch]) -> Result<Self> {
+            let mut shards = Vec::with_capacity(global.len() * 2);
+            for (input, target) in global {
+                shards.push((
+                    input.clone().try_narrow(0, 0, 2)?.forget_layout(),
+                    target.clone().try_narrow(0, 0, 2)?.forget_layout(),
+                ));
+                shards.push((
+                    input.clone().try_narrow(0, 2, 2)?.forget_layout(),
+                    target.clone().try_narrow(0, 2, 2)?.forget_layout(),
+                ));
+            }
+            Ok(Self { shards })
+        }
+    }
+
+    impl Dataset for ShardDataset {
+        type Item = Batch;
+
+        fn len(&self) -> usize {
+            self.shards.len()
+        }
+
+        fn get(&self, index: usize) -> incin_data::BatchResult<Option<Self::Item>> {
+            Ok(self.shards.get(index).cloned())
+        }
+    }
+
+    /// Batch size is one pre-split shard, so collation is the identity:
+    /// the loader must hand `fit` the same `[2, 4]`/`[2, 2]` tensors
+    /// [`shard_batches`] produced, not a stack of them.
+    struct SingleShardCollate;
+
+    impl Collate<Batch> for SingleShardCollate {
+        type Output = Batch;
+
+        fn collate(&self, batch: Vec<Batch>) -> incin_data::BatchResult<Self::Output> {
+            if batch.len() != 1 {
+                return Err(incin_data::DataError::InvalidBatch(format!(
+                    "single-shard batch holds {} samples, not 1",
+                    batch.len()
+                )));
+            }
+            batch
+                .into_iter()
+                .next()
+                .ok_or_else(|| incin_data::DataError::WorkerDisconnected)
+        }
+    }
+
+    /// Rank `rank`'s batches through a [`DistributedSampler`]-backed
+    /// [`DataLoader`] instead of manual narrowing: stride-2 slicing of the
+    /// interleaved [`ShardDataset`] yields exactly [`shard_batches`] in
+    /// order, collected so [`Trainer::fit`] keeps its `&Vec<Batch>` shape.
+    fn loader_shard_batches(global: &[Batch], rank: usize) -> Result<Vec<Batch>> {
+        let dataset = ShardDataset::from_global(global)?;
+        let loader = DataLoader::builder_with_collate(dataset, SingleShardCollate)
+            .batch_size(1)
+            .sampler(DistributedSampler {
+                world_size: 2,
+                rank,
+                remainder: RemainderPolicy::Drop,
+            })
+            .build()
+            .map_err(|error| incin::Error::Msg(error.to_string()))?;
+        let mut batches = Vec::new();
+        for batch in &loader {
+            batches.push(batch.map_err(|error| incin::Error::Msg(error.to_string()))?);
+        }
+        Ok(batches)
     }
 
     fn probe(model: &Model, input: &Tensor<Dyn, Backend>, target: &Tensor<Dyn, Backend>) -> f32 {
@@ -548,8 +631,8 @@ mod reference_run {
         let (_controller, rank0_sync, rank1_sync) =
             ReferenceDataParallel::pair(BucketPolicy::Count { max_tensors: 2 })
                 .expect("a nonzero bucket budget pairs");
-        let shards0 = shard_batches(&global, 0)?;
-        let shards1 = shard_batches(&global, 1)?;
+        let shards0 = loader_shard_batches(&global, 0)?;
+        let shards1 = loader_shard_batches(&global, 1)?;
         let initial0 = initial.clone();
         let (probe0, target0) = (probe_input.clone(), probe_target.clone());
         let (probe1, target1) = (probe_input.clone(), probe_target.clone());
