@@ -881,6 +881,35 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
+            // `lhs [..., K]` against `rhs [N, K]` writes `[..., N]`: the
+            // kernel contracts the trailing axes (the rhs is a plain 2D
+            // `[N, K]` weight, not a generic `MatMul` rhs), which is why
+            // this cannot use `OutputRule::MatMul`.
+            OperationKind::QuantizedMatMul => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                inputs.get(1).and_then(|input| input.shape.as_deref()),
+            ) {
+                (Some(lhs), Some(rhs)) if lhs.len() >= 2 && rhs.len() == 2 => {
+                    if lhs[lhs.len() - 1] != rhs[1] {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "quantized_matmul contracting dimensions differ",
+                        ));
+                    }
+                    let mut output = lhs[..lhs.len() - 1].to_vec();
+                    output.push(rhs[0]);
+                    Some(Some(ShapeBuf::from_slice(&output)))
+                }
+                (None, _) | (_, None) => Some(None),
+                _ => {
+                    return Err(invalid(
+                        operation,
+                        "rank",
+                        "quantized_matmul requires lhs rank at least two and rank-two rhs [N, K]",
+                    ));
+                }
+            },
             OperationKind::SgdStep => Some(inputs.first().and_then(|v| v.shape.clone())),
             OperationKind::AdamStep | OperationKind::AdamWStep => {
                 let source = match output_index {
@@ -890,9 +919,10 @@ fn inferred_shape<A: AttributeContract>(
                 };
                 Some(inputs.get(source).and_then(|v| v.shape.clone()))
             }
-            OperationKind::Quantize
-            | OperationKind::Dequantize
-            | OperationKind::QuantizedMatMul => Some(first()),
+            // `QuantizedMatMul` left this passthrough once its generic
+            // `MatMul` rule moved to the dedicated `TypedInference` branch
+            // above: echoing the lhs would certify the wrong geometry.
+            OperationKind::Quantize | OperationKind::Dequantize => Some(first()),
             _ => return Err(DescriptorError::MissingInference { operation }),
         },
     };
@@ -1332,6 +1362,11 @@ pub(super) fn operand_ranks(
         (GroupedMatMul, 0) => exact(2),
         (GroupedMatMul, 1) => exact(3),
         (GroupedMatMul, 2) => exact(1),
+        // `quantized_matmul`'s rhs is a plain 2D `[N, K]` weight: the
+        // kernel refuses anything else, so the rank contract pins it
+        // exactly while the lhs keeps the primary rank-at-least-two
+        // window. The `K % 32 == 0` block rule stays a kernel refusal.
+        (QuantizedMatMul, 1) => exact(2),
         // Optimizer gradients and moment state mirror the parameter they
         // update, which the primary window already covers; the equal-shape
         // requirement is enforced separately in `validate`.

@@ -376,7 +376,12 @@ pub(super) const fn entry(
     ) {
         output = OutputRule::TypedInference;
     } else if matches!(operation, OperationKind::QuantizedMatMul) {
-        output = OutputRule::MatMul;
+        // The kernel contracts lhs [..., K] against rhs [N, K] on the
+        // trailing axis (not the generic MatMul lhs[-1]==rhs[-2]
+        // orientation), so the generic `MatMul` rule would certify the
+        // wrong geometry; the dedicated `TypedInference` branch below
+        // mirrors the `GroupedMatMul` override for the same reason.
+        output = OutputRule::TypedInference;
     } else if matches!(
         operation,
         OperationKind::Conv1dExact
