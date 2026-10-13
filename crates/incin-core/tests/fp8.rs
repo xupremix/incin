@@ -110,3 +110,63 @@ fn fp8_source_rows_cast_back_exactly() {
         "exactly-representable values must round-trip bit-identically"
     );
 }
+
+/// Storage-only scaled round-trip (issue #94 slice; no matmul): values that
+/// are *not* exactly representable round-trip through
+/// `to_dtype_scaled`/`from_dtype_scaled` within the format's documented
+/// error bound.
+///
+/// Documented bounds
+/// (`crates/incin-backends/src/conformance/tolerance.rs`, e4m3 row:
+/// absolute 0.25 / relative 0.25, e5m2 row: absolute 0.5 / relative 0.5;
+/// CPU-only storage admission:
+/// `crates/incin-backends/src/capability/constants.rs:27-28`): the fp8 cast
+/// rounds the *normalized* value (`self / scale`, in `[-1, 1]` here since
+/// `amax == scale`, so nothing saturates) by at most half an ulp, and the
+/// return leg re-applies the scale, so the error in original units is at
+/// most the normalized-domain tolerance times `scale`.
+///
+/// Each format runs at three scales, one deliberately above its max normal
+/// (e4m3: 448, e5m2: 57344) to prove the scale — not the format range —
+/// is what keeps values representable.
+#[test]
+fn fp8_scaled_roundtrip_within_expected_error() {
+    // Normalized pattern: magnitudes in [0.1, 1.0], all in the normal
+    // range of both formats (e4m3 min normal 2^-6, e5m2 min normal 2^-14),
+    // mostly off-grid so the cast actually rounds.
+    let pattern = [1.0f32, 0.333, -0.5, 0.1, -0.75, 0.907, -0.123, 0.456];
+
+    for scale in [4.0f32, 64.0, 1000.0] {
+        let values: Vec<f32> = pattern.iter().map(|x| x * scale).collect();
+        let w = Tensor::<s![8], B>::from_slice(&values, ()).unwrap();
+        let w8 = w.to_dtype_scaled::<F8E4M3>(scale).unwrap();
+        let back = w8.from_dtype_scaled::<f32>(scale).unwrap();
+        let got = back.to_vec1::<f32>().unwrap();
+        let max_err = values
+            .iter()
+            .zip(got.iter())
+            .map(|(want, got)| (want - got).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            max_err <= 0.25 * scale,
+            "e4m3 round-trip at scale {scale}: max abs error {max_err} exceeds 0.25 * scale"
+        );
+    }
+
+    for scale in [4.0f32, 1024.0, 100_000.0] {
+        let values: Vec<f32> = pattern.iter().map(|x| x * scale).collect();
+        let w = Tensor::<s![8], B>::from_slice(&values, ()).unwrap();
+        let w8 = w.to_dtype_scaled::<F8E5M2>(scale).unwrap();
+        let back = w8.from_dtype_scaled::<f32>(scale).unwrap();
+        let got = back.to_vec1::<f32>().unwrap();
+        let max_err = values
+            .iter()
+            .zip(got.iter())
+            .map(|(want, got)| (want - got).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            max_err <= 0.5 * scale,
+            "e5m2 round-trip at scale {scale}: max abs error {max_err} exceeds 0.5 * scale"
+        );
+    }
+}
