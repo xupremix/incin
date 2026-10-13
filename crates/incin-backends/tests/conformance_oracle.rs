@@ -25,16 +25,15 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// removed or a capability row was narrowed, and either should be a deliberate
 /// edit in the same commit rather than a number quietly absorbing it.
 ///
-/// Two exact identities are outstanding. `quantized_matmul` is outstanding
-/// because two
-/// contracts disagree rather than because the harness cannot build an operand.
-/// The catalog gives it `OutputRule::MatMul`, which requires `lhs[-1] ==
-/// rhs[-2]`; the CPU kernel reads the right operand as `[n, k]`, because a
+/// No exact identity is outstanding. `quantized_matmul` was the last: two
+/// contracts disagreed rather than the harness being unable to build an
+/// operand. The catalog gave it `OutputRule::MatMul`, which requires `lhs[-1]
+/// == rhs[-2]`; the CPU kernel reads the right operand as `[n, k]`, because a
 /// block encoding shares one scale across thirty-two consecutive values and so
 /// can only be contracted along its contiguous axis. A square operand satisfies
 /// both and would report an agreement that is not there.
 ///
-/// `grouped_matmul` is outstanding because its three operands carry three
+/// `grouped_matmul` was outstanding because its three operands carry three
 /// different ranks: a rank-two activation, a rank-three expert stack, and a
 /// rank-one offsets tile, with a contracting-extent agreement between the
 /// first two and a `[0, T)` tiling the third must satisfy. The zero-filled
@@ -59,7 +58,15 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// `GroupedExperts` roles pin f32 (integer tuples would otherwise build
 /// integer matrices the descriptor float rule rejects) and `GroupedOffsets`
 /// carries an i64 `[0, 2, 4]` tile over `T=4, K=3, N=2, E=2`.
-const COVERED_OPERATION_FLOOR: usize = 169;
+///
+/// `quantized_matmul` landed with floor 170. Its `QuantizedLhs` /
+/// `QuantizedRhs` roles carry the tuple's `q8_0` on both operands (the
+/// descriptor's dtype gate refuses anything else) over `T=2, N=3, K=32`:
+/// a `[...batch, 2, 32]` lhs against a plain 2D `[3, 32]` weight, which is
+/// the `[N, K]` geometry the catalog states since the kernel contracts the
+/// trailing axes. `K` is the Q8_0 block width the kernel refuses anything
+/// but a multiple of, so the shared `Paired` `K=3` extents cannot serve.
+const COVERED_OPERATION_FLOOR: usize = 170;
 
 #[test]
 fn the_cpu_backend_executes_every_advertised_tuple_it_is_asked_about() {

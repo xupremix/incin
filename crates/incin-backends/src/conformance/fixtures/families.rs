@@ -590,6 +590,36 @@ typed_family!(
     [GroupedMatMul]
 );
 
+// The two extents a quantized product names: a `[...batch, T, K]` lhs against
+// a plain 2D `[N, K]` weight, agreeing on `K` and writing `[...batch, T, N]`.
+// Fixed rather than ladder-derived, because a Q8_0 block shares one scale
+// across thirty-two contiguous values: `K` is the block width the kernel
+// refuses anything but a multiple of, which the shared `Paired` `K = 3`
+// cannot state, and the rhs is rank two at every tuple rank the row admits
+// while the lhs keeps the rank-at-least-two window. Both operands carry the
+// tuple's `q8_0`, which is what the descriptor's dtype gate requires; the
+// output is f32. Plain shim, since `quantized_matmul` takes `NoAttributes`.
+const QT: usize = 2;
+const QN: usize = 3;
+const QK: usize = 32;
+
+typed_family!(
+    quantized_product,
+    Operands::Binary,
+    &[
+        Role::QuantizedLhs {
+            tokens: QT,
+            contracting: QK
+        },
+        Role::QuantizedRhs {
+            out_rows: QN,
+            contracting: QK
+        }
+    ],
+    plain,
+    [QuantizedMatMul]
+);
+
 // `addmm` is the same product with an addend broadcast against it, so the
 // addend is the product's own shape. It comes first because that is the order
 // the inference reads: addend, then the two factors.

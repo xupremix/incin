@@ -71,6 +71,7 @@ pub(crate) fn fixture(operation: OperationKind) -> Result<Fixture, &'static str>
         .or_else(|| embedding_lookup(operation))
         .or_else(|| matrix_product(operation))
         .or_else(|| grouping(operation))
+        .or_else(|| quantized_product(operation))
         .or_else(|| vector_product(operation))
         .or_else(|| compressing(operation))
         .or_else(|| expanding(operation))
@@ -136,11 +137,7 @@ pub(crate) fn varies_with_tuple_dtype(operation: OperationKind) -> bool {
 /// Why an operation has no fixture, in the terms a contributor closing the gap
 /// would need.
 fn unfixtured_reason(operation: OperationKind) -> &'static str {
-    use OperationKind::*;
     match operation {
-        QuantizedMatMul => {
-            "the descriptor and the kernel disagree about which operand axis is             contracted: `OutputRule::MatMul` requires `lhs[-1] == rhs[-2]`,             while the CPU kernel reads the right operand as `[n, k]` because             thirty-two logical values share a scale only along the contiguous             axis. The two orientations coincide only on a square operand, and             posing a square one would report an agreement that does not exist"
-        }
         coarse if !coarse.is_exact() => {
             "a coarse family row rather than an exact identity: it has no              descriptor and nothing to execute, and the exact rows beneath it              carry the coverage"
         }

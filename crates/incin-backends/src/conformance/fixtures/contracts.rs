@@ -251,6 +251,33 @@ pub(crate) enum Role {
     TrailingVector,
     /// A `[out, in]` projection, where `in` is the input's final extent.
     LinearWeight,
+    /// A quantized matmul lhs: `[...batch, tokens, contracting]`.
+    ///
+    /// The batch prefix is the ladder's, the way [`Role::Paired`] builds it:
+    /// the kernel contracts only the trailing axis and walks the rest
+    /// generically, so every tuple rank the row admits poses its own prefix.
+    /// Both operands carry the tuple's `q8_0`, which is what the descriptor's
+    /// dtype gate requires, so unlike the grouped roles below these deliberately
+    /// stay out of [`Role::carries_tuple_dtype`]'s exclusion list.
+    QuantizedLhs {
+        /// Token rows, the leading output extent beside the rhs rows.
+        tokens: usize,
+        /// Extent contracted against the rhs trailing axis, a multiple of 32.
+        contracting: usize,
+    },
+    /// A quantized matmul rhs: a plain 2D `[out_rows, contracting]` weight.
+    ///
+    /// Fixed rank two at every tuple rank, because the kernel reads the rhs as
+    /// `[N, K]` outright and the descriptor pins it exactly while the lhs keeps
+    /// the rank-at-least-two window. A [`Role::Paired`] cannot serve here: it
+    /// derives both trailing extents per tuple rank and shares the `K = 3`
+    /// the block kernel refuses.
+    QuantizedRhs {
+        /// Output rows, the trailing output extent.
+        out_rows: usize,
+        /// Extent contracted against the lhs trailing axis, a multiple of 32.
+        contracting: usize,
+    },
     /// A grouped matmul activation: `[tokens, contracting]`.
     ///
     /// The token rows the offsets tile tiles into per-expert spans, read

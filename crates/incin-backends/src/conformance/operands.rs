@@ -233,7 +233,12 @@ fn role_buffer(tuple: &AdvertisedTuple, role: Role, length: usize) -> Result<Cpu
         | Role::OutputVector
         | Role::ChannelVector
         | Role::TrailingVector
-        | Role::LinearWeight => buffer(tuple.dtype, length),
+        | Role::LinearWeight
+        // The quantized pair fixes extents, never dtypes, the same way: both
+        // operands carry the tuple's `q8_0`, which is what the descriptor's
+        // dtype gate requires and what the negative probe varies.
+        | Role::QuantizedLhs { .. }
+        | Role::QuantizedRhs { .. } => buffer(tuple.dtype, length),
         // An i64 ramp tiling `[0, tokens)`, never a zero-fill: `expert_spans`
         // in `cpu/ops/matmul/grouped.rs` requires a non-decreasing
         // `[experts + 1]` tile from zero to the token count, and an all-zero
@@ -399,6 +404,17 @@ pub(crate) fn operand(
         }
         (_, Role::Paired { rows, columns }) => paired(tuple.rank, rows, columns)?,
         (_, Role::LinearWeight) => linear_weight(&activation)?,
+        // The quantized lhs batches like a paired operand, because the kernel
+        // walks every leading axis generically; the rhs is a plain 2D weight
+        // at every tuple rank, because the kernel reads it as `[N, K]`
+        // outright and the descriptor pins it exactly.
+        (_, Role::QuantizedLhs { tokens, contracting }) => {
+            paired(tuple.rank, tokens, contracting)?
+        }
+        (_, Role::QuantizedRhs {
+            out_rows,
+            contracting,
+        }) => alloc::vec![out_rows, contracting],
         (_, Role::GroupedActivation { tokens, contracting }) => {
             alloc::vec![tokens, contracting]
         }
