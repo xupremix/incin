@@ -509,6 +509,31 @@ where
     C: Collate<D::Item> + 'static,
 {
     /// New.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use incin_data::{DataLoader, Dataset, DefaultCollate};
+    ///
+    /// struct Range(usize);
+    ///
+    /// impl Dataset for Range {
+    ///     type Item = i32;
+    ///
+    ///     fn len(&self) -> usize {
+    ///         self.0
+    ///     }
+    ///
+    ///     fn get(&self, index: usize) -> incin_data::BatchResult<Option<i32>> {
+    ///         Ok((index < self.0).then_some(index as i32))
+    ///     }
+    /// }
+    ///
+    /// let loader = DataLoader::new(Range(5), DefaultCollate, 2).unwrap();
+    /// let batches: Vec<Vec<i32>> = (&loader).into_iter().collect::<Result<_, _>>().unwrap();
+    /// assert_eq!(batches.len(), 3);
+    /// assert_eq!(batches, vec![vec![0, 1], vec![2, 3], vec![4]]);
+    /// ```
     pub fn new(dataset: D, collate_fn: C, batch_size: usize) -> CoreResult<Self> {
         if batch_size == 0 {
             return Err(Error::InvalidModuleState {
