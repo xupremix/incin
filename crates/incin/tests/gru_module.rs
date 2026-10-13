@@ -222,3 +222,44 @@ fn the_layer_round_trips_and_freezes() -> Result<()> {
     );
     Ok(())
 }
+
+/// The multi-step wrapper maps a tiny sequence to its own shape, and the
+/// forward pass is deterministic.
+///
+/// The same arrangement as the transformer layer tests: the same wrapper run
+/// again, and a second wrapper restored from the first's snapshot, must
+/// produce identical outputs.
+#[test]
+fn gru_forward_shape_is_deterministic() -> Result<()> {
+    let model = GRU::<s![4, 3], Cpu>::new(GRUCell::<s![4, 3], Cpu>::build(())?);
+
+    let x = ramp(vec![BATCH, SEQ, IN])?
+        .into_shape::<s![2, 5, 4]>()?
+        .require_grad();
+    let h = Tensor::<s![2, 3], Cpu>::zeros(())?.require_grad();
+
+    let (sequence, last) = model.forward((x.clone(), h.clone()))?;
+    assert_eq!(sequence.dims().dims(), &[BATCH, SEQ, OUT]);
+    assert_eq!(last.dims().dims(), &[BATCH, OUT]);
+    let first = sequence.to_vec1::<f32>()?;
+
+    let (sequence_again, _) = model.forward((x.clone(), h.clone()))?;
+    assert_eq!(
+        sequence_again.to_vec1::<f32>()?,
+        first,
+        "the same GRU gave different outputs for the same input"
+    );
+
+    let mut restored = GRU::<s![4, 3], Cpu>::new(GRUCell::<s![4, 3], Cpu>::build(())?);
+    incin::state::load_state::<Cpu, _>(
+        &mut restored,
+        &incin::state::collect_state::<Cpu, _>(&model)?,
+    )?;
+    let (sequence_restored, _) = restored.forward((x, h))?;
+    assert_eq!(
+        sequence_restored.to_vec1::<f32>()?,
+        first,
+        "a GRU restored from the same parameters gave a different output"
+    );
+    Ok(())
+}

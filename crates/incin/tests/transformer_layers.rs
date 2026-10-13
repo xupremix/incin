@@ -343,3 +343,75 @@ fn a_non_sequence_input_is_rejected() -> Result<()> {
     );
     Ok(())
 }
+
+/// A freshly built encoder layer maps a tiny sequence to its own shape, and
+/// the forward pass is deterministic.
+///
+/// The same parameters twice — the same layer run again, and a second layer
+/// restored from the first's snapshot — must produce identical outputs.
+/// Anything else means hidden RNG or unseeded state inside the forward path.
+#[test]
+fn encoder_forward_shape_is_deterministic() -> Result<()> {
+    let layer = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
+        TransformerConfig::default(),
+        (),
+        (),
+    )?;
+    let x = ramp(vec![1, SEQ, D_MODEL])?.require_grad();
+
+    let first = layer.forward(x.clone())?;
+    assert_eq!(first.dims().dims(), &[1, SEQ, D_MODEL]);
+    let first = first.to_vec1::<f32>()?;
+    let second = layer.forward(x.clone())?.to_vec1::<f32>()?;
+    assert!(
+        close(&first, &second, 0.0),
+        "the same encoder layer gave different outputs for the same input"
+    );
+
+    let mut restored = TransformerEncoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
+        TransformerConfig::default(),
+        (),
+        (),
+    )?;
+    load_state(&mut restored, &collect_state(&layer)?)?;
+    let third = restored.forward(x)?.to_vec1::<f32>()?;
+    assert!(
+        close(&first, &third, 0.0),
+        "an encoder layer restored from the same parameters gave a different output"
+    );
+    Ok(())
+}
+
+/// The decoder layer gets the same shape-and-determinism pin as the encoder:
+/// causality is covered above, this covers the forward contract itself.
+#[test]
+fn decoder_forward_shape_is_deterministic() -> Result<()> {
+    let layer = TransformerDecoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
+        TransformerConfig::default(),
+        (),
+        (),
+    )?;
+    let x = ramp(vec![1, SEQ, D_MODEL])?.require_grad();
+
+    let first = layer.forward(x.clone())?;
+    assert_eq!(first.dims().dims(), &[1, SEQ, D_MODEL]);
+    let first = first.to_vec1::<f32>()?;
+    let second = layer.forward(x.clone())?.to_vec1::<f32>()?;
+    assert!(
+        close(&first, &second, 0.0),
+        "the same decoder layer gave different outputs for the same input"
+    );
+
+    let mut restored = TransformerDecoderLayer::<D_MODEL, 2, 2, D_FF, Cpu>::build(
+        TransformerConfig::default(),
+        (),
+        (),
+    )?;
+    load_state(&mut restored, &collect_state(&layer)?)?;
+    let third = restored.forward(x)?.to_vec1::<f32>()?;
+    assert!(
+        close(&first, &third, 0.0),
+        "a decoder layer restored from the same parameters gave a different output"
+    );
+    Ok(())
+}
