@@ -179,8 +179,8 @@ impl Init {
                     msg: alloc::string::String::from("KaimingUniform requires fan context"),
                 })?;
                 let fan_val = fan.fan_in;
-                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan_val as f64));
-                let bound = f64::sqrt(3.0) * std;
+                let std = crate::math::sqrt_f64(2.0 / ((1.0 + a * a) * fan_val as f64));
+                let bound = crate::math::sqrt_f64(3.0) * std;
                 Ok(InitPlan::Uniform {
                     low: -bound,
                     high: bound,
@@ -193,7 +193,7 @@ impl Init {
                     got: vec![],
                     msg: alloc::string::String::from("KaimingNormal requires fan context"),
                 })?;
-                let std = f64::sqrt(2.0 / ((1.0 + a * a) * fan.fan_in as f64));
+                let std = crate::math::sqrt_f64(2.0 / ((1.0 + a * a) * fan.fan_in as f64));
                 Ok(InitPlan::Normal { mean: 0.0, std })
             }
             Init::XavierUniform => {
@@ -203,7 +203,7 @@ impl Init {
                     got: vec![],
                     msg: alloc::string::String::from("XavierUniform requires fan context"),
                 })?;
-                let bound = f64::sqrt(6.0 / (fan.fan_in as f64 + fan.fan_out as f64));
+                let bound = crate::math::sqrt_f64(6.0 / (fan.fan_in as f64 + fan.fan_out as f64));
                 Ok(InitPlan::Uniform {
                     low: -bound,
                     high: bound,
@@ -216,7 +216,7 @@ impl Init {
                     got: vec![],
                     msg: alloc::string::String::from("XavierNormal requires fan context"),
                 })?;
-                let std = f64::sqrt(2.0 / (fan.fan_in as f64 + fan.fan_out as f64));
+                let std = crate::math::sqrt_f64(2.0 / (fan.fan_in as f64 + fan.fan_out as f64));
                 Ok(InitPlan::Normal { mean: 0.0, std })
             }
             Init::Orthogonal { gain } => {
@@ -297,7 +297,9 @@ pub fn uniform(bound: f64) -> Init {
 
 /// Kaiming uniform initialization with default $a = \sqrt{5}$.
 pub fn kaiming_uniform() -> Init {
-    Init::KaimingUniform { a: f64::sqrt(5.0) }
+    Init::KaimingUniform {
+        a: crate::math::sqrt_f64(5.0),
+    }
 }
 
 /// Kaiming uniform initialization with explicit $a$.
@@ -307,7 +309,9 @@ pub fn kaiming_uniform_with_a(a: f64) -> Init {
 
 /// Kaiming normal initialization with default $a = \sqrt{5}$.
 pub fn kaiming_normal() -> Init {
-    Init::KaimingNormal { a: f64::sqrt(5.0) }
+    Init::KaimingNormal {
+        a: crate::math::sqrt_f64(5.0),
+    }
 }
 
 /// Kaiming normal initialization with explicit $a$.
@@ -391,7 +395,7 @@ impl InitRng {
             let v = 2.0 * self.next_f64() - 1.0;
             let s = u * u + v * v;
             if s < 1.0 && s > 0.0 {
-                return u * f64::sqrt(-2.0 * f64::ln(s) / s);
+                return u * crate::math::sqrt_f64(-2.0 * crate::math::ln_f64(s) / s);
             }
         }
     }
@@ -538,7 +542,7 @@ pub fn orthogonal_fill(
                 let v = get(values, o, i);
                 norm_sq += v * v;
             }
-            let norm = f64::sqrt(norm_sq);
+            let norm = crate::math::sqrt_f64(norm_sq);
             if norm > 1e-12 {
                 // Normalize to unit length here; the gain is applied once
                 // to the whole matrix below. Scaling each vector as it is

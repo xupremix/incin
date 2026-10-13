@@ -81,7 +81,7 @@ where
         present.push((tensor, grad));
     }
 
-    let total_norm = squared_total.sqrt();
+    let total_norm = crate::math::sqrt_f64(squared_total);
     if !total_norm.is_finite() {
         return Err(invalid_optimizer_config(
             OPERATION,

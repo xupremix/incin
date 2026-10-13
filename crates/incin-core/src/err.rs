@@ -636,7 +636,7 @@ pub fn convert_f64_to_i64(
     }
 
     let candidate = match policy {
-        FloatToIntPolicy::Exact if value.fract() != 0.0 => {
+        FloatToIntPolicy::Exact if crate::math::fract_f64(value) != 0.0 => {
             return Err(Error::InvalidConversion {
                 operation,
                 from,
@@ -644,7 +644,7 @@ pub fn convert_f64_to_i64(
                 reason: ConversionFailure::Fractional,
             });
         }
-        FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => value.trunc(),
+        FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => crate::math::trunc_f64(value),
         FloatToIntPolicy::Saturate => value,
     };
 

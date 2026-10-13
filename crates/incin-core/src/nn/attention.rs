@@ -630,7 +630,7 @@ where
     let pair_index = arange_from_fields::<B, K>(half, 0.0, 1.0, dtype, device)?;
     // theta^(-2i/head_dim) == exp(-2i/head_dim * ln(theta)).
     let inverse_frequency = pair_index
-        .mul_scalar(-2.0_f64 * f64::ln(theta) / head_dim as f64)?
+        .mul_scalar(-2.0_f64 * crate::math::ln_f64(theta) / head_dim as f64)?
         .forget_layout()
         .exp()?
         .forget_layout();
@@ -835,7 +835,7 @@ where
             let scale = self
                 .config
                 .scale
-                .unwrap_or_else(|| 1.0_f64 / f64::sqrt(Self::head_dim() as f64));
+                .unwrap_or_else(|| 1.0_f64 / crate::math::sqrt_f64(Self::head_dim() as f64));
             let scores = query
                 .matmul(&key.transpose(2isize, 3isize)?.forget_layout())?
                 .mul_scalar(scale)?
@@ -1597,7 +1597,7 @@ where
             let scale = self
                 .config
                 .scale
-                .unwrap_or_else(|| 1.0_f64 / f64::sqrt(Self::head_dim() as f64));
+                .unwrap_or_else(|| 1.0_f64 / crate::math::sqrt_f64(Self::head_dim() as f64));
             let scores = query
                 .matmul(&key.transpose(2isize, 3isize)?.forget_layout())?
                 .mul_scalar(scale)?

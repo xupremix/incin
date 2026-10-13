@@ -225,7 +225,7 @@ impl ExponentialLR {
 impl LRScheduler for ExponentialLR {
     fn get_lr(&self) -> f64 {
         let step = i32::try_from(self.current_step).unwrap_or(i32::MAX);
-        self.initial_lr * self.gamma.powi(step)
+        self.initial_lr * crate::math::powi_f64(self.gamma, step)
     }
 
     fn step(&mut self) {

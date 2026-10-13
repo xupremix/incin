@@ -144,12 +144,12 @@ fn decode(bits: u8, p: &Fp8Params) -> f32 {
             return sign * 0.0;
         }
         // Subnormal: mant * 2^(1 - bias - mant_bits), exact in f32.
-        let scale = 2f32.powi(1 - p.bias - p.mant_bits as i32);
+        let scale = crate::math::powi_f32(2.0, 1 - p.bias - p.mant_bits as i32);
         return sign * f32::from(mant) * scale;
     }
     // Normal: (2^mant_bits + mant) * 2^(E - bias - mant_bits), exact in f32.
     let significand = f32::from((1u8 << p.mant_bits) | mant);
-    sign * significand * 2f32.powi(exp as i32 - p.bias - p.mant_bits as i32)
+    sign * significand * crate::math::powi_f32(2.0, exp as i32 - p.bias - p.mant_bits as i32)
 }
 
 /// Round `sig` (value `sig * 2^-shift`) to an integer, round-to-nearest-even.

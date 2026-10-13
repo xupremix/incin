@@ -601,8 +601,8 @@ pub(super) fn prepare_adam_update<B: OptimizerBackend<K>, K: DType>(
     };
 
     let t_step = step as f64;
-    let bias_correction1 = 1.0 - beta1.powf(t_step);
-    let bias_correction2 = 1.0 - beta2.powf(t_step);
+    let bias_correction1 = 1.0 - crate::math::pow_f64(beta1, t_step);
+    let bias_correction2 = 1.0 - crate::math::pow_f64(beta2, t_step);
     if !bias_correction1.is_finite()
         || !bias_correction2.is_finite()
         || bias_correction1 <= 0.0

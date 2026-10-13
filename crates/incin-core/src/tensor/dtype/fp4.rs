@@ -152,7 +152,7 @@ pub fn e8m0_to_f32(bits: u8) -> f32 {
     if bits == 0xFF {
         return f32::NAN;
     }
-    2f32.powi(i32::from(bits) - 127)
+    crate::math::powi_f32(2.0, i32::from(bits) - 127)
 }
 
 /// Encode a non-negative magnitude to one E8M0 scale byte: the ceiling power

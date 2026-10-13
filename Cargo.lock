@@ -1945,6 +1945,7 @@ dependencies = [
  "half",
  "incin-backends",
  "incin-macros",
+ "libm",
  "postcard",
  "proptest",
  "prost",

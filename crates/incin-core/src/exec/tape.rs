@@ -30,7 +30,7 @@ use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::collections::btree_map::Entry;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::err::{BackwardError, Error, NonFiniteSite, Result};
 use crate::exec::policy::{GradMode, NanPolicy};
@@ -49,7 +49,7 @@ use crate::exec::policy::{GradMode, NanPolicy};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TensorId(u64);
 
-static NEXT_TENSOR_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_TENSOR_ID: AtomicUsize = AtomicUsize::new(0);
 
 impl TensorId {
     /// Allocate a fresh, never-before-seen id.
@@ -57,7 +57,13 @@ impl TensorId {
     pub fn next() -> Self {
         // Relaxed is sufficient: this counter is an identity source, not a
         // synchronization primitive guarding shared data.
-        Self(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed))
+        //
+        // Pointer-width rather than 64-bit so targets without 64-bit
+        // atomics (e.g. Cortex-M) still build: on 64-bit platforms this is
+        // exactly as inexhaustible as before, and on 32-bit ones it wraps
+        // after four billion allocations, which a bare-metal run does not
+        // reach without a reset clearing the tape first.
+        Self(NEXT_TENSOR_ID.fetch_add(1, Ordering::Relaxed) as u64)
     }
 
     /// The underlying integer, for diagnostics and stable ordering.

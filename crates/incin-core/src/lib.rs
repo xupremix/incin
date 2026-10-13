@@ -5,6 +5,7 @@
 pub(crate) extern crate alloc;
 
 pub(crate) mod err;
+pub(crate) mod math;
 
 #[macro_use]
 mod operation_catalog;
