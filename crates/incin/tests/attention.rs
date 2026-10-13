@@ -421,6 +421,26 @@ fn a_sequence_longer_than_the_rotary_tables_is_refused() -> Result<()> {
 /// mismatched `D_MODEL % N_HEADS` or `N_HEADS % N_KV_HEADS` never compiles,
 /// covered by the compile-fail fixtures `attention_d_model_head_mismatch` and
 /// `attention_head_kv_mismatch` rather than a runtime case here.
+///
+/// Snapshots here are recorded under CI's invocation:
+///
+///   cargo test -p incin --test attention
+///
+/// which builds the default feature set, so `DefaultBackend` renders as
+/// `incin_backends::cpu::CpuBackendImpl`. A different feature set may spell
+/// that path differently and report a mismatch that is purely the path
+/// spelling.
+#[test]
+fn bad_head_configs_fail_at_compile_time_with_the_assert_they_violate() {
+    let t = trybuild::TestCases::new();
+    // The `pass` case is load-bearing: trybuild compiles a fail-only set
+    // with `cargo check`, which never monomorphizes `build` and so never
+    // evaluates the `const { assert!(..) }` head invariants -- both mismatch
+    // fixtures compile clean under `check`. With a `pass` case present it
+    // uses `cargo build`, and the mismatches fail on the asserts.
+    t.pass("tests/attention_compile_fail/attention_valid_head_config.rs");
+    t.compile_fail("tests/attention_compile_fail/attention_*_mismatch.rs");
+}
 #[test]
 fn an_odd_rotary_head_dim_is_refused_when_the_module_is_built() -> Result<()> {
     let odd_head_dim = MultiHeadAttention::<12, 4, 4, Cpu>::build(

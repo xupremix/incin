@@ -1,0 +1,35 @@
+error[E0080]: evaluation panicked: d_model must be divisible by n_heads
+ --> $RUST/core/src/panic.rs
+  |
+  |           $crate::panicking::panic_fmt($crate::const_format_args!($($t)+));
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `incin::nn::MultiHeadAttention::<10, 3, 1, incin_backends::cpu::CpuBackendImpl>::build::{constant#2}` failed here
+  |
+ ::: $WORKSPACE/crates/incin-core/src/nn/attention.rs
+  |
+  | /             assert!(
+  | |                 D_MODEL.is_multiple_of(N_HEADS),
+  | |                 "d_model must be divisible by n_heads"
+  | |             );
+  | |_____________- in this macro invocation
+
+note: erroneous constant encountered
+ --> $WORKSPACE/crates/incin-core/src/nn/attention.rs
+  |
+  | /         const {
+  | |             assert!(
+  | |                 D_MODEL.is_multiple_of(N_HEADS),
+  | |                 "d_model must be divisible by n_heads"
+  | |             );
+  | |         }
+  | |_________^
+
+note: the above error was encountered while instantiating `fn MultiHeadAttention::<10, 3, 1, incin_backends::cpu::CpuBackendImpl>::build`
+  --> tests/attention_compile_fail/attention_d_model_head_mismatch.rs:6:13
+   |
+ 6 |       let _ = MultiHeadAttention::<10, 3, 1, DefaultBackend>::build(
+   |  _____________^
+ 7 | |         AttentionConfig::default(),
+ 8 | |         (),
+ 9 | |         (),
+10 | |     );
+   | |_____^
