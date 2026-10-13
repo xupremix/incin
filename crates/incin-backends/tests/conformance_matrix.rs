@@ -329,6 +329,116 @@ fn the_run_writes_a_machine_readable_artifact() {
     );
 }
 
+/// Issue #90 slice 2: the widened matmul family poses its halves.
+///
+/// `MatMulExact`/`BatchedMatMul`/`Addmm`/`Linear` advertise `FLOAT_DTYPES` on
+/// CPU, so the matrix must carry a passed `f16` column and a passed `bf16`
+/// column for each: a widened row with no executed half would report the
+/// same green as full coverage. The values behind these cells compare under
+/// the accumulator tolerance in `conformance::tolerance::EXCEPTIONS`, never
+/// exact, because the CPU accumulates halves in `f64` while CUDA accumulates
+/// them in `f32` (`docs/OPERATION_SEMANTICS.md`).
+#[test]
+fn the_matmul_family_carries_passed_half_columns() {
+    use incin_core::shapes::error::OperationKind;
+
+    let report = run_matrix();
+    for operation in [
+        OperationKind::MatMulExact,
+        OperationKind::BatchedMatMul,
+        OperationKind::Addmm,
+        OperationKind::Linear,
+    ] {
+        for dtype in ["f16", "bf16"] {
+            assert!(
+                report.cells.iter().any(|cell| {
+                    cell.backend == DeviceKind::Cpu
+                        && cell.operation == operation
+                        && cell.dtype == dtype
+                        && !cell.negative_probe
+                        && cell.verdict == CellVerdict::Passed
+                }),
+                "{operation} has no passed CPU {dtype} column: the row \
+                 advertises FLOAT_DTYPES but the matrix never executed a half"
+            );
+        }
+    }
+}
+
+/// Issue #90 slice 2: movement rows that advertise halves carry them.
+///
+/// The CPU movement rows ride `NON_QUANTIZED`, which includes the halves, so
+/// a transpose, narrow, concat, reshape, or broadcast that dropped its half
+/// columns would understate the row beside the matmul family's widened one.
+/// Movement is byte-exact, so these cells need no accumulator tolerance: the
+/// claim here is presence and execution, and the first suite already fails a
+/// cell that refused.
+#[test]
+fn movement_rows_that_advertise_halves_carry_them() {
+    use incin_core::shapes::error::OperationKind;
+
+    let report = run_matrix();
+    for operation in [
+        OperationKind::TransposeExact,
+        OperationKind::TransposeView,
+        OperationKind::Narrow,
+        OperationKind::ConcatExact,
+        OperationKind::ReshapeExact,
+        OperationKind::BroadcastAs,
+    ] {
+        for dtype in ["f16", "bf16"] {
+            assert!(
+                report.cells.iter().any(|cell| {
+                    cell.backend == DeviceKind::Cpu
+                        && cell.operation == operation
+                        && cell.dtype == dtype
+                        && !cell.negative_probe
+                        && cell.verdict == CellVerdict::Passed
+                }),
+                "{operation} has no passed CPU {dtype} column: the row \
+                 advertises halves but the matrix never executed one"
+            );
+        }
+    }
+}
+
+/// Issue #90 slice 2: the refusal probes cover the halves.
+///
+/// The probe set must pose `f16`/`bf16` past admission: an `F32_ONLY` row
+/// (`Dot`, `Outer`, `ScaledDotProductAttention`, every reduction and norm)
+/// that quietly executed a half would be unadvertised-but-executed, and a
+/// probe set without halves could never observe it. A passed probe is a
+/// refusal that held; a failed one is already failed suite-wide by
+/// `every_advertised_operation_is_posed_and_probes_are_counted`.
+#[test]
+fn negative_probes_cover_the_halves() {
+    let report = run_matrix();
+    for dtype in ["f16", "bf16"] {
+        let probes: Vec<_> = report
+            .cells
+            .iter()
+            .filter(|cell| cell.negative_probe && cell.dtype == dtype)
+            .collect();
+        assert!(
+            !probes.is_empty(),
+            "no negative probe posed {dtype}: an F32_ONLY row executing a \
+             half would go unobserved"
+        );
+        // Executed, not skipped: a probe that never reached the kernel proves
+        // nothing about the row. The anchor is drawn from an executed tuple at
+        // the same rank, so every half probe has a buildable operand; a skip
+        // here is the harness failing to ask, not the backend refusing.
+        for probe in &probes {
+            assert!(
+                probe.verdict.was_executed(),
+                "{} never reached the kernel: a skipped probe cannot hold \
+                 the refusal it was posed to check",
+                probe.label()
+            );
+        }
+    }
+}
+
 /// Print the state of the run, so a contributor closing a gap can see the
 /// counts without reading the harness.
 #[test]

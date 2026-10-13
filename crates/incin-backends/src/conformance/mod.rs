@@ -490,11 +490,21 @@ fn pose(context: &ExecutionContext<Subject>, tuple: &AdvertisedTuple) -> Verdict
 /// handed to an operation whose descriptor requires a float is refused two
 /// layers before the kernel, and a check that stopped there would report the
 /// contract holding while never having reached the kernel at all.
+///
+/// The halves ride this list since issue #90 widened the matmul family
+/// (`MatMulExact`/`BatchedMatMul`/`Addmm`/`Linear`) to `FLOAT_DTYPES`: a
+/// `F32_ONLY` row beside them (`Dot`, `Outer`, `ScaledDotProductAttention`,
+/// every reduction and norm) that quietly executed an `f16` operand would be
+/// unadvertised-but-executed, and a probe set without halves could never
+/// observe it. Rows that do advertise halves filter them back out below, so
+/// they pay nothing for the wider list.
 fn unadvertised_dtypes(operation: OperationKind) -> Vec<DTypeDescriptor> {
-    const CANDIDATES: [DTypeId; 5] = [
+    const CANDIDATES: [DTypeId; 7] = [
         DTypeId::Bool,
         DTypeId::U8,
         DTypeId::I64,
+        DTypeId::F16,
+        DTypeId::BF16,
         DTypeId::F32,
         DTypeId::F64,
     ];

@@ -17,10 +17,13 @@
 //!   rather than a second copy of the numbers.
 //!
 //! A row that needs a looser bound than its dtype's gets one in
-//! [`EXCEPTIONS`], with the reason recorded beside it. The list is empty
-//! today: emptiness is itself the claim that no operation has needed one yet,
-//! and adding the first entry is a reviewable decision rather than a constant
-//! quietly edited in place.
+//! [`EXCEPTIONS`], with the reason recorded beside it. The four entries are
+//! the issue-#90 matmul family (`MatMulExact`/`BatchedMatMul`/`Addmm`/
+//! `Linear`), whose halves accumulate in `f64` on CPU but `f32` on CUDA:
+//! identical half inputs can differ by the accumulator gap plus one output
+//! rounding, so halves compare under tolerance there, never exact. Adding
+//! the fifth entry is a reviewable decision rather than a constant quietly
+//! edited in place.
 //!
 //! What this table is not: `tests/conformance_values.rs` keeps its own
 //! per-operation table because it compares `f32` output against an `f64`
@@ -200,10 +203,75 @@ pub const fn gradient_options() -> GradCheckOptions {
 
 /// Per-operation overrides to [`for_dtype`], each with its recorded reason.
 ///
-/// Empty today: no operation has needed a looser bound than its dtype's yet.
-/// The shape of an entry is `(operation, tolerance, why)`, and a reviewer
-/// reading a new one should ask for the measurement that set the numbers.
-pub const EXCEPTIONS: &[(OperationKind, Tolerance, &str)] = &[];
+/// The four widened matmul-family rows live here since issue #90. Their
+/// halves store half precision but never accumulate in it, and the
+/// accumulator differs per backend: `f64` on CPU, `f32` on CUDA
+/// (`docs/OPERATION_SEMANTICS.md`'s "Reduced-precision matmul accumulation").
+/// Two backends holding identical half inputs can therefore still disagree by
+/// the accumulator gap plus one output rounding, so halves compare under
+/// tolerance here, never exact. The bound is twice the `bf16` single-rounding
+/// row, which covers both halves at the harness fixture's small-`K` scale
+/// (`K = 3`, single-digit magnitudes); a fixture with a larger contracting
+/// extent or larger magnitudes needs a re-measured row, not a quiet edit.
+/// The kernel-side proof is the half-vs-`f32` parity in
+/// `cpu/ops/matmul/tests.rs`, and the cross-backend half-tolerance proof is
+/// tracked by #82, which is why this row echoes rather than replaces either.
+pub const EXCEPTIONS: &[(OperationKind, Tolerance, &str)] = &[
+    (
+        OperationKind::MatMulExact,
+        Tolerance {
+            absolute: 2e-2,
+            relative: 2e-2,
+            reason: "halves accumulate f64 on CPU but f32 on CUDA and round \
+                     once on store: identical half inputs can differ by the \
+                     accumulator gap plus one output rounding, so halves \
+                     compare under tolerance, never exact",
+        },
+        "issue #90: the CPU-f64 vs CUDA-f32 accumulator asymmetry in \
+         OPERATION_SEMANTICS.md; kernel parity pinned in \
+         cpu/ops/matmul/tests.rs, cross-backend proof tracked by #82",
+    ),
+    (
+        OperationKind::BatchedMatMul,
+        Tolerance {
+            absolute: 2e-2,
+            relative: 2e-2,
+            reason: "halves accumulate f64 on CPU but f32 on CUDA and round \
+                     once on store: identical half inputs can differ by the \
+                     accumulator gap plus one output rounding, so halves \
+                     compare under tolerance, never exact",
+        },
+        "issue #90: `bmm` rewrites into the widened matmul kernel and \
+         inherits its accumulator asymmetry; same proof chain as `matmul`",
+    ),
+    (
+        OperationKind::Addmm,
+        Tolerance {
+            absolute: 2e-2,
+            relative: 2e-2,
+            reason: "halves accumulate f64 on CPU but f32 on CUDA and round \
+                     once on store: identical half inputs can differ by the \
+                     accumulator gap plus one output rounding, so halves \
+                     compare under tolerance, never exact",
+        },
+        "issue #90: `addmm` rewrites into the widened matmul kernel and \
+         inherits its accumulator asymmetry; same proof chain as `matmul`",
+    ),
+    (
+        OperationKind::Linear,
+        Tolerance {
+            absolute: 2e-2,
+            relative: 2e-2,
+            reason: "halves accumulate f64 on CPU but f32 on CUDA and round \
+                     once on store: identical half inputs can differ by the \
+                     accumulator gap plus one output rounding, so halves \
+                     compare under tolerance, never exact",
+        },
+        "issue #90: `linear` rewrites into a transpose and the widened \
+         matmul kernel and inherits its accumulator asymmetry; same proof \
+         chain as `matmul`",
+    ),
+];
 
 /// The bound for one operation's values: its [`EXCEPTIONS`] row, or its
 /// dtype's row when it has none.
@@ -285,6 +353,74 @@ mod tests {
             assert!(
                 tolerance.absolute >= 0.0 && tolerance.relative >= 0.0,
                 "{operation} has a negative exception bound"
+            );
+        }
+    }
+
+    /// The widened matmul family resolves to its exception row, whatever the
+    /// dtype: the accumulator asymmetry is a property of the operation, not
+    /// of the format, and the row is what a cross-backend halves comparison
+    /// reads instead of the dtype default.
+    #[test]
+    fn the_matmul_family_resolves_to_its_accumulator_exception() {
+        for operation in [
+            OperationKind::MatMulExact,
+            OperationKind::BatchedMatMul,
+            OperationKind::Addmm,
+            OperationKind::Linear,
+        ] {
+            for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
+                let bound = for_operation(operation, dtype);
+                assert!(
+                    (bound.absolute - 2e-2) < f64::EPSILON
+                        && (bound.relative - 2e-2) < f64::EPSILON,
+                    "{operation} at {dtype:?} resolved to {bound:?}, not to its \
+                     accumulator exception"
+                );
+            }
+        }
+        // A neighbouring operation keeps its dtype row: the exception is the
+        // matmul family's, not a blanket for everything that accumulates.
+        assert_eq!(
+            for_operation(OperationKind::SumAll, DTypeId::F32),
+            for_dtype(DTypeId::F32)
+        );
+    }
+
+    /// Halves compare under tolerance on the matmul rows, never exact: one
+    /// half ulp of drift (the accumulator gap plus one output rounding, at
+    /// unit magnitude) passes, and a gross error still fails. An exact
+    /// comparison would fail the first half of this test on any backend pair
+    /// with different accumulators, which is the finding the exception rows
+    /// exist to prevent.
+    #[test]
+    fn matmul_halves_accept_a_half_ulp_but_not_a_gross_error() {
+        for operation in [
+            OperationKind::MatMulExact,
+            OperationKind::BatchedMatMul,
+            OperationKind::Addmm,
+            OperationKind::Linear,
+        ] {
+            // One ulp of drift at unit magnitude, which exact equality
+            // rejects: the exception bound is twice the bf16 single-rounding
+            // row, so it holds the wider half with headroom.
+            let bound = for_operation(operation, DTypeId::BF16);
+            assert!(
+                bound.accepts(1.0, 1.0 + 2f64.powi(-8)),
+                "{operation}: one bf16 ulp of drift must pass under tolerance"
+            );
+            assert!(
+                !bound.accepts(1.0, 1.5),
+                "{operation}: a gross error must still fail under tolerance"
+            );
+            let bound = for_operation(operation, DTypeId::F16);
+            assert!(
+                bound.accepts(1.0, 1.0 + 2f64.powi(-11)),
+                "{operation}: one f16 ulp of drift must pass under tolerance"
+            );
+            assert!(
+                !bound.accepts(1.0, 1.5),
+                "{operation}: a gross error must still fail under tolerance"
             );
         }
     }
