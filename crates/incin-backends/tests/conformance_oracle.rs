@@ -47,14 +47,19 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// block size is the dtype registry's rather than a number this harness
 /// invented.
 ///
-/// `nonzero` and `fused_attention` landed with this floor. `nonzero` rides
+/// `nonzero` and `fused_attention` landed with floor 168. `nonzero` rides
 /// the plain unary ladder: every element is non-zero, so the scan always has
 /// rows to report. `fused_attention` rides the same ladder thrice: rank four
 /// is `[2, 3, 2, 2]` on every operand, which satisfies the GQA geometry
 /// (matching batches, key against value exactly, three query heads against
 /// three key/value ones), and the shared transpose preserves the agreement
 /// under the strided layout.
-const COVERED_OPERATION_FLOOR: usize = 168;
+///
+/// `grouped_matmul` landed with floor 169. Its `GroupedActivation` /
+/// `GroupedExperts` roles pin f32 (integer tuples would otherwise build
+/// integer matrices the descriptor float rule rejects) and `GroupedOffsets`
+/// carries an i64 `[0, 2, 4]` tile over `T=4, K=3, N=2, E=2`.
+const COVERED_OPERATION_FLOOR: usize = 169;
 
 #[test]
 fn the_cpu_backend_executes_every_advertised_tuple_it_is_asked_about() {
