@@ -106,18 +106,17 @@ where
     (out, tape_depth() - before)
 }
 
-/// `cross_entropy_loss`: f32 logits, i64 class indices.
-fn run_ce(
+/// `cross_entropy_loss`: f32 logits, i64 class indices, explicit reduction.
+fn run_ce_with(
     context: &ExecutionContext<TestBackend>,
     logits: &TestStorage,
     targets: &TestStorage,
+    reduction: LossReduction,
 ) -> (TestStorage, usize) {
     let before = tape_depth();
     let out = dispatch::execute::<op::CrossEntropyLoss, TestBackend>(
         context,
-        LossAttributes {
-            reduction: LossReduction::Mean,
-        },
+        LossAttributes { reduction },
         &[
             TensorHandle::from_storage::<TestBackend, f32, _>(logits),
             TensorHandle::from_storage::<TestBackend, i64, _>(targets),
@@ -125,6 +124,15 @@ fn run_ce(
     )
     .expect("cross_entropy_loss must execute on CUDA");
     (out, tape_depth() - before)
+}
+
+/// `cross_entropy_loss`: f32 logits, i64 class indices.
+fn run_ce(
+    context: &ExecutionContext<TestBackend>,
+    logits: &TestStorage,
+    targets: &TestStorage,
+) -> (TestStorage, usize) {
+    run_ce_with(context, logits, targets, LossReduction::Mean)
 }
 
 #[test]
@@ -325,4 +333,95 @@ fn linear_cross_entropy_sgd_step_lowers_the_loss_on_cuda() {
         after < before,
         "one SGD step must lower the loss: {before} -> {after}"
     );
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cross_entropy_matches_cpu_across_reductions() {
+    // First #84 slice: CUDA `cross_entropy_loss` forward + input-grad parity
+    // against the CPU oracle for every reduction mode. Small fixed logits
+    // (`[2, 3]`, targets `[0, 2]`) keep the log-softmax stable path exact;
+    // `backward` on the unreduced `[batch]` output seeds ones, exactly like
+    // the `instance_norm` twin above, so the `none` gradient is the
+    // per-sample `(softmax - onehot)` row without an extra seed.
+    require_cuda();
+    const LOGITS: [f32; 6] = [2.0, 1.0, 0.5, 0.5, 1.5, 0.0];
+    const TARGETS: [i64; 2] = [0, 2];
+    const LOGITS_SHAPE: [usize; 2] = [2, 3];
+    const TARGETS_SHAPE: [usize; 1] = [2];
+
+    let context = ExecutionContext::new(TestBackend::new());
+    let cpu_context = ExecutionContext::new(Cpu::new());
+    for reduction in [
+        LossReduction::Mean,
+        LossReduction::Sum,
+        LossReduction::None,
+    ] {
+        let what = match reduction {
+            LossReduction::Mean => "mean",
+            LossReduction::Sum => "sum",
+            LossReduction::None => "none",
+        };
+
+        let logits = upload_f32_shaped(&LOGITS_SHAPE, &LOGITS);
+        let targets = upload_i64(&TARGETS_SHAPE, &TARGETS);
+        let logits_id = TapeStorage::id(&logits);
+        let (out, recorded) = run_ce_with(&context, &logits, &targets, reduction);
+        assert!(
+            recorded >= 1,
+            "cross_entropy_loss advertises training = true ({what}), recorded {recorded}"
+        );
+        let grads = <TestBackend as AutogradBackend>::backward::<f32>(&out)
+            .expect("cross_entropy_loss backward on CUDA");
+        let gx = grads
+            .get(logits_id)
+            .expect("cross_entropy_loss logits receive a gradient");
+
+        let cpu_logits = <Cpu as HostInterop>::from_bytes::<f32>(
+            bytemuck::cast_slice(&LOGITS),
+            &LOGITS_SHAPE,
+            DTypeId::F32.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .expect("uploading the CPU logits must succeed");
+        let cpu_targets = <Cpu as HostInterop>::from_bytes::<i64>(
+            bytemuck::cast_slice(&TARGETS),
+            &TARGETS_SHAPE,
+            DTypeId::I64.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .expect("uploading the CPU targets must succeed");
+        let cpu_out = dispatch::execute::<op::CrossEntropyLoss, _>(
+            &cpu_context,
+            LossAttributes { reduction },
+            &[
+                TensorHandle::from_storage::<Cpu, f32, _>(&cpu_logits),
+                TensorHandle::from_storage::<Cpu, i64, _>(&cpu_targets),
+            ],
+        )
+        .expect("CPU reference cross_entropy_loss executes");
+        let cpu_grads = <Cpu as AutogradBackend>::backward::<f32>(&cpu_out)
+            .expect("cross_entropy_loss backward on CPU");
+        let cpu_gx = cpu_grads
+            .get(TapeStorage::id(&cpu_logits))
+            .expect("CPU reference is missing a gradient");
+
+        let want_fwd = <Cpu as HostReadback>::float_to_vec1::<f32>(&cpu_out)
+            .expect("reading the CPU forward back");
+        assert_close(
+            &read_f32(&out),
+            &want_fwd,
+            1e-5,
+            &format!("cross_entropy forward ({what})"),
+        );
+        let want_dx = <Cpu as HostReadback>::float_to_vec1::<f32>(cpu_gx)
+            .expect("reading the CPU gradient back");
+        assert_close(
+            &read_f32(gx),
+            &want_dx,
+            1e-5,
+            &format!("cross_entropy dx ({what})"),
+        );
+    }
 }
