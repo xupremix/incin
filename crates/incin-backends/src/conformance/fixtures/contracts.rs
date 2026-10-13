@@ -121,9 +121,9 @@ impl Route {
 ///
 /// Every variant here states an operand contract that a capability row cannot.
 /// A row carries one dtype set applied to every operand in turn, which is why
-/// `declarations.rs` documents `INDEX_AND_F32_DTYPES` and `F32_AND_BOOL` as
-/// unions rather than as per-operand claims. The fixture is the only place that
-/// knows the split, so the split lives here.
+/// `declarations.rs` documents `INDEX_AND_F32_DTYPES`, `F32_AND_BOOL` and
+/// `FLOAT_AND_BOOL` as unions rather than as per-operand claims. The fixture
+/// is the only place that knows the split, so the split lives here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Operands {
     /// No operand at all.
@@ -173,8 +173,9 @@ impl Operands {
 ///
 /// A capability row applies one dtype set to every operand in turn, so a row
 /// whose operands genuinely differ has to state the *union* of what they carry.
-/// `declarations.rs` says so twice at length, for `INDEX_AND_F32_DTYPES` and
-/// for `F32_AND_BOOL`. The union is the loosest honest claim the row can make
+/// `declarations.rs` says so at length, for `INDEX_AND_F32_DTYPES`, for
+/// `F32_AND_BOOL`, and - since CUDA's `where_cond`/`masked_fill` rows widened
+/// past `f32` - for `FLOAT_AND_BOOL`. The union is the loosest honest claim the row can make
 /// and it is not a claim that either operand may be either dtype, so walking it
 /// and handing every operand the same dtype poses invocations the operation was
 /// never meant to accept.

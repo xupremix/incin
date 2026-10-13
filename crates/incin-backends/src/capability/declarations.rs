@@ -446,7 +446,8 @@ macro_rules! cuda_descriptor_operations {
             // row: the measured movement identities
             // (`transpose*`/`narrow`/`concat`), the indexed ones
             // (`gather`/`scatter`/`index_select`), the mask consumers
-            // (`where_cond`/`masked_fill` at `F32_AND_BOOL`), and -
+            // (`where_cond`/`masked_fill` at `FLOAT_AND_BOOL` since #90
+            // slice 3), and -
             // like the composed identities below - `pixel_shuffle`/`unfold`,
             // whose executors are pure reshape/transpose/narrow chains over
             // those same byte-movement kernels.

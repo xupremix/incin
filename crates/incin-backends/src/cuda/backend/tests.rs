@@ -232,6 +232,145 @@ fn masked_fill_rejects_mismatched_shapes() {
     assert!(launch_masked_fill(&input, &mask, 0.0).is_err());
 }
 
+/// Issue #90 slice 3: `where_cond` over `f64` values. Byte-exact rather than
+/// `download_f32_host`, which is `f32`-only by contract
+/// (`cuda/backend/contract.rs`): the mask `[1,0,1,0]` must pick
+/// `[10.0, 2.5, 30.0, 4.5]`.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn where_cond_selects_f64_values() {
+    use crate::cuda::ops::select::launch_where_cond;
+    let mask = cuda_bool(&[4], vec![1, 0, 1, 0]);
+    let on_true_bytes: Vec<u8> = [10.0f64, 20.0, 30.0, 40.0]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let on_false_bytes: Vec<u8> = [1.5f64, 2.5, 3.5, 4.5]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let on_true =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &on_true_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let on_false =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &on_false_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let out = launch_where_cond(&mask, &on_true, &on_false).unwrap();
+    assert_eq!(out.shape, vec![4]);
+    assert_eq!(out.dtype(), DTypeId::F64.descriptor());
+    let expected: Vec<u8> = [10.0f64, 2.5, 30.0, 4.5]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    assert_eq!(crate::cuda::testing::download_bytes(&out), expected);
+}
+
+/// Issue #90 slice 3: `where_cond` over `f16` values, compared as raw bytes
+/// for the same `download_f32_host`-is-`f32`-only reason. Every value is a
+/// small integer, exactly representable in `f16`, so the comparison is exact
+/// rather than a tolerance window.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn where_cond_selects_f16_values() {
+    use crate::cuda::ops::select::launch_where_cond;
+    let mask = cuda_bool(&[4], vec![1, 0, 1, 0]);
+    let encode = |values: &[f32]| {
+        values
+            .iter()
+            .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
+            .collect::<Vec<u8>>()
+    };
+    let on_true =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F16.into(), 0, &encode(&[1.0, 2.0, 3.0, 4.0]))
+            .expect("f16 storage is CUDA-admissible");
+    let on_false =
+        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F16.into(), 0, &encode(&[5.0, 6.0, 7.0, 8.0]))
+            .expect("f16 storage is CUDA-admissible");
+    let out = launch_where_cond(&mask, &on_true, &on_false).unwrap();
+    assert_eq!(out.shape, vec![4]);
+    assert_eq!(out.dtype(), DTypeId::F16.descriptor());
+    assert_eq!(
+        crate::cuda::testing::download_bytes(&out),
+        encode(&[1.0, 6.0, 3.0, 8.0])
+    );
+}
+
+/// One typed kernel reads both value operands, so an `f32`/`f64` pair fails
+/// on the host side before any buffer is reinterpreted - the same
+/// `DTypeMismatch` contract `matmul_refuses_a_mixed_dtype_operand_pair` pins.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn where_cond_refuses_a_mixed_dtype_operand_pair() {
+    use crate::cuda::ops::select::launch_where_cond;
+    let mask = cuda_bool(&[2, 2], vec![1; 4]);
+    let on_true = cuda_f32(&[2, 2], vec![1.0; 4]);
+    let on_false_bytes: Vec<u8> = [1.0f64; 4].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let on_false =
+        crate::cuda::backend::cuda_from_bytes(&[2, 2], DTypeId::F64.into(), 0, &on_false_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let error = launch_where_cond(&mask, &on_true, &on_false)
+        .expect_err("f32/f64 where_cond must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::DTypeMismatch {
+                operation: "where_cond",
+                ..
+            }
+        ),
+        "mixed-dtype where_cond must fail as a dtype mismatch, got {error:?}"
+    );
+}
+
+/// Issue #90 slice 3: `masked_fill` over `f64` values, byte-exact for the
+/// same `download_f32_host`-is-`f32`-only reason. The `9.0` scalar narrows to
+/// the kernel's own precision, so the filled positions must read exactly
+/// `9.0f64`.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn masked_fill_overwrites_f64_at_the_input_shape() {
+    use crate::cuda::ops::select::launch_masked_fill;
+    let input_bytes: Vec<u8> = [1.0f64; 6].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let input =
+        crate::cuda::backend::cuda_from_bytes(&[2, 3], DTypeId::F64.into(), 0, &input_bytes)
+            .expect("f64 storage is CUDA-admissible");
+    let mask = cuda_bool(&[2, 3], vec![1, 0, 1, 0, 1, 0]);
+    let out = launch_masked_fill(&input, &mask, 9.0).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    assert_eq!(out.dtype(), DTypeId::F64.descriptor());
+    let expected: Vec<u8> = [9.0f64, 1.0, 9.0, 1.0, 9.0, 1.0]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    assert_eq!(crate::cuda::testing::download_bytes(&out), expected);
+}
+
+/// Issue #90 slice 3: `masked_fill` over `f16` values. `9.0` and `1.0` are
+/// both exactly representable in `f16`, so the scalar narrowing and the
+/// untouched positions both compare byte-exact.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn masked_fill_overwrites_f16_at_the_input_shape() {
+    use crate::cuda::ops::select::launch_masked_fill;
+    let encode = |values: &[f32]| {
+        values
+            .iter()
+            .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
+            .collect::<Vec<u8>>()
+    };
+    let input =
+        crate::cuda::backend::cuda_from_bytes(&[2, 3], DTypeId::F16.into(), 0, &encode(&[1.0; 6]))
+            .expect("f16 storage is CUDA-admissible");
+    let mask = cuda_bool(&[2, 3], vec![1, 0, 1, 0, 1, 0]);
+    let out = launch_masked_fill(&input, &mask, 9.0).unwrap();
+    assert_eq!(out.shape, vec![2, 3]);
+    assert_eq!(out.dtype(), DTypeId::F16.descriptor());
+    assert_eq!(
+        crate::cuda::testing::download_bytes(&out),
+        encode(&[9.0, 1.0, 9.0, 1.0, 9.0, 1.0])
+    );
+}
+
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn logical_and_or_and_not_write_bool_storage_at_the_shared_shape() {

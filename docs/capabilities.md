@@ -113,7 +113,7 @@ run time.
 | `logsumexp_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `logsumexp_keepdim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `lstm` | — | — | — | — |
-| `masked_fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32`, `bool` | `f32`, `bool` | — |
+| `masked_fill` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64`, `bool` | `f32`, `bool` | — |
 | `matmul` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `max_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `max_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
@@ -205,7 +205,7 @@ run time.
 | `var_rand` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` | `f32` |
 | `var_randn` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` | `f32` |
 | `var_zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
-| `where_cond` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32`, `bool` | `f32`, `bool` | — |
+| `where_cond` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64`, `bool` | `f32`, `bool` | — |
 | `zeros` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
 
 Every stable semantic operation comes from the canonical catalog. A dash is an explicit unsupported or migration-blocked decision. Layout, rank and training coverage are in the per-backend tables below.
@@ -444,8 +444,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `matmul` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 2+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
-| `where_cond` | `f32`, `bool` | `contiguous` | 0–6 | yes | native |
-| `masked_fill` | `f32`, `bool` | `contiguous` | 0–6 | yes | native |
+| `where_cond` | `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | 0–6 | yes | native |
+| `masked_fill` | `bf16`, `f16`, `f32`, `f64`, `bool` | `contiguous` | 0–6 | yes | native |
 | `gather` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `scatter` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `index_select` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |

@@ -9,8 +9,8 @@
 
 use super::constants::{
     ALL_DTYPES, BOOL_ONLY, CONTIGUOUS, CPU_LAYOUTS, CUDA_BOOL_SAFE_STORAGE_DTYPES, CUDA_LAYOUTS,
-    CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_AND_F64, F32_ONLY, FLOAT_DTYPES, INDEX_AND_F32_DTYPES,
-    NON_QUANTIZED, PRECISE, Q8_ONLY, WGPU_STORAGE_DTYPES,
+    CUDA_STORAGE_DTYPES, F32_AND_BOOL, F32_AND_F64, F32_ONLY, FLOAT_AND_BOOL, FLOAT_DTYPES,
+    INDEX_AND_F32_DTYPES, NON_QUANTIZED, PRECISE, Q8_ONLY, WGPU_STORAGE_DTYPES,
 };
 use super::declarations::{
     cpu_descriptor_operations, cuda_descriptor_operations, metal_descriptor_operations,
@@ -592,14 +592,14 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         // `where_cond`/`masked_fill` (`cuda/ops/select.rs`) are the
         // consumers a `bool` mask needs to be reachable at all: without them
         // a `cmp_*` result could be produced and reshaped but never fed back
-        // into a float computation. `F32_AND_BOOL` rather than `F32_ONLY`
-        // because both take a `bool` mask alongside `f32` data and
+        // into a float computation. `FLOAT_AND_BOOL` rather than `F32_ONLY`
+        // because both take a `bool` mask alongside float data and
         // `dispatch::execute` checks every operand against this one row -
         // see that constant's own doc for why a shared-group row could not
         // state this.
         native_ranked(
             OperationKind::WhereCond,
-            F32_AND_BOOL,
+            FLOAT_AND_BOOL,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::WhereCond),
             accelerator_max_rank(OperationKind::WhereCond),
@@ -607,7 +607,7 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
         ),
         native_ranked(
             OperationKind::MaskedFill,
-            F32_AND_BOOL,
+            FLOAT_AND_BOOL,
             CONTIGUOUS,
             descriptor_min_rank(OperationKind::MaskedFill),
             accelerator_max_rank(OperationKind::MaskedFill),

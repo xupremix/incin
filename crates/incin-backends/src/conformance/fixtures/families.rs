@@ -487,7 +487,7 @@ family!(dropping, Operands::Unary, dropping_half, [Dropout]);
 
 // `where_cond` selects between two float operands with a bool mask, and
 // `masked_fill` overwrites a float operand where its mask is set. Both rows
-// declare `F32_AND_BOOL`, which is the union of the two operand dtypes and not
+// declare `FLOAT_AND_BOOL`, which is the union of the two operand dtypes and not
 // a claim that either operand may be either, so the roles state the split the
 // row cannot.
 typed_family!(

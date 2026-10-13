@@ -14,6 +14,7 @@ use incin_core::tensor::device::{Device, DeviceKind};
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 use incin_core::tensor::reduction::Reduction;
 
+use half::{bf16, f16};
 use super::backend::CudaBackendImpl;
 use super::storage::CudaStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -1039,6 +1040,32 @@ impl_cuda_cmp![
 /// the mask is set and to `grad_false` where it is not is exactly what
 /// `where_cond(mask, grad_out, zeros)`/`where_cond(mask, zeros, grad_out)`
 /// compute.
+/// Broadcast a `where_cond` value operand to the shared output shape, in its
+/// own dtype.
+///
+/// The turbofish is dispatched on the storage dtype rather than left at the
+/// `f32` these calls used to hardcode. `broadcast_as`'s `K` is phantom at
+/// runtime - the width-parametric `launch_broadcast` underneath moves bytes
+/// for every dtype - but spelling the real dtype keeps the call honest about
+/// what it carries, and a dtype with no spelling is refused here instead of
+/// silently riding the `f32` path.
+fn broadcast_select_value<D: Device>(
+    storage: &CudaStorage,
+    shape: &[usize],
+) -> Result<CudaStorage, Error> {
+    match storage.buffer.dtype.builtin_id() {
+        Some(DTypeId::F32) => CudaBackendImpl::<D>::broadcast_as::<f32>(storage, shape),
+        Some(DTypeId::F64) => CudaBackendImpl::<D>::broadcast_as::<f64>(storage, shape),
+        Some(DTypeId::F16) => CudaBackendImpl::<D>::broadcast_as::<f16>(storage, shape),
+        Some(DTypeId::BF16) => CudaBackendImpl::<D>::broadcast_as::<bf16>(storage, shape),
+        _ => Err(Error::UnsupportedDType {
+            dtype: storage.buffer.dtype,
+            backend: "Cuda",
+            op: "where_cond",
+        }),
+    }
+}
+
 impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
     type Output = CudaStorage;
 
@@ -1076,31 +1103,30 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
         let true_b = if on_true.shape == out_shape {
             on_true.clone()
         } else {
-            CudaBackendImpl::<D>::broadcast_as::<f32>(on_true, &out_shape)
+            broadcast_select_value::<D>(on_true, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };
         let false_b = if on_false.shape == out_shape {
             on_false.clone()
         } else {
-            CudaBackendImpl::<D>::broadcast_as::<f32>(on_false, &out_shape)
+            broadcast_select_value::<D>(on_false, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };
 
         let out = crate::cuda::ops::select::launch_where_cond(&mask_b, &true_b, &false_b)
             .map_err(|e| kernel_error("Cuda", operation, e))?;
 
-        let device_id = mask_b.buffer.device_id;
         let (mask_capture, out_shape_capture) = (mask_b.clone(), out_shape.clone());
         let (true_id, false_id, out_id) = (true_b.id, false_b.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![true_id, false_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                let zeros = CudaBackendImpl::<D>::zeros::<f32>(
-                    &out_shape_capture,
-                    incin_core::tensor::dtype::DTypeId::F32.descriptor(),
-                    &incin_core::tensor::device::DeviceId::cuda(device_id),
-                )?;
+                // In the value dtype, not `f32`: `grad_out` already carries
+                // it, so `zeros_like` reads it off the gradient rather than
+                // naming a dtype of its own.
+                let zeros =
+                    crate::cuda::ops::select::zeros_like(grad_out, &out_shape_capture)?;
                 let grad_true =
                     crate::cuda::ops::select::launch_where_cond(&mask_capture, grad_out, &zeros)?;
                 let grad_false =

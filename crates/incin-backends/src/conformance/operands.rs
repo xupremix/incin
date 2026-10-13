@@ -215,6 +215,11 @@ fn role_buffer(tuple: &AdvertisedTuple, role: Role, length: usize) -> Result<Cpu
     match role {
         Role::Tuple => buffer(tuple.dtype, length),
         Role::Mask => Ok(CpuBuffer::Bool(alloc::vec![1; length])),
+        // `Float` stays pinned at `f32` even where the row widened past it
+        // (CUDA's `where_cond`/`masked_fill` rows now claim `FLOAT_AND_BOOL`):
+        // the fixture poses one representative float operand, the row's union
+        // is what admits the rest, and neither family varies with the tuple
+        // dtype - wider-dtype coverage lives in the backend's own tests.
         Role::Float | Role::FloatMatrix => buffer(DTypeId::F32.descriptor(), length),
         // Grouped matrices pin f32 the way `FloatMatrix` does for
         // `embedding_lookup`: `inference.rs` `require_float` refuses integer

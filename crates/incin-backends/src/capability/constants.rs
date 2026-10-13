@@ -105,6 +105,31 @@ pub(super) const WGPU_STORAGE_DTYPES: &[DTypeDescriptor] = &[
 /// per-operand split this row cannot state on its own.
 pub(super) const F32_AND_BOOL: &[DTypeDescriptor] =
     &[DTypeId::F32.descriptor(), DTypeId::Bool.descriptor()];
+/// The union of `where_cond`'s/`masked_fill`'s widened value dtype and their
+/// `bool` mask operand's, for the same reason `F32_AND_BOOL` exists:
+/// `dispatch::execute` (`crates/incin-core/src/exec/dispatch.rs`'s
+/// `admit_invocation`) checks *every* operand's dtype against the one
+/// resolved capability row in turn, so a row narrower than the union of what
+/// every operand actually carries makes the operation unreachable - the
+/// `mask` operand would fail dtype admission before either kernel ever
+/// launches. Not a claim that either operand may be *either* dtype: the
+/// descriptor's own per-operand contract (`exec/catalog`'s
+/// `WhereCond`/`MaskedFill` arms) and `cuda::ops::select`'s own
+/// `require_bool_mask`/entry-point checks enforce the real, tighter
+/// per-operand split this row cannot state on its own.
+///
+/// Deliberately a separate constant rather than widening `F32_AND_BOOL` in
+/// place: the WGPU `where_cond`/`masked_fill` rows still answer to that
+/// narrower set, and widening the shared constant would have silently
+/// widened an unverified claim too - the same discipline
+/// `CUDA_BOOL_SAFE_STORAGE_DTYPES` documents above.
+pub(super) const FLOAT_AND_BOOL: &[DTypeDescriptor] = &[
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
+    DTypeId::Bool.descriptor(),
+];
 /// `logical_and`/`logical_or`/`logical_not`: every operand and the output
 /// are `bool`, unlike `where_cond`/`masked_fill`'s mixed `F32_AND_BOOL`, so
 /// one dtype suffices - no union needed.
