@@ -40,10 +40,15 @@ pub(super) const CUDA_STORAGE_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::F32.descriptor(),
     DTypeId::F64.descriptor(),
 ];
-/// `CUDA_STORAGE_DTYPES` plus `bool`, for the specific CUDA rows verified
-/// safe for a 1-byte dtype: `storage` (allocation/`to_bytes`/`from_bytes`)
-/// and `reshape` (metadata-only, no kernel launch either way) never assume a
-/// fixed element width the way `broadcast_as`'s `shape_op` kernel does.
+/// `CUDA_STORAGE_DTYPES` plus `bool`, `u8` and `u32`, for the specific CUDA
+/// rows verified safe for 1-byte and 4-byte dtypes: `storage`
+/// (allocation/`to_bytes`/`from_bytes`) and `reshape` (metadata-only, no
+/// kernel launch either way) never assume a fixed element width, and the
+/// movement kernels (`shape_op`'s `8bit`/`16bit`/`32bit`/`64bit` entry
+/// points, `concat`'s `8bit`/`16bit`/`32bit`/`64bit` entry points) select by
+/// element width and do no arithmetic, so a 1-byte `u8` and a 4-byte `u32`
+/// move byte-exact there (`tests/cuda_shape_dtypes.rs`'s byte-exact matrix
+/// covers both widths end to end).
 /// Deliberately a separate constant rather than widening
 /// `CUDA_STORAGE_DTYPES` itself: Metal's own `broadcast` row still reuses
 /// that constant and has the identical `shape_op`-style byte-width
@@ -51,6 +56,8 @@ pub(super) const CUDA_STORAGE_DTYPES: &[DTypeDescriptor] = &[
 /// the shared constant in place would have silently widened Metal's
 /// unverified claim too.
 pub(super) const CUDA_BOOL_SAFE_STORAGE_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
     DTypeId::I64.descriptor(),
     DTypeId::BF16.descriptor(),
     DTypeId::F16.descriptor(),

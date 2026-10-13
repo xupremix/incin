@@ -24,7 +24,7 @@ fn byte_length_uses_authoritative_storage_dtype() {
 }
 
 #[test]
-fn storage_validation_accepts_renderable_float_family_and_i64_indices() {
+fn storage_validation_accepts_the_cuda_storage_family() {
     let device = DeviceId::cuda(0);
     for dtype in [
         DTypeId::F16,
@@ -32,11 +32,14 @@ fn storage_validation_accepts_renderable_float_family_and_i64_indices() {
         DTypeId::F32,
         DTypeId::F64,
         DTypeId::I64,
+        DTypeId::U8,
+        DTypeId::U32,
     ] {
         validate_cuda_storage(dtype.into(), &device, "test").unwrap();
     }
+    // Still unsupported: no CUDA storage or kernel path for fp8.
     assert!(matches!(
-        validate_cuda_storage(DTypeId::U32.into(), &device, "test"),
+        validate_cuda_storage(DTypeId::F8E4M3.into(), &device, "test"),
         Err(Error::UnsupportedDType { .. })
     ));
     assert!(validate_cuda_storage(DTypeId::F32.into(), &DeviceId::cpu(), "test").is_err());

@@ -330,9 +330,13 @@ macro_rules! cuda_descriptor_operations {
             // `ToDType` rides this group since #106(a): the cast kernel is
             // dtype-parametric over the source, and `broadcast`'s
             // `CUDA_BOOL_SAFE_STORAGE_DTYPES` is exactly that source set
-            // (f32/f64/f16/bf16/i64/bool) on contiguous layouts with both
-            // training arms. Capability admits the *input* dtype; the
-            // executor refuses targets outside {f32,f64,f16,bf16,i64}.
+            // (f32/f64/f16/bf16/i64/bool, plus u8/u32 since #90 slice 5)
+            // on contiguous layouts with both training arms. Capability
+            // admits the *input* dtype; the executor refuses targets
+            // outside {f32,f64,f16,bf16,i64}, and `source_code` has no
+            // entry for u8/u32 sources either, so a u8/u32 `to_dtype`
+            // source admitted here still fails loudly inside the
+            // executor rather than casting garbage.
             broadcast = [BroadcastAs, ToDType],
             reshape = [ReshapeExact],
             filling = [

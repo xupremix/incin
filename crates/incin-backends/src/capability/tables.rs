@@ -177,11 +177,12 @@ pub static CUDA_CAPABILITIES: &[CapabilityRule] = cuda_descriptor_operations!(
     // width-parametric entry points (`shape_op_8bit`/`16bit`/`32bit`/`64bit`,
     // selected by element width at launch), and the launcher passes byte
     // buffers through instead of reinterpreting them as `f32`. Measured on
-    // hardware across transpose, broadcast, narrow and concat: `bool`,
-    // `f16`, `bf16`, `f32`, `f64` and `i64` all land byte-exact, so the row
-    // claims the dense storage set. `q8_0` stays out: a block encoding has
-    // no element width to move by, and the kernels refuse it rather than
-    // reinterpret block bytes as scalars (pinned by test).
+    // hardware across transpose, broadcast, narrow and concat: `u8`,
+    // `bool`, `f16`, `bf16`, `f32`, `u32`, `f64` and `i64` all land
+    // byte-exact, so the row claims the dense storage set. `q8_0` stays
+    // out: a block encoding has no element width to move by, and the
+    // kernels refuse it rather than reinterpret block bytes as scalars
+    // (pinned by test).
     // `reshape` does not share this: it never launches `shape_op` at all,
     // only rewraps the same buffer under a new shape, so it stays byte-exact
     // for every dtype `CUDA_STORAGE_DTYPES` names.

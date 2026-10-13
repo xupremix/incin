@@ -22,7 +22,7 @@ macro_rules! impl_cuda_storage_dtype {
     };
 }
 
-impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64, bool);
+impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64, bool, u8, u32);
 
 /// `bool` is a 1-byte scalar dtype (`tensor/dtype/registry.rs`'s own encoding table
 /// gives it the same `scalar_bytes() == 1` as `u8`/`q8_0`), and every path
@@ -36,10 +36,20 @@ impl_cuda_storage_dtype!(f32, f64, f16, bf16, i64, bool);
 /// function accepts is a necessary condition for `bool` support, not a
 /// capability claim by itself - the capability table is what actually
 /// claims something, one row at a time.
+///
+/// `u8`/`u32` ride the same reasoning one step further: the movement
+/// launchers (`shape_op`'s `8bit`/`32bit` entry points, `concat`'s
+/// `8bit`/`32bit` entry points) select by element width and do no
+/// arithmetic, so a 1-byte `u8` and a 4-byte `u32` move byte-exact with no
+/// kernel change. Like `bool` they stay out of every float-templated path:
+/// `validate_elementwise_dtype` re-excludes them, `validate_cuda_f32_kernel`
+/// refuses them for matmul/conv/pool, and the cast kernel's `source_code`
+/// has no entry for them, so each of those fails loudly rather than
+/// misreading.
 /// The precondition for every kernel that reinterprets a byte buffer as `f32`.
 ///
 /// Storage validation above is deliberately wider: CUDA storage legitimately
-/// holds `f64`, `f16`, `bf16`, `i64`, `q8_0` and `bool`. The hand-written
+/// holds `f64`, `f16`, `bf16`, `i64`, `u8`, `u32`, `q8_0` and `bool`. The hand-written
 /// kernels in `cuda/ops` are not that wide. Each takes a `const float*` and
 /// reaches its operand through an unconditional `transmute::<f32>`, which is
 /// sound only when the buffer really is `f32`.
@@ -79,6 +89,8 @@ pub(crate) fn validate_cuda_storage_dtype(dtype: DTypeDescriptor, op: &'static s
                 | DTypeId::F16
                 | DTypeId::BF16
                 | DTypeId::I64
+                | DTypeId::U8
+                | DTypeId::U32
                 | DTypeId::Q8_0
                 | DTypeId::Bool
         )
@@ -158,20 +170,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn storage_dtype_validation_now_accepts_bool_alongside_the_original_family() {
+    fn storage_dtype_validation_admits_the_full_cuda_storage_family() {
         for dtype in [
             DTypeId::F32,
             DTypeId::F64,
             DTypeId::F16,
             DTypeId::BF16,
             DTypeId::I64,
+            DTypeId::U8,
+            DTypeId::U32,
             DTypeId::Q8_0,
             DTypeId::Bool,
         ] {
             validate_cuda_storage_dtype(dtype.descriptor(), "test")
                 .unwrap_or_else(|e| panic!("{dtype:?} should validate: {e:?}"));
         }
-        assert!(validate_cuda_storage_dtype(DTypeId::U32.descriptor(), "test").is_err());
+        // `F8E4M3` is the still-unsupported case: a scalar dtype with no
+        // CUDA storage or kernel path, pinning that this validator stays a
+        // closed list rather than drifting toward accepting everything.
+        assert!(validate_cuda_storage_dtype(DTypeId::F8E4M3.descriptor(), "test").is_err());
     }
 
     /// The kernel guard is deliberately narrower than the storage guard. Every
@@ -187,9 +204,10 @@ mod tests {
             DTypeId::F16,
             DTypeId::BF16,
             DTypeId::I64,
+            DTypeId::U8,
+            DTypeId::U32,
             DTypeId::Q8_0,
             DTypeId::Bool,
-            DTypeId::U32,
         ] {
             assert!(
                 validate_cuda_f32_kernel(dtype.descriptor(), "test").is_err(),
