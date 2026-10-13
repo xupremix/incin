@@ -2449,6 +2449,43 @@ fn scatter_add_refuses_last_write_wins_with_the_cpus_wording() {
     );
 }
 
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn scatter_add_is_bit_stable_across_runs_like_cpu() {
+    // Issue #103: the catalog row claims determinism, and the forward runs
+    // the ordered two-pass kernel (row-major `j` order, one f64 rounding)
+    // rather than the atomic one, so two runs of the same colliding write
+    // agree bitwise. The payload mirrors CPU's
+    // `scatter_add_is_bit_stable_across_runs` in
+    // `crates/incin/tests/routing_primitives.rs`: three writes to slot 1
+    // whose f32 sums differ by order, so an atomic forward would eventually
+    // show a low-bit difference across runs.
+    let target = cuda_f32(&[4], vec![0.1, 0.2, 0.3, 0.4]);
+    let index = cuda_i64(&[3], &[1, 1, 1]);
+    let source = cuda_f32(&[3], vec![1.0e-8, 1.0, 1.0e8]);
+    let first = B::scatter_add::<f32>(&target, 0, &index, &source).unwrap();
+    let second = B::scatter_add::<f32>(&target, 0, &index, &source).unwrap();
+    let (first_host, second_host) = (
+        download_f32_host(&first).unwrap(),
+        download_f32_host(&second).unwrap(),
+    );
+    assert_eq!(
+        first_host, second_host,
+        "the same inputs produced different low bits across runs"
+    );
+
+    // And the sum matches the documented row-major order: 0.2 + 1e-8 + 1.0 + 1e8.
+    let mut expected = 0.2f64;
+    for value in [1.0e-8f32, 1.0f32, 1.0e8f32] {
+        expected += f64::from(value);
+    }
+    let got = f64::from(first_host[1]);
+    assert!(
+        (got - expected).abs() < 2.0,
+        "got {got}, expected ~{expected} in row-major index order"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Issue #103, AC6: CUDA `grouped_matmul`. All five are hardware-gated like
 // every other device path above; the geometry mirrors

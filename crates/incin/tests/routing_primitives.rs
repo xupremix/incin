@@ -374,6 +374,98 @@ fn scatter_add_is_bit_stable_across_runs() -> Result<()> {
     Ok(())
 }
 
+/// The gradient of the stable router log-probabilities.
+///
+/// `d/dx sum(log_softmax(x)) = 1 - n * softmax(x)` along the normalized axis:
+/// each input earns one through its own output and pays its softmax share of
+/// the shared normalizer everyone else subtracts. This pins the backward from
+/// the public surface the router calls; the kernels are gradchecked inside
+/// `incin-backends`, and the forward stability (why this is not
+/// `softmax`-then-`log`) is pinned in `tensor_ops.rs`.
+#[test]
+fn the_gradient_of_the_stable_router_log_probabilities() -> Result<()> {
+    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(
+        &[1.0, 2.0, 3.0, 0.5, -1.0, 2.0],
+        (),
+    )?;
+
+    let loss = x.log_softmax(1)?.sum_all()?;
+    let grads = loss.backward()?;
+    let got = grads.require(&x)?.to_vec1::<f32>()?;
+
+    // Closed form in f64: 1 - 3 * softmax(row).
+    let rows = [[1.0f64, 2.0, 3.0], [0.5, -1.0, 2.0]];
+    let mut expected = Vec::new();
+    for row in rows {
+        let max = row.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let exps: Vec<f64> = row.iter().map(|value| (value - max).exp()).collect();
+        let sum: f64 = exps.iter().sum();
+        expected.extend(exps.iter().map(|exp| 1.0 - 3.0 * exp / sum));
+    }
+    assert_eq!(got.len(), expected.len());
+    for (position, (got, want)) in got.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (f64::from(*got) - want).abs() < 1e-5,
+            "grad[{position}]: got {got}, want {want}"
+        );
+    }
+    Ok(())
+}
+
+/// The gradient of the normalizer is the softmax.
+///
+/// `d/dx logsumexp(x) = softmax(x)`: the shift by the axis maximum that keeps
+/// the forward finite at router magnitudes differentiates away, leaving each
+/// input earning its softmax share of the output. Same pinning rationale as
+/// the `log_softmax` test above: public surface here, kernel gradchecks in
+/// `incin-backends`, forward stability in `tensor_ops.rs`.
+#[test]
+fn the_gradient_of_the_normalizer_is_the_softmax() -> Result<()> {
+    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(
+        &[1.0, 2.0, 3.0, 0.5, -1.0, 2.0],
+        (),
+    )?;
+
+    let loss = x.logsumexp(1)?.sum_all()?;
+    let grads = loss.backward()?;
+    let got = grads.require(&x)?.to_vec1::<f32>()?;
+
+    let rows = [[1.0f64, 2.0, 3.0], [0.5, -1.0, 2.0]];
+    let mut expected = Vec::new();
+    for row in rows {
+        let max = row.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let exps: Vec<f64> = row.iter().map(|value| (value - max).exp()).collect();
+        let sum: f64 = exps.iter().sum();
+        expected.extend(exps.iter().map(|exp| exp / sum));
+    }
+    assert_eq!(got.len(), expected.len());
+    for (position, (got, want)) in got.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (f64::from(*got) - want).abs() < 1e-5,
+            "grad[{position}]: got {got}, want {want}"
+        );
+    }
+    Ok(())
+}
+
+/// Sorting reorders; it does not differentiate.
+///
+/// `sort` returns `NoGrad` values and indices whatever the receiver was (the
+/// catalog row's `GradientRule::None`, same as `argsort`/`topk`), so a router
+/// cannot backpropagate through a grouping decision. The ascriptions below
+/// are the assertion: they stop compiling the day the signature starts
+/// claiming a gradient.
+#[test]
+fn sorting_reorders_without_differentiating() -> Result<()> {
+    let x = Tensor::<s![4], B, f32, Grad>::from_slice(&[3.0, 1.0, 2.0, 0.0], ())?;
+
+    let (values, indices) = x.sort(0, false)?;
+    let _: &Dense<s![4], B, f32, NoGrad> = &values;
+    let _: &Dense<s![4], B, u32, NoGrad> = &indices;
+    assert_eq!(values.to_vec1::<f32>()?, vec![0.0, 1.0, 2.0, 3.0]);
+    Ok(())
+}
+
 /// `nonzero` returns one coordinate row per non-zero element.
 ///
 /// The count is data-dependent, so the result shape is `Dyn` and is read
