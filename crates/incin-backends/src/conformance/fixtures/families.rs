@@ -561,6 +561,35 @@ typed_family!(
     [MatMulExact, BatchedMatMul]
 );
 
+// The three extents a grouped product names: a `[T, K]` activation against an
+// `[E, K, N]` expert stack, agreeing on `K`, beside an `[E + 1]` offsets tile.
+// Fixed rather than ladder-derived, because the operation's own ranks are what
+// they are at every tuple rank the row admits: the activation is rank two, the
+// stack rank three, and the tile rank one, with the tile's entries evenly
+// splitting the token rows so no expert span is empty. Plain shim, since
+// `grouped_matmul` takes `NoAttributes`.
+const T: usize = 4;
+const E: usize = 2;
+
+typed_family!(
+    grouping,
+    Operands::Triple,
+    &[
+        Role::GroupedActivation {
+            tokens: T,
+            contracting: K
+        },
+        Role::GroupedExperts {
+            experts: E,
+            contracting: K,
+            out_cols: N
+        },
+        Role::GroupedOffsets { experts: E, tokens: T }
+    ],
+    plain,
+    [GroupedMatMul]
+);
+
 // `addmm` is the same product with an addend broadcast against it, so the
 // addend is the product's own shape. It comes first because that is the order
 // the inference reads: addend, then the two factors.

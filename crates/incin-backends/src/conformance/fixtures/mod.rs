@@ -70,6 +70,7 @@ pub(crate) fn fixture(operation: OperationKind) -> Result<Fixture, &'static str>
         .or_else(|| selecting_rows(operation))
         .or_else(|| embedding_lookup(operation))
         .or_else(|| matrix_product(operation))
+        .or_else(|| grouping(operation))
         .or_else(|| vector_product(operation))
         .or_else(|| compressing(operation))
         .or_else(|| expanding(operation))

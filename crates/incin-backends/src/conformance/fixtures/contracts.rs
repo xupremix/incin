@@ -251,6 +251,42 @@ pub(crate) enum Role {
     TrailingVector,
     /// A `[out, in]` projection, where `in` is the input's final extent.
     LinearWeight,
+    /// A grouped matmul activation: `[tokens, contracting]`.
+    ///
+    /// The token rows the offsets tile tiles into per-expert spans, read
+    /// against one `[contracting, out_cols]` slice of the expert stack each.
+    /// Fixed the way [`Role::FloatMatrix`] is, because the operation's own
+    /// ranks are what they are at every tuple rank the row admits.
+    GroupedActivation {
+        /// Token rows, tiled by the offsets operand.
+        tokens: usize,
+        /// Extent contracted against the expert stack's middle axis.
+        contracting: usize,
+    },
+    /// A grouped matmul expert stack: `[experts, contracting, out_cols]`.
+    ///
+    /// One `[contracting, out_cols]` weight per expert, stacked on axis zero
+    /// the way the kernel's `narrow` slices them back off.
+    GroupedExperts {
+        /// Expert slices stacked on axis zero.
+        experts: usize,
+        /// Extent contracted against the activation's final axis.
+        contracting: usize,
+        /// Output columns each expert writes.
+        out_cols: usize,
+    },
+    /// A grouped matmul offsets tile: `[experts + 1]`, an i64 ramp tiling
+    /// `[0, tokens)`.
+    ///
+    /// The one operand that pins a dtype of its own rather than carrying the
+    /// tuple's, the way [`Role::IndexVector`] does for the other mixed-dtype
+    /// rows.
+    GroupedOffsets {
+        /// Expert slices the tile separates, so one more entry than this.
+        experts: usize,
+        /// Token rows the tile spans, so its final entry.
+        tokens: usize,
+    },
 }
 
 impl Role {
@@ -274,7 +310,14 @@ impl Role {
     pub(crate) const fn carries_tuple_dtype(self) -> bool {
         !matches!(
             self,
-            Self::Mask | Self::Float | Self::FloatMatrix | Self::Index | Self::IndexVector
+            Self::Mask
+                | Self::Float
+                | Self::FloatMatrix
+                | Self::Index
+                | Self::IndexVector
+                | Self::GroupedActivation { .. }
+                | Self::GroupedExperts { .. }
+                | Self::GroupedOffsets { .. }
         )
     }
 }
