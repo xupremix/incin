@@ -511,6 +511,15 @@ pub(super) const fn entry(
         empty,
         numeric,
         gradient,
+        // Issue #103 close-out: `TopK` and `Argsort` are deterministic.
+        // Evidence: CPU `topk`/`argsort`/`sort` all use stable `sort_by`
+        // (`cpu/ops/reduce/select.rs`); CUDA `Sort` and `Argsort` both
+        // delegate to the `topk` kernel (`cuda/executor.rs`, `cuda/backend/
+        // reduce.rs`), whose tie-break is earliest-index (`j < best_pos`)
+        // in a single-threaded per-slice launch; Metal `sort`/`topk` share
+        // `sort_pairs`' stable `sort_by`. All three match the "all three
+        // stable" prose, so only the random/sample/dropout/scatter rows
+        // opt out here.
         deterministic: !matches!(
             operation,
             OperationKind::UniformRandom
@@ -520,8 +529,6 @@ pub(super) const fn entry(
                 | OperationKind::Sample
                 | OperationKind::Dropout
                 | OperationKind::Scatter
-                | OperationKind::TopK
-                | OperationKind::Argsort
         ),
         layout,
         legacy_source,

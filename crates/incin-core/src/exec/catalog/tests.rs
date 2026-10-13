@@ -1011,12 +1011,12 @@ fn zero_output_gradient_and_determinism_exceptions_override_their_family() {
         );
     }
 
-    for operation in [
-        OperationKind::UniformRandom,
-        OperationKind::Dropout,
-        OperationKind::TopK,
-        OperationKind::Argsort,
-    ] {
+    // Issue #103 close-out: `TopK`/`Argsort` left this list. All three
+    // ordering ops use a stable earliest-index tie-break on every backend
+    // (see the `deterministic` comment in `table.rs`), so they are
+    // deterministic; only sampling, dropout, and the overwriting scatter
+    // remain nondeterministic here.
+    for operation in [OperationKind::UniformRandom, OperationKind::Dropout] {
         assert!(
             !catalog_entry(operation).unwrap().deterministic,
             "{operation} is not deterministic",
