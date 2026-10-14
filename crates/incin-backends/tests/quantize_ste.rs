@@ -220,11 +220,13 @@ fn a_training_context_admits_the_boundary_and_records_both_ste_entries() {
 fn a_training_context_still_refuses_quantized_matmul() {
     let context = ExecutionContext::<B>::new(B::new()).with_training(true);
     // The descriptor validates before any capability query, so the operands
-    // have to satisfy `OutputRule::MatMul` (`lhs[-1] == rhs[-2]`) for this
-    // to reach the training check rather than fail on shape. Two rows of
-    // thirty-two elements are one whole Q8_0 block each.
+    // have to satisfy the true `OutputRule::TypedInference` geometry
+    // (`lhs[-1] == rhs[-1]`, rhs exactly two dimensions) for this to reach
+    // the training check rather than fail on shape. Two rows of thirty-two
+    // elements are one whole Q8_0 block each, arranged as the kernel
+    // requires (`lhs: [1,32]`, `rhs: [1,32]`).
     let left_row = storage((0..32).map(|index| index as f32).collect(), vec![1, 32]);
-    let right_row = storage((0..32).map(|index| index as f32).collect(), vec![32, 1]);
+    let right_row = storage((0..32).map(|index| index as f32).collect(), vec![1, 32]);
     let lhs = GradMode::Enabled.scope(|| quantize(&context, &left_row));
     let rhs = GradMode::Enabled.scope(|| quantize(&context, &right_row));
 
