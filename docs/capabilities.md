@@ -551,6 +551,9 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `logsumexp_dim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `logsumexp_keepdim` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `matmul` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 2+ | yes | native |
+| `bmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 3+ | yes | native |
+| `addmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
+| `linear` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | native |
 | `conv2d` | `f32` | `contiguous` | 1–4 | yes | native |
 | `conv1d` | `f32` | `contiguous` | 1–3 | yes | native |
 | `conv_transpose2d` | `f32` | `contiguous` | 1–4 | yes | native |
@@ -626,9 +629,6 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `bce_with_logits_loss` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
 | `instance_norm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 2–4 | yes | composed |
 | `norm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | any | yes | composed |
-| `bmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 3+ | yes | composed |
-| `addmm` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | composed |
-| `linear` | `bf16`, `f16`, `f32`, `f64` | `contiguous` | 1+ | yes | composed |
 | `cross_entropy_loss` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | composed |
 
 ## `wgpu`

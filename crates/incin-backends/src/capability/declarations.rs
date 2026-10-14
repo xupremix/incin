@@ -380,7 +380,24 @@ macro_rules! cuda_descriptor_operations {
                 // `matmul` group's F32_ONLY row (`tables.rs`) is
                 // intentional: it feeds the composed `SDPA`/`Dot`/`Outer`
                 // rows, which must stay narrow.
-                MatMulExact
+                MatMulExact,
+                // Issue #85 slices 6+7: `BatchedMatMul`/`Addmm`/`Linear`
+                // join `MatMulExact` in this native FLOAT_DTYPES row
+                // rather than `composed_reduction`'s. `bmm` is one
+                // grid-z launch of `matmul.cu`'s batched entries (one
+                // per float dtype, `matmul_batched*`) through the
+                // admitted-plan launcher (`ops/matmul.rs`), not a
+                // per-slice loop - the loop survives only as the
+                // fallback for shapes the flat plan refuses. `addmm`
+                // and `linear` try the fused cuBLASLt bias epilogue
+                // first (`ops/cublaslt.rs`'s `try_launch_matmul` with
+                // `Some(bias)`, one kernel for product plus bias) and
+                // otherwise compose the same native product the row
+                // names, so the row states the kernel that answers
+                // first rather than the fallback that answers last -
+                // the same Native-with-composed-fallback shape
+                // `MatMulExact`'s own row already states.
+                BatchedMatMul, Addmm, Linear
             ],
             spatial = [
                 Conv2dExact, Conv1dExact, ConvTranspose2d,
@@ -493,6 +510,8 @@ macro_rules! cuda_descriptor_operations {
             // whose rule shape it matches exactly once the product widened
             // to FLOAT_DTYPES - same Composed kind, Contiguous layouts,
             // rank bounds and training; only the dtype set differed.
+            // (Issue #85 slice 6 moves it on to `reduction`'s native row;
+            // this group stays empty.)
             composed_matmul_bias = [],
             // `Quantize`/`Dequantize` are `training = true` like CPU's: the
             // CUDA executor's quantize/dequantize paths push the issue #93
@@ -507,13 +526,14 @@ macro_rules! cuda_descriptor_operations {
                 // Issue #87: the six `Variance*`/`Std*` rows moved to
                 // `native_tensor` - the Welford kernel is f32-only, so the
                 // FLOAT_DTYPES inheritance here overstated the claim.
-                Norm,
-                // Issue #90: these three matched this group's rule shape
-                // exactly and only sat in the matmul groups while those
-                // groups carried the same dtype set. They now inherit
-                // FLOAT_DTYPES honestly: `bmm`/`addmm`/`linear` all
-                // rewrite into the widened `MatMulExact` kernel.
-                BatchedMatMul, Addmm, Linear
+                Norm
+                // Issue #85 slice 6: `BatchedMatMul`/`Addmm`/`Linear`
+                // left for `reduction`'s native row - each answers
+                // through a real kernel first (one grid-z batched
+                // launch; the fused cuBLASLt bias epilogue for the
+                // biased pair), so Composed understated them. The
+                // composed loop survives inside the executor as the
+                // fallback, not as the row.
             ],
             composed_reduction_indexed = [CrossEntropyLoss]
         }

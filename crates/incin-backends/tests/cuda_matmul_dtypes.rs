@@ -1,14 +1,18 @@
-//! Issue #90: the composed CUDA matmul-family rows at non-`f32` dtypes.
+//! Issue #90: the CUDA matmul-family rows at non-`f32` dtypes.
 //!
 //! `BatchedMatMul`, `Addmm` and `Linear` advertise `bf16`/`f16`/`f32`/`f64`
-//! on CUDA via the `composed_reduction` group, and `backend/tests.rs` pins
-//! that admission host-side. What no hardware run covered was the composed
-//! *executor* path below `f32`: `op::Addmm` had never been launched on CUDA
-//! at any dtype, and `op::BatchedMatMul`/`op::Linear` only at `f32`
-//! (`cuda_gemm_batched`). Each forward here drives one row at a dtype whose
-//! small integers stay exactly representable, so every assertion is equality
-//! against hand-computed values - a tolerance window would hide the
-//! accumulation and entry-point choice this file exists to observe.
+//! on CUDA via the native `reduction`-group row (issue #85 slice 6), and
+//! `backend/tests.rs` pins that admission host-side. What no hardware run
+//! covered was the *executor* path below `f32`: `op::Addmm` had never been
+//! launched on CUDA at any dtype, and `op::BatchedMatMul`/`op::Linear`
+//! only at `f32` (`cuda_gemm_batched`). Each forward here drives one row
+//! at a dtype whose small integers stay exactly representable, so every
+//! assertion is equality against hand-computed values - a tolerance
+//! window would hide the accumulation and entry-point choice this file
+//! exists to observe. (Below `f32` the executor still composes the
+//! native product with `mul_scalar`/`add`: the fused cuBLASLt bias
+//! epilogue of issue #85 slice 7 admits `f32` only, so a wider claim
+//! there would be a claim no kernel honours.)
 //!
 //! The mixed-dtype refusal keeps the other half of the contract: a row
 //! states the union of what its operands may carry (one `FLOAT_DTYPES` set

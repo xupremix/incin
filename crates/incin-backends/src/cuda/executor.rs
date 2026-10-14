@@ -768,6 +768,81 @@ impl<D: Device> Execute<op::Split> for CudaBackendImpl<D> {
     }
 }
 
+/// Issue #85 slice 7: one fused kernel for `addend + lhs @ rhs` at unit scales.
+///
+/// Under `cuda-vendor`, a request the cuBLASLt epilogue policy admits
+/// (f32 throughout, a rank-2 product, contiguous offset-0 operands, and
+/// a rank-1 bias vector of the output width) is served by a single
+/// `cublaslt::try_launch_matmul` call with `Some(addend)` - product and
+/// bias in one launch, no `mul_scalar`/`add` intermediates - and records
+/// one tape entry whose backward replays the same identities the
+/// composed path would have pushed separately (`unbroadcast` into the
+/// addend, `grad @ rhs^T` into the left, `lhs^T @ grad` into the
+/// right, through the same tape-free launches `matmul`'s own backward
+/// uses). Anything the policy refuses (non-f32 dtypes, batched ranks,
+/// matrix addends, strided or offset views, any vendor failure) returns
+/// `None` and the caller keeps its existing `batched_matmul` + scale +
+/// add composition, which computes the identical values: the vendor
+/// path stays advisory here, and a missed fusion is never a wrong value
+/// or a missing gradient. (The epilogue's fail-closed contract binds
+/// callers with no fallback; this caller has one, so falling back
+/// cannot drop the bias.) Without `cuda-vendor` the `cublaslt` module
+/// does not exist and every request takes the composed path directly.
+fn try_fused_biased_gemm(
+    addend: &CudaStorage,
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+) -> Option<CudaStorage> {
+    #[cfg(feature = "cuda-vendor")]
+    {
+        let fused =
+            match crate::cuda::ops::cublaslt::try_launch_matmul(lhs, rhs, Some(addend), None) {
+                Ok(Some(product)) => product,
+                Ok(None) | Err(_) => return None,
+            };
+        let (addend_shape, lhs_shape, rhs_shape) = (
+            addend.shape.to_vec(),
+            lhs.shape.to_vec(),
+            rhs.shape.to_vec(),
+        );
+        let (lhs_rank, rhs_rank) = (lhs.shape.len(), rhs.shape.len());
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (addend_id, lhs_id, rhs_id, out_id) = (addend.id, lhs.id, rhs.id, fused.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![addend_id, lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grad_addend = crate::cuda::tape::unbroadcast(grad_out, &addend_shape)?;
+                let rhs_t = crate::cuda::ops::shape::launch_transpose(
+                    &rhs_capture,
+                    rhs_rank - 2,
+                    rhs_rank - 1,
+                )?;
+                let grad_lhs = crate::cuda::tape::unbroadcast(
+                    &crate::cuda::ops::matmul::launch_matmul(grad_out, &rhs_t)?,
+                    &lhs_shape,
+                )?;
+                let lhs_t = crate::cuda::ops::shape::launch_transpose(
+                    &lhs_capture,
+                    lhs_rank - 2,
+                    lhs_rank - 1,
+                )?;
+                let grad_rhs = crate::cuda::tape::unbroadcast(
+                    &crate::cuda::ops::matmul::launch_matmul(&lhs_t, grad_out)?,
+                    &rhs_shape,
+                )?;
+                Ok(vec![grad_addend, grad_lhs, grad_rhs])
+            }),
+        });
+        Some(fused)
+    }
+    #[cfg(not(feature = "cuda-vendor"))]
+    {
+        let _ = (addend, lhs, rhs);
+        None
+    }
+}
+
 /// N-D batched matrix product, whose operand rank contract differs from the
 /// plain `matmul` row and so does not share its registration.
 impl<D: Device> Execute<op::BatchedMatMul> for CudaBackendImpl<D> {
@@ -788,6 +863,16 @@ impl<D: Device> Execute<op::BatchedMatMul> for CudaBackendImpl<D> {
 }
 
 /// Fused `beta * mat + alpha * (mat1 @ mat2)`.
+///
+/// At unit scales with a vector addend this is one fused cuBLASLt bias
+/// epilogue (issue #85 slice 7); anything else keeps the
+/// `batched_matmul` + scale + add composition, which computes the
+/// identical values. Dispatch's descriptor admits only rank-2+
+/// addends (`table.rs`: `Addmm => 2..=3`), so dispatch-routed requests
+/// always take the composition; the fused attempt serves the fitting
+/// (rank-1 vector) invocations that reach this executor directly, and
+/// lights up with no code change if the catalog ever admits them
+/// through dispatch.
 impl<D: Device> Execute<op::Addmm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -803,6 +888,11 @@ impl<D: Device> Execute<op::Addmm> for CudaBackendImpl<D> {
         let rhs = downcast(rhs, operation, "mat2 is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
         (|| {
+            if attrs.alpha == 1.0 && attrs.beta == 1.0 {
+                if let Some(fused) = try_fused_biased_gemm(mat, lhs, rhs) {
+                    return Ok(fused);
+                }
+            }
             let product = CudaBackendImpl::<D>::batched_matmul::<f32>(lhs, rhs)?;
             let scaled_product =
                 CudaBackendImpl::<D>::mul_scalar_float::<f32>(&product, attrs.alpha)?;
@@ -1892,18 +1982,35 @@ impl<D: Device> Execute<op::Linear> for CudaBackendImpl<D> {
         // `batched_matmul` to the exact same 2D `matmul` (and tape entry)
         // this call always made. Before that swap a rank-3+ Linear failed
         // here inside `matmul`'s unbatched-2D check.
-        let product =
-            crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(rows, &transposed)
-                .map_err(wrap)?;
-        let projected = match bias {
-            None => product,
-            Some(bias) => crate::cuda::backend::elementwise::cuda_add_storage(
-                &product,
-                bias,
-                crate::kernel::KernelSpecialization::NONE,
+        //
+        // Since issue #85 slice 7 a bias beside a rank-2 product goes to
+        // one fused cuBLASLt bias epilogue instead of the separate add
+        // pass below; anything the epilogue policy refuses keeps the
+        // `batched_matmul` + add composition, which computes the identical
+        // values.
+        let product = match bias {
+            Some(bias) => match try_fused_biased_gemm(bias, rows, &transposed) {
+                Some(fused) => fused,
+                None => {
+                    let product =
+                        crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(
+                            rows, &transposed,
+                        )
+                        .map_err(wrap)?;
+                    crate::cuda::backend::elementwise::cuda_add_storage(
+                        &product,
+                        bias,
+                        crate::kernel::KernelSpecialization::NONE,
+                    )
+                    .map_err(wrap)?
+                }
+            },
+            None => crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(
+                rows, &transposed,
             )
             .map_err(wrap)?,
         };
+        let projected = product;
 
         if unbatched {
             let out_dim = projected.shape[projected.shape.len() - 1];
