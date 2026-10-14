@@ -15,8 +15,10 @@
 //! host-side by [`gemm_request_fits`] - only when all of the following
 //! hold:
 //!
-//! - both operands are `f32`, the only dtype wired here; `f16`/`bf16`/`f64`
-//!   keep their `matmul.cu` entry points,
+//! - both operands share one dtype of `f32`, `f16`, or `bf16` - the
+//!   types with a tensor-core route below; `f64` stays on its `matmul.cu`
+//!   SIMT entry point (no tensor-core double on this arch) and so do
+//!   integer/quantized dtypes,
 //! - both operands live on the same device,
 //! - both operands are rank 2 with matching inner dimensions and no zero
 //!   extent,
@@ -48,12 +50,34 @@
 //!
 //! # Compute type
 //!
-//! The matmul descriptor forces `CUBLAS_COMPUTE_32F`. cudarc's own
-//! `Matmul<f32>` impl uses `CUBLAS_COMPUTE_32F_FAST_TF32`, which would
-//! quietly relax precision below what the CUDA capability rows advertise
-//! for matmul (`MathMode::Precise`; see `capability/tables.rs`), so this
-//! module drives `cudarc::cublaslt::result` directly instead of the safe
+//! The matmul descriptor forces `CUBLAS_COMPUTE_32F` with a `CUDA_R_32F`
+//! scale type at every operand dtype, so `alpha`/`beta` stay host-side
+//! `f32` throughout. The matrix layouts carry the operand dtype instead:
+//! `CUDA_R_32F` for `f32`, `CUDA_R_16F` for `f16`, `CUDA_R_16BF` for
+//! `bf16`. That is fp32 accumulation over half-precision operands - the
+//! same storage/compute split `kernels/matmul.cu` implements (its
+//! `f16`/`bf16` entries convert on load, accumulate in `float`, convert
+//! on store), and the same mapping cudarc's own `Matmul<half::f16>` /
+//! `Matmul<half::bf16>` impls use. cudarc's `Matmul<f32>` impl uses
+//! `CUBLAS_COMPUTE_32F_FAST_TF32`, which would quietly relax precision
+//! below what the CUDA capability rows advertise for matmul
+//! (`MathMode::Precise`; see `capability/tables.rs`), so this module
+//! drives `cudarc::cublaslt::result` directly instead of the safe
 //! wrapper.
+//!
+//! `f64` has no route here: there is no tensor-core double on the
+//! architectures this path targets, so `f64` pairs are refused by the fit
+//! policies and stay on the `matmul_f64` SIMT kernel.
+//!
+//! # Epilogue dtypes
+//!
+//! The fused bias/activation epilogue serves `f32` products only: its bias
+//! attribute is read as `f32` (`bias_request_fits`), matching the `f32`
+//! output layout. A bias or activation requested on an `f16`/`bf16` pair
+//! fails closed rather than launching a dtype-mismatched epilogue; the
+//! `addmm`/`linear` executor treats that refusal as "compose instead"
+//! (see `executor.rs`'s `try_fused_biased_gemm`), so the fallback computes
+//! the identical biased values from the native product plus `add`.
 //!
 //! # Row-major layout
 //!
@@ -83,8 +107,11 @@
 //!
 //! This module is compile-verified and unit-tests its host-side policy
 //! without hardware. The end-to-end tests live as `#[ignore = "requires
-//! CUDA hardware"]` cases in [`crate::cuda::backend::tests`] and have not
-//! been executed in an environment without a GPU.
+//! CUDA hardware"]` cases in [`crate::cuda::backend::tests`] and
+//! `tests/cuda_gemm_batched.rs` / `tests/cuda_matmul_dtypes.rs`; the
+//! `f32`/`f16`/`bf16` plain and batched vendor paths were executed on a
+//! GTX 1650 SUPER (Turing, `libcublasLt.so.12`), where vendor-vs-hand and
+//! vendor-vs-native agreement hold.
 
 use alloc::sync::Arc;
 use core::ffi::c_void;
@@ -101,7 +128,7 @@ use super::{OperandMeta, alloc_zeroed_bytes};
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -132,16 +159,19 @@ static UNAVAILABLE: AtomicBool = AtomicBool::new(false);
 
 /// Whether a plain product request fits the cuBLASLt path of issue #85.
 ///
-/// The conjunction is the dispatch policy documented on the module: `f32`
-/// on both operands of the same device, rank 2 with matching inner
-/// dimensions and no zero extent, contiguous at offset zero. Every request
-/// this function refuses keeps the behaviour it had before the path
-/// existed - `kernels/matmul.cu` computes it - so refusing is never a
-/// regression, only a missed fusion opportunity. Pure and host-side so the
-/// policy is unit-testable without a GPU.
+/// The conjunction is the dispatch policy documented on the module: one
+/// shared dtype of `f32`/`f16`/`bf16` on both operands of the same device,
+/// rank 2 with matching inner dimensions and no zero extent, contiguous
+/// at offset zero. Every request this function refuses keeps the
+/// behaviour it had before the path existed - `kernels/matmul.cu`
+/// computes it - so refusing is never a regression, only a missed fusion
+/// opportunity. Pure and host-side so the policy is unit-testable
+/// without a GPU.
 pub(crate) fn gemm_request_fits(lhs: &OperandMeta<'_>, rhs: &OperandMeta<'_>) -> bool {
-    let f32 = DTypeId::F32.descriptor();
-    if lhs.dtype != f32 || rhs.dtype != f32 {
+    if lhs.dtype != rhs.dtype {
+        return false;
+    }
+    if gemm_dtype_layout(lhs.dtype).is_none() {
         return false;
     }
     if lhs.device_id != rhs.device_id {
@@ -160,6 +190,25 @@ pub(crate) fn gemm_request_fits(lhs: &OperandMeta<'_>, rhs: &OperandMeta<'_>) ->
         return false;
     }
     is_contiguous_rank_two(lhs) && is_contiguous_rank_two(rhs)
+}
+
+/// The cuBLASLt matrix-layout type for an operand dtype, or `None` for a
+/// dtype with no tensor-core route here.
+///
+/// `f32`/`f16`/`bf16` map to `CUDA_R_32F`/`CUDA_R_16F`/`CUDA_R_16BF` - the
+/// same mapping cudarc's safe `Matmul` impls use, with `CUBLAS_COMPUTE_32F`
+/// compute and an `f32` scale at every dtype (see the module doc). `f64`
+/// maps to nothing: double precision has no tensor-core route on the
+/// architectures this path targets, so `f64` pairs stay on the
+/// `matmul_f64` SIMT kernel; integer and quantized dtypes have no GEMM
+/// entry anywhere and are refused for the same reason.
+fn gemm_dtype_layout(dtype: DTypeDescriptor) -> Option<sys::cudaDataType_t> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Some(sys::cudaDataType_t::CUDA_R_32F),
+        Some(DTypeId::F16) => Some(sys::cudaDataType_t::CUDA_R_16F),
+        Some(DTypeId::BF16) => Some(sys::cudaDataType_t::CUDA_R_16BF),
+        _ => None,
+    }
 }
 
 /// Row-major contiguity for a rank-2 operand: strides `[n, 1]`, which is
@@ -317,8 +366,8 @@ impl Drop for MatmulPref {
     }
 }
 
-/// Runs one `f32` GEMM through cuBLASLt, optionally with a fused bias and
-/// activation epilogue (issue #85).
+/// Runs one GEMM through cuBLASLt at `f32`/`f16`/`bf16`, optionally with
+/// a fused bias and activation epilogue on `f32` only (issue #85).
 ///
 /// `lhs` is `[M, K]`, `rhs` is `[K, N]`, the product is `[M, N]`. The
 /// caller owns the shape contract - inner dimensions already match - and
@@ -354,7 +403,7 @@ pub(crate) fn try_launch_matmul(
         return if epilogue_requested {
             Err(Error::Msg(format!(
                 "cuBLASLt epilogue request does not fit the #85 dispatch policy \
-                 (f32, same device, rank 2, contiguous, offset 0, nonzero extents); \
+                 (f32/f16/bf16, same device, rank 2, contiguous, offset 0, nonzero extents); \
                  got lhs shape {:?} strides {:?} offset {}, rhs shape {:?} strides {:?} offset {}",
                 lhs_meta.shape,
                 lhs_meta.strides,
@@ -367,6 +416,20 @@ pub(crate) fn try_launch_matmul(
             Ok(None)
         };
     }
+    // The epilogue serves `f32` products only (see the module doc): an
+    // `f16`/`bf16` pair with a bias or activation fails closed here rather
+    // than launching a dtype-mismatched epilogue. Direct callers must
+    // propagate the error; the `addmm`/`linear` executor treats it as
+    // "compose instead".
+    if epilogue_requested && lhs_meta.dtype != DTypeId::F32.descriptor() {
+        return Err(Error::Msg(format!(
+            "cuBLASLt epilogue requests serve f32 operands only; got dtype {:?}",
+            lhs_meta.dtype
+        )));
+    }
+    // Admitted by the policy above, so the dtype has a layout type.
+    let cuda_type =
+        gemm_dtype_layout(lhs_meta.dtype).expect("gemm_request_fits admits only f32/f16/bf16");
     let (m, k) = (lhs.shape[0], lhs.shape[1]);
     let n = rhs.shape[1];
     if let Some(bias_storage) = bias {
@@ -412,18 +475,18 @@ pub(crate) fn try_launch_matmul(
     // Row-major derivation (module doc): the col-major call computes
     // C̃[N,M] = rhs[N,K] · lhs[K,M] with C̃ the same buffer as the
     // row-major product, leading dimension N on both rhs and the output,
-    // leading dimension K on lhs, and no transposes.
+    // leading dimension K on lhs, and no transposes. The layouts carry
+    // the operand dtype (`cuda_type`); the descriptor below keeps
+    // `CUBLAS_COMPUTE_32F` compute with an `f32` scale at every dtype, so
+    // `alpha`/`beta` stay host-side `f32` for the half types too.
     let a_layout = MatrixLayout(
-        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, n_u64, k_u64, n_i64)
-            .map_err(lt_error)?,
+        result::create_matrix_layout(cuda_type, n_u64, k_u64, n_i64).map_err(lt_error)?,
     );
     let b_layout = MatrixLayout(
-        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, k_u64, m_u64, k_i64)
-            .map_err(lt_error)?,
+        result::create_matrix_layout(cuda_type, k_u64, m_u64, k_i64).map_err(lt_error)?,
     );
     let c_layout = MatrixLayout(
-        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, n_u64, m_u64, n_i64)
-            .map_err(lt_error)?,
+        result::create_matrix_layout(cuda_type, n_u64, m_u64, n_i64).map_err(lt_error)?,
     );
     let desc = MatmulDesc(
         result::create_matmul_desc(
@@ -517,9 +580,9 @@ pub(crate) fn try_launch_matmul(
     // are still owned by their guards, so none of the seven handles has
     // been freed; the layouts describe live allocations of exactly the
     // shapes passed in (`rhs`, `lhs`, and the output buffer each hold at
-    // least `rows * cols` f32 elements by the caller's shape contract and
-    // the checked output allocation), which is what "valid layouts for
-    // allocations" requires of the heuristic query.
+    // least `rows * cols` elements of the admitted dtype by the caller's
+    // shape contract and the checked output allocation), which is what
+    // "valid layouts for allocations" requires of the heuristic query.
     let heuristic = unsafe {
         result::get_matmul_algo_heuristic(
             *state.blas.handle(),
@@ -582,16 +645,20 @@ pub(crate) fn try_launch_matmul(
 }
 
 /// Whether a plain *batched* product request fits the cuBLASLt path of
-/// issue #85: `f32` on both operands of the same device, rank 3 each, an
-/// equal nonzero batch, matching inner dimensions, no zero extent, fully
-/// row-major contiguous at offset zero. Anything else - a batch broadcast
-/// (stride-0 read), a rank deficit, a strided or offset view - returns
-/// false so the orchestrator keeps the native batched plan or the composed
-/// loop; refusing is never a regression, only a missed vendor opportunity.
-/// Pure and host-side so the policy is unit-testable without a GPU.
+/// issue #85: one shared dtype of `f32`/`f16`/`bf16` on both operands of
+/// the same device, rank 3 each, an equal nonzero batch, matching inner
+/// dimensions, no zero extent, fully row-major contiguous at offset zero.
+/// Anything else - a batch broadcast (stride-0 read), a rank deficit, a
+/// strided or offset view, `f64` (no tensor-core double on this arch) -
+/// returns false so the orchestrator keeps the native batched plan or the
+/// composed loop; refusing is never a regression, only a missed vendor
+/// opportunity. Pure and host-side so the policy is unit-testable without
+/// a GPU.
 pub(crate) fn batched_gemm_request_fits(lhs: &OperandMeta<'_>, rhs: &OperandMeta<'_>) -> bool {
-    let f32 = DTypeId::F32.descriptor();
-    if lhs.dtype != f32 || rhs.dtype != f32 {
+    if lhs.dtype != rhs.dtype {
+        return false;
+    }
+    if gemm_dtype_layout(lhs.dtype).is_none() {
         return false;
     }
     if lhs.device_id != rhs.device_id {
@@ -631,7 +698,8 @@ fn slice_elements(a: usize, b: usize, field: &str) -> Result<usize> {
         .ok_or_else(|| Error::Msg(format!("cuBLASLt {field} slice overflows usize: {a} * {b}")))
 }
 
-/// Runs one strided-batched `f32` GEMM through cuBLASLt (issue #85).
+/// Runs one strided-batched GEMM through cuBLASLt at `f32`/`f16`/`bf16`
+/// (issue #85).
 ///
 /// `lhs` is `[B, M, K]`, `rhs` is `[B, K, N]`, the product is `[B, M, N]`.
 /// The caller owns the shape contract - this function additionally
@@ -663,6 +731,12 @@ pub(crate) fn try_launch_batched_matmul(
     if !batched_gemm_request_fits(&lhs_meta, &rhs_meta) {
         return Ok(None);
     }
+    // Admitted by the policy above, so the dtype has a layout type. The
+    // descriptor keeps `CUBLAS_COMPUTE_32F` compute with an `f32` scale at
+    // every dtype (see the plain launcher), so `alpha`/`beta` below stay
+    // host-side `f32` for the half types too.
+    let cuda_type =
+        gemm_dtype_layout(lhs_meta.dtype).expect("batched_gemm_request_fits admits only f32/f16/bf16");
     let (batch, m, k, n) = (lhs.shape[0], lhs.shape[1], lhs.shape[2], rhs.shape[2]);
 
     let state = cublaslt_state(lhs_meta.device_id, &lhs.buffer.device.default_stream())?;
@@ -700,16 +774,13 @@ pub(crate) fn try_launch_batched_matmul(
     // Same row-major derivation as the plain launcher, three times over:
     // A[batch, N, K] = rhs, B[batch, K, M] = lhs, C[batch, N, M] = output.
     let a_layout = MatrixLayout(
-        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, n_u64, k_u64, n_i64)
-            .map_err(lt_error)?,
+        result::create_matrix_layout(cuda_type, n_u64, k_u64, n_i64).map_err(lt_error)?,
     );
     let b_layout = MatrixLayout(
-        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, k_u64, m_u64, k_i64)
-            .map_err(lt_error)?,
+        result::create_matrix_layout(cuda_type, k_u64, m_u64, k_i64).map_err(lt_error)?,
     );
     let c_layout = MatrixLayout(
-        result::create_matrix_layout(sys::cudaDataType_t::CUDA_R_32F, n_u64, m_u64, n_i64)
-            .map_err(lt_error)?,
+        result::create_matrix_layout(cuda_type, n_u64, m_u64, n_i64).map_err(lt_error)?,
     );
     // The batch itself: count plus element stride on each layout, the
     // strided-batched configuration cuBLASLt walks without the host
@@ -900,13 +971,23 @@ mod tests {
     }
 
     #[test]
-    fn gemm_fits_refuses_every_non_f32_dtype() {
-        for dtype in [
-            DTypeId::F16.descriptor(),
-            DTypeId::BF16.descriptor(),
-            DTypeId::F64.descriptor(),
-            DTypeId::I64.descriptor(),
-        ] {
+    fn gemm_fits_admits_f16_and_bf16_pairs_on_the_tensor_core_route() {
+        // The fp16/bf16 tensor-core route of issue #85 item 9: homogeneous
+        // half pairs fit, with fp32 accumulation matching `matmul.cu`'s
+        // SIMT entries (operands convert on load, accumulate in float).
+        for dtype in [DTypeId::F16.descriptor(), DTypeId::BF16.descriptor()] {
+            let lhs = meta(dtype, &[2, 3], &[3, 1], 0);
+            let rhs = meta(dtype, &[3, 2], &[2, 1], 0);
+            assert!(gemm_request_fits(&lhs, &rhs), "{dtype:?} pair fits");
+        }
+    }
+
+    #[test]
+    fn gemm_fits_refuses_f64_mixed_and_non_float_dtypes() {
+        // `f64` stays on its `matmul_f64` SIMT kernel - no tensor-core
+        // double on this arch - and one typed kernel still reads both
+        // operands, so a mixed pair is refused rather than reinterpreted.
+        for dtype in [DTypeId::F64.descriptor(), DTypeId::I64.descriptor()] {
             let lhs = meta(dtype, &[2, 3], &[3, 1], 0);
             let rhs = meta(f32(), &[3, 2], &[2, 1], 0);
             assert!(!gemm_request_fits(&lhs, &rhs), "lhs {dtype:?} refused");
@@ -914,6 +995,18 @@ mod tests {
             let rhs = meta(dtype, &[3, 2], &[2, 1], 0);
             assert!(!gemm_request_fits(&lhs, &rhs), "rhs {dtype:?} refused");
         }
+        let lhs = meta(f32(), &[2, 3], &[3, 1], 0);
+        let rhs = meta(DTypeId::F16.descriptor(), &[3, 2], &[2, 1], 0);
+        assert!(
+            !gemm_request_fits(&lhs, &rhs),
+            "an f32/f16 mix must be refused, not reinterpreted"
+        );
+        let lhs = meta(DTypeId::F16.descriptor(), &[2, 3], &[3, 1], 0);
+        let rhs = meta(DTypeId::BF16.descriptor(), &[3, 2], &[2, 1], 0);
+        assert!(
+            !gemm_request_fits(&lhs, &rhs),
+            "an f16/bf16 mix must be refused, not reinterpreted"
+        );
     }
 
     #[test]
@@ -976,5 +1069,32 @@ mod tests {
         let mut wrong_device = meta(f32(), &[2], &[1], 0);
         wrong_device.device_id = 1;
         assert!(!bias_request_fits(&wrong_device, 0, 2));
+    }
+
+    #[test]
+    fn batched_fits_admits_half_pairs_and_refuses_f64_and_mixed() {
+        // The batched policy shares `gemm_dtype_layout` with the plain one,
+        // so the tensor-core route covers the strided-batched call too.
+        for dtype in [
+            f32(),
+            DTypeId::F16.descriptor(),
+            DTypeId::BF16.descriptor(),
+        ] {
+            let lhs = meta(dtype, &[2, 2, 3], &[6, 3, 1], 0);
+            let rhs = meta(dtype, &[2, 3, 2], &[6, 2, 1], 0);
+            assert!(batched_gemm_request_fits(&lhs, &rhs), "{dtype:?} pair fits");
+        }
+        let lhs = meta(DTypeId::F64.descriptor(), &[2, 2, 3], &[6, 3, 1], 0);
+        let rhs = meta(DTypeId::F64.descriptor(), &[2, 3, 2], &[6, 2, 1], 0);
+        assert!(
+            !batched_gemm_request_fits(&lhs, &rhs),
+            "f64 stays SIMT, never vendor"
+        );
+        let lhs = meta(f32(), &[2, 2, 3], &[6, 3, 1], 0);
+        let rhs = meta(DTypeId::F16.descriptor(), &[2, 3, 2], &[6, 2, 1], 0);
+        assert!(
+            !batched_gemm_request_fits(&lhs, &rhs),
+            "a mixed pair must be refused, not reinterpreted"
+        );
     }
 }

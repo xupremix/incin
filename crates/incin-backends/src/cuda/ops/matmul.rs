@@ -7,7 +7,7 @@
 //! launch loop. Every float storage dtype the kernel exports an entry point
 //! for: `f32`/`f64` accumulate in their own type, `f16`/`bf16` hold
 //! half-precision operands and accumulate in `f32`. Also since issue #85,
-//! plain `f32` requests are offered to the cuBLASLt path in
+//! plain `f32`/`f16`/`bf16` requests are offered to the cuBLASLt path in
 //! `cuda/ops/cublaslt.rs` first - that module exists only under the
 //! `cuda-vendor` feature, which gates both the plain and the batched
 //! vendor attempt - and it either serves the request or reports that it
@@ -67,13 +67,14 @@ fn matmul_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
 ///
 /// Issue #85 dispatch: under `cuda-vendor`, a plain request that fits
 /// `cuda/ops/cublaslt.rs`'s policy is served by cuBLASLt; anything
-/// else - a non-`f32` dtype, a strided or offset view, a zero extent, or
-/// any cuBLASLt failure - falls through to `kernels/matmul.cu` below,
-/// which computes the identical product. The fallback is what keeps the
-/// fast path advisory: no request can regress by cuBLASLt being absent or
-/// refusing a shape, it merely misses the fusion opportunity. This
-/// function carries no epilogue parameters; bias/activation requests reach
-/// `cublaslt::try_launch_matmul` only from its own callers.
+/// else - an `f64`/integer dtype, a mixed pair, a strided or offset view,
+/// a zero extent, or any cuBLASLt failure - falls through to
+/// `kernels/matmul.cu` below, which computes the identical product. The
+/// fallback is what keeps the fast path advisory: no request can regress
+/// by cuBLASLt being absent or refusing a shape, it merely misses the
+/// fusion opportunity. This function carries no epilogue parameters;
+/// bias/activation requests reach `cublaslt::try_launch_matmul` only from
+/// its own callers.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
@@ -84,13 +85,14 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             actual: rhs_buf.dtype,
         });
     }
-    // Issue #85: canonical f32 products go to cuBLASLt first when the
-    // `cuda-vendor` feature is on. The dtype check above already ran, so a
-    // mixed pair never reaches it, and a non-f32 dtype is refused by
-    // `gemm_request_fits` rather than by an error - `Ok(None)` and `Err`
-    // alike fall through to the kernel path, which is why the vendor
-    // result collapses to an `Option` here. Without the feature the module
-    // does not exist and every request takes the kernel path directly.
+    // Issue #85: canonical f32/f16/bf16 products go to cuBLASLt first when
+    // the `cuda-vendor` feature is on. The dtype check above already ran,
+    // so a mixed pair never reaches it, and an f64/integer dtype is
+    // refused by `gemm_request_fits` rather than by an error - `Ok(None)`
+    // and `Err` alike fall through to the kernel path, which is why the
+    // vendor result collapses to an `Option` here. Without the feature the
+    // module does not exist and every request takes the kernel path
+    // directly.
     #[cfg(feature = "cuda-vendor")]
     let vendor = super::cublaslt::try_launch_matmul(lhs, rhs, None, None)
         .ok()

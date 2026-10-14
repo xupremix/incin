@@ -368,6 +368,22 @@ pub fn batched_matmul_vendor(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Opt
     crate::cuda::ops::cublaslt::try_launch_batched_matmul(lhs, rhs)
 }
 
+/// The plain cuBLASLt path alone (one call, epilogue-free). `Ok(None)`
+/// means out of vendor policy; production then falls through to
+/// `kernels/matmul.cu`. Same gating and contract as
+/// [`batched_matmul_vendor`]: a direct caller sees the real error instead
+/// of a silent fallback, which is what lets a hardware test prove the
+/// vendor path served an `f16`/`bf16` product rather than the NVRTC kernel
+/// masking a refusal.
+///
+/// # Errors
+///
+/// Propagates a cuBLASLt failure on a request the policy admitted.
+#[cfg(feature = "cuda-vendor")]
+pub fn matmul_vendor(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Option<CudaStorage>> {
+    crate::cuda::ops::cublaslt::try_launch_matmul(lhs, rhs, None, None)
+}
+
 /// Runs the fused SGD step kernel.
 ///
 /// # Errors

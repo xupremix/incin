@@ -464,10 +464,130 @@ fn vendor_and_native_batched_paths_agree_on_the_shape_both_claim() {
     );
 }
 
+#[cfg(feature = "cuda-vendor")]
 #[test]
 #[ignore = "requires CUDA hardware"]
-fn rank_three_linear_projects_through_the_batched_dispatcher() {
-    // `op::Linear` with a leading batch on the input: before issue #85
+fn vendor_and_native_batched_paths_agree_on_f16_and_bf16() {
+    // Issue #85 item 9, the batched half of the tensor-core route: the
+    // vendor policy claims the contiguous equal-batch rank-3 `f16`/`bf16`
+    // pair, and on that shape both paths must compute the same values.
+    // Both sides accumulate in fp32, so vendor-vs-native agreement is
+    // within one ulp at the fixture's magnitude (a last-ulp flip between
+    // tensor-core and SIMT accumulation order), while agreement with the
+    // dtype-rounded host naive GEMM proves neither side merely agreed on
+    // garbage. Running both directly also proves each path is reachable
+    // on its own.
+    use half::{bf16, f16};
+    use incin_backends::cuda::testing::{
+        batched_matmul_vendor, download_bytes, upload_bytes,
+    };
+
+    require_cuda();
+    let lhs_shape = [2, 2, 3];
+    let rhs_shape = [2, 3, 2];
+    let lhs_vals: Vec<f32> = (1..=12).map(|v| v as f32).collect();
+    let rhs_vals: Vec<f32> = (1..=12).map(|v| v as f32).collect();
+    let (want, want_shape) = naive_batched_gemm(
+        &as_f64(&lhs_vals),
+        &lhs_shape,
+        &as_f64(&rhs_vals),
+        &rhs_shape,
+    );
+
+    let encode_f16 = |values: &[f32]| {
+        values
+            .iter()
+            .flat_map(|&v| f16::from_f32(v).to_bits().to_le_bytes())
+            .collect::<Vec<u8>>()
+    };
+    let encode_bf16 = |values: &[f32]| {
+        values
+            .iter()
+            .flat_map(|&v| bf16::from_f32(v).to_bits().to_le_bytes())
+            .collect::<Vec<u8>>()
+    };
+    let decode_f16 = |bytes: &[u8]| {
+        bytes
+            .chunks_exact(2)
+            .map(|c| f16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32() as f64)
+            .collect::<Vec<f64>>()
+    };
+    let decode_bf16 = |bytes: &[u8]| {
+        bytes
+            .chunks_exact(2)
+            .map(|c| bf16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32() as f64)
+            .collect::<Vec<f64>>()
+    };
+
+    // Small integers stay exact in both half types only up to 256
+    // (`bf16` keeps 8 bits of precision): the raw host GEMM is rounded
+    // through the pair's own dtype before comparison, so the assertions
+    // pin correctly-rounded computation rather than unrepresentable
+    // integers. The tolerance is one ulp at the fixture's magnitude
+    // (`f16`: 0.5, `bf16`: 2.0) - a last-ulp flip between tensor-core and
+    // SIMT accumulation order - while a wrong entry point or dropped batch
+    // would miss by orders of magnitude.
+    for (dtype, encode, decode, tol) in [
+        (
+            DTypeId::F16,
+            &encode_f16 as &dyn Fn(&[f32]) -> Vec<u8>,
+            &decode_f16 as &dyn Fn(&[u8]) -> Vec<f64>,
+            0.5,
+        ),
+        (
+            DTypeId::BF16,
+            &encode_bf16 as &dyn Fn(&[f32]) -> Vec<u8>,
+            &decode_bf16 as &dyn Fn(&[u8]) -> Vec<f64>,
+            2.0,
+        ),
+    ] {
+        let lhs = upload_bytes(&lhs_shape, dtype, &encode(&lhs_vals));
+        let rhs = upload_bytes(&rhs_shape, dtype, &encode(&rhs_vals));
+
+        let native = batched_matmul_native(&lhs, &rhs)
+            .expect("the native attempt must not fail")
+            .expect("the native plan must admit the contiguous rank-3 half pair");
+        let vendor = batched_matmul_vendor(&lhs, &rhs)
+            .expect("the vendor attempt must not fail on an admitted request")
+            .expect("the vendor policy must admit the contiguous rank-3 half pair");
+
+        assert_eq!(
+            native.shape, want_shape,
+            "{dtype:?}: native product shape"
+        );
+        assert_eq!(
+            vendor.shape, want_shape,
+            "{dtype:?}: vendor product shape"
+        );
+        let want_rounded = decode(&encode(
+            &want.iter().map(|&v| v as f32).collect::<Vec<f32>>(),
+        ));
+        let got_native = decode(&download_bytes(&native));
+        let got_vendor = decode(&download_bytes(&vendor));
+        assert_close(
+            &got_native,
+            &want_rounded,
+            tol,
+            &format!("{dtype:?} native vs host naive GEMM"),
+        );
+        assert_close(
+            &got_vendor,
+            &want_rounded,
+            tol,
+            &format!("{dtype:?} vendor vs host naive GEMM"),
+        );
+        assert_close(
+            &got_vendor,
+            &got_native,
+            tol,
+            &format!("{dtype:?} vendor vs native batched product"),
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn rank_three_linear_projects_through_the_batched_dispatcher() {    // `op::Linear` with a leading batch on the input: before issue #85
     // this failed inside `matmul`'s unbatched-2D check. It must now reach
     // the batched dispatcher (one launch when the plan admits the pair),
     // add the bias by broadcast, and match the host computation

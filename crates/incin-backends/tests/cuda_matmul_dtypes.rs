@@ -12,7 +12,13 @@
 //! exists to observe. (Below `f32` the executor still composes the
 //! native product with `mul_scalar`/`add`: the fused cuBLASLt bias
 //! epilogue of issue #85 slice 7 admits `f32` only, so a wider claim
-//! there would be a claim no kernel honours.)
+//! there would be a claim no kernel honours. The *plain* epilogue-free
+//! `f16`/`bf16` product is different: since issue #85 item 9 it rides the
+//! cuBLASLt tensor-core route (`CUDA_R_16F`/`CUDA_R_16BF` layouts,
+//! `CUBLAS_COMPUTE_32F` compute, fp32 accumulation like `matmul.cu`), and
+//! the `cuda-vendor` tests at the end of this file prove the vendor path
+//! computes the hand values directly rather than the NVRTC fallback
+//! masking a refusal.)
 //!
 //! The mixed-dtype refusal keeps the other half of the contract: a row
 //! states the union of what its operands may carry (one `FLOAT_DTYPES` set
@@ -361,5 +367,74 @@ fn addmm_refuses_a_mixed_dtype_addend() {
     assert!(
         text.contains("dtype") || text.contains("mismatch") || text.contains("mix"),
         "the refusal must name the dtype problem it found, got: {text}"
+    );
+}
+
+/// Issue #85 item 9: the plain epilogue-free `f16` product rides the
+/// cuBLASLt tensor-core route (`CUDA_R_16F` layouts, `CUBLAS_COMPUTE_32F`
+/// compute, fp32 accumulation like `matmul.cu`'s `matmul_f16` entry).
+/// Driving `matmul_vendor` directly proves the vendor path served it: the
+/// `[[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]]`
+/// fixture is the same one the `f32` cuBLASLt test pins in
+/// `backend/tests.rs`, and every value is a small integer, exactly
+/// representable in `f16`, so this is equality against the hand product.
+#[cfg(feature = "cuda-vendor")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_plain_f16_matches_the_hand_computed_product() {
+    use incin_backends::cuda::testing::matmul_vendor;
+
+    require_cuda();
+    let lhs = upload_bytes(
+        &[2, 3],
+        DTypeId::F16,
+        &f16_bytes(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    );
+    let rhs = upload_bytes(
+        &[3, 2],
+        DTypeId::F16,
+        &f16_bytes(&[7.0, 8.0, 9.0, 10.0, 11.0, 12.0]),
+    );
+    let out = matmul_vendor(&lhs, &rhs)
+        .expect("cuBLASLt must answer a canonical f16 request on hardware")
+        .expect("the request fits the #85 dispatch policy");
+    assert_eq!(out.shape, vec![2, 2], "vendor f16 product shape");
+    assert_eq!(out.dtype, DTypeId::F16.descriptor());
+    assert_eq!(
+        decode_f16(&download_bytes(&out)),
+        vec![58.0, 64.0, 139.0, 154.0],
+        "the tensor-core route must compute the hand product, not fall back"
+    );
+}
+
+/// The `bf16` twin of the test above (`CUDA_R_16BF` layouts, same fp32
+/// accumulation). `bf16` keeps integers up to 256 exact, so the same
+/// small-integer fixture is equality here too.
+#[cfg(feature = "cuda-vendor")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cublaslt_plain_bf16_matches_the_hand_computed_product() {
+    use incin_backends::cuda::testing::matmul_vendor;
+
+    require_cuda();
+    let lhs = upload_bytes(
+        &[2, 3],
+        DTypeId::BF16,
+        &bf16_bytes(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+    );
+    let rhs = upload_bytes(
+        &[3, 2],
+        DTypeId::BF16,
+        &bf16_bytes(&[7.0, 8.0, 9.0, 10.0, 11.0, 12.0]),
+    );
+    let out = matmul_vendor(&lhs, &rhs)
+        .expect("cuBLASLt must answer a canonical bf16 request on hardware")
+        .expect("the request fits the #85 dispatch policy");
+    assert_eq!(out.shape, vec![2, 2], "vendor bf16 product shape");
+    assert_eq!(out.dtype, DTypeId::BF16.descriptor());
+    assert_eq!(
+        decode_bf16(&download_bytes(&out)),
+        vec![58.0, 64.0, 139.0, 154.0],
+        "the tensor-core route must compute the hand product, not fall back"
     );
 }
