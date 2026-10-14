@@ -6,10 +6,11 @@
 //! is not a CPU-only construction.
 
 use incin_core::backend_authoring::{Descriptor, Execute, ExecutionRequest, StorageBackend, op};
-use incin_core::error::BackendError;
+use incin_core::error::{BackendError, Error};
 use incin_core::exec::{CanonicalOperation, Capabilities, CapabilityQuery, SupportLevel};
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::device::{Device, DeviceKind};
+use incin_core::tensor::dtype::DTypeId;
 
 use super::backend::WgpuBackendImpl;
 use super::storage::WgpuStorage;
@@ -467,6 +468,190 @@ impl_wgpu_reduction_dim![
         WgpuBackendImpl::<D>::prod_dim::<f32>(input, axis)
     }),
 ];
+
+/// `argmax`/`argmin`: one operand plus the optional `axis` and the requested
+/// index `dtype` — the same request shape CPU's `index_reduction_executors!`
+/// answers, dispatching the index width the same way. The descriptor's
+/// `validate_index_dtype` already refuses anything but `u8`/`u32`/`i64`
+/// before dispatch, so the trailing arm is unreachable defense-in-depth.
+macro_rules! impl_wgpu_index_reduction {
+    ($(($op:ident, $method:ident, $name:literal)),* $(,)?) => {$(
+        impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {
+            type Output = WgpuStorage;
+
+            fn execute(
+                &self,
+                request: ExecutionRequest<'_, op::$op, Self>,
+            ) -> Result<WgpuStorage, BackendError> {
+                let operation = OperationKind::$op;
+                let [input] = request.inputs else {
+                    return Err(invalid(operation, "expects exactly 1 input"));
+                };
+                let input = input
+                    .downcast_ref::<WgpuStorage>()
+                    .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+                let attributes = request.operation.descriptor().attributes();
+                let dtype = attributes.dtype;
+                match dtype.builtin_id() {
+                    Some(DTypeId::U8) => {
+                        WgpuBackendImpl::<D>::$method::<f32, u8>(input, attributes.axis)
+                    }
+                    Some(DTypeId::U32) => {
+                        WgpuBackendImpl::<D>::$method::<f32, u32>(input, attributes.axis)
+                    }
+                    Some(DTypeId::I64) => {
+                        WgpuBackendImpl::<D>::$method::<f32, i64>(input, attributes.axis)
+                    }
+                    _ => Err(Error::UnsupportedDType {
+                        dtype,
+                        backend: "Wgpu",
+                        op: $name,
+                    }),
+                }
+                .map_err(|error| kernel_error("Wgpu", operation, error))
+            }
+        }
+    )*};
+}
+
+impl_wgpu_index_reduction![(ArgMax, argmax, "argmax"), (ArgMin, argmin, "argmin"),];
+
+/// `argsort`: one operand plus `(axis, descending, index_dtype)` — the index
+/// half of `sort` below, with the operand's own geometry.
+impl<D: Device> Execute<op::Argsort> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Argsort, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Argsort;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "argsort expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        let index_dtype = attributes.index_dtype;
+        match index_dtype.builtin_id() {
+            Some(DTypeId::U8) => WgpuBackendImpl::<D>::argsort::<f32, u8>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            ),
+            Some(DTypeId::U32) => WgpuBackendImpl::<D>::argsort::<f32, u32>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            ),
+            Some(DTypeId::I64) => WgpuBackendImpl::<D>::argsort::<f32, i64>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            ),
+            _ => Err(Error::UnsupportedDType {
+                dtype: index_dtype,
+                backend: "Wgpu",
+                op: "argsort",
+            }),
+        }
+        .map_err(|error| kernel_error("Wgpu", operation, error))
+    }
+}
+
+/// `sort`: one operand plus `(axis, descending, index_dtype)` — the sorted
+/// values beside the permutation that produced them, mirroring CUDA's
+/// `Execute<op::Sort>` in arity and attribute read.
+impl<D: Device> Execute<op::Sort> for WgpuBackendImpl<D> {
+    type Output = (WgpuStorage, WgpuStorage);
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Sort, Self>,
+    ) -> Result<(WgpuStorage, WgpuStorage), BackendError> {
+        let operation = OperationKind::Sort;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "sort expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        let index_dtype = attributes.index_dtype;
+        match index_dtype.builtin_id() {
+            Some(DTypeId::U8) => WgpuBackendImpl::<D>::sort::<f32, u8>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            ),
+            Some(DTypeId::U32) => WgpuBackendImpl::<D>::sort::<f32, u32>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            ),
+            Some(DTypeId::I64) => WgpuBackendImpl::<D>::sort::<f32, i64>(
+                input,
+                attributes.axis,
+                attributes.descending,
+            ),
+            _ => Err(Error::UnsupportedDType {
+                dtype: index_dtype,
+                backend: "Wgpu",
+                op: "sort",
+            }),
+        }
+        .map_err(|error| kernel_error("Wgpu", operation, error))
+    }
+}
+
+/// `topk`: one operand plus `(k, axis, largest, index_dtype)` — the `k`
+/// extreme values beside their indices, mirroring CUDA's
+/// `Execute<op::TopK>`.
+impl<D: Device> Execute<op::TopK> for WgpuBackendImpl<D> {
+    type Output = (WgpuStorage, WgpuStorage);
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::TopK, Self>,
+    ) -> Result<(WgpuStorage, WgpuStorage), BackendError> {
+        let operation = OperationKind::TopK;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "topk expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        let index_dtype = attributes.index_dtype;
+        match index_dtype.builtin_id() {
+            Some(DTypeId::U8) => WgpuBackendImpl::<D>::topk::<f32, u8>(
+                input,
+                attributes.k,
+                attributes.axis,
+                attributes.largest,
+            ),
+            Some(DTypeId::U32) => WgpuBackendImpl::<D>::topk::<f32, u32>(
+                input,
+                attributes.k,
+                attributes.axis,
+                attributes.largest,
+            ),
+            Some(DTypeId::I64) => WgpuBackendImpl::<D>::topk::<f32, i64>(
+                input,
+                attributes.k,
+                attributes.axis,
+                attributes.largest,
+            ),
+            _ => Err(Error::UnsupportedDType {
+                dtype: index_dtype,
+                backend: "Wgpu",
+                op: "topk",
+            }),
+        }
+        .map_err(|error| kernel_error("Wgpu", operation, error))
+    }
+}
 
 macro_rules! impl_wgpu_unary_float {
     ($(($op:ident, $method:ident)),* $(,)?) => {$(

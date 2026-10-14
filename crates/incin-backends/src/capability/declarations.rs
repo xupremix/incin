@@ -694,6 +694,17 @@ macro_rules! wgpu_descriptor_operations {
                 // via `$tensor_dtypes`, result `Bool` — see the group's
                 // note above for why the row states only the operands.
                 CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
+                // The order statistics (#91): host-side walks over downloaded
+                // `f32` in `wgpu/backend/reduce.rs`, mirroring CPU's
+                // `cpu::ops::reduce::select` walk for walk (strict `>`/`<`
+                // first-wins extremum, stable `sort_by` so ties keep arrival
+                // order). Values stay `f32` via `require_f32`; index outputs
+                // honor the requested `u8`/`u32`/`i64` width with a checked
+                // fit. Forward-only on every backend, so
+                // `descriptor_training` resolves all five rows `false` and no
+                // tape entry is pushed. `F32_ONLY`/`CONTIGUOUS` through
+                // `$tensor_dtypes`/`$tensor_layouts`, like the comparisons.
+                ArgMax, ArgMin, Argsort, Sort, TopK,
             ],
             // Boolean on every operand and on the result (#91):
             // `logical_and`/`logical_or` ride `binary.wgsl` modes 13/14 and
