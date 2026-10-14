@@ -503,6 +503,12 @@ macro_rules! cuda_descriptor_operations {
                 // still inherit the unchanged f32-only `$matmul` argument
                 // (SDPA sits on f32-only `softmax`; `Dot`/`Outer` compose
                 // through mul + all-reduce under this group's dtype row).
+                // Issue #85 (g) keeps SDPA on this row on purpose: the
+                // executor transparently runs the fused attention kernel for
+                // no-mask rank-4 contiguous float shapes, but masked,
+                // strided, and non-rank-4 forms still compose — and the
+                // capability query cannot distinguish mask presence — so a
+                // Native claim would overstate the row.
                 ScaledDotProductAttention,
                 Dot, Outer
             ],

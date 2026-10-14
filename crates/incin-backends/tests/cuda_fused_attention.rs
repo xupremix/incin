@@ -18,7 +18,7 @@ use incin_backends::cuda::{
     },
 };
 use incin_core::backend_authoring::{AutogradBackend, HostInterop, StorageBackend};
-use incin_core::exec::catalog::FusedAttentionAttributes;
+use incin_core::exec::catalog::{AttentionAttributes, FusedAttentionAttributes};
 use incin_core::exec::{
     CapabilityQuery, ExecutionContext, LayoutClass, MathMode, OperationIdentity, SupportLevel,
     TapeStorage, TensorHandle, dispatch, op,
@@ -939,5 +939,345 @@ fn fused_attention_refusals_are_typed() {
         )
         .is_err(),
         "f32/f64 mix must be refused"
+    );
+}
+
+/// Issue #85 (g): the CPU composed twin — forward plus sum-all gradients —
+/// for `ScaledDotProductAttention`, the reference the CUDA fast path below
+/// has to match. The CPU executor answers this row with the same
+/// bmm→scale→add→softmax→bmm chain the CUDA fallback runs.
+#[cfg(feature = "cpu")]
+#[allow(clippy::too_many_arguments)]
+fn cpu_sdpa_with_grads(
+    shape_q: &[usize],
+    q: &[f32],
+    shape_kv: &[usize],
+    k: &[f32],
+    v: &[f32],
+    mask: Option<(&[usize], &[f32])>,
+    scale: Option<f64>,
+) -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
+    let context = ExecutionContext::new(Cpu::new());
+    let device = &incin_core::tensor::device::DeviceId::cpu();
+    let hq = <Cpu as HostInterop>::from_bytes::<f32>(
+        bytemuck::cast_slice(q),
+        shape_q,
+        DTypeId::F32.descriptor(),
+        device,
+    )
+    .expect("uploading the CPU query twin must succeed");
+    let hk = <Cpu as HostInterop>::from_bytes::<f32>(
+        bytemuck::cast_slice(k),
+        shape_kv,
+        DTypeId::F32.descriptor(),
+        device,
+    )
+    .expect("uploading the CPU key twin must succeed");
+    let hv = <Cpu as HostInterop>::from_bytes::<f32>(
+        bytemuck::cast_slice(v),
+        shape_kv,
+        DTypeId::F32.descriptor(),
+        device,
+    )
+    .expect("uploading the CPU value twin must succeed");
+    let (hq_id, hk_id, hv_id) = (
+        TapeStorage::id(&hq),
+        TapeStorage::id(&hk),
+        TapeStorage::id(&hv),
+    );
+    let mut handles = Vec::new();
+    handles.push(TensorHandle::from_storage::<Cpu, f32, _>(&hq));
+    handles.push(TensorHandle::from_storage::<Cpu, f32, _>(&hk));
+    handles.push(TensorHandle::from_storage::<Cpu, f32, _>(&hv));
+    // The mask handle must outlive the forward: `handles` borrows it.
+    let hm;
+    if let Some((shape_m, m)) = mask {
+        hm = <Cpu as HostInterop>::from_bytes::<f32>(
+            bytemuck::cast_slice(m),
+            shape_m,
+            DTypeId::F32.descriptor(),
+            device,
+        )
+        .expect("uploading the CPU mask twin must succeed");
+        handles.push(TensorHandle::from_storage::<Cpu, f32, _>(&hm));
+    }
+    let hout = dispatch::execute::<op::ScaledDotProductAttention, Cpu>(
+        &context,
+        AttentionAttributes {
+            scale,
+            has_mask: mask.is_some(),
+        },
+        &handles,
+    )
+    .expect("CPU reference SDPA executes");
+    let hloss = dispatch::execute::<op::SumAll, _>(
+        &context,
+        incin_core::exec::catalog::NoAttributes,
+        &[TensorHandle::from_storage::<Cpu, f32, _>(&hout)],
+    )
+    .expect("CPU sum_all executes");
+    let hgrads = <Cpu as AutogradBackend>::backward::<f32>(&hloss).expect("CPU backward runs");
+    (
+        cpu_read_f32(&hout),
+        cpu_read_f32(hgrads.get(hq_id).expect("CPU query receives a gradient")),
+        cpu_read_f32(hgrads.get(hk_id).expect("CPU key receives a gradient")),
+        cpu_read_f32(hgrads.get(hv_id).expect("CPU value receives a gradient")),
+    )
+}
+
+/// Run CUDA `ScaledDotProductAttention` (mask optional) through `dispatch`,
+/// returning the output and the tape entries the forward pushed.
+fn run_sdpa(
+    context: &ExecutionContext<TestBackend>,
+    q: &TestStorage,
+    k: &TestStorage,
+    v: &TestStorage,
+    mask: Option<&TestStorage>,
+    attributes: AttentionAttributes,
+) -> (TestStorage, usize) {
+    let before = tape_depth();
+    let mut handles = Vec::new();
+    handles.push(TensorHandle::from_storage::<TestBackend, f32, _>(q));
+    handles.push(TensorHandle::from_storage::<TestBackend, f32, _>(k));
+    handles.push(TensorHandle::from_storage::<TestBackend, f32, _>(v));
+    if let Some(m) = mask {
+        handles.push(TensorHandle::from_storage::<TestBackend, f32, _>(m));
+    }
+    let out = dispatch::execute::<op::ScaledDotProductAttention, TestBackend>(
+        context,
+        attributes,
+        &handles,
+    )
+    .expect("an advertised SDPA invocation must execute");
+    (out, tape_depth() - before)
+}
+
+/// Backward through a sum-all loss on CUDA, returning the three input
+/// gradients as `f64` vectors.
+fn cuda_sdpa_grads(
+    context: &ExecutionContext<TestBackend>,
+    out: &TestStorage,
+    q_id: incin_core::backend_authoring::TensorId,
+    k_id: incin_core::backend_authoring::TensorId,
+    v_id: incin_core::backend_authoring::TensorId,
+) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+    let loss = dispatch::execute::<op::SumAll, _>(
+        context,
+        incin_core::exec::catalog::NoAttributes,
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(out)],
+    )
+    .expect("sum_all executes");
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("backward runs");
+    (
+        read_f32(grads.get(q_id).expect("query receives a gradient")),
+        read_f32(grads.get(k_id).expect("key receives a gradient")),
+        read_f32(grads.get(v_id).expect("value receives a gradient")),
+    )
+}
+
+/// Issue #85 (g): mask-free rank-4 SDPA must take the fused fast path (one
+/// tape entry, not the composition's several) and match the composed
+/// reference — forward and gradients.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn sdpa_no_mask_dispatch_matches_composed_reference() {
+    require_cuda();
+    // B=1, H=2, Sq=3, Skv=3, D=4, default scale.
+    let qv: Vec<f32> = (0..24).map(|i| (i as f32 - 12.0) / 8.0).collect();
+    let kv: Vec<f32> = (0..24).map(|i| ((i * 7) % 11) as f32 / 8.0 - 0.5).collect();
+    let vv: Vec<f32> = (0..24).map(|i| ((i * 13) % 7) as f32 / 4.0 - 0.5).collect();
+    let context = ExecutionContext::new(TestBackend::new());
+    let q = upload_f32_shaped(&[1, 2, 3, 4], &qv);
+    let k = upload_f32_shaped(&[1, 2, 3, 4], &kv);
+    let v = upload_f32_shaped(&[1, 2, 3, 4], &vv);
+    let (q_id, k_id, v_id) = (
+        TapeStorage::id(&q),
+        TapeStorage::id(&k),
+        TapeStorage::id(&v),
+    );
+    let (out, recorded) = run_sdpa(
+        &context,
+        &q,
+        &k,
+        &v,
+        None,
+        AttentionAttributes {
+            scale: None,
+            has_mask: false,
+        },
+    );
+    assert_eq!(
+        recorded, 1,
+        "mask-free rank-4 SDPA must take the fused fast path (one tape entry)"
+    );
+    assert_eq!(out.shape, vec![1, 2, 3, 4]);
+    let (dq, dk, dv) = cuda_sdpa_grads(&context, &out, q_id, k_id, v_id);
+    #[cfg(feature = "cpu")]
+    {
+        let (want_out, want_dq, want_dk, want_dv) = cpu_sdpa_with_grads(
+            &[1, 2, 3, 4],
+            &qv,
+            &[1, 2, 3, 4],
+            &kv,
+            &vv,
+            None,
+            None,
+        );
+        assert_close(&read_f32(&out), &want_out, 1e-4, "sdpa fused forward");
+        assert_close(&dq, &want_dq, 1e-4, "sdpa fused dq");
+        assert_close(&dk, &want_dk, 1e-4, "sdpa fused dk");
+        assert_close(&dv, &want_dv, 1e-4, "sdpa fused dv");
+    }
+}
+
+/// Issue #85 (g): GQA without a mask must also take the fused fast path.
+/// Multi-query attention (one kv head shared by four query heads) is the GQA
+/// form the `ScaledDotProductAttention` descriptor admits — its batch rule
+/// broadcasts `[1, 4]` queries against `[1, 1]` keys — and it exercises the
+/// fused kernel's head-group mapping (`groups = 4`) end to end.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn sdpa_gqa_no_mask_dispatch_matches_composed_reference() {
+    require_cuda();
+    // B=1, Hq=4 over Hkv=1, Sq=Skv=4, D=8, explicit scale.
+    let (b, hq, hkv, sq, skv, d) = (1usize, 4usize, 1usize, 4usize, 4usize, 8usize);
+    let scale = Some(0.25);
+    let qv = lcg(0x9d9a_1001, b * hq * sq * d);
+    let kv = lcg(0x9d9a_1002, b * hkv * skv * d);
+    let vv = lcg(0x9d9a_1003, b * hkv * skv * d);
+    let context = ExecutionContext::new(TestBackend::new());
+    let q = upload_f32_shaped(&[b, hq, sq, d], &qv);
+    let k = upload_f32_shaped(&[b, hkv, skv, d], &kv);
+    let v = upload_f32_shaped(&[b, hkv, skv, d], &vv);
+    let (q_id, k_id, v_id) = (
+        TapeStorage::id(&q),
+        TapeStorage::id(&k),
+        TapeStorage::id(&v),
+    );
+    let (out, recorded) = run_sdpa(
+        &context,
+        &q,
+        &k,
+        &v,
+        None,
+        AttentionAttributes {
+            scale,
+            has_mask: false,
+        },
+    );
+    assert_eq!(
+        recorded, 1,
+        "mask-free GQA SDPA must take the fused fast path (one tape entry)"
+    );
+    assert_eq!(out.shape, vec![b, hq, sq, d]);
+    let (dq, dk, dv) = cuda_sdpa_grads(&context, &out, q_id, k_id, v_id);
+    #[cfg(feature = "cpu")]
+    {
+        let (want_out, want_dq, want_dk, want_dv) = cpu_sdpa_with_grads(
+            &[b, hq, sq, d],
+            &qv,
+            &[b, hkv, skv, d],
+            &kv,
+            &vv,
+            None,
+            scale,
+        );
+        assert_close(&read_f32(&out), &want_out, 1e-4, "gqa sdpa fused forward");
+        assert_close(&dq, &want_dq, 1e-4, "gqa sdpa fused dq");
+        assert_close(&dk, &want_dk, 1e-4, "gqa sdpa fused dk");
+        assert_close(&dv, &want_dv, 1e-4, "gqa sdpa fused dv");
+    }
+}
+
+/// Issue #85 (g): an explicit additive mask — here a causal-shaped one —
+/// must stay on the composed fallback (more than one tape entry), and the
+/// fallback must agree with both the CPU composed twin and the fused
+/// causal kernel at the same scale.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn sdpa_causal_mask_falls_back_and_matches_fused_causal() {
+    require_cuda();
+    // B=1, H=2, Sq=Skv=3, D=4, default scale; the square causal mask lets
+    // query row i see keys 0..=i.
+    let (b, h, s, d) = (1usize, 2usize, 3usize, 4usize);
+    let qv: Vec<f32> = (0..b * h * s * d)
+        .map(|i| (i as f32 - 12.0) / 8.0)
+        .collect();
+    let kv: Vec<f32> = (0..b * h * s * d)
+        .map(|i| ((i * 7) % 11) as f32 / 8.0 - 0.5)
+        .collect();
+    let vv: Vec<f32> = (0..b * h * s * d)
+        .map(|i| ((i * 13) % 7) as f32 / 4.0 - 0.5)
+        .collect();
+    // Full [B, H, Sq, Skv] causal mask: 0 where visible, -inf past the
+    // diagonal (the `log(tril(ones))` form the attention modules build).
+    let mut maskv = Vec::with_capacity(b * h * s * s);
+    for _ in 0..b * h {
+        for i in 0..s {
+            for j in 0..s {
+                maskv.push(if j <= i { 0.0 } else { f32::NEG_INFINITY });
+            }
+        }
+    }
+    let context = ExecutionContext::new(TestBackend::new());
+    let q = upload_f32_shaped(&[b, h, s, d], &qv);
+    let k = upload_f32_shaped(&[b, h, s, d], &kv);
+    let v = upload_f32_shaped(&[b, h, s, d], &vv);
+    let m = upload_f32_shaped(&[b, h, s, s], &maskv);
+    let (q_id, k_id, v_id) = (
+        TapeStorage::id(&q),
+        TapeStorage::id(&k),
+        TapeStorage::id(&v),
+    );
+    let (out, recorded) = run_sdpa(
+        &context,
+        &q,
+        &k,
+        &v,
+        Some(&m),
+        AttentionAttributes {
+            scale: None,
+            has_mask: true,
+        },
+    );
+    assert!(
+        recorded > 1,
+        "masked SDPA must stay on the composed fallback (several tape entries), got {recorded}"
+    );
+    assert_eq!(out.shape, vec![b, h, s, d]);
+    let (dq, dk, dv) = cuda_sdpa_grads(&context, &out, q_id, k_id, v_id);
+    #[cfg(feature = "cpu")]
+    {
+        let (want_out, want_dq, want_dk, want_dv) = cpu_sdpa_with_grads(
+            &[b, h, s, d],
+            &qv,
+            &[b, h, s, d],
+            &kv,
+            &vv,
+            Some((&[b, h, s, s], &maskv)),
+            None,
+        );
+        assert_close(&read_f32(&out), &want_out, 1e-4, "masked sdpa forward");
+        assert_close(&dq, &want_dq, 1e-4, "masked sdpa dq");
+        assert_close(&dk, &want_dk, 1e-4, "masked sdpa dk");
+        assert_close(&dv, &want_dv, 1e-4, "masked sdpa dv");
+    }
+    // The fallback's causal-mask semantics must equal the fused kernel's
+    // causal attribute at the same scale.
+    let (fused_out, _) = run_fused(
+        &context,
+        &q,
+        &k,
+        &v,
+        FusedAttentionAttributes {
+            scale: None,
+            causal: true,
+        },
+    );
+    assert_close(
+        &read_f32(&out),
+        &read_f32(&fused_out),
+        1e-4,
+        "masked sdpa fallback vs fused causal forward",
     );
 }

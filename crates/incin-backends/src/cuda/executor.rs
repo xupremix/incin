@@ -965,6 +965,16 @@ impl<D: Device> Execute<op::Outer> for CudaBackendImpl<D> {
 /// Scaled dot-product attention, with the mask as an optional fourth
 /// operand. The attribute set says whether a mask is present, so the operand
 /// count and the declared contract have to agree before anything runs.
+///
+/// Issue #85 (g): without a mask, rank-4 contiguous float operands that fit
+/// the fused kernel's geometry run it (single-pass online softmax, one tape
+/// entry) instead of the bmm→scale→add→softmax→bmm composition below. Any
+/// explicit mask — including a causal-shaped additive one — stays on the
+/// composition: the fused kernel only knows `causal: false/true` from its
+/// own attributes, and this row carries no causal flag to map a mask tensor
+/// to. Strided, non-rank-4, or non-float operands likewise fall through; the
+/// composition computes identical values, only with more traffic and more
+/// tape entries.
 impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -990,6 +1000,23 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
             .map(|m| downcast(m, operation, "mask is not CUDA storage"))
             .transpose()?;
         (|| {
+            // No mask means non-causal, which the fused kernel speaks
+            // directly; `geometry` is the single eligibility gate (rank-4,
+            // contiguous, GQA-divisible, float, sane scale), so anything it
+            // refuses is exactly what the kernel cannot run. The fused path
+            // records its own recompute tape entry, keeping training parity
+            // with the composition.
+            if mask.is_none()
+                && crate::cuda::ops::attention::geometry(query, key, value, attrs.scale).is_ok()
+            {
+                return crate::cuda::backend::nn::fused_attention_storage(
+                    query,
+                    key,
+                    value,
+                    false,
+                    attrs.scale,
+                );
+            }
             let key_rank = key.shape.len();
             let key_t = if key_rank >= 2 {
                 CudaBackendImpl::<D>::transpose::<f32>(key, key_rank - 2, key_rank - 1)?
@@ -1009,9 +1036,9 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
                 None => scaled_scores,
             };
             let attention_axis = masked_scores.shape.len().saturating_sub(1);
-            // The tracked softmax, not the fused launch: attention trains, so
-            // every link in its chain must record, and the raw launch records
-            // nothing.
+            // The composed fallback for masked/strided/non-rank-4 shapes:
+            // the tracked softmax records like every other link, so the
+            // chain trains exactly as before the fused fast path above.
             let attention = CudaBackendImpl::<D>::softmax::<f32>(&masked_scores, attention_axis)?;
             CudaBackendImpl::<D>::batched_matmul::<f32>(&attention, value)
         })()
