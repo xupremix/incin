@@ -10,7 +10,8 @@
 //! structural operations; `reduce` is reductions; `nn` is pooling and
 //! convolution; `indexing` is `embedding`/`gather`/`index_select` host-walks
 //! plus the `masked_fill`/`where_cond` GPU selection kernel; `autograd` is
-//! `AutogradBackend`/`VariableBackend`.
+//! `AutogradBackend`/`VariableBackend`; `convert` is the host-side
+//! `to_dtype` cast between the storage dtypes WGPU can hold.
 
 pub(crate) use crate::wgpu::capability::validate_wgpu_dtype;
 pub(crate) use crate::wgpu::dispatch;
@@ -24,6 +25,7 @@ pub(crate) use incin_core::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 mod autograd;
 mod compare;
 mod contract;
+mod convert;
 mod creation;
 mod elementwise;
 mod indexing;

@@ -372,6 +372,28 @@ impl<D: Device> Execute<op::FlattenExact> for WgpuBackendImpl<D> {
     }
 }
 
+/// `to_dtype`: one operand plus a target dtype — bidirectional host cast in
+/// `wgpu/backend/convert.rs`.
+impl<D: Device> Execute<op::ToDType> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ToDType, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::ToDType;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "to_dtype expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let target = request.operation.descriptor().attributes().dtype;
+        WgpuBackendImpl::<D>::to_dtype(input, target)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
 macro_rules! impl_wgpu_reduction_all {
     ($(($op:ident, $func:expr)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for WgpuBackendImpl<D> {

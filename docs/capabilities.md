@@ -189,7 +189,7 @@ run time.
 | `tensor_from_data` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `u8`, `u32`, `i64`, `f32`, `bool` | `f32` |
 | `tensor_to_bytes` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `to_device` | — | — | — | — |
-| `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | `f32` |
+| `to_dtype` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `topk` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
 | `transpose` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `transpose_view` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | — | — |
@@ -704,8 +704,10 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `remainder` | `f32` | `contiguous` | any | yes | native |
 | `dropout` | `f32` | `contiguous` | any | yes | native |
 | `broadcast_as` | `f32` | `contiguous` | 0–6 | no | native |
+| `to_dtype` | `f32` | `contiguous` | any | no | native |
 | `reshape` | `f32` | `contiguous` | any | no | native |
 | `broadcast_as` | `f32` | `contiguous` | 0–6 | yes | native |
+| `to_dtype` | `f32` | `contiguous` | any | yes | native |
 | `reshape` | `f32` | `contiguous` | any | yes | native |
 | `matmul` | `f32` | `contiguous` | 2+ | yes | native |
 | `tensor_from_data` | `f32` | `contiguous` | any | no | native |

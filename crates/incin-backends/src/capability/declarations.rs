@@ -570,7 +570,16 @@ macro_rules! wgpu_descriptor_operations {
                 // when eval or p<=0, zero when p>=1 — CPU's recipe.
                 Dropout
             ],
-            broadcast = [BroadcastAs],
+            // `ToDType` rides this group since #91: the cast walks the shared
+            // host bytes dtype-parametrically over the source (`wgpu/backend/
+            // convert.rs`), and `broadcast`'s `F32_ONLY` rows admit the source
+            // set the capability actually checks (inputs only — the target tag
+            // is an attribute, never inspected by `admit_invocation`). The
+            // executor refuses targets outside `{f32,u8,u32,i64}` and sources
+            // outside `WGPU_STORAGE_DTYPES`, so a wider pair admitted here
+            // still fails loudly inside the executor rather than casting
+            // garbage. Same split CUDA's #106(a) row and Metal's #92 row make.
+            broadcast = [BroadcastAs, ToDType],
             reshape = [ReshapeExact],
             // `impl_creation_executors!` gives WGPU real `UniformRandom`/
             // `NormalRandom` executors too, and `impl_data_creation_executors!`
