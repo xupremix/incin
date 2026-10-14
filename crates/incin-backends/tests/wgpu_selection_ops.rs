@@ -19,9 +19,9 @@
 #![cfg(feature = "wgpu")]
 
 use incin_backends::wgpu::WgpuBackendImpl;
-use incin_core::backend_authoring::{HostInterop, HostReadback, StorageBackend, op};
-use incin_core::exec::catalog::NoAttributes;
-use incin_core::exec::{ExecutionContext, TensorHandle};
+use incin_core::backend_authoring::{AutogradBackend, HostInterop, HostReadback, StorageBackend, op};
+use incin_core::exec::catalog::{LerpAttributes, NoAttributes};
+use incin_core::exec::{ExecutionContext, TapeStorage, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
 use incin_core::typenum::U0;
 
@@ -133,4 +133,73 @@ fn abs_diff_matches_the_cpu_reference_and_records_a_gradient() {
         recorded >= 2,
         "abs_diff composes two tape-tracked primitives, so it records both"
     );
+}
+
+/// Runs `lerp` and returns its result and the number of tape entries added.
+fn run_lerp(start: &TestStorage, end: &TestStorage, weight: f64) -> (TestStorage, usize) {
+    let context = ExecutionContext::new(TestBackend::default());
+    let inputs = [
+        TensorHandle::from_storage::<TestBackend, f32, _>(start),
+        TensorHandle::from_storage::<TestBackend, f32, _>(end),
+    ];
+    let before = incin_backends::wgpu::tape_depth();
+    let out = incin_core::exec::dispatch::execute::<op::Lerp, _>(
+        &context,
+        LerpAttributes { weight },
+        &inputs,
+    )
+    .expect("an advertised operation must execute");
+    (out, incin_backends::wgpu::tape_depth() - before)
+}
+
+#[test]
+fn lerp_matches_the_cpu_reference_and_records_a_gradient() {
+    require_wgpu();
+    let (start, end) = (upload(&LHS), upload(&RHS));
+    let (out, recorded) = run_lerp(&start, &end, 0.25);
+    // `s + (e - s) * 0.25`: every intermediate is exact in f32 on these
+    // operands, so this is an equality check, as the selections above are.
+    assert_eq!(read(&out), vec![1.75, 4.25, 3.0, 3.0, -3.25, 0.5]);
+    assert_eq!(
+        recorded, 3,
+        "lerp advertises `training = true` and composes three tape-tracked \
+         primitives (`sub`, `mul_scalar_float`, `add`), so it must leave \
+         exactly three tape entries. Fewer would drop the gradient; more \
+         would mean the composition grew a step the CPU reference does not run."
+    );
+}
+
+/// A real backward through `lerp`: `d/dstart = 1 - weight` and
+/// `d/dend = weight` per element, driven by a sum reduction so the seed
+/// gradient is uniform and easy to check.
+#[test]
+fn lerp_trains_with_the_blended_gradient() {
+    require_wgpu();
+    let context = ExecutionContext::new(TestBackend::default());
+    let start = upload(&LHS);
+    let end = upload(&RHS);
+    let (start_id, end_id) = (TapeStorage::id(&start), TapeStorage::id(&end));
+
+    let mixed = {
+        let inputs = [
+            TensorHandle::from_storage::<TestBackend, f32, _>(&start),
+            TensorHandle::from_storage::<TestBackend, f32, _>(&end),
+        ];
+        incin_core::exec::dispatch::execute::<op::Lerp, _>(
+            &context,
+            LerpAttributes { weight: 0.25 },
+            &inputs,
+        )
+        .expect("lerp executes")
+    };
+    let loss = {
+        let inputs = [TensorHandle::from_storage::<TestBackend, f32, _>(&mixed)];
+        incin_core::exec::dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &inputs)
+            .expect("sum_all executes")
+    };
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("backward runs");
+    let start_grad = grads.get(start_id).expect("start has a gradient");
+    let end_grad = grads.get(end_id).expect("end has a gradient");
+    assert_eq!(read(start_grad), vec![0.75; 6]);
+    assert_eq!(read(end_grad), vec![0.25; 6]);
 }

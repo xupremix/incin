@@ -686,7 +686,7 @@ macro_rules! wgpu_descriptor_operations {
             // those shaders take strides, which is the same work the CUDA
             // strided kernels already do.
             native_tensor = [
-                Maximum, Minimum, AbsDiff, TransposeExact,
+                Maximum, Minimum, AbsDiff, Lerp, TransposeExact,
                 // Structural windows and joins, each with a `shape.wgsl`
                 // slice/paste path and a tape entry: `narrow`/`slice` are one
                 // mode-0 launch forward and one mode-1 paste backward;

@@ -100,7 +100,7 @@ run time.
 | `int_to_vec1` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
 | `l1_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `layer_norm` | `f32` | `f32` | `f32` | `f32` |
-| `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | — | — |
+| `lerp` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `linear` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `linspace` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
 | `log` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -757,6 +757,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `maximum` | `f32` | `contiguous` | any | yes | native |
 | `minimum` | `f32` | `contiguous` | any | yes | native |
 | `abs_diff` | `f32` | `contiguous` | any | yes | native |
+| `lerp` | `f32` | `contiguous` | any | yes | native |
 | `transpose` | `f32` | `contiguous` | 2–6 | yes | native |
 | `narrow` | `f32` | `contiguous` | 1–6 | yes | native |
 | `slice` | `f32` | `contiguous` | any | yes | native |

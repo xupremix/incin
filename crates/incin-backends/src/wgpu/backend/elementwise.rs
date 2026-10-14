@@ -310,6 +310,26 @@ impl<D: Device> WgpuBackendImpl<D> {
         let diff = Self::sub::<K>(lhs, rhs)?;
         Self::abs::<K>(&diff)
     }
+
+    /// `lerp(start, end, weight) = start + (end - start) * weight`.
+    ///
+    /// Composed exactly as CPU's `lerp_storage` and CUDA's
+    /// `cuda_lerp_storage` compose it: `sub` then `mul_scalar_float` then
+    /// `add`. Each step pushes its own tape entry, so no backward code is
+    /// written here — the catalog's `BinaryBroadcast` gradient
+    /// (`d/dstart = 1 - weight`, `d/dend = weight`, per element) arrives
+    /// through the three entries' replay, with unbroadcast handled by each
+    /// wrapper, the same way `abs_diff` above inherits its gradient from
+    /// `sub` and `abs`.
+    pub(crate) fn lerp<K: DType>(
+        start: &<Self as StorageBackend>::Storage<K>,
+        end: &<Self as StorageBackend>::Storage<K>,
+        weight: f64,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let diff = Self::sub::<K>(end, start)?;
+        let scaled = Self::mul_scalar_float::<K>(&diff, weight)?;
+        Self::add::<K>(start, &scaled)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

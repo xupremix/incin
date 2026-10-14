@@ -94,6 +94,33 @@ impl_wgpu_canonical![
     (Remainder, remainder),
 ];
 
+/// `lerp`: two operands plus the `weight` attribute, composed from taped
+/// primitives by `WgpuBackendImpl::lerp` — the same request shape CUDA's
+/// `Execute<op::Lerp>` answers, dispatching the attribute the same way, so
+/// the two accelerator executors cannot drift on which field they bind.
+impl<D: Device> Execute<op::Lerp> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Lerp, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Lerp;
+        let [start, end] = request.inputs else {
+            return Err(invalid(operation, "lerp expects exactly two operands"));
+        };
+        let start = start
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "start is not WGPU storage"))?;
+        let end = end
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "end is not WGPU storage"))?;
+        let weight = request.operation.descriptor().attributes().weight;
+        Self::lerp::<f32>(start, end, weight)
+            .map_err(|error| kernel_error("Wgpu", operation, error))
+    }
+}
+
 impl<D: Device> Execute<op::ReshapeExact> for WgpuBackendImpl<D> {
     type Output = WgpuStorage;
     fn execute(
