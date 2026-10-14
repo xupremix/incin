@@ -19,8 +19,8 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
-    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes, ScalarAttributes,
-    ScatterAttributes,
+    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes, OneHotAttributes,
+    ScalarAttributes, ScatterAttributes,
 };
 use incin_core::exec::{CanonicalError, ExecutionContext, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
@@ -65,6 +65,18 @@ fn upload_i64(values: &[i64], shape: &[usize]) -> IntStorage {
         &DeviceId::wgpu(0),
     )
     .expect("uploading i64 indices must succeed")
+}
+
+type U8Storage = <TestBackend as StorageBackend>::Storage<u8>;
+
+fn upload_u8(values: &[u8], shape: &[usize]) -> U8Storage {
+    <TestBackend as HostInterop>::from_bytes::<u8>(
+        values,
+        shape,
+        DTypeId::U8.descriptor(),
+        &DeviceId::wgpu(0),
+    )
+    .expect("uploading u8 indices must succeed")
 }
 
 /// Bool mask uploaded as one byte per element (0/1); physical `f32` expansion
@@ -277,6 +289,72 @@ fn index_select_replaces_an_axis_and_accumulates_dups() {
         vec![1.0, 0.0, 2.0, 0.0],
         "duplicate selections accumulate"
     );
+}
+
+// ── one_hot ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn one_hot_encodes_indices_as_a_bool_mask_without_a_tape_entry() {
+    require_wgpu();
+    // indices [0, 2, 1] with depth 3 -> rows [1,0,0], [0,0,1], [0,1,0].
+    let indices = upload_i64(&[0, 2, 1], &[3]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, i64, _>(&indices)];
+    let before = incin_backends::wgpu::tape_depth();
+    let out = incin_core::exec::dispatch::execute::<op::OneHot, _>(
+        &context,
+        OneHotAttributes { depth: 3 },
+        &handles,
+    )
+    .expect("one_hot is advertised and must execute");
+    assert_eq!(
+        incin_backends::wgpu::tape_depth() - before,
+        0,
+        "one_hot is forward-only: no tape entry"
+    );
+    assert_eq!(
+        out.metadata().dtype(),
+        DTypeId::Bool.descriptor(),
+        "one_hot result is bool storage over the physical f32 encoding"
+    );
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[3, 3],
+        "one_hot appends a depth axis"
+    );
+    let packed = <TestBackend as HostInterop>::to_bytes::<bool>(&out)
+        .expect("packing the 0.0/1.0 mask as bool bytes must succeed");
+    assert_eq!(
+        packed,
+        vec![1, 0, 0, 0, 0, 1, 0, 1, 0],
+        "one_hot mask"
+    );
+
+    // An index outside 0..depth writes no 1 (CPU's ONNX skip, not an error).
+    let oob = upload_i64(&[5], &[1]);
+    let handles = [TensorHandle::from_storage::<TestBackend, i64, _>(&oob)];
+    let out = incin_core::exec::dispatch::execute::<op::OneHot, _>(
+        &context,
+        OneHotAttributes { depth: 3 },
+        &handles,
+    )
+    .expect("out-of-range one_hot index is a silent skip, not an error");
+    let packed = <TestBackend as HostInterop>::to_bytes::<bool>(&out)
+        .expect("packing the all-zero mask as bool bytes must succeed");
+    assert_eq!(packed, vec![0, 0, 0], "oob one_hot is all zero");
+
+    // The u8 index width rides the same walk (the capability row's union).
+    let narrow = upload_u8(&[1, 0], &[2]);
+    let handles = [TensorHandle::from_storage::<TestBackend, u8, _>(&narrow)];
+    let out = incin_core::exec::dispatch::execute::<op::OneHot, _>(
+        &context,
+        OneHotAttributes { depth: 2 },
+        &handles,
+    )
+    .expect("u8 one_hot indices must execute");
+    let packed = <TestBackend as HostInterop>::to_bytes::<bool>(&out)
+        .expect("packing the u8-indexed mask as bool bytes must succeed");
+    assert_eq!(packed, vec![0, 1, 1, 0], "u8 one_hot mask");
 }
 
 // ── diag ────────────────────────────────────────────────────────────────────

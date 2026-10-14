@@ -656,7 +656,20 @@ macro_rules! wgpu_descriptor_operations {
             // `dispatch::execute` applies one dtype set to every operand;
             // the descriptor's own per-operand contract refuses a non-integer
             // index or a non-f32 weight before this row is consulted.
-            embedding = [EmbeddingExact],
+            //
+            // `OneHot` joins this group for the same union reason CUDA's
+            // comment above states: its only operand is an integer index
+            // while the row states `INDEX_AND_F32_DTYPES`, and the
+            // descriptor's own per-operand contract (operand 0 is the index)
+            // plus `index_values`'s fail-closed integer check enforce the
+            // real split this row cannot state. The result is `Bool` over
+            // the physical f32 0.0/1.0 encoding, so it feeds the
+            // `masked_fill`/`where_cond` mask path without a conversion;
+            // out-of-range indices write no `1` (CPU's ONNX skip).
+            // Forward-only: no tape entry is pushed even though this group
+            // hardcodes `training = true` — the same claim CUDA's and
+            // Metal's embedding groups make for it (`GradientRule::None`).
+            embedding = [EmbeddingExact, OneHot],
             // No fused-attention kernel on WGPU yet (issue #104); empty
             // until one ships.
             fused_attention = [],

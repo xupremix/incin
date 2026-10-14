@@ -135,7 +135,7 @@ run time.
 | `neg` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `nonzero` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | — | — | — |
 | `norm` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `one_hot` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | — | `u8`, `u32`, `i64`, `f32` |
+| `one_hot` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` |
 | `ones` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
 | `outer` | `f32` | `f32` | `f32` | — |
 | `pad` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
@@ -756,6 +756,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `rms_norm` | `f32` | `contiguous` | 1+ | yes | native |
 | `group_norm` | `f32` | `contiguous` | 2+ | yes | native |
 | `embedding` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
+| `one_hot` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | native |
 | `maximum` | `f32` | `contiguous` | any | yes | native |
 | `minimum` | `f32` | `contiguous` | any | yes | native |
 | `abs_diff` | `f32` | `contiguous` | any | yes | native |

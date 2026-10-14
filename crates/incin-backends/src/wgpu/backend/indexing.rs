@@ -405,6 +405,45 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
+    /// `one_hot(indices, depth)`: append a `depth` axis, setting position
+    /// `indices[i]` to `1.0` and the rest to `0.0` — CPU's `one_hot_storage`
+    /// walk for walk.
+    ///
+    /// The result is `Bool` storage over the physical `f32` 0.0/1.0 encoding
+    /// `wgpu/storage.rs::physical_element_bytes` documents, so it feeds the
+    /// `masked_fill`/`where_cond` mask path without a conversion. Indices
+    /// outside `0..depth` write no `1` (CPU's ONNX skip: the value names no
+    /// slot, so no slot is set, and a padding index flows through instead of
+    /// aborting the batch). Forward-only: no tape entry, the same
+    /// `GradientRule::None` family `nonzero`/`bincount` belong to.
+    pub(crate) fn one_hot(indices: &WgpuStorage, depth: usize) -> Result<WgpuStorage> {
+        if depth == 0 {
+            return Err(Error::Msg("one_hot: depth must be at least one".into()));
+        }
+        let idx_vals = index_values(indices)?;
+        let total = num_elements(&indices.shape)?;
+        let out_elements =
+            total
+                .checked_mul(depth)
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::OneHot,
+                    expression: "one_hot output element count",
+                })?;
+        let mut out_shape = indices.shape.to_vec();
+        out_shape.push(depth);
+        let mut out = alloc::vec![0.0f32; out_elements];
+        for (flat, &raw) in idx_vals.iter().enumerate() {
+            if raw >= 0 && (raw as usize) < depth {
+                out[flat * depth + raw as usize] = 1.0;
+            }
+        }
+        Ok(WgpuStorage::new_with_dtype(
+            WgpuBuffer::from_slice(&out),
+            out_shape,
+            DTypeId::Bool.descriptor(),
+        ))
+    }
+
     /// `diag(input, diagonal)`: CPU's `diag_storage` walk for walk.
     ///
     /// Rank 1 builds the diagonal matrix (`[n]` -> `[n + |k|, n + |k|]`,
@@ -1038,6 +1077,28 @@ impl<D: Device> Execute<op::IndexSelect> for WgpuBackendImpl<D> {
             .ok_or_else(|| invalid(operation, "index is not WGPU storage"))?;
         let axis = request.operation.descriptor().attributes().axis;
         WgpuBackendImpl::<D>::index_select(input, axis, index)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+/// `one_hot`: index tensor plus `depth` — bool-mask host walk above.
+/// Forward-only (no tape entry), matching CPU/Metal/CUDA.
+impl<D: Device> Execute<op::OneHot> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::OneHot, Self>,
+    ) -> core::result::Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::OneHot;
+        let [indices] = request.inputs else {
+            return Err(invalid(operation, "one_hot expects exactly 1 input"));
+        };
+        let indices = indices
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "indices is not WGPU storage"))?;
+        let depth = request.operation.descriptor().attributes().depth;
+        WgpuBackendImpl::<D>::one_hot(indices, depth)
             .map_err(|e| kernel_error("Wgpu", operation, e))
     }
 }
