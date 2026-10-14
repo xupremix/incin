@@ -17,6 +17,10 @@
 //! the same product from tape-tracked reshapes around the 2D launcher.
 
 use super::alloc_zeroed_bytes;
+#[cfg(feature = "cuda")]
+use super::gemm_select::{
+    GemmCrossover, GemmPath, GemmPreference, GemmSelection, gemm_flops, select_gemm_path,
+};
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
@@ -74,9 +78,36 @@ fn matmul_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
 /// by cuBLASLt being absent or refusing a shape, it merely misses the
 /// fusion opportunity. This function carries no epilogue parameters;
 /// bias/activation requests reach `cublaslt::try_launch_matmul` only from
-/// its own callers.
+/// its own callers, so epilogue requests bypass vendor-vs-native selection
+/// entirely - there is no native fused epilogue to select.
+///
+/// Since issue #85 item 10, the vendor-first order is a selection
+/// (`cuda/ops/gemm_select.rs`), not a hardcoded sequence: `Auto` consults
+/// the learned crossover under `cuda-vendor` + `autotune` (measuring each
+/// workload bucket once and serving the winner), and keeps today's
+/// vendor-first order as a zero-threshold static fallback everywhere else.
+/// Forced preferences skip measurement and the crossover; they only select
+/// the attempt order, and refusals or failures still fall through to native.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    launch_matmul_with_preference(lhs, rhs, GemmPreference::Auto)
+}
+
+/// [`launch_matmul`] with an explicit [`GemmPreference`]. Production
+/// dispatch passes [`GemmPreference::Auto`]; the forced variants let
+/// hardware tests pin each path independently (see the agreement and
+/// benchmark tests in `cuda/backend/tests.rs`).
+///
+/// # Errors
+///
+/// The dtype-mismatch refusal and every native-launch failure propagate,
+/// exactly as [`launch_matmul`] reports them today.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_matmul_with_preference(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    preference: GemmPreference,
+) -> Result<CudaStorage> {
     let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
     if lhs_buf.dtype != rhs_buf.dtype {
         return Err(Error::DTypeMismatch {
@@ -85,23 +116,197 @@ pub(crate) fn launch_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Cuda
             actual: rhs_buf.dtype,
         });
     }
-    // Issue #85: canonical f32/f16/bf16 products go to cuBLASLt first when
-    // the `cuda-vendor` feature is on. The dtype check above already ran,
-    // so a mixed pair never reaches it, and an f64/integer dtype is
-    // refused by `gemm_request_fits` rather than by an error - `Ok(None)`
-    // and `Err` alike fall through to the kernel path, which is why the
-    // vendor result collapses to an `Option` here. Without the feature the
-    // module does not exist and every request takes the kernel path
-    // directly.
-    #[cfg(feature = "cuda-vendor")]
-    let vendor = super::cublaslt::try_launch_matmul(lhs, rhs, None, None)
+    match preference {
+        GemmPreference::ForceNative => return launch_plain_native(lhs, rhs),
+        GemmPreference::ForceVendor => {
+            #[cfg(feature = "cuda-vendor")]
+            if let Some(product) = vendor_attempt_plain(lhs, rhs) {
+                return Ok(product);
+            }
+            return launch_plain_native(lhs, rhs);
+        }
+        GemmPreference::Auto => {}
+    }
+    #[cfg(all(feature = "cuda-vendor", feature = "autotune"))]
+    return autotuned_plain_matmul(lhs, rhs);
+    #[cfg(not(all(feature = "cuda-vendor", feature = "autotune")))]
+    {
+        // The static fallback: today's vendor-first order, expressed as a
+        // selection with a zero threshold. Everything the fit policy admits
+        // attempts vendor first; everything else runs native directly. The
+        // order is identical to the pre-selection code - only the spelling
+        // changed, so one policy function owns both.
+        let selection = static_plain_selection(lhs, rhs);
+        match selection.path {
+            GemmPath::Vendor => {
+                #[cfg(feature = "cuda-vendor")]
+                if let Some(product) = vendor_attempt_plain(lhs, rhs) {
+                    return Ok(product);
+                }
+                launch_plain_native(lhs, rhs)
+            }
+            GemmPath::Native => launch_plain_native(lhs, rhs),
+        }
+    }
+}
+
+/// The `cuda-vendor` attempt for an epilogue-free plain request: the
+/// cuBLASLt result when it serves, `None` when it refuses (`Ok(None)`) or
+/// fails (`Err`) - both fall through to the native kernels, which is why
+/// the vendor result collapses to an `Option` here. Without the feature the
+/// function does not exist and every request takes the kernel path directly.
+///
+/// Issue #85: canonical f32/f16/bf16 products go to cuBLASLt first when
+/// the `cuda-vendor` feature is on. The dtype check in
+/// [`launch_matmul_with_preference`] already ran, so a mixed pair never
+/// reaches it, and an f64/integer dtype is refused by `gemm_request_fits`
+/// rather than by an error.
+#[cfg(all(feature = "cuda", feature = "cuda-vendor"))]
+fn vendor_attempt_plain(lhs: &CudaStorage, rhs: &CudaStorage) -> Option<CudaStorage> {
+    super::cublaslt::try_launch_matmul(lhs, rhs, None, None)
         .ok()
-        .flatten();
+        .flatten()
+}
+
+/// The static vendor-first selection for a plain request: the vendor fit
+/// policy as the admission test and a zero threshold, so every admitted
+/// request selects vendor and every other request selects native.
+#[cfg(all(
+    feature = "cuda",
+    not(all(feature = "cuda-vendor", feature = "autotune"))
+))]
+fn static_plain_selection(lhs: &CudaStorage, rhs: &CudaStorage) -> GemmSelection {
+    #[cfg(feature = "cuda-vendor")]
+    let vendor_admitted = super::cublaslt::gemm_request_fits(
+        &super::OperandMeta::of(lhs),
+        &super::OperandMeta::of(rhs),
+    );
     #[cfg(not(feature = "cuda-vendor"))]
-    let vendor: Option<CudaStorage> = None;
-    if let Some(product) = vendor {
+    let vendor_admitted = false;
+    select_gemm_path(
+        gemm_flops(lhs.shape[0], rhs.shape[1], lhs.shape[1], None),
+        vendor_admitted,
+        GemmPreference::Auto,
+        &GemmCrossover::measured(0),
+    )
+}
+
+/// The autotuned plain dispatch (issue #85 item 10): the first request for
+/// a workload bucket benchmarks both paths once and serves the winner (see
+/// [`measure_plain_once`]); later requests consult the cached crossover.
+/// Any measurement failure falls through to the crossover consult, which
+/// serves native while the crossover is unknown - so a failed benchmark
+/// costs a retry, never a wrong path or a lost answer.
+///
+/// # Errors
+///
+/// A native-launch failure propagates: the static fallback surfaces native
+/// errors while swallowing vendor ones, and the autotuned path keeps that
+/// contract.
+#[cfg(all(feature = "cuda", feature = "cuda-vendor", feature = "autotune"))]
+fn autotuned_plain_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    let vendor_admitted = super::cublaslt::gemm_request_fits(
+        &super::OperandMeta::of(lhs),
+        &super::OperandMeta::of(rhs),
+    );
+    let (m, k, n) = (lhs.shape[0], lhs.shape[1], rhs.shape[1]);
+    let flops = gemm_flops(m, n, k, None);
+    let problem = crate::tuning::gemm_problem_id(lhs.buffer.dtype, false);
+    let bucket = crate::tuning::WorkloadBucket::gemm(m, n, k, None);
+    let device_id = lhs.buffer.device_id;
+    if vendor_admitted
+        && !super::gemm_select::gemm_bucket_measured(&problem, device_id, &bucket)
+        && let Ok(product) = measure_plain_once(lhs, rhs, &problem, device_id, bucket, flops)
+    {
         return Ok(product);
     }
+    let crossover: GemmCrossover = super::gemm_select::gemm_crossover_for(&problem, device_id);
+    let selection: GemmSelection =
+        select_gemm_path(flops, vendor_admitted, GemmPreference::Auto, &crossover);
+    match selection.path {
+        GemmPath::Vendor => {
+            if let Some(product) = vendor_attempt_plain(lhs, rhs) {
+                return Ok(product);
+            }
+            launch_plain_native(lhs, rhs)
+        }
+        GemmPath::Native => launch_plain_native(lhs, rhs),
+    }
+}
+
+/// Benchmarks both plain paths once for an unmeasured bucket and serves the
+/// winner's own output buffer: native first (its errors propagate, matching
+/// the static fallback), then vendor (refusal or failure counts as a native
+/// win, matching the static fallback's `.ok().flatten()`). Records the
+/// refined crossover and marks the bucket measured, so the benchmark runs
+/// once per bucket per process.
+///
+/// # Errors
+///
+/// Propagates a native-launch failure or a timing failure. The caller falls
+/// back to the crossover consult on any error, which serves native while
+/// the crossover is unknown.
+#[cfg(all(feature = "cuda", feature = "cuda-vendor", feature = "autotune"))]
+fn measure_plain_once(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    problem: &str,
+    device_id: usize,
+    bucket: crate::tuning::WorkloadBucket,
+    flops: super::gemm_select::GemmFlops,
+) -> Result<CudaStorage> {
+    use super::gemm_select::{
+        NATIVE_PROBE_CANDIDATE, VENDOR_PROBE_CANDIDATE, note_gemm_measurement,
+        refine_gemm_crossover, time_gemm_path, vendor_won_measurement,
+    };
+    let stream = lhs.buffer.device.default_stream();
+    let mut native_product: Option<CudaStorage> = None;
+    let native_measurement = time_gemm_path(&stream, NATIVE_PROBE_CANDIDATE, || {
+        native_product = Some(launch_plain_native(lhs, rhs)?);
+        Ok(())
+    })?;
+    let mut vendor_product: Option<CudaStorage> = None;
+    let mut vendor_failed = false;
+    let vendor_measurement =
+        time_gemm_path(
+            &stream,
+            VENDOR_PROBE_CANDIDATE,
+            || match super::cublaslt::try_launch_matmul(lhs, rhs, None, None) {
+                Ok(product) => {
+                    vendor_product = product;
+                    Ok(())
+                }
+                Err(_) => {
+                    vendor_failed = true;
+                    Ok(())
+                }
+            },
+        )?;
+    let vendor_won = !vendor_failed
+        && vendor_product.is_some()
+        && vendor_won_measurement(&vendor_measurement, &native_measurement)?;
+    let crossover = refine_gemm_crossover(
+        &super::gemm_select::gemm_crossover_for(problem, device_id),
+        flops,
+        vendor_won,
+    );
+    note_gemm_measurement(problem, device_id, bucket, crossover);
+    if vendor_won {
+        // The flag above established `vendor_product` is `Some`.
+        Ok(vendor_product.expect("vendor won the benchmark, so its output exists"))
+    } else {
+        // The `?` on the native timing established at least one successful
+        // native launch wrote this buffer.
+        Ok(native_product.expect("native timing succeeded, so its output exists"))
+    }
+}
+
+/// The native plain kernel launch: entry-point selection plus one
+/// `kernels/matmul.cu` launch. Extracted so the orchestrators above choose
+/// the path while this function stays the single owner of the kernel call.
+#[cfg(feature = "cuda")]
+fn launch_plain_native(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
+    let (lhs_buf, rhs_buf) = (&*lhs.buffer, &*rhs.buffer);
     // Selects the entry point and refuses every dtype without one, before
     // any buffer is reinterpreted.
     let entry_point = matmul_entry_point(lhs_buf.dtype)?;
@@ -554,8 +759,12 @@ pub(crate) fn try_launch_batched_native(
 /// identical product, so falling through can only change which
 /// implementation runs, never the values - which is what makes the vendor
 /// path advisory. Without `cuda-vendor` the vendor module does not exist
-/// and the `None` binding takes its place, keeping the native-first order
-/// intact.
+/// and the request goes straight to the native plan.
+///
+/// Since issue #85 item 10 the order above is a selection (see
+/// [`try_launch_batched_matmul_with_preference`]): `Auto` consults the
+/// learned crossover under `cuda-vendor` + `autotune` and keeps this
+/// vendor-first order as a zero-threshold static fallback everywhere else.
 ///
 /// # Errors
 ///
@@ -566,16 +775,221 @@ pub(crate) fn try_launch_batched_matmul(
     lhs: &CudaStorage,
     rhs: &CudaStorage,
 ) -> Result<Option<CudaStorage>> {
-    #[cfg(feature = "cuda-vendor")]
-    let vendor = super::cublaslt::try_launch_batched_matmul(lhs, rhs)
-        .ok()
-        .flatten();
-    #[cfg(not(feature = "cuda-vendor"))]
-    let vendor: Option<CudaStorage> = None;
-    if let Some(product) = vendor {
-        return Ok(Some(product));
+    try_launch_batched_matmul_with_preference(lhs, rhs, GemmPreference::Auto)
+}
+
+/// [`try_launch_batched_matmul`] with an explicit [`GemmPreference`].
+/// Production dispatch passes [`GemmPreference::Auto`]; the forced variants
+/// let hardware tests pin each path independently.
+///
+/// # Errors
+///
+/// Only from the native launch (see [`try_launch_batched_native`]): a plan
+/// refusal is `Ok(None)`, not an error.
+#[cfg(feature = "cuda")]
+pub(crate) fn try_launch_batched_matmul_with_preference(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    preference: GemmPreference,
+) -> Result<Option<CudaStorage>> {
+    match preference {
+        GemmPreference::ForceNative => try_launch_batched_native(lhs, rhs),
+        GemmPreference::ForceVendor => {
+            #[cfg(feature = "cuda-vendor")]
+            if let Ok(Some(product)) = super::cublaslt::try_launch_batched_matmul(lhs, rhs) {
+                return Ok(Some(product));
+            }
+            // Refusal or failure falls through to native: forcing selects
+            // the attempt order, not a hard requirement.
+            try_launch_batched_native(lhs, rhs)
+        }
+        GemmPreference::Auto => {
+            #[cfg(all(feature = "cuda-vendor", feature = "autotune"))]
+            return autotuned_batched_matmul(lhs, rhs);
+            #[cfg(not(all(feature = "cuda-vendor", feature = "autotune")))]
+            {
+                // The static fallback: today's vendor-first order as a zero
+                // threshold selection, exactly like the plain path.
+                match static_batched_selection(lhs, rhs).path {
+                    GemmPath::Vendor => {
+                        #[cfg(feature = "cuda-vendor")]
+                        if let Ok(Some(product)) =
+                            super::cublaslt::try_launch_batched_matmul(lhs, rhs)
+                        {
+                            return Ok(Some(product));
+                        }
+                        try_launch_batched_native(lhs, rhs)
+                    }
+                    GemmPath::Native => try_launch_batched_native(lhs, rhs),
+                }
+            }
+        }
     }
-    try_launch_batched_native(lhs, rhs)
+}
+
+/// The trailing GEMM geometry both batched paths share, or `None` when an
+/// operand has rank below 2. `(batch, m, k, n)`: `m`/`k` from `lhs`'s last
+/// two axes, `n` from `rhs`'s last axis, and `batch` the larger of the two
+/// leading-axis products, so a broadcast operand still buckets under the
+/// batch it actually serves. Bucketing is logarithmic, so the heuristic only
+/// has to land in the right bin, not count exactly.
+#[cfg(feature = "cuda")]
+fn batched_gemm_geometry(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+) -> Option<(usize, usize, usize, usize)> {
+    let lhs_dims = lhs.shape.dims();
+    let rhs_dims = rhs.shape.dims();
+    if lhs_dims.len() < 2 || rhs_dims.len() < 2 {
+        return None;
+    }
+    let (m, k) = (lhs_dims[lhs_dims.len() - 2], lhs_dims[lhs_dims.len() - 1]);
+    let n = rhs_dims[rhs_dims.len() - 1];
+    let batch = lhs_dims[..lhs_dims.len() - 2]
+        .iter()
+        .product::<usize>()
+        .max(rhs_dims[..rhs_dims.len() - 2].iter().product::<usize>())
+        .max(1);
+    Some((batch, m, k, n))
+}
+
+/// The static vendor-first selection for a batched request: the strided
+/// batched fit policy as the admission test and a zero threshold. A request
+/// with no trailing-matrix geometry reports `flops = 0`, which still
+/// selects vendor-first under the zero threshold - and the vendor attempt
+/// refuses it purely, exactly as the pre-selection code did.
+#[cfg(all(
+    feature = "cuda",
+    not(all(feature = "cuda-vendor", feature = "autotune"))
+))]
+fn static_batched_selection(lhs: &CudaStorage, rhs: &CudaStorage) -> GemmSelection {
+    #[cfg(feature = "cuda-vendor")]
+    let vendor_admitted = super::cublaslt::batched_gemm_request_fits(
+        &super::OperandMeta::of(lhs),
+        &super::OperandMeta::of(rhs),
+    );
+    #[cfg(not(feature = "cuda-vendor"))]
+    let vendor_admitted = false;
+    let (batch, m, k, n) = batched_gemm_geometry(lhs, rhs).unwrap_or((1, 0, 0, 0));
+    select_gemm_path(
+        gemm_flops(m, n, k, Some(batch)),
+        vendor_admitted,
+        GemmPreference::Auto,
+        &GemmCrossover::measured(0),
+    )
+}
+
+/// The autotuned batched dispatch (issue #85 item 10): the first request for
+/// a workload bucket benchmarks the strided-batched vendor call against the
+/// native grid-z kernel once and serves the winner; later requests consult
+/// the cached crossover. Measurement failures fall through to the crossover
+/// consult, which serves native while unknown.
+///
+/// # Errors
+///
+/// Only from the native launch (see [`try_launch_batched_native`]): a plan
+/// refusal is `Ok(None)`, not an error.
+#[cfg(all(feature = "cuda", feature = "cuda-vendor", feature = "autotune"))]
+fn autotuned_batched_matmul(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<Option<CudaStorage>> {
+    let vendor_admitted = super::cublaslt::batched_gemm_request_fits(
+        &super::OperandMeta::of(lhs),
+        &super::OperandMeta::of(rhs),
+    );
+    let geometry = batched_gemm_geometry(lhs, rhs);
+    // Without trailing-matrix geometry neither path can launch - vendor
+    // refuses purely and native has no plan - so there is nothing to
+    // benchmark; the consult below reports `Ok(None)` for the composed loop.
+    let (batch, m, k, n) = geometry.unwrap_or((1, 0, 0, 0));
+    let flops = gemm_flops(m, n, k, Some(batch));
+    let problem = crate::tuning::gemm_problem_id(lhs.buffer.dtype, true);
+    let bucket = crate::tuning::WorkloadBucket::gemm(m, n, k, Some(batch));
+    let device_id = lhs.buffer.device_id;
+    if vendor_admitted
+        && geometry.is_some()
+        && !super::gemm_select::gemm_bucket_measured(&problem, device_id, &bucket)
+        && let Ok(product) = measure_batched_once(lhs, rhs, &problem, device_id, bucket, flops)
+    {
+        return Ok(product);
+    }
+    let crossover: GemmCrossover = super::gemm_select::gemm_crossover_for(&problem, device_id);
+    let selection: GemmSelection =
+        select_gemm_path(flops, vendor_admitted, GemmPreference::Auto, &crossover);
+    match selection.path {
+        GemmPath::Vendor => {
+            if let Ok(Some(product)) = super::cublaslt::try_launch_batched_matmul(lhs, rhs) {
+                return Ok(Some(product));
+            }
+            try_launch_batched_native(lhs, rhs)
+        }
+        GemmPath::Native => try_launch_batched_native(lhs, rhs),
+    }
+}
+
+/// Benchmarks both batched paths once for an unmeasured bucket and serves
+/// the winner: native first (its errors propagate, matching the static
+/// fallback), then vendor (refusal counts as a native win; a vendor failure
+/// counts as one too, matching the static fallback's collapse of `Err` into
+/// the fall-through). Records the refined crossover and marks the bucket
+/// measured.
+///
+/// A native plan refusal (`Ok(None)`) is not an error: a refused native
+/// side simply loses, and `Ok(None)` from both sides reports `Ok(None)` for
+/// the composed loop, exactly as the static fallback does.
+///
+/// # Errors
+///
+/// Propagates a native-launch failure or a timing failure. The caller falls
+/// back to the crossover consult on any error.
+#[cfg(all(feature = "cuda", feature = "cuda-vendor", feature = "autotune"))]
+fn measure_batched_once(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+    problem: &str,
+    device_id: usize,
+    bucket: crate::tuning::WorkloadBucket,
+    flops: super::gemm_select::GemmFlops,
+) -> Result<Option<CudaStorage>> {
+    use super::gemm_select::{
+        NATIVE_PROBE_CANDIDATE, VENDOR_PROBE_CANDIDATE, note_gemm_measurement,
+        refine_gemm_crossover, time_gemm_path, vendor_won_measurement,
+    };
+    let stream = lhs.buffer.device.default_stream();
+    let mut native_product: Option<CudaStorage> = None;
+    let native_measurement = time_gemm_path(&stream, NATIVE_PROBE_CANDIDATE, || {
+        native_product = try_launch_batched_native(lhs, rhs)?;
+        Ok(())
+    })?;
+    let mut vendor_product: Option<CudaStorage> = None;
+    let mut vendor_failed = false;
+    let vendor_measurement = time_gemm_path(&stream, VENDOR_PROBE_CANDIDATE, || {
+        match super::cublaslt::try_launch_batched_matmul(lhs, rhs) {
+            Ok(product) => {
+                vendor_product = product;
+                Ok(())
+            }
+            Err(_) => {
+                vendor_failed = true;
+                Ok(())
+            }
+        }
+    })?;
+    let vendor_won = !vendor_failed
+        && vendor_product.is_some()
+        && vendor_won_measurement(&vendor_measurement, &native_measurement)?;
+    let crossover = refine_gemm_crossover(
+        &super::gemm_select::gemm_crossover_for(problem, device_id),
+        flops,
+        vendor_won,
+    );
+    note_gemm_measurement(problem, device_id, bucket, crossover);
+    if vendor_won {
+        // The flag above established `vendor_product` is `Some(Some(..))`.
+        Ok(Some(
+            vendor_product.expect("vendor won the benchmark, so its output exists"),
+        ))
+    } else {
+        Ok(native_product)
+    }
 }
 
 /// Pure entry-point selection: runs wherever the `cuda` feature is on,

@@ -9,6 +9,8 @@ pub(crate) mod conv;
 pub(crate) mod cublaslt;
 pub(crate) mod dropout;
 pub(crate) mod elementwise;
+#[cfg(feature = "cuda")]
+pub(crate) mod gemm_select;
 #[cfg(test)]
 mod ir_conformance_tests;
 pub(crate) mod kernels;

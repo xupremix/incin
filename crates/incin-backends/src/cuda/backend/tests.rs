@@ -682,6 +682,158 @@ fn cublaslt_epilogue_requests_on_out_of_policy_operands_fail_closed() {
     );
 }
 
+// Issue #85 item 10: vendor-vs-native selection by measurement, driven
+// through the forced preferences. Forcing pins the attempt order so each
+// test proves one path serves the request on its own - the orchestrator
+// hides which path served a production `Auto` request. The fixtures use
+// small integers, which are exact in fp32 and in any tensor-core rounding,
+// so the comparison is tight rather than architecture-dependent.
+#[cfg(feature = "cuda-vendor")]
+fn assert_max_abs_diff(got: &[f32], want: &[f32], tol: f32, what: &str) {
+    assert_eq!(got.len(), want.len(), "{what}: length mismatch");
+    let max_diff = got
+        .iter()
+        .zip(want)
+        .map(|(g, w)| (g - w).abs())
+        .fold(0.0f32, f32::max);
+    assert!(
+        max_diff <= tol,
+        "{what}: max abs diff {max_diff} exceeds tol {tol}"
+    );
+}
+
+#[cfg(feature = "cuda-vendor")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn gemm_selection_forced_paths_agree_on_plain_product() {
+    use crate::cuda::ops::gemm_select::GemmPreference;
+    use crate::cuda::ops::matmul::launch_matmul_with_preference;
+
+    let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+    let vendor = launch_matmul_with_preference(&lhs, &rhs, GemmPreference::ForceVendor)
+        .expect("the forced vendor path must serve a canonical f32 request");
+    let native = launch_matmul_with_preference(&lhs, &rhs, GemmPreference::ForceNative)
+        .expect("the forced native path must serve a canonical f32 request");
+    assert_eq!(vendor.shape, vec![2, 2]);
+    assert_eq!(native.shape, vec![2, 2]);
+    let want = vec![58.0, 64.0, 139.0, 154.0];
+    assert_max_abs_diff(
+        &download_f32_host(&vendor).unwrap(),
+        &want,
+        1e-4,
+        "forced vendor plain product",
+    );
+    assert_max_abs_diff(
+        &download_f32_host(&native).unwrap(),
+        &download_f32_host(&vendor).unwrap(),
+        1e-4,
+        "forced vendor vs forced native plain product",
+    );
+}
+
+#[cfg(feature = "cuda-vendor")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn gemm_selection_forced_paths_agree_on_batched_product() {
+    use crate::cuda::ops::gemm_select::GemmPreference;
+    use crate::cuda::ops::matmul::try_launch_batched_matmul_with_preference;
+
+    let lhs = cuda_f32(&[2, 2, 3], (1..=12).map(|v| v as f32).collect());
+    let rhs = cuda_f32(&[2, 3, 2], (1..=12).map(|v| v as f32).collect());
+    let vendor = try_launch_batched_matmul_with_preference(&lhs, &rhs, GemmPreference::ForceVendor)
+        .expect("the forced vendor path must not fail")
+        .expect("the vendor policy must admit the contiguous rank-3 f32 pair");
+    let native = try_launch_batched_matmul_with_preference(&lhs, &rhs, GemmPreference::ForceNative)
+        .expect("the forced native path must not fail")
+        .expect("the native plan must admit the contiguous rank-3 pair");
+    assert_eq!(vendor.shape, vec![2, 2, 2]);
+    assert_eq!(native.shape, vec![2, 2, 2]);
+    // B0 = [[1,2,3],[4,5,6]] @ [[1,2],[3,4],[5,6]], B1 shifts both by 6.
+    let want = vec![22.0, 28.0, 49.0, 64.0, 220.0, 244.0, 301.0, 334.0];
+    assert_max_abs_diff(
+        &download_f32_host(&vendor).unwrap(),
+        &want,
+        1e-4,
+        "forced vendor batched product",
+    );
+    assert_max_abs_diff(
+        &download_f32_host(&native).unwrap(),
+        &download_f32_host(&vendor).unwrap(),
+        1e-4,
+        "forced vendor vs forced native batched product",
+    );
+}
+
+#[cfg(feature = "cuda-vendor")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn gemm_selection_benchmark_reports_forced_path_timings() {
+    use crate::cuda::ops::gemm_select::GemmPreference;
+    use crate::cuda::ops::matmul::launch_matmul_with_preference;
+    use std::time::Instant;
+
+    // 256^3 integer-valued f32: large enough to separate the paths, exact
+    // in every rounding the two implementations may use.
+    const M: usize = 256;
+    let lhs_vals: Vec<f32> = (0..M * M).map(|i| ((i * 37) % 11) as f32 - 5.0).collect();
+    let rhs_vals: Vec<f32> = (0..M * M).map(|i| ((i * 53) % 11) as f32 - 5.0).collect();
+    let lhs = cuda_f32(&[M, M], lhs_vals);
+    let rhs = cuda_f32(&[M, M], rhs_vals);
+
+    // Warm up once per path (module load, workspace sizing) so the timed
+    // reps measure steady state.
+    for preference in [GemmPreference::ForceVendor, GemmPreference::ForceNative] {
+        launch_matmul_with_preference(&lhs, &rhs, preference)
+            .expect("warmup must serve the benchmark shape");
+    }
+    let mut best = [(GemmPreference::ForceVendor, f32::INFINITY); 2];
+    let mut outputs = [Vec::new(), Vec::new()];
+    for (slot, preference) in [GemmPreference::ForceVendor, GemmPreference::ForceNative]
+        .into_iter()
+        .enumerate()
+    {
+        for _ in 0..3 {
+            let start = Instant::now();
+            let out = launch_matmul_with_preference(&lhs, &rhs, preference)
+                .expect("the benchmark shape must stay servable");
+            // The download synchronizes the device, so the elapsed time
+            // covers the launch, not just the enqueue.
+            outputs[slot] = download_f32_host(&out).unwrap();
+            best[slot].1 = best[slot].1.min(start.elapsed().as_secs_f32() * 1000.0);
+        }
+    }
+    assert_max_abs_diff(&outputs[0], &outputs[1], 1e-3, "benchmark vendor vs native");
+    eprintln!(
+        "gemm_selection_benchmark [{M}x{M}x{M} f32]: vendor {:.2} ms, native {:.2} ms",
+        best[0].1, best[1].1
+    );
+}
+
+#[cfg(all(feature = "cuda-vendor", feature = "autotune"))]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn gemm_selection_autotune_serves_the_measured_path() {
+    use crate::cuda::ops::matmul::launch_matmul;
+
+    // The production `Auto` entry: the first call benchmarks the bucket and
+    // serves the winner, the second consults the cached crossover. Both
+    // must compute the same canonical product - selection changes which
+    // implementation runs, never the values.
+    let lhs = cuda_f32(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let rhs = cuda_f32(&[3, 2], vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+    let want = vec![58.0, 64.0, 139.0, 154.0];
+    for _ in 0..2 {
+        let out = launch_matmul(&lhs, &rhs).expect("autotuned matmul must serve");
+        assert_max_abs_diff(
+            &download_f32_host(&out).unwrap(),
+            &want,
+            1e-4,
+            "autotuned product",
+        );
+    }
+}
+
 #[test]
 #[ignore = "requires CUDA hardware"]
 fn narrow_backward_zero_pads_grad_to_original_shape() {
