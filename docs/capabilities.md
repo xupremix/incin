@@ -73,7 +73,7 @@ run time.
 | `cumsum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
 | `dequantize` | `q8_0` | `q8_0` | — | — |
 | `detach` | — | — | — | — |
-| `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | — | — |
+| `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `div_scalar` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `dot` | `f32` | `f32` | `f32` | — |
@@ -159,8 +159,8 @@ run time.
 | `rsqrt` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `sample` | — | — | — | — |
 | `scaled_dot_product_attention` | `f32` | `f32` | `f32` | `f32` |
-| `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | — | `u8`, `u32`, `i64`, `f32` |
-| `scatter_add` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | — | — |
+| `scatter` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` |
+| `scatter_add` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | — |
 | `sgd_step` | — | — | — | — |
 | `sigmoid` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `sign` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -646,6 +646,8 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `where_cond` | `f32`, `bool` | `contiguous` | 0–6 | yes | native |
 | `gather` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `index_select` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
+| `scatter` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
+| `scatter_add` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `softmax` | `f32` | `contiguous` | 1+ | yes | composed |
 | `rms_norm` | `f32` | `contiguous` | 1+ | yes | composed |
 | `broadcast` | `f32` | `contiguous` | 0–6 | no | native |
@@ -765,6 +767,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `stack` | `f32` | `contiguous` | any | yes | native |
 | `tril` | `f32` | `contiguous` | 1–2 | yes | native |
 | `triu` | `f32` | `contiguous` | 1–2 | yes | native |
+| `diag` | `f32` | `contiguous` | 1–2 | yes | native |
 | `pad` | `f32` | `contiguous` | any | yes | native |
 | `repeat` | `f32` | `contiguous` | any | yes | native |
 | `repeat_interleave` | `f32` | `contiguous` | 1+ | yes | native |

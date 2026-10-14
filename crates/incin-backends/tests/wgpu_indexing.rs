@@ -17,9 +17,14 @@ use incin_backends::wgpu::WgpuBackendImpl;
 use incin_core::backend_authoring::{
     AutogradBackend, HostInterop, HostReadback, StorageBackend, TapeStorage, op,
 };
-use incin_core::exec::catalog::{AxisAttributes, NoAttributes, ScalarAttributes};
-use incin_core::exec::{ExecutionContext, TensorHandle};
+use incin_core::error::BackendError;
+use incin_core::exec::catalog::{
+    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes, ScalarAttributes,
+    ScatterAttributes,
+};
+use incin_core::exec::{CanonicalError, ExecutionContext, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
+use incin_core::shapes::error::OperationKind;
 use incin_core::typenum::U0;
 
 type TestBackend = WgpuBackendImpl<WgpuN<U0>>;
@@ -130,6 +135,34 @@ fn sum_loss(out: &TestStorage) -> TestStorage {
     let handle = TensorHandle::from_storage::<TestBackend, f32, _>(out);
     incin_core::exec::dispatch::execute::<op::SumAll, _>(&ctx, NoAttributes, &[handle])
         .expect("sum_all must run to seed the backward")
+}
+
+/// Run a ternary index request in catalog order (input, index, source) and
+/// return the output storage plus how many tape entries the call pushed.
+///
+/// `run_mixed` cannot serve these: it groups `f32` operands before integer
+/// ones, which would order the handles (input, source, index) against the
+/// catalog's (input, index, source).
+fn run_ternary<O, Attr>(
+    input: &TestStorage,
+    index: &IntStorage,
+    source: &TestStorage,
+    attrs: Attr,
+) -> Result<(TestStorage, usize), CanonicalError>
+where
+    O: incin_core::exec::CanonicalOperation<Attributes = Attr>,
+    TestBackend: incin_core::backend_authoring::Execute<O, Output = TestStorage>,
+    Attr: Clone,
+{
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [
+        TensorHandle::from_storage::<TestBackend, f32, _>(input),
+        TensorHandle::from_storage::<TestBackend, i64, _>(index),
+        TensorHandle::from_storage::<TestBackend, f32, _>(source),
+    ];
+    let before = incin_backends::wgpu::tape_depth();
+    let out = incin_core::exec::dispatch::execute::<O, _>(&context, attrs, &handles)?;
+    Ok((out, incin_backends::wgpu::tape_depth() - before))
 }
 
 // ── embedding ───────────────────────────────────────────────────────────────
@@ -243,6 +276,252 @@ fn index_select_replaces_an_axis_and_accumulates_dups() {
         read_f32(gin),
         vec![1.0, 0.0, 2.0, 0.0],
         "duplicate selections accumulate"
+    );
+}
+
+// ── diag ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn diag_extracts_the_offset_diagonal_and_scatters_grad_back() {
+    require_wgpu();
+    // input [3,3] row-major 1..=9; offset 1 names [2, 6].
+    let input = upload_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], &[3, 3]);
+    let (out, recorded) =
+        run_mixed::<op::Diag, _>(&[&input], &[], &[], DiagonalAttributes { offset: 1 })
+            .expect("diag must execute");
+
+    assert_close(&read_f32(&out), &[2.0, 6.0], 0.0, "diag offset-1 forward");
+    assert_eq!(recorded, 1, "diag pushes ONE TapeEntry (input only)");
+
+    let loss = sum_loss(&out);
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("diag backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    // Cotangent 1 lands on (0,1) and (1,2) only — CPU's own fixture.
+    assert_eq!(
+        read_f32(gin),
+        vec![0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+        "extract backward scatters onto the named diagonal"
+    );
+}
+
+#[test]
+fn diag_builds_the_offset_matrix_and_reads_its_grad_back() {
+    require_wgpu();
+    // vector [1, 2] with offset -1: entry i lands at (i + 1, i).
+    let input = upload_f32(&[1.0, 2.0], &[2]);
+    let (out, recorded) =
+        run_mixed::<op::Diag, _>(&[&input], &[], &[], DiagonalAttributes { offset: -1 })
+            .expect("diag must execute");
+
+    assert_eq!(
+        read_f32(&out),
+        vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 2.0, 0.0],
+        "construct forward writes the sub-diagonal of a 3x3"
+    );
+    assert_eq!(recorded, 1);
+
+    let loss = sum_loss(&out);
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("diag backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0, 1.0],
+        "construct backward reads the cotangent's own diagonal"
+    );
+}
+
+// ── scatter ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn scatter_last_write_wins_and_splits_the_cotangent() {
+    require_wgpu();
+    // input [10, 20, 30, 40]; index [1, 2, 1], source [7, 8, 9] along dim 0:
+    // slot 1 takes 7 then 9 (last wins), slot 2 takes 8.
+    let input = upload_f32(&[10.0, 20.0, 30.0, 40.0], &[4]);
+    let index = upload_i64(&[1, 2, 1], &[3]);
+    let source = upload_f32(&[7.0, 8.0, 9.0], &[3]);
+    let (out, recorded) = run_ternary::<op::Scatter, _>(
+        &input,
+        &index,
+        &source,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+    )
+    .expect("scatter must execute");
+
+    assert_eq!(read_f32(&out), vec![10.0, 9.0, 8.0, 40.0]);
+    assert_eq!(
+        recorded, 1,
+        "scatter pushes ONE TapeEntry over both value operands"
+    );
+
+    let loss = sum_loss(&out);
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("scatter backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0, 0.0, 0.0, 1.0],
+        "overwritten positions keep no input cotangent"
+    );
+    let gsrc = grads
+        .get(TapeStorage::id(&source))
+        .expect("source must receive a gradient");
+    assert_eq!(
+        read_f32(gsrc),
+        vec![0.0, 1.0, 1.0],
+        "only the last write per destination earns the cotangent"
+    );
+    assert!(
+        grads.get(TapeStorage::id(&index)).is_none(),
+        "the integer index operand must stay off the tape, as on CPU"
+    );
+}
+
+#[test]
+fn scatter_refuses_an_out_of_range_index_like_cuda() {
+    require_wgpu();
+    // Slot 4 does not exist in a length-4 axis: CUDA's `launch_scatter`
+    // raises `InvalidInput` here, and this backend mirrors that rather
+    // than CPU/Metal's silent drop.
+    let input = upload_f32(&[10.0, 20.0, 30.0, 40.0], &[4]);
+    let index = upload_i64(&[4], &[1]);
+    let source = upload_f32(&[7.0], &[1]);
+    let error = match run_ternary::<op::Scatter, _>(
+        &input,
+        &index,
+        &source,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+    ) {
+        Ok(_) => panic!("an out-of-range scatter index must be refused"),
+        Err(error) => error,
+    };
+    assert!(
+        matches!(
+            error,
+            CanonicalError::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Scatter,
+                ..
+            })
+        ),
+        "the refusal must stay the typed InvalidInput CUDA raises, got {error:?}"
+    );
+    assert!(
+        format!("{error:?}").contains("index out of bounds"),
+        "the refusal must carry CUDA's reason, got {error:?}"
+    );
+}
+
+#[test]
+fn scatter_refuses_reject_duplicates_like_cpu() {
+    require_wgpu();
+    let input = upload_f32(&[10.0, 20.0], &[2]);
+    let index = upload_i64(&[0, 0], &[2]);
+    let source = upload_f32(&[1.0, 2.0], &[2]);
+    let error = match run_ternary::<op::Scatter, _>(
+        &input,
+        &index,
+        &source,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::Reject,
+        },
+    ) {
+        Ok(_) => panic!("Reject is not a last-write-wins rule"),
+        Err(error) => error,
+    };
+    assert!(
+        format!("{error:?}").contains("last-write-wins and cannot reject duplicate indices"),
+        "refusal must carry CPU's wording, got {error:?}"
+    );
+}
+
+// ── scatter_add ─────────────────────────────────────────────────────────────
+
+#[test]
+fn scatter_add_accumulates_in_order_and_drops_out_of_range_targets() {
+    require_wgpu();
+    // CUDA's own fixture: duplicate destinations sum (1 + 2 at slot 0);
+    // target 9 is outside a length-3 axis and drops, so the 100 lands
+    // nowhere — the ordered kernel and CPU agree here.
+    let input = upload_f32(&[0.0, 0.0, 0.0], &[3]);
+    let index = upload_i64(&[0, 0, 2, 9], &[4]);
+    let source = upload_f32(&[1.0, 2.0, 4.0, 100.0], &[4]);
+    let (out, recorded) = run_ternary::<op::ScatterAdd, _>(
+        &input,
+        &index,
+        &source,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::Accumulate,
+        },
+    )
+    .expect("scatter_add must execute");
+
+    assert_eq!(read_f32(&out), vec![3.0, 0.0, 4.0]);
+    assert_eq!(recorded, 1);
+
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("scatter_add backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0, 1.0, 1.0],
+        "addition displaces nothing, so the input cotangent passes through"
+    );
+    let gsrc = grads
+        .get(TapeStorage::id(&source))
+        .expect("source must receive a gradient");
+    assert_eq!(
+        read_f32(gsrc),
+        vec![1.0, 1.0, 1.0, 0.0],
+        "every surviving write takes the cotangent; the dropped one takes zero"
+    );
+    assert!(
+        grads.get(TapeStorage::id(&index)).is_none(),
+        "the integer index operand must stay off the tape, as on CPU"
+    );
+}
+
+#[test]
+fn scatter_add_refuses_last_write_wins_with_the_cpus_wording() {
+    require_wgpu();
+    let input = upload_f32(&[0.0, 0.0], &[2]);
+    let index = upload_i64(&[0, 0], &[2]);
+    let source = upload_f32(&[1.0, 2.0], &[2]);
+    let error = match run_ternary::<op::ScatterAdd, _>(
+        &input,
+        &index,
+        &source,
+        ScatterAttributes {
+            axis: 0,
+            duplicate_indices: DuplicateIndexRule::LastWriteWins,
+        },
+    ) {
+        Ok(_) => panic!("last-write-wins is not a scatter_add rule"),
+        Err(error) => error,
+    };
+    let rendered = format!("{error:?}");
+    assert!(
+        rendered.contains("scatter_add accumulates duplicate indices and implements no other rule")
+            && rendered.contains("use scatter for last-write-wins"),
+        "refusal must carry CPU's wording, got {rendered}"
     );
 }
 

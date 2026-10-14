@@ -1,13 +1,17 @@
-//! WGPU indexing ops: `embedding`/`gather`/`index_select` host-walks and the
-//! `masked_fill`/`where_cond` GPU selection kernel.
+//! WGPU indexing ops: `embedding`/`gather`/`index_select`/`diag`/`scatter`/
+//! `scatter_add` host-walks and the `masked_fill`/`where_cond` GPU selection
+//! kernel.
 //!
-//! The three gather-family operations download their operands, compute on the
+//! The gather-family operations download their operands, compute on the
 //! host exactly as `cpu::ops::{embedding, shape_ops::select}` do, and upload
 //! the `f32` result — the same host-walk pattern `triangular`/`pad`/`repeat`
 //! already use. Their tape recipes are copied from CPU walk-for-walk: ONE
 //! `TapeEntry` per forward, `input_ids = vec![data.id]` only (the integer
 //! index operand is off the tape), and a scatter-add backward that
 //! accumulates repeated selections rather than overwriting them.
+//! `diag` walks `cpu::ops::shape_ops::triangular`'s diagonal forms the same
+//! way; `scatter`/`scatter_add` walk `scatter_storage`/`scatter_add_storage`
+//! with both value operands on the tape.
 //!
 //! `masked_fill`/`where_cond` take the GPU path: a new `select.wgsl` with two
 //! modes, fed by a pre-broadcast mask (raw, no tape — a `bool` mask has
@@ -16,6 +20,7 @@
 
 use super::*;
 use crate::descriptor_bind::{invalid, kernel_error};
+use incin_core::exec::catalog::DuplicateIndexRule;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Host-walk helpers
@@ -86,6 +91,45 @@ fn checked_address(
         .into());
     }
     Ok(address)
+}
+
+/// Out-of-range check for a `scatter` index value, mirroring CUDA's
+/// `launch_scatter` error flag: any value outside `[0, bound)` is a typed
+/// [`BackendError::InvalidInput`] refusal, not a silent drop.
+///
+/// CPU's `scatter_storage` and Metal's `scatter` both drop these writes
+/// quietly (`flat_dest < out_data.len()`), but this slice follows CUDA:
+/// a scatter that names a position outside the operand is a caller bug,
+/// and clamping or dropping would hand back an answer that silently
+/// omitted a contribution. (`scatter_add` is the deliberate exception —
+/// CUDA's ordered kernel and CPU both drop there, so this backend drops
+/// there too. See [`WgpuBackendImpl::scatter_add`].)
+fn scatter_address(raw: i64, bound: usize, operation: OperationKind) -> Result<usize> {
+    match usize::try_from(raw) {
+        Ok(address) if address < bound => Ok(address),
+        _ => Err(Error::Backend(BackendError::InvalidInput {
+            operation,
+            reason: "index out of bounds",
+        })),
+    }
+}
+
+/// [`kernel_error`], but an already-typed [`Error::Backend`] is returned
+/// as-is — the WGPU twin of CUDA's `index_kernel_error` (`cuda/executor.rs`).
+///
+/// The scatter pair raises [`BackendError::InvalidInput`] when an index
+/// value falls outside the axis it names: a refusal of the operand, not a
+/// device failure. Handing that to [`kernel_error`] would flatten it into
+/// `Execution` with the `InvalidInput` text buried in the message, so a
+/// caller matching on the typed variant would see "the backend executed
+/// something and it failed" for an input rejected before any element was
+/// read. Stays local to the new index executors below rather than changing
+/// the shared helper.
+fn index_kernel_error(operation: OperationKind, error: Error) -> BackendError {
+    match error {
+        Error::Backend(inner) => inner,
+        other => kernel_error("Wgpu", operation, other),
+    }
 }
 
 /// Row-major contiguous strides for a host walk (same as `shape_ops`).
@@ -361,6 +405,384 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
+    /// `diag(input, diagonal)`: CPU's `diag_storage` walk for walk.
+    ///
+    /// Rank 1 builds the diagonal matrix (`[n]` -> `[n + |k|, n + |k|]`,
+    /// entry `i` at `(row, col)` with the same `k >= 0` row/col split CPU
+    /// uses); rank 2 extracts the `k`-th diagonal as a vector, reading the
+    /// first trailing matrix the way CPU's `diagonal_vector` does. Ranks
+    /// outside 1–2 are refused like `tril`/`triu` are — the descriptor's
+    /// `DiagonalAttributes` already rejects them before dispatch, so this
+    /// is defense-in-depth with the same `ShapeMismatch` shape. Backward
+    /// mirrors CPU in both directions: construct's adjoint is the extract
+    /// with the same offset, extract's adjoint scatters the cotangent back
+    /// onto the diagonal positions. ONE `TapeEntry`, `input_ids = vec![id]`.
+    pub(crate) fn diag(input: &WgpuStorage, diagonal: i64) -> Result<WgpuStorage> {
+        require_f32(input, "diag_input")?;
+        let rank = input.shape.len();
+        if rank != 1 && rank != 2 {
+            return Err(Error::ShapeMismatch {
+                op: "diag",
+                expected: vec![1, 2],
+                got: vec![rank],
+                msg: "diag accepts rank 1 or 2".into(),
+            });
+        }
+        let data = input.buffer.to_vec::<f32>()?;
+        if rank == 1 {
+            let n = input.shape[0];
+            let k_abs = diagonal.unsigned_abs() as usize;
+            let out_dim =
+                n.checked_add(k_abs)
+                    .ok_or(ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::Diag,
+                        expression: "diagonal output dimension",
+                    })?;
+            let out_total =
+                out_dim
+                    .checked_mul(out_dim)
+                    .ok_or(ShapeError::ArithmeticOverflow {
+                        operation: OperationKind::Diag,
+                        expression: "diagonal output element count",
+                    })?;
+            let mut out_vals = vec![0.0f32; out_total];
+            for (i, &value) in data.iter().enumerate() {
+                let row = if diagonal >= 0 { i } else { i + k_abs };
+                let col = if diagonal >= 0 { i + k_abs } else { i };
+                if row < out_dim && col < out_dim {
+                    out_vals[row * out_dim + col] = value;
+                }
+            }
+            let out = WgpuStorage::new(WgpuBuffer::from_slice(&out_vals), vec![out_dim, out_dim]);
+
+            let (t_id, out_id) = (input.id, out.id);
+            crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+                output_id: out_id,
+                input_ids: vec![t_id],
+                backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                    let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                    let mut vals = Vec::with_capacity(n);
+                    for i in 0..n {
+                        let row = if diagonal >= 0 { i } else { i + k_abs };
+                        let col = if diagonal >= 0 { i + k_abs } else { i };
+                        vals.push(if row < out_dim && col < out_dim {
+                            grad_data[row * out_dim + col]
+                        } else {
+                            0.0
+                        });
+                    }
+                    Ok(vec![WgpuStorage::new(
+                        WgpuBuffer::from_slice(&vals),
+                        vec![n],
+                    )])
+                }),
+            });
+            Ok(out)
+        } else {
+            let (rows, cols) = (input.shape[0], input.shape[1]);
+            let mut values: Vec<f32> = Vec::new();
+            let mut positions: Vec<(usize, usize)> = Vec::new();
+            for row in 0..rows {
+                let Some(col) = (row as i64).checked_add(diagonal).filter(|&col| col >= 0)
+                else {
+                    continue;
+                };
+                let col = col as usize;
+                if col < cols {
+                    values.push(data[row * cols + col]);
+                    positions.push((row, col));
+                }
+            }
+            let len = values.len();
+            let out = WgpuStorage::new(WgpuBuffer::from_slice(&values), vec![len]);
+
+            let original_shape = input.shape.to_vec();
+            let (t_id, out_id) = (input.id, out.id);
+            crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+                output_id: out_id,
+                input_ids: vec![t_id],
+                backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                    let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                    let total = original_shape.iter().product::<usize>();
+                    let mut grads = vec![0.0f32; total];
+                    let strides = host_strides(&original_shape);
+                    for (i, &(row, col)) in positions.iter().enumerate() {
+                        let flat: usize = [row, col]
+                            .iter()
+                            .zip(strides.iter())
+                            .map(|(&coordinate, &stride)| coordinate * stride)
+                            .sum();
+                        grads[flat] += grad_data[i];
+                    }
+                    Ok(vec![WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grads),
+                        original_shape.clone(),
+                    )])
+                }),
+            });
+            Ok(out)
+        }
+    }
+
+    /// `scatter(input, dim, index, source)`: CPU's `scatter_storage` walk
+    /// for walk — last-write-wins in row-major index order, output shaped
+    /// like the input.
+    ///
+    /// Backward mirrors CPU's exactly: the input keeps its cotangent
+    /// everywhere EXCEPT the positions a write overwrote, and the source
+    /// receives the output cotangent only through the LAST write to each
+    /// destination (earlier writes to the same position contributed
+    /// nothing). ONE `TapeEntry` with `input_ids = vec![t.id, src.id]`;
+    /// the integer index operand is off the tape.
+    ///
+    /// Two deliberate divergences from the CPU/Metal host walks, both
+    /// mirroring CUDA's `launch_scatter` instead: an index value outside
+    /// `[0, input.shape[dim])` is a typed `InvalidInput` refusal (see
+    /// [`scatter_address`]), and rank/shape mismatches among the three
+    /// operands are `InvalidInput` too (CUDA's launch prologue wording),
+    /// rather than panics or silent misreads.
+    pub(crate) fn scatter(
+        input: &WgpuStorage,
+        dim: usize,
+        index: &WgpuStorage,
+        source: &WgpuStorage,
+    ) -> Result<WgpuStorage> {
+        require_f32(input, "scatter_input")?;
+        require_f32(source, "scatter_source")?;
+        let rank = input.shape.len();
+        if dim >= rank {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Scatter,
+                reason: "scatter axis is outside the operand's rank",
+            }));
+        }
+        if index.shape.len() != rank || source.shape.len() != rank {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Scatter,
+                reason: "scatter index and source ranks must match the input rank",
+            }));
+        }
+        if index.shape != source.shape {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Scatter,
+                reason: "scatter expects the index and source operands to share a shape",
+            }));
+        }
+        let bound = input.shape[dim];
+        let data = input.buffer.to_vec::<f32>()?;
+        let src_data = source.buffer.to_vec::<f32>()?;
+        let idx_vals = index_values(index)?;
+        let in_strides = host_strides(&input.shape);
+        let idx_strides = host_strides(&index.shape);
+
+        let mut out_data = data;
+        // Every write as `(flat_dest, src_coord)` in row-major order, so
+        // the backward can recover the surviving (last) write per
+        // destination exactly as CPU's `written_flat_dest` does.
+        let mut written: Vec<(usize, Vec<usize>)> = Vec::with_capacity(idx_vals.len());
+        let mut idx = vec![0usize; rank];
+        let total = index.shape.iter().product::<usize>();
+        for _ in 0..total {
+            let flat: usize = idx
+                .iter()
+                .zip(idx_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            let target = scatter_address(idx_vals[flat], bound, OperationKind::Scatter)?;
+            let mut dest_idx = idx.clone();
+            dest_idx[dim] = target;
+            let flat_dest: usize = dest_idx
+                .iter()
+                .zip(in_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            out_data[flat_dest] = src_data[flat];
+            written.push((flat_dest, idx.clone()));
+            if !index.shape.is_empty() {
+                host_increment(&mut idx, &index.shape);
+            }
+        }
+        let out = WgpuStorage::new(WgpuBuffer::from_slice(&out_data), input.shape.to_vec());
+
+        let in_shape = input.shape.to_vec();
+        let src_shape = source.shape.to_vec();
+        let in_total = in_shape.iter().product::<usize>();
+        let src_total = src_shape.iter().product::<usize>();
+        let src_strides = host_strides(&src_shape);
+        let mut last_write_of_dest: alloc::collections::BTreeMap<usize, usize> =
+            alloc::collections::BTreeMap::new();
+        for (position, &(flat_dest, _)) in written.iter().enumerate() {
+            last_write_of_dest.insert(flat_dest, position);
+        }
+        let surviving: Vec<(usize, Vec<usize>)> = last_write_of_dest
+            .into_iter()
+            .filter_map(|(flat_dest, position)| {
+                written
+                    .get(position)
+                    .map(|(_, src_idx)| (flat_dest, src_idx.clone()))
+            })
+            .collect();
+        let mut overwritten = vec![false; in_total];
+        for &(flat_dest, _) in &surviving {
+            overwritten[flat_dest] = true;
+        }
+        let (t_id, source_id, out_id) = (input.id, source.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, source_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut grad_t = vec![0.0f32; in_total];
+                for (i, item) in grad_t.iter_mut().enumerate() {
+                    if !overwritten[i] {
+                        *item = grad_data[i];
+                    }
+                }
+                let mut grad_source = vec![0.0f32; src_total];
+                for (flat_dest, src_coord) in &surviving {
+                    let flat_src: usize = src_coord
+                        .iter()
+                        .zip(src_strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    grad_source[flat_src] += grad_data[*flat_dest];
+                }
+                Ok(vec![
+                    WgpuStorage::new(WgpuBuffer::from_slice(&grad_t), in_shape.clone()),
+                    WgpuStorage::new(WgpuBuffer::from_slice(&grad_source), src_shape.clone()),
+                ])
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `scatter_add(input, dim, index, source)`: CPU's
+    /// `scatter_add_storage` walk for walk — colliding writes sum in
+    /// row-major index order rather than last-write-wins.
+    ///
+    /// No WGSL kernel and no float atomics are involved, which is what
+    /// makes this slice feasible under #91's no-float-atomics constraint:
+    /// the accumulation is an ordinary sequential `+=` over downloaded
+    /// `f32`, in exactly the row-major order the catalog's determinism
+    /// contract names. A parallel WGSL scatter-add would need
+    /// `atomicAdd` on floats (unavailable) and would still race on
+    /// duplicate indices the way CUDA's atomic kernel did before its
+    /// ordered two-pass replacement; the host walk *is* the ordered
+    /// path, with one rounding per contribution like CPU.
+    ///
+    /// Out-of-range destinations are dropped rather than refused —
+    /// mirroring CUDA's ordered kernel and CPU, not [`scatter_address`]:
+    /// the typed `InvalidInput` refusal belongs to the overwriting
+    /// `scatter`, whose dropped write would silently change which value
+    /// survives. Backward mirrors CPU: the input's cotangent passes
+    /// through untouched (addition displaces nothing) and every recorded
+    /// write takes the output cotangent at its destination. ONE
+    /// `TapeEntry`, index off-tape.
+    pub(crate) fn scatter_add(
+        input: &WgpuStorage,
+        dim: usize,
+        index: &WgpuStorage,
+        source: &WgpuStorage,
+    ) -> Result<WgpuStorage> {
+        require_f32(input, "scatter_add_input")?;
+        require_f32(source, "scatter_add_source")?;
+        let rank = input.shape.len();
+        if dim >= rank {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::ScatterAdd,
+                reason: "scatter_add axis is outside the operand's rank",
+            }));
+        }
+        if index.shape.len() != rank || source.shape.len() != rank {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::ScatterAdd,
+                reason: "scatter_add index and source ranks must match the input rank",
+            }));
+        }
+        if index.shape != source.shape {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::ScatterAdd,
+                reason: "scatter_add expects the index and source operands to share a shape",
+            }));
+        }
+        let bound = input.shape[dim];
+        let data = input.buffer.to_vec::<f32>()?;
+        let src_data = source.buffer.to_vec::<f32>()?;
+        let idx_vals = index_values(index)?;
+        let in_strides = host_strides(&input.shape);
+        let idx_strides = host_strides(&index.shape);
+
+        let mut out_data = data;
+        // Every surviving write, in order — unlike `scatter` there is no
+        // survivor to identify later: every contribution sums, so each
+        // recorded write earned its cotangent.
+        let mut writes: Vec<(usize, Vec<usize>)> = Vec::with_capacity(idx_vals.len());
+        let mut idx = vec![0usize; rank];
+        let total = index.shape.iter().product::<usize>();
+        for _ in 0..total {
+            let flat: usize = idx
+                .iter()
+                .zip(idx_strides.iter())
+                .map(|(&i, &s)| i * s)
+                .sum();
+            let raw = idx_vals[flat];
+            // Out-of-range destinations are dropped rather than refused:
+            // CUDA's ordered kernel and CPU both drop here (clamping would
+            // silently add a contribution to a row the caller never named).
+            let target = match usize::try_from(raw) {
+                Ok(address) if address < bound => Some(address),
+                _ => None,
+            };
+            if let Some(target) = target {
+                let mut dest_idx = idx.clone();
+                dest_idx[dim] = target;
+                let flat_dest: usize = dest_idx
+                    .iter()
+                    .zip(in_strides.iter())
+                    .map(|(&i, &s)| i * s)
+                    .sum();
+                out_data[flat_dest] += src_data[flat];
+                writes.push((flat_dest, idx.clone()));
+            }
+            if !index.shape.is_empty() {
+                host_increment(&mut idx, &index.shape);
+            }
+        }
+        let out = WgpuStorage::new(WgpuBuffer::from_slice(&out_data), input.shape.to_vec());
+
+        let in_shape = input.shape.to_vec();
+        let src_shape = source.shape.to_vec();
+        let in_total = in_shape.iter().product::<usize>();
+        let src_total = src_shape.iter().product::<usize>();
+        let src_strides = host_strides(&src_shape);
+        let (t_id, source_id, out_id) = (input.id, source.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, source_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut grad_t = vec![0.0f32; in_total];
+                for (i, item) in grad_t.iter_mut().enumerate() {
+                    *item = grad_data[i];
+                }
+                let mut grad_source = vec![0.0f32; src_total];
+                for (flat_dest, src_coord) in &writes {
+                    let flat_src: usize = src_coord
+                        .iter()
+                        .zip(src_strides.iter())
+                        .map(|(&i, &s)| i * s)
+                        .sum();
+                    grad_source[flat_src] += grad_data[*flat_dest];
+                }
+                Ok(vec![
+                    WgpuStorage::new(WgpuBuffer::from_slice(&grad_t), in_shape.clone()),
+                    WgpuStorage::new(WgpuBuffer::from_slice(&grad_source), src_shape.clone()),
+                ])
+            }),
+        });
+        Ok(out)
+    }
+
     /// `masked_fill(input, mask, value)` through `select.wgsl` mode 1.
     ///
     /// The mask is pre-broadcast to the input's geometry with the *raw*
@@ -617,6 +1039,91 @@ impl<D: Device> Execute<op::IndexSelect> for WgpuBackendImpl<D> {
         let axis = request.operation.descriptor().attributes().axis;
         WgpuBackendImpl::<D>::index_select(input, axis, index)
             .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Diag> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Diag, Self>,
+    ) -> core::result::Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Diag;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "diag expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let diagonal = request.operation.descriptor().attributes().offset;
+        WgpuBackendImpl::<D>::diag(input, diagonal)
+            .map_err(|e| index_kernel_error(operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Scatter> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Scatter, Self>,
+    ) -> core::result::Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Scatter;
+        let [input, index, source] = request.inputs else {
+            return Err(invalid(operation, "scatter expects 3 inputs"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let index = index
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "index is not WGPU storage"))?;
+        let source = source
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "source is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        if attributes.duplicate_indices == DuplicateIndexRule::Reject {
+            return Err(invalid(
+                operation,
+                "this backend applies last-write-wins and cannot reject duplicate indices",
+            ));
+        }
+        WgpuBackendImpl::<D>::scatter(input, attributes.axis, index, source)
+            .map_err(|e| index_kernel_error(operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::ScatterAdd> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ScatterAdd, Self>,
+    ) -> core::result::Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::ScatterAdd;
+        let [input, index, source] = request.inputs else {
+            return Err(invalid(operation, "scatter_add expects 3 inputs"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let index = index
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "index is not WGPU storage"))?;
+        let source = source
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "source is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        if attributes.duplicate_indices != DuplicateIndexRule::Accumulate {
+            return Err(invalid(
+                operation,
+                "scatter_add accumulates duplicate indices and implements no other rule; \
+                 use scatter for last-write-wins",
+            ));
+        }
+        WgpuBackendImpl::<D>::scatter_add(input, attributes.axis, index, source)
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 

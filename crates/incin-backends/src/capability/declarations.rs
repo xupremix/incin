@@ -698,8 +698,11 @@ macro_rules! wgpu_descriptor_operations {
                 // mode-0 launch forward and one mode-1 paste backward;
                 // `concat`/`stack` are one zeroed buffer plus one paste per
                 // operand; `tril`/`triu` mask rank 1–2 storage host-side the
-                // way CPU's `triangular_storage` does.
-                Narrow, SliceExact, ConcatExact, StackExact, Tril, Triu,
+                // way CPU's `triangular_storage` does; `diag` extracts or
+                // builds the offset diagonal host-side the way CPU's
+                // `diag_storage` does (construct's adjoint is the extract,
+                // extract's adjoint scatters onto the diagonal).
+                Narrow, SliceExact, ConcatExact, StackExact, Tril, Triu, Diag,
                 // Batch-C host walks: pad fills the outside window and extracts
                 // it on the backward; repeat tiles by modulo; repeat_interleave
                 // copies contiguous blocks; cumsum is a host scan whose reverse

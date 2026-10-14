@@ -897,6 +897,42 @@ pub static WGPU_CAPABILITIES: &[CapabilityRule] = wgpu_descriptor_operations!(
             descriptor_max_rank(OperationKind::IndexSelect),
             true,
         ),
+        // `scatter`: last-write-wins host walk in `wgpu/backend/indexing.rs`,
+        // mirroring CPU's `scatter_storage` forward (copy the input, then one
+        // in-order write per index position) and its split backward (the input
+        // keeps its cotangent except where overwritten; the source takes the
+        // output cotangent through the last write per destination). ONE
+        // `TapeEntry` over both value operands, index off-tape.
+        // `INDEX_AND_F32_DTYPES` for the same union reason as the two rows
+        // above; no `accelerator_max_rank` cap for the same rank-agnostic
+        // reason. One deliberate divergence from CPU: an index value outside
+        // the named axis is a typed `InvalidInput` refusal, mirroring CUDA's
+        // `launch_scatter` error flag rather than CPU/Metal's silent drop.
+        native_ranked(
+            OperationKind::Scatter,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::Scatter),
+            descriptor_max_rank(OperationKind::Scatter),
+            true,
+        ),
+        // `scatter_add`: the accumulating twin of the row above, mirroring
+        // CPU's `scatter_add_storage` (sequential `+=` in row-major index
+        // order, one rounding per contribution) and its pass-through
+        // backward. The host walk is what makes this row feasible under
+        // #91's no-float-atomics constraint: no WGSL kernel runs, so no
+        // `atomicAdd` on floats is needed, and the sequential accumulation
+        // is the deterministic ordered path CUDA needed a second kernel
+        // for. Out-of-range destinations drop here (CUDA's ordered kernel
+        // and CPU both drop), unlike the refusing `scatter` above.
+        native_ranked(
+            OperationKind::ScatterAdd,
+            INDEX_AND_F32_DTYPES,
+            CONTIGUOUS,
+            descriptor_min_rank(OperationKind::ScatterAdd),
+            descriptor_max_rank(OperationKind::ScatterAdd),
+            true,
+        ),
         // No legacy Normalization row: no WGPU kernel backs the family. The
         // typed `normalization = []` list above still advertises none, and a
         // coarse row here would claim native LayerNorm/BatchNorm support this
