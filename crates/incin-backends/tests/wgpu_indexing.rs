@@ -19,8 +19,8 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
-    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes, OneHotAttributes,
-    ScalarAttributes, ScatterAttributes,
+    AxisAttributes, BincountAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes,
+    OneHotAttributes, ScalarAttributes, ScatterAttributes,
 };
 use incin_core::exec::{CanonicalError, ExecutionContext, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
@@ -355,6 +355,125 @@ fn one_hot_encodes_indices_as_a_bool_mask_without_a_tape_entry() {
     let packed = <TestBackend as HostInterop>::to_bytes::<bool>(&out)
         .expect("packing the u8-indexed mask as bool bytes must succeed");
     assert_eq!(packed, vec![0, 1, 1, 0], "u8 one_hot mask");
+}
+
+// ── bincount ────────────────────────────────────────────────────────────────
+
+fn read_histogram(out: &IntStorage) -> Vec<i64> {
+    <TestBackend as HostReadback>::int_to_vec1::<i64>(out)
+        .expect("reading an i64 histogram back must succeed")
+}
+
+#[test]
+fn bincount_counts_indices_into_a_fixed_histogram_without_a_tape_entry() {
+    require_wgpu();
+    // [0, 2, 0, 1, 2, 2] with 3 bins -> [2, 1, 3], the routing fixture CPU proves.
+    let indices = upload_i64(&[0, 2, 0, 1, 2, 2], &[6]);
+    let (out, recorded) = run_mixed::<op::Bincount, _>(
+        &[],
+        &[&indices],
+        &[],
+        BincountAttributes { bins: 3 },
+    )
+    .expect("bincount is advertised and must execute");
+    assert_eq!(recorded, 0, "bincount is forward-only: no tape entry");
+    assert_eq!(
+        out.metadata().dtype(),
+        DTypeId::I64.descriptor(),
+        "bincount result is i64 storage"
+    );
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<i64>(&out).dims(),
+        &[3],
+        "bincount output is the static [bins] histogram"
+    );
+    assert_eq!(read_histogram(&out), vec![2, 1, 3], "bincount histogram");
+
+    // Geometry does not survive: the same values as [2, 3] count identically.
+    let grid = upload_i64(&[0, 2, 0, 1, 2, 2], &[2, 3]);
+    let (out, _) = run_mixed::<op::Bincount, _>(&[], &[&grid], &[], BincountAttributes { bins: 3 })
+        .expect("bincount over a rank-2 index tensor must execute");
+    assert_eq!(
+        read_histogram(&out),
+        vec![2, 1, 3],
+        "bincount ignores the operand's own shape"
+    );
+
+    // Wider than the data: trailing bins stay zero.
+    let (out, _) = run_mixed::<op::Bincount, _>(
+        &[],
+        &[&indices],
+        &[],
+        BincountAttributes { bins: 5 },
+    )
+    .expect("bincount with spare bins must execute");
+    assert_eq!(
+        read_histogram(&out),
+        vec![2, 1, 3, 0, 0],
+        "empty bins count zero"
+    );
+
+    // The u8 index width rides the same walk (the capability row's union).
+    let narrow = upload_u8(&[1, 0], &[2]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, u8, _>(&narrow)];
+    let out = incin_core::exec::dispatch::execute::<op::Bincount, _>(
+        &context,
+        BincountAttributes { bins: 2 },
+        &handles,
+    )
+    .expect("u8 bincount indices must execute");
+    assert_eq!(read_histogram(&out), vec![1, 1], "u8 bincount histogram");
+}
+
+#[test]
+fn bincount_refuses_out_of_range_indices_and_zero_bins_like_cpu() {
+    require_wgpu();
+    // Slot 5 does not exist in a 3-bin histogram: CPU's `bincount_storage`
+    // raises `InvalidInput` here, and this backend mirrors that rather than
+    // `one_hot`'s silent ONNX skip — a quietly-low count would corrupt every
+    // offset derived from it.
+    let bad = upload_i64(&[5], &[1]);
+    let error = match run_mixed::<op::Bincount, _>(&[], &[&bad], &[], BincountAttributes { bins: 3 })
+    {
+        Ok(_) => panic!("an out-of-range bincount index must be refused"),
+        Err(error) => error,
+    };
+    assert!(
+        matches!(
+            error,
+            CanonicalError::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Bincount,
+                ..
+            })
+        ),
+        "the refusal must stay the typed InvalidInput CPU raises, got {error:?}"
+    );
+    assert!(
+        format!("{error:?}").contains("bincount index is not a whole number inside the bin range"),
+        "the refusal must carry CPU's reason, got {error:?}"
+    );
+
+    // Zero bins names no histogram at all.
+    let indices = upload_i64(&[0], &[1]);
+    let error =
+        match run_mixed::<op::Bincount, _>(&[], &[&indices], &[], BincountAttributes { bins: 0 })
+        {
+            Ok(_) => panic!("a zero-bin bincount must be refused"),
+            Err(error) => error,
+        };
+    assert!(
+        format!("{error:?}").contains("bincount needs at least one bin to count into"),
+        "the refusal must carry CPU's reason, got {error:?}"
+    );
+
+    // A float operand is not an index: `index_values` refuses it by name
+    // (or the descriptor's own per-operand contract does first).
+    let floats = upload_f32(&[0.0], &[1]);
+    match run_mixed::<op::Bincount, _>(&[&floats], &[], &[], BincountAttributes { bins: 1 }) {
+        Ok(_) => panic!("a float bincount operand must be refused"),
+        Err(_) => {}
+    }
 }
 
 // ── diag ────────────────────────────────────────────────────────────────────

@@ -50,7 +50,7 @@ run time.
 | `backward` | — | — | — | — |
 | `batch_norm` | `f32` | `f32` | `f32` | `f32` |
 | `bce_with_logits_loss` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
-| `bincount` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | — | — |
+| `bincount` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | — |
 | `bmm` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `broadcast_as` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `q8_0`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
 | `broadcast_left` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | — |
@@ -757,6 +757,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `group_norm` | `f32` | `contiguous` | 2+ | yes | native |
 | `embedding` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
 | `one_hot` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | native |
+| `bincount` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | native |
 | `maximum` | `f32` | `contiguous` | any | yes | native |
 | `minimum` | `f32` | `contiguous` | any | yes | native |
 | `abs_diff` | `f32` | `contiguous` | any | yes | native |

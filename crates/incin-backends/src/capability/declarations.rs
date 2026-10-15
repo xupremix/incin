@@ -669,7 +669,16 @@ macro_rules! wgpu_descriptor_operations {
             // Forward-only: no tape entry is pushed even though this group
             // hardcodes `training = true` — the same claim CUDA's and
             // Metal's embedding groups make for it (`GradientRule::None`).
-            embedding = [EmbeddingExact, OneHot],
+            //
+            // `Bincount` joins for the same union reason: one integer index
+            // operand in, one i64 histogram out, the bin count an attribute.
+            // The output shape `[bins]` is static (named by the attribute),
+            // which is what separates this slice from `nonzero`'s
+            // data-dependent extent. Host walk through the same
+            // `index_values` accessor, out-of-range indices a typed
+            // `InvalidInput` refusal (CPU's `bincount_storage` errors for the
+            // same reason), forward-only with no tape entry.
+            embedding = [EmbeddingExact, OneHot, Bincount],
             // No fused-attention kernel on WGPU yet (issue #104); empty
             // until one ships.
             fused_attention = [],

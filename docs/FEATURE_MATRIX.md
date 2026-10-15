@@ -34,7 +34,7 @@ hardware workflow runs them.
 | `incin` | `data-hub` | stable | facade | `std` | no | `std`, `incin-data/hub` | none | network | The Hugging Face Hub client at `incin::hub`. Off by default because it brings an async runtime and a second TLS stack into the dependency graph for an API most training code never calls; dataset downloading does not need it. |
 | `incin` | `compiled` | preview | facade | `std`, `cpu` | no | `std`, `cpu`, `incin-core/compiled`, `incin-backends/compiled` | none | none | Preview-only CPU reference evaluator and plan-inspection types under `incin::experimental::compiled`. No stable API, deployment format, or portable artifact ABI is promised. |
 | `incin` | `hardware-tests` | hardware-only | facade | `distributed-nccl` | no | `distributed-nccl` | none | multi-host-cuda | Opt-in only: ignored multi-host CUDA runtime fixtures require actual hardware and are not part of compile-only feature coverage. |
-| `incin-backends` | `std` | stable | backends | none | yes | `incin-core/std`, `anyhow/std`, `rand/std`, `rand/std_rng`, `rand/thread_rng`, `rand_distr/std`, `half/std` | none | none | Enables APIs that require the Rust standard library. |
+| `incin-backends` | `std` | stable | backends | none | yes | `incin-core/std`, `anyhow/std`, `rand/std`, `rand/std_rng`, `rand/thread_rng`, `rand_distr/std`, `half/std`, `serde/std`, `serde_json/std`, `dep:rayon` | none | none | Enables APIs that require the Rust standard library. |
 | `incin-backends` | `cpu` | stable | backends | `std` | yes | `std` | none | none | Enables Incin's built-in pure-Rust CPU backend. Declares `std` for the same reason `cuda` and `wgpu` do: the kernels reach for `Vec` and `Box` through the std prelude and the autograd tape is a `thread_local!`, so `cpu` without `std` was a combination the manifest offered and the crate never compiled under. |
 | `incin-backends` | `compiled` | preview | backends | `std`, `cpu` | no | `std`, `cpu`, `incin-core/compiled` | none | none | Enables execution of compiled graphs through the canonical CPU descriptors. |
 | `incin-backends` | `cpu-blas` | stable | backends | `std`, `cpu` | no | `std`, `cpu`, `dep:matrixmultiply` | none | none | Hands large f32 CPU matmuls to a blocked, register-tiled GEMM. Off by default: the pure-Rust kernels in cpu/ops/matmul.rs stay complete without it, and enabling it changes only floating-point accumulation order. |
@@ -44,7 +44,7 @@ hardware workflow runs them.
 | `incin-backends` | `metal` | preview | backends | `std` | no | `std`, `incin-core/metal` | none | apple-silicon | Enables Incin's native Metal backend for Apple Silicon. |
 | `incin-backends` | `rocm` | preview | backends | `std` | no | `std`, `incin-core/rocm` | none | rocm | Enables Incin's ROCm backend scaffolding for AMD GPUs (issue #6). Detection and storage metadata only: no HIP bindings are vendored, so no device memory is allocated and the capability table is empty. |
 | `incin-backends` | `metal-mps` | preview | backends | `metal` | no | `metal` | none | apple-silicon | Enables MPS and MPSGraph structured primitives for Apple Silicon. |
-| `incin-backends` | `autotune` | preview | backends | `cuda` | no | `cuda` | none | cuda | Benchmarks legal CUDA launch configurations and caches the selected candidate. |
+| `incin-backends` | `autotune` | preview | backends | `cuda` | no | `cuda`, `dep:fs2` | none | cuda | Benchmarks legal CUDA launch configurations and caches the selected candidate. |
 | `incin-backends` | `external-candle` | stable | backends | `std` | no | `std`, `dep:candle-core`, `dep:candle-nn` | none | none | Enables the external Candle backend at `incin_backends::external::candle`. |
 | `incin-backends` | `telemetry` | stable | backends | `std` | no | `std`, `dep:incin-telemetry` | none | none | Connects backend execution and autograd events to `incin-telemetry`. |
 | `incin-backends` | `distributed` | preview | backends | `std` | no | `std`, `incin-core/distributed` | none | none | Shared distributed contracts and topology types. Transport implementations remain opt-in so the normal CPU build does not gain communication machinery. |
@@ -67,7 +67,7 @@ hardware workflow runs them.
 | `incin-macros` | `nightly` | preview | macros | none | no | none | none | nightly | Enables nightly-only macro experiments. Empty on stable by design. |
 | `incin-macros` | `distributed` | preview | macros | none | no | none | none | none | Enables distributed macro tests and integrations. |
 | `incin-diagnostics` | `std` | stable | diagnostics | none | yes | none | none | none | Standard-library support for filesystem-backed diagnostic expansion. |
-| `incin-data` | `download` | stable | data | none | yes | `dep:ureq`, `dep:flate2` | none | network | HTTP download and gzip extraction, used by the bundled dataset fetchers. |
+| `incin-data` | `download` | stable | data | none | yes | `dep:ureq`, `dep:flate2`, `dep:tar` | none | network | HTTP download and gzip extraction, used by the bundled dataset fetchers. |
 | `incin-data` | `hub` | stable | data | none | no | `dep:hf-hub` | none | network | The Hugging Face Hub client. Not a default: it brings an async runtime and a second TLS stack into the dependency graph of every crate that depends on the facade, for an API most training code never calls. |
 <!-- END GENERATED: feature-inventory -->
 

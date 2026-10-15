@@ -1,5 +1,5 @@
 //! WGPU indexing ops: `embedding`/`gather`/`index_select`/`diag`/`scatter`/
-//! `scatter_add` host-walks and the `masked_fill`/`where_cond` GPU selection
+//! `scatter_add`/`one_hot`/`bincount` host-walks and the `masked_fill`/`where_cond` GPU selection
 //! kernel.
 //!
 //! The gather-family operations download their operands, compute on the
@@ -441,6 +441,47 @@ impl<D: Device> WgpuBackendImpl<D> {
             WgpuBuffer::from_slice(&out),
             out_shape,
             DTypeId::Bool.descriptor(),
+        ))
+    }
+
+    /// `bincount(indices, bins)`: count how many times each of `bins` slots
+    /// appears in the integer index operand — CPU's `bincount_storage` walk
+    /// for walk, through the same `index_values` accessor `one_hot` uses.
+    ///
+    /// The output shape `[bins]` is static (named by the attribute, not the
+    /// values), which is what separates this slice from `nonzero`'s
+    /// data-dependent extent. An index outside `0..bins` is a typed
+    /// `InvalidInput` refusal, not a silent skip: a quietly-low count makes
+    /// every offset derived from it wrong (CPU's
+    /// `bincount_storage` errors for the same reason; `one_hot`'s ONNX skip
+    /// does not apply here). Forward-only: no tape entry, the same
+    /// `GradientRule::None` family `one_hot`/`nonzero` belong to.
+    pub(crate) fn bincount(indices: &WgpuStorage, bins: usize) -> Result<WgpuStorage> {
+        if bins == 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Bincount,
+                reason: "bincount needs at least one bin to count into",
+            }));
+        }
+        let idx_vals = index_values(indices)?;
+        let mut counts = alloc::vec![0i64; bins];
+        for &raw in &idx_vals {
+            // `index_values` already refused non-integer dtypes by name, so
+            // every value here is whole; only the range remains to check.
+            match usize::try_from(raw) {
+                Ok(address) if address < bins => counts[address] += 1,
+                _ => {
+                    return Err(Error::Backend(BackendError::InvalidInput {
+                        operation: OperationKind::Bincount,
+                        reason: "bincount index is not a whole number inside the bin range",
+                    }));
+                }
+            }
+        }
+        Ok(WgpuStorage::new_with_dtype(
+            WgpuBuffer::from_slice(&counts),
+            alloc::vec![bins],
+            DTypeId::I64.descriptor(),
         ))
     }
 
@@ -1100,6 +1141,28 @@ impl<D: Device> Execute<op::OneHot> for WgpuBackendImpl<D> {
         let depth = request.operation.descriptor().attributes().depth;
         WgpuBackendImpl::<D>::one_hot(indices, depth)
             .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+/// `bincount`: index tensor plus `bins` — i64-histogram host walk above.
+/// Forward-only (no tape entry), matching CPU/CUDA.
+impl<D: Device> Execute<op::Bincount> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Bincount, Self>,
+    ) -> core::result::Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Bincount;
+        let [indices] = request.inputs else {
+            return Err(invalid(operation, "bincount expects exactly 1 input"));
+        };
+        let indices = indices
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "indices is not WGPU storage"))?;
+        let bins = request.operation.descriptor().attributes().bins;
+        WgpuBackendImpl::<D>::bincount(indices, bins)
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
