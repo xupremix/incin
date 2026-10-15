@@ -15,3 +15,5 @@
 - [Quantized training: STE today, low precision tomorrow](./next_quantized_training.md)
 - [Distributed execution: from plans to ranks](./next_distributed_execution.md)
 - [Compiled graphs and pointwise fusion](./next_compiled_fusion.md)
+- [Normalization in training: BatchNorm's two modes](./next_normalization_dynamics.md)
+- [Custom autograd: writing an operation that trains](./next_custom_autograd.md)

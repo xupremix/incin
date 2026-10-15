@@ -127,6 +127,8 @@
     include_str!("../../../docs/book-next/src/next_quantized_training.md"),
     include_str!("../../../docs/book-next/src/next_distributed_execution.md"),
     include_str!("../../../docs/book-next/src/next_compiled_fusion.md"),
+    include_str!("../../../docs/book-next/src/next_normalization_dynamics.md"),
+    include_str!("../../../docs/book-next/src/next_custom_autograd.md"),
 )]
 mod book_docs {}
 
