@@ -193,6 +193,38 @@ if let Err(err) = optim.step(&grads) {
 # }
 ```
 
+## 6. Reuse the diagnostics outside the CLI
+
+Everything `cargo incin` prints about a shape error is a library call
+first. `incin_diagnostics::humanize_diagnostic` is the single entry point
+the CLI and the editor integrations share, so their output stays
+identical: it rewrites typenum expressions to decimal values, collapses
+`DimCons` chains, and elides the default layout. The `mismatch` parsers go
+one level deeper — `parse_matmul_mismatch`, `parse_broadcast_mismatch`,
+`parse_concat_mismatch`, `parse_contraction_mismatch` — each returning a
+typed struct with a `render()` that explains that one rule.
+
+```rust,ignore
+use incin_diagnostics::{humanize_diagnostic, parse_matmul_mismatch};
+
+// Same text the CLI would have printed for this diagnostic.
+let translated = humanize_diagnostic(&compiler_output);
+eprintln!("{}", translated.text);
+
+// Or one rule, explained structurally.
+if let Some(m) = parse_matmul_mismatch(&compiler_output) {
+    eprintln!("{}", m.render());
+}
+```
+
+Two behavioral notes. First, `cargo incin --explain` passes the *entire*
+rendered diagnostic to the explainers, because several rules key off each
+other (a contraction explanation keys off the `MatMulShape` bound, so an
+explainer shown a fragment explains the wrong thing or nothing). Pipe the
+whole error, not the line you think matters. Second, an explainer that does
+not recognize its trait explains nothing rather than guessing — silence
+from one parser is a signal to try the next, not a bug.
+
 ## Common mistakes
 
 - **Fixing the operands instead of the message.** Read `fix:` first — it

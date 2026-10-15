@@ -128,6 +128,33 @@ through `CifarCollate`. CIFAR reads the extracted official tarballs from
 disk (the downloader only fetches single `.gz` members, so `new` names the
 files it needs instead of pretending to fetch a tarball).
 
+## Hugging Face Hub
+
+The catalog covers bundled vision datasets. Anything else arrives through
+the Hub client (`incin::hub`, facade feature `data-hub`, which brings an
+async runtime and a second TLS stack — off by default for exactly that
+reason):
+
+```rust,ignore
+use incin::hub::{HubApi, download, from_pretrained};
+
+// Requires network; constructing the client does not.
+let api = HubApi::new()?; // honors INCIN_HUB_CACHE_DIR and INCIN_HUB_TOKEN
+let path = api.model("org/resnet18").get("model.safetensors")?;
+let state = from_pretrained("org/resnet18", None)?; // downloads + loads
+```
+
+Models and datasets are separate Hub namespaces, so they are separate
+methods: `api.model(id)` and `api.dataset(id)`, with `download` /
+`download_dataset` shortcuts for single files. `get` returns the cached
+path immediately when the file is already local. `load_safetensors` and
+`from_pretrained` load through the *foreign* snapshot path: a Hub file was
+written by whatever produced the repository and carries no
+`incin.format.version` key, so the stricter own-format loader would refuse
+it. Restore the snapshot into your module with the state machinery from
+[Save and load](./howto_save_load.md), supplying any missing running
+statistics the way that chapter describes.
+
 ## Data-parallel sampling
 
 `DistributedSampler` splits one epoch across ranks without communication:

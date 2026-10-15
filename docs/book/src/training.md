@@ -217,3 +217,19 @@ fn train() -> Result<()> {
 For a real dataset instead of a fixed tensor, see [Data
 loading](./data_loading.md); the loop shape is identical, just with a
 `DataLoader` iteration in place of the fixed `x`.
+
+## Precision and autocast
+
+The loop above is all-`f32`. When the `Trainer` runs it instead
+([Experimental](./experimental.md), feature `train`), a
+`RuntimePrecisionPolicy` rides along: under `mixed_bf16()`, allowlisted
+operands are cast at dispatch admission (for example `matmul` under a
+backend row that admits `bf16`), master weights stay `f32` because
+parameter creation is outside the allowlist, and `fit_scaled` runs the
+loop under dynamic loss scaling so small `f16` gradients survive
+underflow. The one refusal to memorize: an `f16`-active policy with an
+exact-`f32` accumulator and scaling disabled fails plan construction with
+`TrainError::UnsupportedPrecision` — `bf16` needs no scaling, `f16`
+without scaling is not a plan. The full policy, scaler-state, and fixture
+story lives with the `Trainer` in [Experimental](./experimental.md#the-preview-trainer);
+the hand-written loop here stays exact-precision on purpose.

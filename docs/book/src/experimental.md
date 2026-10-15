@@ -88,6 +88,34 @@ Feature `telemetry`. Backend telemetry hooks plus an emitter/reporter pair in
 the `incin-telemetry` crate. With this on, `cargo incin doctor` additionally
 reports the telemetry run directory.
 
+End to end, the path is three steps. The training process creates an
+`Emitter` over transports — `Emitter::to_run_dir` wires the default file
+transport under the XDG run directory and hands back the `RunInfo`
+describing it — and emits events as the run proceeds. `cargo incin watch
+[--run-id ID | --run-dir PATH]` launches the live TUI over that directory
+from anywhere, including a different checkout. Only the file-transport path
+is supported by the watcher: `incin-telemetry` has a write-side socket
+transport, but `incin-viz` has no socket reader yet, so there is no
+`--socket` flag to pass through.
+
+```rust,ignore
+use incin_telemetry::emitter::{Emitter, RunInfo};
+
+// File transport under the XDG run directory; no daemon, no socket.
+let (emitter, run): (Emitter, RunInfo) = Emitter::to_run_dir(None)?;
+// ... train, emitting events ...
+emitter.shutdown(); // flush; dropped_count()/write_error_count() say what survived
+```
+
+```sh
+cargo incin watch --run-id <id-from-RunInfo>
+```
+
+The emitter is bounded and honest about overload: capacities are set with
+`Emitter::with_capacities`, and the dropped/write-error counters tell you
+after shutdown whether the run directory has the whole story or a sampled
+one.
+
 ## Visualization
 
 The `incin-viz` crate is a TUI for inspecting graphs, with a plugin API in
