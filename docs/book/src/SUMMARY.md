@@ -6,6 +6,7 @@
 
 - [Installation](./installation.md)
 - [Editor integrations](./editor_integrations.md)
+- [Command-line tooling: `cargo incin`](./cli_tooling.md)
 - [Quickstart](./quickstart.md)
 
 # Core concepts

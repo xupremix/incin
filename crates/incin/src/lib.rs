@@ -80,6 +80,7 @@
     include_str!("../../../docs/book/src/introduction.md"),
     include_str!("../../../docs/book/src/installation.md"),
     include_str!("../../../docs/book/src/editor_integrations.md"),
+    include_str!("../../../docs/book/src/cli_tooling.md"),
     include_str!("../../../docs/book/src/quickstart.md"),
     include_str!("../../../docs/book/src/tensors.md"),
     include_str!("../../../docs/book/src/shapes.md"),
@@ -119,6 +120,13 @@
     include_str!("../../../docs/book/src/deep_proofs.md"),
     include_str!("../../../docs/book/src/deep_macros_internals.md"),
     include_str!("../../../docs/book/src/deep_autograd.md"),
+    include_str!("../../../docs/book-next/src/next_overview.md"),
+    include_str!("../../../docs/book-next/src/next_wgpu_gaps.md"),
+    include_str!("../../../docs/book-next/src/next_cuda.md"),
+    include_str!("../../../docs/book-next/src/next_metal.md"),
+    include_str!("../../../docs/book-next/src/next_quantized_training.md"),
+    include_str!("../../../docs/book-next/src/next_distributed_execution.md"),
+    include_str!("../../../docs/book-next/src/next_compiled_fusion.md"),
 )]
 mod book_docs {}
 
