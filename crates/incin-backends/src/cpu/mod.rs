@@ -75,6 +75,18 @@ pub use tape::record as tape_record;
 /// The lazy form of `tape_record`: the entry closure runs only when the
 /// ambient [`GradMode`](incin_core::exec::GradMode) records.
 pub use tape::record_with as tape_record_with;
+/// Discard every unevaluated node on this thread's tape without walking it.
+///
+/// The inference-loop release valve (#149): a forward that is never followed
+/// by `backward` would otherwise retain its graph for the life of the thread
+/// (an evaluation pass over a 1000-image subset grew RSS ~600 MB/epoch until
+/// OOM). Draining discards graphs, not gradients — call it only when no
+/// `backward` will follow on this thread. Pair with [`tape_depth`] to watch
+/// the gauge: depth that grows without bound across validation passes is the
+/// leak announcing itself before the OOM does. Prefer a non-recording
+/// [`GradMode`](incin_core::exec::GradMode) scope where the whole loop can
+/// run without recording; reach for this when the graph was already recorded.
+pub use tape::clear as drain_tape;
 pub use var::CpuVar;
 
 /// The CPU pure-Rust `Backend` implementor.

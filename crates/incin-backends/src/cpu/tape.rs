@@ -179,6 +179,17 @@ pub fn record(entry: TapeNode<CpuStorage>) {
 /// measurements would otherwise be counted against the next one, and the
 /// saved values their recipes captured would stay alive until the thread
 /// recorded over them.
+///
+/// Since #149 this is also the sanctioned release valve for inference and
+/// validation loops: a forward that is never followed by `backward` would
+/// otherwise retain its graph for the life of the thread. The re-export
+/// [`drain_tape`](super::drain_tape) is the public spelling; the contract is
+/// the same either way. Draining discards graphs, not gradients: call it only
+/// when no `backward` will follow on this thread, because a drained graph
+/// cannot be walked afterwards. Under a non-recording [`GradMode`](incin_core::exec::GradMode)
+/// nothing is recorded in the first place, so draining is a no-op rather
+/// than a requirement — prefer the disabled scope and keep this for graphs
+/// that were recorded before their consumer decided against `backward`.
 pub fn clear() {
     TAPE.with(|t| {
         let _ = t.borrow_mut().drain();

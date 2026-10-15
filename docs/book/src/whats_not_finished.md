@@ -81,14 +81,15 @@ of repeating a number that won't.
   epoch, monotonically, until the machine ran out. The documented way out is
   `incin_core::exec::GradMode::Disabled.scope(..)`, which records nothing and
   retains nothing (peak fell from 5448 MB to 684 MB over eight epochs), and
-  which the example now uses. What is still missing is ergonomics: the one
-  function that drains a thread's tape is `pub` inside
-  `incin-backends/src/cpu/tape.rs` but is not re-exported from the backend
-  module, and its own doc comment disclaims exactly this use ("not for
-  training code"), on the assumption that every forward is followed by a
-  backward. An inference server, a validation pass, or any loop that poses
-  forwards and calls `backward` on only some of them has no release valve
-  short of a disabled gradient scope.
+  which the example now uses. For graphs that were already recorded before
+  their consumer decided against `backward`, the release valve is
+  `incin_backends::cpu::drain_tape`, paired with `tape_depth` as the gauge:
+  depth that grows without bound across validation passes is the leak
+  announcing itself before the OOM does (#149). What is still missing is
+  ergonomics: the drain lives in the backend crate rather than beside the
+  gradient scope most training code already imports, so an inference server,
+  a validation pass, or any loop that poses forwards and calls `backward`
+  on only some of them has to know to reach for it.
 - **The CPU `conv2d` is the throughput ceiling for a training example.**
   It is im2col plus a batched matmul, which is the right shape, and the
   optional `cpu-blas` feature hands large f32 GEMMs to a blocked,
