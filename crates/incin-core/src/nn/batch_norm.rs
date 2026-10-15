@@ -95,6 +95,11 @@ pub struct BatchNorm2d<
     pub eps: f32,
     #[module(ignore)]
     /// Momentum factor for running statistics.
+    ///
+    /// Read but never spent (#148): no forward writes the running statistics
+    /// back, on any backend, so evaluation needs statistics supplied from
+    /// outside (checkpoint or `collect_state`/restore) or the module left in
+    /// training mode.
     pub momentum: f32,
     #[module(ignore)]
     /// Whether `forward` normalizes by batch statistics (`true`) or by

@@ -69,6 +69,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     #[inline]
     /// `batch_norm`.
     ///
+    /// Always trains (`training: true` below). The running statistics are
+    /// accepted for arity and ignored (#148): no backend writes them back,
+    /// so evaluation needs externally supplied statistics or the training
+    /// path.
+    ///
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
