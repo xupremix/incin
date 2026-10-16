@@ -398,6 +398,54 @@ impl<D: Device> Execute<op::Conv1dExact> for WgpuBackendImpl<D> {
     }
 }
 
+/// `conv_transpose2d` (groups == 1, like CPU): input unfold plus weight
+/// matmul folded back, with one tape entry mirroring CPU's
+/// `conv_transpose2d_impl`; bias rides the reshape/broadcast/add tail.
+impl<D: Device> Execute<op::ConvTranspose2d> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ConvTranspose2d, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::ConvTranspose2d;
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv_transpose2d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = activation
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "activation is not WGPU storage"))?;
+        let weight = weight
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not WGPU storage"))?;
+        let bias = bias
+            .map(|b| {
+                b.downcast_ref::<WgpuStorage>()
+                    .ok_or_else(|| invalid(operation, "bias is not WGPU storage"))
+            })
+            .transpose()?;
+        let attrs = request.operation.descriptor().attributes();
+        let pair = |[h, w]: [usize; 2]| (h, w);
+        Self::conv_transpose2d::<f32>(
+            activation,
+            weight,
+            bias,
+            pair(attrs.stride),
+            pair(attrs.padding),
+            pair(attrs.output_padding),
+            pair(attrs.dilation),
+            attrs.groups,
+        )
+        .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
 /// `grouped_matmul`: per-expert `matmul` over token spans with one composed
 /// tape entry, mirroring CPU's `grouped_matmul_impl`.
 impl<D: Device> Execute<op::GroupedMatMul> for WgpuBackendImpl<D> {

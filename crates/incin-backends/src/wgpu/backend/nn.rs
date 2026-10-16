@@ -1659,6 +1659,313 @@ impl<D: Device> WgpuBackendImpl<D> {
             None => Ok(conv_out),
         }
     }
+
+    /// `conv_transpose2d` (groups == 1, like CPU): input unfold plus weight
+    /// matmul folded back with `col2im`, exactly CPU's
+    /// `conv_transpose2d_impl` composition. Rank 3 rides with a batch of one;
+    /// bias follows conv2d's reshape/broadcast/add tail. ONE `TapeEntry`
+    /// (`input`, `weight`); piece calls run disabled so the composition
+    /// leaves no nested entries.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn conv_transpose2d<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        weight: &<Self as StorageBackend>::Storage<K>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
+        stride: (usize, usize),
+        padding: (usize, usize),
+        output_padding: (usize, usize),
+        dilation: (usize, usize),
+        groups: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if groups != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "conv_transpose2d",
+                expected: alloc::vec![1],
+                got: alloc::vec![groups],
+                msg: "conv_transpose2d: only groups == 1 is supported".to_string(),
+            });
+        }
+        let rank = t.shape.len();
+        if rank != 3 && rank != 4 {
+            return Err(Error::ShapeMismatch {
+                op: "conv_transpose2d",
+                expected: alloc::vec![3, 4],
+                got: alloc::vec![rank],
+                msg: "conv_transpose2d accepts rank 3 or 4".to_string(),
+            });
+        }
+        let unbatched = rank == 3;
+        let activation = if unbatched {
+            let mut batched = alloc::vec![1usize];
+            batched.extend_from_slice(&t.shape);
+            Self::reshape::<K>(t, &batched)?
+        } else {
+            WgpuStorage::new(t.buffer.clone(), t.shape.to_vec())
+        };
+        let (b, cin, h, w) = (
+            activation.shape[0],
+            activation.shape[1],
+            activation.shape[2],
+            activation.shape[3],
+        );
+        if weight.shape.len() != 4 || weight.shape[0] != cin {
+            return Err(Error::ShapeMismatch {
+                op: "conv_transpose2d",
+                expected: alloc::vec![cin],
+                got: weight.shape.to_vec(),
+                msg: "conv_transpose2d: weight Cin must match input Cin".to_string(),
+            });
+        }
+        let (cout, kh, kw) = (weight.shape[1], weight.shape[2], weight.shape[3]);
+        // Natural output size: conv2d's forward-shape formula inverted,
+        // saturating rather than underflowing on pathological inputs.
+        let h_nat = h
+            .saturating_sub(1)
+            .saturating_mul(stride.0)
+            .saturating_add(dilation.0.saturating_mul(kh.saturating_sub(1)))
+            .saturating_add(1)
+            .saturating_sub(2 * padding.0);
+        let w_nat = w
+            .saturating_sub(1)
+            .saturating_mul(stride.1)
+            .saturating_add(dilation.1.saturating_mul(kw.saturating_sub(1)))
+            .saturating_add(1)
+            .saturating_sub(2 * padding.1);
+        let (op_h, op_w) = output_padding;
+        let (final_h, final_w) = (h_nat + op_h, w_nat + op_w);
+        let input_spatial = h * w;
+        let weight_columns = cout * kh * kw;
+
+        let conv_out = incin_core::exec::GradMode::Disabled.scope(|| {
+            let input_flat = Self::reshape::<K>(&activation, &[b, cin, input_spatial])?;
+            let input_t = Self::transpose::<K>(&input_flat, 1, 2)?;
+            let weight_mat = Self::reshape::<K>(weight, &[cin, weight_columns])?;
+            let cols = Self::batched_matmul::<K>(&input_t, &weight_mat)?;
+            // Fold [B, H*W, Cout*Kh*Kw] into the natural output via col2im.
+            let cols_data = cols.buffer.to_vec::<f32>()?;
+            let mut natural_data = alloc::vec![0.0f32; b * cout * h_nat * w_nat];
+            for bi in 0..b {
+                for co in 0..cout {
+                    for hi in 0..h {
+                        for wi in 0..w {
+                            let col_base =
+                                (bi * (h * w) + hi * w + wi) * weight_columns;
+                            for khi in 0..kh {
+                                for kwi in 0..kw {
+                                    let sh = hi * stride.0 + khi * dilation.0;
+                                    let sw = wi * stride.1 + kwi * dilation.1;
+                                    if sh >= padding.0
+                                        && sh - padding.0 < h_nat
+                                        && sw >= padding.1
+                                        && sw - padding.1 < w_nat
+                                    {
+                                        natural_data[(bi * cout + co) * (h_nat * w_nat)
+                                            + (sh - padding.0) * w_nat
+                                            + (sw - padding.1)] += cols_data[col_base
+                                            + co * (kh * kw)
+                                            + khi * kw
+                                            + kwi];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let natural_storage = WgpuStorage::new(
+                WgpuBuffer::from_slice(&natural_data),
+                alloc::vec![b, cout, h_nat, w_nat],
+            );
+            let padded = if op_h == 0 && op_w == 0 {
+                natural_storage
+            } else {
+                let _final_storage = WgpuStorage::new(
+                    WgpuBuffer::new_zeros_for(
+                        DTypeId::F32,
+                        b * cout * final_h * final_w,
+                        OperationKind::ConvTranspose2d,
+                    )?,
+                    alloc::vec![b, cout, final_h, final_w],
+                );
+                // Paste the natural fold into the zeroed final buffer.
+                let mut final_data =
+                    alloc::vec![0.0f32; b * cout * final_h * final_w];
+                let natural_data = natural_storage.buffer.to_vec::<f32>()?;
+                for bi in 0..b {
+                    for co in 0..cout {
+                        for hi in 0..h_nat {
+                            for wi in 0..w_nat {
+                                final_data[(bi * cout + co) * (final_h * final_w)
+                                    + hi * final_w
+                                    + wi] = natural_data[(bi * cout + co)
+                                    * (h_nat * w_nat)
+                                    + hi * w_nat
+                                    + wi];
+                            }
+                        }
+                    }
+                }
+                WgpuStorage::new(
+                    WgpuBuffer::from_slice(&final_data),
+                    alloc::vec![b, cout, final_h, final_w],
+                )
+            };
+            Ok::<_, Error>(padded)
+        })?;
+        let conv_out = if unbatched {
+            Self::reshape::<K>(&conv_out, &[cout, final_h, final_w])?
+        } else {
+            conv_out
+        };
+
+        // ONE tape entry; backward mirrors CPU's swap (this op's backward
+        // w.r.t. input is conv2d's forward formula on the cotangent).
+        let (input_capture, weight_capture) = (t.clone(), weight.clone());
+        let (input_id, weight_id, out_id) = (t.id, weight.id, conv_out.id);
+        let input_shape = t.shape.to_vec();
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![input_id, weight_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_batched = if unbatched {
+                    Self::reshape::<K>(grad_out, &[1, cout, final_h, final_w])?
+                } else {
+                    WgpuStorage::new(grad_out.buffer.clone(), grad_out.shape.to_vec())
+                };
+                // Crop output padding: it contributed nothing.
+                let grad_nat = if op_h == 0 && op_w == 0 {
+                    grad_batched
+                } else {
+                    let cropped_h =
+                        Self::narrow::<K>(&grad_batched, 2, 0, h_nat)?;
+                    Self::narrow::<K>(&cropped_h, 3, 0, w_nat)?
+                };
+                // grad_out_nat: unfold with the forward fold's window, then
+                // matmul against the weight matrix transposed.
+                let grad_nat_data = grad_nat.buffer.to_vec::<f32>()?;
+                let (cols, _) = {
+                    // [B, Cout, H_nat, W_nat] -> im2col over the INPUT
+                    // geometry windows the forward fold used.
+                    let mut unfolded = alloc::vec![0.0f32; b * h * w * cout * kh * kw];
+                    for bi in 0..b {
+                        for co in 0..cout {
+                            for hi in 0..h {
+                                for wi in 0..w {
+                                    for khi in 0..kh {
+                                        for kwi in 0..kw {
+                                            let sh = hi * stride.0 + khi * dilation.0;
+                                            let sw = wi * stride.1 + kwi * dilation.1;
+                                            let val = if sh >= padding.0
+                                                && sh - padding.0 < h_nat
+                                                && sw >= padding.1
+                                                && sw - padding.1 < w_nat
+                                            {
+                                                grad_nat_data[(bi * cout + co)
+                                                    * (h_nat * w_nat)
+                                                    + (sh - padding.0) * w_nat
+                                                    + (sw - padding.1)]
+                                            } else {
+                                                0.0
+                                            };
+                                            unfolded[((bi * h + hi) * w + wi) * (cout * kh * kw)
+                                                + co * (kh * kw)
+                                                + khi * kw
+                                                + kwi] = val;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    (unfolded, ())
+                };
+                let cols_storage = WgpuStorage::new(
+                    WgpuBuffer::from_slice(&cols),
+                    alloc::vec![b, h * w, cout * kh * kw],
+                );
+                let weight_mat =
+                    Self::reshape::<K>(&weight_capture, &[cin, weight_columns])?;
+                let weight_t = Self::transpose::<K>(&weight_mat, 0, 1)?;
+                let grad_input_flat =
+                    Self::batched_matmul::<K>(&cols_storage, &weight_t)?;
+                let grad_input_t =
+                    Self::transpose::<K>(&grad_input_flat, 1, 2)?;
+                let grad_input_full =
+                    Self::reshape::<K>(&grad_input_t, &[b, cin, h, w])?;
+                let grad_input = if unbatched {
+                    Self::reshape::<K>(&grad_input_full, &input_shape)?
+                } else {
+                    grad_input_full
+                };
+                // grad_weight: input_flat^T @ grad_out_cols, summed over batch.
+                // input_flat is already contiguous [B,Cin,H*W]: reshape only.
+                let input_flat =
+                    Self::reshape::<K>(&input_capture, &[b, cin, h * w])?;
+                let in_cols_t = Self::transpose::<K>(&input_flat, 1, 2)?;
+                let in_cols_storage = Self::transpose::<K>(&in_cols_t, 1, 2)?;
+                // grad_out as [B, H*W, Cout*Kh*Kw]: reuse the forward fold's
+                // window by unfolding grad_nat the same way.
+                let grad_nat_data2 = grad_nat.buffer.to_vec::<f32>()?;
+                let mut go_cols = alloc::vec![0.0f32; b * h * w * cout * kh * kw];
+                for bi in 0..b {
+                    for hi in 0..h {
+                        for wi in 0..w {
+                            for co in 0..cout {
+                                for khi in 0..kh {
+                                    for kwi in 0..kw {
+                                        let sh = hi * stride.0 + khi * dilation.0;
+                                        let sw = wi * stride.1 + kwi * dilation.1;
+                                        let val = if sh >= padding.0
+                                            && sh - padding.0 < h_nat
+                                            && sw >= padding.1
+                                            && sw - padding.1 < w_nat
+                                        {
+                                            grad_nat_data2[(bi * cout + co)
+                                                * (h_nat * w_nat)
+                                                + (sh - padding.0) * w_nat
+                                                + (sw - padding.1)]
+                                        } else {
+                                            0.0
+                                        };
+                                        go_cols[((bi * h + hi) * w + wi) * (cout * kh * kw)
+                                            + co * (kh * kw)
+                                            + khi * kw
+                                            + kwi] = val;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let go_cols_storage = WgpuStorage::new(
+                    WgpuBuffer::from_slice(&go_cols),
+                    alloc::vec![b, h * w, cout * kh * kw],
+                );
+                let grad_weight_mat =
+                    Self::batched_matmul::<K>(&in_cols_storage, &go_cols_storage)?;
+                let grad_weight_summed = Self::sum_dim::<K>(&grad_weight_mat, 0)?;
+                let grad_weight = Self::reshape::<K>(
+                    &grad_weight_summed,
+                    &[cin, cout, kh, kw],
+                )?;
+                Ok(alloc::vec![grad_input, grad_weight])
+            }),
+        });
+
+        match bias {
+            Some(bi) => {
+                let bcast_shape: Vec<usize> = if unbatched {
+                    alloc::vec![cout, 1, 1]
+                } else {
+                    alloc::vec![1, cout, 1, 1]
+                };
+                let b_shaped = Self::reshape::<K>(bi, &bcast_shape)?;
+                let b_stretched = Self::broadcast_as::<K>(&b_shaped, &conv_out.shape)?;
+                Self::add::<K>(&conv_out, &b_stretched)
+            }
+            None => Ok(conv_out),
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

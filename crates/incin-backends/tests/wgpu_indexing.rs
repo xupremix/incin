@@ -19,7 +19,8 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
-    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, Conv1dAttributes, DiagonalAttributes,
+    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, Conv1dAttributes, ConvTranspose2dAttributes,
+    DiagonalAttributes,
     DuplicateIndexRule, NoAttributes, OneHotAttributes, PixelShuffleAttributes,
     ScalarAttributes, ScatterAttributes, UnfoldAttributes,
 };
@@ -1192,5 +1193,64 @@ fn grouped_matmul_routes_token_spans_to_experts_with_one_tape_entry() {
         read_f32(grhs),
         vec![4.0, 4.0, 6.0, 6.0, 12.0, 12.0, 14.0, 14.0],
         "rhs gradient is the per-expert outer product"
+    );
+}
+
+// ── conv_transpose2d ────────────────────────────────────────────────────────
+
+#[test]
+fn conv_transpose2d_folds_and_crops_with_one_tape_entry() {
+    require_wgpu();
+    // [1,1,2,2] of 1..4 with identity kernel, stride 1: each input lands
+    // on the diagonal of its 2x2 output window.
+    let input = upload_f32(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 2, 2]);
+    let weight = upload_f32(&[1.0, 0.0, 0.0, 1.0], &[1, 1, 2, 2]);
+    let (out, recorded) = run_mixed::<op::ConvTranspose2d, _>(
+        &[&input, &weight],
+        &[],
+        &[],
+        ConvTranspose2dAttributes {
+            stride: [1, 1],
+            padding: [0, 0],
+            output_padding: [0, 0],
+            dilation: [1, 1],
+            groups: 1,
+            has_bias: false,
+        },
+    )
+    .expect("conv_transpose2d is advertised and must execute");
+    assert_eq!(recorded, 1, "conv_transpose2d trains with ONE TapeEntry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[1, 1, 3, 3],
+        "natural output size"
+    );
+    assert_eq!(
+        read_f32(&out),
+        vec![1.0, 2.0, 0.0, 3.0, 5.0, 2.0, 0.0, 3.0, 4.0],
+        "folded transpose"
+    );
+
+    // Ones seed: input sees the conv2d-forward formula on the cotangent
+    // (identity kernel sums each 2x2 window to 2.0); weight sees the
+    // summed outer of input windows and seed (10.0 everywhere).
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("conv_transpose2d backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![2.0, 2.0, 2.0, 2.0],
+        "input gradient via the conv2d-forward formula"
+    );
+    let gw = grads
+        .get(TapeStorage::id(&weight))
+        .expect("weight must receive a gradient");
+    assert_eq!(
+        read_f32(gw),
+        vec![10.0, 10.0, 10.0, 10.0],
+        "weight gradient via summed outer products"
     );
 }

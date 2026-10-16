@@ -624,7 +624,7 @@ macro_rules! wgpu_descriptor_operations {
                 // (max → sub → exp → sum/keepdim → log → add/squeeze).
                 LogSumExpDim, LogSumExpKeepDim
             ],
-            spatial = [Conv2dExact, MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact, Conv1dExact],
+            spatial = [Conv2dExact, MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact, Conv1dExact, ConvTranspose2d],
             // Issue #90 audit: this group and the two composed matmul groups
             // below keep the table's `F32_ONLY` `$matmul` while CPU/CUDA
             // widened to `FLOAT_DTYPES`. `matmul.wgsl` is `array<f32>`
