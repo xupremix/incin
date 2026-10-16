@@ -39,8 +39,8 @@ pub struct InitContext {
     pub role: ParameterRole,
     /// Fan geometry, if applicable.
     pub fan: Option<Fan>,
-    /// Seed for host-sampled initializers ([`InitPlan::Orthogonal`] and
-    /// [`InitPlan::TruncatedNormal`]). The backend-sampled plans (`Uniform`,
+    /// Seed for host-sampled initializers ([`Init::Orthogonal`] and
+    /// [`Init::TruncatedNormal`]). The backend-sampled plans (`Uniform`,
     /// `Normal`) draw from device RNG and ignore this. When `None`, lowering
     /// uses [`DEFAULT_HOST_INIT_SEED`], so parameters lowered from the same
     /// seed share identical fills — vary it per parameter.
