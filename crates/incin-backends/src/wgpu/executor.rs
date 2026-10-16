@@ -351,6 +351,79 @@ impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for WgpuBackendImpl<D> {
     }
 }
 
+/// `conv1d`: im2col host walk plus the GPU matmul with one tape entry,
+/// mirroring CPU's `conv1d_impl`; bias rides the reshape/broadcast/add tail
+/// so its gradient flows through tracked ops.
+impl<D: Device> Execute<op::Conv1dExact> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Conv1dExact, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Conv1dExact;
+        let (activation, weight, bias) = match request.inputs {
+            [activation, weight] => (activation, weight, None),
+            [activation, weight, bias] => (activation, weight, Some(bias)),
+            _ => {
+                return Err(invalid(
+                    operation,
+                    "conv1d expects an activation, a weight and an optional bias",
+                ));
+            }
+        };
+        let activation = activation
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "activation is not WGPU storage"))?;
+        let weight = weight
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "weight is not WGPU storage"))?;
+        let bias = bias
+            .map(|b| {
+                b.downcast_ref::<WgpuStorage>()
+                    .ok_or_else(|| invalid(operation, "bias is not WGPU storage"))
+            })
+            .transpose()?;
+        let attrs = request.operation.descriptor().attributes();
+        let wrap = |e| kernel_error("Wgpu", operation, e);
+        Self::conv1d::<f32>(
+            activation,
+            weight,
+            bias,
+            attrs.stride,
+            attrs.padding,
+            attrs.dilation,
+            attrs.groups,
+        )
+        .map_err(wrap)
+    }
+}
+
+/// `grouped_matmul`: per-expert `matmul` over token spans with one composed
+/// tape entry, mirroring CPU's `grouped_matmul_impl`.
+impl<D: Device> Execute<op::GroupedMatMul> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupedMatMul, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::GroupedMatMul;
+        let [lhs, rhs, offsets] = request.inputs else {
+            return Err(invalid(operation, "grouped_matmul expects 3 inputs"));
+        };
+        let lhs = lhs
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "lhs is not WGPU storage"))?;
+        let rhs = rhs
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "rhs is not WGPU storage"))?;
+        let offsets = offsets
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "offsets is not WGPU storage"))?;
+        WgpuBackendImpl::<D>::grouped_matmul::<f32>(lhs, rhs, offsets)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
 /// `transpose` and `flatten` read attribute *pairs* rather than a single
 /// `axis`, so neither fits the axis macro above.
 ///

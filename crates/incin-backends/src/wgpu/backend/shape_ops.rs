@@ -917,6 +917,175 @@ impl<D: Device> WgpuBackendImpl<D> {
         Self::matmul::<K>(lhs, rhs)
     }
 
+    /// `grouped_matmul`: per-expert `matmul` over token spans, exactly CPU's
+    /// `grouped_matmul_impl` composition (`expert_rows`/`expert_weight`
+    /// slices plus `matmul_forward` per span, scatter into one output).
+    /// `offsets` is an integer tile with no cotangent: ONE `TapeEntry` with
+    /// `input_ids = [lhs_id, rhs_id]`, and the backward returns exactly two
+    /// gradients. The piece calls run under a disabled recording scope so
+    /// the composition leaves no nested entries (CPU's slices are raw for
+    /// the same reason); the backward closure recomputes through the same
+    /// impls, safe because the backward walk itself runs disabled.
+    pub(crate) fn grouped_matmul<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+        offsets: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if lhs.shape.len() != 2 || rhs.shape.len() != 3 || offsets.shape.len() != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: alloc::vec![2, 3, 1],
+                got: alloc::vec![lhs.shape.len(), rhs.shape.len(), offsets.shape.len()],
+                msg: "grouped_matmul requires lhs [T,K], rhs [E,K,N], offsets [E+1]".to_string(),
+            });
+        }
+        let (tokens, contracting) = (lhs.shape[0], lhs.shape[1]);
+        let (experts, rhs_k, out_cols) = (rhs.shape[0], rhs.shape[1], rhs.shape[2]);
+        if contracting != rhs_k {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: alloc::vec![contracting],
+                got: alloc::vec![rhs_k],
+                msg: "grouped_matmul contracting dimensions differ".to_string(),
+            });
+        }
+        if offsets.shape[0] != experts + 1 {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: alloc::vec![experts + 1],
+                got: offsets.shape.to_vec(),
+                msg: "grouped_matmul offsets must have length E+1".to_string(),
+            });
+        }
+        let off_values: Vec<i64> = match offsets.dtype.builtin_id() {
+            Some(DTypeId::I64) => offsets.buffer.to_vec::<i64>()?,
+            Some(DTypeId::U32) => offsets
+                .buffer
+                .to_vec::<u32>()?
+                .into_iter()
+                .map(i64::from)
+                .collect(),
+            Some(DTypeId::U8) => offsets
+                .buffer
+                .to_vec::<u8>()?
+                .into_iter()
+                .map(i64::from)
+                .collect(),
+            _ => {
+                return Err(Error::UnsupportedDType {
+                    dtype: offsets.dtype,
+                    backend: "Wgpu",
+                    op: "grouped_matmul offsets",
+                });
+            }
+        };
+        let mut spans: Vec<(usize, usize)> = Vec::with_capacity(experts);
+        let mut previous = 0i64;
+        for (expert, &value) in off_values.iter().enumerate() {
+            if value < 0 || value as usize > tokens {
+                return Err(Error::Backend(BackendError::InvalidInput {
+                    operation: OperationKind::GroupedMatMul,
+                    reason: "grouped_matmul offsets must tile [0, tokens)",
+                }));
+            }
+            if value < previous {
+                return Err(Error::Backend(BackendError::InvalidInput {
+                    operation: OperationKind::GroupedMatMul,
+                    reason: "grouped_matmul offsets must be non-decreasing",
+                }));
+            }
+            previous = value;
+            if expert > 0 {
+                spans.push((off_values[expert - 1] as usize, value as usize));
+            }
+        }
+        if off_values.first() != Some(&0) || off_values.last() != Some(&(tokens as i64)) {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::GroupedMatMul,
+                reason: "grouped_matmul offsets must tile [0, tokens)",
+            }));
+        }
+
+        let out_result: Result<WgpuStorage> =
+            incin_core::exec::GradMode::Disabled.scope(|| {
+                let mut out_data = alloc::vec![0.0f32; tokens * out_cols];
+                for (expert, &(start, end)) in spans.iter().enumerate() {
+                    if start == end {
+                        continue;
+                    }
+                    let rows = Self::narrow::<K>(lhs, 0, start, end - start)?;
+                    let weight_slice = Self::narrow::<K>(rhs, 0, expert, 1)?;
+                    let weight = Self::reshape::<K>(&weight_slice, &[contracting, out_cols])?;
+                    let product = Self::matmul::<K>(&rows, &weight)?;
+                    let product_data = product.buffer.to_vec::<f32>()?;
+                    for row in 0..(end - start) {
+                        for col in 0..out_cols {
+                            out_data[(start + row) * out_cols + col] =
+                                product_data[row * out_cols + col];
+                        }
+                    }
+                }
+                Ok(WgpuStorage::new(
+                    WgpuBuffer::from_slice(&out_data),
+                    alloc::vec![tokens, out_cols],
+                ))
+            });
+        let out = out_result?;
+
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![lhs_id, rhs_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let mut grad_lhs = alloc::vec![0.0f32; tokens * contracting];
+                let mut grad_rhs =
+                    alloc::vec![0.0f32; experts * contracting * out_cols];
+                for (expert, &(start, end)) in spans.iter().enumerate() {
+                    if start == end {
+                        continue;
+                    }
+                    let grad_rows_all = Self::narrow::<K>(grad_out, 0, start, end - start)?;
+                    let weight_slice =
+                        Self::narrow::<K>(&rhs_capture, 0, expert, 1)?;
+                    let weight =
+                        Self::reshape::<K>(&weight_slice, &[contracting, out_cols])?;
+                    let weight_t = Self::transpose::<K>(&weight, 0, 1)?;
+                    let grad_block = Self::matmul::<K>(&grad_rows_all, &weight_t)?;
+                    let grad_block_data = grad_block.buffer.to_vec::<f32>()?;
+                    for row in 0..(end - start) {
+                        for col in 0..contracting {
+                            grad_lhs[(start + row) * contracting + col] +=
+                                grad_block_data[row * contracting + col];
+                        }
+                    }
+                    let lhs_rows = Self::narrow::<K>(&lhs_capture, 0, start, end - start)?;
+                    let lhs_rows_t = Self::transpose::<K>(&lhs_rows, 0, 1)?;
+                    let grad_weight =
+                        Self::matmul::<K>(&lhs_rows_t, &grad_rows_all)?;
+                    let grad_weight_data = grad_weight.buffer.to_vec::<f32>()?;
+                    for k in 0..contracting {
+                        for n in 0..out_cols {
+                            grad_rhs[(expert * contracting + k) * out_cols + n] +=
+                                grad_weight_data[k * out_cols + n];
+                        }
+                    }
+                }
+                Ok(alloc::vec![
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_lhs),
+                        alloc::vec![tokens, contracting],
+                    ),
+                    WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_rhs),
+                        alloc::vec![experts, contracting, out_cols],
+                    ),
+                ])
+            }),
+        });
+        Ok(out)
+    }
+
     /// `addmm(mat, lhs, rhs)`: `beta * mat + alpha * (lhs @ rhs)`, matching
     /// CPU's `addmm_storage` step for step (product, scale by alpha, scale mat
     /// by beta, add).

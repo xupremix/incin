@@ -64,7 +64,7 @@ run time.
 | `cmp_lt` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `cmp_ne` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `concat` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool` | `f32` | `f32` |
-| `conv1d` | `f32` | `f32` | — | — |
+| `conv1d` | `f32` | `f32` | `f32` | — |
 | `conv2d` | `f32` | `f32` | `f32` | — |
 | `conv_transpose2d` | `f32` | `f32` | — | — |
 | `cos` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -93,7 +93,7 @@ run time.
 | `gather` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` |
 | `gelu` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `group_norm` | `f32` | `f32` | `f32` | `f32` |
-| `grouped_matmul` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | — | — |
+| `grouped_matmul` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | — |
 | `index_select` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` |
 | `instance_norm` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `int_to_scalar` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
@@ -750,6 +750,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `max_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
 | `adaptive_avg_pool2d` | `f32` | `contiguous` | 3–4 | yes | native |
+| `conv1d` | `f32` | `contiguous` | 1–3 | yes | native |
 | `softmax` | `f32` | `contiguous` | 1+ | yes | native |
 | `log_softmax` | `f32` | `contiguous` | 1+ | yes | native |
 | `layer_norm` | `f32` | `contiguous` | 1+ | yes | native |
@@ -760,6 +761,7 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `one_hot` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | native |
 | `bincount` | `u8`, `u32`, `i64`, `f32` | `contiguous` | any | yes | native |
 | `nonzero` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1+ | yes | native |
+| `grouped_matmul` | `u8`, `u32`, `i64`, `f32` | `contiguous` | 1–3 | yes | native |
 | `maximum` | `f32` | `contiguous` | any | yes | native |
 | `minimum` | `f32` | `contiguous` | any | yes | native |
 | `abs_diff` | `f32` | `contiguous` | any | yes | native |

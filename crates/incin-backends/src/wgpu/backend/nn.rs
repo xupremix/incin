@@ -170,6 +170,100 @@ pub(crate) fn cpu_sum_batch(src: &[f32], b: usize, m: usize, n: usize) -> Result
     Ok(out)
 }
 
+/// Gather a `[B, Cin, L]` buffer (row-major) into a `[B, L_out, Cin*K]`
+/// column matrix. Positions in the padded region contribute 0.0 — CPU's
+/// `im2col_1d` walk for walk.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn im2col_1d_cpu(
+    input: &[f32],
+    b: usize,
+    cin: usize,
+    len: usize,
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<(Vec<f32>, usize)> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv1d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let padded = padding
+        .checked_mul(2)
+        .and_then(|twice| len.checked_add(twice))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv1d,
+            expression: "convolution padded input dimension",
+        })?;
+    let effective = dilation
+        .checked_mul(kernel_size.saturating_sub(1))
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv1d,
+            expression: "convolution effective kernel",
+        })?;
+    let l_out = padded.saturating_sub(effective) / stride + 1;
+    let columns =
+        ShapeBuf::from_slice(&[cin, kernel_size]).checked_numel(OperationKind::Conv1d)?;
+    let mut out = alloc::vec![0.0f32; b * l_out * columns];
+    for bi in 0..b {
+        for oi in 0..l_out {
+            for ci in 0..cin {
+                for ki in 0..kernel_size {
+                    let src = oi * stride + ki * dilation;
+                    let val = if src >= padding && src - padding < len {
+                        input[bi * (cin * len) + ci * len + (src - padding)]
+                    } else {
+                        0.0
+                    };
+                    out[bi * (l_out * columns) + oi * columns + ci * kernel_size + ki] = val;
+                }
+            }
+        }
+    }
+    Ok((out, l_out))
+}
+
+/// Exact inverse of [`im2col_1d_cpu`]: scatter-ADD each contribution of a
+/// `[B, L_out, Cin*K]`-shaped gradient back into a zero-initialized
+/// `[B, Cin, L]` buffer, skipping padded destinations.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn col2im_1d_cpu(
+    cols_grad: &[f32],
+    b: usize,
+    cin: usize,
+    len: usize,
+    l_out: usize,
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<Vec<f32>> {
+    let mut out = alloc::vec![0.0f32; b * cin * len];
+    for bi in 0..b {
+        for oi in 0..l_out {
+            for ci in 0..cin {
+                for ki in 0..kernel_size {
+                    let src = oi * stride + ki * dilation;
+                    if src >= padding && src - padding < len {
+                        let dst = src - padding;
+                        out[bi * (cin * len) + ci * len + dst] += cols_grad[bi
+                            * (l_out * cin * kernel_size)
+                            + oi * (cin * kernel_size)
+                            + ci * kernel_size
+                            + ki];
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WgpuBackendImpl inherent helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1327,6 +1421,238 @@ impl<D: Device> WgpuBackendImpl<D> {
         match bias {
             Some(b) => {
                 let b_shaped = Self::reshape::<K>(b, &[1, c_out, 1, 1])?;
+                let b_stretched = Self::broadcast_as::<K>(&b_shaped, &conv_out.shape)?;
+                Self::add::<K>(&conv_out, &b_stretched)
+            }
+            None => Ok(conv_out),
+        }
+    }
+
+    /// `conv1d`: im2col host walk plus the GPU matmul, exactly CPU's
+    /// `conv1d_impl` composition (narrow per group, unfold, weight reshape
+    /// and transpose, batched matmul, concat, transpose back, reshape).
+    /// Rank 2 rides with a batch of one like CPU's `with_batch_axis`; bias
+    /// follows conv2d's reshape/broadcast/add tail so its gradient flows
+    /// through tracked ops. ONE `TapeEntry` (`input`, `weight`); the piece
+    /// calls below run under a disabled recording scope so the composition
+    /// leaves no nested entries, and the backward closure recomputes through
+    /// the same impls (safe: the backward walk itself runs disabled).
+    pub(crate) fn conv1d<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        weight: &<Self as StorageBackend>::Storage<K>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
+        stride: usize,
+        padding: usize,
+        dilation: usize,
+        groups: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let rank = t.shape.len();
+        if rank != 2 && rank != 3 {
+            return Err(Error::ShapeMismatch {
+                op: "conv1d",
+                expected: alloc::vec![2, 3],
+                got: alloc::vec![rank],
+                msg: "conv1d accepts rank 2 or 3".to_string(),
+            });
+        }
+        let unbatched = rank == 2;
+        // Work on the batched form throughout; the axis comes back off the
+        // output and the input gradient below.
+        let activation = if unbatched {
+            let mut batched = alloc::vec![1usize];
+            batched.extend_from_slice(&t.shape);
+            Self::reshape::<K>(t, &batched)?
+        } else {
+            WgpuStorage::new(t.buffer.clone(), t.shape.to_vec())
+        };
+        let (b, cin, len) = (activation.shape[0], activation.shape[1], activation.shape[2]);
+        if weight.shape.len() != 3 {
+            return Err(Error::ShapeMismatch {
+                op: "conv1d",
+                expected: alloc::vec![3],
+                got: alloc::vec![weight.shape.len()],
+                msg: "conv1d weight must be [Cout, Cin/groups, K]".to_string(),
+            });
+        }
+        let (cout, cin_g, kernel_size) = (weight.shape[0], weight.shape[1], weight.shape[2]);
+        let g = groups.max(1);
+        if g == 0 || cin % g != 0 || cout % g != 0 || cin / g != cin_g {
+            return Err(Error::ShapeMismatch {
+                op: "conv1d",
+                expected: alloc::vec![g],
+                got: alloc::vec![cin, cout],
+                msg: "conv1d: groups must evenly divide Cin and Cout, and weight Cin must equal Cin/groups".to_string(),
+            });
+        }
+        let cout_g = cout / g;
+        let input_columns =
+            ShapeBuf::from_slice(&[cin_g, kernel_size]).checked_numel(OperationKind::Conv1d)?;
+
+        let (out_storage, l_out) = incin_core::exec::GradMode::Disabled.scope(|| {
+            let mut group_outputs: Vec<WgpuStorage> = Vec::new();
+            let mut l_out = 0usize;
+            for group in 0..g {
+                let input_g = Self::narrow::<K>(&activation, 1, group * (cin / g), cin / g)?;
+                let weight_g = Self::narrow::<K>(weight, 0, group * cout_g, cout_g)?;
+                let input_data = input_g.buffer.to_vec::<f32>()?;
+                let (cols, l) = im2col_1d_cpu(
+                    &input_data,
+                    b,
+                    cin / g,
+                    len,
+                    kernel_size,
+                    stride,
+                    padding,
+                    dilation,
+                )?;
+                l_out = l;
+                let cols_storage = WgpuStorage::new(
+                    WgpuBuffer::from_slice(&cols),
+                    alloc::vec![b, l_out, input_columns],
+                );
+                let weight_mat = Self::reshape::<K>(&weight_g, &[cout_g, input_columns])?;
+                let weight_t = Self::transpose::<K>(&weight_mat, 0, 1)?;
+                let out_g = Self::batched_matmul::<K>(&cols_storage, &weight_t)?;
+                group_outputs.push(out_g);
+            }
+            let refs: Vec<&WgpuStorage> = group_outputs.iter().collect();
+            let matmul_out = if g == 1 {
+                refs[0].clone()
+            } else {
+                Self::concat_exact::<K>(&refs, 2)?
+            };
+            // [B, L_out, Cout] -> [B, Cout, L_out].
+            let transposed = Self::transpose::<K>(&matmul_out, 1, 2)?;
+            let conv_out = Self::reshape::<K>(&transposed, &[b, cout, l_out])?;
+            Ok::<_, Error>((conv_out, l_out))
+        })?;
+        let conv_out = if unbatched {
+            Self::reshape::<K>(&out_storage, &[cout, l_out])?
+        } else {
+            out_storage
+        };
+
+        // ONE tape entry over the composition above; the piece calls ran
+        // disabled so they left none. Backward recomputes through the same
+        // impls (safe: the backward walk itself runs disabled), mirroring
+        // CPU's `conv1d_impl` group loop.
+        let (input_capture, weight_capture) = (t.clone(), weight.clone());
+        let (input_id, weight_id, out_id) = (t.id, weight.id, conv_out.id);
+        let input_shape = t.shape.to_vec();
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![input_id, weight_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_batched = if unbatched {
+                    Self::reshape::<K>(grad_out, &[1, cout, l_out])?
+                } else {
+                    WgpuStorage::new(grad_out.buffer.clone(), grad_out.shape.to_vec())
+                };
+                let grad_t = Self::transpose::<K>(&grad_batched, 1, 2)?;
+                // The captured input is already row-major flat; the batched
+                // view below is metadata over the same buffer, exactly as
+                // forward's reshape was.
+                let act_shape = if unbatched {
+                    alloc::vec![1, input_shape[0], input_shape[1]]
+                } else {
+                    input_shape.clone()
+                };
+                let act_storage =
+                    WgpuStorage::new(input_capture.buffer.clone(), act_shape.clone());
+                let (ab, acin, alen) = (act_shape[0], act_shape[1], act_shape[2]);
+                let mut grad_input_groups: Vec<WgpuStorage> = Vec::new();
+                let mut grad_weight_groups: Vec<WgpuStorage> = Vec::new();
+                for group in 0..g {
+                    let input_g =
+                        Self::narrow::<K>(&act_storage, 1, group * (acin / g), acin / g)?;
+                    let weight_g =
+                        Self::narrow::<K>(&weight_capture, 0, group * cout_g, cout_g)?;
+                    let grad_out_g =
+                        Self::narrow::<K>(&grad_t, 2, group * cout_g, cout_g)?;
+                    let weight_mat =
+                        Self::reshape::<K>(&weight_g, &[cout_g, input_columns])?;
+                    let grad_cols = Self::batched_matmul::<K>(&grad_out_g, &weight_mat)?;
+                    let grad_cols_data = grad_cols.buffer.to_vec::<f32>()?;
+                    let grad_cols_shape = grad_cols.shape.to_vec();
+                    let grad_input_vec = col2im_1d_cpu(
+                        &grad_cols_data,
+                        ab,
+                        acin / g,
+                        alen,
+                        grad_cols_shape[1],
+                        kernel_size,
+                        stride,
+                        padding,
+                        dilation,
+                    )?;
+                    grad_input_groups.push(WgpuStorage::new(
+                        WgpuBuffer::from_slice(&grad_input_vec),
+                        alloc::vec![ab, acin / g, alen],
+                    ));
+                    let input_g_data = input_g.buffer.to_vec::<f32>()?;
+                    let (cols, _) = im2col_1d_cpu(
+                        &input_g_data,
+                        ab,
+                        acin / g,
+                        alen,
+                        kernel_size,
+                        stride,
+                        padding,
+                        dilation,
+                    )?;
+                    let cols_storage = WgpuStorage::new(
+                        WgpuBuffer::from_slice(&cols),
+                        alloc::vec![ab, grad_cols_shape[1], input_columns],
+                    );
+                    let grad_out_g_t = Self::transpose::<K>(&grad_out_g, 1, 2)?;
+                    let grad_weight_mat =
+                        Self::batched_matmul::<K>(&grad_out_g_t, &cols_storage)?;
+                    let grad_weight_summed = Self::sum_dim::<K>(&grad_weight_mat, 0)?;
+                    let grad_weight_g = Self::reshape::<K>(
+                        &grad_weight_summed,
+                        &[cout_g, acin / g, kernel_size],
+                    )?;
+                    grad_weight_groups.push(grad_weight_g);
+                }
+                let grad_input = if g == 1 {
+                    grad_input_groups.into_iter().next().ok_or(Error::Backend(
+                        BackendError::InvalidInput {
+                            operation: OperationKind::Conv1d,
+                            reason: "the single convolution group produced no input gradient",
+                        },
+                    ))?
+                } else {
+                    let refs: Vec<&WgpuStorage> = grad_input_groups.iter().collect();
+                    Self::concat_exact::<K>(&refs, 1)?
+                };
+                let grad_input = if unbatched {
+                    Self::reshape::<K>(&grad_input, &input_shape)?
+                } else {
+                    grad_input
+                };
+                let grad_weight = if g == 1 {
+                    grad_weight_groups.into_iter().next().ok_or(Error::Backend(
+                        BackendError::InvalidInput {
+                            operation: OperationKind::Conv1d,
+                            reason: "the single convolution group produced no weight gradient",
+                        },
+                    ))?
+                } else {
+                    let refs: Vec<&WgpuStorage> = grad_weight_groups.iter().collect();
+                    Self::concat_exact::<K>(&refs, 0)?
+                };
+                Ok(alloc::vec![grad_input, grad_weight])
+            }),
+        });
+
+        match bias {
+            Some(bi) => {
+                let bcast_shape: Vec<usize> = if unbatched {
+                    alloc::vec![cout, 1]
+                } else {
+                    alloc::vec![1, cout, 1]
+                };
+                let b_shaped = Self::reshape::<K>(bi, &bcast_shape)?;
                 let b_stretched = Self::broadcast_as::<K>(&b_shaped, &conv_out.shape)?;
                 Self::add::<K>(&conv_out, &b_stretched)
             }

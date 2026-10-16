@@ -19,7 +19,7 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
-    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, DiagonalAttributes,
+    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, Conv1dAttributes, DiagonalAttributes,
     DuplicateIndexRule, NoAttributes, OneHotAttributes, PixelShuffleAttributes,
     ScalarAttributes, ScatterAttributes, UnfoldAttributes,
 };
@@ -1094,5 +1094,103 @@ fn adaptive_avg_pool2d_uses_variable_windows_with_one_tape_entry() {
         &[0.5, 5.0 / 6.0, 1.0 / 3.0, 5.0 / 6.0, 0.5],
         1e-6,
         "cotangent spreads over variable windows",
+    );
+}
+
+// ── conv1d ──────────────────────────────────────────────────────────────────
+
+#[test]
+fn conv1d_composes_im2col_and_matmul_with_one_tape_entry() {
+    require_wgpu();
+    // [1,1,4] of 1..4 with kernel [1,0,-1]: out[0] = 1-3, out[1] = 2-4.
+    let input = upload_f32(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 4]);
+    let weight = upload_f32(&[1.0, 0.0, -1.0], &[1, 1, 3]);
+    let (out, recorded) = run_mixed::<op::Conv1dExact, _>(
+        &[&input, &weight],
+        &[],
+        &[],
+        Conv1dAttributes { stride: 1, padding: 0, dilation: 1, groups: 1, has_bias: false },
+    )
+    .expect("conv1d is advertised and must execute");
+    assert_eq!(recorded, 1, "conv1d trains with ONE TapeEntry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[1, 1, 2],
+        "output length follows the conv shape rule"
+    );
+    assert_eq!(read_f32(&out), vec![-2.0, -2.0], "im2col plus matmul");
+
+    // Backward through the composition: input [1,1,-1,-1] (col2im spread),
+    // weight [3,5,7] (summed outer of seed and columns: row 0 gives
+    // [1,2,3], row 1 gives [2,3,4]).
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("conv1d backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0, 1.0, -1.0, -1.0],
+        "col2im input gradient"
+    );
+    let gw = grads
+        .get(TapeStorage::id(&weight))
+        .expect("weight must receive a gradient");
+    assert_eq!(
+        read_f32(gw),
+        vec![3.0, 5.0, 7.0],
+        "summed outer-product weight gradient"
+    );
+}
+
+// ── grouped_matmul ──────────────────────────────────────────────────────────
+
+#[test]
+fn grouped_matmul_routes_token_spans_to_experts_with_one_tape_entry() {
+    require_wgpu();
+    // 4 tokens, 2 experts: [1,2],[3,4] ride identity, [5,6],[7,8] double.
+    let lhs = upload_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], &[4, 2]);
+    let rhs = upload_f32(&[1.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0, 2.0], &[2, 2, 2]);
+    let offsets = upload_i64(&[0, 2, 4], &[3]);
+    let (out, recorded) = run_mixed::<op::GroupedMatMul, _>(
+        &[&lhs, &rhs],
+        &[&offsets],
+        &[],
+        NoAttributes,
+    )
+    .expect("grouped_matmul is advertised and must execute");
+    assert_eq!(recorded, 1, "grouped_matmul trains with ONE TapeEntry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[4, 2],
+        "one output row per token"
+    );
+    assert_eq!(
+        read_f32(&out),
+        vec![1.0, 2.0, 3.0, 4.0, 10.0, 12.0, 14.0, 16.0],
+        "expert routing"
+    );
+
+    // Ones seed: lhs grads follow the expert scales, rhs grads are the
+    // per-expert outer products.
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("grouped_matmul backward must run");
+    let glhs = grads
+        .get(TapeStorage::id(&lhs))
+        .expect("lhs must receive a gradient");
+    assert_eq!(
+        read_f32(glhs),
+        vec![1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0],
+        "lhs gradient follows expert scales"
+    );
+    let grhs = grads
+        .get(TapeStorage::id(&rhs))
+        .expect("rhs must receive a gradient");
+    assert_eq!(
+        read_f32(grhs),
+        vec![4.0, 4.0, 6.0, 6.0, 12.0, 12.0, 14.0, 14.0],
+        "rhs gradient is the per-expert outer product"
     );
 }

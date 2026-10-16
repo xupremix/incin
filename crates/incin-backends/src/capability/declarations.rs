@@ -624,7 +624,7 @@ macro_rules! wgpu_descriptor_operations {
                 // (max → sub → exp → sum/keepdim → log → add/squeeze).
                 LogSumExpDim, LogSumExpKeepDim
             ],
-            spatial = [Conv2dExact, MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact],
+            spatial = [Conv2dExact, MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact, Conv1dExact],
             // Issue #90 audit: this group and the two composed matmul groups
             // below keep the table's `F32_ONLY` `$matmul` while CPU/CUDA
             // widened to `FLOAT_DTYPES`. `matmul.wgsl` is `array<f32>`
@@ -684,7 +684,13 @@ macro_rules! wgpu_descriptor_operations {
             // it), so the shape is read back from the returned storage. The
             // input may be any storage width this backend admits; the zero
             // test is per element, forward-only with no tape entry.
-            embedding = [EmbeddingExact, OneHot, Bincount, NonZero],
+            // `GroupedMatMul` joins for the same union reason: two `f32`
+            // matrices plus an integer offsets tile, which the row's
+            // `INDEX_AND_F32_DTYPES` states as one set over all three
+            // operands; the descriptor's per-operand contract (offsets are
+            // integer, matrices share one float dtype) enforces the real
+            // split. ONE composed tape entry, offsets off-tape.
+            embedding = [EmbeddingExact, OneHot, Bincount, NonZero, GroupedMatMul],
             // No fused-attention kernel on WGPU yet (issue #104); empty
             // until one ships.
             fused_attention = [],
