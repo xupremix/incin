@@ -472,6 +472,68 @@ impl<D: Device> Execute<op::GroupedMatMul> for WgpuBackendImpl<D> {
     }
 }
 
+/// `quantize`/`dequantize` straight-through nodes plus the record-nothing
+/// `quantized_matmul`, mirroring CPU's `cpu/canonical/linalg.rs` (identity
+/// backward each for the first two, `GradientRule::None` for the third).
+impl<D: Device> Execute<op::Quantize> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Quantize, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Quantize;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "quantize expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let dtype = request.operation.descriptor().attributes().dtype;
+        Self::quantize::<f32>(input, dtype)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Dequantize> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Dequantize, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Dequantize;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "dequantize expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let dtype = request.operation.descriptor().attributes().dtype;
+        Self::dequantize::<f32>(input, dtype)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::QuantizedMatMul> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::QuantizedMatMul, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::QuantizedMatMul;
+        let [lhs, rhs] = request.inputs else {
+            return Err(invalid(operation, "quantized_matmul expects 2 inputs"));
+        };
+        let lhs = lhs
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "lhs is not WGPU storage"))?;
+        let rhs = rhs
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "rhs is not WGPU storage"))?;
+        Self::quantized_matmul::<f32>(lhs, rhs)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
 /// `transpose` and `flatten` read attribute *pairs* rather than a single
 /// `axis`, so neither fits the axis macro above.
 ///

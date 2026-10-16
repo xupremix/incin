@@ -804,8 +804,14 @@ macro_rules! wgpu_descriptor_operations {
                 Outer, ScaledDotProductAttention
             ],
             composed_matmul_bias = [Linear],
-            quantizing = [],
-            quantized = [],
+            // Q8_0 rows over raw block bytes (see the quantization section
+            // in `nn.rs`): `quantize` reads `f32` and writes blocks,
+            // `dequantize` and `quantized_matmul` read blocks, all
+            // contiguous-only like the rows above. Training claims mirror
+            // CPU/CUDA exactly: straight-through identity entries for the
+            // first two, nothing for the third by design.
+            quantizing = [(Quantize, true)],
+            quantized = [(Dequantize, true), (QuantizedMatMul, false)],
             // Losses and moments composed from sub/mul/abs and an all- or
             // axis-reduce, exactly CPU's recipes, so each inherits this
             // backend's f32-only contiguous reduction claim honestly.

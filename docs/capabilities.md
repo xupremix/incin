@@ -71,7 +71,7 @@ run time.
 | `cosh` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `cross_entropy_loss` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` | `u8`, `u32`, `i64`, `f32` |
 | `cumsum` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | `f32` |
-| `dequantize` | `q8_0` | `q8_0` | — | — |
+| `dequantize` | `q8_0` | `q8_0` | `q8_0` | — |
 | `detach` | — | — | — | — |
 | `diag` | `u8`, `u32`, `i64`, `bf16`, `f16`, `f32`, `f64`, `bool`, `f8e4m3`, `f8e5m2` | `f32` | `f32` | — |
 | `div` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -143,8 +143,8 @@ run time.
 | `powf` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
 | `prod_all` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
 | `prod_dim` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
-| `quantize` | `f32` | `bf16`, `f16`, `f32`, `f64` | — | — |
-| `quantized_matmul` | `q8_0` | `q8_0` | — | — |
+| `quantize` | `f32` | `bf16`, `f16`, `f32`, `f64` | `f32` | — |
+| `quantized_matmul` | `q8_0` | `q8_0` | `q8_0` | — |
 | `rand` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` | `f32` |
 | `randn` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` | `f32` |
 | `relu` | `bf16`, `f16`, `f32`, `f64` | `bf16`, `f16`, `f32`, `f64` | `f32` | `f32` |
@@ -807,6 +807,9 @@ Every stable semantic operation comes from the canonical catalog. A dash is an e
 | `outer` | `f32` | `contiguous` | 1+ | yes | composed |
 | `scaled_dot_product_attention` | `f32` | `contiguous` | 2+ | yes | composed |
 | `linear` | `f32` | `contiguous` | 1+ | yes | composed |
+| `quantize` | `f32` | `contiguous` | any | yes | native |
+| `dequantize` | `q8_0` | `contiguous` | any | yes | native |
+| `quantized_matmul` | `q8_0` | `contiguous` | 2+ | no | native |
 | `mse_loss` | `f32` | `contiguous` | any | yes | composed |
 | `l1_loss` | `f32` | `contiguous` | any | yes | composed |
 | `bce_with_logits_loss` | `f32` | `contiguous` | any | yes | composed |

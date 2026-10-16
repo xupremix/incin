@@ -275,6 +275,33 @@ impl WgpuStorage {
         shape: Vec<usize>,
         dtype: DTypeDescriptor,
     ) -> Result<Self> {
+        // Q8_0 is block-packed (34 bytes per 32 logical elements), so it
+        // cannot go through the per-element width below: a whole number of
+        // blocks with capacity counted in logical elements.
+        if dtype.builtin_id() == Some(DTypeId::Q8_0) {
+            const BLOCK_BYTES: usize = 34;
+            const BLOCK_ELEMS: usize = 32;
+            if !buffer.size.is_multiple_of(BLOCK_BYTES) {
+                return Err(Error::Msg(alloc::format!(
+                    "WGPU buffer byte size {} is not a whole number of Q8_0 blocks (34 bytes)",
+                    buffer.size
+                )));
+            }
+            let capacity = buffer.size / BLOCK_BYTES * BLOCK_ELEMS;
+            let meta = TensorMeta::contiguous(
+                shape.as_slice().into(),
+                dtype,
+                DeviceId::wgpu(0),
+                physical_alignment(dtype),
+                capacity,
+            )
+            .map_err(|error| Error::Msg(format!("invalid WGPU storage metadata: {error}")))?;
+            return Ok(Self {
+                buffer,
+                meta,
+                id: TensorId::next(),
+            });
+        }
         let width = physical_element_bytes(dtype)?;
         if width == 0 || !buffer.size.is_multiple_of(width) {
             return Err(Error::Msg(alloc::format!(

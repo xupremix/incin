@@ -22,7 +22,7 @@ use incin_core::exec::catalog::{
     AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, Conv1dAttributes, ConvTranspose2dAttributes,
     DiagonalAttributes,
     DuplicateIndexRule, NoAttributes, OneHotAttributes, PixelShuffleAttributes,
-    ScalarAttributes, ScatterAttributes, UnfoldAttributes,
+    QuantizationAttributes, ScalarAttributes, ScatterAttributes, UnfoldAttributes,
 };
 use incin_core::exec::{CanonicalError, ExecutionContext, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
@@ -1253,4 +1253,127 @@ fn conv_transpose2d_folds_and_crops_with_one_tape_entry() {
         vec![10.0, 10.0, 10.0, 10.0],
         "weight gradient via summed outer products"
     );
+}
+
+// ── quantize / dequantize / quantized_matmul ────────────────────────────────
+
+fn q8_attrs() -> QuantizationAttributes {
+    QuantizationAttributes { dtype: DTypeId::Q8_0.descriptor() }
+}
+
+fn f32_attrs() -> QuantizationAttributes {
+    QuantizationAttributes { dtype: DTypeId::F32.descriptor() }
+}
+
+#[test]
+fn quantize_round_trips_through_blocks_with_straight_through_gradients() {
+    require_wgpu();
+    // 64 values: two full Q8_0 blocks. The f16 block scale keeps the
+    // round-trip approximate, not exact — CPU's own contract.
+    let values: Vec<f32> = (0..64).map(|i| (i as f32) * 0.05 - 1.0).collect();
+    let input = upload_f32(&values, &[64]);
+    let (quantized, recorded) =
+        run_mixed::<op::Quantize, _>(&[&input], &[], &[], q8_attrs())
+            .expect("quantize is advertised and must execute");
+    assert_eq!(recorded, 1, "quantize records its straight-through entry");
+    assert_eq!(
+        quantized.metadata().dtype(),
+        DTypeId::Q8_0.descriptor(),
+        "quantize result wears the Q8_0 label"
+    );
+
+    let (back, recorded) =
+        run_mixed::<op::Dequantize, _>(&[&quantized], &[], &[], f32_attrs())
+            .expect("dequantize is advertised and must execute");
+    assert_eq!(recorded, 1, "dequantize records its straight-through entry");
+    assert_close(
+        &read_f32(&back),
+        &values.iter().map(|&v| v as f64).collect::<Vec<_>>(),
+        0.05,
+        "Q8_0 round-trip within block-quantization tolerance",
+    );
+
+    // Straight-through: the round-trip's backward is the identity, so a
+    // ones seed reaches the input unchanged.
+    let loss = sum_loss(&back);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("quantize round-trip backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0; 64],
+        "straight-through gradient is the identity"
+    );
+}
+
+#[test]
+fn quantized_matmul_matches_f32_matmul_without_recording() {
+    require_wgpu();
+    // K = 32 (one block): lhs [2,32], rhs [N=2,K=32] pre-transposed.
+    let lhs: Vec<f32> = (0..64).map(|i| (i as f32) * 0.02 - 0.5).collect();
+    let rhs: Vec<f32> = (0..64).map(|i| (i as f32) * 0.03 - 0.4).collect();
+    let lhs_q = run_mixed::<op::Quantize, _>(
+        &[&upload_f32(&lhs, &[2, 32])],
+        &[],
+        &[],
+        q8_attrs(),
+    )
+    .expect("lhs quantize must execute")
+    .0;
+    let rhs_q = run_mixed::<op::Quantize, _>(
+        &[&upload_f32(&rhs, &[2, 32])],
+        &[],
+        &[],
+        q8_attrs(),
+    )
+    .expect("rhs quantize must execute")
+    .0;
+    let (out, recorded) = run_mixed::<op::QuantizedMatMul, _>(
+        &[&lhs_q, &rhs_q],
+        &[],
+        &[],
+        NoAttributes,
+    )
+    .expect("quantized_matmul is advertised and must execute");
+    assert_eq!(recorded, 0, "quantized_matmul records nothing by design");
+    // Reference: plain f32 matmul of lhs against the transposed rhs.
+    let mut rhs_t = vec![0.0f32; 64];
+    for i in 0..2 {
+        for j in 0..32 {
+            rhs_t[j * 2 + i] = rhs[i * 32 + j];
+        }
+    }
+    let plain = run_mixed::<op::MatMulExact, _>(
+        &[&upload_f32(&lhs, &[2, 32]), &upload_f32(&rhs_t, &[32, 2])],
+        &[],
+        &[],
+        NoAttributes,
+    )
+    .expect("reference matmul must execute")
+    .0;
+    assert_close(
+        &read_f32(&out),
+        &read_f32(&plain),
+        0.5,
+        "dequantized matmul within block-quantization tolerance",
+    );
+}
+
+#[test]
+fn quantize_refuses_short_buffers_and_wrong_dtypes_like_cpu() {
+    require_wgpu();
+    // 30 values is not a whole number of 32-element blocks.
+    let short = upload_f32(&[0.5; 30], &[30]);
+    match run_mixed::<op::Quantize, _>(&[&short], &[], &[], q8_attrs()) {
+        Ok(_) => panic!("a short quantize buffer must be refused"),
+        Err(_) => {}
+    }
+    // Dequantizing f32 (not blocks) is a typed refusal, not a reinterpret.
+    let plain = upload_f32(&[0.5; 32], &[32]);
+    match run_mixed::<op::Dequantize, _>(&[&plain], &[], &[], f32_attrs()) {
+        Ok(_) => panic!("dequantizing non-blocks must be refused"),
+        Err(_) => {}
+    }
 }

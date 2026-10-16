@@ -1984,3 +1984,164 @@ impl<D: Device> WgpuBackendImpl<D> {
 // This mirrors the NativeBackend's `BlockQ8_0` layout, allowing byte-level
 // interoperability.  The encode/decode runs on the CPU (WgpuBuffer::to_vec /
 // from_slice); a GPU-native WGSL kernel is deferred post-0.1.0.
+
+impl<D: Device> WgpuBackendImpl<D> {
+    /// `quantize` to Q8_0 blocks: download `f32`, encode CPU-side with the
+    /// same block math as `cpu::ops::quant::quantize_storage` (per-block
+    /// `max_abs / 127` scale, round-to-nearest `i8`), upload the packed
+    /// 34-byte blocks under the Q8_0 label. Only Q8_0 is admitted (CPU
+    /// routes FP4 targets too; that admission lights up here when the
+    /// catalog rows do). Straight-through estimator: the backward passes
+    /// the cotangent through unchanged, one tape entry.
+    pub(crate) fn quantize<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dtype: DTypeDescriptor,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if dtype != DTypeId::Q8_0.descriptor() {
+            return Err(Error::Backend(BackendError::unsupported(
+                "Wgpu",
+                UnsupportedReason::DType {
+                    operation: OperationKind::Quantize,
+                    dtype,
+                },
+            )));
+        }
+        if t.dtype != DTypeId::F32.descriptor() {
+            return Err(Error::UnsupportedDType {
+                dtype: t.dtype,
+                backend: "Wgpu",
+                op: "quantize",
+            });
+        }
+        let data = t.buffer.to_vec::<f32>()?;
+        if data.len() % 32 != 0 {
+            return Err(Error::Msg(alloc::format!(
+                "quantize Q8_0 requires buffer length multiple of 32, got {}",
+                data.len()
+            )));
+        }
+        let mut bytes = alloc::vec::Vec::with_capacity(data.len() / 32 * 34);
+        for chunk in data.chunks_exact(32) {
+            let max_abs = chunk.iter().map(|value| value.abs()).fold(0.0f32, f32::max);
+            let d = max_abs / 127.0;
+            let inv_d = if d == 0.0 { 0.0 } else { 1.0 / d };
+            let mut qs = [0i8; 32];
+            for (index, value) in chunk.iter().enumerate() {
+                qs[index] = (*value * inv_d).round() as i8;
+            }
+            let block = crate::quant::BlockQ8_0 {
+                d: half::f16::from_f32(d),
+                qs,
+            };
+            bytes.extend_from_slice(&block.d.to_le_bytes());
+            bytes.extend_from_slice(&qs.map(|q| q as u8));
+        }
+        let out = WgpuStorage::new_with_dtype(
+            WgpuBuffer::from_slice(&bytes),
+            t.shape.to_vec(),
+            DTypeId::Q8_0.descriptor(),
+        );
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                Ok(alloc::vec![grad_out.clone()])
+            }),
+        });
+        Ok(out)
+    }
+
+    /// `dequantize` from Q8_0 blocks to `f32`: download, decode CPU-side,
+    /// upload. The dual of `quantize`'s straight-through node: decoding has
+    /// no derivative either, so the cotangent passes to the quantized
+    /// operand unchanged, one tape entry.
+    pub(crate) fn dequantize<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dtype: DTypeDescriptor,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if dtype != DTypeId::F32.descriptor() {
+            return Err(Error::Backend(BackendError::unsupported(
+                "Wgpu",
+                UnsupportedReason::DType {
+                    operation: OperationKind::Dequantize,
+                    dtype,
+                },
+            )));
+        }
+        if t.dtype != DTypeId::Q8_0.descriptor() {
+            return Err(Error::UnsupportedDType {
+                dtype: t.dtype,
+                backend: "Wgpu",
+                op: "dequantize",
+            });
+        }
+        let bytes = t.buffer.to_vec::<u8>()?;
+        if bytes.len() % 34 != 0 {
+            return Err(Error::Msg(alloc::format!(
+                "dequantize Q8_0 requires a whole number of 34-byte blocks, got {} bytes",
+                bytes.len()
+            )));
+        }
+        let mut out = alloc::vec::Vec::with_capacity(bytes.len() / 34 * 32);
+        for block in bytes.chunks_exact(34) {
+            let d = half::f16::from_le_bytes([block[0], block[1]]).to_f32();
+            for &q in &block[2..34] {
+                out.push((q as i8) as f32 * d);
+            }
+        }
+        let out_storage = WgpuStorage::new(WgpuBuffer::from_slice(&out), t.shape.to_vec());
+        let (t_id, out_id) = (t.id, out_storage.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                Ok(alloc::vec![grad_out.clone()])
+            }),
+        });
+        Ok(out_storage)
+    }
+
+    /// `quantized_matmul`: dequantize both Q8_0 operands on the host, then
+    /// the GPU matmul. Records nothing and has `GradientRule::None` by
+    /// design, like CPU/CUDA.
+    pub(crate) fn quantized_matmul<K: DType>(
+        lhs: &<Self as StorageBackend>::Storage<K>,
+        rhs: &<Self as StorageBackend>::Storage<K>,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        for operand in [lhs, rhs] {
+            if operand.dtype != DTypeId::Q8_0.descriptor() {
+                return Err(Error::UnsupportedDType {
+                    dtype: operand.dtype,
+                    backend: "Wgpu",
+                    op: "quantized_matmul",
+                });
+            }
+        }
+        if lhs.shape.len() < 2 || rhs.shape.len() != 2 {
+            return Err(Error::ShapeMismatch {
+                op: "quantized_matmul",
+                expected: alloc::vec![2],
+                got: alloc::vec![lhs.shape.len(), rhs.shape.len()],
+                msg: "quantized_matmul requires lhs rank >= 2 and rhs rank 2".to_string(),
+            });
+        }
+        let k = lhs.shape[lhs.shape.len() - 1];
+        if k != rhs.shape[1] || !k.is_multiple_of(32) {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::QuantizedMatMul,
+                reason: "quantized_matmul K must match and be a multiple of 32",
+            }));
+        }
+        // Dequantize pushed straight-through entries above; this op records
+        // nothing by design, so everything below runs disabled.
+        incin_core::exec::GradMode::Disabled.scope(|| {
+            let lhs_f32 = Self::dequantize::<K>(lhs, DTypeId::F32.descriptor())?;
+            let rhs_f32 = Self::dequantize::<K>(rhs, DTypeId::F32.descriptor())?;
+            // The quantized rhs is stored pre-transposed ([N,K]); the matmul
+            // needs [K,N].
+            let rhs_t = Self::transpose::<K>(&rhs_f32, 0, 1)?;
+            Self::matmul::<K>(&lhs_f32, &rhs_t)
+        })
+    }
+}

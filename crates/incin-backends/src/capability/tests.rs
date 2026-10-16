@@ -412,7 +412,9 @@ fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
     // Every other backend: whatever it advertises of the three stays
     // training-false until an executor there records a tape entry, except
     // CUDA's quantize/dequantize pair, whose executor records the same STE
-    // entry as CPU's (hardware-verified). A backend that does not advertise
+    // entry as CPU's (hardware-verified), and WGPU's pair, whose executor
+    // records the same entry (software-adapter-verified: the quant tests
+    // assert one tape entry each). A backend that does not advertise
     // one of them at all is fine - `None` is the fail-closed answer too.
     for (device, rules) in [
         (DeviceKind::Cuda, CUDA_CAPABILITIES),
@@ -421,7 +423,8 @@ fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
     ] {
         for operation in [K::Quantize, K::Dequantize, K::QuantizedMatMul] {
             if let Some(training) = training_of(rules, operation) {
-                let expect_training = device == DeviceKind::Cuda && operation != K::QuantizedMatMul;
+                let expect_training = matches!(device, DeviceKind::Cuda | DeviceKind::Wgpu)
+                    && operation != K::QuantizedMatMul;
                 assert_eq!(
                     training, expect_training,
                     "{device:?} advertises {operation:?} with training = {training}, but its \
