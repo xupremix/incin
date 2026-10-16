@@ -1,5 +1,5 @@
 //! WGPU indexing ops: `embedding`/`gather`/`index_select`/`diag`/`scatter`/
-//! `scatter_add`/`one_hot`/`bincount` host-walks and the `masked_fill`/`where_cond` GPU selection
+//! `scatter_add`/`one_hot`/`bincount`/`nonzero` host-walks and the `masked_fill`/`where_cond` GPU selection
 //! kernel.
 //!
 //! The gather-family operations download their operands, compute on the
@@ -481,6 +481,91 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(WgpuStorage::new_with_dtype(
             WgpuBuffer::from_slice(&counts),
             alloc::vec![bins],
+            DTypeId::I64.descriptor(),
+        ))
+    }
+
+    /// `nonzero(input)`: row-major coordinates of every non-zero element —
+    /// CPU's `nonzero_storage` walk for walk, over whatever storage width
+    /// the operand was uploaded with.
+    ///
+    /// The count is not known until the scan finishes, which is why the
+    /// output extent is data-dependent and the shape `[count, rank]` is read
+    /// back from the returned storage rather than pre-asserted. A zero is
+    /// whatever the width's zero is (`0.0`, `0`, or `false`); anything else
+    /// names its coordinates. Forward-only with no tape entry: coordinates
+    /// are addresses, not values, the same `GradientRule::None` reason
+    /// `one_hot` and `bincount` record nothing.
+    pub(crate) fn nonzero(input: &WgpuStorage) -> Result<WgpuStorage> {
+        let rank = input.shape.len();
+        let total = input
+            .shape
+            .iter()
+            .try_fold(1usize, |acc, &dim| {
+                acc.checked_mul(dim).ok_or(Error::Backend(
+                    BackendError::InvalidInput {
+                        operation: OperationKind::NonZero,
+                        reason: "nonzero operand extent overflows the address space",
+                    },
+                ))
+            })?;
+        // Download once, whatever the width: the zero test below is per
+        // element, so every storage width this backend admits is a row here.
+        // A width outside the set is a typed refusal, not a reinterpret.
+        // (`Bool` reads through the `f32` arm below; the capability row does
+        // not admit it today, so that arm is defense-in-depth for a future
+        // union widening, not a claim.)
+        enum Flat {
+            F32(Vec<f32>),
+            I64(Vec<i64>),
+            U32(Vec<u32>),
+            U8(Vec<u8>),
+        }
+        let flat = match input.dtype.builtin_id() {
+            Some(DTypeId::F32) => Flat::F32(input.buffer.to_vec::<f32>()?),
+            Some(DTypeId::I64) => Flat::I64(input.buffer.to_vec::<i64>()?),
+            Some(DTypeId::U32) => Flat::U32(input.buffer.to_vec::<u32>()?),
+            Some(DTypeId::U8) => Flat::U8(input.buffer.to_vec::<u8>()?),
+            // `Bool` is stored as one `f32` (0.0/1.0) under its `Bool`
+            // label, so it reads through the `f32` arm, not a bool one.
+            Some(DTypeId::Bool) => Flat::F32(input.buffer.to_vec::<f32>()?),
+            _ => {
+                return Err(Error::UnsupportedDType {
+                    dtype: input.dtype,
+                    backend: "Wgpu",
+                    op: "nonzero",
+                });
+            }
+        };
+        let is_set = |flat_position: usize| -> bool {
+            match &flat {
+                Flat::F32(values) => values[flat_position] != 0.0,
+                Flat::I64(values) => values[flat_position] != 0,
+                Flat::U32(values) => values[flat_position] != 0,
+                Flat::U8(values) => values[flat_position] != 0,
+            }
+        };
+        // Odometer over the shape; the flat position counts row-major
+        // elements, which is what a contiguous buffer holds. Strided
+        // operands never reach a host walk: readback refuses them before
+        // dispatch hands one over.
+        let mut coordinates = alloc::vec::Vec::new();
+        let mut count = 0usize;
+        let mut idx = alloc::vec![0usize; rank];
+        for flat_position in 0..total {
+            if is_set(flat_position) {
+                for &coordinate in &idx {
+                    coordinates.push(coordinate as i64);
+                }
+                count += 1;
+            }
+            if rank > 0 {
+                host_increment(&mut idx, &input.shape);
+            }
+        }
+        Ok(WgpuStorage::new_with_dtype(
+            WgpuBuffer::from_slice(&coordinates),
+            alloc::vec![count, rank],
             DTypeId::I64.descriptor(),
         ))
     }
@@ -1163,6 +1248,26 @@ impl<D: Device> Execute<op::Bincount> for WgpuBackendImpl<D> {
         let bins = request.operation.descriptor().attributes().bins;
         WgpuBackendImpl::<D>::bincount(indices, bins)
             .map_err(|e| index_kernel_error(operation, e))
+    }
+}
+
+/// `nonzero`: coordinates out, data-dependent extent, no tape entry —
+/// the `GradientRule::None` family `one_hot`/`bincount` belong to.
+impl<D: Device> Execute<op::NonZero> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::NonZero, Self>,
+    ) -> core::result::Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::NonZero;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "nonzero expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        WgpuBackendImpl::<D>::nonzero(input).map_err(|e| index_kernel_error(operation, e))
     }
 }
 

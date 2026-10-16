@@ -624,7 +624,7 @@ macro_rules! wgpu_descriptor_operations {
                 // (max → sub → exp → sum/keepdim → log → add/squeeze).
                 LogSumExpDim, LogSumExpKeepDim
             ],
-            spatial = [Conv2dExact, MaxPool2d, AvgPool2d],
+            spatial = [Conv2dExact, MaxPool2d, AvgPool2d, AdaptiveAvgPool2dExact],
             // Issue #90 audit: this group and the two composed matmul groups
             // below keep the table's `F32_ONLY` `$matmul` while CPU/CUDA
             // widened to `FLOAT_DTYPES`. `matmul.wgsl` is `array<f32>`
@@ -678,7 +678,13 @@ macro_rules! wgpu_descriptor_operations {
             // `index_values` accessor, out-of-range indices a typed
             // `InvalidInput` refusal (CPU's `bincount_storage` errors for the
             // same reason), forward-only with no tape entry.
-            embedding = [EmbeddingExact, OneHot, Bincount],
+            //
+            // `NonZero` joins for the same union reason with one extra
+            // twist: the output extent is data-dependent (no attribute names
+            // it), so the shape is read back from the returned storage. The
+            // input may be any storage width this backend admits; the zero
+            // test is per element, forward-only with no tape entry.
+            embedding = [EmbeddingExact, OneHot, Bincount, NonZero],
             // No fused-attention kernel on WGPU yet (issue #104); empty
             // until one ships.
             fused_attention = [],
@@ -725,6 +731,13 @@ macro_rules! wgpu_descriptor_operations {
                 // `diag_storage` does (construct's adjoint is the extract,
                 // extract's adjoint scatters onto the diagonal).
                 Narrow, SliceExact, ConcatExact, StackExact, Tril, Triu, Diag,
+                // Batch-D host walks over downloaded `f32` (`shape_ops.rs`),
+                // each with one tape entry mirroring CPU's recipe: the pure
+                // permutation `pixel_shuffle` (inverse-permutation backward)
+                // and the sliding-window `unfold` (scatter-accumulating
+                // backward). `F32_ONLY`/`CONTIGUOUS` honestly, like the rows
+                // above; CPU admits wider dtypes and strided layouts.
+                PixelShuffle, Unfold,
                 // Batch-C host walks: pad fills the outside window and extracts
                 // it on the backward; repeat tiles by modulo; repeat_interleave
                 // copies contiguous blocks; cumsum is a host scan whose reverse

@@ -342,6 +342,202 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
+    /// Odometer increment over `shape` for host walks below (wraps like
+    /// CPU's `increment_index`).
+    fn increment_index(idx: &mut [usize], shape: &[usize]) {
+        for axis in (0..shape.len()).rev() {
+            idx[axis] += 1;
+            if idx[axis] < shape[axis] {
+                return;
+            }
+            idx[axis] = 0;
+        }
+    }
+
+    /// `pixel_shuffle`: `[N, C, H, W]` to `[N, C/r^2, H*r, W*r]`, a pure
+    /// permutation walked host-side exactly as CPU's `pixel_shuffle_storage`
+    /// does (same source-coordinate map, same `C % r^2` refusal). Backward
+    /// scatters the cotangent through the inverse permutation with
+    /// accumulation. ONE `TapeEntry`, `input_ids = vec![t.id]`.
+    pub(crate) fn pixel_shuffle<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        upscale_factor: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        if t.shape.len() != 4 {
+            return Err(Error::ShapeMismatch {
+                op: "pixel_shuffle",
+                expected: alloc::vec![4],
+                got: alloc::vec![t.shape.len()],
+                msg: "pixel_shuffle expects a 4D tensor (N, C, H, W)".to_string(),
+            });
+        }
+        let (n, c, h, w) = (t.shape[0], t.shape[1], t.shape[2], t.shape[3]);
+        let r = upscale_factor;
+        let r_sq = r.checked_mul(r).ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::PixelShuffle,
+            expression: "upscale factor squared",
+        })?;
+        if c % r_sq != 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::PixelShuffle,
+                reason: "pixel_shuffle channels must be divisible by upscale_factor^2",
+            }));
+        }
+        let out_shape = alloc::vec![n, c / r_sq, h * r, w * r];
+        let total = num_elements(&out_shape)?;
+        let data = t.buffer.to_vec::<f32>()?;
+        let mut out = alloc::vec![0.0f32; total];
+        let mut source_positions: alloc::vec::Vec<[usize; 4]> =
+            alloc::vec::Vec::with_capacity(total);
+        let mut idx = alloc::vec![0usize; 4];
+        for out_val in out.iter_mut() {
+            let (b, c_out, h_out, w_out) = (idx[0], idx[1], idx[2], idx[3]);
+            let src = [
+                b,
+                c_out * r_sq + (h_out % r) * r + (w_out % r),
+                h_out / r,
+                w_out / r,
+            ];
+            source_positions.push(src);
+            *out_val = data[src[0] * (c * h * w)
+                + src[1] * (h * w)
+                + src[2] * w
+                + src[3]];
+            Self::increment_index(&mut idx, &out_shape);
+        }
+        let out_storage = WgpuStorage::new(WgpuBuffer::from_slice(&out), out_shape.clone());
+
+        let original_shape = t.shape.to_vec();
+        let original_numel = num_elements(&original_shape)?;
+        let (t_id, out_id) = (t.id, out_storage.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut grads = alloc::vec![0.0f32; original_numel];
+                let in_strides = [
+                    original_shape[1] * original_shape[2] * original_shape[3],
+                    original_shape[2] * original_shape[3],
+                    original_shape[3],
+                    1,
+                ];
+                for (flat_out, src) in source_positions.iter().enumerate() {
+                    let flat_src: usize = src
+                        .iter()
+                        .zip(in_strides.iter())
+                        .map(|(&coordinate, &stride)| coordinate * stride)
+                        .sum();
+                    grads[flat_src] += grad_data[flat_out];
+                }
+                Ok(alloc::vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grads),
+                    original_shape.clone(),
+                )])
+            }),
+        });
+        Ok(out_storage)
+    }
+
+    /// `unfold`: sliding windows along `axis`, host-walked exactly as CPU's
+    /// `unfold_storage` does (same `size > dim_len` refusal, same window
+    /// map). Overlapping windows read the same source element, so the
+    /// cotangent accumulates through the exact forward mapping. ONE
+    /// `TapeEntry`, `input_ids = vec![t.id]`.
+    pub(crate) fn unfold<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        dim: usize,
+        size: usize,
+        step: usize,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let rank = t.shape.len();
+        if dim >= rank {
+            return Err(Error::ShapeMismatch {
+                op: "unfold",
+                expected: t.shape.to_vec(),
+                got: alloc::vec![dim],
+                msg: "unfold axis out of bounds".to_string(),
+            });
+        }
+        let dim_len = t.shape[dim];
+        if size > dim_len {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::Unfold,
+                reason: "unfold size cannot exceed dimension length",
+            }));
+        }
+        let n_windows = (dim_len - size) / step + 1;
+        let mut out_shape = t.shape.to_vec();
+        out_shape[dim] = n_windows;
+        out_shape.push(size);
+        let total = num_elements(&out_shape)?;
+        let data = t.buffer.to_vec::<f32>()?;
+        let in_strides = {
+            let mut strides = alloc::vec![1usize; rank];
+            for i in (0..rank.saturating_sub(1)).rev() {
+                strides[i] = strides[i + 1] * t.shape[i + 1];
+            }
+            strides
+        };
+        let mut out = alloc::vec![0.0f32; total];
+        let mut idx = alloc::vec![0usize; out_shape.len()];
+        for out_val in out.iter_mut() {
+            let win_idx = idx[dim];
+            let offset_idx = idx[out_shape.len() - 1];
+            let mut flat_src = 0usize;
+            for axis in 0..rank {
+                let coordinate = if axis == dim {
+                    win_idx * step + offset_idx
+                } else {
+                    idx[axis]
+                };
+                flat_src += coordinate * in_strides[axis];
+            }
+            *out_val = data[flat_src];
+            Self::increment_index(&mut idx, &out_shape);
+        }
+        let out_storage = WgpuStorage::new(WgpuBuffer::from_slice(&out), out_shape.clone());
+
+        let original_shape = t.shape.to_vec();
+        let original_numel = num_elements(&original_shape)?;
+        let (t_id, out_id) = (t.id, out_storage.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let mut grads = alloc::vec![0.0f32; original_numel];
+                let grad_rank = grad_out.shape.len();
+                let mut grad_strides = alloc::vec![1usize; grad_rank];
+                for i in (0..grad_rank.saturating_sub(1)).rev() {
+                    grad_strides[i] = grad_strides[i + 1] * grad_out.shape[i + 1];
+                }
+                let mut grad_idx = alloc::vec![0usize; grad_rank];
+                let grad_total = num_elements(&grad_out.shape)?;
+                for (flat_grad, _) in grad_data.iter().enumerate().take(grad_total) {
+                    let win_idx = grad_idx[dim];
+                    let offset_idx = grad_idx[grad_rank - 1];
+                    let mut flat_src = 0usize;
+                    for axis in 0..rank {
+                        let coordinate = if axis == dim {
+                            win_idx * step + offset_idx
+                        } else {
+                            grad_idx[axis]
+                        };
+                        flat_src += coordinate * in_strides[axis];
+                    }
+                    grads[flat_src] += grad_data[flat_grad];
+                    Self::increment_index(&mut grad_idx, &grad_out.shape);
+                }
+                Ok(alloc::vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grads),
+                    original_shape.clone(),
+                )])
+            }),
+        });
+        Ok(out_storage)
+    }
+
     pub(crate) fn broadcast_as<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],

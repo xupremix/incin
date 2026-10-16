@@ -327,6 +327,30 @@ impl<D: Device> Execute<op::AvgPool2d> for WgpuBackendImpl<D> {
     }
 }
 
+/// `adaptive_avg_pool2d`: variable windows from the output size, host-walked
+/// with one tape entry mirroring CPU's `adaptive_avg_pool2d_impl`.
+impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::AdaptiveAvgPool2dExact, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let [input] = request.inputs else {
+            return Err(invalid(
+                OperationKind::AdaptiveAvgPool2d,
+                "adaptive_avg_pool2d expects 1 input",
+            ));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(OperationKind::AdaptiveAvgPool2d, "input is not WGPU storage"))?;
+        let attrs = request.operation.descriptor().attributes();
+        let [h, w] = attrs.output;
+        Self::adaptive_avg_pool2d::<f32>(input, (h, w))
+            .map_err(|e| kernel_error("Wgpu", OperationKind::AdaptiveAvgPool2d, e))
+    }
+}
+
 /// `transpose` and `flatten` read attribute *pairs* rather than a single
 /// `axis`, so neither fits the axis macro above.
 ///
@@ -350,6 +374,53 @@ impl<D: Device> Execute<op::TransposeExact> for WgpuBackendImpl<D> {
         let attributes = request.operation.descriptor().attributes();
         WgpuBackendImpl::<D>::transpose::<f32>(input, attributes.first, attributes.second)
             .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+/// `pixel_shuffle`/`unfold`: f32-only contiguous host walks in `shape_ops`,
+/// each with one tape entry mirroring CPU's recipe walk for walk.
+impl<D: Device> Execute<op::PixelShuffle> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::PixelShuffle, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::PixelShuffle;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "pixel_shuffle expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::pixel_shuffle::<f32>(input, attributes.upscale_factor)
+            .map_err(|e| kernel_error("Wgpu", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Unfold> for WgpuBackendImpl<D> {
+    type Output = WgpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Unfold, Self>,
+    ) -> Result<WgpuStorage, BackendError> {
+        let operation = OperationKind::Unfold;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "unfold expects exactly 1 input"));
+        };
+        let input = input
+            .downcast_ref::<WgpuStorage>()
+            .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
+        let attributes = request.operation.descriptor().attributes();
+        WgpuBackendImpl::<D>::unfold::<f32>(
+            input,
+            attributes.axis,
+            attributes.size,
+            attributes.step,
+        )
+        .map_err(|e| kernel_error("Wgpu", operation, e))
     }
 }
 

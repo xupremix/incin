@@ -19,8 +19,9 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
-    AxisAttributes, BincountAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes,
-    OneHotAttributes, ScalarAttributes, ScatterAttributes,
+    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, DiagonalAttributes,
+    DuplicateIndexRule, NoAttributes, OneHotAttributes, PixelShuffleAttributes,
+    ScalarAttributes, ScatterAttributes, UnfoldAttributes,
 };
 use incin_core::exec::{CanonicalError, ExecutionContext, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
@@ -881,4 +882,217 @@ fn integer_index_bytes_round_trip_at_their_own_widths() {
             "round-trip must be byte-identical for {dtype:?}"
         );
     }
+}
+
+// ── nonzero ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn nonzero_reports_coordinates_without_a_tape_entry() {
+    require_wgpu();
+    // [0, 1, 0, 2] names positions 1 and 3: the routing fixture CPU proves.
+    let input = upload_f32(&[0.0, 1.0, 0.0, 2.0], &[4]);
+    let (out, recorded) =
+        run_mixed::<op::NonZero, _>(&[&input], &[], &[], NoAttributes)
+            .expect("nonzero is advertised and must execute");
+    assert_eq!(recorded, 0, "nonzero is forward-only: no tape entry");
+    assert_eq!(
+        out.metadata().dtype(),
+        DTypeId::I64.descriptor(),
+        "nonzero result is i64 storage"
+    );
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<i64>(&out).dims(),
+        &[2, 1],
+        "nonzero output is the data-dependent [count, rank] extent"
+    );
+    assert_eq!(read_histogram(&out), vec![1, 3], "nonzero coordinates");
+
+    // Rank 2: each coordinate names its own row and column.
+    let grid = upload_f32(&[0.0, 5.0, 0.0, 0.0, 0.0, 7.0], &[2, 3]);
+    let (out, _) = run_mixed::<op::NonZero, _>(&[&grid], &[], &[], NoAttributes)
+        .expect("nonzero over a rank-2 operand must execute");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<i64>(&out).dims(),
+        &[2, 2],
+        "two set elements in rank 2"
+    );
+    assert_eq!(read_histogram(&out), vec![0, 1, 1, 2], "rank-2 coordinates");
+
+    // Nothing set: the extent is [0, rank] with no coordinates.
+    let empty = upload_f32(&[0.0, 0.0], &[2]);
+    let (out, _) = run_mixed::<op::NonZero, _>(&[&empty], &[], &[], NoAttributes)
+        .expect("an all-zero operand must execute");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<i64>(&out).dims(),
+        &[0, 1],
+        "empty result keeps the rank axis"
+    );
+    assert_eq!(read_histogram(&out), Vec::<i64>::new(), "no coordinates");
+
+    // Integer widths ride the same walk (the capability row's union).
+    let narrow = upload_u8(&[0, 3, 0], &[3]);
+    let context = ExecutionContext::new(TestBackend::default());
+    let handles = [TensorHandle::from_storage::<TestBackend, u8, _>(&narrow)];
+    let out = incin_core::exec::dispatch::execute::<op::NonZero, _>(
+        &context,
+        NoAttributes,
+        &handles,
+    )
+    .expect("u8 nonzero input must execute");
+    assert_eq!(read_histogram(&out), vec![1], "u8 nonzero coordinate");
+}
+
+// ── pixel_shuffle / unfold ──────────────────────────────────────────────────
+
+#[test]
+fn pixel_shuffle_permutes_channels_into_space_with_one_tape_entry() {
+    require_wgpu();
+    // [1,4,2,1] factor 2 -> [1,1,4,2]: out[ho,wo] reads channel
+    // (ho%2)*2 + (wo%2) at (ho/2, wo/2) — CPU's own fixture spacing.
+    let input = upload_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], &[1, 4, 2, 1]);
+    let (out, recorded) = run_mixed::<op::PixelShuffle, _>(
+        &[&input],
+        &[],
+        &[],
+        PixelShuffleAttributes { upscale_factor: 2 },
+    )
+    .expect("pixel_shuffle is advertised and must execute");
+    assert_eq!(recorded, 1, "pixel_shuffle trains with ONE TapeEntry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[1, 1, 4, 2],
+        "channels fold into space"
+    );
+    assert_eq!(
+        read_f32(&out),
+        vec![1.0, 3.0, 5.0, 7.0, 2.0, 4.0, 6.0, 8.0],
+        "channel-to-space permutation"
+    );
+
+    // A permutation's backward is its inverse: a ones seed comes back ones.
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("pixel_shuffle backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0; 8],
+        "bijective permutation preserves the ones seed"
+    );
+}
+
+#[test]
+fn unfold_windows_and_scatters_the_cotangent() {
+    require_wgpu();
+    // [1,2,3,4] axis 0 size 2 step 1 -> [3,2] windows [1,2],[2,3],[3,4].
+    let input = upload_f32(&[1.0, 2.0, 3.0, 4.0], &[4]);
+    let (out, recorded) = run_mixed::<op::Unfold, _>(
+        &[&input],
+        &[],
+        &[],
+        UnfoldAttributes { axis: 0, size: 2, step: 1 },
+    )
+    .expect("unfold is advertised and must execute");
+    assert_eq!(recorded, 1, "unfold trains with ONE TapeEntry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[3, 2],
+        "three windows of two"
+    );
+    assert_eq!(
+        read_f32(&out),
+        vec![1.0, 2.0, 2.0, 3.0, 3.0, 4.0],
+        "sliding windows"
+    );
+
+    // Overlapping windows share elements, so the cotangent accumulates:
+    // interior elements belong to two windows each.
+    let loss = sum_loss(&out);
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("unfold backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&input))
+        .expect("input must receive a gradient");
+    assert_eq!(
+        read_f32(gin),
+        vec![1.0, 2.0, 2.0, 1.0],
+        "shared elements accumulate window contributions"
+    );
+}
+
+// ── adaptive_avg_pool2d ─────────────────────────────────────────────────────
+
+#[test]
+fn adaptive_avg_pool2d_uses_variable_windows_with_one_tape_entry() {
+    require_wgpu();
+    // [1,1,2,2] of 1..4 -> [1,1,1,1] of 2.5: the whole input is one window.
+    let input = upload_f32(&[1.0, 2.0, 3.0, 4.0], &[1, 1, 2, 2]);
+    let (out, recorded) = run_mixed::<op::AdaptiveAvgPool2dExact, _>(
+        &[&input],
+        &[],
+        &[],
+        AdaptivePool2dAttributes { output: [1, 1] },
+    )
+    .expect("adaptive_avg_pool2d is advertised and must execute");
+    assert_eq!(recorded, 1, "adaptive_avg_pool2d trains with ONE TapeEntry");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[1, 1, 1, 1],
+        "output size comes from the attribute"
+    );
+    assert_eq!(read_f32(&out), vec![2.5], "mean of 1..4");
+
+    // 1x1x1x5 -> 1x1x1x3: windows [0,2),[1,4),[3,5) give [1.5,3.0,4.5].
+    let row = upload_f32(&[1.0, 2.0, 3.0, 4.0, 5.0], &[1, 1, 1, 5]);
+    let (out, _) = run_mixed::<op::AdaptiveAvgPool2dExact, _>(
+        &[&row],
+        &[],
+        &[],
+        AdaptivePool2dAttributes { output: [1, 3] },
+    )
+    .expect("uneven windows must execute");
+    assert_eq!(read_f32(&out), vec![1.5, 3.0, 4.5], "variable windows");
+
+    // Rank 3 rides without a batch axis: [1,2,2] of 1..4 -> [1,1,1] of 2.5.
+    let flat = upload_f32(&[1.0, 2.0, 3.0, 4.0], &[1, 2, 2]);
+    let (out, _) = run_mixed::<op::AdaptiveAvgPool2dExact, _>(
+        &[&flat],
+        &[],
+        &[],
+        AdaptivePool2dAttributes { output: [1, 1] },
+    )
+    .expect("rank-3 input must execute");
+    assert_eq!(
+        <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
+        &[1, 1, 1],
+        "rank-3 output keeps rank 3"
+    );
+    assert_eq!(read_f32(&out), vec![2.5], "rank-3 mean");
+
+    // Backward spreads g/count over each variable window: windows cover
+    // [0,2),[1,4),[3,5), so positions see [1, 2, 1, 2, 1] windows over
+    // counts [2, 3, 2]: [0.5, 5/6, 1/3, 5/6, 0.5].
+    let loss = sum_loss(
+        &run_mixed::<op::AdaptiveAvgPool2dExact, _>(
+            &[&row],
+            &[],
+            &[],
+            AdaptivePool2dAttributes { output: [1, 3] },
+        )
+        .expect("re-run for backward")
+        .0,
+    );
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("adaptive_avg_pool2d backward must run");
+    let gin = grads
+        .get(TapeStorage::id(&row))
+        .expect("input must receive a gradient");
+    assert_close(
+        &read_f32(gin),
+        &[0.5, 5.0 / 6.0, 1.0 / 3.0, 5.0 / 6.0, 0.5],
+        1e-6,
+        "cotangent spreads over variable windows",
+    );
 }

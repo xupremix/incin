@@ -887,6 +887,153 @@ impl<D: Device> WgpuBackendImpl<D> {
         Ok(out)
     }
 
+    /// Variable window for output position `i`: `start = floor(i*in/out)`,
+    /// `end = ceil((i+1)*in/out)` — CPU's `adaptive_window_bounds` bound for
+    /// bound, including its overflow errors.
+    fn adaptive_bounds(
+        in_size: usize,
+        out_size: usize,
+        i: usize,
+    ) -> Result<(usize, usize)> {
+        if out_size == 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::AdaptiveAvgPool2d,
+                reason: "adaptive_avg_pool2d output size must be non-zero",
+            }));
+        }
+        let start = i
+            .checked_mul(in_size)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::AdaptiveAvgPool2d,
+                expression: "adaptive-pooling start index",
+            })?
+            / out_size;
+        let end = i
+            .checked_add(1)
+            .and_then(|next| next.checked_mul(in_size))
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::AdaptiveAvgPool2d,
+                expression: "adaptive-pooling end index",
+            })?
+            .div_ceil(out_size);
+        Ok((start, end))
+    }
+
+    /// `adaptive_avg_pool2d`: variable windows from the output size, walked
+    /// host-side exactly as CPU's `adaptive_avg_pool2d_impl` does (same
+    /// floor/ceil window bounds, same `f64` accumulation narrowed once,
+    /// same `g/count` spread backward). Rank 3 rides without a batch axis
+    /// like CPU's `batched_spatial`. ONE `TapeEntry`, `input_ids = vec![t.id]`.
+    pub(crate) fn adaptive_avg_pool2d<K: DType>(
+        t: &<Self as StorageBackend>::Storage<K>,
+        output_size: (usize, usize),
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let rank = t.shape.len();
+        if rank != 3 && rank != 4 {
+            return Err(Error::ShapeMismatch {
+                op: "adaptive_avg_pool2d",
+                expected: alloc::vec![3, 4],
+                got: alloc::vec![rank],
+                msg: "adaptive_avg_pool2d accepts rank 3 or 4".to_string(),
+            });
+        }
+        let (h_out, w_out) = output_size;
+        if h_out == 0 || w_out == 0 {
+            return Err(Error::Backend(BackendError::InvalidInput {
+                operation: OperationKind::AdaptiveAvgPool2d,
+                reason: "adaptive_avg_pool2d output size must be non-zero",
+            }));
+        }
+        let (b, c, h, w) = if rank == 4 {
+            (t.shape[0], t.shape[1], t.shape[2], t.shape[3])
+        } else {
+            (1, t.shape[0], t.shape[1], t.shape[2])
+        };
+        let data = t.buffer.to_vec::<f32>()?;
+        let out_shape = if rank == 4 {
+            alloc::vec![b, c, h_out, w_out]
+        } else {
+            alloc::vec![c, h_out, w_out]
+        };
+        let out_total = num_elements(&out_shape)?;
+        let mut out_vals = alloc::vec![0.0f32; out_total];
+        // Flat base per (batch, channel) in the downloaded buffer, which is
+        // row-major contiguous: readback refuses strided operands before a
+        // host walk ever sees one.
+        let in_plane = h * w;
+        for bi in 0..b {
+            for ci in 0..c {
+                let base = (bi * c + ci) * in_plane;
+                for oh in 0..h_out {
+                    let (h_start, h_end) = Self::adaptive_bounds(h, h_out, oh)?;
+                    for ow in 0..w_out {
+                        let (w_start, w_end) = Self::adaptive_bounds(w, w_out, ow)?;
+                        let mut sum = 0.0f64;
+                        for ih in h_start..h_end {
+                            for iw in w_start..w_end {
+                                sum += f64::from(data[base + ih * w + iw]);
+                            }
+                        }
+                        let count = ((h_end - h_start) * (w_end - w_start)) as f64;
+                        out_vals[((bi * c + ci) * h_out + oh) * w_out + ow] =
+                            (sum / count) as f32;
+                    }
+                }
+            }
+        }
+        let out = WgpuStorage::new(WgpuBuffer::from_slice(&out_vals), out_shape);
+
+        let input_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::wgpu::tape::push_with(|| crate::wgpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![t_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
+                let grad_data = grad_out.buffer.to_vec::<f32>()?;
+                let input_total = num_elements(&input_shape)?;
+                let mut grads = alloc::vec![0.0f32; input_total];
+                let (gb, gc, gh, gw) = if rank == 4 {
+                    (
+                        input_shape[0],
+                        input_shape[1],
+                        input_shape[2],
+                        input_shape[3],
+                    )
+                } else {
+                    (1, input_shape[0], input_shape[1], input_shape[2])
+                };
+                let gh_out = grad_out.shape[grad_out.shape.len() - 2];
+                let gw_out = grad_out.shape[grad_out.shape.len() - 1];
+                for bi in 0..gb {
+                    for ci in 0..gc {
+                        let base = (bi * gc + ci) * (gh * gw);
+                        let grad_base = (bi * gc + ci) * (gh_out * gw_out);
+                        for oh in 0..gh_out {
+                            let (h_start, h_end) = Self::adaptive_bounds(gh, gh_out, oh)?;
+                            for ow in 0..gw_out {
+                                let (w_start, w_end) =
+                                    Self::adaptive_bounds(gw, gw_out, ow)?;
+                                let count =
+                                    ((h_end - h_start) * (w_end - w_start)) as f32;
+                                let g = grad_data[grad_base + oh * gw_out + ow] / count;
+                                for ih in h_start..h_end {
+                                    for iw in w_start..w_end {
+                                        grads[base + ih * gw + iw] += g;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(alloc::vec![WgpuStorage::new(
+                    WgpuBuffer::from_slice(&grads),
+                    input_shape.clone(),
+                )])
+            }),
+        });
+        Ok(out)
+    }
+
     /// `max_pool2d`.
     pub(crate) fn max_pool2d<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
