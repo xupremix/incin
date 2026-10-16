@@ -24,6 +24,10 @@ pub(super) fn gemm(
         return;
     }
 
+    if packed_rhs_gemm(m, k, n, lhs, rhs, out) {
+        return;
+    }
+
     scalar_gemm(m, k, n, lhs, rhs, out);
 }
 
@@ -82,6 +86,51 @@ pub(super) fn blocked_gemm(
             1,
         );
     }
+    true
+}
+
+/// Pack a strided `f32` rhs panel to contiguous row-major and rerun dispatch.
+///
+/// `simd_gemm` declines any `rhs.col_stride != 1`, which is exactly what a
+/// transposed operand presents — every backward pass — landing in
+/// `scalar_gemm`'s slow `f64` path at a few hundred MFLOP/s. Packing costs
+/// one streaming `k*n` pass and is repaid across the `m` rows that reuse
+/// each packed element, so below the same product threshold `blocked_gemm`
+/// uses the scalar path reads the view directly. A packed view accumulates
+/// in the same order as the equivalent contiguous problem; agreement with
+/// the unpacked path is within normal `f32` rounding, asserted in tests.
+pub(super) fn packed_rhs_gemm(
+    m: usize,
+    k: usize,
+    n: usize,
+    lhs: MatrixView<'_>,
+    rhs: MatrixView<'_>,
+    out: &mut [f32],
+) -> bool {
+    if rhs.col_stride == 1 || rhs.f32_data().is_none() {
+        return false;
+    }
+    const MIN_PRODUCT: usize = 64 * 64 * 64;
+    if m.saturating_mul(k).saturating_mul(n) < MIN_PRODUCT {
+        return false;
+    }
+    let mut packed = alloc::vec::Vec::with_capacity(k.saturating_mul(n));
+    for row in 0..k {
+        for col in 0..n {
+            packed.push(rhs.get(row, col) as f32);
+        }
+    }
+    let buffer = CpuBuffer::F32(packed);
+    let view = MatrixView {
+        buffer: &buffer,
+        offset: 0,
+        row_stride: n,
+        col_stride: 1,
+    };
+    if simd_gemm(m, k, n, lhs, view, out) {
+        return true;
+    }
+    scalar_gemm(m, k, n, lhs, view, out);
     true
 }
 

@@ -39,7 +39,11 @@
 //! (#103) that reuses `matmul_forward` per expert and composes one tape
 //! entry over the whole tile; `gemm` is the actual `[m,k] @ [k,n]` inner
 //! kernel, tried in decreasing order of specificity (blocked/BLAS,
-//! architecture SIMD, then the always-correct scalar path).
+//! architecture SIMD, packed-rhs repack, then the always-correct scalar
+//! path). The packed step exists because every backward pass presents a
+//! transposed operand, which SIMD declines and the scalar path reads at
+//! `f64` elementwise: repacking to contiguous first keeps the default
+//! build within a small factor of the BLAS path on those shapes.
 
 use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
@@ -68,6 +72,12 @@ pub(crate) use unbatched::matmul_impl;
 // module's own reach, not wider), so `batched`/`core`/`tests` see them
 // through their own `use super::*;` once they are imported here.
 use gemm::{gemm, gemm_f64, writes_f32};
+// Test-only re-export: the production call inside `gemm()` resolves in
+// `gemm.rs`'s own scope, so this import serves only the direct-call
+// agreement test in `tests`; a non-test build reports it unused.
+#[cfg(test)]
+#[allow(unused_imports)]
+use gemm::packed_rhs_gemm;
 use transpose::transpose_2d;
 use types::MatrixView;
 // `matmul_forward` is reached by `grouped` for each expert's tape-free

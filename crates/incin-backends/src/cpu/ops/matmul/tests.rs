@@ -628,6 +628,51 @@ fn a_large_product_agrees_with_the_kernel_that_is_always_correct() {
     }
 }
 
+/// A strided rhs large enough to cross the packing threshold repacks to
+/// contiguous and agrees with the scalar kernel: the packed path is the
+/// transposed-operand pattern every backward pass presents, and only normal
+/// `f32` rounding separates it from the always-correct kernel.
+#[test]
+fn a_large_strided_rhs_packs_and_agrees_with_the_kernel_that_is_always_correct() {
+    let (m, k, n) = (128, 96, 64);
+    debug_assert!(m * k * n >= 64 * 64 * 64, "test must cross the packing threshold");
+    let lhs = matrix(
+        (0..m * k)
+            .map(|x| ((x % 17) as f32 - 8.0) * 0.125)
+            .collect(),
+        m,
+        k,
+    );
+    // A [n,k] buffer read as a transposed [k,n] view: column stride k, so
+    // the SIMD path declines and only the packed path stands between this
+    // problem and the slow `f64` scalar loop.
+    let rhs = matrix(
+        (0..k * n)
+            .map(|x| ((x % 23) as f32 - 11.0) * 0.0625)
+            .collect(),
+        n,
+        k,
+    )
+    .transpose(0, 1)
+    .unwrap();
+    let (lhs_view, rhs_view) = (MatrixView::trailing(&lhs), MatrixView::trailing(&rhs));
+    assert_ne!(rhs_view.col_stride, 1, "test setup must present a strided rhs");
+    let mut packed = vec![0f32; m * n];
+    assert!(
+        packed_rhs_gemm(m, k, n, lhs_view, rhs_view, &mut packed),
+        "a large strided rhs must take the packed path"
+    );
+    let mut scalar = vec![0f32; m * n];
+    scalar_gemm(m, k, n, lhs_view, rhs_view, &mut scalar);
+    for (index, (got, want)) in packed.iter().zip(&scalar).enumerate() {
+        let tolerance = 1e-3 * want.abs().max(1.0);
+        assert!(
+            (got - want).abs() <= tolerance,
+            "element {index} was {got}, scalar kernel says {want}"
+        );
+    }
+}
+
 /// A contiguous non-`f32` matmul used to return all zeros: the
 /// row-streaming branch was chosen on stride alone and then bailed out on
 /// finding a buffer it could not read, leaving the zeroed output as the
