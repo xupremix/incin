@@ -290,6 +290,8 @@ pub(crate) fn launch_masked_fill(
                 .map_err(|e| Error::Msg(format!("CUDA masked_fill launch failed: {e:?}")))?;
         }};
     }
+    // SAFETY: the output buffer was allocated fresh for this launch, so it has
+    // no other owners and `Arc::get_mut` either succeeds or fails closed.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {

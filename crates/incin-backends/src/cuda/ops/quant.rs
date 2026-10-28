@@ -226,7 +226,7 @@ pub(crate) fn launch_quantized_matmul_q8_0(
             k, k2, lhs.shape, rhs.shape
         )));
     }
-    if k % 32 != 0 {
+    if !k.is_multiple_of(32) {
         return Err(Error::Msg(format!(
             "CUDA quantized_matmul requires K to be a multiple of 32, got {k}"
         )));

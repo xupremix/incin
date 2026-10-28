@@ -888,10 +888,11 @@ impl<D: Device> Execute<op::Addmm> for CudaBackendImpl<D> {
         let rhs = downcast(rhs, operation, "mat2 is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
         (|| {
-            if attrs.alpha == 1.0 && attrs.beta == 1.0 {
-                if let Some(fused) = try_fused_biased_gemm(mat, lhs, rhs) {
-                    return Ok(fused);
-                }
+            if attrs.alpha == 1.0
+                && attrs.beta == 1.0
+                && let Some(fused) = try_fused_biased_gemm(mat, lhs, rhs)
+            {
+                return Ok(fused);
             }
             let product = CudaBackendImpl::<D>::batched_matmul::<f32>(lhs, rhs)?;
             let scaled_product =

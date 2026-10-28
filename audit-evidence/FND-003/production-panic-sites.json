@@ -12,181 +12,181 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1834",
+    "site": "crates/incin/src/train.rs:2461",
     "code": ".expect(\"this rank deposited above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1837",
+    "site": "crates/incin/src/train.rs:2464",
     "code": ".expect(\"peer deposit checked above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1868",
+    "site": "crates/incin/src/train.rs:2495",
     "code": "let mine = inner.pending[rank].take().expect(\"deposited above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:1869",
+    "site": "crates/incin/src/train.rs:2496",
     "code": "let theirs = inner.pending[peer].take().expect(\"checked above\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin/src/train.rs:2005",
+    "site": "crates/incin/src/train.rs:2632",
     "code": ".expect(\"f64 values always match the f64 buffer dtype\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1057",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1275",
     "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1058",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1276",
     "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1059",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1277",
     "code": "writeln!(out).unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1061",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1279",
     "code": "write!(out, \"extern \\\"C\\\" __global__ void {}_forward(\", self.name).unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1063",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1281",
     "code": "write!(out, \"const {scalar_ty}* __restrict__ in{i}, \").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1065",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1283",
     "code": "writeln!(out, \"{scalar_ty}* __restrict__ out, const int numel) {{\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1070",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1288",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1071",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1289",
     "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1077",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1295",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1078",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1296",
     "code": "writeln!(out, \"}}\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1109",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1327",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1110",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1328",
     "code": "writeln!(out, \"#include <cuda_fp16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1111",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1329",
     "code": "writeln!(out, \"#include <cuda_bf16.h>\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1112",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1330",
     "code": "writeln!(out).unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1119",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1337",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1120",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1338",
     "code": "write!(out, \"const {scalar_ty}* __restrict__ grad_out, \").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1122",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1340",
     "code": "write!(out, \"const {scalar_ty}* __restrict__ in{i}, \").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1128",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1346",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1133",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1351",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1134",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1352",
     "code": "writeln!(out, \"    if (idx >= numel) return;\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1139",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1357",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1145",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1363",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1150",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1368",
     "code": ".unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/codegen/ir.rs:1151",
+    "site": "crates/incin-backends/src/codegen/ir.rs:1369",
     "code": "writeln!(out, \"}}\").unwrap();",
     "disposition": "infallible String formatting",
     "evidence": "codegen unit tests"
   },
   {
-    "site": "crates/incin-backends/src/conformance/mod.rs:554",
+    "site": "crates/incin-backends/src/conformance/mod.rs:564",
     "code": ".expect(\"the operation was drawn from an executed observation\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -210,7 +210,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/cpu/mod.rs:314",
+    "site": "crates/incin-backends/src/cpu/mod.rs:326",
     "code": "<$ty>::from_ne_bytes(chunk.try_into().expect(\"checked chunk size\"))",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -306,8 +306,14 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/executor.rs:2082",
+    "site": "crates/incin-backends/src/cuda/executor.rs:2366",
     "code": "batch_cols.into_iter().next().unwrap()",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/attention.rs:133",
+    "code": "q_dtype.expect(\"matched arm is always Some\")",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
@@ -348,13 +354,25 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/cublaslt.rs:444",
+    "site": "crates/incin-backends/src/cuda/ops/cublaslt.rs:432",
+    "code": "gemm_dtype_layout(lhs_meta.dtype).expect(\"gemm_request_fits admits only f32/f16/bf16\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/cublaslt.rs:507",
     "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/cublaslt.rs:761",
+    "site": "crates/incin-backends/src/cuda/ops/cublaslt.rs:739",
+    "code": ".expect(\"batched_gemm_request_fits admits only f32/f16/bf16\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/cublaslt.rs:832",
     "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
@@ -378,14 +396,32 @@
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:155",
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:296",
+    "code": "Ok(vendor_product.expect(\"vendor won the benchmark, so its output exists\"))",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:300",
+    "code": "Ok(native_product.expect(\"native timing succeeded, so its output exists\"))",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:362",
     "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
   {
-    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:502",
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:709",
     "code": ".expect(\"out_b.data is freshly allocated and uniquely owned here\");",
+    "disposition": "validated backend transition",
+    "evidence": "CUDA/NCCL clippy and hardware matrix"
+  },
+  {
+    "site": "crates/incin-backends/src/cuda/ops/matmul.rs:988",
+    "code": "vendor_product.expect(\"vendor won the benchmark, so its output exists\"),",
     "disposition": "validated backend transition",
     "evidence": "CUDA/NCCL clippy and hardware matrix"
   },
@@ -750,13 +786,13 @@
     "evidence": "wgpu_launch_limits refusal tests; storage.rs pre-length limit check"
   },
   {
-    "site": "crates/incin-backends/src/wgpu/storage.rs:304",
+    "site": "crates/incin-backends/src/wgpu/storage.rs:331",
     "code": ".expect(\"backend-created contiguous WGPU storage must match its allocation\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-backends/src/wgpu/storage.rs:320",
+    "site": "crates/incin-backends/src/wgpu/storage.rs:347",
     "code": ".expect(\"backend-created contiguous WGPU storage must match its allocation\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -840,19 +876,19 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/serialize.rs:330",
+    "site": "crates/incin-core/src/serialize.rs:338",
     "code": ".expect(\"read_exact_at returned exactly the requested prefix length\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/serialize.rs:1027",
+    "site": "crates/incin-core/src/serialize.rs:1426",
     "code": ".expect(\"the active handle for this layout was ensured above\")",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-core/src/serialize.rs:1033",
+    "site": "crates/incin-core/src/serialize.rs:1432",
     "code": ".expect(\"tensor_shard only points at names its layout contains\");",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
@@ -900,7 +936,7 @@
     "evidence": "FND-003 classification and focused crate tests"
   },
   {
-    "site": "crates/incin-data/src/loader.rs:406",
+    "site": "crates/incin-data/src/loader.rs:551",
     "code": "prefetch: NonZeroUsize::new(2).expect(\"constant is non-zero\"),",
     "disposition": "statically proven internal transition",
     "evidence": "FND-003 classification and focused crate tests"
