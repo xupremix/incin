@@ -173,7 +173,10 @@ impl GemmCrossover {
     /// Only measurement builds and tests consult the unknown crossover
     /// today (the static fallback carries an explicit zero threshold); the
     /// orchestrators that will read it are the autotuned ones.
-    #[cfg_attr(not(any(test, feature = "autotune")), allow(dead_code))]
+    #[cfg_attr(
+        not(any(test, all(feature = "cuda-vendor", feature = "autotune"))),
+        allow(dead_code)
+    )]
     pub(crate) fn unknown() -> Self {
         Self {
             vendor_min_flops: None,

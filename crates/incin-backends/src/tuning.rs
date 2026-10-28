@@ -99,6 +99,7 @@ impl WorkloadBucket {
     /// dimension `k`, so one bucket spans the shapes whose vendor/native
     /// tradeoff measures the same. Alignment is always false - the vendor
     /// fit policies already refuse unaligned views before selection runs.
+    #[cfg(any(test, all(feature = "cuda-vendor", feature = "autotune")))]
     pub(crate) fn gemm(m: usize, n: usize, k: usize, batch: Option<usize>) -> Self {
         Self {
             elements_log2: size_log2_bucket(m.saturating_mul(n).saturating_mul(batch.unwrap_or(1))),
@@ -125,7 +126,7 @@ fn size_log2_bucket(size: usize) -> u8 {
 /// Dtypes with no vendor route share the `other` id - they never consult a
 /// crossover (selection reports `VendorUnavailable` first), so sharing an
 /// id cannot misroute them.
-#[cfg(any(feature = "autotune", test))]
+#[cfg(any(test, all(feature = "cuda-vendor", feature = "autotune")))]
 pub(crate) fn gemm_problem_id(dtype: DTypeDescriptor, batched: bool) -> String {
     let dtype_tag = match dtype.builtin_id() {
         Some(DTypeId::F32) => "f32",
