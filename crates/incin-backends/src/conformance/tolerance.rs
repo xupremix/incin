@@ -372,8 +372,8 @@ mod tests {
             for dtype in [DTypeId::F16, DTypeId::BF16, DTypeId::F32, DTypeId::F64] {
                 let bound = for_operation(operation, dtype);
                 assert!(
-                    (bound.absolute - 2e-2) < f64::EPSILON
-                        && (bound.relative - 2e-2) < f64::EPSILON,
+                    (bound.absolute - 2e-2).abs() < f64::EPSILON
+                        && (bound.relative - 2e-2).abs() < f64::EPSILON,
                     "{operation} at {dtype:?} resolved to {bound:?}, not to its \
                      accumulator exception"
                 );

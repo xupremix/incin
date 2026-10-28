@@ -459,10 +459,10 @@ fn bincount_refuses_out_of_range_indices_and_zero_bins_like_cpu() {
     // A float operand is not an index: `index_values` refuses it by name
     // (or the descriptor's own per-operand contract does first).
     let floats = upload_f32(&[0.0], &[1]);
-    match run_mixed::<op::Bincount, _>(&[&floats], &[], &[], BincountAttributes { bins: 1 }) {
-        Ok(_) => panic!("a float bincount operand must be refused"),
-        Err(_) => {}
-    }
+    assert!(
+        run_mixed::<op::Bincount, _>(&[&floats], &[], &[], BincountAttributes { bins: 1 }).is_err(),
+        "a float bincount operand must be refused"
+    );
 }
 
 // ── diag ────────────────────────────────────────────────────────────────────
@@ -1343,14 +1343,14 @@ fn quantize_refuses_short_buffers_and_wrong_dtypes_like_cpu() {
     require_wgpu();
     // 30 values is not a whole number of 32-element blocks.
     let short = upload_f32(&[0.5; 30], &[30]);
-    match run_mixed::<op::Quantize, _>(&[&short], &[], &[], q8_attrs()) {
-        Ok(_) => panic!("a short quantize buffer must be refused"),
-        Err(_) => {}
-    }
+    assert!(
+        run_mixed::<op::Quantize, _>(&[&short], &[], &[], q8_attrs()).is_err(),
+        "a short quantize buffer must be refused"
+    );
     // Dequantizing f32 (not blocks) is a typed refusal, not a reinterpret.
     let plain = upload_f32(&[0.5; 32], &[32]);
-    match run_mixed::<op::Dequantize, _>(&[&plain], &[], &[], f32_attrs()) {
-        Ok(_) => panic!("dequantizing non-blocks must be refused"),
-        Err(_) => {}
-    }
+    assert!(
+        run_mixed::<op::Dequantize, _>(&[&plain], &[], &[], f32_attrs()).is_err(),
+        "dequantizing non-blocks must be refused"
+    );
 }
