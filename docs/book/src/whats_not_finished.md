@@ -28,9 +28,10 @@ of repeating a number that won't.
   NVIDIA devices: matmul parity, losses, fused attention, quantize STE
   and the two-rank NCCL harness all run green outside CI (the weekly
   matrix's CUDA job is still skipped because `HARDWARE_CUDA_RUNNER` is
-  unset, issues #82 and #83). Metal's host-side suites run on any OS but
-  do not prove a Metal device; the macOS Apple-Silicon hardware job is the
-  device run. Verified training in this book's
+  unset, issues #82 and #83). Metal's host-side suites run on any OS and its
+  `MetalStorage` wraps host memory, so even the macOS Apple-Silicon job runs
+  host math rather than Metal compute until a real Metal backend lands.
+  Verified training in this book's
   [Building models](./building_models.md) chapter is still CPU-first.
 - **Attention has a native online-softmax kernel on CPU and CUDA.**
   Evaluation and zero-dropout inference can route through the catalog's

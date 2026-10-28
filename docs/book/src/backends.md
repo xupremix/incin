@@ -26,25 +26,26 @@ backend registrations rather than written by hand:
 |---|---:|---|
 | CPU | 170 | complete, and the only one verified across the full catalog |
 | CUDA | 169 | preview, hardware-proven on NVIDIA GPUs (see below) |
-| WGPU | 146 | preview, software-adapter execution evidence |
-| Metal | 117 | preview, host-verified + macOS Apple-Silicon job |
+| WGPU | 168 | preview, software-adapter execution evidence |
+| Metal | 117 | preview, host-side math + macOS Apple-Silicon job |
 
 Those are counts from the `Element types by operation and backend` matrix, so
 they say what each backend *advertises*, which is not the same as what it has
 been observed to compute. Two caveats belong next to the numbers:
 
 - **Advertised is not trainable.** The per-backend tables carry a `Training`
-  column. CUDA marks 147 of its 204 rows trainable; CPU 137 of 187; WGPU
-  123 of 155; Metal 89 of 119.
-- **Metal is the least proven of the three.** The Metal shader and MPS
-  infrastructure from MTL-001/002/003 is complete and the gaps are operation
-  coverage on top of it (`conv2d`/pooling still empty; `instance_norm`,
-  `masked_fill`/`where_cond`, and `cmp_*`/`logical_*` unadvertised), and
-  every Metal row reports `Implementation: native`, so that column does not
-  distinguish a finished kernel from a placeholder. Host-side suites
-  (`metal_gap_ops`, `metal_attention_ops`) run the math on any OS; a real
-  Metal device run is the macOS Apple-Silicon hardware job only. Read
-  Metal's 107 as a registry claim, not a capability proof.
+  column. CPU marks 129 of its 170 backend-executable operations trainable;
+  CUDA 124 of 169; WGPU 127 of 168; Metal 88 of 117.
+- **Metal is the least proven of the three.** Metal execution is still
+  host-side: `MetalStorage` wraps a host `Vec<u8>`, there is no Metal API
+  dependency, and the MSL sources are included as strings rather than
+  submitted to an `MTLDevice`. The macOS Apple-Silicon job therefore exercises
+  host math on Apple hardware, not Metal compute. Metal also has the largest
+  coverage gap (63 dashed rows, 10 of them non-backend execution sites), with
+  spatial operations, comparisons, and quantization still unadvertised, and
+  every Metal row reports `Implementation: native` where that column cannot
+  distinguish a finished kernel from a placeholder. Read Metal's 117 as a
+  registry claim, not a capability proof.
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
 `matmul`, and thirteen unary activations (`relu`, `step`, `mish`, `elu`,

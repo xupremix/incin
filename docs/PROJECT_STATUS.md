@@ -37,7 +37,7 @@ claim that every named test has run on the reader's current checkout.
   170 advertised in the `docs/capabilities.md` matrix); completeness does not
   mean every dtype, layout, or training combination is supported.
 - CUDA, WGPU, and Metal are previews with different operation subsets. The
-  current matrix advertises 169 / 146 / 117 operations respectively (CPU 170).
+  current matrix advertises 169 / 168 / 117 operations respectively (CPU 170).
   `docs/capabilities.md` is generated from the registrations and records the
   exact dtype, layout, rank, and training restrictions. These are capability
   declarations, not evidence of hardware execution. In particular, Metal's
@@ -206,14 +206,14 @@ Verification boundary for this batch:
 
 | Theme | Status | Evidence / boundary |
 |---|---|---|
-| WGPU training path | Advertised and partially runtime-verified | Matrix advertises 146 ops (164 rows / 123 trainable); losses, norms, dropout, embedding, conv/pool, attention all present. Runtime evidence: Batches A/B/C, attention e2e + backward, cross-entropy backward on Vulkan/lavapipe. Compute still `f32`-only; `cmp_*` (`f32`) and `logical_*` (`bool`) advertised. |
-| Metal coverage | Expanded, still preview and mostly host-verified | Matrix advertises 117 ops (130 rows / 96 trainable), including losses, norms, dropout, embedding, SDPA, linear, tril/triu, and the 28 unary activations. Spatial (`conv2d`/pooling) still empty; `instance_norm` (`f32`) advertised, while `masked_fill`/`where_cond`, `cmp_*`/`logical_*` remain unadvertised. Device runs only on macOS Apple Silicon. |
+| WGPU training path | Advertised and partially runtime-verified | Matrix advertises 168 of 170 backend-executable operations (127 trainable); losses, norms, dropout, embedding, conv/pool, attention all present. Runtime evidence: Batches A/B/C, attention e2e + backward, cross-entropy backward on Vulkan/lavapipe. Compute still `f32`-only; `cmp_*` (`f32`) and `logical_*` (`bool`) advertised. |
+| Metal coverage | Expanded, still preview and host-side | Matrix advertises 117 of 170 backend-executable operations (88 trainable), including losses, norms, dropout, embedding, SDPA, linear, tril/triu, and the 28 unary activations. Spatial (`conv2d`/pooling) still empty; `instance_norm` (`f32`) advertised, while `masked_fill`/`where_cond`, `cmp_*`/`logical_*` remain unadvertised. There is no Metal API dependency yet: `MetalStorage` wraps host memory, so the macOS job runs host math rather than Metal compute. |
 | Autocast / mixed precision (#2) | Present in this working tree | `incin_core::exec::autocast`; `Trainer::fit` / `fit_scaled` install it for the run (`train.rs`). `precision_fixtures` asserts `mixed_bf16_autocasts_allowlisted_dispatch_operands` and the f16 twin; f16-without-scaling still rejected (`TrainError::UnsupportedPrecision`). Not yet a dated commit. |
 | Streaming checkpoints (#13) | Present in this working tree | `ModelExt::load` restores via `load_state_streaming` / `SafetensorsStateStream` without materializing the whole file (`serialize.rs`, `state.rs`); test `crates/incin-core/tests/streaming_checkpoint.rs`. Not yet a dated commit. |
 | Fusion groups (#112) | Landed | CMP-005 legality-checked pointwise fuser (`0bd705a4`, `compiled/fusion.rs`); book section in `deep_lowering.md`. NVRTC dispatch tail still `#[ignore]`d. |
 | Fuzzing (#48) | Landed | `fuzz/fuzz_targets/{onnx_parser,state_envelope,gguf_reader}.rs`, workflow `fuzz.yml`. |
 | Broadcast/mask hardening | Landed | #100 `BroadcastShape` bounds + compile-fail fixtures; #122 bool-mask retirement (`cf9a2991`). |
-| Distributed FSDP/ZeRO (#99) | Landed (CPU-proven lowering) | `7f38cb38`; host-side two-rank protocol on CPU. No NCCL transport ships; multi-rank still needs `HARDWARE_CUDA_RUNNER` (#82). |
+| Distributed FSDP/ZeRO (#99) | Landed (CPU-proven lowering) | `7f38cb38`; host-side two-rank protocol on CPU. The NCCL transport ships behind `distributed-nccl` and is hardware-proven outside CI (`8883eb05`); CI multi-rank execution still needs `HARDWARE_CUDA_RUNNER` (#82). |
 
 ### Uncommitted working-tree note
 
