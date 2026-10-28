@@ -528,14 +528,21 @@
     link.addEventListener("click", async (event) => {
       event.preventDefault();
       const base = link.getAttribute("data-version-base");
+      // The attribute is authored in the shell, but validate it anyway: a
+      // switcher that navigates to whatever string an attribute carries is a
+      // script-injection sink if the template is ever edited carelessly.
+      const allowed = new Set(["next/", "../", "./"]);
+      if (!base || !allowed.has(base)) return;
+      const target = new URL(base, window.location.href);
+      if (target.origin !== window.location.origin) return;
       const slug = route().slug;
       try {
-        const response = await fetch(base + "chapters.json");
+        const response = await fetch(new URL("chapters.json", target));
         const other = await response.json();
         const kept = other.chapters.some((entry) => entry.slug === slug) ? slug : "introduction";
-        window.location.href = base + "#/" + kept;
+        window.location.assign(`${target.href}#/${kept}`);
       } catch (error) {
-        window.location.href = base;
+        window.location.assign(target.href);
       }
     });
   });
