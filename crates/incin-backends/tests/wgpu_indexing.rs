@@ -19,10 +19,10 @@ use incin_core::backend_authoring::{
 };
 use incin_core::error::BackendError;
 use incin_core::exec::catalog::{
-    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, Conv1dAttributes, ConvTranspose2dAttributes,
-    DiagonalAttributes,
-    DuplicateIndexRule, NoAttributes, OneHotAttributes, PixelShuffleAttributes,
-    QuantizationAttributes, ScalarAttributes, ScatterAttributes, UnfoldAttributes,
+    AdaptivePool2dAttributes, AxisAttributes, BincountAttributes, Conv1dAttributes,
+    ConvTranspose2dAttributes, DiagonalAttributes, DuplicateIndexRule, NoAttributes,
+    OneHotAttributes, PixelShuffleAttributes, QuantizationAttributes, ScalarAttributes,
+    ScatterAttributes, UnfoldAttributes,
 };
 use incin_core::exec::{CanonicalError, ExecutionContext, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};
@@ -326,11 +326,7 @@ fn one_hot_encodes_indices_as_a_bool_mask_without_a_tape_entry() {
     );
     let packed = <TestBackend as HostInterop>::to_bytes::<bool>(&out)
         .expect("packing the 0.0/1.0 mask as bool bytes must succeed");
-    assert_eq!(
-        packed,
-        vec![1, 0, 0, 0, 0, 1, 0, 1, 0],
-        "one_hot mask"
-    );
+    assert_eq!(packed, vec![1, 0, 0, 0, 0, 1, 0, 1, 0], "one_hot mask");
 
     // An index outside 0..depth writes no 1 (CPU's ONNX skip, not an error).
     let oob = upload_i64(&[5], &[1]);
@@ -371,13 +367,9 @@ fn bincount_counts_indices_into_a_fixed_histogram_without_a_tape_entry() {
     require_wgpu();
     // [0, 2, 0, 1, 2, 2] with 3 bins -> [2, 1, 3], the routing fixture CPU proves.
     let indices = upload_i64(&[0, 2, 0, 1, 2, 2], &[6]);
-    let (out, recorded) = run_mixed::<op::Bincount, _>(
-        &[],
-        &[&indices],
-        &[],
-        BincountAttributes { bins: 3 },
-    )
-    .expect("bincount is advertised and must execute");
+    let (out, recorded) =
+        run_mixed::<op::Bincount, _>(&[], &[&indices], &[], BincountAttributes { bins: 3 })
+            .expect("bincount is advertised and must execute");
     assert_eq!(recorded, 0, "bincount is forward-only: no tape entry");
     assert_eq!(
         out.metadata().dtype(),
@@ -402,13 +394,9 @@ fn bincount_counts_indices_into_a_fixed_histogram_without_a_tape_entry() {
     );
 
     // Wider than the data: trailing bins stay zero.
-    let (out, _) = run_mixed::<op::Bincount, _>(
-        &[],
-        &[&indices],
-        &[],
-        BincountAttributes { bins: 5 },
-    )
-    .expect("bincount with spare bins must execute");
+    let (out, _) =
+        run_mixed::<op::Bincount, _>(&[], &[&indices], &[], BincountAttributes { bins: 5 })
+            .expect("bincount with spare bins must execute");
     assert_eq!(
         read_histogram(&out),
         vec![2, 1, 3, 0, 0],
@@ -436,11 +424,11 @@ fn bincount_refuses_out_of_range_indices_and_zero_bins_like_cpu() {
     // `one_hot`'s silent ONNX skip — a quietly-low count would corrupt every
     // offset derived from it.
     let bad = upload_i64(&[5], &[1]);
-    let error = match run_mixed::<op::Bincount, _>(&[], &[&bad], &[], BincountAttributes { bins: 3 })
-    {
-        Ok(_) => panic!("an out-of-range bincount index must be refused"),
-        Err(error) => error,
-    };
+    let error =
+        match run_mixed::<op::Bincount, _>(&[], &[&bad], &[], BincountAttributes { bins: 3 }) {
+            Ok(_) => panic!("an out-of-range bincount index must be refused"),
+            Err(error) => error,
+        };
     assert!(
         matches!(
             error,
@@ -459,8 +447,7 @@ fn bincount_refuses_out_of_range_indices_and_zero_bins_like_cpu() {
     // Zero bins names no histogram at all.
     let indices = upload_i64(&[0], &[1]);
     let error =
-        match run_mixed::<op::Bincount, _>(&[], &[&indices], &[], BincountAttributes { bins: 0 })
-        {
+        match run_mixed::<op::Bincount, _>(&[], &[&indices], &[], BincountAttributes { bins: 0 }) {
             Ok(_) => panic!("a zero-bin bincount must be refused"),
             Err(error) => error,
         };
@@ -563,8 +550,8 @@ fn scatter_last_write_wins_and_splits_the_cotangent() {
     );
 
     let loss = sum_loss(&out);
-    let grads =
-        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("scatter backward must run");
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
+        .expect("scatter backward must run");
     let gin = grads
         .get(TapeStorage::id(&input))
         .expect("input must receive a gradient");
@@ -892,9 +879,8 @@ fn nonzero_reports_coordinates_without_a_tape_entry() {
     require_wgpu();
     // [0, 1, 0, 2] names positions 1 and 3: the routing fixture CPU proves.
     let input = upload_f32(&[0.0, 1.0, 0.0, 2.0], &[4]);
-    let (out, recorded) =
-        run_mixed::<op::NonZero, _>(&[&input], &[], &[], NoAttributes)
-            .expect("nonzero is advertised and must execute");
+    let (out, recorded) = run_mixed::<op::NonZero, _>(&[&input], &[], &[], NoAttributes)
+        .expect("nonzero is advertised and must execute");
     assert_eq!(recorded, 0, "nonzero is forward-only: no tape entry");
     assert_eq!(
         out.metadata().dtype(),
@@ -934,12 +920,9 @@ fn nonzero_reports_coordinates_without_a_tape_entry() {
     let narrow = upload_u8(&[0, 3, 0], &[3]);
     let context = ExecutionContext::new(TestBackend::default());
     let handles = [TensorHandle::from_storage::<TestBackend, u8, _>(&narrow)];
-    let out = incin_core::exec::dispatch::execute::<op::NonZero, _>(
-        &context,
-        NoAttributes,
-        &handles,
-    )
-    .expect("u8 nonzero input must execute");
+    let out =
+        incin_core::exec::dispatch::execute::<op::NonZero, _>(&context, NoAttributes, &handles)
+            .expect("u8 nonzero input must execute");
     assert_eq!(read_histogram(&out), vec![1], "u8 nonzero coordinate");
 }
 
@@ -993,7 +976,11 @@ fn unfold_windows_and_scatters_the_cotangent() {
         &[&input],
         &[],
         &[],
-        UnfoldAttributes { axis: 0, size: 2, step: 1 },
+        UnfoldAttributes {
+            axis: 0,
+            size: 2,
+            step: 1,
+        },
     )
     .expect("unfold is advertised and must execute");
     assert_eq!(recorded, 1, "unfold trains with ONE TapeEntry");
@@ -1011,8 +998,8 @@ fn unfold_windows_and_scatters_the_cotangent() {
     // Overlapping windows share elements, so the cotangent accumulates:
     // interior elements belong to two windows each.
     let loss = sum_loss(&out);
-    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
-        .expect("unfold backward must run");
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("unfold backward must run");
     let gin = grads
         .get(TapeStorage::id(&input))
         .expect("input must receive a gradient");
@@ -1110,7 +1097,13 @@ fn conv1d_composes_im2col_and_matmul_with_one_tape_entry() {
         &[&input, &weight],
         &[],
         &[],
-        Conv1dAttributes { stride: 1, padding: 0, dilation: 1, groups: 1, has_bias: false },
+        Conv1dAttributes {
+            stride: 1,
+            padding: 0,
+            dilation: 1,
+            groups: 1,
+            has_bias: false,
+        },
     )
     .expect("conv1d is advertised and must execute");
     assert_eq!(recorded, 1, "conv1d trains with ONE TapeEntry");
@@ -1125,8 +1118,8 @@ fn conv1d_composes_im2col_and_matmul_with_one_tape_entry() {
     // weight [3,5,7] (summed outer of seed and columns: row 0 gives
     // [1,2,3], row 1 gives [2,3,4]).
     let loss = sum_loss(&out);
-    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&loss)
-        .expect("conv1d backward must run");
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("conv1d backward must run");
     let gin = grads
         .get(TapeStorage::id(&input))
         .expect("input must receive a gradient");
@@ -1154,13 +1147,9 @@ fn grouped_matmul_routes_token_spans_to_experts_with_one_tape_entry() {
     let lhs = upload_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], &[4, 2]);
     let rhs = upload_f32(&[1.0, 0.0, 0.0, 1.0, 2.0, 0.0, 0.0, 2.0], &[2, 2, 2]);
     let offsets = upload_i64(&[0, 2, 4], &[3]);
-    let (out, recorded) = run_mixed::<op::GroupedMatMul, _>(
-        &[&lhs, &rhs],
-        &[&offsets],
-        &[],
-        NoAttributes,
-    )
-    .expect("grouped_matmul is advertised and must execute");
+    let (out, recorded) =
+        run_mixed::<op::GroupedMatMul, _>(&[&lhs, &rhs], &[&offsets], &[], NoAttributes)
+            .expect("grouped_matmul is advertised and must execute");
     assert_eq!(recorded, 1, "grouped_matmul trains with ONE TapeEntry");
     assert_eq!(
         <TestBackend as StorageBackend>::shape::<f32>(&out).dims(),
@@ -1258,11 +1247,15 @@ fn conv_transpose2d_folds_and_crops_with_one_tape_entry() {
 // ── quantize / dequantize / quantized_matmul ────────────────────────────────
 
 fn q8_attrs() -> QuantizationAttributes {
-    QuantizationAttributes { dtype: DTypeId::Q8_0.descriptor() }
+    QuantizationAttributes {
+        dtype: DTypeId::Q8_0.descriptor(),
+    }
 }
 
 fn f32_attrs() -> QuantizationAttributes {
-    QuantizationAttributes { dtype: DTypeId::F32.descriptor() }
+    QuantizationAttributes {
+        dtype: DTypeId::F32.descriptor(),
+    }
 }
 
 #[test]
@@ -1272,9 +1265,8 @@ fn quantize_round_trips_through_blocks_with_straight_through_gradients() {
     // round-trip approximate, not exact — CPU's own contract.
     let values: Vec<f32> = (0..64).map(|i| (i as f32) * 0.05 - 1.0).collect();
     let input = upload_f32(&values, &[64]);
-    let (quantized, recorded) =
-        run_mixed::<op::Quantize, _>(&[&input], &[], &[], q8_attrs())
-            .expect("quantize is advertised and must execute");
+    let (quantized, recorded) = run_mixed::<op::Quantize, _>(&[&input], &[], &[], q8_attrs())
+        .expect("quantize is advertised and must execute");
     assert_eq!(recorded, 1, "quantize records its straight-through entry");
     assert_eq!(
         quantized.metadata().dtype(),
@@ -1282,9 +1274,8 @@ fn quantize_round_trips_through_blocks_with_straight_through_gradients() {
         "quantize result wears the Q8_0 label"
     );
 
-    let (back, recorded) =
-        run_mixed::<op::Dequantize, _>(&[&quantized], &[], &[], f32_attrs())
-            .expect("dequantize is advertised and must execute");
+    let (back, recorded) = run_mixed::<op::Dequantize, _>(&[&quantized], &[], &[], f32_attrs())
+        .expect("dequantize is advertised and must execute");
     assert_eq!(recorded, 1, "dequantize records its straight-through entry");
     assert_close(
         &read_f32(&back),
@@ -1314,29 +1305,15 @@ fn quantized_matmul_matches_f32_matmul_without_recording() {
     // K = 32 (one block): lhs [2,32], rhs [N=2,K=32] pre-transposed.
     let lhs: Vec<f32> = (0..64).map(|i| (i as f32) * 0.02 - 0.5).collect();
     let rhs: Vec<f32> = (0..64).map(|i| (i as f32) * 0.03 - 0.4).collect();
-    let lhs_q = run_mixed::<op::Quantize, _>(
-        &[&upload_f32(&lhs, &[2, 32])],
-        &[],
-        &[],
-        q8_attrs(),
-    )
-    .expect("lhs quantize must execute")
-    .0;
-    let rhs_q = run_mixed::<op::Quantize, _>(
-        &[&upload_f32(&rhs, &[2, 32])],
-        &[],
-        &[],
-        q8_attrs(),
-    )
-    .expect("rhs quantize must execute")
-    .0;
-    let (out, recorded) = run_mixed::<op::QuantizedMatMul, _>(
-        &[&lhs_q, &rhs_q],
-        &[],
-        &[],
-        NoAttributes,
-    )
-    .expect("quantized_matmul is advertised and must execute");
+    let lhs_q = run_mixed::<op::Quantize, _>(&[&upload_f32(&lhs, &[2, 32])], &[], &[], q8_attrs())
+        .expect("lhs quantize must execute")
+        .0;
+    let rhs_q = run_mixed::<op::Quantize, _>(&[&upload_f32(&rhs, &[2, 32])], &[], &[], q8_attrs())
+        .expect("rhs quantize must execute")
+        .0;
+    let (out, recorded) =
+        run_mixed::<op::QuantizedMatMul, _>(&[&lhs_q, &rhs_q], &[], &[], NoAttributes)
+            .expect("quantized_matmul is advertised and must execute");
     assert_eq!(recorded, 0, "quantized_matmul records nothing by design");
     // Reference: plain f32 matmul of lhs against the transposed rhs.
     let mut rhs_t = vec![0.0f32; 64];

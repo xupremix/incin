@@ -422,13 +422,12 @@ impl<D: Device> WgpuBackendImpl<D> {
         }
         let idx_vals = index_values(indices)?;
         let total = num_elements(&indices.shape)?;
-        let out_elements =
-            total
-                .checked_mul(depth)
-                .ok_or(ShapeError::ArithmeticOverflow {
-                    operation: OperationKind::OneHot,
-                    expression: "one_hot output element count",
-                })?;
+        let out_elements = total
+            .checked_mul(depth)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::OneHot,
+                expression: "one_hot output element count",
+            })?;
         let mut out_shape = indices.shape.to_vec();
         out_shape.push(depth);
         let mut out = alloc::vec![0.0f32; out_elements];
@@ -498,17 +497,13 @@ impl<D: Device> WgpuBackendImpl<D> {
     /// `one_hot` and `bincount` record nothing.
     pub(crate) fn nonzero(input: &WgpuStorage) -> Result<WgpuStorage> {
         let rank = input.shape.len();
-        let total = input
-            .shape
-            .iter()
-            .try_fold(1usize, |acc, &dim| {
-                acc.checked_mul(dim).ok_or(Error::Backend(
-                    BackendError::InvalidInput {
-                        operation: OperationKind::NonZero,
-                        reason: "nonzero operand extent overflows the address space",
-                    },
-                ))
-            })?;
+        let total = input.shape.iter().try_fold(1usize, |acc, &dim| {
+            acc.checked_mul(dim)
+                .ok_or(Error::Backend(BackendError::InvalidInput {
+                    operation: OperationKind::NonZero,
+                    reason: "nonzero operand extent overflows the address space",
+                }))
+        })?;
         // Download once, whatever the width: the zero test below is per
         // element, so every storage width this backend admits is a row here.
         // A width outside the set is a typed refusal, not a reinterpret.
@@ -597,19 +592,16 @@ impl<D: Device> WgpuBackendImpl<D> {
         if rank == 1 {
             let n = input.shape[0];
             let k_abs = diagonal.unsigned_abs() as usize;
-            let out_dim =
-                n.checked_add(k_abs)
-                    .ok_or(ShapeError::ArithmeticOverflow {
-                        operation: OperationKind::Diag,
-                        expression: "diagonal output dimension",
-                    })?;
-            let out_total =
-                out_dim
-                    .checked_mul(out_dim)
-                    .ok_or(ShapeError::ArithmeticOverflow {
-                        operation: OperationKind::Diag,
-                        expression: "diagonal output element count",
-                    })?;
+            let out_dim = n.checked_add(k_abs).ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Diag,
+                expression: "diagonal output dimension",
+            })?;
+            let out_total = out_dim
+                .checked_mul(out_dim)
+                .ok_or(ShapeError::ArithmeticOverflow {
+                    operation: OperationKind::Diag,
+                    expression: "diagonal output element count",
+                })?;
             let mut out_vals = vec![0.0f32; out_total];
             for (i, &value) in data.iter().enumerate() {
                 let row = if diagonal >= 0 { i } else { i + k_abs };
@@ -648,8 +640,7 @@ impl<D: Device> WgpuBackendImpl<D> {
             let mut values: Vec<f32> = Vec::new();
             let mut positions: Vec<(usize, usize)> = Vec::new();
             for row in 0..rows {
-                let Some(col) = (row as i64).checked_add(diagonal).filter(|&col| col >= 0)
-                else {
+                let Some(col) = (row as i64).checked_add(diagonal).filter(|&col| col >= 0) else {
                     continue;
                 };
                 let col = col as usize;
@@ -1246,8 +1237,7 @@ impl<D: Device> Execute<op::Bincount> for WgpuBackendImpl<D> {
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "indices is not WGPU storage"))?;
         let bins = request.operation.descriptor().attributes().bins;
-        WgpuBackendImpl::<D>::bincount(indices, bins)
-            .map_err(|e| index_kernel_error(operation, e))
+        WgpuBackendImpl::<D>::bincount(indices, bins).map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1286,8 +1276,7 @@ impl<D: Device> Execute<op::Diag> for WgpuBackendImpl<D> {
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
         let diagonal = request.operation.descriptor().attributes().offset;
-        WgpuBackendImpl::<D>::diag(input, diagonal)
-            .map_err(|e| index_kernel_error(operation, e))
+        WgpuBackendImpl::<D>::diag(input, diagonal).map_err(|e| index_kernel_error(operation, e))
     }
 }
 

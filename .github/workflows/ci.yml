@@ -659,14 +659,16 @@ jobs:
     - name: Install mdbook
       run: command -v mdbook && mdbook --version | grep -F "${MDBOOK_VERSION}" || cargo install mdbook --version "${MDBOOK_VERSION}" --locked --force
 
-    - name: Build the book
-      run: mdbook build docs/book
+    - name: Build the books
+      run: |
+        mdbook build docs/book
+        mdbook build docs/book-next
 
     - name: Build and validate the chaptered site
       run: |
         python3 tools/check-docs.py
         python3 tools/check-markdown-links.py
-        python3 docs/book/build_site.py
+        python3 docs/book/build_site.py --all
         python3 tools/check-book-site.py
         python3 tools/test-book-site.py
         python3 tools/test-api-page.py

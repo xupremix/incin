@@ -478,9 +478,7 @@ fn vendor_and_native_batched_paths_agree_on_f16_and_bf16() {
     // garbage. Running both directly also proves each path is reachable
     // on its own.
     use half::{bf16, f16};
-    use incin_backends::cuda::testing::{
-        batched_matmul_vendor, download_bytes, upload_bytes,
-    };
+    use incin_backends::cuda::testing::{batched_matmul_vendor, download_bytes, upload_bytes};
 
     require_cuda();
     let lhs_shape = [2, 2, 3];
@@ -551,14 +549,8 @@ fn vendor_and_native_batched_paths_agree_on_f16_and_bf16() {
             .expect("the vendor attempt must not fail on an admitted request")
             .expect("the vendor policy must admit the contiguous rank-3 half pair");
 
-        assert_eq!(
-            native.shape, want_shape,
-            "{dtype:?}: native product shape"
-        );
-        assert_eq!(
-            vendor.shape, want_shape,
-            "{dtype:?}: vendor product shape"
-        );
+        assert_eq!(native.shape, want_shape, "{dtype:?}: native product shape");
+        assert_eq!(vendor.shape, want_shape, "{dtype:?}: vendor product shape");
         let want_rounded = decode(&encode(
             &want.iter().map(|&v| v as f32).collect::<Vec<f32>>(),
         ));
@@ -587,7 +579,8 @@ fn vendor_and_native_batched_paths_agree_on_f16_and_bf16() {
 
 #[test]
 #[ignore = "requires CUDA hardware"]
-fn rank_three_linear_projects_through_the_batched_dispatcher() {    // `op::Linear` with a leading batch on the input: before issue #85
+fn rank_three_linear_projects_through_the_batched_dispatcher() {
+    // `op::Linear` with a leading batch on the input: before issue #85
     // this failed inside `matmul`'s unbatched-2D check. It must now reach
     // the batched dispatcher (one launch when the plan admits the pair),
     // add the bias by broadcast, and match the host computation

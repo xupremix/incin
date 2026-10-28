@@ -735,8 +735,8 @@ pub(crate) fn try_launch_batched_matmul(
     // descriptor keeps `CUBLAS_COMPUTE_32F` compute with an `f32` scale at
     // every dtype (see the plain launcher), so `alpha`/`beta` below stay
     // host-side `f32` for the half types too.
-    let cuda_type =
-        gemm_dtype_layout(lhs_meta.dtype).expect("batched_gemm_request_fits admits only f32/f16/bf16");
+    let cuda_type = gemm_dtype_layout(lhs_meta.dtype)
+        .expect("batched_gemm_request_fits admits only f32/f16/bf16");
     let (batch, m, k, n) = (lhs.shape[0], lhs.shape[1], lhs.shape[2], rhs.shape[2]);
 
     let state = cublaslt_state(lhs_meta.device_id, &lhs.buffer.device.default_stream())?;
@@ -1075,11 +1075,7 @@ mod tests {
     fn batched_fits_admits_half_pairs_and_refuses_f64_and_mixed() {
         // The batched policy shares `gemm_dtype_layout` with the plain one,
         // so the tensor-core route covers the strided-batched call too.
-        for dtype in [
-            f32(),
-            DTypeId::F16.descriptor(),
-            DTypeId::BF16.descriptor(),
-        ] {
+        for dtype in [f32(), DTypeId::F16.descriptor(), DTypeId::BF16.descriptor()] {
             let lhs = meta(dtype, &[2, 2, 3], &[6, 3, 1], 0);
             let rhs = meta(dtype, &[2, 3, 2], &[6, 2, 1], 0);
             assert!(batched_gemm_request_fits(&lhs, &rhs), "{dtype:?} pair fits");

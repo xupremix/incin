@@ -635,7 +635,10 @@ fn a_large_product_agrees_with_the_kernel_that_is_always_correct() {
 #[test]
 fn a_large_strided_rhs_packs_and_agrees_with_the_kernel_that_is_always_correct() {
     let (m, k, n) = (128, 96, 64);
-    debug_assert!(m * k * n >= 64 * 64 * 64, "test must cross the packing threshold");
+    debug_assert!(
+        m * k * n >= 64 * 64 * 64,
+        "test must cross the packing threshold"
+    );
     let lhs = matrix(
         (0..m * k)
             .map(|x| ((x % 17) as f32 - 8.0) * 0.125)
@@ -656,7 +659,10 @@ fn a_large_strided_rhs_packs_and_agrees_with_the_kernel_that_is_always_correct()
     .transpose(0, 1)
     .unwrap();
     let (lhs_view, rhs_view) = (MatrixView::trailing(&lhs), MatrixView::trailing(&rhs));
-    assert_ne!(rhs_view.col_stride, 1, "test setup must present a strided rhs");
+    assert_ne!(
+        rhs_view.col_stride, 1,
+        "test setup must present a strided rhs"
+    );
     let mut packed = vec![0f32; m * n];
     assert!(
         packed_rhs_gemm(m, k, n, lhs_view, rhs_view, &mut packed),

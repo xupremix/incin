@@ -413,21 +413,37 @@ pub(crate) fn operand(
         // walks every leading axis generically; the rhs is a plain 2D weight
         // at every tuple rank, because the kernel reads it as `[N, K]`
         // outright and the descriptor pins it exactly.
-        (_, Role::QuantizedLhs { tokens, contracting }) => {
-            paired(tuple.rank, tokens, contracting)?
-        }
-        (_, Role::QuantizedRhs {
-            out_rows,
-            contracting,
-        }) => alloc::vec![out_rows, contracting],
-        (_, Role::GroupedActivation { tokens, contracting }) => {
+        (
+            _,
+            Role::QuantizedLhs {
+                tokens,
+                contracting,
+            },
+        ) => paired(tuple.rank, tokens, contracting)?,
+        (
+            _,
+            Role::QuantizedRhs {
+                out_rows,
+                contracting,
+            },
+        ) => alloc::vec![out_rows, contracting],
+        (
+            _,
+            Role::GroupedActivation {
+                tokens,
+                contracting,
+            },
+        ) => {
             alloc::vec![tokens, contracting]
         }
-        (_, Role::GroupedExperts {
-            experts,
-            contracting,
-            out_cols,
-        }) => alloc::vec![experts, contracting, out_cols],
+        (
+            _,
+            Role::GroupedExperts {
+                experts,
+                contracting,
+                out_cols,
+            },
+        ) => alloc::vec![experts, contracting, out_cols],
         (_, Role::GroupedOffsets { experts, .. }) => alloc::vec![experts + 1],
         (_, Role::ChannelVector) => channel_vector(&activation)?,
         (_, Role::TrailingVector) => trailing_vector(&activation)?,

@@ -375,7 +375,11 @@ fn widened_rows_admit_u8_and_u32_through_public_dispatch() {
 
     // `u8` (1-byte width): transpose of a 2x3 moves elements [0..6] to
     // [0,3,1,4,2,5], exactly as the matrix column measures.
-    let source = upload_bytes(&[2, 3], DTypeId::U8, &elements_bytes(1, &[0, 1, 2, 3, 4, 5]));
+    let source = upload_bytes(
+        &[2, 3],
+        DTypeId::U8,
+        &elements_bytes(1, &[0, 1, 2, 3, 4, 5]),
+    );
     let handle = TensorHandle::from_storage::<B, u8, _>(&source);
     let moved = dispatch::execute::<op::TransposeExact, _>(
         &context,

@@ -19,7 +19,9 @@
 #![cfg(feature = "wgpu")]
 
 use incin_backends::wgpu::WgpuBackendImpl;
-use incin_core::backend_authoring::{AutogradBackend, HostInterop, HostReadback, StorageBackend, op};
+use incin_core::backend_authoring::{
+    AutogradBackend, HostInterop, HostReadback, StorageBackend, op,
+};
 use incin_core::exec::catalog::{LerpAttributes, NoAttributes};
 use incin_core::exec::{ExecutionContext, TapeStorage, TensorHandle};
 use incin_core::prelude::{DTypeId, DeviceId, WgpuN};

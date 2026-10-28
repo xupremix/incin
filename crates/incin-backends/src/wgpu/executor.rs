@@ -341,9 +341,12 @@ impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for WgpuBackendImpl<D> {
                 "adaptive_avg_pool2d expects 1 input",
             ));
         };
-        let input = input
-            .downcast_ref::<WgpuStorage>()
-            .ok_or_else(|| invalid(OperationKind::AdaptiveAvgPool2d, "input is not WGPU storage"))?;
+        let input = input.downcast_ref::<WgpuStorage>().ok_or_else(|| {
+            invalid(
+                OperationKind::AdaptiveAvgPool2d,
+                "input is not WGPU storage",
+            )
+        })?;
         let attrs = request.operation.descriptor().attributes();
         let [h, w] = attrs.output;
         Self::adaptive_avg_pool2d::<f32>(input, (h, w))
@@ -489,8 +492,7 @@ impl<D: Device> Execute<op::Quantize> for WgpuBackendImpl<D> {
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        Self::quantize::<f32>(input, dtype)
-            .map_err(|e| kernel_error("Wgpu", operation, e))
+        Self::quantize::<f32>(input, dtype).map_err(|e| kernel_error("Wgpu", operation, e))
     }
 }
 
@@ -508,8 +510,7 @@ impl<D: Device> Execute<op::Dequantize> for WgpuBackendImpl<D> {
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "input is not WGPU storage"))?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        Self::dequantize::<f32>(input, dtype)
-            .map_err(|e| kernel_error("Wgpu", operation, e))
+        Self::dequantize::<f32>(input, dtype).map_err(|e| kernel_error("Wgpu", operation, e))
     }
 }
 
@@ -529,8 +530,7 @@ impl<D: Device> Execute<op::QuantizedMatMul> for WgpuBackendImpl<D> {
         let rhs = rhs
             .downcast_ref::<WgpuStorage>()
             .ok_or_else(|| invalid(operation, "rhs is not WGPU storage"))?;
-        Self::quantized_matmul::<f32>(lhs, rhs)
-            .map_err(|e| kernel_error("Wgpu", operation, e))
+        Self::quantized_matmul::<f32>(lhs, rhs).map_err(|e| kernel_error("Wgpu", operation, e))
     }
 }
 
@@ -883,11 +883,9 @@ impl<D: Device> Execute<op::Sort> for WgpuBackendImpl<D> {
         let attributes = request.operation.descriptor().attributes();
         let index_dtype = attributes.index_dtype;
         match index_dtype.builtin_id() {
-            Some(DTypeId::U8) => WgpuBackendImpl::<D>::sort::<f32, u8>(
-                input,
-                attributes.axis,
-                attributes.descending,
-            ),
+            Some(DTypeId::U8) => {
+                WgpuBackendImpl::<D>::sort::<f32, u8>(input, attributes.axis, attributes.descending)
+            }
             Some(DTypeId::U32) => WgpuBackendImpl::<D>::sort::<f32, u32>(
                 input,
                 attributes.axis,

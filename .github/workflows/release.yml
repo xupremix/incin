@@ -79,7 +79,8 @@ jobs:
         run: |
           set -euo pipefail
           mdbook build docs/book
-          python3 docs/book/build_site.py
+          mdbook build docs/book-next
+          python3 docs/book/build_site.py --all
           python3 tools/check-book-site.py
           python3 tools/test-book-site.py
           python3 tools/test-api-page.py

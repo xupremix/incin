@@ -71,7 +71,9 @@ pub(crate) mod iteration;
 
 pub(crate) mod layout;
 
-#[cfg(any(feature = "cpu", feature = "cuda"))]
+// Q8_0/FP4 block layouts are shared by every backend that stores them,
+// including WGPU's host-side quantize path, so the module is not CPU/CUDA-only.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "wgpu"))]
 pub(crate) mod quant;
 
 /// Compile-time SIMD lane-width resolution for type-specialized kernels.

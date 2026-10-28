@@ -158,19 +158,14 @@ fn compare_eq_over_f64_is_byte_exact() {
         .iter()
         .flat_map(|v| v.to_le_bytes())
         .collect();
-    let lhs =
-        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &lhs_bytes)
-            .expect("f64 storage is CUDA-admissible");
-    let rhs =
-        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &rhs_bytes)
-            .expect("f64 storage is CUDA-admissible");
+    let lhs = crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &lhs_bytes)
+        .expect("f64 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F64.into(), 0, &rhs_bytes)
+        .expect("f64 storage is CUDA-admissible");
     let out = launch_compare(CompareOp::Eq, &lhs, &rhs).unwrap();
     assert_eq!(out.shape, vec![4]);
     assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
-    assert_eq!(
-        crate::cuda::testing::download_bytes(&out),
-        vec![1, 0, 1, 0]
-    );
+    assert_eq!(crate::cuda::testing::download_bytes(&out), vec![1, 0, 1, 0]);
 }
 
 /// Issue #90 slice 4: `cmp_lt` over `f16` operands, compared as raw bytes
@@ -188,12 +183,20 @@ fn compare_lt_over_f16_is_byte_exact() {
             .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
             .collect::<Vec<u8>>()
     };
-    let lhs =
-        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::F16.into(), 0, &encode(&[1.0, 5.0, 3.0]))
-            .expect("f16 storage is CUDA-admissible");
-    let rhs =
-        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::F16.into(), 0, &encode(&[4.0, 2.0, 7.0]))
-            .expect("f16 storage is CUDA-admissible");
+    let lhs = crate::cuda::backend::cuda_from_bytes(
+        &[3],
+        DTypeId::F16.into(),
+        0,
+        &encode(&[1.0, 5.0, 3.0]),
+    )
+    .expect("f16 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(
+        &[3],
+        DTypeId::F16.into(),
+        0,
+        &encode(&[4.0, 2.0, 7.0]),
+    )
+    .expect("f16 storage is CUDA-admissible");
     let out = launch_compare(CompareOp::Lt, &lhs, &rhs).unwrap();
     assert_eq!(out.shape, vec![3]);
     assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
@@ -213,12 +216,20 @@ fn compare_ge_over_bf16_is_byte_exact() {
             .flat_map(|&v| half::bf16::from_f32(v).to_bits().to_le_bytes())
             .collect::<Vec<u8>>()
     };
-    let lhs =
-        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::BF16.into(), 0, &encode(&[1.0, 5.0, 3.0]))
-            .expect("bf16 storage is CUDA-admissible");
-    let rhs =
-        crate::cuda::backend::cuda_from_bytes(&[3], DTypeId::BF16.into(), 0, &encode(&[4.0, 2.0, 7.0]))
-            .expect("bf16 storage is CUDA-admissible");
+    let lhs = crate::cuda::backend::cuda_from_bytes(
+        &[3],
+        DTypeId::BF16.into(),
+        0,
+        &encode(&[1.0, 5.0, 3.0]),
+    )
+    .expect("bf16 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(
+        &[3],
+        DTypeId::BF16.into(),
+        0,
+        &encode(&[4.0, 2.0, 7.0]),
+    )
+    .expect("bf16 storage is CUDA-admissible");
     let out = launch_compare(CompareOp::Ge, &lhs, &rhs).unwrap();
     assert_eq!(out.shape, vec![3]);
     assert_eq!(out.dtype(), DTypeId::Bool.descriptor());
@@ -234,9 +245,8 @@ fn compare_refuses_a_mixed_dtype_operand_pair() {
     use crate::cuda::ops::compare::{CompareOp, launch_compare};
     let lhs = cuda_f32(&[2, 2], vec![1.0; 4]);
     let rhs_bytes: Vec<u8> = [1.0f64; 4].iter().flat_map(|v| v.to_le_bytes()).collect();
-    let rhs =
-        crate::cuda::backend::cuda_from_bytes(&[2, 2], DTypeId::F64.into(), 0, &rhs_bytes)
-            .expect("f64 storage is CUDA-admissible");
+    let rhs = crate::cuda::backend::cuda_from_bytes(&[2, 2], DTypeId::F64.into(), 0, &rhs_bytes)
+        .expect("f64 storage is CUDA-admissible");
     let error =
         launch_compare(CompareOp::Eq, &lhs, &rhs).expect_err("f32/f64 compare must be refused");
     assert!(
@@ -383,12 +393,20 @@ fn where_cond_selects_f16_values() {
             .flat_map(|&v| half::f16::from_f32(v).to_bits().to_le_bytes())
             .collect::<Vec<u8>>()
     };
-    let on_true =
-        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F16.into(), 0, &encode(&[1.0, 2.0, 3.0, 4.0]))
-            .expect("f16 storage is CUDA-admissible");
-    let on_false =
-        crate::cuda::backend::cuda_from_bytes(&[4], DTypeId::F16.into(), 0, &encode(&[5.0, 6.0, 7.0, 8.0]))
-            .expect("f16 storage is CUDA-admissible");
+    let on_true = crate::cuda::backend::cuda_from_bytes(
+        &[4],
+        DTypeId::F16.into(),
+        0,
+        &encode(&[1.0, 2.0, 3.0, 4.0]),
+    )
+    .expect("f16 storage is CUDA-admissible");
+    let on_false = crate::cuda::backend::cuda_from_bytes(
+        &[4],
+        DTypeId::F16.into(),
+        0,
+        &encode(&[5.0, 6.0, 7.0, 8.0]),
+    )
+    .expect("f16 storage is CUDA-admissible");
     let out = launch_where_cond(&mask, &on_true, &on_false).unwrap();
     assert_eq!(out.shape, vec![4]);
     assert_eq!(out.dtype(), DTypeId::F16.descriptor());

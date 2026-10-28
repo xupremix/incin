@@ -207,8 +207,7 @@ pub(crate) fn im2col_1d_cpu(
             expression: "convolution effective kernel",
         })?;
     let l_out = padded.saturating_sub(effective) / stride + 1;
-    let columns =
-        ShapeBuf::from_slice(&[cin, kernel_size]).checked_numel(OperationKind::Conv1d)?;
+    let columns = ShapeBuf::from_slice(&[cin, kernel_size]).checked_numel(OperationKind::Conv1d)?;
     let mut out = alloc::vec![0.0f32; b * l_out * columns];
     for bi in 0..b {
         for oi in 0..l_out {
@@ -984,11 +983,7 @@ impl<D: Device> WgpuBackendImpl<D> {
     /// Variable window for output position `i`: `start = floor(i*in/out)`,
     /// `end = ceil((i+1)*in/out)` — CPU's `adaptive_window_bounds` bound for
     /// bound, including its overflow errors.
-    fn adaptive_bounds(
-        in_size: usize,
-        out_size: usize,
-        i: usize,
-    ) -> Result<(usize, usize)> {
+    fn adaptive_bounds(in_size: usize, out_size: usize, i: usize) -> Result<(usize, usize)> {
         if out_size == 0 {
             return Err(Error::Backend(BackendError::InvalidInput {
                 operation: OperationKind::AdaptiveAvgPool2d,
@@ -1069,8 +1064,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                             }
                         }
                         let count = ((h_end - h_start) * (w_end - w_start)) as f64;
-                        out_vals[((bi * c + ci) * h_out + oh) * w_out + ow] =
-                            (sum / count) as f32;
+                        out_vals[((bi * c + ci) * h_out + oh) * w_out + ow] = (sum / count) as f32;
                     }
                 }
             }
@@ -1105,10 +1099,8 @@ impl<D: Device> WgpuBackendImpl<D> {
                         for oh in 0..gh_out {
                             let (h_start, h_end) = Self::adaptive_bounds(gh, gh_out, oh)?;
                             for ow in 0..gw_out {
-                                let (w_start, w_end) =
-                                    Self::adaptive_bounds(gw, gw_out, ow)?;
-                                let count =
-                                    ((h_end - h_start) * (w_end - w_start)) as f32;
+                                let (w_start, w_end) = Self::adaptive_bounds(gw, gw_out, ow)?;
+                                let count = ((h_end - h_start) * (w_end - w_start)) as f32;
                                 let g = grad_data[grad_base + oh * gw_out + ow] / count;
                                 for ih in h_start..h_end {
                                     for iw in w_start..w_end {
@@ -1465,7 +1457,11 @@ impl<D: Device> WgpuBackendImpl<D> {
         } else {
             WgpuStorage::new(t.buffer.clone(), t.shape.to_vec())
         };
-        let (b, cin, len) = (activation.shape[0], activation.shape[1], activation.shape[2]);
+        let (b, cin, len) = (
+            activation.shape[0],
+            activation.shape[1],
+            activation.shape[2],
+        );
         if weight.shape.len() != 3 {
             return Err(Error::ShapeMismatch {
                 op: "conv1d",
@@ -1557,20 +1553,15 @@ impl<D: Device> WgpuBackendImpl<D> {
                 } else {
                     input_shape.clone()
                 };
-                let act_storage =
-                    WgpuStorage::new(input_capture.buffer.clone(), act_shape.clone());
+                let act_storage = WgpuStorage::new(input_capture.buffer.clone(), act_shape.clone());
                 let (ab, acin, alen) = (act_shape[0], act_shape[1], act_shape[2]);
                 let mut grad_input_groups: Vec<WgpuStorage> = Vec::new();
                 let mut grad_weight_groups: Vec<WgpuStorage> = Vec::new();
                 for group in 0..g {
-                    let input_g =
-                        Self::narrow::<K>(&act_storage, 1, group * (acin / g), acin / g)?;
-                    let weight_g =
-                        Self::narrow::<K>(&weight_capture, 0, group * cout_g, cout_g)?;
-                    let grad_out_g =
-                        Self::narrow::<K>(&grad_t, 2, group * cout_g, cout_g)?;
-                    let weight_mat =
-                        Self::reshape::<K>(&weight_g, &[cout_g, input_columns])?;
+                    let input_g = Self::narrow::<K>(&act_storage, 1, group * (acin / g), acin / g)?;
+                    let weight_g = Self::narrow::<K>(&weight_capture, 0, group * cout_g, cout_g)?;
+                    let grad_out_g = Self::narrow::<K>(&grad_t, 2, group * cout_g, cout_g)?;
+                    let weight_mat = Self::reshape::<K>(&weight_g, &[cout_g, input_columns])?;
                     let grad_cols = Self::batched_matmul::<K>(&grad_out_g, &weight_mat)?;
                     let grad_cols_data = grad_cols.buffer.to_vec::<f32>()?;
                     let grad_cols_shape = grad_cols.shape.to_vec();
@@ -1605,13 +1596,10 @@ impl<D: Device> WgpuBackendImpl<D> {
                         alloc::vec![ab, grad_cols_shape[1], input_columns],
                     );
                     let grad_out_g_t = Self::transpose::<K>(&grad_out_g, 1, 2)?;
-                    let grad_weight_mat =
-                        Self::batched_matmul::<K>(&grad_out_g_t, &cols_storage)?;
+                    let grad_weight_mat = Self::batched_matmul::<K>(&grad_out_g_t, &cols_storage)?;
                     let grad_weight_summed = Self::sum_dim::<K>(&grad_weight_mat, 0)?;
-                    let grad_weight_g = Self::reshape::<K>(
-                        &grad_weight_summed,
-                        &[cout_g, acin / g, kernel_size],
-                    )?;
+                    let grad_weight_g =
+                        Self::reshape::<K>(&grad_weight_summed, &[cout_g, acin / g, kernel_size])?;
                     grad_weight_groups.push(grad_weight_g);
                 }
                 let grad_input = if g == 1 {
@@ -1748,8 +1736,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                 for co in 0..cout {
                     for hi in 0..h {
                         for wi in 0..w {
-                            let col_base =
-                                (bi * (h * w) + hi * w + wi) * weight_columns;
+                            let col_base = (bi * (h * w) + hi * w + wi) * weight_columns;
                             for khi in 0..kh {
                                 for kwi in 0..kw {
                                     let sh = hi * stride.0 + khi * dilation.0;
@@ -1761,10 +1748,8 @@ impl<D: Device> WgpuBackendImpl<D> {
                                     {
                                         natural_data[(bi * cout + co) * (h_nat * w_nat)
                                             + (sh - padding.0) * w_nat
-                                            + (sw - padding.1)] += cols_data[col_base
-                                            + co * (kh * kw)
-                                            + khi * kw
-                                            + kwi];
+                                            + (sw - padding.1)] +=
+                                            cols_data[col_base + co * (kh * kw) + khi * kw + kwi];
                                     }
                                 }
                             }
@@ -1788,19 +1773,16 @@ impl<D: Device> WgpuBackendImpl<D> {
                     alloc::vec![b, cout, final_h, final_w],
                 );
                 // Paste the natural fold into the zeroed final buffer.
-                let mut final_data =
-                    alloc::vec![0.0f32; b * cout * final_h * final_w];
+                let mut final_data = alloc::vec![0.0f32; b * cout * final_h * final_w];
                 let natural_data = natural_storage.buffer.to_vec::<f32>()?;
                 for bi in 0..b {
                     for co in 0..cout {
                         for hi in 0..h_nat {
                             for wi in 0..w_nat {
-                                final_data[(bi * cout + co) * (final_h * final_w)
-                                    + hi * final_w
-                                    + wi] = natural_data[(bi * cout + co)
-                                    * (h_nat * w_nat)
-                                    + hi * w_nat
-                                    + wi];
+                                final_data
+                                    [(bi * cout + co) * (final_h * final_w) + hi * final_w + wi] =
+                                    natural_data
+                                        [(bi * cout + co) * (h_nat * w_nat) + hi * w_nat + wi];
                             }
                         }
                     }
@@ -1836,8 +1818,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                 let grad_nat = if op_h == 0 && op_w == 0 {
                     grad_batched
                 } else {
-                    let cropped_h =
-                        Self::narrow::<K>(&grad_batched, 2, 0, h_nat)?;
+                    let cropped_h = Self::narrow::<K>(&grad_batched, 2, 0, h_nat)?;
                     Self::narrow::<K>(&cropped_h, 3, 0, w_nat)?
                 };
                 // grad_out_nat: unfold with the forward fold's window, then
@@ -1860,8 +1841,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                                                 && sw >= padding.1
                                                 && sw - padding.1 < w_nat
                                             {
-                                                grad_nat_data[(bi * cout + co)
-                                                    * (h_nat * w_nat)
+                                                grad_nat_data[(bi * cout + co) * (h_nat * w_nat)
                                                     + (sh - padding.0) * w_nat
                                                     + (sw - padding.1)]
                                             } else {
@@ -1883,15 +1863,11 @@ impl<D: Device> WgpuBackendImpl<D> {
                     WgpuBuffer::from_slice(&cols),
                     alloc::vec![b, h * w, cout * kh * kw],
                 );
-                let weight_mat =
-                    Self::reshape::<K>(&weight_capture, &[cin, weight_columns])?;
+                let weight_mat = Self::reshape::<K>(&weight_capture, &[cin, weight_columns])?;
                 let weight_t = Self::transpose::<K>(&weight_mat, 0, 1)?;
-                let grad_input_flat =
-                    Self::batched_matmul::<K>(&cols_storage, &weight_t)?;
-                let grad_input_t =
-                    Self::transpose::<K>(&grad_input_flat, 1, 2)?;
-                let grad_input_full =
-                    Self::reshape::<K>(&grad_input_t, &[b, cin, h, w])?;
+                let grad_input_flat = Self::batched_matmul::<K>(&cols_storage, &weight_t)?;
+                let grad_input_t = Self::transpose::<K>(&grad_input_flat, 1, 2)?;
+                let grad_input_full = Self::reshape::<K>(&grad_input_t, &[b, cin, h, w])?;
                 let grad_input = if unbatched {
                     Self::reshape::<K>(&grad_input_full, &input_shape)?
                 } else {
@@ -1899,8 +1875,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                 };
                 // grad_weight: input_flat^T @ grad_out_cols, summed over batch.
                 // input_flat is already contiguous [B,Cin,H*W]: reshape only.
-                let input_flat =
-                    Self::reshape::<K>(&input_capture, &[b, cin, h * w])?;
+                let input_flat = Self::reshape::<K>(&input_capture, &[b, cin, h * w])?;
                 let in_cols_t = Self::transpose::<K>(&input_flat, 1, 2)?;
                 let in_cols_storage = Self::transpose::<K>(&in_cols_t, 1, 2)?;
                 // grad_out as [B, H*W, Cout*Kh*Kw]: reuse the forward fold's
@@ -1920,8 +1895,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                                             && sw >= padding.1
                                             && sw - padding.1 < w_nat
                                         {
-                                            grad_nat_data2[(bi * cout + co)
-                                                * (h_nat * w_nat)
+                                            grad_nat_data2[(bi * cout + co) * (h_nat * w_nat)
                                                 + (sh - padding.0) * w_nat
                                                 + (sw - padding.1)]
                                         } else {
@@ -1944,10 +1918,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                 let grad_weight_mat =
                     Self::batched_matmul::<K>(&in_cols_storage, &go_cols_storage)?;
                 let grad_weight_summed = Self::sum_dim::<K>(&grad_weight_mat, 0)?;
-                let grad_weight = Self::reshape::<K>(
-                    &grad_weight_summed,
-                    &[cin, cout, kh, kw],
-                )?;
+                let grad_weight = Self::reshape::<K>(&grad_weight_summed, &[cin, cout, kh, kw])?;
                 Ok(alloc::vec![grad_input, grad_weight])
             }),
         });

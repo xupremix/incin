@@ -69,9 +69,9 @@ impl<B: Backend + AutogradBackend> Gradients<B> {
         B: HostInterop,
     {
         let bytes = self.require_bytes(tensor)?;
-        let num_elements = tensor.shape_buf().checked_numel(
-            crate::shapes::error::OperationKind::Storage,
-        )?;
+        let num_elements = tensor
+            .shape_buf()
+            .checked_numel(crate::shapes::error::OperationKind::Storage)?;
         let elem_size = core::mem::size_of::<K::Elem>();
         let expected_elem_size =
             tensor.dtype().encoding().scalar_bytes().ok_or_else(|| {
@@ -124,10 +124,7 @@ impl<B: Backend + AutogradBackend> Gradients<B> {
     /// Bytes plus [`Tensor::dtype`] (for width and encoding) are everything
     /// such a caller needs; concrete-dtype callers should prefer
     /// `require_values`.
-    pub fn require_bytes<S, K, G, P, L>(
-        &self,
-        tensor: &Tensor<S, B, K, G, P, L>,
-    ) -> Result<Vec<u8>>
+    pub fn require_bytes<S, K, G, P, L>(&self, tensor: &Tensor<S, B, K, G, P, L>) -> Result<Vec<u8>>
     where
         S: Shape,
         K: DType,

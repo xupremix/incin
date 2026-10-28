@@ -169,14 +169,8 @@ fn quantized_matmul_matches_cpu_reference_on_ragged_shapes() {
     let lhs_values = mixed_scale_values(m, k, 1);
     let rhs_values = mixed_scale_values(n, k, 7);
 
-    let cuda_lhs = quantize_cuda(
-        &cuda_ctx,
-        &upload_f32_shaped(&[m, k], &lhs_values),
-    );
-    let cuda_rhs = quantize_cuda(
-        &cuda_ctx,
-        &upload_f32_shaped(&[n, k], &rhs_values),
-    );
+    let cuda_lhs = quantize_cuda(&cuda_ctx, &upload_f32_shaped(&[m, k], &lhs_values));
+    let cuda_rhs = quantize_cuda(&cuda_ctx, &upload_f32_shaped(&[n, k], &rhs_values));
     let out = quantized_matmul_cuda(&cuda_ctx, &cuda_lhs, &cuda_rhs)
         .expect("a Q8_0 [M,K] x Q8_0 [N,K] pair must launch");
     assert_eq!(out.shape.to_vec(), vec![m, n], "output geometry");
@@ -213,14 +207,8 @@ fn quantized_matmul_matches_cpu_reference_on_batched_lhs() {
     let lhs_values = mixed_scale_values(b * m, k, 3);
     let rhs_values = mixed_scale_values(n, k, 11);
 
-    let cuda_lhs = quantize_cuda(
-        &cuda_ctx,
-        &upload_f32_shaped(&[b, m, k], &lhs_values),
-    );
-    let cuda_rhs = quantize_cuda(
-        &cuda_ctx,
-        &upload_f32_shaped(&[n, k], &rhs_values),
-    );
+    let cuda_lhs = quantize_cuda(&cuda_ctx, &upload_f32_shaped(&[b, m, k], &lhs_values));
+    let cuda_rhs = quantize_cuda(&cuda_ctx, &upload_f32_shaped(&[n, k], &rhs_values));
     let out = quantized_matmul_cuda(&cuda_ctx, &cuda_lhs, &cuda_rhs)
         .expect("a batched Q8_0 lhs must launch");
     assert_eq!(out.shape.to_vec(), vec![b, m, n], "batched output geometry");
@@ -251,8 +239,8 @@ fn quantized_matmul_refuses_k_not_a_multiple_of_32() {
     let rhs_values = mixed_scale_values(2, 48, 9);
     let lhs = quantize_cuda(&ctx, &upload_f32_shaped(&[2, 48], &lhs_values));
     let rhs = quantize_cuda(&ctx, &upload_f32_shaped(&[2, 48], &rhs_values));
-    let error = quantized_matmul_cuda(&ctx, &lhs, &rhs)
-        .expect_err("K = 48 must be refused before launch");
+    let error =
+        quantized_matmul_cuda(&ctx, &lhs, &rhs).expect_err("K = 48 must be refused before launch");
     let message = format!("{error}");
     assert!(
         message.contains("multiple of 32"),

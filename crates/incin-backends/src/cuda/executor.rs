@@ -14,10 +14,10 @@ use incin_core::tensor::device::{Device, DeviceKind};
 use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 use incin_core::tensor::reduction::Reduction;
 
-use half::{bf16, f16};
 use super::backend::CudaBackendImpl;
 use super::storage::CudaStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
+use half::{bf16, f16};
 
 impl<D: Device> Capabilities for CudaBackendImpl<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
@@ -1242,8 +1242,7 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
                 // In the value dtype, not `f32`: `grad_out` already carries
                 // it, so `zeros_like` reads it off the gradient rather than
                 // naming a dtype of its own.
-                let zeros =
-                    crate::cuda::ops::select::zeros_like(grad_out, &out_shape_capture)?;
+                let zeros = crate::cuda::ops::select::zeros_like(grad_out, &out_shape_capture)?;
                 let grad_true =
                     crate::cuda::ops::select::launch_where_cond(&mask_capture, grad_out, &zeros)?;
                 let grad_false =
@@ -2019,11 +2018,11 @@ impl<D: Device> Execute<op::Linear> for CudaBackendImpl<D> {
             Some(bias) => match try_fused_biased_gemm(bias, rows, &transposed) {
                 Some(fused) => fused,
                 None => {
-                    let product =
-                        crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(
-                            rows, &transposed,
-                        )
-                        .map_err(wrap)?;
+                    let product = crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(
+                        rows,
+                        &transposed,
+                    )
+                    .map_err(wrap)?;
                     crate::cuda::backend::elementwise::cuda_add_storage(
                         &product,
                         bias,
@@ -2032,10 +2031,8 @@ impl<D: Device> Execute<op::Linear> for CudaBackendImpl<D> {
                     .map_err(wrap)?
                 }
             },
-            None => crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(
-                rows, &transposed,
-            )
-            .map_err(wrap)?,
+            None => crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(rows, &transposed)
+                .map_err(wrap)?,
         };
         let projected = product;
 

@@ -311,6 +311,11 @@
    "kind": "method",
    "item": "Tensor::full"
   },
+  "fused_attention": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=fused_attention",
+   "kind": "search",
+   "item": "fused_attention"
+  },
   "gather": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.gather",
    "kind": "method",
@@ -325,6 +330,11 @@
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.group_norm",
    "kind": "method",
    "item": "Tensor::group_norm"
+  },
+  "grouped_matmul": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=grouped_matmul",
+   "kind": "search",
+   "item": "grouped_matmul"
   },
   "index_select": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.index_select",
@@ -520,6 +530,11 @@
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.neg",
    "kind": "method",
    "item": "Tensor::neg"
+  },
+  "nonzero": {
+   "url": "https://docs.rs/incin-core/latest/incin_core/?search=nonzero",
+   "kind": "search",
+   "item": "nonzero"
   },
   "norm": {
    "url": "https://docs.rs/incin-core/latest/incin_core/tensor/base/struct.Tensor.html#method.norm",

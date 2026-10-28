@@ -377,12 +377,13 @@ fn topk_returns_ordered_values_and_their_indices() {
             index_dtype: DTypeId::I64.descriptor(),
         },
     );
-    assert_close(&read(&values), &[1.0, 1.5, -3.0, -2.0], 1e-6, "smallest values");
-    assert_eq!(
-        read_i64(&indices),
-        vec![1, 3, 3, 0],
-        "smallest indices"
+    assert_close(
+        &read(&values),
+        &[1.0, 1.5, -3.0, -2.0],
+        1e-6,
+        "smallest values",
     );
+    assert_eq!(read_i64(&indices), vec![1, 3, 3, 0], "smallest indices");
 }
 
 #[test]

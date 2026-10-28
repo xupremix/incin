@@ -1044,9 +1044,7 @@ fn run_sdpa(
         handles.push(TensorHandle::from_storage::<TestBackend, f32, _>(m));
     }
     let out = dispatch::execute::<op::ScaledDotProductAttention, TestBackend>(
-        context,
-        attributes,
-        &handles,
+        context, attributes, &handles,
     )
     .expect("an advertised SDPA invocation must execute");
     (out, tape_depth() - before)
@@ -1114,15 +1112,8 @@ fn sdpa_no_mask_dispatch_matches_composed_reference() {
     let (dq, dk, dv) = cuda_sdpa_grads(&context, &out, q_id, k_id, v_id);
     #[cfg(feature = "cpu")]
     {
-        let (want_out, want_dq, want_dk, want_dv) = cpu_sdpa_with_grads(
-            &[1, 2, 3, 4],
-            &qv,
-            &[1, 2, 3, 4],
-            &kv,
-            &vv,
-            None,
-            None,
-        );
+        let (want_out, want_dq, want_dk, want_dv) =
+            cpu_sdpa_with_grads(&[1, 2, 3, 4], &qv, &[1, 2, 3, 4], &kv, &vv, None, None);
         assert_close(&read_f32(&out), &want_out, 1e-4, "sdpa fused forward");
         assert_close(&dq, &want_dq, 1e-4, "sdpa fused dq");
         assert_close(&dk, &want_dk, 1e-4, "sdpa fused dk");

@@ -209,20 +209,8 @@ fn tensor_to_bytes_admits_the_dense_set_while_tohost_refuses_half() {
 /// only ever the output.
 #[test]
 fn comparison_rows_admit_every_float_dtype() {
-    for operation in [
-        K::CmpEq,
-        K::CmpNe,
-        K::CmpLt,
-        K::CmpLe,
-        K::CmpGt,
-        K::CmpGe,
-    ] {
-        for dtype in [
-            DTypeId::BF16,
-            DTypeId::F16,
-            DTypeId::F32,
-            DTypeId::F64,
-        ] {
+    for operation in [K::CmpEq, K::CmpNe, K::CmpLt, K::CmpLe, K::CmpGt, K::CmpGe] {
+        for dtype in [DTypeId::BF16, DTypeId::F16, DTypeId::F32, DTypeId::F64] {
             assert!(
                 admits(operation, dtype, LayoutClass::Contiguous, false),
                 "CUDA: {operation:?} must admit {dtype:?} contiguous with \

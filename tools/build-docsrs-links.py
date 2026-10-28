@@ -138,13 +138,38 @@ def type_index(refresh: bool) -> dict:
     return index
 
 
+CATALOG = ROOT / "crates/incin-core/src/operation_catalog.rs"
+CATALOG_ROW = re.compile(
+    r'\(\s*\w+\s*,\s*"([^"]+)"\s*,\s*\w+\s*,\s*\w+\s*,'
+    r'\s*\w+\s*,\s*\d+\s*,\s*\d+\s*,\s*"([^"]*)"\s*\)'
+)
+
+
+def catalog_operations(payload: dict) -> list[dict]:
+    """Every catalog operation, not only the ones in the last generated site.
+
+    `build-api-site-data.py` regenerates the payload from the capability matrix,
+    but this linker reads the payload back as its input. Taking only that file's
+    rows makes the two generators circular: a newly catalogued operation cannot
+    get a link until the payload that needs it has already been written. The
+    catalog is the authoritative list, so union it with the payload's rows.
+    """
+    rows = {
+        name: {"name": name, "catalog": {"api": api}}
+        for name, api in CATALOG_ROW.findall(CATALOG.read_text(encoding="utf-8"))
+    }
+    for op in payload["operations"]:
+        rows[op["name"]] = op
+    return [rows[name] for name in sorted(rows)]
+
+
 def main() -> int:
     refresh = "--refresh" in sys.argv
     payload = json.loads(PAYLOAD.read_text())
     published = {page: anchors(fetch(url, refresh)) for page, url in PAGES.items()}
 
     links, verified, searched = {}, 0, []
-    for op in payload["operations"]:
+    for op in catalog_operations(payload):
         name = op["name"]
         api = (op.get("catalog") or {}).get("api")
         hit = None

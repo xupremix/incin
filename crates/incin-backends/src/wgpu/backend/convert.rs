@@ -47,12 +47,10 @@ use super::util::num_elements;
 fn cast_values(input: &WgpuStorage, target: DTypeDescriptor) -> Result<WgpuStorage> {
     let shape = input.shape().to_vec();
     let total = num_elements(&shape)?;
-    let unsupported_target = |dtype: DTypeDescriptor| {
-        Error::UnsupportedDType {
-            dtype,
-            backend: "Wgpu",
-            op: "to_dtype",
-        }
+    let unsupported_target = |dtype: DTypeDescriptor| Error::UnsupportedDType {
+        dtype,
+        backend: "Wgpu",
+        op: "to_dtype",
     };
     match target.builtin_id() {
         Some(DTypeId::F32) => {
@@ -173,10 +171,7 @@ fn upload<T: bytemuck::Pod>(
 impl<D: Device> WgpuBackendImpl<D> {
     /// `to_dtype(input, target)`: convert storage dtype host-side. Records
     /// nothing on the tape (see the module docs for why that is a claim).
-    pub(crate) fn to_dtype(
-        input: &WgpuStorage,
-        target: DTypeDescriptor,
-    ) -> Result<WgpuStorage> {
+    pub(crate) fn to_dtype(input: &WgpuStorage, target: DTypeDescriptor) -> Result<WgpuStorage> {
         let source = input.metadata().dtype();
         if source == target {
             return Ok(input.clone());

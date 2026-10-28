@@ -378,11 +378,7 @@ fn cross_entropy_matches_cpu_across_reductions() {
 
     let context = ExecutionContext::new(TestBackend::new());
     let cpu_context = ExecutionContext::new(Cpu::new());
-    for reduction in [
-        LossReduction::Mean,
-        LossReduction::Sum,
-        LossReduction::None,
-    ] {
+    for reduction in [LossReduction::Mean, LossReduction::Sum, LossReduction::None] {
         let what = match reduction {
             LossReduction::Mean => "mean",
             LossReduction::Sum => "sum",
@@ -474,11 +470,7 @@ fn mse_l1_bce_match_cpu_across_reductions() {
 
     macro_rules! check_pair_loss {
         ($op:ty, $name:literal) => {
-            for reduction in [
-                LossReduction::Mean,
-                LossReduction::Sum,
-                LossReduction::None,
-            ] {
+            for reduction in [LossReduction::Mean, LossReduction::Sum, LossReduction::None] {
                 let what = match reduction {
                     LossReduction::Mean => "mean",
                     LossReduction::Sum => "sum",

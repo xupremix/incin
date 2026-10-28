@@ -399,10 +399,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                 w_out / r,
             ];
             source_positions.push(src);
-            *out_val = data[src[0] * (c * h * w)
-                + src[1] * (h * w)
-                + src[2] * w
-                + src[3]];
+            *out_val = data[src[0] * (c * h * w) + src[1] * (h * w) + src[2] * w + src[3]];
             Self::increment_index(&mut idx, &out_shape);
         }
         let out_storage = WgpuStorage::new(WgpuBuffer::from_slice(&out), out_shape.clone());
@@ -1006,30 +1003,29 @@ impl<D: Device> WgpuBackendImpl<D> {
             }));
         }
 
-        let out_result: Result<WgpuStorage> =
-            incin_core::exec::GradMode::Disabled.scope(|| {
-                let mut out_data = alloc::vec![0.0f32; tokens * out_cols];
-                for (expert, &(start, end)) in spans.iter().enumerate() {
-                    if start == end {
-                        continue;
-                    }
-                    let rows = Self::narrow::<K>(lhs, 0, start, end - start)?;
-                    let weight_slice = Self::narrow::<K>(rhs, 0, expert, 1)?;
-                    let weight = Self::reshape::<K>(&weight_slice, &[contracting, out_cols])?;
-                    let product = Self::matmul::<K>(&rows, &weight)?;
-                    let product_data = product.buffer.to_vec::<f32>()?;
-                    for row in 0..(end - start) {
-                        for col in 0..out_cols {
-                            out_data[(start + row) * out_cols + col] =
-                                product_data[row * out_cols + col];
-                        }
+        let out_result: Result<WgpuStorage> = incin_core::exec::GradMode::Disabled.scope(|| {
+            let mut out_data = alloc::vec![0.0f32; tokens * out_cols];
+            for (expert, &(start, end)) in spans.iter().enumerate() {
+                if start == end {
+                    continue;
+                }
+                let rows = Self::narrow::<K>(lhs, 0, start, end - start)?;
+                let weight_slice = Self::narrow::<K>(rhs, 0, expert, 1)?;
+                let weight = Self::reshape::<K>(&weight_slice, &[contracting, out_cols])?;
+                let product = Self::matmul::<K>(&rows, &weight)?;
+                let product_data = product.buffer.to_vec::<f32>()?;
+                for row in 0..(end - start) {
+                    for col in 0..out_cols {
+                        out_data[(start + row) * out_cols + col] =
+                            product_data[row * out_cols + col];
                     }
                 }
-                Ok(WgpuStorage::new(
-                    WgpuBuffer::from_slice(&out_data),
-                    alloc::vec![tokens, out_cols],
-                ))
-            });
+            }
+            Ok(WgpuStorage::new(
+                WgpuBuffer::from_slice(&out_data),
+                alloc::vec![tokens, out_cols],
+            ))
+        });
         let out = out_result?;
 
         let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
@@ -1039,17 +1035,14 @@ impl<D: Device> WgpuBackendImpl<D> {
             input_ids: alloc::vec![lhs_id, rhs_id],
             backward: alloc::boxed::Box::new(move |grad_out: &WgpuStorage| {
                 let mut grad_lhs = alloc::vec![0.0f32; tokens * contracting];
-                let mut grad_rhs =
-                    alloc::vec![0.0f32; experts * contracting * out_cols];
+                let mut grad_rhs = alloc::vec![0.0f32; experts * contracting * out_cols];
                 for (expert, &(start, end)) in spans.iter().enumerate() {
                     if start == end {
                         continue;
                     }
                     let grad_rows_all = Self::narrow::<K>(grad_out, 0, start, end - start)?;
-                    let weight_slice =
-                        Self::narrow::<K>(&rhs_capture, 0, expert, 1)?;
-                    let weight =
-                        Self::reshape::<K>(&weight_slice, &[contracting, out_cols])?;
+                    let weight_slice = Self::narrow::<K>(&rhs_capture, 0, expert, 1)?;
+                    let weight = Self::reshape::<K>(&weight_slice, &[contracting, out_cols])?;
                     let weight_t = Self::transpose::<K>(&weight, 0, 1)?;
                     let grad_block = Self::matmul::<K>(&grad_rows_all, &weight_t)?;
                     let grad_block_data = grad_block.buffer.to_vec::<f32>()?;
@@ -1061,8 +1054,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                     }
                     let lhs_rows = Self::narrow::<K>(&lhs_capture, 0, start, end - start)?;
                     let lhs_rows_t = Self::transpose::<K>(&lhs_rows, 0, 1)?;
-                    let grad_weight =
-                        Self::matmul::<K>(&lhs_rows_t, &grad_rows_all)?;
+                    let grad_weight = Self::matmul::<K>(&lhs_rows_t, &grad_rows_all)?;
                     let grad_weight_data = grad_weight.buffer.to_vec::<f32>()?;
                     for k in 0..contracting {
                         for n in 0..out_cols {

@@ -384,10 +384,7 @@ fn scatter_add_is_bit_stable_across_runs() -> Result<()> {
 /// `softmax`-then-`log`) is pinned in `tensor_ops.rs`.
 #[test]
 fn the_gradient_of_the_stable_router_log_probabilities() -> Result<()> {
-    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(
-        &[1.0, 2.0, 3.0, 0.5, -1.0, 2.0],
-        (),
-    )?;
+    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 0.5, -1.0, 2.0], ())?;
 
     let loss = x.log_softmax(1)?.sum_all()?;
     let grads = loss.backward()?;
@@ -421,10 +418,7 @@ fn the_gradient_of_the_stable_router_log_probabilities() -> Result<()> {
 /// `incin-backends`, forward stability in `tensor_ops.rs`.
 #[test]
 fn the_gradient_of_the_normalizer_is_the_softmax() -> Result<()> {
-    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(
-        &[1.0, 2.0, 3.0, 0.5, -1.0, 2.0],
-        (),
-    )?;
+    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 0.5, -1.0, 2.0], ())?;
 
     let loss = x.logsumexp(1)?.sum_all()?;
     let grads = loss.backward()?;
@@ -459,9 +453,12 @@ fn the_gradient_of_the_normalizer_is_the_softmax() -> Result<()> {
 fn sorting_reorders_without_differentiating() -> Result<()> {
     let x = Tensor::<s![4], B, f32, Grad>::from_slice(&[3.0, 1.0, 2.0, 0.0], ())?;
 
+    type ValueTensor = Dense<s![4], B, f32, NoGrad>;
+    type IndexTensor = Dense<s![4], B, u32, NoGrad>;
+
     let (values, indices) = x.sort(0, false)?;
-    let _: &Dense<s![4], B, f32, NoGrad> = &values;
-    let _: &Dense<s![4], B, u32, NoGrad> = &indices;
+    let _: &ValueTensor = &values;
+    let _: &IndexTensor = &indices;
     assert_eq!(values.to_vec1::<f32>()?, vec![0.0, 1.0, 2.0, 3.0]);
     Ok(())
 }

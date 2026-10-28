@@ -16,11 +16,12 @@ use incin_core::exec::catalog::{
     AddmmAttributes, ArgsortAttributes, AttentionAttributes, AxisAttributes,
     AxisVarianceAttributes, BincountAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes,
     DiagonalAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
-    FlattenAttributes, FusedAttentionAttributes, GroupNormAttributes, IndexReductionAttributes, LerpAttributes,
-    LinearAttributes, LossAttributes, LossReduction, NarrowAttributes, NoAttributes,
-    NormAttributes, OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes,
-    RepeatInterleaveAttributes, ScalarAttributes, ScatterAttributes, ShapeAttributes,
-    SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes, VarianceAttributes,
+    FlattenAttributes, FusedAttentionAttributes, GroupNormAttributes, IndexReductionAttributes,
+    LerpAttributes, LinearAttributes, LossAttributes, LossReduction, NarrowAttributes,
+    NoAttributes, NormAttributes, OneHotAttributes, PadAttributes, QuantizationAttributes,
+    RepeatAttributes, RepeatInterleaveAttributes, ScalarAttributes, ScatterAttributes,
+    ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes,
+    VarianceAttributes,
 };
 use incin_core::exec::{CanonicalError, Capabilities, ExecutionContext, Operation, TensorHandle};
 use incin_core::shapes::error::OperationKind;
@@ -584,7 +585,10 @@ typed_family!(
             contracting: K,
             out_cols: N
         },
-        Role::GroupedOffsets { experts: E, tokens: T }
+        Role::GroupedOffsets {
+            experts: E,
+            tokens: T
+        }
     ],
     plain,
     [GroupedMatMul]

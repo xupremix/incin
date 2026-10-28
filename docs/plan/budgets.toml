@@ -345,7 +345,7 @@ default = ["download"]
 
 [[feature_crate.feature]]
 name = "download"
-enables = ["dep:ureq", "dep:flate2"]
+enables = ["dep:ureq", "dep:flate2", "dep:tar"]
 
 [[feature_crate.feature]]
 name = "hub"
@@ -367,7 +367,7 @@ default = ["std", "cpu"]
 
 [[feature_crate.feature]]
 name = "std"
-enables = ["incin-core/std", "anyhow/std", "rand/std", "rand/std_rng", "rand/thread_rng", "rand_distr/std", "half/std"]
+enables = ["incin-core/std", "anyhow/std", "rand/std", "rand/std_rng", "rand/thread_rng", "rand_distr/std", "half/std", "serde/std", "serde_json/std", "dep:rayon"]
 
 [[feature_crate.feature]]
 name = "cpu"
@@ -404,7 +404,7 @@ enables = ["metal"]
 
 [[feature_crate.feature]]
 name = "autotune"
-enables = ["cuda"]
+enables = ["cuda", "dep:fs2"]
 
 [[feature_crate.feature]]
 name = "external-candle"

@@ -813,9 +813,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                         op,
                         expected: shape.clone(),
                         got: alloc::vec![d],
-                        msg: alloc::format!(
-                            "{op}: axis {d} out of range for shape {shape:?}"
-                        ),
+                        msg: alloc::format!("{op}: axis {d} out of range for shape {shape:?}"),
                     });
                 }
                 let mut base_shape = shape.clone();
@@ -843,9 +841,7 @@ impl<D: Device> WgpuBackendImpl<D> {
                             .zip(strides.iter())
                             .map(|(&c, &s)| c * s)
                             .sum();
-                        if (is_max && data[flat] > best_val)
-                            || (!is_max && data[flat] < best_val)
-                        {
+                        if (is_max && data[flat] > best_val) || (!is_max && data[flat] < best_val) {
                             best_val = data[flat];
                             best_axis = j;
                         }
