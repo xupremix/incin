@@ -193,6 +193,17 @@ pub enum BackwardError {
         /// What the recipe expected and did not find.
         reason: &'static str,
     },
+
+    #[error("backward pass found no recorded operations: the tape is empty or was already drained")]
+    /// A backward pass ran over an empty node list.
+    ///
+    /// The tape is drained into the walk that consumes it (`D-06`), so a
+    /// second `backward` from the same loss — or a `backward` on a thread
+    /// that never recorded the forward pass — used to return only the seed
+    /// with `Ok`. That silent seed-only result reads like a successful
+    /// gradient and trains on nothing. Failing here makes the consumed-graph
+    /// case loud instead.
+    GraphConsumed,
 }
 
 /// Where a non-finite gradient was found.
@@ -273,6 +284,25 @@ pub enum Error {
         backend: &'static str,
         /// Operation identity string.
         op: &'static str,
+    },
+
+    #[error("dtype registry refused ({namespace}, {name}, {version}): {reason}")]
+    /// A [`DTypeRegistry`](crate::tensor::dtype::DTypeRegistry) registration
+    /// was refused.
+    ///
+    /// Refusing rather than replacing is the point. A second registration of
+    /// the same key with a different descriptor would silently change how
+    /// every tensor already written with that key is read back, so the
+    /// registry treats the disagreement as the error it is.
+    DTypeRegistration {
+        /// Namespace component of the key being registered.
+        namespace: &'static str,
+        /// Name component of the key being registered.
+        name: &'static str,
+        /// Version component of the key being registered.
+        version: u32,
+        /// Why the registration was refused.
+        reason: &'static str,
     },
 
     #[error(
@@ -465,6 +495,22 @@ pub enum Error {
         reason: ErrorMessage,
     },
 
+    #[error("{operation}: KV cache capacity {capacity} exceeded: requested {requested}")]
+    /// A typed preallocated key/value cache would write past its capacity.
+    ///
+    /// The cache reserves its full extent when it is built (issue #104), so
+    /// overflow is a caller contract failure rather than a reallocation: the
+    /// shape that was promised cannot grow at run time. `requested` is the
+    /// total sequence length the append would have produced.
+    CacheCapacityExceeded {
+        /// Operation that attempted the append.
+        operation: &'static str,
+        /// Total length the append would have required.
+        requested: usize,
+        /// Preallocated capacity of the cache.
+        capacity: usize,
+    },
+
     #[error("{operation}: resource '{resource}' value {actual} exceeds limit {limit}")]
     /// Untrusted input exceeded a configured resource bound.
     ResourceLimit {
@@ -590,7 +636,7 @@ pub fn convert_f64_to_i64(
     }
 
     let candidate = match policy {
-        FloatToIntPolicy::Exact if value.fract() != 0.0 => {
+        FloatToIntPolicy::Exact if crate::math::fract_f64(value) != 0.0 => {
             return Err(Error::InvalidConversion {
                 operation,
                 from,
@@ -598,7 +644,7 @@ pub fn convert_f64_to_i64(
                 reason: ConversionFailure::Fractional,
             });
         }
-        FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => value.trunc(),
+        FloatToIntPolicy::Exact | FloatToIntPolicy::Truncate => crate::math::trunc_f64(value),
         FloatToIntPolicy::Saturate => value,
     };
 

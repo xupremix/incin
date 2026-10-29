@@ -6,6 +6,7 @@ error[E0277]: the trait bound `WgpuBackendImpl: SupportsDType<f64>` is not satis
    |
    = help: `WgpuBackendImpl<D>` implements trait `SupportsDType<K>`:
              SupportsDType<Dyn>
+             SupportsDType<bool>
              SupportsDType<f32>
              SupportsDType<i64>
              SupportsDType<incin_core::prelude::bf16>

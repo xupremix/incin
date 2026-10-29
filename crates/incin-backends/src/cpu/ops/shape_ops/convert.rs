@@ -50,6 +50,40 @@ pub(crate) fn int_to_vec1_storage(t: &CpuStorage) -> Result<alloc::vec::Vec<i64>
     Ok(out)
 }
 
+/// Convert dtype and, when both sides are floating, record the conversion.
+///
+/// A mid-graph dtype change is an ordinary research move: cast to `f64` for a
+/// numerically delicate step, or to `bf16` for a cheap one, and cast back.
+/// Until this recorded, doing that detached the graph silently. Everything
+/// upstream of the cast received no gradient at all, and nothing said so.
+///
+/// The rule is the identity, in the input's dtype: `d(cast(x))/dx = 1`, so the
+/// incoming gradient is passed through and cast back to what the input was.
+/// The cast itself is lossy in one direction (`f64` to `bf16` and back does
+/// not round-trip), and that loss is the honest gradient of a lossy forward.
+///
+/// Only float to float records. A cast to an integer dtype truncates, so its
+/// derivative is zero almost everywhere, and passing a gradient through one
+/// would report a sensitivity the forward pass does not have.
+pub(crate) fn canonical_to_dtype(t: &CpuStorage, dtype: DTypeDescriptor) -> Result<CpuStorage> {
+    let source = t.metadata().dtype();
+    let out = tensor_to_dtype_storage(t, dtype)?;
+
+    let both_float = source.builtin_id().is_some_and(DTypeId::is_float)
+        && dtype.builtin_id().is_some_and(DTypeId::is_float);
+    if both_float {
+        let (input_id, out_id) = (t.id, out.id);
+        crate::cpu::tape::push_with(|| crate::cpu::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![input_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &CpuStorage| {
+                Ok(alloc::vec![tensor_to_dtype_storage(grad_out, source)?])
+            }),
+        });
+    }
+    Ok(out)
+}
+
 pub(crate) fn tensor_to_dtype_storage(
     t: &CpuStorage,
     dtype: DTypeDescriptor,
@@ -94,9 +128,49 @@ pub(crate) fn tensor_to_dtype_storage(
             }
             CpuBuffer::BF16(out)
         }
+        Some(DTypeId::F8E4M3) => {
+            let mut out = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(incin_core::tensor::dtype::F8E4M3::from_f64(
+                    t.get(&multi_idx),
+                ));
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::F8E4M3(out)
+        }
+        Some(DTypeId::F8E5M2) => {
+            let mut out = Vec::with_capacity(total);
+            for _ in 0..total {
+                out.push(incin_core::tensor::dtype::F8E5M2::from_f64(
+                    t.get(&multi_idx),
+                ));
+                if !t.shape.is_empty() {
+                    crate::cpu::storage::increment_index(&mut multi_idx, &t.shape);
+                }
+            }
+            CpuBuffer::F8E5M2(out)
+        }
         Some(DTypeId::Q8_0) => {
             return Err(Error::UnsupportedBackendOperation {
                 op: "tensor_to_dtype(Q8_0)",
+                backend: "Cpu",
+            });
+        }
+        // Issue #95: entering block-FP4 storage goes through `quantize`,
+        // not `to_dtype` — packing nibbles is not an elementwise cast.
+        // (The reverse direction needs no arm: `t.get()` decodes FP4
+        // blocks, so an FP4 *source* casts out through the generic path.)
+        Some(DTypeId::NVFP4) => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(NVFP4)",
+                backend: "Cpu",
+            });
+        }
+        Some(DTypeId::MXFP4) => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "tensor_to_dtype(MXFP4)",
                 backend: "Cpu",
             });
         }

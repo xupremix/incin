@@ -177,12 +177,18 @@ fn movement_kernels_are_element_type_agnostic() {
 /// widened capability rows claim. `q8_0` is deliberately absent -- a block
 /// encoding has no element width to move by, and the refusal test below pins
 /// that it stays refused rather than silently misreading blocks as scalars.
-fn movement_dtypes() -> [(DTypeId, usize); 6] {
+/// `u8` rides `shape_op_8bit`/`concat_8bit`, `u32` rides the `32bit` entry
+/// points: both widths were already in the launchers' width match, so the
+/// columns below measure that the kernels move them byte-exact, not that
+/// new entry points exist.
+fn movement_dtypes() -> [(DTypeId, usize); 8] {
     [
+        (DTypeId::U8, 1),
         (DTypeId::Bool, 1),
         (DTypeId::F16, 2),
         (DTypeId::BF16, 2),
         (DTypeId::F32, 4),
+        (DTypeId::U32, 4),
         (DTypeId::F64, 8),
         (DTypeId::I64, 8),
     ]
@@ -339,4 +345,106 @@ fn widened_rows_admit_i64_through_public_dispatch() {
     )
     .expect("the widened broadcast row admits i64");
     assert_eq!(download_i64(&spread), vec![7, 8, 9, 7, 8, 9]);
+}
+
+/// The widened rows admit `u8`/`u32` through public dispatch: transpose and
+/// broadcast of byte-pattern elements, checked byte-exact.
+///
+/// Policy note ("a row is widened by a test that fails without it"): the
+/// byte-exact matrix above is NOT that test for the capability rows -- it
+/// drives the launchers through the `testing` seam (`upload_bytes` /
+/// `launch_*`), which never consults the capability table, so narrowing a
+/// movement row back to the old six dtypes leaves every matrix column
+/// green. This test goes through `dispatch::execute`, whose
+/// `admit_invocation` checks each handle against the resolved capability
+/// row: with `u8`/`u32` removed from the rows it fails at admission, with
+/// them present it runs the same width-parametric kernels the matrix
+/// measured. Narrow the rows back and this is the test that goes red.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn widened_rows_admit_u8_and_u32_through_public_dispatch() {
+    use incin_backends::cuda::CudaBackendImpl;
+    use incin_core::backend_authoring::ExecutionContext;
+    use incin_core::exec::catalog::{ShapeAttributes, TransposeAttributes};
+    use incin_core::exec::{TensorHandle, dispatch, op};
+    use incin_core::tensor::device::Cuda;
+
+    type B = CudaBackendImpl<Cuda>;
+    require_cuda();
+    let context = ExecutionContext::new(B::new());
+
+    // `u8` (1-byte width): transpose of a 2x3 moves elements [0..6] to
+    // [0,3,1,4,2,5], exactly as the matrix column measures.
+    let source = upload_bytes(
+        &[2, 3],
+        DTypeId::U8,
+        &elements_bytes(1, &[0, 1, 2, 3, 4, 5]),
+    );
+    let handle = TensorHandle::from_storage::<B, u8, _>(&source);
+    let moved = dispatch::execute::<op::TransposeExact, _>(
+        &context,
+        TransposeAttributes {
+            first: 0,
+            second: 1,
+        },
+        &[handle],
+    )
+    .expect("the widened transpose row admits u8");
+    assert_eq!(
+        download_bytes(&moved),
+        elements_bytes(1, &[0, 3, 1, 4, 2, 5]),
+        "admitted but misplaced: the row promises what the kernel does"
+    );
+
+    // `u8` broadcast of a 1x3 row to 2x3 repeats rather than tiling the
+    // flat buffer.
+    let row = upload_bytes(&[1, 3], DTypeId::U8, &elements_bytes(1, &[0, 1, 2]));
+    let row_handle = TensorHandle::from_storage::<B, u8, _>(&row);
+    let spread = dispatch::execute::<op::BroadcastAs, _>(
+        &context,
+        ShapeAttributes { shape: vec![2, 3] },
+        &[row_handle],
+    )
+    .expect("the widened broadcast row admits u8");
+    assert_eq!(
+        download_bytes(&spread),
+        elements_bytes(1, &[0, 1, 2, 0, 1, 2]),
+        "admitted but misbroadcast: the row promises what the kernel does"
+    );
+
+    // `u32` (4-byte width): the same two probes at the 32-bit entry point.
+    let source = upload_bytes(
+        &[2, 3],
+        DTypeId::U32,
+        &elements_bytes(4, &[0, 1, 2, 3, 4, 5]),
+    );
+    let handle = TensorHandle::from_storage::<B, u32, _>(&source);
+    let moved = dispatch::execute::<op::TransposeExact, _>(
+        &context,
+        TransposeAttributes {
+            first: 0,
+            second: 1,
+        },
+        &[handle],
+    )
+    .expect("the widened transpose row admits u32");
+    assert_eq!(
+        download_bytes(&moved),
+        elements_bytes(4, &[0, 3, 1, 4, 2, 5]),
+        "admitted but misplaced: the row promises what the kernel does"
+    );
+
+    let row = upload_bytes(&[1, 3], DTypeId::U32, &elements_bytes(4, &[0, 1, 2]));
+    let row_handle = TensorHandle::from_storage::<B, u32, _>(&row);
+    let spread = dispatch::execute::<op::BroadcastAs, _>(
+        &context,
+        ShapeAttributes { shape: vec![2, 3] },
+        &[row_handle],
+    )
+    .expect("the widened broadcast row admits u32");
+    assert_eq!(
+        download_bytes(&spread),
+        elements_bytes(4, &[0, 1, 2, 0, 1, 2]),
+        "admitted but misbroadcast: the row promises what the kernel does"
+    );
 }

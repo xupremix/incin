@@ -12,11 +12,12 @@ use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
 use crate::cpu::ops::shape_ops::{
-    broadcast_left_storage, concat_storage, diag_storage, flatten_storage, gather_storage,
-    index_select_storage, lerp_storage, masked_fill_storage, narrow_storage, one_hot_storage,
-    pad_storage, pixel_shuffle_storage, repeat_storage, scatter_add_storage, scatter_storage,
-    slice_storage, squeeze_storage, stack_storage, tensor_to_dtype_storage, transpose_storage,
-    tril_storage, triu_storage, unfold_storage, unsqueeze_storage, where_storage,
+    bincount_storage, broadcast_left_storage, canonical_to_dtype, concat_storage, diag_storage,
+    flatten_storage, gather_storage, index_select_storage, lerp_storage, masked_fill_storage,
+    narrow_storage, nonzero_storage, one_hot_storage, pad_storage, pixel_shuffle_storage,
+    repeat_interleave_storage, repeat_storage, scatter_add_storage, scatter_storage, slice_storage,
+    squeeze_storage, stack_storage, transpose_storage, tril_storage, triu_storage, unfold_storage,
+    unsqueeze_storage, where_storage,
 };
 use crate::cpu::storage::CpuStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
@@ -135,20 +136,27 @@ impl<D: Device> Execute<op::TransposeExact> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let attributes = request.operation.descriptor().attributes();
+        // Views everywhere (issue #113, orchestrator decision 2026-09-25,
+        // reversing the unrecorded materialize settlement): `transpose`
+        // permutes shape and strides over the same buffer and does no copy.
+        // The result aliases its input; densifying is the caller's explicit
+        // choice via `into_row_major`. CUDA still materialises -- a tracked
+        // deviation recorded at its capability row and `launch_transpose`
+        // (no strided-consumer support verified on hardware yet).
         transpose_storage(input, attributes.first, attributes.second)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
-/// A transpose that is explicitly a view.
+/// A transpose that is explicitly a view, and the construction the
+/// `TransposeExact` executor above routes through.
 ///
-/// Shares `transpose_storage` with `TransposeExact`, because on this backend
-/// that function already returns a view -- permuted metadata over the same
-/// buffer, no copy. The two operations are distinct in the catalog so a caller
-/// can *say* which behaviour they want: CUDA's `TransposeExact` materialises,
-/// and a caller who needs the no-copy path had no way to ask for it.
-///
-/// Which one to reach for is a property of the consumer, not of the transpose.
+/// Views everywhere (issue #113): `transpose_storage` permutes shape and
+/// strides over the same buffer and does no copy. `TransposeExact` and
+/// `TransposeView` share this one construction on CPU -- two spellings, one
+/// semantic -- so a caller can no longer tell them apart here by design.
+/// Which one to reach for was a property of the consumer, not of the
+/// transpose; the decision settled it at the operation level instead.
 /// Measured on a GTX 1650, a materialised transpose loses to a strided read by
 /// about 45% when the result is read once and wins by about 23% when it is read
 /// eight times, crossing over at about four reads. See
@@ -440,6 +448,52 @@ impl<D: Device> Execute<op::OneHot> for CpuBackendImpl<D> {
     }
 }
 
+impl<D: Device> Execute<op::Bincount> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Bincount, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::Bincount;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        // No dtype guard, for the reason `one_hot`'s impl above states: the
+        // descriptor names operand zero an integer index before this row is
+        // consulted, and the kernel reads through the f64 accessor.
+        let bins = request.operation.descriptor().attributes().bins;
+        bincount_storage(input, bins).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::NonZero> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::NonZero, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::NonZero;
+        // Training is refused by the capability row (`descriptor_training`
+        // returns false): the coordinates are addresses, so there is no
+        // cotangent to route and no reason to admit a training-mode query.
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        // No dtype guard: the kernel reads through the f64 accessor, so every
+        // non-quantized width lands exactly, the same division of labour
+        // `one_hot` documents above.
+        nonzero_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
 impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 
@@ -456,6 +510,26 @@ impl<D: Device> Execute<op::Repeat> for CpuBackendImpl<D> {
         )?;
         let repeats = &request.operation.descriptor().attributes().repeats;
         repeat_storage(input, repeats).map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::RepeatInterleave> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RepeatInterleave, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::RepeatInterleave;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let attributes = request.operation.descriptor().attributes();
+        repeat_interleave_storage(input, attributes.repeats, attributes.axis)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }
 
@@ -700,13 +774,18 @@ impl<D: Device> Execute<op::ToDType> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype == DTypeId::Q8_0.descriptor() {
+        // Issue #95: entering block storage goes through `quantize`, not
+        // `to_dtype` — same guard as Q8_0 (the kernel holds a second,
+        // identical refusal).
+        if dtype == DTypeId::Q8_0.descriptor()
+            || dtype == DTypeId::NVFP4.descriptor()
+            || dtype == DTypeId::MXFP4.descriptor()
+        {
             return Err(BackendError::unsupported(
                 CPU_NAME,
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        tensor_to_dtype_storage(input, dtype)
-            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        canonical_to_dtype(input, dtype).map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

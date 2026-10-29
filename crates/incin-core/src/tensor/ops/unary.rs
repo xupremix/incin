@@ -21,6 +21,33 @@ macro_rules! impl_unary_op {
         $(#[$meta])*
         pub fn $method(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
         where
+            K: crate::tensor::ops::quantization::FloatCapable,
+            B: Execute<op::$operation>,
+            <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
+        {
+            execute_unary_descriptor::<op::$operation, S, B, K, G, L>(self)
+        }
+    };
+}
+
+/// Pointwise op admitted for every dtype, without the [`FloatCapable`] bound
+/// [`impl_unary_op`] attaches.
+///
+/// For the handful of ops a still-generic `K: DType` caller inside the crate
+/// needs -- `sin`/`cos` are reached from rotary-table construction, whose own
+/// signature cannot grow a float bound -- so that admission stays a
+/// decision at each op rather than a wall at the impl block. A quantized
+/// operand reaches the catalog's runtime dtype check instead of a compile
+/// error. The method's where clause is identical to the pre-bound surface:
+/// `K: DType` already comes from the impl block.
+macro_rules! impl_unary_op_any_k {
+    (
+        $(#[$meta:meta])*
+        $method:ident, $operation:ident
+    ) => {
+        $(#[$meta])*
+        pub fn $method(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
+        where
             B: Execute<op::$operation>,
             <B as Execute<op::$operation>>::Output: Into<B::Storage<K>>,
         {
@@ -104,9 +131,190 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         frac, Frac
     );
 
+    /// Run a custom operation on this tensor and get a tensor back.
+    ///
+    /// The one call a custom-operation author needs. Without it the author
+    /// assembles a [`TensorHandle`](crate::exec::TensorHandle), builds an
+    /// execution context, dispatches, and lifts the result storage back with
+    /// `try_from_storage`, naming the shape, dtype, device and gradient
+    /// marker again by hand at the end. All four are already known here, so
+    /// none of them is a question the caller should have to answer, and each
+    /// one restated by hand is a chance to restate it wrong.
+    ///
+    /// The output keeps this tensor's shape, dtype, device and gradient
+    /// marker. That covers the common custom operation, which is elementwise:
+    /// a fused activation, a custom loss term, a quantization stub. An
+    /// operation that changes shape or takes more than one input goes through
+    /// [`apply_op_n`](Self::apply_op_n), which is this call plus the one thing
+    /// it cannot infer, the output geometry. Only a multi-output operation
+    /// still needs the explicit
+    /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path.
+    ///
+    /// Recording is not the caller's concern either. If `O` implements
+    /// [`DifferentiableOp`](crate::tensor::backend::DifferentiableOp) the
+    /// blanket `Execute` records the node during dispatch, so the result is
+    /// already on the graph and `backward` walks it together with every
+    /// built-in operation around it. If it does not, the operation is
+    /// forward-only and nothing is recorded. Neither case needs a different
+    /// call here.
+    ///
+    /// The ambient gradient mode is narrowed by this tensor's own marker
+    /// before dispatch, exactly as for a built-in operation, so a `NoGrad`
+    /// input records nothing however the operation was written.
+    ///
+    /// # Layout
+    ///
+    /// The result carries the `Dyn` layout, not the `RowMajor` every built-in
+    /// unary operation returns. That is deliberate. `RowMajor` is a claim the
+    /// built-ins can make because their kernels are known to write contiguous
+    /// output; a custom kernel is by definition not known to, and promising
+    /// contiguity on its behalf would be a promise this crate cannot keep.
+    /// `Dyn` claims nothing, which is the honest description, and it costs the
+    /// caller nothing: every layout bound in the tensor operation surface is
+    /// the fully general `L: Layout<S>`, so no built-in successor can refuse a
+    /// `Dyn` operand. That is a property of the bounds rather than of any one
+    /// case, and `a_custom_operation_is_one_call_from_a_tensor` in
+    /// `tests/custom_training.rs` exercises the concrete one. An author who
+    /// does know their kernel is contiguous can say so by going through the
+    /// explicit dispatch path.
+    pub fn apply_op<O>(&self, attributes: O::Attributes) -> Result<Tensor<S, B, K, G, Local>>
+    where
+        O: crate::exec::catalog::Operation,
+        B: Execute<O> + crate::exec::Capabilities,
+        <B as Execute<O>>::Output: Into<B::Storage<K>>,
+    {
+        let handle = crate::exec::TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let shape_val = self._shape.clone();
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let storage = G::grad_mode(&self._grad)
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped::<O, B, S>(
+                    &context,
+                    attributes,
+                    &[handle],
+                    &shape_val,
+                )
+            })
+            .map_err(crate::err::Error::from)?;
+        Tensor::from_shape_value(
+            storage.into(),
+            self._shape.clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// [`apply_op`](Self::apply_op) for an operation with several inputs and a
+    /// caller-stated output shape.
+    ///
+    /// The shape is a parameter because nothing on this side knows it. A
+    /// shape-changing operation's output geometry is the operation author's
+    /// knowledge, and inventing a guess at it is the one thing `apply_op` is
+    /// careful not to do. Everything else is inherited from `self` exactly as
+    /// there: the dtype, the device and the gradient marker are already known
+    /// here, so none of them is restated and none of them can be restated
+    /// wrong.
+    ///
+    /// The extra operands are borrowed *storage*, not borrowed tensors. A
+    /// slice of `&Self` would force every operand to share this tensor's shape
+    /// and layout, which rules out precisely the operations the method exists
+    /// for: a two-operand kernel whose operands have different geometry, a
+    /// matrix multiply over `[m, k]` and `[k, n]` being the obvious one.
+    /// Dispatch asks for none of that.
+    /// [`TensorHandle::from_storage`](crate::exec::TensorHandle::from_storage)
+    /// is parameterized by backend, dtype and placement only, so a storage
+    /// reference is the widest operand type that keeps the call type-safe, and
+    /// [`inner`](Tensor::inner) is public, so the call site reads
+    /// `&[w.inner()]`.
+    ///
+    /// `self` is the first input and `others` follow in order. The gradient
+    /// mode comes from `self`'s marker alone, which is the rule `apply_op` and
+    /// the explicit dispatch path already follow: a `Grad` receiver records
+    /// even when an operand's storage came from a `NoGrad` tensor. Recording
+    /// is otherwise the same story as in `apply_op`. If `O` implements
+    /// [`DifferentiableOp`](crate::tensor::backend::DifferentiableOp) the
+    /// blanket `Execute` records the node during dispatch; if it does not, the
+    /// operation is forward-only. Neither case needs a different call here.
+    ///
+    /// An operation returning more than one output still keeps the explicit
+    /// [`execute_shaped_n`](crate::exec::dispatch::execute_shaped_n) path,
+    /// because there is no single tensor for this method to hand back.
+    ///
+    /// # Devices
+    ///
+    /// The result is labelled with `self`'s device, and nothing here verifies
+    /// that the other operands agree. For a custom operation nothing can. The
+    /// canonical dispatch path gates its cross-input device check on a
+    /// per-operation `same_device` row, which the `Transfer` and `Creation`
+    /// profiles set to false precisely because changing device is what they
+    /// are for, so the framework does not hold that every operation wants its
+    /// operands together. A custom operation has no such row to read, and
+    /// answering strictly here would settle that question on the author's
+    /// behalf. With a single input the label was right by construction; with
+    /// several it is an assumption, so an author whose operands can live on
+    /// different devices should compare them before calling. The explicit
+    /// path is no stricter: there the caller writes the device field by hand
+    /// at `try_from_storage`, and nothing checks that either.
+    ///
+    /// # Layout
+    ///
+    /// The result carries `Dyn`, for the reason set out under `apply_op`'s own
+    /// `# Layout` heading: a custom kernel is not known to write contiguous
+    /// output, and the general `L: Layout<S>` bound on the operation surface
+    /// means claiming nothing costs the caller nothing.
+    pub fn apply_op_n<O, S2>(
+        &self,
+        others: &[&B::Storage<K>],
+        attributes: O::Attributes,
+        shape: crate::shapes::ShapeValue<S2>,
+    ) -> Result<Tensor<S2, B, K, G, Local>>
+    where
+        O: crate::exec::catalog::Operation,
+        S2: Shape,
+        B: Execute<O> + crate::exec::Capabilities,
+        <B as Execute<O>>::Output: Into<B::Storage<K>>,
+    {
+        let mut handles = alloc::vec::Vec::with_capacity(1 + others.len());
+        handles.push(crate::exec::TensorHandle::from_storage::<B, K, Local>(
+            &self.inner,
+        ));
+        for operand in others {
+            handles.push(crate::exec::TensorHandle::from_storage::<B, K, Local>(
+                operand,
+            ));
+        }
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let storage = G::grad_mode(&self._grad)
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped_n::<O, B, _>(
+                    &context, attributes, &handles, &shape,
+                )
+            })
+            .map_err(crate::err::Error::from)?;
+        Tensor::from_shape_value(
+            storage.into(),
+            shape,
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
     /// Computes the absolute value of each element in the tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 2.0]).unwrap();
+    /// assert_eq!(t.abs().unwrap().to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn abs(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Abs>,
         <B as Execute<op::Abs>>::Output: Into<B::Storage<K>>,
     {
@@ -114,6 +322,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Rectified Linear Unit (ReLU) function element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 0.0, 2.0]).unwrap();
+    /// assert_eq!(t.relu().unwrap().to_vec1::<f32>().unwrap(), vec![0.0, 0.0, 2.0]);
+    /// ```
     pub fn relu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Relu>,
@@ -123,6 +341,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Gaussian Error Linear Unit (GELU) function element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 2.0]).unwrap();
+    /// let out = t.gelu().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// // GELU(2) = 2 * Phi(2) ~= 1.9545.
+    /// assert!((out[1] - 1.9545).abs() < 1e-3);
+    /// ```
     pub fn gelu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Gelu>,
@@ -131,9 +362,21 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         execute_unary_descriptor::<op::Gelu, S, B, K, G, L>(self)
     }
 
-    /// Applies the Step function element-wise.
+    /// Applies the Step function element-wise: `1.0` where `x > 0.0`, else `0.0`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 0.0, 2.0]).unwrap();
+    /// // Zero maps to 0.0, not 1.0: the comparison is strictly greater-than.
+    /// assert_eq!(t.step().unwrap().to_vec1::<f32>().unwrap(), vec![0.0, 0.0, 1.0]);
+    /// ```
     pub fn step(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Step>,
         <B as Execute<op::Step>>::Output: Into<B::Storage<K>>,
     {
@@ -141,8 +384,22 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Mish function element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 2.0]).unwrap();
+    /// let out = t.mish().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// // Mish(2) = 2 * tanh(softplus(2)) ~= 1.9434.
+    /// assert!((out[1] - 1.9434).abs() < 1e-3);
+    /// ```
     pub fn mish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Mish>,
         <B as Execute<op::Mish>>::Output: Into<B::Storage<K>>,
     {
@@ -150,8 +407,22 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Exponential Linear Unit (ELU) function element-wise with alpha=1.0.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 2.0]).unwrap();
+    /// let out = t.elu().unwrap().to_vec1::<f32>().unwrap();
+    /// // Negative side: exp(-1) - 1 ~= -0.6321; positive side is the identity.
+    /// assert!((out[0] + 0.6321).abs() < 1e-3);
+    /// assert_eq!(out[1], 2.0);
+    /// ```
     pub fn elu(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Elu>,
         <B as Execute<op::Elu>>::Output: Into<B::Storage<K>>,
     {
@@ -159,6 +430,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Swish function element-wise (also known as SiLU).
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 1.0]).unwrap();
+    /// let out = t.swish().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// // Swish(1) = sigmoid(1) ~= 0.7311.
+    /// assert!((out[1] - 0.7311).abs() < 1e-3);
+    /// ```
     pub fn swish(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Swish>,
@@ -168,6 +452,20 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Applies the Softmax function over the specified dimension.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// let probs = t.softmax(0).unwrap().to_vec1::<f32>().unwrap();
+    /// // A probability distribution over the selected axis.
+    /// let sum: f32 = probs.iter().sum();
+    /// assert!((sum - 1.0).abs() < 1e-5);
+    /// assert!(probs[0] < probs[1] && probs[1] < probs[2]);
+    /// ```
     #[inline]
     pub fn softmax<A: ReduceSelector<S>>(
         &self,
@@ -200,9 +498,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[0.0, -200.0, 1.0], ()).unwrap();
+    /// let t = Cpu.tensor([0.0f32, -200.0, 1.0]).unwrap();
     /// let logits = t.log_softmax(0).unwrap().to_vec1::<f32>().unwrap();
     /// // The middle entry survives as a large finite number; through
     /// // `softmax` then `log` it would have been negative infinity.
@@ -228,6 +527,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Negates the tensor element-wise, returning recoverable execution errors.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 2.0]).unwrap();
+    /// assert_eq!(t.try_neg().unwrap().to_vec1::<f32>().unwrap(), vec![1.0, -2.0]);
+    /// ```
     pub fn try_neg(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Neg>,
@@ -247,6 +556,16 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the square root of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([4.0f32, 9.0]).unwrap();
+    /// assert_eq!(t.sqrt().unwrap().to_vec1::<f32>().unwrap(), vec![2.0, 3.0]);
+    /// ```
     pub fn sqrt(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Sqrt>,
@@ -256,6 +575,18 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the exponential of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 1.0]).unwrap();
+    /// let out = t.exp().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 1.0);
+    /// assert!((out[1] - core::f32::consts::E).abs() < 1e-5);
+    /// ```
     pub fn exp(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Exp>,
@@ -265,9 +596,20 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Raises tensor elements to power `exponent`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// assert_eq!(t.powf(2.0).unwrap().to_vec1::<f32>().unwrap(), vec![1.0, 4.0, 9.0]);
+    /// ```
     #[inline]
     pub fn powf(&self, exponent: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Powf>,
         <B as Execute<op::Powf>>::Output: Into<B::Storage<K>>,
     {
@@ -278,9 +620,23 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Clamps tensor elements to range `[min, max]`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-2.0f32, 0.5, 5.0]).unwrap();
+    /// assert_eq!(
+    ///     t.clamp(-1.0, 1.0).unwrap().to_vec1::<f32>().unwrap(),
+    ///     vec![-1.0, 0.5, 1.0]
+    /// );
+    /// ```
     #[inline]
     pub fn clamp(&self, min: f64, max: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         B: Execute<op::Clamp>,
         <B as Execute<op::Clamp>>::Output: Into<B::Storage<K>>,
     {
@@ -320,17 +676,29 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         log10, Log10
     );
 
-    impl_unary_op!(
+    impl_unary_op_any_k!(
         /// Computes sine elementwise.
         sin, Sin
     );
 
-    impl_unary_op!(
+    impl_unary_op_any_k!(
         /// Computes cosine elementwise.
         cos, Cos
     );
 
     /// Computes the natural logarithm of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, core::f32::consts::E]).unwrap();
+    /// let out = t.log().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.0);
+    /// assert!((out[1] - 1.0).abs() < 1e-5);
+    /// ```
     pub fn log(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Log>,
@@ -340,6 +708,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the hyperbolic tangent of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([-1.0f32, 0.0, 1.0]).unwrap();
+    /// let out = t.tanh().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[1], 0.0);
+    /// assert!((out[0] + 0.7616).abs() < 1e-3);
+    /// assert!((out[2] - 0.7616).abs() < 1e-3);
+    /// ```
     pub fn tanh(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Tanh>,
@@ -349,6 +730,19 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the sigmoid of each element.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([0.0f32, 1.0]).unwrap();
+    /// let out = t.sigmoid().unwrap().to_vec1::<f32>().unwrap();
+    /// assert_eq!(out[0], 0.5);
+    /// // sigmoid(1) ~= 0.7311.
+    /// assert!((out[1] - 0.7311).abs() < 1e-3);
+    /// ```
     pub fn sigmoid(&self) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::Sigmoid>,
@@ -362,9 +756,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
     /// let res = t.mul_scalar(3.0).unwrap(); // [3.0, 6.0]
     /// ```
     pub fn mul_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
@@ -388,9 +783,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![2], DefaultBackend>::from_slice(&[1.0, 2.0], ()).unwrap();
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
     /// let res = t.add_scalar(3.0).unwrap(); // [4.0, 5.0]
     /// ```
     pub fn add_scalar<Sc: Into<crate::tensor::backend::ScalarValue>>(
@@ -515,6 +911,23 @@ where
 
 impl<S: Shape, B: Backend, G: RequiresGrad, L: Layout<S>> Tensor<S, B, bool, G, Local, L> {
     /// Logical NOT element-wise.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // Bool tensors come from comparisons; there is no bool literal constructor.
+    /// let mask = Cpu.tensor([1.0f32, 0.0, 3.0])
+    ///     .unwrap()
+    ///     .gt(&Cpu.tensor([0.5f32, 0.5, 1.5]).unwrap())
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     mask.logical_not().unwrap().to_vec1::<bool>().unwrap(),
+    ///     vec![false, true, false]
+    /// );
+    /// ```
     pub fn logical_not(
         &self,
     ) -> Result<Tensor<S, B, bool, crate::tensor::grad::NoGrad, Local, RowMajor>>

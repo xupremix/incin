@@ -222,6 +222,13 @@ impl Lowering<'_> {
             }
             IrExpr::Unary(op, inner) => {
                 let v = self.lower(inner)?;
+                let call = |name: &str| {
+                    if compute.is_f64() {
+                        format!("{name}({v})")
+                    } else {
+                        format!("{name}f({v})")
+                    }
+                };
                 match op {
                     IrUnaryOp::Neg => format!("-{v}"),
                     IrUnaryOp::Abs => format!("{}({v})", compute.pick("fabs", "fabsf")),
@@ -261,6 +268,32 @@ impl Lowering<'_> {
                             "({half} * {v} * ({one} + {tanh}({k} * ({v} + {c} * {v} * {v} * {v}))))"
                         )
                     }
+                    // Plain libdevice calls whose single-precision spelling is
+                    // the same name with an `f` appended. Listed one variant at
+                    // a time rather than behind a wildcard, so a future
+                    // operator cannot inherit whichever call the arm named.
+                    //
+                    // `Erf` emits the device function, not the rational
+                    // approximation `IrUnaryOp::apply` uses on the host. The
+                    // host one is accurate to about 1.5e-7, a little over one
+                    // f32 ulp, which is fine for folding a constant and not
+                    // fine for the kernel.
+                    IrUnaryOp::Tan => call("tan"),
+                    IrUnaryOp::Asin => call("asin"),
+                    IrUnaryOp::Acos => call("acos"),
+                    IrUnaryOp::Atan => call("atan"),
+                    IrUnaryOp::Sinh => call("sinh"),
+                    IrUnaryOp::Cosh => call("cosh"),
+                    IrUnaryOp::Asinh => call("asinh"),
+                    IrUnaryOp::Acosh => call("acosh"),
+                    IrUnaryOp::Atanh => call("atanh"),
+                    IrUnaryOp::Erf => call("erf"),
+                    IrUnaryOp::Floor => call("floor"),
+                    IrUnaryOp::Ceil => call("ceil"),
+                    // `round`, not `rint`: CUDA's `round` breaks ties away from
+                    // zero, matching `f64::round` and the hand-written literal.
+                    IrUnaryOp::Round => call("round"),
+                    IrUnaryOp::Trunc => call("trunc"),
                 }
             }
             IrExpr::Binary(op, lhs, rhs) => {
@@ -274,6 +307,9 @@ impl Lowering<'_> {
                     IrBinaryOp::Pow => format!("{}({l}, {r})", compute.pick("pow", "powf")),
                     IrBinaryOp::Max => format!("{}({l}, {r})", compute.pick("fmax", "fmaxf")),
                     IrBinaryOp::Min => format!("{}({l}, {r})", compute.pick("fmin", "fminf")),
+                    IrBinaryOp::Atan2 => {
+                        format!("{}({l}, {r})", compute.pick("atan2", "atan2f"))
+                    }
                 }
             }
             IrExpr::Ternary(op, a, b, c) => {

@@ -119,7 +119,7 @@ fn unsupported_methods_return_typed_error_not_silent_placeholder() {
     // All other  methods are now fully implemented. We prove that
     // unsupported operations return typed errors by attempting to convert
     // to Q8_0, which is intentionally left unsupported in the Cpu backend.
-    let result = tensor_to_dtype_storage(&t, DTypeId::Q8_0.descriptor());
+    let result = super::convert::tensor_to_dtype_storage(&t, DTypeId::Q8_0.descriptor());
     assert!(matches!(
         result,
         Err(Error::UnsupportedBackendOperation {
@@ -814,6 +814,89 @@ fn masked_fill_backward_passes_through_only_unmasked_positions() {
 }
 
 #[test]
+/// `masked_fill_storage_broadcasts_a_rank_deficit_mask_both_ways`.
+///
+/// #100: the public `masked_fill` pin admits a mask that broadcasts *into*
+/// the input, so the storage kernel must right-align the mask's coordinates
+/// in the forward read and again in the backward read - a rank-1 mask over a
+/// rank-2 input, applied to every row. The equal-shape test above covers the
+/// fast path; this covers the aligned one.
+fn masked_fill_storage_broadcasts_a_rank_deficit_mask_both_ways() {
+    let t = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0, 1]), vec![3]);
+    let out = masked_fill_storage(&t, &mask, 0.0).unwrap();
+    // Mask `[true, false, true]`: columns 0 and 2 overwritten on both rows.
+    assert_eq!(f32_vec(&out), vec![0.0, 2.0, 0.0, 0.0, 5.0, 0.0]);
+    let grads = tape::backward(&out).unwrap();
+    let g = grads.get(t.id).expect("input should have gradient");
+    // Positions the broadcast mask covers receive nothing; the rest pass
+    // the cotangent through, identically on both rows.
+    assert_eq!(f32_vec(g), vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0]);
+}
+
+#[test]
+/// `where_storage_folds_a_rank_deficit_mask_into_the_output_geometry`.
+///
+/// #100: the output shape is `broadcast(mask, broadcast(true, false))`, so a
+/// rank-1 mask selects over both rows, and the backward pass unbroadcasts the
+/// cotangents back onto each operand's own shape.
+fn where_storage_folds_a_rank_deficit_mask_into_the_output_geometry() {
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0, 1]), vec![3]);
+    let on_true = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+    let on_false = matrix(vec![-1.0; 6], 2, 3);
+    let out = where_storage(&mask, &on_true, &on_false).unwrap();
+    assert_eq!(f32_vec(&out), vec![1.0, -1.0, 3.0, 4.0, -1.0, 6.0]);
+    let grads = tape::backward(&out).unwrap();
+    assert_eq!(
+        f32_vec(grads.get(on_true.id).unwrap()),
+        vec![1.0, 0.0, 1.0, 1.0, 0.0, 1.0]
+    );
+    assert_eq!(
+        f32_vec(grads.get(on_false.id).unwrap()),
+        vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0]
+    );
+}
+
+#[test]
+/// `masked_fill_storage_rejects_a_mask_that_does_not_broadcast`.
+///
+/// Fail-closed companion to #100: a mask with an axis the input cannot meet
+/// never reaches the element loop - `admit_broadcast_operand` refuses it
+/// with the same sentence `validated.rs` uses.
+fn masked_fill_storage_rejects_a_mask_that_does_not_broadcast() {
+    let t = matrix(vec![1.0; 6], 2, 3);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1; 8]), vec![2, 4]);
+    let err = masked_fill_storage(&t, &mask, 0.0).unwrap_err();
+    let text = format!("{err}");
+    assert!(
+        text.contains("mask must broadcast to the input shape"),
+        "unexpected error: {text}"
+    );
+}
+
+#[test]
+/// `masked_fill_broadcast_mask_gradcheck_matches_finite_differences`.
+///
+/// #100's gradient story at f32 precision: with a rank-deficit mask the
+/// forward zeroes the masked columns of both rows, so the analytic gradient
+/// must agree with central differences on the perturbed *input* - which is
+/// exactly what a misaligned mask read in either direction would break.
+fn masked_fill_broadcast_mask_gradcheck_matches_finite_differences() {
+    use crate::cpu::gradcheck::{F32_STEP, GRAD_TOL, gradcheck};
+    let t = matrix(vec![0.5, -1.0, 2.0, 1.5], 2, 2);
+    let mask = CpuStorage::from_contiguous(CpuBuffer::Bool(vec![1, 0]), vec![2]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = masked_fill_storage(&inputs[0], &mask, 9.0).unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let err = gradcheck(op, &[t], F32_STEP);
+    assert!(
+        err < GRAD_TOL,
+        "masked_fill broadcast-mask gradcheck too high: {err}"
+    );
+}
+
+#[test]
 /// `index_select_backward_accumulates_repeated_selections`.
 fn index_select_backward_accumulates_repeated_selections() {
     // Rows of the input selected by index [2, 0, 2]: row 2 is chosen twice,
@@ -974,4 +1057,366 @@ fn group_norm_gradcheck_proves_the_statistical_path_is_recorded() {
     };
     let err = gradcheck(op, &operands, F32_STEP);
     assert!(err < GRAD_TOL, "group_norm gradcheck too high: {err}");
+}
+
+#[test]
+/// `casting_between_float_dtypes_carries_the_gradient`.
+///
+/// A mid-graph dtype change is an ordinary research move, and until this
+/// recorded it detached the graph without saying so: everything upstream of
+/// the cast received no gradient and the optimizer skipped those parameters
+/// silently. The rule is the identity, so the gradient arrives back at the
+/// input unchanged and in the input's own dtype.
+fn casting_between_float_dtypes_carries_the_gradient() {
+    use crate::cpu::tape;
+    use incin_core::tensor::dtype::DTypeId;
+
+    let x = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.5, -2.25, 3.0]), vec![3]);
+    let wide = canonical_to_dtype(&x, DTypeId::F64.descriptor()).unwrap();
+    let loss = crate::cpu::ops::reduce::sum_all(&wide).unwrap();
+
+    let grads = tape::backward(&loss).unwrap();
+    let grad = grads.get(x.id).expect("the cast carried the gradient back");
+
+    assert_eq!(grad.shape, vec![3]);
+    assert_eq!(f32_vec(grad), vec![1.0, 1.0, 1.0]);
+}
+
+#[test]
+/// `casting_to_an_integer_dtype_records_nothing`.
+///
+/// Truncation to an integer has a zero derivative almost everywhere, so
+/// passing a gradient through one would report a sensitivity the forward pass
+/// does not have. Recording nothing is the rule, not a gap in it.
+fn casting_to_an_integer_dtype_records_nothing() {
+    use crate::cpu::tape;
+    use incin_core::tensor::dtype::DTypeId;
+
+    tape::clear();
+    let x = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.5, -2.25, 3.0]), vec![3]);
+    let _ = canonical_to_dtype(&x, DTypeId::I64.descriptor()).unwrap();
+    assert_eq!(tape::depth(), 0);
+}
+
+// --- FP8 scaled casts (issue #94) ---
+
+/// `fp8_cast_matches_the_element_functions`.
+///
+/// `tensor_to_dtype_storage` must agree bit-for-bit with the OCP conversion
+/// functions the dtype module proves against the spec: the CPU kernel is a
+/// caller of that contract, not a second implementation of it.
+#[test]
+fn fp8_cast_matches_the_element_functions() {
+    use incin_core::tensor::dtype::{DTypeId, F8E4M3, F8E5M2};
+
+    let values: Vec<f64> = vec![
+        0.0,
+        1.0,
+        -1.0,
+        0.5,
+        1.0625,
+        100.0,
+        -440.0,
+        448.0,
+        1000.0,
+        30000.0,
+        57344.0,
+        1e10,
+        1e-8,
+        2f64.powi(-10),
+        f64::INFINITY,
+        f64::NAN,
+    ];
+    let x = CpuStorage::from_contiguous(CpuBuffer::F64(values.clone()), vec![values.len()]);
+    let e4 = super::convert::tensor_to_dtype_storage(&x, DTypeId::F8E4M3.descriptor()).unwrap();
+    let e5 = super::convert::tensor_to_dtype_storage(&x, DTypeId::F8E5M2.descriptor()).unwrap();
+    let got_e4 = match &*e4.buffer {
+        CpuBuffer::F8E4M3(v) => v.clone(),
+        _ => panic!("expected F8E4M3 buffer"),
+    };
+    let got_e5 = match &*e5.buffer {
+        CpuBuffer::F8E5M2(v) => v.clone(),
+        _ => panic!("expected F8E5M2 buffer"),
+    };
+    for (i, &v) in values.iter().enumerate() {
+        assert_eq!(got_e4[i], F8E4M3::from_f64(v), "e4m3 at index {i} ({v})");
+        assert_eq!(got_e5[i], F8E5M2::from_f64(v), "e5m2 at index {i} ({v})");
+    }
+    assert_eq!(e4.buffer.dtype_id(), DTypeId::F8E4M3);
+    assert_eq!(e5.buffer.dtype_id(), DTypeId::F8E5M2);
+}
+
+/// `fp8_dequantize_is_exact`.
+///
+/// fp8 → f32 is exact (every fp8 value is representable), so a cast back
+/// over all 256 patterns of each format must reproduce the element
+/// functions bit-for-bit.
+#[test]
+fn fp8_dequantize_is_exact() {
+    use incin_core::tensor::dtype::{DTypeId, F8E4M3, F8E5M2};
+
+    for make in [
+        |bytes: Vec<u8>| CpuBuffer::F8E4M3(bytes.iter().map(|&b| F8E4M3::from_bits(b)).collect()),
+        |bytes: Vec<u8>| CpuBuffer::F8E5M2(bytes.iter().map(|&b| F8E5M2::from_bits(b)).collect()),
+    ] {
+        let all: Vec<u8> = (0u8..=255).collect();
+        let n = all.len();
+        let storage = CpuStorage::from_contiguous(make(all), vec![n]);
+        let back =
+            super::convert::tensor_to_dtype_storage(&storage, DTypeId::F32.descriptor()).unwrap();
+        let got = match &*back.buffer {
+            CpuBuffer::F32(v) => v.clone(),
+            _ => panic!("expected F32 buffer"),
+        };
+        assert_eq!(got.len(), n);
+    }
+    // Spot-check exactness against the element functions (NaN by predicate,
+    // since NaN != NaN).
+    let e4 = CpuStorage::from_contiguous(
+        CpuBuffer::F8E4M3(vec![F8E4M3::from_bits(0x7E), F8E4M3::from_bits(0x7F)]),
+        vec![2],
+    );
+    let back = super::convert::tensor_to_dtype_storage(&e4, DTypeId::F32.descriptor()).unwrap();
+    assert_eq!(back.get(&[0]), 448.0);
+    assert!(back.get(&[1]).is_nan());
+}
+
+/// `scaled_fp8_roundtrip_meets_the_conformance_tolerance`.
+///
+/// The documented calibration contract (issue #94 AC2): with `scale = amax`
+/// the cast only rounds, and the roundtrip error stays inside the dtype's
+/// conformance row from `conformance::tolerance`.
+#[test]
+fn scaled_fp8_roundtrip_meets_the_conformance_tolerance() {
+    use crate::conformance::for_dtype;
+    use incin_core::tensor::dtype::DTypeId;
+
+    let values: Vec<f64> = vec![
+        224.0, -112.0, 56.0, -28.0, 7.0, -3.5, 0.75, -0.125, 0.03125, -200.0, 3.0, -0.0,
+    ];
+    let amax = values.iter().map(|v| v.abs()).fold(0.0f64, f64::max);
+    for dtype in [DTypeId::F8E4M3, DTypeId::F8E5M2] {
+        let tolerance = for_dtype(dtype);
+        let scaled: Vec<f64> = values.iter().map(|v| v / amax).collect();
+        let x = CpuStorage::from_contiguous(CpuBuffer::F64(scaled), vec![values.len()]);
+        let q = super::convert::tensor_to_dtype_storage(&x, dtype.descriptor()).unwrap();
+        let back = super::convert::tensor_to_dtype_storage(&q, DTypeId::F64.descriptor()).unwrap();
+        for (i, &expected) in values.iter().enumerate() {
+            let actual = back.get(&[i]) * amax;
+            assert!(
+                tolerance.accepts(expected, actual),
+                "{dtype:?} roundtrip of {expected} gave {actual} (scale {amax})"
+            );
+        }
+    }
+}
+
+/// `casting_into_fp8_records_the_identity_edge`.
+///
+/// fp8 is `DTypeKind::Float`, which is what admits the float-to-float
+/// gradient edge in `canonical_to_dtype`. A cast that detached the graph
+/// would report no gradient for weights trained through fp8.
+#[test]
+fn casting_into_fp8_records_the_identity_edge() {
+    use crate::cpu::tape;
+    use incin_core::tensor::dtype::DTypeId;
+
+    for dtype in [DTypeId::F8E4M3, DTypeId::F8E5M2] {
+        tape::clear();
+        let x = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.5, -2.25, 3.0]), vec![3]);
+        let q = canonical_to_dtype(&x, dtype.descriptor()).unwrap();
+        assert_eq!(q.buffer.dtype_id(), dtype);
+        assert_eq!(tape::depth(), 1, "{dtype:?} cast must record");
+
+        // Back through the recorded edge: the fp8 cotangent returns as f32.
+        let back = canonical_to_dtype(&q, DTypeId::F32.descriptor()).unwrap();
+        let loss = crate::cpu::ops::reduce::sum_all(&back).unwrap();
+        let grads = tape::backward(&loss).unwrap();
+        let grad = grads.get(x.id).expect("the fp8 cast carried the gradient");
+        assert_eq!(grad.shape, vec![3]);
+        assert_eq!(f32_vec(grad), vec![1.0, 1.0, 1.0]);
+    }
+}
+
+/// `scaled_fp8_training_step_converges_like_bf16`.
+///
+/// The honest CPU slice of the adaptive-scale AC (issue #94 AC4): weights
+/// are projected through a per-tensor scaled fp8 cast every step
+/// (straight-through gradient), and the loss must decrease about like the
+/// bf16 projection's. Full device matmul/adaptive policy is deferred; what
+/// this pins is the mechanism — scaled forward, recorded backward, lower
+/// loss — on CPU.
+#[test]
+fn scaled_fp8_training_step_converges_like_bf16() {
+    use incin_core::tensor::dtype::DTypeId;
+
+    fn run(dtype: DTypeId) -> Vec<f64> {
+        let target = [1.0, -2.0, 0.5, 4.0, -0.25, 3.0, -1.0, 2.0];
+        let mut w: Vec<f64> = vec![0.1, 0.2, -0.1, 0.3, 0.0, -0.2, 0.15, -0.05];
+        let n = w.len() as f64;
+        let mut losses = Vec::with_capacity(64);
+        for _ in 0..64 {
+            let amax = w.iter().map(|v| v.abs()).fold(1e-12f64, f64::max);
+            let scaled: Vec<f64> = w.iter().map(|v| v / amax).collect();
+            let x = CpuStorage::from_contiguous(CpuBuffer::F64(scaled), vec![w.len()]);
+            let q = super::convert::tensor_to_dtype_storage(&x, dtype.descriptor()).unwrap();
+            let back =
+                super::convert::tensor_to_dtype_storage(&q, DTypeId::F64.descriptor()).unwrap();
+            let mut loss = 0.0;
+            let mut grad = vec![0.0; w.len()];
+            for i in 0..w.len() {
+                let what = back.get(&[i]) * amax;
+                let err = what - target[i];
+                loss += err * err;
+                grad[i] = 2.0 * err / n;
+            }
+            losses.push(loss / n);
+            for (wi, &gi) in w.iter_mut().zip(&grad) {
+                *wi -= 0.5 * gi;
+            }
+        }
+        losses
+    }
+
+    let e4 = run(DTypeId::F8E4M3);
+    let e5 = run(DTypeId::F8E5M2);
+    let bf16 = run(DTypeId::BF16);
+    for (name, losses) in [("e4m3", &e4), ("e5m2", &e5), ("bf16", &bf16)] {
+        assert!(
+            losses.last().unwrap() < &(losses.first().unwrap() * 0.05),
+            "{name} did not converge: first={} last={}",
+            losses.first().unwrap(),
+            losses.last().unwrap()
+        );
+    }
+    // Same trajectory family: fp8 finals land within 2x of the bf16 final.
+    let bf16_final = *bf16.last().unwrap();
+    for (name, losses) in [("e4m3", &e4), ("e5m2", &e5)] {
+        let final_loss = *losses.last().unwrap();
+        assert!(
+            final_loss <= 2.0 * bf16_final + 1e-6,
+            "{name} diverged from the bf16 trajectory: {final_loss} vs {bf16_final}"
+        );
+    }
+}
+
+/// A deterministic ramp: distinct and non-symmetric, so a gradient that is
+/// merely permuted lands on different values and is caught rather than
+/// hiding behind a repeated pattern.
+fn ramp(n: usize) -> Vec<f32> {
+    (0..n)
+        .map(|i| ((i * 7 + 3) % 13) as f32 * 0.09 - 0.54)
+        .collect()
+}
+
+fn ramped(shape: Vec<usize>) -> CpuStorage {
+    let elements: usize = shape.iter().product();
+    matrix(ramp(elements), *shape.last().unwrap(), 1)
+        .reshape(&shape)
+        .unwrap()
+}
+
+/// Scaled dot-product attention is the one composition in the backend with
+/// four differentiable inputs, a scale, a softmax Jacobian and an optional
+/// mask, and nothing checked any of it numerically. The existing coverage
+/// asserts only that training produces *finite non-zero* gradients - which a
+/// wrong gradient passes, since a factor-of-two Jacobian is still finite and
+/// still non-zero, and still trains.
+///
+/// So all three projections are swept against central differences.
+///
+/// The risk this covers is a *composition* gap rather than a miswritten
+/// formula. There is no hand-written softmax backward here: the softmax is
+/// assembled from recorded `max_keepdim`, `sub`, `exp`, `sum_keepdim`, `log`
+/// and `sub` steps, so its Jacobian is emergent and correct exactly when all
+/// six are. A tape-silent step among them would leave every gradient finite,
+/// non-zero and the right shape - which is what the existing assertions
+/// check - and wrong.
+#[test]
+fn scaled_dot_product_attention_gradcheck_all_three_projections() {
+    let q = ramped(vec![1, 2, 3, 4]);
+    let k = ramped(vec![1, 2, 3, 4]);
+    let v = ramped(vec![1, 2, 3, 4]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
+            &inputs[0], &inputs[1], &inputs[2], None, None,
+        )
+        .unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let max_rel_err =
+        crate::cpu::gradcheck::gradcheck(op, &[q, k, v], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "attention gradcheck too high: {max_rel_err:.6}"
+    );
+}
+
+/// The same with an additive mask, which is the form every decoder uses. The
+/// mask enters through a recorded `add` into the scores, and the diagonal is
+/// pushed far enough down that the masked positions carry an exponentially
+/// small share of the cotangent - so a mask that reached the forward but not
+/// the backward, or not at all, is a disagreement rather than a rounding
+/// detail.
+#[test]
+fn scaled_dot_product_attention_gradcheck_with_mask() {
+    let q = ramped(vec![1, 2, 3, 4]);
+    let k = ramped(vec![1, 2, 3, 4]);
+    let v = ramped(vec![1, 2, 3, 4]);
+    // A mask shaped like the scores, as an additive -inf-style bias in
+    // miniature: large negative on the diagonal, so the masked positions
+    // receive an exponentially small share and a missing mask gradient shows
+    // up rather than cancelling.
+    let mut mask_values = vec![0.0f32; 3 * 3];
+    for i in 0..3 {
+        mask_values[i * 3 + i] = -3.0;
+    }
+    let mask =
+        crate::cpu::ops::shape_ops::broadcast_as_storage(&matrix(mask_values, 3, 3), &[1, 2, 3, 3])
+            .unwrap();
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
+            &inputs[0],
+            &inputs[1],
+            &inputs[2],
+            Some(&mask),
+            None,
+        )
+        .unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let max_rel_err =
+        crate::cpu::gradcheck::gradcheck(op, &[q, k, v], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "masked attention gradcheck too high: {max_rel_err:.6}"
+    );
+}
+
+/// With an explicit scale. The default is `1/sqrt(d_k)`, and a kernel that
+/// applied it twice, or dropped the `sqrt`, would still produce finite
+/// non-zero gradients from the check above - it would just be attending at
+/// the wrong temperature.
+#[test]
+fn scaled_dot_product_attention_gradcheck_explicit_scale() {
+    let q = ramped(vec![1, 2, 3, 4]);
+    let k = ramped(vec![1, 2, 3, 4]);
+    let v = ramped(vec![1, 2, 3, 4]);
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = scaled_dot_product_attention_storage::<incin_core::tensor::device::Cpu>(
+            &inputs[0],
+            &inputs[1],
+            &inputs[2],
+            None,
+            Some(0.125),
+        )
+        .unwrap();
+        crate::cpu::ops::reduce::sum_all(&out).unwrap()
+    };
+    let max_rel_err =
+        crate::cpu::gradcheck::gradcheck(op, &[q, k, v], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "scaled attention gradcheck too high: {max_rel_err:.6}"
+    );
 }

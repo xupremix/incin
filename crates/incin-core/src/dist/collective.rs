@@ -58,7 +58,17 @@ pub const fn validate_collective_dtype(dtype: DTypeId) -> Result<(), CollectiveE
         | DTypeId::F32
         | DTypeId::F64
         | DTypeId::Bool => Ok(()),
-        DTypeId::Q8_0 => Err(CollectiveError::UnsupportedDType { dtype }),
+        // Issue #94: fp8 refuses like Q8_0. Reducing fp8 values needs a
+        // wider-precision scaled policy (the adaptive-scale story, still
+        // device-bound); the honest path is dequantize-first, so the
+        // collective admits no fp8 gradient rather than reducing it
+        // in-place at 8-bit precision.
+        // Issue #95: block fp4 refuses like Q8_0 — block/layout-aware
+        // message contracts are out of scope for the scalar collective
+        // interface; dequantize first.
+        DTypeId::Q8_0 | DTypeId::F8E4M3 | DTypeId::F8E5M2 | DTypeId::NVFP4 | DTypeId::MXFP4 => {
+            Err(CollectiveError::UnsupportedDType { dtype })
+        }
     }
 }
 

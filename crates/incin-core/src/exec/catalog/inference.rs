@@ -213,6 +213,20 @@ fn transformed_shape<A: AttributeContract>(
                     .ok_or_else(|| invalid(operation, "repeats", "repeated extent overflows usize"))
             })
             .collect::<Result<Vec<_>, _>>()?,
+        ShapeTransform::RepeatInterleave { axis, repeats } => {
+            let mut output = input.to_vec();
+            let extent = output.get(axis).copied().ok_or_else(|| {
+                invalid(
+                    operation,
+                    "axis",
+                    "repeat_interleave axis is outside the operand's rank",
+                )
+            })?;
+            output[axis] = extent.checked_mul(repeats).ok_or_else(|| {
+                invalid(operation, "repeats", "interleaved extent overflows usize")
+            })?;
+            output
+        }
         ShapeTransform::Pad(padding) => input
             .iter()
             .zip(padding)
@@ -555,7 +569,11 @@ fn inferred_shape<A: AttributeContract>(
             if operation == OperationKind::TopK {
                 return transformed_shape(operation, attributes, inputs, output_index);
             }
-            if operation == OperationKind::Argsort {
+            // Both outputs of `sort` are the operand's own geometry, so the
+            // branch is right for either index: sorting reorders an axis
+            // rather than resizing it, which is what separates it from `topk`
+            // above, whose axis shrinks to `k`.
+            if matches!(operation, OperationKind::Argsort | OperationKind::Sort) {
                 Some(Some(ShapeBuf::from_slice(shape)))
             } else if matches!(
                 operation,
@@ -634,6 +652,14 @@ fn inferred_shape<A: AttributeContract>(
                     Some(Some(ShapeBuf::from_slice(&output)))
                 }
                 _ => Some(None),
+            },
+            // Every index lands in one of `bins` slots whatever geometry
+            // addressed it, so the operand's own shape does not survive: the
+            // output is the histogram, rank one and as wide as the attribute
+            // says.
+            OperationKind::Bincount => match attributes.bins() {
+                Some(bins) => Some(Some(ShapeBuf::from_slice(&[bins]))),
+                None => Some(None),
             },
             OperationKind::IndexSelect => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
@@ -743,6 +769,60 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
+            // Issue #104: the same output-shape rule as the composed row --
+            // `[batch, heads_q, seq_q, head_dim]` -- so selecting fused over
+            // composed is invisible to the caller's types. Stricter than the
+            // composed row on purpose: rank is exactly four (the kernel
+            // indexes `[batch, heads, seq, head_dim]` directly), key and
+            // value agree exactly, and the query head count is a multiple of
+            // the key/value head count (the GQA grouping). `seq_q` and
+            // `seq_kv` may differ (incremental decoding attends new queries
+            // against the cached prefix); the causal attribute aligns
+            // trailing positions, which needs no shape work here.
+            OperationKind::FusedAttention => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                inputs.get(1).and_then(|input| input.shape.as_deref()),
+                inputs.get(2).and_then(|input| input.shape.as_deref()),
+            ) {
+                (Some(query), Some(key), Some(value))
+                    if query.len() == 4 && key.len() == 4 && value.len() == 4 =>
+                {
+                    if query[0] != key[0] || key != value {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "fused attention needs one query batch matching key/value, \
+                             and key/value sharing [batch, kv_heads, seq_kv, head_dim]",
+                        ));
+                    }
+                    if query[3] != key[3] || query[3] == 0 {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "fused attention query/key head widths differ or are zero",
+                        ));
+                    }
+                    if query[1] == 0 || key[1] == 0 || query[1] % key[1] != 0 {
+                        return Err(invalid(
+                            operation,
+                            "heads",
+                            "fused attention query heads must be a non-zero multiple of \
+                             the key/value heads",
+                        ));
+                    }
+                    Some(Some(ShapeBuf::from_slice(&[
+                        query[0], query[1], query[2], query[3],
+                    ])))
+                }
+                (None, _, _) | (_, None, _) | (_, _, None) => Some(None),
+                _ => {
+                    return Err(invalid(
+                        operation,
+                        "rank",
+                        "fused attention operands must be rank-4 [batch, heads, seq, head_dim]",
+                    ));
+                }
+            },
             OperationKind::Linear => match (
                 inputs.first().and_then(|input| input.shape.as_deref()),
                 inputs.get(1).and_then(|input| input.shape.as_deref()),
@@ -774,6 +854,62 @@ fn inferred_shape<A: AttributeContract>(
                     ));
                 }
             },
+            // `lhs [T, K]` against stacked `rhs [E, K, N]` writes one
+            // `[T, N]` result: the expert axis is consumed by the offsets
+            // tile rather than broadcast into the geometry, which is the
+            // difference from the generic `MatMul` rule above.
+            OperationKind::GroupedMatMul => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                inputs.get(1).and_then(|input| input.shape.as_deref()),
+            ) {
+                (Some(lhs), Some(rhs)) if lhs.len() == 2 && rhs.len() == 3 => {
+                    if lhs[1] != rhs[1] {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "grouped_matmul contracting dimensions differ",
+                        ));
+                    }
+                    Some(Some(ShapeBuf::from_slice(&[lhs[0], rhs[2]])))
+                }
+                (None, _) | (_, None) => Some(None),
+                _ => {
+                    return Err(invalid(
+                        operation,
+                        "rank",
+                        "grouped_matmul requires a rank-two lhs and a rank-three rhs",
+                    ));
+                }
+            },
+            // `lhs [..., K]` against `rhs [N, K]` writes `[..., N]`: the
+            // kernel contracts the trailing axes (the rhs is a plain 2D
+            // `[N, K]` weight, not a generic `MatMul` rhs), which is why
+            // this cannot use `OutputRule::MatMul`.
+            OperationKind::QuantizedMatMul => match (
+                inputs.first().and_then(|input| input.shape.as_deref()),
+                inputs.get(1).and_then(|input| input.shape.as_deref()),
+            ) {
+                (Some(lhs), Some(rhs)) if lhs.len() >= 2 && rhs.len() == 2 => {
+                    if lhs[lhs.len() - 1] != rhs[1] {
+                        return Err(invalid(
+                            operation,
+                            "shape",
+                            "quantized_matmul contracting dimensions differ",
+                        ));
+                    }
+                    let mut output = lhs[..lhs.len() - 1].to_vec();
+                    output.push(rhs[0]);
+                    Some(Some(ShapeBuf::from_slice(&output)))
+                }
+                (None, _) | (_, None) => Some(None),
+                _ => {
+                    return Err(invalid(
+                        operation,
+                        "rank",
+                        "quantized_matmul requires lhs rank at least two and rank-two rhs [N, K]",
+                    ));
+                }
+            },
             OperationKind::SgdStep => Some(inputs.first().and_then(|v| v.shape.clone())),
             OperationKind::AdamStep | OperationKind::AdamWStep => {
                 let source = match output_index {
@@ -783,9 +919,10 @@ fn inferred_shape<A: AttributeContract>(
                 };
                 Some(inputs.get(source).and_then(|v| v.shape.clone()))
             }
-            OperationKind::Quantize
-            | OperationKind::Dequantize
-            | OperationKind::QuantizedMatMul => Some(first()),
+            // `QuantizedMatMul` left this passthrough once its generic
+            // `MatMul` rule moved to the dedicated `TypedInference` branch
+            // above: echoing the lhs would certify the wrong geometry.
+            OperationKind::Quantize | OperationKind::Dequantize => Some(first()),
             _ => return Err(DescriptorError::MissingInference { operation }),
         },
     };
@@ -804,6 +941,22 @@ pub(super) fn verify_outputs<A: AttributeContract>(
     let is_float = |dtype: DTypeDescriptor| dtype.is_float();
     let is_integer = |dtype: DTypeDescriptor| dtype.is_integer();
 
+    let index_input = match operation {
+        OperationKind::Gather
+        | OperationKind::Scatter
+        | OperationKind::ScatterAdd
+        | OperationKind::IndexSelect => Some(1),
+        // The index is the only operand, so it is operand zero rather than
+        // operand one the way the scatter family's is.
+        OperationKind::EmbeddingExact | OperationKind::OneHot | OperationKind::Bincount => Some(0),
+        OperationKind::CrossEntropyLoss => Some(1),
+        // The offsets operand tiles the row range and is an integer vector
+        // beside two float matrices, the same mixed-operand shape `embedding`
+        // has with its index and weight.
+        OperationKind::GroupedMatMul => Some(2),
+        _ => None,
+    };
+
     if matches!(
         row.profile,
         SemanticProfile::BinaryBroadcast
@@ -811,7 +964,14 @@ pub(super) fn verify_outputs<A: AttributeContract>(
             | SemanticProfile::Logical
             | SemanticProfile::MatMul
     ) {
-        for input in inputs.iter().skip(1) {
+        for (index, input) in inputs.iter().enumerate().skip(1) {
+            // The integer offsets operand of `grouped_matmul` is not a value
+            // operand and does not take the first operand's dtype; exempting
+            // it here is what the `index_input` slot below already does for
+            // the float requirement, applied to the same-dtype rule.
+            if Some(index) == index_input {
+                continue;
+            }
             if let (Some(expected), Some(actual)) = (first_dtype, input.dtype) {
                 if expected != actual {
                     return Err(invalid(
@@ -823,18 +983,6 @@ pub(super) fn verify_outputs<A: AttributeContract>(
             }
         }
     }
-
-    let index_input = match operation {
-        OperationKind::Gather
-        | OperationKind::Scatter
-        | OperationKind::ScatterAdd
-        | OperationKind::IndexSelect => Some(1),
-        // The index is the only operand, so it is operand zero rather than
-        // operand one the way the scatter family's is.
-        OperationKind::EmbeddingExact | OperationKind::OneHot => Some(0),
-        OperationKind::CrossEntropyLoss => Some(1),
-        _ => None,
-    };
     let require_float = matches!(
         row.profile,
         SemanticProfile::UnaryFloat
@@ -1095,11 +1243,11 @@ fn expected_output<A: AttributeContract>(
         OperationKind::WhereCond | OperationKind::EmbeddingExact => {
             inputs.get(1).and_then(|input| input.dtype)
         }
-        OperationKind::TopK if index == 0 => first_dtype,
+        OperationKind::TopK | OperationKind::Sort if index == 0 => first_dtype,
         OperationKind::ArgMax | OperationKind::ArgMin | OperationKind::Argsort => {
             attributes.declared_dtype()
         }
-        OperationKind::TopK => attributes.declared_dtype(),
+        OperationKind::TopK | OperationKind::Sort => attributes.declared_dtype(),
         OperationKind::QuantizedMatMul => Some(DTypeId::F32.descriptor()),
         OperationKind::CmpEq
         | OperationKind::CmpNe
@@ -1111,6 +1259,13 @@ fn expected_output<A: AttributeContract>(
         | OperationKind::LogicalOr
         | OperationKind::LogicalNot
         | OperationKind::OneHot => Some(DTypeId::Bool.descriptor()),
+        // A count is not a value in the operand's dtype: counting f32-encoded
+        // indices still produces integers, and the width is the attribute's
+        // rather than the operand's.
+        OperationKind::Bincount => Some(DTypeId::I64.descriptor()),
+        // Coordinate rows are addresses, and this backend's index type is
+        // `i64` wherever an index tensor is produced.
+        OperationKind::NonZero => Some(DTypeId::I64.descriptor()),
         _ => attributes.declared_dtype().or(first_dtype),
     };
     Ok(ExpectedOutput {
@@ -1201,6 +1356,17 @@ pub(super) fn operand_ranks(
         (CrossEntropyLoss, 1) => exact(1),
         // `index_select` addresses one axis with a flat index vector.
         (IndexSelect, 1) => exact(1),
+        // `grouped_matmul`'s three operands are not interchangeable: the
+        // activation is a matrix, the rhs is a stack of expert matrices, and
+        // the offsets are a flat tile of the activation's row range.
+        (GroupedMatMul, 0) => exact(2),
+        (GroupedMatMul, 1) => exact(3),
+        (GroupedMatMul, 2) => exact(1),
+        // `quantized_matmul`'s rhs is a plain 2D `[N, K]` weight: the
+        // kernel refuses anything else, so the rank contract pins it
+        // exactly while the lhs keeps the primary rank-at-least-two
+        // window. The `K % 32 == 0` block rule stays a kernel refusal.
+        (QuantizedMatMul, 1) => exact(2),
         // Optimizer gradients and moment state mirror the parameter they
         // update, which the primary window already covers; the equal-shape
         // requirement is enforced separately in `validate`.

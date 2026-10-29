@@ -1,16 +1,16 @@
 # Canonical operation semantics
 
-This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.
+This file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands. `Gradient` is the derivative contract; `StraightThrough` marks the straight-through estimator (STE), an approximation rather than a true derivative: backward passes the cotangent through unchanged, which is the `quantize`/`dequantize` boundary's rule (PyTorch QAT's `FakeQuantize` behavior; a fixed clip range would zero the cotangent outside `|x| <= clip`, and Q8_0's per-block scale never saturates, so the pass-through is unconditional).
 
 | ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |
 |---|---|---|---|---|---|---|---|---|---|:--:|---|---|
-Canonical operations: 174
-Backend-executable operations: 164
+Canonical operations: 180
+Backend-executable operations: 170
 Non-backend execution sites: 10
 
 | Execution site | Count |
 |---|---:|
-| `Kernel` | 146 |
+| `Kernel` | 152 |
 | `Creation` | 13 |
 | `HostReadback` | 5 |
 | `Composed` | 3 |
@@ -18,7 +18,20 @@ Non-backend execution sites: 10
 | `DeviceTransfer` | 1 |
 | `GraphState` | 3 |
 
-| `tensor_from_data` | `Descriptor<op::TensorFromData>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `TensorArgsData` |
+
+## Ordering contracts
+
+### `sort`, `argsort`, and `topk` tie-breaking
+
+All three are **stable**: equal keys keep the order they arrived in, on every axis and in both directions. The CPU kernel calls Rust's stable `sort_by`, so a descending sort does not reverse a run of equal keys relative to the input - position `i` of a tie group is still the element the input's position `i` named. `argsort`'s permutation and `sort`'s dual output are therefore the same reordering, and `topk`'s indices within a boundary tie are the earliest arrivals. This is the same stability PyTorch documents for `torch.sort` and `torch.argsort`, and it is what lets a router group the same assignment the same way twice.
+
+### `scatter_add` determinism
+
+Duplicate destinations accumulate in **row-major order of `index`**, not in an atomic or race-dependent order. Floating-point addition is not associative, so that order is part of the contract rather than an implementation detail; it is why the catalog row claims determinism and why a backend summing with atomics could not advertise this operation.
+
+### Reduced-precision matmul accumulation
+
+The `f16`/`bf16` matmul-family rows store half precision but never accumulate in it. The CUDA kernels convert each operand to `f32` on load, accumulate the tile in `f32`, and round once on store (`matmul_impl<__half, float>` / `matmul_impl<__nv_bfloat16, float>` in `crates/incin-backends/src/cuda/ops/kernels/matmul.cu:159-177`). The CPU kernels accumulate each output element in `f64` and narrow once (`gemm_f64` and the `scalar_gemm` fallback in `crates/incin-backends/src/cpu/ops/matmul/gemm.rs:205-228`, selected by the non-`f32` branch in `crates/incin-backends/src/cpu/ops/matmul/unbatched.rs:51-62`). The CPU-`f64` vs CUDA-`f32` asymmetry is deliberate: each backend keeps the wider accumulator its kernel already used rather than matching the other. What each side proves today is asymmetric too: the CPU pins half results within a half-ulp tolerance of the `f32` reference (`crates/incin-backends/src/cpu/ops/matmul/tests.rs:942-948`), while CUDA pins only exact small integers (`crates/incin-backends/tests/cuda_matmul_dtypes.rs`), which cannot distinguish the `f32` accumulator. A cross-backend half-tolerance proof needs CUDA hardware and is tracked by #82.| `tensor_from_data` | `Descriptor<op::TensorFromData>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `TensorArgsData` |
 | `tensor_from_bytes` | `Descriptor<op::TensorFromBytes>` | `DataAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `Tensor::from_bytes` |
 | `tensor_to_bytes` | `Descriptor<op::TensorToBytes>` | `NoAttributes` | `HostReadback` | 1-1 / 0-0 | 0-18446744073709551615 | `None` | `TypedContract` / `HostValue` | `Allowed` / `NotApplicable` | `None` | yes | `PreserveOrMaterialize` | `Tensor::to_bytes` |
 | `zeros` | `Descriptor<op::Zeros>` | `CreationAttributes` | `Creation` | 0-0 / 1-1 | 0-18446744073709551615 | `None` | `ExplicitOutput` / `Created` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `Descriptor<op::Zeros>` |
@@ -113,10 +126,13 @@ Non-backend execution sites: 10
 | `scatter` | `Descriptor<op::Scatter>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Undefined` | no | `FreshContiguous` | `::scatter` |
 | `scatter_add` | `Descriptor<op::ScatterAdd>` | `ScatterAttributes` | `Kernel` | 3-3 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Preserve` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::scatter_add` |
 | `one_hot` | `Descriptor<op::OneHot>` | `OneHotAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `None` | yes | `FreshContiguous` | `::one_hot` |
+| `bincount` | `Descriptor<op::Bincount>` | `BincountAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `None` | yes | `FreshContiguous` | `::bincount` |
+| `nonzero` | `Descriptor<op::NonZero>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `DataDependent` | `TypedContract` / `CheckedInteger` | `None` | yes | `FreshContiguous` | `Tensor::nonzero` |
 | `index_select` | `Descriptor<op::IndexSelect>` | `AxisAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `TypedContract` / `Indexing` | `TypedContract` / `CheckedInteger` | `Defined` | yes | `FreshContiguous` | `::index_select` |
 | `masked_fill` | `Descriptor<op::MaskedFill>` | `ScalarAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `Numpy` | `TypedContract` / `Preserve` | `Allowed` / `TypedContract` | `Piecewise` | yes | `FreshContiguous` | `::masked_fill` |
 | `unsqueeze` | `Descriptor<op::UnsqueezeExact>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unsqueeze` |
 | `repeat` | `Descriptor<op::Repeat>` | `RepeatAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::repeat` |
+| `repeat_interleave` | `Descriptor<op::RepeatInterleave>` | `RepeatInterleaveAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::repeat_interleave` |
 | `pad` | `Descriptor<op::Pad>` | `PadAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::pad` |
 | `triu` | `Descriptor<op::Triu>` | `DiagonalAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::triu` |
 | `tril` | `Descriptor<op::Tril>` | `DiagonalAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::tril` |
@@ -125,7 +141,9 @@ Non-backend execution sites: 10
 | `split` | `Descriptor<op::Split>` | `SplitAttributes` | `Kernel` | 1-1 / 0-many | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `Tensor::split` |
 | `addmm` | `Descriptor<op::Addmm>` | `AddmmAttributes` | `Kernel` | 3-3 / 1-1 | 2-3 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::addmm` |
 | `bmm` | `Descriptor<op::BatchedMatMul>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-3 | `TypedContract` | `Floating` / `MatMul` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::bmm` |
+| `grouped_matmul` | `Descriptor<op::GroupedMatMul>` | `NoAttributes` | `Kernel` | 3-3 / 1-1 | 1-3 | `TypedContract` | `Floating` / `TypedInference` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::grouped_matmul` |
 | `scaled_dot_product_attention` | `Descriptor<op::ScaledDotProductAttention>` | `AttentionAttributes` | `Kernel` | 3-4 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Floating` / `TypedInference` | `TypedContract` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::scaled_dot_product_attention` |
+| `fused_attention` | `Descriptor<op::FusedAttention>` | `FusedAttentionAttributes` | `Kernel` | 3-3 / 1-1 | 4-4 | `TypedContract` | `Floating` / `TypedInference` | `TypedContract` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::fused_attention` |
 | `unfold` | `Descriptor<op::Unfold>` | `UnfoldAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::unfold` |
 | `pixel_shuffle` | `Descriptor<op::PixelShuffle>` | `PixelShuffleAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Preserve` / `ShapeAttributes` | `Allowed` / `NotApplicable` | `Defined` | yes | `ViewWhenPossible` | `::pixel_shuffle` |
 | `group_norm` | `Descriptor<op::GroupNorm>` | `GroupNormAttributes` | `Kernel` | 1-1 / 1-1 | 1-18446744073709551615 | `TypedContract` | `Floating` / `Preserve` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::group_norm` |
@@ -159,8 +177,9 @@ Non-backend execution sites: 10
 | `prod_all` | `Descriptor<op::ProdAll>` | `NoAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::prod_all` |
 | `prod_dim` | `Descriptor<op::ProdDim>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::prod_dim` |
 | `cumsum` | `Descriptor<op::Cumsum>` | `AxisAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Preserve` / `Preserve` | `IdentityOrDefined` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `::cumsum` |
-| `topk` | `Descriptor<op::TopK>` | `TopKAttributes` | `Kernel` | 1-1 / 2-2 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | no | `FreshContiguous` | `::topk` |
-| `argsort` | `Descriptor<op::Argsort>` | `ArgsortAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | no | `FreshContiguous` | `::argsort` |
+| `topk` | `Descriptor<op::TopK>` | `TopKAttributes` | `Kernel` | 1-1 / 2-2 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | yes | `FreshContiguous` | `::topk` |
+| `argsort` | `Descriptor<op::Argsort>` | `ArgsortAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | yes | `FreshContiguous` | `::argsort` |
+| `sort` | `Descriptor<op::Sort>` | `ArgsortAttributes` | `Kernel` | 1-1 / 2-2 | 0-18446744073709551615 | `None` | `IndexResult` / `Reduction` | `RejectedWhenReductionIsEmpty` / `IeeePropagate` | `None` | yes | `FreshContiguous` | `::sort` |
 | `norm` | `Descriptor<op::Norm>` | `NormAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::norm` |
 | `var_all` | `Descriptor<op::VarianceAll>` | `VarianceAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::var_all` |
 | `var_dim` | `Descriptor<op::VarianceDim>` | `AxisVarianceAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Tensor::var_dim` |
@@ -186,9 +205,9 @@ Non-backend execution sites: 10
 | `l1_loss` | `Descriptor<op::L1Loss>` | `LossAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Loss::l1_loss` |
 | `bce_with_logits_loss` | `Descriptor<op::BceWithLogitsLoss>` | `LossAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Loss::bce_with_logits_loss` |
 | `cross_entropy_loss` | `Descriptor<op::CrossEntropyLoss>` | `LossAttributes` | `Kernel` | 2-2 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Floating` / `Reduction` | `RejectedWhenReductionIsEmpty` / `StableAccumulation` | `Defined` | yes | `FreshContiguous` | `Loss::cross_entropy_loss` |
-| `quantize` | `Descriptor<op::Quantize>` | `QuantizationAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Quantized` / `TypedInference` | `TypedContract` / `TypedContract` | `None` | yes | `FreshContiguous` | `Descriptor<op::Quantize>` |
-| `dequantize` | `Descriptor<op::Dequantize>` | `QuantizationAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Quantized` / `TypedInference` | `TypedContract` / `TypedContract` | `None` | yes | `FreshContiguous` | `Descriptor<op::Dequantize>` |
-| `quantized_matmul` | `Descriptor<op::QuantizedMatMul>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-18446744073709551615 | `TypedContract` | `Quantized` / `MatMul` | `TypedContract` / `TypedContract` | `None` | yes | `FreshContiguous` | `Descriptor<op::QuantizedMatMul>` |
+| `quantize` | `Descriptor<op::Quantize>` | `QuantizationAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Quantized` / `TypedInference` | `TypedContract` / `TypedContract` | `StraightThrough (approximation: STE)` | yes | `FreshContiguous` | `Descriptor<op::Quantize>` |
+| `dequantize` | `Descriptor<op::Dequantize>` | `QuantizationAttributes` | `Kernel` | 1-1 / 1-1 | 0-18446744073709551615 | `TypedContract` | `Quantized` / `TypedInference` | `TypedContract` / `TypedContract` | `StraightThrough (approximation: STE)` | yes | `FreshContiguous` | `Descriptor<op::Dequantize>` |
+| `quantized_matmul` | `Descriptor<op::QuantizedMatMul>` | `NoAttributes` | `Kernel` | 2-2 / 1-1 | 2-18446744073709551615 | `TypedContract` | `Quantized` / `TypedInference` | `TypedContract` / `TypedContract` | `None` | yes | `FreshContiguous` | `Descriptor<op::QuantizedMatMul>` |
 | `sgd_step` | `Descriptor<op::SgdStep>` | `SgdAttributes` | `Mutation` | 2-2 / 1-1 | 0-18446744073709551615 | `None` | `Floating` / `TypedInference` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `SGD::step` |
 | `adam_step` | `Descriptor<op::AdamStep>` | `AdamAttributes` | `Mutation` | 4-4 / 3-3 | 0-18446744073709551615 | `None` | `Floating` / `TypedInference` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `Adam::step` |
 | `adamw_step` | `Descriptor<op::AdamWStep>` | `AdamWAttributes` | `Mutation` | 4-4 / 3-3 | 0-18446744073709551615 | `None` | `Floating` / `TypedInference` | `Allowed` / `TypedContract` | `None` | yes | `FreshContiguous` | `AdamW::step` |

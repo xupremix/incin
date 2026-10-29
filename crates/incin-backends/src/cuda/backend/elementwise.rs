@@ -245,6 +245,128 @@ fn fused_unary_backward(
     .map(Some)
 }
 
+/// Whether `t` needs the double-precision spelling of a hand-written
+/// pointwise literal (see `f64_unary_fwd`).
+fn uses_f64_compute(t: &CudaStorage) -> bool {
+    t.buffer.dtype.builtin_id() == Some(DTypeId::F64)
+}
+
+/// Double-precision forward spelling for the hand-written literal `cuda_pointwise!`
+/// emits under `op_name`.
+///
+/// The literals in the macro invocation below are written for the `float`
+/// compute type (`expf`, `tanhf`, `1.0f`, ...). F16/BF16 tensors also compute
+/// in `float`, so those spellings are right for them, but passing an f64 `x`
+/// to `expf` narrows it to `float` first: an f64 tensor would silently compute
+/// at f32 precision. The generated functions select this table's spelling when
+/// the input's dtype is f64.
+///
+/// An op missing here fails loudly instead of running the float spelling on
+/// doubles, so adding a new float-suffixed literal to the macro without a row
+/// here is a compile-visible error at runtime rather than a silent narrowing.
+fn f64_unary_fwd(op_name: &'static str) -> Result<&'static str> {
+    match op_name {
+        "relu" => Ok("x > 0.0 ? x : 0.0"),
+        "mish" => Ok("x * tanh(log1p(exp(x)))"),
+        "elu" => Ok("x >= 0.0 ? x : (exp(x) - 1.0)"),
+        "gelu" => Ok("0.5 * x * (1.0 + tanh(0.7978845608028654 * (x + 0.044715 * x * x * x)))"),
+        "abs" => Ok("fabs(x)"),
+        "neg" => Ok("-x"),
+        "log" => Ok("log(x)"),
+        "swish" => Ok("x / (1.0 + exp(-x))"),
+        "sin" => Ok("sin(x)"),
+        "cos" => Ok("cos(x)"),
+        "tan" => Ok("tan(x)"),
+        "asin" => Ok("asin(x)"),
+        "acos" => Ok("acos(x)"),
+        "atan" => Ok("atan(x)"),
+        "sinh" => Ok("sinh(x)"),
+        "cosh" => Ok("cosh(x)"),
+        "asinh" => Ok("asinh(x)"),
+        "acosh" => Ok("acosh(x)"),
+        "atanh" => Ok("atanh(x)"),
+        "erf" => Ok("erf(x)"),
+        "log2" => Ok("log2(x)"),
+        "log10" => Ok("log10(x)"),
+        "exp" => Ok("exp(x)"),
+        "sqrt" => Ok("sqrt(x)"),
+        "rsqrt" => Ok("rsqrt(x)"),
+        "tanh" => Ok("tanh(x)"),
+        "sigmoid" => Ok("1.0 / (1.0 + exp(-x))"),
+        "step" => Ok("x > 0.0 ? 1.0 : 0.0"),
+        "sign" => Ok("x > 0.0 ? 1.0 : (x < 0.0 ? -1.0 : 0.0)"),
+        "floor" => Ok("floor(x)"),
+        "ceil" => Ok("ceil(x)"),
+        "round" => Ok("round(x)"),
+        "trunc" => Ok("trunc(x)"),
+        "frac" => Ok("x - trunc(x)"),
+        // No float-suffixed intrinsic: the f32 spelling is already exact in
+        // `double`, so these rows are identity entries that keep the resolver
+        // total rather than special-casing the call sites.
+        "maximum" => Ok("a > b ? a : b"),
+        "minimum" => Ok("a < b ? a : b"),
+        "abs_diff" => Ok("fabs(a - b)"),
+        _ => Err(Error::UnsupportedDType {
+            dtype: DTypeId::F64.descriptor(),
+            backend: "Cuda",
+            op: "f64 pointwise forward without a double-precision spelling",
+        }),
+    }
+}
+
+/// Double-precision derivative spelling for the hand-written derivative
+/// `cuda_pointwise!` emits under `op_name`. Same contract as `f64_unary_fwd`:
+/// the IR-lowered fused path (`fused_unary_backward`) is already
+/// dtype-correct, so only this hand-written fallback needs the table.
+fn f64_unary_deriv(op_name: &'static str) -> Result<&'static str> {
+    match op_name {
+        "relu" => Ok("x > 0.0 ? 1.0 : 0.0"),
+        "mish" => Ok(
+            "tanh(log1p(exp(x))) + x * (1.0 / (1.0 + exp(-x))) * (1.0 - tanh(log1p(exp(x))) * tanh(log1p(exp(x))))",
+        ),
+        "elu" => Ok("x >= 0.0 ? 1.0 : exp(x)"),
+        "gelu" => Ok(
+            "0.5 * (1.0 + tanh(0.7978845608028654 * (x + 0.044715 * x * x * x))) + 0.5 * x * (1.0 - tanh(0.7978845608028654 * (x + 0.044715 * x * x * x)) * tanh(0.7978845608028654 * (x + 0.044715 * x * x * x))) * 0.7978845608028654 * (1.0 + 3.0 * 0.044715 * x * x)",
+        ),
+        "abs" => Ok("x > 0.0 ? 1.0 : (x < 0.0 ? -1.0 : 0.0)"),
+        "neg" => Ok("-1.0"),
+        "log" => Ok("1.0 / x"),
+        "swish" => Ok("(1.0 / (1.0 + exp(-x))) * (1.0 + x * (1.0 - (1.0 / (1.0 + exp(-x)))))"),
+        "sin" => Ok("cos(x)"),
+        "cos" => Ok("-sin(x)"),
+        "tan" => Ok("1.0 / (cos(x) * cos(x))"),
+        "asin" => Ok("1.0 / sqrt(1.0 - x * x)"),
+        "acos" => Ok("-1.0 / sqrt(1.0 - x * x)"),
+        "atan" => Ok("1.0 / (1.0 + x * x)"),
+        "sinh" => Ok("cosh(x)"),
+        "cosh" => Ok("sinh(x)"),
+        "asinh" => Ok("1.0 / sqrt(x * x + 1.0)"),
+        "acosh" => Ok("1.0 / sqrt(x * x - 1.0)"),
+        "atanh" => Ok("1.0 / (1.0 - x * x)"),
+        "erf" => Ok("1.1283791670955126 * exp(-x * x)"),
+        "log2" => Ok("1.0 / (x * 0.6931471805599453)"),
+        "log10" => Ok("1.0 / (x * 2.302585092994046)"),
+        "exp" => Ok("x"),
+        "sqrt" => Ok("0.5 / x"),
+        "rsqrt" => Ok("-0.5 * x * x * x"),
+        "tanh" => Ok("1.0 - x * x"),
+        "sigmoid" => Ok("x * (1.0 - x)"),
+        // The binary derivatives are bare `1.0f`/`0.0f` selections, exact in
+        // `double`, so these rows repeat the f32 spelling unsuffixed.
+        "maximum_lhs" => Ok("a >= b ? 1.0 : 0.0"),
+        "maximum_rhs" => Ok("a < b ? 1.0 : 0.0"),
+        "minimum_lhs" => Ok("a <= b ? 1.0 : 0.0"),
+        "minimum_rhs" => Ok("a > b ? 1.0 : 0.0"),
+        "abs_diff_lhs" => Ok("a >= b ? 1.0 : -1.0"),
+        "abs_diff_rhs" => Ok("a >= b ? -1.0 : 1.0"),
+        _ => Err(Error::UnsupportedDType {
+            dtype: DTypeId::F64.descriptor(),
+            backend: "Cuda",
+            op: "f64 pointwise derivative without a double-precision spelling",
+        }),
+    }
+}
+
 macro_rules! cuda_pointwise {
     (
         $(
@@ -265,9 +387,18 @@ macro_rules! cuda_pointwise {
                 t: &CudaStorage,
                 spec: crate::kernel::KernelSpecialization,
             ) -> Result<CudaStorage> {
+                // The literal below is the `float` spelling; f64 inputs take
+                // the double-precision one from `f64_unary_fwd` instead of
+                // silently narrowing through the float intrinsics.
+                let f64_compute = uses_f64_compute(t);
+                let fwd: &str = if f64_compute {
+                    f64_unary_fwd($op_name)?
+                } else {
+                    $fwd_expr
+                };
                 let out = crate::cuda::ops::elementwise::launch_unary_body(
                     $op_name,
-                    &crate::codegen::ScalarFragment::literal($fwd_expr),
+                    &crate::codegen::ScalarFragment::literal(fwd),
                     t,
                     spec,
                 )?;
@@ -281,9 +412,14 @@ macro_rules! cuda_pointwise {
                     )? {
                         return Ok(grad);
                     }
+                    let deriv: &str = if f64_compute {
+                        f64_unary_deriv($op_name)?
+                    } else {
+                        $deriv_expr
+                    };
                     let deriv = crate::cuda::ops::elementwise::launch_unary_op(
                         concat!($op_name, "_grad"),
-                        $deriv_expr,
+                        deriv,
                         &t_capture,
                     )?;
                     crate::cuda::ops::elementwise::launch_binary_op(
@@ -302,17 +438,30 @@ macro_rules! cuda_pointwise {
                 t: &CudaStorage,
                 spec: crate::kernel::KernelSpecialization,
             ) -> Result<CudaStorage> {
+                // Same float/double selection as the `_wrt_input` arm above:
+                // the literal is the `float` spelling.
+                let f64_compute = uses_f64_compute(t);
+                let fwd: &str = if f64_compute {
+                    f64_unary_fwd($op_name_out)?
+                } else {
+                    $fwd_expr_out
+                };
                 let out = crate::cuda::ops::elementwise::launch_unary_body(
                     $op_name_out,
-                    &crate::codegen::ScalarFragment::literal($fwd_expr_out),
+                    &crate::codegen::ScalarFragment::literal(fwd),
                     t,
                     spec,
                 )?;
                 let out_capture = out.clone();
                 push_unary_tape_entry(t.id, out.id, move |grad_out| {
+                    let deriv: &str = if f64_compute {
+                        f64_unary_deriv($op_name_out)?
+                    } else {
+                        $deriv_expr_out
+                    };
                     let deriv = crate::cuda::ops::elementwise::launch_unary_op(
                         concat!($op_name_out, "_grad"),
-                        $deriv_expr_out,
+                        deriv,
                         &out_capture,
                     )?;
                     crate::cuda::ops::elementwise::launch_binary_op(
@@ -331,9 +480,17 @@ macro_rules! cuda_pointwise {
                 t: &CudaStorage,
                 spec: crate::kernel::KernelSpecialization,
             ) -> Result<CudaStorage> {
+                // Grad-less but not precision-less: `floorf` on a `double`
+                // still narrows first, so the forward takes the double
+                // spelling for f64 inputs too.
+                let fwd: &str = if uses_f64_compute(t) {
+                    f64_unary_fwd($op_name_ng)?
+                } else {
+                    $fwd_expr_ng
+                };
                 crate::cuda::ops::elementwise::launch_unary_body(
                     $op_name_ng,
-                    &crate::codegen::ScalarFragment::literal($fwd_expr_ng),
+                    &crate::codegen::ScalarFragment::literal(fwd),
                     t,
                     spec,
                 )
@@ -346,9 +503,20 @@ macro_rules! cuda_pointwise {
                 spec: crate::kernel::KernelSpecialization,
             ) -> Result<CudaStorage> {
                 let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
+                // The launch already refuses mixed dtypes, so either side
+                // names the compute type. Only `abs_diff`'s forward carries a
+                // float-suffixed intrinsic; the `1.0f`/`0.0f` derivative
+                // selections are exact in `double`, so the derivatives keep
+                // one spelling via `f64_unary_deriv`'s `_lhs`/`_rhs` rows.
+                let f64_compute = uses_f64_compute(lhs);
+                let fwd: &str = if f64_compute {
+                    f64_unary_fwd($op_name_bin)?
+                } else {
+                    $fwd_expr_bin
+                };
                 let out = crate::cuda::ops::elementwise::launch_binary_body(
                     $op_name_bin,
-                    &crate::codegen::ScalarFragment::literal($fwd_expr_bin),
+                    &crate::codegen::ScalarFragment::literal(fwd),
                     lhs,
                     rhs,
                     &out_shape,
@@ -362,9 +530,14 @@ macro_rules! cuda_pointwise {
                     input_ids: vec![lhs_id, rhs_id],
                     backward: Box::new(move |grad_out: &CudaStorage| {
                         let deriv_lhs_shape = crate::layout::broadcast_shape(&lhs_capture.shape, &rhs_capture.shape)?;
+                        let deriv_lhs_expr: &str = if f64_compute {
+                            f64_unary_deriv(concat!($op_name_bin, "_lhs"))?
+                        } else {
+                            $deriv_lhs_expr
+                        };
                         let deriv_lhs = crate::cuda::ops::elementwise::launch_binary_op(
                             concat!($op_name_bin, "_grad_lhs"),
-                            $deriv_lhs_expr,
+                            deriv_lhs_expr,
                             &lhs_capture,
                             &rhs_capture,
                             &deriv_lhs_shape,
@@ -379,9 +552,14 @@ macro_rules! cuda_pointwise {
                         )?;
 
                         let deriv_rhs_shape = crate::layout::broadcast_shape(&lhs_capture.shape, &rhs_capture.shape)?;
+                        let deriv_rhs_expr: &str = if f64_compute {
+                            f64_unary_deriv(concat!($op_name_bin, "_rhs"))?
+                        } else {
+                            $deriv_rhs_expr
+                        };
                         let deriv_rhs = crate::cuda::ops::elementwise::launch_binary_op(
                             concat!($op_name_bin, "_grad_rhs"),
-                            $deriv_rhs_expr,
+                            deriv_rhs_expr,
                             &lhs_capture,
                             &rhs_capture,
                             &deriv_rhs_shape,
@@ -443,20 +621,49 @@ cuda_pointwise! {
     unary_no_grad: cuda_ceil_storage("ceil", "ceilf(x)");
     unary_no_grad: cuda_round_storage("round", "roundf(x)");
     unary_no_grad: cuda_trunc_storage("trunc", "truncf(x)");
-    unary_no_grad: cuda_frac_storage("frac", "x - truncf(x)");
 
     binary: cuda_maximum_storage("maximum", "a > b ? a : b", "a >= b ? 1.0f : 0.0f", "a < b ? 1.0f : 0.0f");
     binary: cuda_minimum_storage("minimum", "a < b ? a : b", "a <= b ? 1.0f : 0.0f", "a > b ? 1.0f : 0.0f");
     binary: cuda_abs_diff_storage("abs_diff", "fabsf(a - b)", "a >= b ? 1.0f : -1.0f", "a >= b ? -1.0f : 1.0f");
 }
 
+/// `frac(x) = x - trunc(x)`. Derivative 1 wherever it exists; the gradient
+/// passes straight through, matching CPU's `canonical_frac`.
+///
+/// Deliberately not a `unary_no_grad` arm of `cuda_pointwise!`: the row
+/// claims `training = yes`, and unlike its `trunc` half — which is one of
+/// the conformance harness's `carries_no_gradient` piecewise-constant rows
+/// and so may legitimately record nothing — an unrecorded `frac` leaves a
+/// hole in any graph that runs through it.
+pub(crate) fn cuda_frac_storage(
+    t: &CudaStorage,
+    spec: crate::kernel::KernelSpecialization,
+) -> Result<CudaStorage> {
+    let fwd: &str = if uses_f64_compute(t) {
+        f64_unary_fwd("frac")?
+    } else {
+        "x - truncf(x)"
+    };
+    let out = crate::cuda::ops::elementwise::launch_unary_body(
+        "frac",
+        &crate::codegen::ScalarFragment::literal(fwd),
+        t,
+        spec,
+    )?;
+    push_unary_tape_entry(t.id, out.id, |grad_out| Ok(grad_out.clone()));
+    Ok(out)
+}
+
 pub(crate) fn cuda_powf_storage(t: &CudaStorage, exp: f64) -> Result<CudaStorage> {
-    let expr = format!("powf(x, {exp:.17})");
+    // `powf` narrows a `double` x to `float` first; f64 inputs take `pow`.
+    let f64_compute = uses_f64_compute(t);
+    let kernel = if f64_compute { "pow" } else { "powf" };
+    let expr = format!("{kernel}(x, {exp:.17})");
     let out = crate::cuda::ops::elementwise::launch_unary_op("powf", &expr, t)?;
     let t_capture = t.clone();
     let exp_minus_1 = exp - 1.0;
     push_unary_tape_entry(t.id, out.id, move |grad_out| {
-        let deriv_expr = format!("({exp:.17}) * powf(x, {exp_minus_1:.17})");
+        let deriv_expr = format!("({exp:.17}) * {kernel}(x, {exp_minus_1:.17})");
         let deriv =
             crate::cuda::ops::elementwise::launch_unary_op("powf_grad", &deriv_expr, &t_capture)?;
         crate::cuda::ops::elementwise::launch_binary_op(
@@ -489,25 +696,183 @@ pub(crate) fn cuda_clamp_storage(t: &CudaStorage, min: f64, max: f64) -> Result<
     Ok(out)
 }
 
+/// `atan2(y, x)`, matching CPU's argument order (lhs is y, rhs is x).
+///
+/// The backward is the quotient rule CPU's `canonical_atan2` uses:
+/// `d/dy = g * x / (x^2 + y^2)` and `d/dx = g * (-y) / (x^2 + y^2)`.
 pub(crate) fn cuda_atan2_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    crate::cuda::ops::elementwise::launch_binary_op("atan2", "atan2f(a, b)", lhs, rhs, &out_shape)
+    // `atan2f` narrows `double` operands first; f64 inputs take `atan2`.
+    let expr = if uses_f64_compute(lhs) {
+        "atan2(a, b)"
+    } else {
+        "atan2f(a, b)"
+    };
+    let out = crate::cuda::ops::elementwise::launch_binary_op("atan2", expr, lhs, rhs, &out_shape)?;
+    let (y_capture, x_capture) = (lhs.clone(), rhs.clone());
+    let (y_shape, x_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+    let (y_id, x_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![y_id, x_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let x_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_x_sq",
+                "a * b",
+                &x_capture,
+                &x_capture,
+                &x_shape,
+            )?;
+            let y_sq = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_y_sq",
+                "a * b",
+                &y_capture,
+                &y_capture,
+                &y_shape,
+            )?;
+            let denom_shape = crate::layout::broadcast_shape(&x_shape, &y_shape)?;
+            let denom = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_denom",
+                "a + b",
+                &x_sq,
+                &y_sq,
+                &denom_shape,
+            )?;
+            let numer_y_shape = crate::layout::broadcast_shape(&grad_out.shape, &x_shape)?;
+            let numer_y = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_numer_y",
+                "a * b",
+                grad_out,
+                &x_capture,
+                &numer_y_shape,
+            )?;
+            let grad_y_shape = crate::layout::broadcast_shape(&numer_y.shape, &denom.shape)?;
+            let grad_y = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_div_y",
+                "a / b",
+                &numer_y,
+                &denom,
+                &grad_y_shape,
+            )?;
+            let neg_y = crate::cuda::ops::elementwise::launch_unary_op(
+                "atan2_grad_neg_y",
+                "-x",
+                &y_capture,
+            )?;
+            let numer_x_shape = crate::layout::broadcast_shape(&grad_out.shape, &neg_y.shape)?;
+            let numer_x = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_numer_x",
+                "a * b",
+                grad_out,
+                &neg_y,
+                &numer_x_shape,
+            )?;
+            let grad_x_shape = crate::layout::broadcast_shape(&numer_x.shape, &denom.shape)?;
+            let grad_x = crate::cuda::ops::elementwise::launch_binary_op(
+                "atan2_grad_div_x",
+                "a / b",
+                &numer_x,
+                &denom,
+                &grad_x_shape,
+            )?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(&grad_y, &y_shape)?,
+                crate::cuda::tape::unbroadcast(&grad_x, &x_shape)?,
+            ])
+        }),
+    });
+    Ok(out)
 }
 
 pub(crate) fn cuda_fmod_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    crate::cuda::ops::elementwise::launch_binary_op("fmod", "fmodf(a, b)", lhs, rhs, &out_shape)
+    let expr = if uses_f64_compute(lhs) {
+        "fmod(a, b)"
+    } else {
+        "fmodf(a, b)"
+    };
+    let out = crate::cuda::ops::elementwise::launch_binary_op("fmod", expr, lhs, rhs, &out_shape)?;
+    push_modulus_tape(lhs, rhs, &out);
+    Ok(out)
 }
 
 pub(crate) fn cuda_remainder_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     let out_shape = crate::layout::broadcast_shape(&lhs.shape, &rhs.shape)?;
-    crate::cuda::ops::elementwise::launch_binary_op(
+    // `remainderf` is the IEEE remainder (`x - round(x/y) * y`), which lands
+    // on the wrong side of zero for a negative dividend: `remainderf(-1, 2)`
+    // is `-1`. The catalog's `remainder` — CPU's `canonical_remainder`, WGPU
+    // mode 20, Metal — is the least non-negative residue, where that pair
+    // yields `1`. Build it from the truncated `fmod` the same way Rust's
+    // `rem_euclid` does: adjust a negative residue up by `|b|`. `fmod` takes
+    // the double spelling for an f64 operand for the usual narrowing reason.
+    let (ty, fmod_call, fabs_call, zero) = if uses_f64_compute(lhs) {
+        ("double", "fmod", "fabs", "0.0")
+    } else {
+        ("float", "fmodf", "fabsf", "0.0f")
+    };
+    let body = crate::codegen::ScalarFragment {
+        prologue: vec![format!("const {ty} t0 = {fmod_call}(a, b);")],
+        value: format!("t0 < {zero} ? t0 + {fabs_call}(b) : t0"),
+    };
+    let out = crate::cuda::ops::elementwise::launch_binary_body(
         "remainder",
-        "remainderf(a, b)",
+        &body,
         lhs,
         rhs,
         &out_shape,
-    )
+        crate::kernel::KernelSpecialization::NONE,
+    )?;
+    push_modulus_tape(lhs, rhs, &out);
+    Ok(out)
+}
+
+/// The shared `record_modulus` tape entry for `fmod`/`remainder`.
+///
+/// Every modulus has the form `r = a - b * q` with `q` locally constant, so
+/// `dr/da = 1` and `dr/db = -q`, with `q` recovered as `(a - r) / b` from
+/// the values themselves rather than recomputed with a rounding rule that
+/// could drift from the forward — CPU's `record_modulus`, ported.
+fn push_modulus_tape(lhs: &CudaStorage, rhs: &CudaStorage, out: &CudaStorage) {
+    let (lhs_capture, rhs_capture, out_capture) = (lhs.clone(), rhs.clone(), out.clone());
+    let (lhs_shape, rhs_shape, out_shape) =
+        (lhs.shape.to_vec(), rhs.shape.to_vec(), out.shape.to_vec());
+    let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![lhs_id, rhs_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let num_shape = crate::layout::broadcast_shape(&lhs_shape, &out_shape)?;
+            let numerator = crate::cuda::ops::elementwise::launch_binary_op(
+                "mod_grad_num",
+                "a - b",
+                &lhs_capture,
+                &out_capture,
+                &num_shape,
+            )?;
+            let q_shape = crate::layout::broadcast_shape(&num_shape, &rhs_shape)?;
+            let quotient = crate::cuda::ops::elementwise::launch_binary_op(
+                "mod_grad_q",
+                "a / b",
+                &numerator,
+                &rhs_capture,
+                &q_shape,
+            )?;
+            let neg_q =
+                crate::cuda::ops::elementwise::launch_unary_op("mod_grad_neg_q", "-x", &quotient)?;
+            let grad_rhs_shape = crate::layout::broadcast_shape(&grad_out.shape, &neg_q.shape)?;
+            let grad_rhs = crate::cuda::ops::elementwise::launch_binary_op(
+                "mod_grad_rhs",
+                "a * b",
+                grad_out,
+                &neg_q,
+                &grad_rhs_shape,
+            )?;
+            Ok(vec![
+                crate::cuda::tape::unbroadcast(grad_out, &lhs_shape)?,
+                crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?,
+            ])
+        }),
+    });
 }
 
 pub(crate) fn cuda_lerp_storage(
@@ -547,6 +912,45 @@ pub(crate) fn cuda_log_softmax<D: Device>(input: &CudaStorage, axis: usize) -> R
     let log_sum = cuda_log_storage(&sum_val, crate::kernel::KernelSpecialization::NONE)?;
     cuda_sub_storage(
         &shifted,
+        &log_sum,
+        crate::kernel::KernelSpecialization::NONE,
+    )
+}
+
+/// `logsumexp(x, dim) = max + log(sum_keepdim(exp(x - max), dim))`, the same
+/// composition and the same primitives as CPU's `logsumexp_keepdim`: the
+/// shift by the axis maximum is what keeps router-sized logits from
+/// overflowing, and every step other than `max_keepdim` pushes its own tape
+/// entry. `max_keepdim` pushing none is exactly right here (and is why this
+/// is not just `cuda_log_softmax` plus a max): softmax's gradient is
+/// invariant to the shift, so the cotangent that would flow back through
+/// the stabilizing max cancels between the `sub`'s right operand and the
+/// final `add`'s left operand, and untracked leaves give that cancellation
+/// for free - `log(sum(exp(x - max))) + max` has gradient `softmax(x)`
+/// through the remaining chain alone. The axis-out-of-range message mirrors
+/// CPU's `logsumexp_keepdim` verbatim.
+pub(crate) fn cuda_logsumexp_keepdim<D: Device>(
+    input: &CudaStorage,
+    axis: usize,
+) -> Result<CudaStorage> {
+    if axis >= input.shape.len() {
+        return Err(incin_core::error::Error::ShapeMismatch {
+            op: "logsumexp_keepdim",
+            expected: input.shape.to_vec(),
+            got: vec![axis],
+            msg: format!(
+                "logsumexp_keepdim: axis {axis} out of range for shape {:?}",
+                input.shape
+            ),
+        });
+    }
+    let max_val = CudaBackendImpl::<D>::max_keepdim::<f32>(input, axis)?;
+    let shifted = cuda_sub_storage(input, &max_val, crate::kernel::KernelSpecialization::NONE)?;
+    let exp_vals = cuda_exp_storage(&shifted, crate::kernel::KernelSpecialization::NONE)?;
+    let sum_val = CudaBackendImpl::<D>::sum_keepdim::<f32>(&exp_vals, axis)?;
+    let log_sum = cuda_log_storage(&sum_val, crate::kernel::KernelSpecialization::NONE)?;
+    cuda_add_storage(
+        &max_val,
         &log_sum,
         crate::kernel::KernelSpecialization::NONE,
     )
@@ -732,4 +1136,108 @@ pub(crate) fn cuda_sub_scalar_float(t: &CudaStorage, val: f64) -> Result<CudaSto
 
 pub(crate) fn cuda_div_scalar_float(t: &CudaStorage, val: f64) -> Result<CudaStorage> {
     CudaBackendImpl::<Cuda>::div_scalar_float::<f32>(t, val)
+}
+
+#[cfg(test)]
+mod f64_precision_tests {
+    use super::*;
+
+    const FWD_OPS: &[&str] = &[
+        "relu", "mish", "elu", "gelu", "abs", "neg", "log", "swish", "sin", "cos", "tan", "asin",
+        "acos", "atan", "sinh", "cosh", "asinh", "acosh", "atanh", "erf", "log2", "log10", "exp",
+        "sqrt", "rsqrt", "tanh", "sigmoid", "step", "sign", "floor", "ceil", "round", "trunc",
+        "frac", "maximum", "minimum", "abs_diff",
+    ];
+
+    const DERIV_OPS: &[&str] = &[
+        "relu",
+        "mish",
+        "elu",
+        "gelu",
+        "abs",
+        "neg",
+        "log",
+        "swish",
+        "sin",
+        "cos",
+        "tan",
+        "asin",
+        "acos",
+        "atan",
+        "sinh",
+        "cosh",
+        "asinh",
+        "acosh",
+        "atanh",
+        "erf",
+        "log2",
+        "log10",
+        "exp",
+        "sqrt",
+        "rsqrt",
+        "tanh",
+        "sigmoid",
+        "maximum_lhs",
+        "maximum_rhs",
+        "minimum_lhs",
+        "minimum_rhs",
+        "abs_diff_lhs",
+        "abs_diff_rhs",
+    ];
+
+    #[test]
+    fn every_hand_written_literal_has_a_double_spelling() {
+        for op in FWD_OPS {
+            f64_unary_fwd(op).unwrap_or_else(|e| panic!("{op} has no f64 forward spelling: {e:?}"));
+        }
+        for op in DERIV_OPS {
+            f64_unary_deriv(op)
+                .unwrap_or_else(|e| panic!("{op} has no f64 derivative spelling: {e:?}"));
+        }
+    }
+
+    /// A double spelling that still names a float intrinsic (or carries a
+    /// float-suffixed literal) would narrow exactly like the bug it replaces.
+    /// Every `f` in these spellings must therefore belong to an identifier
+    /// (`fabs`, `floor`, `fmax`-free) rather than to a suffix: no `f` may
+    /// directly follow an ASCII digit, and no float-suffixed intrinsic name
+    /// may appear at all.
+    #[test]
+    fn double_spellings_name_no_float_intrinsics_or_suffixed_literals() {
+        const FORBIDDEN_INTRINSICS: &[&str] = &[
+            "expf", "logf", "log1pf", "log2f", "log10f", "tanhf", "fabsf", "sinf", "cosf", "tanf",
+            "asinf", "acosf", "atanf", "atan2f", "sinhf", "coshf", "asinhf", "acoshf", "atanhf",
+            "erff", "sqrtf", "rsqrtf", "powf", "fmodf", "floorf", "ceilf", "roundf", "truncf",
+        ];
+        let mut spellings = Vec::new();
+        for op in FWD_OPS {
+            spellings.push(f64_unary_fwd(op).unwrap());
+        }
+        for op in DERIV_OPS {
+            spellings.push(f64_unary_deriv(op).unwrap());
+        }
+        assert!(!spellings.is_empty());
+        for spelling in spellings {
+            for forbidden in FORBIDDEN_INTRINSICS {
+                assert!(
+                    !spelling.contains(forbidden),
+                    "double spelling {spelling:?} still names float intrinsic {forbidden}"
+                );
+            }
+            let bytes = spelling.as_bytes();
+            for (i, &b) in bytes.iter().enumerate() {
+                if b == b'f' && i > 0 && bytes[i - 1].is_ascii_digit() {
+                    panic!("double spelling {spelling:?} carries a float-suffixed literal");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_unmapped_op_fails_loudly_instead_of_running_the_float_spelling() {
+        assert!(f64_unary_fwd("not_an_op").is_err());
+        assert!(f64_unary_deriv("not_an_op").is_err());
+        // Grad-less spellings have no derivative row by construction.
+        assert!(f64_unary_deriv("floor").is_err());
+    }
 }

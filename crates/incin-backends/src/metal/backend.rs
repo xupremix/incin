@@ -144,9 +144,36 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for MetalBackendImpl<
 
 // ─── Concrete creation helpers ──────────────────────────────────────────────
 
+/// Time-seeded LCG state for the host-side `rand`/`randn` fills below.
+/// Same constants as WGPU's `creation.rs`; GPU-side generation would need
+/// more infrastructure than either backend has today.
+fn lcg_seed() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos() as u64
+}
+
+fn lcg_uniform(state: &mut u64) -> f32 {
+    *state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
+    ((*state >> 33) as f32) / (u32::MAX as f32)
+}
+
 impl<D: Device> MetalBackendImpl<D> {
     /// `full`. Same host-fill-then-upload pattern `ones` above already
     /// uses.
+    ///
+    /// Honesty note (latent, unreachable): this fills a `Vec<f32>` and
+    /// stores its bytes under whatever `dtype` was requested, with no
+    /// numeric conversion — a non-`f32` request would mislabel `f32` bit
+    /// patterns. It cannot happen through canonical dispatch: the
+    /// capability rows gate every filling identity to `F32_ONLY`, and the
+    /// validator rejects the rest before any method below runs. Same holds
+    /// for `ones`/`arange`/`linspace`. If filling ever widens past `f32`,
+    /// convert here instead of reinterpreting.
     pub(crate) fn full<K: DType>(
         val: f64,
         shape: &[usize],
@@ -230,6 +257,9 @@ impl<D: Device> MetalBackendImpl<D> {
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
+    /// `rand`. Host-side LCG upload, the same approach as WGPU's
+    /// `creation.rs`: there is no Metal-side generator yet, and the previous
+    /// constant `0.5` fill advertised sampling while returning a constant.
     pub(crate) fn rand<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -238,12 +268,15 @@ impl<D: Device> MetalBackendImpl<D> {
         validate_metal(dtype, device, OperationKind::Random, "rand")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
         let n = num_elements(shape)?;
-        let data: Vec<f32> = vec![0.5; n];
+        let mut state = lcg_seed();
+        let data: Vec<f32> = (0..n).map(|_| lcg_uniform(&mut state)).collect();
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
     }
 
+    /// `randn`. Box-Muller over the same host LCG as `rand`, mirroring WGPU;
+    /// the previous constant `0.0` fill is why this exists.
     pub(crate) fn randn<K: DType>(
         shape: &[usize],
         dtype: DTypeDescriptor,
@@ -252,7 +285,17 @@ impl<D: Device> MetalBackendImpl<D> {
         validate_metal(dtype, device, OperationKind::Random, "randn")?;
         let shape_buf = incin_core::shapes::ShapeBuf::from_slice(shape);
         let n = num_elements(shape)?;
-        let data: Vec<f32> = vec![0.0; n];
+        let mut state = lcg_seed();
+        let data: Vec<f32> = (0..n.div_ceil(2))
+            .flat_map(|_| {
+                let u1 = lcg_uniform(&mut state).max(1e-7);
+                let u2 = lcg_uniform(&mut state);
+                let r = (-2.0 * u1.ln()).sqrt();
+                let theta = 2.0 * core::f32::consts::PI * u2;
+                [r * theta.cos(), r * theta.sin()]
+            })
+            .take(n)
+            .collect();
         let bytes: Vec<u8> = bytemuck::cast_slice(&data).to_vec();
         let meta = TensorMeta::contiguous(shape_buf, dtype, *device, MetalStorage::alignment(), n)?;
         MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, device.ordinal())
@@ -261,26 +304,65 @@ impl<D: Device> MetalBackendImpl<D> {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-fn unbroadcast(grad: &MetalStorage, target_shape: &[usize]) -> Result<MetalStorage> {
-    if grad.metadata().shape().dims() == target_shape {
+/// Reduce `grad` back to `target_shape` for a broadcast backward recipe.
+///
+/// Semantics (fail-closed, shared with CPU, CUDA, and WGPU): on success the
+/// result's shape equals `target_shape`, so it can always be accumulated into
+/// the target. A compatible grad of lower rank than the target - a scalar
+/// seed, e.g. `[] -> [1]` - expands (a scalar broadcasts to any shape); a
+/// grad that does not broadcast into the target refuses with a named
+/// `ShapeMismatch`. Never panics on rank-deficient input.
+pub(super) fn unbroadcast(grad: &MetalStorage, target_shape: &[usize]) -> Result<MetalStorage> {
+    if grad.shape() == target_shape {
         return Ok(grad.clone());
     }
-    let grad_dims = grad.metadata().shape().dims();
-    let ndim_diff = grad_dims.len().saturating_sub(target_shape.len());
+
+    let ndim_diff = grad.shape().len().saturating_sub(target_shape.len());
     let mut result = grad.clone();
 
+    // Reduce leading dims
     for _ in 0..ndim_diff {
         result = sum_dim_squeeze(&result, 0)?;
     }
 
-    let cur_dims = result.metadata().shape().dims().to_vec();
-    for (i, &t_dim) in target_shape.iter().enumerate() {
-        if t_dim == 1 && cur_dims[i] != 1 {
-            result = sum_dim_keepdim(&result, i)?;
+    // Reduce keepdim dims. Only when the ranks agree after the leading
+    // squeeze (grad rank >= target rank): that squeeze right-aligns the
+    // axes, so indexing `result.shape()[i]` against `target_shape[i]` is
+    // sound only at equal rank. When the target outranks the grad - the
+    // scalar-seed case, e.g. `[] -> [1]` - there is no aligned axis to
+    // reduce; the tail expands the smaller grad instead of indexing past
+    // it (the latent cross-backend panic this guards).
+    if result.shape().len() == target_shape.len() {
+        for (i, &t_dim) in target_shape.iter().enumerate() {
+            if t_dim == 1 && result.shape()[i] != 1 {
+                result = sum_dim_keepdim(&result, i)?;
+            }
         }
     }
 
-    Ok(result)
+    if result.shape() == target_shape {
+        return Ok(result);
+    }
+
+    // Expand what reduction left smaller: a reduced-all-the-way scalar seed
+    // reaches here with fewer elements than its target, and the accumulator
+    // requires grads shape-matched to their target, so handing the scalar on
+    // breaks the tape's shape contract. `broadcast_shape` must resolve *to*
+    // the target, not merely be mutual: the materializer assumes a legal
+    // right-aligned broadcast into `target_shape` and would otherwise
+    // mis-index on a shape like `[4] -> [2,1]`. Mirrors the CPU tail
+    // (`cpu/tape.rs`), the CUDA tail (`cuda/tape.rs`), and the WGPU tail
+    // (`wgpu/tape.rs`).
+    let resolved = crate::layout::broadcast_shape(result.shape(), target_shape)?;
+    if resolved.as_slice() != target_shape {
+        return Err(Error::ShapeMismatch {
+            op: "autograd unbroadcast",
+            expected: target_shape.to_vec(),
+            got: result.shape().to_vec(),
+            msg: "the reduced gradient does not broadcast into the target shape".into(),
+        });
+    }
+    broadcast_metal(&result, target_shape)
 }
 
 fn sum_dim_squeeze(storage: &MetalStorage, axis: usize) -> Result<MetalStorage> {
@@ -294,7 +376,23 @@ fn sum_dim_keepdim(storage: &MetalStorage, axis: usize) -> Result<MetalStorage> 
     sum_dim_impl(storage, axis, true)
 }
 
-fn binary_op_metal(
+/// Materialize `t` at `shape` by right-aligned broadcast, recording nothing.
+///
+/// The reduction-backward tail needs a plain expand, not an op: the tape
+/// entry lives in `MetalBackendImpl::broadcast_as`, which routes through this
+/// helper. Mirrors WGPU's non-recording `broadcast_storage` and CUDA's
+/// `ops::shape::launch_broadcast`, the expands the other tape tails call.
+fn broadcast_metal(t: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
+    let zeros = MetalStorage::zeros(
+        &ShapeBuf::from_slice(shape),
+        t.metadata().dtype(),
+        t.mode(),
+        t.device_ordinal(),
+    )?;
+    binary_op_metal(t, &zeros, "broadcast_as", |x, _| x)
+}
+
+pub(super) fn binary_op_metal(
     lhs: &MetalStorage,
     rhs: &MetalStorage,
     op_name: &'static str,
@@ -378,7 +476,7 @@ fn binary_op_metal(
     }
 }
 
-fn unary_op_metal(t: &MetalStorage, f: impl Fn(f32) -> f32) -> Result<MetalStorage> {
+pub(super) fn unary_op_metal(t: &MetalStorage, f: impl Fn(f32) -> f32) -> Result<MetalStorage> {
     let bytes = t.as_bytes()?;
     let slice: &[f32] = bytemuck::cast_slice(bytes);
     let out_data: Vec<f32> = slice.iter().map(|&x| f(x)).collect();
@@ -393,13 +491,75 @@ fn unary_op_metal(t: &MetalStorage, f: impl Fn(f32) -> f32) -> Result<MetalStora
     MetalStorage::from_bytes(out_bytes, meta, t.mode(), t.device_ordinal())
 }
 
-fn scalar_op_metal(
+pub(super) fn scalar_op_metal(
     t: &MetalStorage,
     scalar: f64,
     f: impl Fn(f32, f32) -> f32,
 ) -> Result<MetalStorage> {
     let s_f32 = scalar as f32;
     unary_op_metal(t, move |x| f(x, s_f32))
+}
+
+/// Wrap host-computed `f32` values in contiguous [`MetalStorage`] that
+/// inherits `like`'s dtype, mode, device and alignment.
+///
+/// The shape ops and the `max` reduction below assemble their results in a
+/// `Vec<f32>` the same way `sum_dim_impl`/`transpose_metal` do, then need one
+/// place that turns those values back into storage without restating the
+/// `TensorMeta::contiguous` → `from_bytes` pairing (whose `numel` argument
+/// must match the value count, a mismatch `from_bytes` would only report as a
+/// byte-span error).
+pub(super) fn storage_from_f32(
+    values: &[f32],
+    shape: &[usize],
+    like: &MetalStorage,
+) -> Result<MetalStorage> {
+    let numel: usize = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Storage)?;
+    if values.len() != numel {
+        return Err(Error::ShapeMismatch {
+            op: "storage_from_f32",
+            expected: vec![numel],
+            got: vec![values.len()],
+            msg: "value count does not match the target shape".into(),
+        });
+    }
+    let meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(shape),
+        like.metadata().dtype(),
+        like.device(),
+        MetalStorage::alignment(),
+        numel,
+    )?;
+    MetalStorage::from_bytes(
+        bytemuck::cast_slice(values).to_vec(),
+        meta,
+        like.mode(),
+        like.device_ordinal(),
+    )
+}
+
+/// Wrap raw little-endian bytes in contiguous [`MetalStorage`] with an
+/// explicit `dtype`, inheriting `like`'s mode, device and alignment.
+///
+/// `storage_from_f32` cannot produce `i64` index or `bool` outputs because
+/// it inherits `like`'s dtype; this helper is the typed counterpart for
+/// operations whose result is not the operand's dtype (`argmax`, `sort`,
+/// `topk` indices, `one_hot` masks, `to_dtype` targets).
+pub(super) fn storage_from_raw(
+    bytes: Vec<u8>,
+    shape: &[usize],
+    dtype: DTypeDescriptor,
+    like: &MetalStorage,
+) -> Result<MetalStorage> {
+    let numel: usize = ShapeBuf::from_slice(shape).checked_numel(OperationKind::Storage)?;
+    let meta = TensorMeta::contiguous(
+        ShapeBuf::from_slice(shape),
+        dtype,
+        like.device(),
+        MetalStorage::alignment(),
+        numel,
+    )?;
+    MetalStorage::from_bytes(bytes, meta, like.mode(), like.device_ordinal())
 }
 
 fn sum_dim_impl(t: &MetalStorage, axis: usize, keepdim: bool) -> Result<MetalStorage> {
@@ -551,7 +711,7 @@ fn matmul_metal(lhs: &MetalStorage, rhs: &MetalStorage) -> Result<MetalStorage> 
     MetalStorage::from_bytes(out_bytes, meta, lhs.mode(), lhs.device_ordinal())
 }
 
-fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
+pub(super) fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage> {
     let numel = storage
         .metadata()
         .shape()
@@ -582,7 +742,11 @@ fn reshape_metal(storage: &MetalStorage, shape: &[usize]) -> Result<MetalStorage
     )
 }
 
-fn transpose_metal(storage: &MetalStorage, dim0: usize, dim1: usize) -> Result<MetalStorage> {
+pub(super) fn transpose_metal(
+    storage: &MetalStorage,
+    dim0: usize,
+    dim1: usize,
+) -> Result<MetalStorage> {
     let dims = storage.metadata().shape().dims();
     if dim0 >= dims.len() || dim1 >= dims.len() {
         return Err(Error::ShapeMismatch {
@@ -736,18 +900,13 @@ impl<D: Device> MetalBackendImpl<D> {
     }
 }
 
-// ───  ───────────────────────────────────────────────────────────────
+// ─── Scalar arithmetic ─────────────────────────────────────────────────────
+//
+// The Batch-A elementwise surface (unaries, `powf`/`clamp`, `sub`/`div`
+// scalars, `atan2`/`fmod`/`remainder`) lives in `super::pointwise`. Only the
+// two scalars `dispatch_unary!` routes by name stay here.
 
 impl<D: Device> MetalBackendImpl<D> {
-    crate::unsupported::unsupported_float_ops! {
-        unary:
-            sign, floor, ceil, round, log2, log10, sin, cos, tan, asin, acos,
-            atan, sinh, cosh, asinh, acosh, atanh, erf, rsqrt, trunc, frac;
-        exponent: powf;
-        bounds: clamp;
-        binary: atan2, fmod, remainder;
-    }
-
     pub(crate) fn add_scalar_float<K: DType>(
         t: &<Self as StorageBackend>::Storage<K>,
         scalar: f64,
@@ -893,8 +1052,23 @@ impl<D: Device> MetalBackendImpl<D> {
         let dims = t.metadata().shape().dims();
         let total: usize = incin_core::shapes::ShapeBuf::from_slice(dims)
             .checked_numel(incin_core::shapes::OperationKind::Storage)?;
+        // `sum_all` pushes its own `t -> sum` entry; the rescale below used
+        // to push nothing, detaching the output from the tape while the
+        // table advertised `training = yes`. Chain a `sum -> out` entry so
+        // backward walks `out -> sum -> t`, mirroring WGPU's `mean_all`
+        // (which inlines the raw sum and pushes one entry instead).
+        let scale = 1.0 / (total as f64);
         let sum = Self::sum_all::<K>(t)?;
-        scalar_op_metal(&sum, 1.0 / (total as f64), |x, s| x * s)
+        let out = scalar_op_metal(&sum, scale, |x, s| x * s)?;
+        let (sum_id, out_id) = (sum.id(), out.id());
+        crate::metal::tape::push(crate::metal::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![sum_id],
+            backward: Box::new(move |grad_out: &MetalStorage| {
+                Ok(vec![scalar_op_metal(grad_out, scale, |x, s| x * s)?])
+            }),
+        });
+        Ok(out)
     }
 }
 
@@ -952,13 +1126,7 @@ impl<D: Device> MetalBackendImpl<D> {
         t: &<Self as StorageBackend>::Storage<K>,
         shape: &[usize],
     ) -> Result<<Self as StorageBackend>::Storage<K>> {
-        let zeros = MetalStorage::zeros(
-            &ShapeBuf::from_slice(shape),
-            t.metadata().dtype(),
-            t.mode(),
-            t.device_ordinal(),
-        )?;
-        let out = binary_op_metal(t, &zeros, "broadcast_as", |x, _| x)?;
+        let out = broadcast_metal(t, shape)?;
         let t_dims = t.metadata().shape().dims().to_vec();
         let (t_id, out_id) = (t.id(), out.id());
         crate::metal::tape::push(crate::metal::tape::TapeEntry {
@@ -1059,5 +1227,124 @@ impl<D: Device> VariableBackend for MetalBackendImpl<D> {
     fn assign_var<K: DType>(var: &mut Self::Var<K>, tensor: &Self::Storage<K>) -> Result<()> {
         var.storage = tensor.clone();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+/// `unbroadcast` tests mirroring `cpu/tape.rs`, `wgpu/tape.rs`, and
+/// `cuda/backend/tests.rs`. Metal's unbroadcast path is pure host-side
+/// `Vec<u8>` math (`sum_dim_impl`, `binary_op_metal`), so these run without
+/// a Metal device.
+mod tests {
+    use super::*;
+    use incin_core::tensor::dtype::DTypeId;
+
+    /// Host-side contiguous f32 storage.
+    fn storage(values: &[f32], shape: &[usize]) -> MetalStorage {
+        let bytes: Vec<u8> = bytemuck::cast_slice(values).to_vec();
+        let meta = TensorMeta::contiguous(
+            ShapeBuf::from_slice(shape),
+            DTypeId::F32.into(),
+            DeviceId::metal(0),
+            MetalStorage::alignment(),
+            values.len(),
+        )
+        .expect("contiguous metadata for test storage");
+        MetalStorage::from_bytes(bytes, meta, MetalStorageMode::Shared, 0)
+            .expect("bytes cover the metadata span")
+    }
+
+    /// `scalar`.
+    fn scalar(v: f32) -> MetalStorage {
+        storage(&[v], &[])
+    }
+
+    /// `vector`.
+    fn vector(v: &[f32]) -> MetalStorage {
+        storage(v, &[v.len()])
+    }
+
+    /// `matrix`.
+    fn matrix(v: &[f32], rows: usize, cols: usize) -> MetalStorage {
+        storage(v, &[rows, cols])
+    }
+
+    /// `read`.
+    fn read(s: &MetalStorage) -> Vec<f32> {
+        bytemuck::cast_slice(s.as_bytes().expect("shared-mode storage is host-readable")).to_vec()
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_for_size_one_target_materializes`.
+    fn unbroadcast_scalar_seed_for_size_one_target_materializes() {
+        // Regression for the latent cross-backend panic: a size-1 target
+        // dimension at an index >= the grad's rank (here the whole target)
+        // used to index past the reduced grad in the keepdim loop at
+        // `cur_dims[i]`. A scalar broadcasts to any shape, so `[] -> [1]`
+        // expands to `[v]`, matching the tail's `[3]` materialization.
+        let grad = scalar(2.0);
+        let result =
+            unbroadcast(&grad, &[1]).expect("a compatible scalar seed for a size-1 target expands");
+        assert_eq!(result.shape(), &[1]);
+        assert_eq!(read(&result), vec![2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_is_materialized_to_full_width`.
+    fn unbroadcast_scalar_seed_is_materialized_to_full_width() {
+        // Pre-fix this returned the scalar `[]` unchanged for a `[3]`
+        // target - no panic (the `t_dim == 1` guard short-circuits on a 3)
+        // but a wrong-shaped gradient handed to accumulation. A scalar
+        // broadcasts to any shape, so it materializes to full width here,
+        // matching the CPU/CUDA/WGPU tails (#121).
+        let grad = scalar(2.0);
+        let result = unbroadcast(&grad, &[3]).expect("a compatible scalar seed expands");
+        assert_eq!(result.shape(), &[3]);
+        assert_eq!(read(&result), vec![2.0, 2.0, 2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_incompatible_shapes_are_refused`.
+    fn unbroadcast_incompatible_shapes_are_refused() {
+        // A grad that no broadcast could have produced for this target must
+        // refuse rather than hand a wrong-shaped gradient on to accumulation
+        // (mirrors the CPU/CUDA/WGPU refusal tests; see #121).
+        let grad = vector(&[1.0, 2.0, 3.0]);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+        let grad = matrix(&[1.0; 6], 2, 3);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused`.
+    fn unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused() {
+        // Mutually-broadcastable is not enough: `[4]` does not broadcast
+        // *into* `[2,1]` (a 4 cannot shrink onto a 1). Pre-fix this indexed
+        // past the grad in the keepdim loop and panicked; it must refuse by
+        // name instead (mirrors the CPU/WGPU/CUDA tests).
+        let grad = vector(&[1.0, 2.0, 3.0, 4.0]);
+        assert!(matches!(
+            unbroadcast(&grad, &[2, 1]),
+            Err(Error::ShapeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    /// `unbroadcast_bias_vector_b_n_to_n`.
+    fn unbroadcast_bias_vector_b_n_to_n() {
+        // The reduction half of unbroadcast, which the equal-rank guard and
+        // the tail must not disturb: grad shape [4,3] (B=4, N=3), summed
+        // back to [3] (bias vector case).
+        let grad = matrix(
+            &[
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            4,
+            3,
+        );
+        let result = unbroadcast(&grad, &[3]).expect("the bias reduction runs");
+        assert_eq!(result.shape(), &[3]);
+        // Column sums: col0 = 1+4+7+10=22, col1 = 2+5+8+11=26, col2 = 3+6+9+12=30
+        assert_eq!(read(&result), vec![22.0, 26.0, 30.0]);
     }
 }

@@ -61,6 +61,7 @@ async function run() {
   await until(() => doc().querySelector("#chapter h1"), "initial chapter");
   check(doc().querySelectorAll("#chapter").length === 1, "expected one active chapter mount");
   check(!doc().querySelector("[data-chapter-body]"), "inactive chapter bodies were retained");
+  check(doc().querySelector("[data-version-base]"), "version switcher is missing");
 
   const initialTheme = doc().documentElement.dataset.theme;
   doc().getElementById("theme-toggle").click();
@@ -216,36 +217,53 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="incin-book-site-") as output:
         builder.SITE = Path(output)
-        builder.main()
-        SITE = Path(output)
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            with tempfile.TemporaryDirectory(prefix="incin-book-browser-") as profile:
-                command = [
-                    browser,
-                    "--headless=new",
-                    "--no-sandbox",
-                    "--disable-gpu",
-                    "--disable-dev-shm-usage",
-                    "--user-data-dir=" + profile,
-                    "--virtual-time-budget=12000",
-                    "--dump-dom",
-                    f"http://127.0.0.1:{server.server_port}/book-test.html",
-                ]
-                result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
-        finally:
-            server.shutdown()
-            thread.join(timeout=5)
+        builder.main(["--all"])
+        for label, served in (("stable", Path(output)), ("next", Path(output) / "next")):
+            SITE = served
+            verdict = serve_and_test(browser, served, label)
+            if verdict != 0:
+                return verdict
+        stable = (Path(output) / "chapters.json").read_text(encoding="utf-8")
+        following = (Path(output) / "next" / "chapters.json").read_text(encoding="utf-8")
+        if "next_overview" not in following or "next_overview" in stable:
+            print("next site manifest does not carry the in-development chapters")
+            return 1
+    print("book browser checks passed: routing, history, theme, search, keyboard, DOM, base path (stable and next)")
+    return 0
+
+
+def serve_and_test(browser: str, served: Path, label: str) -> int:
+    global SITE
+    SITE = served
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory(prefix="incin-book-browser-") as profile:
+            command = [
+                browser,
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--user-data-dir=" + profile,
+                "--virtual-time-budget=12000",
+                "--dump-dom",
+                f"http://127.0.0.1:{server.server_port}/book-test.html",
+            ]
+            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
 
     output = result.stdout + result.stderr
     passed, verdict = harness_verdict(output, "BOOK_TEST=" + "PASS")
     if result.returncode != 0 or not passed:
+        print(f"[{label}]")
         print(output)
         print("harness verdict: " + verdict)
         return 1
-    print("book browser checks passed: routing, history, theme, search, keyboard, DOM, base path")
+    print(f"book browser checks passed ({label}): routing, history, theme, search, keyboard, DOM, base path")
     return 0
 
 

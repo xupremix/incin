@@ -1,0 +1,17 @@
+error[E0271]: type mismatch resolving `<DimCons<UInt<UInt<UTerm, B1>, B1>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UTerm, B1>, Nil>>> as ReverseShape>::Output == DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>`
+  --> tests/compile_fail/where_cond_mask_enlarges_data.rs:15:18
+   |
+15 |     let _ = mask.where_cond(&on_true, &on_false);
+   |                  ^^^^^^^^^^ expected `DimCons<UInt<UInt<UTerm, B1>, B0>, ...>`, found `DimCons<UInt<UTerm, B1>, ...>`
+   |
+   = note: expected struct `DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>`
+              found struct `DimCons<UInt<UTerm, B1>, DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>>`
+   = note: required for `DimCons<UInt<UTerm, B1>, DimCons<UInt<UTerm, B1>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>>` to implement `BroadcastShape<DimCons<UInt<UInt<UTerm, B1>, B0>, DimCons<UInt<UInt<UTerm, B1>, B1>, Nil>>>`
+note: required by a bound in `indexing::<impl incin::prelude::Tensor<S, B, bool, G, incin::dist::Local, L>>::where_cond`
+  --> src/tensor/ops/manipulation/indexing.rs
+   |
+   |     pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad, L2: Layout<S2>>(
+   |            ---------- required by a bound in this associated function
+...
+   |         S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
+   |                                                         ^^^^^^^^^^^ required by this bound in `indexing::<impl Tensor<S, B, bool, G, Local, L>>::where_cond`

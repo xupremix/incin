@@ -738,3 +738,363 @@ fn conv2d_unbatched_gradients_match_the_batched_form_with_a_sliding_window() {
     assert_eq!(results[0].0.len(), 18);
     assert_eq!(results[0], results[1]);
 }
+
+// --- conv gradient coverage for the non-degenerate geometry ---
+//
+// The two gradchecks above both use `[1,1,4,4]` against a `[1,1,2,2]`
+// kernel with stride 1, no padding, no dilation and one group, and both
+// seed the backward with `sum_all`. That configuration is the one case
+// where conv's index arithmetic cannot go wrong: with one input channel,
+// one output channel, unit stride, no padding and no dilation, every
+// window starts at `(y * kh + ky, x * kw + kx)` - a single offset term,
+// and every weight element is used the same number of times. A defect in
+// the stride, padding, dilation or grouping arithmetic is invisible to it,
+// because that arithmetic is not exercised.
+//
+// So two things are added here. The geometry is varied across every
+// attribute, and each combination that mixes them. And the seed is a
+// distinct ramp over the output elements rather than `sum_all`'s uniform
+// one, which matters for the weight gradient specifically: under a uniform
+// seed the gradient w.r.t. a weight element is just the number of times it
+// is used, so two weight elements that are swapped between positions with
+// equal counts agree no matter how wrongly they were paired. A distinct
+// seed makes the pairing observable.
+//
+// Both gradients are checked, because they fail differently: `grad_input`
+// accumulates over all windows that touched a position, `grad_weight`
+// accumulates over all positions a kernel element landed on.
+
+/// A ramp of distinct, non-symmetric cotangents, one per output element.
+///
+/// A uniform seed would let a mispairing between two weight elements with
+/// equal usage counts go unnoticed; distinct values make the mispairing a
+/// disagreement.
+fn seed_ramp(n: usize) -> Vec<f32> {
+    (0..n)
+        .map(|i| ((i * 7 + 3) % 13) as f32 * 0.11 - 0.66)
+        .collect()
+}
+
+/// A storage of `shape` filled with `seed_ramp`. Deriving the element count
+/// from the shape removes a mistake these tests made twice while being
+/// written: a hand-counted buffer length that disagrees with the shape it is
+/// handed is caught as an allocation mismatch, several lines away from the
+/// arithmetic that was actually under test.
+fn seeded_tensor(shape: Vec<usize>) -> CpuStorage {
+    let elements: usize = shape.iter().product();
+    tensor(seed_ramp(elements), shape)
+}
+
+/// `conv2d` under a distinct per-element seed, for the given window and
+/// group count. Returns the weighted output sum as the scalar loss.
+fn conv2d_seeded_op(
+    inputs: &[CpuStorage],
+    window: Window2d,
+    groups: usize,
+) -> Result<CpuStorage, Error> {
+    let out = conv2d_windowed_impl::<Cpu, f32>(&inputs[0], &inputs[1], None, window, groups)?;
+    let seed = seeded_tensor(out.shape.dims().to_vec());
+    let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed)?;
+    crate::cpu::ops::reduce::sum_all(&weighted)
+}
+
+/// The same, with a bias included as a third differentiated input.
+fn conv2d_seeded_with_bias_op(inputs: &[CpuStorage]) -> Result<CpuStorage, Error> {
+    let out = conv2d_windowed_impl::<Cpu, f32>(
+        &inputs[0],
+        &inputs[1],
+        Some(&inputs[2]),
+        Window2d::isotropic(1, 0, 1),
+        1,
+    )?;
+    let seed = seeded_tensor(out.shape.dims().to_vec());
+    let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed)?;
+    crate::cpu::ops::reduce::sum_all(&weighted)
+}
+
+fn gradcheck_conv2d(
+    input_shape: Vec<usize>,
+    weight_shape: Vec<usize>,
+    window: Window2d,
+    groups: usize,
+) {
+    let input = seeded_tensor(input_shape);
+    let weight = seeded_tensor(weight_shape);
+    let op = |inputs: &[CpuStorage]| conv2d_seeded_op(inputs, window, groups).unwrap();
+    let max_rel_err = gradcheck(op, &[input, weight], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "conv2d gradcheck max relative error too high \
+         (stride={:?}, padding={:?}, dilation={:?}, groups={groups}): {max_rel_err}",
+        window.stride,
+        window.padding,
+        window.dilation
+    );
+}
+
+/// Stride 2: the output index advances by two, so an implementation that
+/// computed positions as if it advanced by one would still produce a
+/// correctly shaped result of the wrong values.
+#[test]
+fn conv2d_gradcheck_strided() {
+    gradcheck_conv2d(
+        vec![1, 2, 5, 5],
+        vec![3, 2, 2, 2],
+        Window2d::isotropic(2, 0, 1),
+        1,
+    );
+}
+
+/// Padding 1 with a 3x3 kernel: the first and last rows and columns of the
+/// output are computed entirely from zeros. A backward that forgets to skip
+/// the padded window contributes input gradient to positions the forward
+/// never read.
+#[test]
+fn conv2d_gradcheck_padded() {
+    gradcheck_conv2d(
+        vec![1, 2, 4, 4],
+        vec![3, 2, 3, 3],
+        Window2d::isotropic(1, 1, 1),
+        1,
+    );
+}
+
+/// Dilation 2 with a 3x3 kernel: the kernel reads every other element, so
+/// a backward that used a contiguous window would agree on the shape and on
+/// nothing else.
+#[test]
+fn conv2d_gradcheck_dilated() {
+    gradcheck_conv2d(
+        vec![1, 2, 5, 5],
+        vec![3, 2, 3, 3],
+        Window2d::isotropic(1, 0, 2),
+        1,
+    );
+}
+
+/// Two groups over two input channels: each group sees only its own slice
+/// of the input and produces its own slice of the output. A backward that
+/// summed the weight gradient across groups would double-count, and one
+/// that ignored the split would pair each kernel with the wrong channel.
+#[test]
+fn conv2d_gradcheck_groups() {
+    gradcheck_conv2d(
+        vec![1, 2, 4, 4],
+        vec![4, 1, 2, 2],
+        Window2d::isotropic(1, 0, 1),
+        2,
+    );
+}
+
+/// Every attribute at once, on a batched multi-channel input. This is the
+/// configuration a real model uses and the one the single-channel
+/// stride-1 case above shares no index arithmetic with.
+#[test]
+fn conv2d_gradcheck_batched_strided_padded_dilated() {
+    gradcheck_conv2d(
+        vec![2, 3, 7, 7],
+        vec![4, 3, 3, 3],
+        Window2d::isotropic(2, 1, 2),
+        1,
+    );
+}
+
+/// Asymmetric stride and padding: `Window2d` allows them independently, so
+/// the row and column offsets are separate terms and either can be wrong on
+/// its own.
+#[test]
+fn conv2d_gradcheck_asymmetric_stride_and_padding() {
+    gradcheck_conv2d(
+        vec![1, 2, 6, 6],
+        vec![3, 2, 2, 2],
+        Window2d {
+            stride: [2, 1],
+            padding: [1, 0],
+            dilation: [1, 1],
+        },
+        1,
+    );
+}
+
+/// The bias gradient is a plain sum over the spatial axes, but it is the
+/// one gradient whose *shape* reduction is easy to get wrong under a
+/// strided window, where the count per output channel is not uniform.
+#[test]
+fn conv2d_gradcheck_bias() {
+    let input = seeded_tensor(vec![1, 1, 4, 4]);
+    let weight = seeded_tensor(vec![1, 1, 2, 2]);
+    let bias = seeded_tensor(vec![1]);
+    let max_rel_err = gradcheck(
+        |inputs: &[CpuStorage]| conv2d_seeded_with_bias_op(inputs).unwrap(),
+        &[input, weight, bias],
+        F32_STEP,
+    );
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "conv2d bias gradcheck max relative error too high: {max_rel_err}"
+    );
+}
+
+/// `conv_transpose2d` under a distinct per-element seed.
+fn conv_transpose2d_seeded_op(
+    inputs: &[CpuStorage],
+    stride: usize,
+    padding: usize,
+    output_padding: usize,
+    dilation: usize,
+    groups: usize,
+) -> Result<CpuStorage, Error> {
+    let out = conv_transpose2d_impl::<Cpu, f32>(
+        &inputs[0],
+        &inputs[1],
+        None,
+        stride,
+        padding,
+        output_padding,
+        dilation,
+        groups,
+    )?;
+    let seed = seeded_tensor(out.shape.dims().to_vec());
+    let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed)?;
+    crate::cpu::ops::reduce::sum_all(&weighted)
+}
+
+fn gradcheck_conv_transpose2d(
+    input_shape: Vec<usize>,
+    weight_shape: Vec<usize>,
+    stride: usize,
+    padding: usize,
+    output_padding: usize,
+    dilation: usize,
+    groups: usize,
+) {
+    let input = seeded_tensor(input_shape);
+    let weight = seeded_tensor(weight_shape);
+    let op = |inputs: &[CpuStorage]| {
+        conv_transpose2d_seeded_op(inputs, stride, padding, output_padding, dilation, groups)
+            .unwrap()
+    };
+    let max_rel_err = gradcheck(op, &[input, weight], F32_STEP);
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "conv_transpose2d gradcheck max relative error too high \
+         (stride={stride}, padding={padding}, output_padding={output_padding}, \
+         dilation={dilation}, groups={groups}): {max_rel_err}"
+    );
+}
+
+/// Stride 2, which is the attribute that makes a transposed convolution
+/// overlap its scattered contributions: the output size is
+/// `(H - 1) * S - 2 * P + dilation * (K - 1) + output_padding + 1`, and the
+/// backward has to route each output element's cotangent back to the input
+/// and kernel positions that produced it through the same arithmetic.
+#[test]
+fn conv_transpose2d_gradcheck_strided() {
+    gradcheck_conv_transpose2d(vec![1, 2, 3, 3], vec![2, 3, 2, 2], 2, 0, 0, 1, 1);
+}
+
+/// Padding 1, which crops the scattered output on both sides. The forward
+/// writes into positions the output does not contain, and the backward has
+/// to drop exactly those contributions.
+#[test]
+fn conv_transpose2d_gradcheck_padded() {
+    gradcheck_conv_transpose2d(vec![1, 2, 4, 4], vec![2, 2, 3, 3], 1, 1, 0, 1, 1);
+}
+
+/// `output_padding` adds a row and column of contributions that no input
+/// position requested, so the backward has to attribute them to the kernel
+/// anyway.
+#[test]
+fn conv_transpose2d_gradcheck_output_padding() {
+    gradcheck_conv_transpose2d(vec![1, 1, 3, 3], vec![1, 1, 2, 2], 2, 1, 1, 1, 1);
+}
+
+/// Dilation 2 widens the scatter so contributions land on every other
+/// output element.
+#[test]
+fn conv_transpose2d_gradcheck_dilated() {
+    gradcheck_conv_transpose2d(vec![1, 1, 3, 3], vec![1, 1, 3, 3], 1, 0, 0, 2, 1);
+}
+
+/// Multi-channel in both directions, so the backward pairs each of the
+/// `Cin * Cout` kernel planes with the right input and output channels.
+#[test]
+fn conv_transpose2d_gradcheck_multichannel() {
+    gradcheck_conv_transpose2d(vec![1, 3, 3, 3], vec![3, 4, 2, 2], 2, 0, 1, 1, 1);
+}
+
+/// Every attribute at once on a batched input, which shares no index
+/// arithmetic with the stride-1 single-channel case above.
+#[test]
+fn conv_transpose2d_gradcheck_batched_strided_padded_dilated() {
+    gradcheck_conv_transpose2d(vec![2, 2, 4, 4], vec![2, 3, 2, 2], 2, 1, 1, 2, 1);
+}
+
+/// The bias gradient is the sum of the output cotangent over the non-channel
+/// axes, so it is reached by the backward of a *recorded* broadcast. Each of
+/// the three conv kernels folded the bias in with an inherent reshape and an
+/// untracked `add_storage`, neither of which records anything, and none of
+/// them produced a bias gradient on this backend - with no error, since a
+/// missing gradient is only visible to something that asks for one. These
+/// three tests fail on that code: `gradcheck` expects a gradient for every
+/// input it is handed, and there was none for the bias.
+///
+/// WGPU reached the same forward by a recorded reshape, broadcast and add,
+/// so this was a cross-backend disagreement about a gradient rather than a
+/// local numerical mistake.
+#[test]
+fn conv1d_gradcheck_bias() {
+    let input = seeded_tensor(vec![1, 2, 4]);
+    let weight = seeded_tensor(vec![3, 2, 2]);
+    let bias = seeded_tensor(vec![3]);
+    let max_rel_err = gradcheck(
+        |inputs: &[CpuStorage]| {
+            let out = conv1d_impl::<Cpu, f32>(&inputs[0], &inputs[1], Some(&inputs[2]), 1, 0, 1, 1)
+                .unwrap();
+            let seed = seeded_tensor(out.shape.dims().to_vec());
+            let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed).unwrap();
+            crate::cpu::ops::reduce::sum_all(&weighted).unwrap()
+        },
+        &[input, weight, bias],
+        F32_STEP,
+    );
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "conv1d bias gradcheck max relative error too high: {max_rel_err}"
+    );
+}
+
+/// The transposed convolution's bias, which is broadcast the other way: the
+/// output *grows* rather than shrinks, so the scatter that produces it adds
+/// contributions at positions no input asked for and the bias has to be
+/// summed over the whole enlarged output.
+#[test]
+fn conv_transpose2d_gradcheck_bias() {
+    let input = seeded_tensor(vec![1, 1, 2, 2]);
+    let weight = seeded_tensor(vec![1, 2, 2, 2]);
+    let bias = seeded_tensor(vec![2]);
+    let max_rel_err = gradcheck(
+        |inputs: &[CpuStorage]| {
+            let out = conv_transpose2d_impl::<Cpu, f32>(
+                &inputs[0],
+                &inputs[1],
+                Some(&inputs[2]),
+                2,
+                0,
+                0,
+                1,
+                1,
+            )
+            .unwrap();
+            let seed = seeded_tensor(out.shape.dims().to_vec());
+            let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed).unwrap();
+            crate::cpu::ops::reduce::sum_all(&weighted).unwrap()
+        },
+        &[input, weight, bias],
+        F32_STEP,
+    );
+    assert!(
+        max_rel_err < GRAD_TOL,
+        "conv_transpose2d bias gradcheck max relative error too high: {max_rel_err}"
+    );
+}

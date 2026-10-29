@@ -1,0 +1,23 @@
+error[E0308]: mismatched types
+  --> tests/compile_fail/backend_operations_rejects_incompatible_output.rs:32:33
+   |
+32 |         op::Zeros => Vec<f64> = scalar;
+   |                                 ^^^^^^
+   |                                 |
+   |                                 expected `Result<Vec<f64>, BackendError>`, found `Result<f64, BackendError>`
+   |                                 expected `Result<Vec<f64>, BackendError>` because of return type
+   |
+   = note: expected enum `Result<Vec<f64>, BackendError>`
+              found enum `Result<f64, BackendError>`
+
+error[E0308]: mismatched types
+  --> tests/compile_fail/backend_operations_rejects_incompatible_output.rs:32:33
+   |
+32 |         op::Zeros => Vec<f64> = scalar;
+   |                                 ^^^^^^
+   |                                 |
+   |                                 expected fn pointer, found fn item
+   |                                 expected because of the type of the constant
+   |
+   = note: expected fn pointer `for<'a, 'b> fn(&'a Backend, ExecutionRequest<'b, incin::backend_authoring::operations::op::Zeros, Backend>) -> Result<Vec<f64>, BackendError>`
+                 found fn item `for<'a, 'b> fn(&'a Backend, ExecutionRequest<'b, incin::backend_authoring::operations::op::Zeros, Backend>) -> Result<f64, BackendError> {scalar}`

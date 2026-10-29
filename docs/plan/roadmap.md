@@ -33,7 +33,7 @@ For what a *user* can rely on, read `docs/PROJECT_STATUS.md` and the generated
 | `gov` - governance & baselines | 7 | |
 | `grd` - autograd | 7 | Higher-order gradients are not in this set. |
 | `compile` - compile-time | 6 | |
-| `metal` - Metal backend | 6 | `MTL-001` only; the shader and MPS rows are what make it execute. |
+| `metal` - Metal backend | 6 | `MTL-001` through `MTL-006` are complete per `ledger.toml`; the shader and MPS infrastructure exists and the gap is operation coverage on top of it. |
 | `perf` - kernel performance | 5 | |
 | `rel` - release | 4 | |
 | **Total** | **101** | 31 rows carry recorded deviations. |
@@ -46,7 +46,7 @@ For what a *user* can rely on, read `docs/PROJECT_STATUS.md` and the generated
   capability query, and one `Execute<O>` path per operation, with a
   compile-time assertion in both directions that advertised rows and written
   executors are the same set.
-- **CPU completeness** - all 158 backend-executable catalog operations have CPU
+- **CPU completeness** - all 164 backend-executable catalog operations have CPU
   executors, and training runs on them.
 - **Autograd** - reverse-mode tape, `GRD-001..005`, finite-difference gradient
   checks across the CPU operation families.
@@ -56,8 +56,12 @@ For what a *user* can rely on, read `docs/PROJECT_STATUS.md` and the generated
 ### What's missing or weak
 
 - **GPU breadth** - CUDA, WGPU, and Metal cover arithmetic, reductions,
-  `matmul`, and convolution/pooling (plus unary activations on WGPU). None
-  covers normalization, loss, or embedding, so training is CPU-only.
+  `matmul`, and convolution/pooling (plus unary activations on WGPU). CUDA
+  additionally advertises the normalization family through `batch_norm`, the
+  loss functions, `embedding`, and `dropout`, all with training rows; WGPU
+  and Metal still lack losses, `embedding`, `dropout`, and group/instance
+  normalization. Counts are advertisement claims in `docs/capabilities.md`,
+  and verified training on this host is CPU-only.
 - **CPU kernel performance** - no SIMD in reduce, norm, pool, conv, or the
   non-f32 elementwise paths.
 - **Compiled/fused execution** - eager only; no op fusion, no graph-level

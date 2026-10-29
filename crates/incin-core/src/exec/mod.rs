@@ -35,6 +35,8 @@
 //! [`Execute<O>`](crate::backend_authoring::Execute) is now the descriptor consumer.
 //! Concrete backend execution consumes the canonical catalog descriptors.
 
+/// Dispatch-time autocast: allowlisted operand casting for mixed precision.
+pub mod autocast;
 /// Backend-neutral capability queries and registry resolution.
 pub mod capability;
 /// Canonical exact-operation inventory and typed descriptor vocabulary.
@@ -45,6 +47,7 @@ pub mod conformance;
 pub mod context;
 /// The production path from a canonical operation to native execution.
 pub mod dispatch;
+pub mod gradcheck;
 /// Checked physical storage metadata shared by all backends.
 pub mod meta;
 /// Backend-neutral execution policy vocabulary.
@@ -91,6 +94,7 @@ pub use conformance::{
 };
 pub use context::ExecutionContext;
 pub use dispatch::{CanonicalError, PolicyViolation};
+pub use gradcheck::{Disagreement, GradCheckOptions, GradCheckReport, GradCheckStorage, gradcheck};
 pub use meta::{Alignment, LayoutClass, MetaError, TensorMeta};
 #[cfg(feature = "std")]
 pub use policy::check_gradients;

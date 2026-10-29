@@ -46,6 +46,10 @@ impl<'de> serde::Deserialize<'de> for DTypeKey {
                 ("i64", 1) => return Ok(<i64 as ConstDType>::DESCRIPTOR.key()),
                 ("f16", 1) => return Ok(<half::f16 as ConstDType>::DESCRIPTOR.key()),
                 ("bf16", 1) => return Ok(<half::bf16 as ConstDType>::DESCRIPTOR.key()),
+                ("f8e4m3", 1) => return Ok(<F8E4M3 as ConstDType>::DESCRIPTOR.key()),
+                ("f8e5m2", 1) => return Ok(<F8E5M2 as ConstDType>::DESCRIPTOR.key()),
+                ("nvfp4", 1) => return Ok(<NVFP4 as ConstDType>::DESCRIPTOR.key()),
+                ("mxfp4", 1) => return Ok(<MXFP4 as ConstDType>::DESCRIPTOR.key()),
                 ("f32", 1) => return Ok(<f32 as ConstDType>::DESCRIPTOR.key()),
                 ("f64", 1) => return Ok(<f64 as ConstDType>::DESCRIPTOR.key()),
                 ("bool", 1) => return Ok(<bool as ConstDType>::DESCRIPTOR.key()),
@@ -54,11 +58,18 @@ impl<'de> serde::Deserialize<'de> for DTypeKey {
             }
         }
 
+        // Not a built-in. The registry is the only other place a `'static`
+        // descriptor for this key can come from, and the refusal below is the
+        // same one as before when it holds nothing matching: an unregistered
+        // key still fails loudly rather than being guessed at.
+        if let Some(descriptor) = DTypeRegistry::lookup_parts(&ns, &name, version) {
+            return Ok(descriptor.key());
+        }
+
         Err(serde::de::Error::custom(alloc::format!(
-            "Deserializing custom DTypeKey ({}, {}, {}) is not supported without a persistent DType registry",
-            ns,
-            name,
-            version
+            "Deserializing custom DTypeKey ({ns}, {name}, {version}) requires that dtype to be \
+             registered first: call DTypeRegistry::register(descriptor) at startup, before \
+             loading anything that mentions it"
         )))
     }
 }
@@ -114,7 +125,7 @@ pub enum DTypeKind {
     UnsignedInteger,
     /// Signed integer dtype (e.g. `i64`).
     SignedInteger,
-    /// Floating-point dtype (e.g. `f16`, `bf16`, `f32`, `f64`).
+    /// Floating-point dtype (e.g. `f16`, `bf16`, `f8e4m3`, `f8e5m2`, `f32`, `f64`).
     Float,
     /// Complex dtype (reserved for future use).
     Complex,
@@ -311,10 +322,14 @@ impl StorageEncoding {
 ///
 /// # Design boundary
 ///
-/// `TensorMeta`, capability registries, and the operation catalog still use
-/// [`DTypeId`] as their built-in runtime vocabulary. Migrating them to
-/// arbitrary descriptors will happen in a future phase. This boundary is
-/// intentional and documented.
+/// `TensorMeta`, capability registries, and the operation catalog are
+/// descriptor-driven: they accept arbitrary `DTypeDescriptor`s, including
+/// external custom dtypes. The closed [`DTypeId`] vocabulary remains only on
+/// the narrower surfaces listed on
+/// [`BuiltinDType`](crate::tensor::dtype::BuiltinDType) (distributed plan
+/// digests, collective-tuning keys, kernel-table lookups, and the
+/// `safetensors` snapshot export). Migrating those to descriptors is a future
+/// phase (issue #96). This boundary is intentional and documented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct DTypeDescriptor {
     key: DTypeKey,
@@ -482,6 +497,14 @@ pub enum DTypeId {
     I64,
     /// 16-bit brain floating point.
     BF16,
+    /// 8-bit floating point, OCP E4M3 (weights/activations). 1 byte per
+    /// element, `DTypeKind::Float`, max magnitude 448, saturating, no
+    /// infinities. See [`F8E4M3`](super::F8E4M3) for the conversion contract.
+    F8E4M3,
+    /// 8-bit floating point, OCP E5M2 (gradients). 1 byte per element,
+    /// `DTypeKind::Float`, max magnitude 57344. See
+    /// [`F8E5M2`](super::F8E5M2) for the conversion contract.
+    F8E5M2,
     /// 16-bit (IEEE 754 half-precision) floating point.
     F16,
     /// 32-bit floating point.
@@ -494,6 +517,21 @@ pub enum DTypeId {
     /// Logical: 32 values per block. Physical: one `f16` scale + 32 `i8`
     /// quants = 34 bytes per block.
     Q8_0,
+    /// NVFP4 block-scaled 4-bit float (issue #95).
+    ///
+    /// Logical: 16 E2M1 values per block. Physical: one FP8-E4M3 scale byte
+    /// plus 16 packed 4-bit values (8 bytes) = 9 bytes per block, interleaved
+    /// scale-first.
+    ///
+    /// The optional per-tensor FP32 global scale is data beside
+    /// the tensor, not part of this encoding.
+    NVFP4,
+    /// MXFP4 block-scaled 4-bit float (issue #95, OCP MX).
+    ///
+    /// Logical: 32 E2M1 values per block. Physical: one E8M0 scale byte +
+    /// 32 packed 4-bit values (16 bytes) = 17 bytes per block, interleaved
+    /// scale-first.
+    MXFP4,
     /// 8-bit logical boolean.
     Bool,
 }
@@ -530,6 +568,18 @@ impl DTypeId {
                 DTypeKind::Float,
                 StorageEncoding::scalar(2, 2),
             ),
+            DTypeId::F8E4M3 => DTypeDescriptor::builtin(
+                DTypeId::F8E4M3,
+                DTypeKey::new("incin", "f8e4m3", 1),
+                DTypeKind::Float,
+                StorageEncoding::scalar(1, 1),
+            ),
+            DTypeId::F8E5M2 => DTypeDescriptor::builtin(
+                DTypeId::F8E5M2,
+                DTypeKey::new("incin", "f8e5m2", 1),
+                DTypeKind::Float,
+                StorageEncoding::scalar(1, 1),
+            ),
             DTypeId::F16 => DTypeDescriptor::builtin(
                 DTypeId::F16,
                 DTypeKey::new("incin", "f16", 1),
@@ -554,6 +604,21 @@ impl DTypeId {
                 DTypeKind::Quantized,
                 // 32 logical i8 values + 1 f16 scale = 34 bytes, 2-byte aligned.
                 StorageEncoding::block(32, 34, 2),
+            ),
+            DTypeId::NVFP4 => DTypeDescriptor::builtin(
+                DTypeId::NVFP4,
+                DTypeKey::new("incin", "nvfp4", 1),
+                DTypeKind::Quantized,
+                // 16 logical E2M1 values + 1 FP8-E4M3 scale byte = 9 bytes.
+                // 9 is odd, so alignment is 1 (audit: 93-block-generalization).
+                StorageEncoding::block(16, 9, 1),
+            ),
+            DTypeId::MXFP4 => DTypeDescriptor::builtin(
+                DTypeId::MXFP4,
+                DTypeKey::new("incin", "mxfp4", 1),
+                DTypeKind::Quantized,
+                // 32 logical E2M1 values + 1 E8M0 scale byte = 17 bytes.
+                StorageEncoding::block(32, 17, 1),
             ),
             DTypeId::Bool => DTypeDescriptor::builtin(
                 DTypeId::Bool,
@@ -594,7 +659,7 @@ impl DTypeId {
         )
     }
 
-    /// True for `BF16`, `F16`, `F32`, `F64`.
+    /// True for `BF16`, `F16`, `F32`, `F64`, `F8E4M3`, `F8E5M2`.
     #[must_use]
     pub const fn is_float(self) -> bool {
         matches!(self.descriptor().kind(), DTypeKind::Float)
@@ -640,7 +705,10 @@ impl DTypeId {
     )]
     pub fn element_size(&self) -> usize {
         match self {
-            DTypeId::U8 | DTypeId::Q8_0 | DTypeId::Bool => 1,
+            DTypeId::U8 | DTypeId::Q8_0 | DTypeId::Bool | DTypeId::F8E4M3 | DTypeId::F8E5M2 => 1,
+            // Block dtypes have no scalar width; like Q8_0 above this arm is
+            // the documented-wrong compatibility value, never sizing truth.
+            DTypeId::NVFP4 | DTypeId::MXFP4 => 1,
             DTypeId::F16 | DTypeId::BF16 => 2,
             DTypeId::F32 | DTypeId::U32 => 4,
             DTypeId::F64 | DTypeId::I64 => 8,
@@ -691,5 +759,133 @@ impl DTypeId {
         operation: OperationKind,
     ) -> Result<usize, ShapeError> {
         self.encoding().size_bytes(elements, operation)
+    }
+}
+
+// ============================================================================
+// DTypeRegistry - the wire key's way back to a descriptor
+// ============================================================================
+
+/// Descriptors for dtypes this binary did not define, keyed by wire identity.
+///
+/// A `BTreeMap` rather than a `HashMap` so the store needs no hasher and no
+/// `std`, and behind `spin::Mutex` for the same reason
+/// [`TRACING_GRAPH`](crate::graph_recording) is: a process-wide table in a
+/// crate that builds without an allocator-plus-threads environment.
+static CUSTOM_DTYPES: spin::LazyLock<
+    spin::Mutex<alloc::collections::BTreeMap<DTypeKey, DTypeDescriptor>>,
+> = spin::LazyLock::new(|| spin::Mutex::new(alloc::collections::BTreeMap::new()));
+
+/// Process-wide map from a wire key back to the descriptor that defines it.
+///
+/// A custom dtype could already be defined, dispatched and executed:
+/// `CapabilityRule::dtypes` and `CapabilityQuery::dtype` are both
+/// [`DTypeDescriptor`]-keyed, so the capability layer never needed widening.
+/// What it could not do is survive a checkpoint. [`DTypeKey`] holds
+/// `&'static str`, and a key arriving off the wire holds owned `String`s, so
+/// deserializing one means finding the `'static` descriptor it names. For a
+/// built-in that is a match arm. For everything else there was nothing to
+/// match against, and the refusal said so.
+///
+/// This is that something. Built-ins are not stored here, because they are
+/// already reachable through those match arms and storing them would give the
+/// same key two sources of truth. A downstream crate registers its own dtypes
+/// once, at startup, before loading anything that mentions them.
+///
+/// ```rust
+/// # extern crate incin_core as incin;
+/// use incin_core::tensor::dtype::{
+///     DTypeDescriptor, DTypeKey, DTypeKind, DTypeRegistry, StorageEncoding,
+/// };
+///
+/// const PACKED: DTypeDescriptor = DTypeDescriptor::new(
+///     DTypeKey::new("mycrate", "packed3x5", 1),
+///     DTypeKind::Opaque,
+///     StorageEncoding::block(3, 5, 1),
+/// );
+///
+/// // Once, at startup, before loading anything that mentions it.
+/// DTypeRegistry::register(PACKED)?;
+/// assert_eq!(DTypeRegistry::lookup(PACKED.key()), Some(PACKED));
+/// # Ok::<(), incin_core::error::Error>(())
+/// ```
+///
+/// # Ordering
+///
+/// Registration has to happen before the load, not before first use. Nothing
+/// here can detect a late registration, because the failure it causes is a
+/// deserialize error that already happened.
+#[derive(Debug)]
+pub struct DTypeRegistry;
+
+impl DTypeRegistry {
+    /// Register a custom dtype so its key can be read back.
+    ///
+    /// Registering the same key twice with the same descriptor is idempotent,
+    /// which is what lets two independent crates depend on a third that
+    /// registers its own dtype without ordering themselves. Registering it
+    /// with a *different* descriptor is refused rather than applied: the
+    /// second caller's tensors would otherwise be read with the first
+    /// caller's encoding, which is a silent corruption rather than a load
+    /// failure.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::DTypeRegistration`](crate::err::Error::DTypeRegistration) if
+    /// the key is in the reserved `incin` namespace, or if it is already
+    /// registered with a descriptor that differs.
+    pub fn register(descriptor: DTypeDescriptor) -> crate::err::Result<()> {
+        let key = descriptor.key();
+        if key.namespace() == "incin" {
+            return Err(crate::err::Error::DTypeRegistration {
+                namespace: key.namespace(),
+                name: key.name(),
+                version: key.version(),
+                reason: "the `incin` namespace is reserved for built-in dtypes, which are \
+                         already readable without registration",
+            });
+        }
+        let mut registered = CUSTOM_DTYPES.lock();
+        match registered.get(&key) {
+            Some(existing) if *existing == descriptor => Ok(()),
+            Some(_) => Err(crate::err::Error::DTypeRegistration {
+                namespace: key.namespace(),
+                name: key.name(),
+                version: key.version(),
+                reason: "already registered with a different descriptor; bump the key's \
+                         version rather than redefining one that tensors may already use",
+            }),
+            None => {
+                registered.insert(key, descriptor);
+                Ok(())
+            }
+        }
+    }
+
+    /// The descriptor registered for `key`, if any.
+    ///
+    /// Built-in keys are not held here and answer `None`. Use
+    /// [`DTypeId::descriptor`] for those.
+    #[must_use]
+    pub fn lookup(key: DTypeKey) -> Option<DTypeDescriptor> {
+        CUSTOM_DTYPES.lock().get(&key).copied()
+    }
+
+    /// The descriptor registered under a key spelled out in owned parts.
+    ///
+    /// The form deserialization needs. A wire key is three owned values and
+    /// [`DTypeKey`] is three `'static` ones, so the comparison has to run on
+    /// contents rather than on a constructed key. A linear scan is right here:
+    /// the map holds the dtypes one process defined beyond the built-ins,
+    /// which is a handful, and storing owned duplicates to index it would put
+    /// the same strings in the table twice.
+    fn lookup_parts(namespace: &str, name: &str, version: u32) -> Option<DTypeDescriptor> {
+        CUSTOM_DTYPES
+            .lock()
+            .iter()
+            .find(|(key, _)| {
+                key.namespace() == namespace && key.name() == name && key.version() == version
+            })
+            .map(|(_, descriptor)| *descriptor)
     }
 }

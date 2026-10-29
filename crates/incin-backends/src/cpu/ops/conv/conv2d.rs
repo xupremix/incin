@@ -6,7 +6,6 @@ use incin_core::shapes::ShapeBuf;
 use incin_core::shapes::error::OperationKind;
 use incin_core::tensor::dtype::DType;
 
-use crate::cpu::ops::elementwise::add_storage;
 use crate::cpu::ops::matmul::{batched_matmul_impl, transpose_last2};
 use crate::cpu::ops::shape_ops::concat_storage;
 use crate::cpu::storage::CpuStorage;
@@ -172,12 +171,12 @@ pub(crate) fn conv2d_windowed_impl<D: incin_core::tensor::device::Device, K: DTy
         Some(bias) => {
             // One broadcast axis per output axis. Right-aligned broadcasting
             // would otherwise put the batch axis back on an unbatched result.
-            let bias_shaped = if unbatched {
-                bias.reshape(&[cout, 1, 1])?
+            let bcast_shape: Vec<usize> = if unbatched {
+                alloc::vec![cout, 1, 1]
             } else {
-                bias.reshape(&[1, cout, 1, 1])?
+                alloc::vec![1, cout, 1, 1]
             };
-            add_storage(&conv_out, &bias_shaped)
+            super::helpers::add_conv_bias_tracked(&conv_out, bias, &bcast_shape)
         }
         None => Ok(conv_out),
     }

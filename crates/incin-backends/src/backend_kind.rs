@@ -4,11 +4,11 @@ use incin_core::backend_authoring::{
     HostInterop, StorageBackend, StorageTransfer, SupportsDType, TransferTo, VariableBackend,
 };
 use incin_core::error::{Error, Result};
-#[cfg(test)]
+#[cfg(all(test, feature = "cpu"))]
 use incin_core::shapes::ShapeBuf;
-#[cfg(test)]
+#[cfg(all(test, feature = "cpu"))]
 use incin_core::shapes::dynamic::Dyn;
-#[cfg(test)]
+#[cfg(all(test, feature = "cpu"))]
 use incin_core::tensor::device::Cpu;
 use incin_core::tensor::device::Device;
 use incin_core::tensor::dtype::DType;
@@ -106,20 +106,32 @@ impl_transfer!(crate::dispatch::DispatchBackend<D>);
 
 #[cfg(test)]
 mod tests {
+    // The `cuda` and `wgpu` selection tests name their backend through a full
+    // `crate::` path, so everything the glob brings in serves the cpu tests.
+    #[cfg(feature = "cpu")]
     use super::*;
     use incin_core::backend_authoring::Backend;
     #[cfg(all(feature = "cpu", not(feature = "wgpu")))]
     use incin_core::error::BackendError;
+    // Every use of `Error` below is inside a `cpu`-gated test, so the import
+    // needs the same gate or a `cuda`-only build warns on it.
+    #[cfg(feature = "cpu")]
     use incin_core::error::Error;
     #[cfg(feature = "cpu")]
     use incin_core::exec::DescriptorError;
+    #[cfg(feature = "cpu")]
     use incin_core::nn::{LayerNorm, Linear};
+    #[cfg(feature = "cpu")]
     use incin_core::shapes::OperationKind;
+    #[cfg(feature = "cpu")]
     use incin_core::tensor::base::Tensor;
+    #[cfg(feature = "cpu")]
     use incin_core::tensor::device::DeviceId;
     #[cfg(feature = "cpu")]
     use incin_core::tensor::dtype::DTypeId;
+    #[cfg(feature = "cpu")]
     use incin_core::tensor::grad::{Grad, RequiresGrad};
+    #[cfg(feature = "cpu")]
     use incin_core::tensor::transfer::ToDevice;
     #[cfg(feature = "cpu")]
     type Linear23 = incin_core::shapes::shape::DimCons<

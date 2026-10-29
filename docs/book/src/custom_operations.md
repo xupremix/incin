@@ -8,7 +8,9 @@ There are three different forms of fusion:
    operation's existing `Execute` implementation. It does not add a second
    public operation hierarchy.
 3. Combining several graph nodes belongs to compiler lowering and is outside
-   this API task.
+   this API task. The preview `compiled` pipeline does exactly this via
+   `FusionPass` and the pointwise fuser — see
+   [Lowering: from descriptor to kernel](./deep_lowering.md#fusion-legality-checked-pointwise-groups-cmp-005).
 
 The executable authoring contract is exercised in
 `crates/incin-core/tests/custom_operation.rs` and the downstream backend
@@ -117,94 +119,197 @@ unchecked fields. If the operation is built from existing tensor methods
 instead, document it as a composition rather than as a new fused catalog
 entry.
 
-## Gradients: the other half of a custom operation
+A custom operation that only supports certain dtypes enforces that at two
+layers, and both must agree. `supports_custom` answers the capability query
+carrying the invocation's real dtype descriptor: return `Native` for the
+dtypes the kernel holds and `Unsupported` with a `CustomOperation` reason for
+everything else, so planners and dispatch refuse before launch. The kernel
+then re-checks the storage descriptor it actually received instead of
+trusting the advertisement. Compile-time bounds on the typed frontend are the
+third layer where the operation is reached through a generic tensor method.
+There is no silent narrowing anywhere in that chain: an unsupported dtype is
+a typed refusal naming the operation, never a quiet cast or a fallback
+backend.
 
-Everything above stops at the forward pass. An operation that only ever runs
-under inference can stop there too, and the seven-operand
-`crates/incin-backends/examples/calibration_update.rs` does. An operation that
-has to sit inside a training graph needs the other half: a rule that turns the
-gradient of its output back into one gradient per input.
+Custom autodiff works through public tape-record entry points, one per
+backend with a training tape: `incin_backends::cpu::tape_record` (and the
+lazy `tape_record_with`), `incin_backends::wgpu::tape_record`,
+`incin_backends::cuda::tape_record`, and `incin_backends::metal::tape_record`.
+Inside `Execute<YourOperation>`, run the forward kernel, then record a core
+`TapeNode`: the output id, the input ids in recipe order, and a `backward`
+closure mapping one output gradient to one gradient per input, capturing its
+saved values by move. The node joins the same thread-local tape the
+built-in kernels record on, under the same `GradMode` gate, so mixed graphs
+walk as one graph and `AutogradBackend::backward` returns gradients for
+custom inputs alongside built-in ones. The recipe must be validated like any
+other: hand-derived gradients cross-checked against central finite
+differences, `NoGrad` asserting nothing is recorded, and capability refusals
+for dtypes the kernel does not hold. Unless a custom operation records this
+way or is composed from existing differentiable tensor operations, document
+it as forward-only.
 
-There is no registration hook for that. Nothing discovers an
-`impl Backward for MyOperation`, and the catalog has no differentiability
-column a custom row could set. What there is instead is the tape the built-in
-operations already use, and every piece of it except one push site is public:
-you write the backward recipe, assemble it into core `TapeNode`s, and hand
-those to the same reverse walk the CPU backend calls.
+## Experimental: expression-DSL pointwise ops
 
-### First, check whether you need to write one at all
-
-If the operation is expressible as a composition of existing differentiable
-tensor methods, write it that way and stop there. Each method in the
-composition records its own tape entry as it runs, the `loss.backward()` of
-[Autograd](./autograd.md) already walks through the whole chain, and there is
-no recipe of yours to get wrong. Document the result as a composition rather
-than as a new fused catalog entry, as above.
-
-The rest of this section is for the case where a single fused kernel *is* the
-point. That kernel runs as one opaque step, so nothing gets recorded unless
-you record it.
-
-### The recipe is a `TapeNode`
-
-```rust,ignore
-use incin_core::exec::TapeStorage as _; // brings `.id()` into scope
-use incin_core::exec::tape::TapeNode;
-
-// The kernel has already produced `out` from `input`. Record how to run it
-// backwards. `saved` is moved into the closure: the recipe needs the forward
-// input, and nothing else is going to keep it alive.
-let saved = input.clone();
-let node = TapeNode {
-    output_id: out.id(),
-    input_ids: vec![input.id()],
-    backward: Box::new(move |grad_out: &MyStorage| {
-        // One contribution per id in `input_ids`, in that order.
-        Ok(vec![my_elementwise_mul(grad_out, &saved)?])
-    }),
-};
-```
-
-The type is three fields and no more: the id of the value the operation
-produced, the ids of the values it consumed, and a
-`Fn(&S) -> Result<Vec<S>>` that maps the output's gradient to one contribution
-per input. The returned vector is positional -- `contributions[i]` belongs to
-`input_ids[i]` -- and returning a shorter vector silently drops the gradients
-of the inputs it does not cover, because the walk zips the two together.
-
-Two properties of that shape are worth stating outright, because in both
-cases the natural first guess is the other one.
-
-**Saved values are captured, not declared.** There is no `saved_tensors`
-field. Whatever the derivative needs -- the forward inputs, an argmax index
-map, a normalization constant -- is moved into the closure, which is what
-keeps `TapeNode` backend-neutral: the core never names a storage type it would
-otherwise have to hold. It is also why a node that gets refused releases its
-saved values immediately, since they live in the `Box` that is dropped.
-
-**One node names one output.** `output_id` is a single id, so an operation
-that returns two values records *two* nodes that share the same `input_ids`.
-Each recipe receives only the gradient of its own output:
+Separate from the three forms above — and **experimental**, not part of the
+stable authoring contract — `incin_backends::codegen::dsl` exposes an
+expression DSL for single-kernel pointwise custom ops. `define_unary_custom_op`,
+`define_unary_custom_op` and `define_binary_custom_op` take a closure over
+the codegen IR (`IrExpr`) and build a `KernelDefinition`: the forward
+expression plus one symbolically derived backward derivative per input,
+computed by the same `IrExpr::diff` that the shipped fused-unary-backward
+path runs.
 
 ```rust,ignore
-// x = r cos(theta) and y = r sin(theta): two outputs, two nodes, both naming
-// the same two inputs.
-let node_x = TapeNode {
-    output_id: x.id(),
-    input_ids: vec![radius.id(), theta.id()],
-    // dx/dr = cos(theta), dx/dtheta = -r sin(theta)
-    backward: Box::new(move |grad_x: &MyStorage| { /* ... */ }),
-};
-let node_y = TapeNode {
-    output_id: y.id(),
-    input_ids: vec![radius.id(), theta.id()],
-    // dy/dr = sin(theta), dy/dtheta =  r cos(theta)
-    backward: Box::new(move |grad_y: &MyStorage| { /* ... */ }),
-};
+use incin_backends::codegen::{define_unary_custom_op, sigmoid};
+use incin_core::tensor::dtype::DTypeId;
+
+let swish = define_unary_custom_op("swish", DTypeId::F32, |x| {
+    let s = sigmoid(x.clone());
+    x * s
+});
 ```
 
-Neither recipe adds the two contributions to `radius` together. That is the
-walk's job.
+Two executors take that definition:
+
+- `codegen::CpuJitKernel` evaluates forward and backward on the host as a
+  per-element tree-walking interpreter over `f64`. It is a reference — the CPU
+  twin a hardware result is checked against — not a zero-overhead runtime and
+  not the path a production CPU operation takes.
+- `codegen::CudaJitKernel` renders the definition to CUDA C and compiles it
+  through the production NVRTC dispatcher, caching the module per device.
+
+What it deliberately does not do: it defines no `Operation`, adds no catalog
+row, and participates in no capability admission — a DSL op is not reachable
+through tensor methods or `dispatch::execute`. Wiring one into the library is
+form 1 above; the DSL is for kernels launched directly while the surface
+moves, and it may change without a major bump. The whole path — symbolic
+derivatives, CPU reference numbers, NVRTC compilation — is exercised by
+`crates/incin-backends/tests/codegen_ir_pipeline.rs` and the ignored
+hardware suite in `crates/incin-backends/tests/codegen_nvrtc_smoke.rs`.
+
+The same IR ships inside ordinary kernels: `codegen::fragment::lower_scalar`
+renders an `IrExpr` into the body slot the scalar kernel templates fill — see
+[Lowering: from descriptor to kernel](./deep_lowering.md#fusion-legality-checked-pointwise-groups-cmp-005).
+
+## Training a custom operation, end to end
+
+What follows is the whole pattern, condensed from the executed fixture in
+`crates/incin-core/tests/custom_training.rs` (CPU; WGPU and CUDA twins live
+beside it in `crates/incin-backends/tests/`). The `DifferentiableOp` trait
+carries the pattern: implement a forward kernel and a backward rule as pure
+functions over one backend's storage, and a blanket `Execute` implementation
+builds the node, derives its identities, checks admission, and records. A
+custom `square` operation, `y = x^2`, training through the standard backward
+pass:
+
+```rust,ignore
+use incin_core::backend_authoring::DifferentiableOp;
+
+impl DifferentiableOp<CpuBackendImpl<Cpu>> for Square {
+    type Dtype = f32;
+    type Saved = CpuStorage; // what forward saves: the input itself
+
+    fn supports(query: &CapabilityQuery) -> SupportLevel {
+        // f32 only: anything else is refused before launch, never executed
+        // against a dtype the kernel was not written for.
+        ...
+    }
+
+    fn forward(inputs: &[CpuStorage], _attributes: &NoAttributes)
+        -> Result<(CpuStorage, Self::Saved), BackendError>
+    {
+        let x = /* the single input */;
+        let out = /* elementwise x^2 into fresh storage (fresh id) */;
+        Ok((out, x))
+    }
+
+    // Both halves receive the invocation's attributes. `Square` has none, but
+    // an operation whose derivative depends on its configuration (a leaky
+    // ReLU's slope) reads it here rather than copying it into `Saved`.
+    fn backward(saved: &CpuStorage, _attributes: &NoAttributes, grad_out: &CpuStorage)
+        -> Result<Vec<CpuStorage>, incin_core::error::Error>
+    {
+        Ok(vec![/* 2 * saved * grad_out, same shape */])
+    }
+}
+
+// Call it, and train through the standard pass. No handle and no execution
+// context, and the shape, dtype, device and gradient marker are not restated,
+// because `x` already carries all four:
+let y = x.apply_op::<Square>(NoAttributes)?;
+let grads = y.sum_all()?.backward()?; // walks built-in and custom nodes as one
+
+// Several inputs, or an output shape that differs from the input's:
+// `apply_op_n` adds the one thing that cannot be inherited from `x`. The extra
+// operands are borrowed storage rather than borrowed tensors, so each is free
+// to have a shape of its own.
+let joined = x.apply_op_n::<Concat2<f32>, s![6]>(&[w.inner()], NoAttributes, expected)?;
+```
+
+How many implementations an operation needs is a question about how its
+kernel is written, not a property of the trait. A recipe written as a hand
+loop over one buffer variant covers that dtype on that backend, so covering a
+second means a second implementation, conventionally via a generic wrapper. A
+recipe written as dispatched built-in operations covers every backend that
+implements them and every dtype they accept, from one implementation; the
+dtype has to appear in the self type rather than only in the associated type,
+because an impl type parameter that appears nowhere in the self type is
+rejected (E0207). `crates/incin-core/tests/custom_op_composition.rs` is the
+worked example. Which to write is a performance question: a fused kernel is
+still one implementation per backend, and a composed one is not. The same file
+holds the two-input, shape-changing case, which is `apply_op_n`'s reason to
+exist: a concatenation whose operands are `s![4]` and `s![2]` and whose result
+is `s![6]`, three shapes that are three distinct Rust types, none of them
+derivable from the receiver. Multi-output
+operations keep the explicit `tape_record` path — one node per output
+cannot be derived from a single return type, and that shape is rare enough
+to deserve spelling out (the polar example is the reference).
+
+Three details carry the soundness, and all three are pinned by the fixture
+rather than left as advice. First, the recipe returns one gradient per
+input in input order, and the walk refuses a count mismatch instead of
+zipping silently — while a swapped pair still trains the wrong tensor with
+the right numbers, which is what the finite-difference sweep is for.
+Second, `try_from_storage` moves the storage rather than rebuilding it, so
+the recorded output id still matches and the custom node stays reachable.
+Third, the fixture sweeps the hand-derived gradient against central finite
+differences, asserts a `NoGrad` forward records nothing, and drives an
+`f16` input at the `f32`-only kernel to prove the refusal happens before
+any kernel runs. That sweep is `incin_core::exec::gradcheck`, which is public
+and backend generic: hand it a scalar-output closure and its inputs and it
+walks every element, with a step size already chosen for the dtype and a
+report that names which element disagreed and by how much. The deep autograd
+chapter covers what its output means. Run it before trusting a recipe: a
+wrong forward kernel produces visibly wrong numbers, and a wrong recipe
+produces a model that trains slightly worse.
+
+A recipe that records nothing at all is caught earlier, and not by you. The
+conformance oracle runs every tuple whose capability row claims `training`
+with recording enabled and fails the row if no node reached the tape, so an
+operation that advertises training and forgets its backward is a test
+failure rather than a hole in somebody's graph.
+
+The remaining seam for a multi-output operation is the explicit per-backend
+`tape_record` path, which is public on all four training backends: one node
+per output cannot be derived from a single return type, so there is no
+`DifferentiableOp` blanket impl for this shape. An in-tree backend moves its
+backward recipes into its `Execute` impl and records them there via
+`tape_record`, so custom and built-in nodes share one graph. A foreign backend
+does the same with its own thread-local over the public core `Tape` type,
+walked by the same `incin_core::exec::tape::backward` the CPU backend calls.
+A single-output in-tree operation skips the hand-built nodes entirely and
+implements `DifferentiableOp` instead. Everything else a differentiable custom
+operation needs is public, and `crates/incin-backends/examples/polar_cartesian.rs`
+shows it end to end, run by CI rather than only built. Polar-to-Cartesian takes
+two inputs and returns two outputs -- the multi-output inference a
+single-output catalog row cannot express, run through the typed dispatch path
+via `execute_shaped_n` with one `ShapeValue` per output -- with a backward
+recipe per output assembled into core `TapeNode`s and walked by the same
+`incin_core::exec::tape::backward` the CPU backend calls. The example checks
+the forward values and the hand-derived gradients against textbook answers,
+sweeps every input element against central finite differences, asserts the
+contract refusals, and then fits `(r, theta)` to a target point by gradient
+descent through nothing but its own backward.
 
 ### The walk accumulates; the recipe shapes
 
@@ -219,15 +324,15 @@ let d_radius = grads
 
 `tape::backward` seeds the loss with ones, walks the nodes in reverse
 insertion order, and for an input that already holds a gradient **sums** the
-new contribution into it rather than overwriting. That accumulation is the
-reason both halves of the two-output operation above can name the same inputs
-and still come out right. It is also the step that was silently wrong back
-when each backend carried its own copy of the walk: one contribution was
-inserted over the other rather than added to it. The walk is written once in
-the core now, and its accumulation has no overwrite spelling.
+new contribution into it rather than overwriting. That accumulation is why
+both halves of a two-output operation can name the same inputs and still come
+out right. It is also the step that was silently wrong when each backend
+carried its own copy of the walk: one contribution was inserted over the
+other rather than added to it. The walk is written once in the core now, and
+its accumulation has no overwrite spelling.
 
-The division of labour between the two is precise, and getting it backwards
-produces gradients that are wrong only for some shapes:
+The division of labour between the walk and the recipe is precise, and
+getting it backwards produces gradients that are wrong only for some shapes:
 
 - **The walk never broadcasts.** `TapeStorage::accumulate` assumes both
   operands already have the target's shape.
@@ -235,62 +340,26 @@ produces gradients that are wrong only for some shapes:
   operand -- a bias vector added across a batch, a scalar multiplied into a
   matrix -- the recipe has to sum the incoming gradient back down to that
   operand's shape before returning it. The CPU backend keeps an `unbroadcast`
-  helper for this, but it is `pub(crate)`; an out-of-tree backend writes its
-  own reduction.
+  helper for exactly this, but it is `pub(crate)`; an out-of-tree backend
+  writes its own reduction.
 
 Three more contract details the signature encodes:
 
 - `backward` takes the nodes **by value**. A recipe may itself record -- every
   convolution backward on the CPU backend does -- so a walk still holding the
-  tape would re-enter it. Drain first; there is no spelling that lets you
-  avoid it.
-- A second `backward` from the same loss returns only the seed. The nodes were
-  consumed by the first one, and running a recipe twice would double every
-  gradient it feeds.
+  tape would re-enter it. Drain first; there is no spelling that avoids it.
+- A second `backward` from the same loss **fails** with
+  `BackwardError::GraphConsumed`. The nodes were consumed by the first walk,
+  and running a recipe twice would double every gradient it feeds; a
+  seed-only `Ok` would read like a successful gradient while training on
+  nothing.
 - `tape::backward_with_seed(nodes, &loss, &seed)` takes an explicit output
-  cotangent instead of ones, which is what you want for a
-  vector-Jacobian product or a non-scalar output.
+  cotangent instead of ones, which is what a vector-Jacobian product or a
+  non-scalar output needs.
 
 An operation whose recipes call tape-recording operations should run the walk
 inside `GradMode::Disabled.scope(..)`, as the CPU backend's `backward` does,
 so the backward pass does not record a graph of its own.
-
-### The one seam: where the nodes get pushed
-
-An in-tree backend owns a thread-local tape and pushes onto it from inside
-`Execute`, so its custom nodes and its built-in ones land on one graph and a
-single `loss.backward()` walks all of them:
-
-```rust,ignore
-// Inside `impl Execute<PolarToCartesian> for CpuBackendImpl`. `tape` here is
-// the backend's own `crate::cpu::tape`, not `incin_core::exec::tape`; both
-// `push_with` and `TapeEntry` are `pub(crate)` to that backend.
-let (x, y) = /* the fused kernel */;
-tape::push_with(|| TapeEntry { output_id: x.id(), /* ... */ });
-tape::push_with(|| TapeEntry { output_id: y.id(), /* ... */ });
-Ok((x, y))
-```
-
-`push_with` takes a closure rather than a node because it consults the ambient
-`GradMode` first: under `NoGrad` the entry is never built, so a `NoGrad`
-forward pass does not allocate a boxed closure and an id vector per operation
-for a value nothing can read. On the way out, the backend drains only the
-graph reachable from the loss, leaving any unrelated live graph on the same
-thread for its own `backward`.
-
-That push is the seam an external crate cannot reach: the thread-local is
-`pub(crate)` by design. An out-of-tree backend therefore owns its node list
-itself and calls `tape::backward` on it directly. Prefer a core
-`incin_core::exec::Tape<S>` for that, rather than a bare `Vec<TapeNode<S>>`:
-`Tape::push` is where the `GradMode` gate lives, so a plain vector records
-nodes under `GradMode::Disabled` that should never have been recorded, and
-you would have to check `GradMode::current().records()` at every call site
-yourself. `Tape::drain_reachable(loss.id())` then hands `backward` exactly
-the nodes it needs.
-
-The recipes and the walk are identical either way -- only the ownership of the
-node list differs -- so a recipe developed out-of-tree moves into an `Execute`
-impl unchanged if the operation is later upstreamed.
 
 ### A new backend implements `TapeStorage`
 
@@ -317,59 +386,22 @@ impl TapeStorage for MyStorage {
 }
 ```
 
-Reusing the built-in `CpuStorage` -- as a custom operation on the CPU backend
-does -- means this is already implemented and there is nothing to write.
+A custom operation on an in-tree backend reuses that backend's storage, so
+this is already implemented and there is nothing to write.
 
-### Checking that the gradient is actually right
+### One note on the step size
 
-A backward recipe is the part of a custom operation that fails quietly. A
-wrong forward kernel produces visibly wrong numbers; a wrong recipe produces a
-model that trains slightly worse, which is not a signal anyone can act on.
-Check it numerically before trusting it.
-
-There is no public gradcheck helper -- the crate's own lives in
-`crates/incin-backends/src/cpu/gradcheck.rs` and is `pub(crate)` -- so the
-check is a short central-difference sweep you write yourself:
-
-```rust,ignore
-// Perturb one input element, re-run the forward, and compare the slope
-// against the analytic gradient for that element. Sweep every element:
-// a single spot check will not catch an accumulation that overwrites
-// instead of summing.
-let eps = 1e-5;
-let numeric = (loss_at(&plus) - loss_at(&minus)) / (2.0 * eps);
-let denominator = analytic.abs().max(numeric.abs()).max(1e-6);
-assert!((analytic - numeric).abs() / denominator < 1e-4);
-```
-
-Two practical notes on the step size. In `f64`, `1e-5` is comfortable. In
-`f32` it is not: the rounding term of a central difference scales as `1/eps`,
-and the step that minimizes total error is around `(6 * f32::EPSILON).cbrt()`,
-roughly `1e-2` -- two orders of magnitude larger than the `1e-4` that looks
-conservative and in fact sits at the noise floor, where a real defect and a
-rounding artifact are indistinguishable. Prefer `f64` for the check where the
-operation admits it.
+`gradcheck` picks its own step from the dtype, and the number is worth knowing
+before you override it or write a sweep by hand. In `f64`, `1e-5` is
+comfortable. In `f32` it is not: the rounding term of a central difference
+grows as `1 / step` while truncation grows as `step^2`, and the two meet near
+`(6 * f32::EPSILON).cbrt()`, about `9e-3`. The `1e-4` that looks conservative
+is roughly a hundredth of that and sits at its own noise floor, where a real
+defect and a rounding artifact are indistinguishable. `GradCheckOptions::for_f32`
+therefore steps by `1e-2`, and `for_f64` by `1e-5`.
 
 `incin_core::exec::check_gradients` is *not* this check, despite the name. It
-installs `NanPolicy::Reject` for the enclosed code, which makes the walk stop
-at the first non-finite contribution and name the tensor it appeared on
-instead of letting a `NaN` propagate to the optimizer. That finds where a
-gradient exploded; it says nothing about whether a finite gradient is the
-right number.
-
-### The worked example
-
-`crates/incin-backends/examples/polar_cartesian.rs` is all of the above end to
-end, and CI runs it rather than only building it. Polar-to-Cartesian takes two
-inputs and returns two outputs -- the multi-output inference a single-output
-catalog row cannot express, dispatched through `execute_shaped_n` with one
-shape proof per output -- with a backward recipe per output assembled into
-core `TapeNode`s and walked by `incin_core::exec::tape::backward`. It checks
-the forward values and the hand-derived gradients against textbook answers,
-sweeps every input element against central finite differences, asserts the
-per-operand contract refusals, and then fits `(r, theta)` to a target point by
-gradient descent through nothing but its own backward:
-
-```text
-cargo run -p incin-backends --features cpu --example polar_cartesian
-```
+installs `NanPolicy::Reject` for the enclosed code, so the walk stops at the
+first non-finite contribution and names the tensor it appeared on instead of
+letting a `NaN` reach the optimizer. That finds where a gradient exploded; it
+says nothing about whether a finite gradient is the right number.

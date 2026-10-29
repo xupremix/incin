@@ -1,10 +1,16 @@
 //! CUDA launchers for Q8_0 quantization kernels.
+//!
+//! Since #106(b) `quantize` accepts every float storage dtype
+//! (`FLOAT_DTYPES`): `quantize_entry_point` picks the typed kernel entry
+//! for the input's dtype, so no buffer is ever reinterpreted as the wrong
+//! type. The capability row already advertised `FLOAT_DTYPES`; the f32-only
+//! `cuda_require_f32` gate that made that row a lie is gone.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::shapes::error::OperationKind;
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 #[cfg(feature = "cuda")]
 const QUANT_SRC: &str = include_str!("kernels/quant.cu");
@@ -18,8 +24,31 @@ fn ensure_quant_loaded(device_id: usize) -> Result<()> {
     Ok(())
 }
 
+/// The quantize entry point for a storage dtype, or a typed refusal for
+/// anything `quant.cu` does not export (`i64`/`bool`/`q8_0`/`u8`/`u32`).
+/// Fail-closed by construction: the launcher launches exactly this name, so
+/// a dtype without an entry can never reach a buffer reinterpreted as the
+/// wrong type.
+#[cfg(feature = "cuda")]
+fn quantize_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok("quantize_q8_0"),
+        Some(DTypeId::F64) => Ok("quantize_q8_0_f64"),
+        Some(DTypeId::F16) => Ok("quantize_q8_0_f16"),
+        Some(DTypeId::BF16) => Ok("quantize_q8_0_bf16"),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op: "quantize",
+        }),
+    }
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
+    // Selects the entry point and refuses every dtype without one, before
+    // any buffer is reinterpreted (replaces the old f32-only gate).
+    let entry_point = quantize_entry_point(input.buffer.dtype)?;
     let total_numel = input.shape.iter().product::<usize>();
     if total_numel % 32 != 0 {
         return Err(Error::Msg(format!(
@@ -32,7 +61,7 @@ pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
     let device_id = input.buffer.device_id;
     ensure_quant_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("quant", "quantize_q8_0")?;
+    let function = dispatcher.get_function("quant", entry_point)?;
     let stream = input.buffer.device.default_stream();
 
     let mut out_buffer = CudaBuffer {
@@ -58,7 +87,9 @@ pub(crate) fn launch_quantize_q8_0(input: &CudaStorage) -> Result<CudaStorage> {
         };
         let num_blocks_i32 = crate::cuda::checked_i32(num_blocks, "quantize block count")?;
 
-        // SAFETY: Launches Q8_0 quantize kernel with verified block count and output byte allocation.
+        // SAFETY: Launches the typed Q8_0 quantize kernel with verified block
+        // count and output byte allocation; `quantize_entry_point` above
+        // established that the entry's type really is this buffer's dtype.
         unsafe {
             let out_u8 = Arc::get_mut(&mut out_buffer.data)
                 .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
@@ -139,27 +170,71 @@ pub(crate) fn launch_quantized_matmul_q8_0(
     lhs: &CudaStorage,
     rhs: &CudaStorage,
 ) -> Result<CudaStorage> {
-    if lhs.shape.len() != 2 || rhs.shape.len() != 2 {
+    // Canonical Q8_0xQ8_0 contract (issue #3, Option A), mirroring
+    // `cpu/ops/quant.rs::quantized_matmul_storage`: both operands are
+    // packed Q8_0, `lhs` is `[..., K]`, `rhs` is exactly `[N, K]`, and the
+    // output is `[..., N]` f32. Anything else is refused before any buffer
+    // reaches the launch, so a buffer can never be reinterpreted as the
+    // wrong type.
+    if lhs.shape.len() < 2 || rhs.shape.len() != 2 {
         return Err(Error::Msg(format!(
-            "CUDA quantized_matmul requires 2D matrices, got lhs {:?}, rhs {:?}",
+            "CUDA quantized_matmul requires lhs rank at least two and rank-two rhs [N, K], got lhs {:?}, rhs {:?}",
             lhs.shape, rhs.shape
         )));
     }
-    let (m, k) = (lhs.shape[0], lhs.shape[1]);
-    let (k2, n) = (rhs.shape[0], rhs.shape[1]);
+    for storage in [lhs, rhs] {
+        if storage.buffer.dtype != DTypeId::Q8_0.descriptor() {
+            return Err(Error::UnsupportedDType {
+                dtype: storage.buffer.dtype,
+                backend: "Cuda",
+                op: "quantized_matmul",
+            });
+        }
+    }
+    if lhs.buffer.device_id != rhs.buffer.device_id {
+        return Err(Error::DeviceMismatch {
+            left: incin_core::tensor::device::DeviceId::cuda(lhs.buffer.device_id),
+            right: incin_core::tensor::device::DeviceId::cuda(rhs.buffer.device_id),
+        });
+    }
+    // The kernel indexes both operands as flat row-major block rows
+    // (`A[row * blocks + kb]`, `B[col * blocks + kb]`) with no stride or
+    // offset parameters, so a strided view or a non-zero offset would be
+    // misread.
+    for (name, storage) in [("lhs", lhs), ("rhs", rhs)] {
+        let expected = crate::layout::contiguous_strides(&storage.shape);
+        if storage.strides.strides() != expected.strides() || storage.offset_elements != 0 {
+            return Err(Error::Msg(format!(
+                "CUDA quantized_matmul requires contiguous {name} storage at offset 0 \
+                 (the kernel reads flat buffers); got strides {:?}, offset {}",
+                storage.strides.strides(),
+                storage.offset_elements
+            )));
+        }
+    }
+    // Geometry follows the catalog (`inference.rs`): `rhs` is `[N, K]`,
+    // `lhs` contracts on its trailing axis, and the output replaces that
+    // axis with `N`. The row count `m` flattens every leading axis so a
+    // batched lhs `[B, M, K]` writes `[B, M, N]` through the same flat
+    // indexing the CPU kernel uses - never a silently wrong `[m, n]`.
+    let (n, k2) = (rhs.shape[0], rhs.shape[1]);
+    let k = lhs.shape[lhs.shape.len() - 1];
+    let m = crate::bytes::checked_numel(&lhs.shape[..lhs.shape.len() - 1])?;
     if k != k2 {
         return Err(Error::Msg(format!(
-            "CUDA quantized_matmul dimension mismatch: lhs shape {:?}, rhs shape {:?}",
-            lhs.shape, rhs.shape
+            "CUDA quantized_matmul K mismatch: {} != {} (lhs shape {:?}, rhs shape {:?})",
+            k, k2, lhs.shape, rhs.shape
         )));
     }
-    if k % 32 != 0 {
+    if !k.is_multiple_of(32) {
         return Err(Error::Msg(format!(
             "CUDA quantized_matmul requires K to be a multiple of 32, got {k}"
         )));
     }
 
-    let out_shape = vec![m, n];
+    let mut out_shape = lhs.shape.to_vec();
+    let out_len = out_shape.len();
+    out_shape[out_len - 1] = n;
     let out_numel = m * n;
     let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::MatMul)?;
 
@@ -192,7 +267,10 @@ pub(crate) fn launch_quantized_matmul_q8_0(
         let n_i32 = crate::cuda::checked_i32(n, "quantized matmul n")?;
         let k_i32 = crate::cuda::checked_i32(k, "quantized matmul k")?;
 
-        // SAFETY: Launches Q8_0 quantized matmul kernel with verified matrix dimensions.
+        // SAFETY: Launches the Q8_0xQ8_0 quantized matmul kernel with
+        // verified matrix geometry, Q8_0 dtypes on both operands (matching
+        // the kernel's `const BlockQ8_0* A, const BlockQ8_0* B`
+        // signature), a shared device, and flat contiguous operands.
         unsafe {
             let out_u8 = Arc::get_mut(&mut out_buffer.data)
                 .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;

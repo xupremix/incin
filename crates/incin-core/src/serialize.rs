@@ -1,13 +1,21 @@
 #[cfg(feature = "std")]
-use crate::err::{Error, Result};
+use crate::err::{Error, ErrorMessage, Result};
 #[cfg(feature = "std")]
 use crate::nn::{StatePath, StateRole, StateSnapshot, StateValue};
+#[cfg(feature = "std")]
+use crate::shapes::Dyn;
 #[cfg(feature = "std")]
 use crate::shapes::ShapeBuf;
 #[cfg(feature = "std")]
 use crate::tensor::backend::Backend;
 #[cfg(feature = "std")]
-use crate::tensor::dtype::{DTypeDescriptor, DTypeId};
+use crate::tensor::backend::HostInterop;
+#[cfg(feature = "std")]
+use crate::tensor::base::Tensor;
+#[cfg(feature = "std")]
+use crate::tensor::device::DeviceId;
+#[cfg(feature = "std")]
+use crate::tensor::dtype::{DType, DTypeDescriptor, DTypeId};
 #[cfg(feature = "std")]
 use crate::tensor::prelude::Device;
 #[cfg(feature = "std")]
@@ -21,6 +29,8 @@ fn safetensors_dtype(dtype: DTypeDescriptor) -> anyhow::Result<safetensors::tens
         Some(DTypeId::F64) => Ok(Dtype::F64),
         Some(DTypeId::F16) => Ok(Dtype::F16),
         Some(DTypeId::BF16) => Ok(Dtype::BF16),
+        Some(DTypeId::F8E4M3) => Ok(Dtype::F8_E4M3),
+        Some(DTypeId::F8E5M2) => Ok(Dtype::F8_E5M2),
         Some(DTypeId::U32) => Ok(Dtype::U32),
         Some(DTypeId::I64) => Ok(Dtype::I64),
         Some(DTypeId::U8) => Ok(Dtype::U8),
@@ -39,6 +49,8 @@ fn dtype_from_safetensors(dtype: safetensors::tensor::Dtype) -> anyhow::Result<D
         safetensors::tensor::Dtype::F64 => DTypeId::F64,
         safetensors::tensor::Dtype::F16 => DTypeId::F16,
         safetensors::tensor::Dtype::BF16 => DTypeId::BF16,
+        safetensors::tensor::Dtype::F8_E4M3 => DTypeId::F8E4M3,
+        safetensors::tensor::Dtype::F8_E5M2 => DTypeId::F8E5M2,
         safetensors::tensor::Dtype::U32 => DTypeId::U32,
         safetensors::tensor::Dtype::I64 => DTypeId::I64,
         safetensors::tensor::Dtype::U8 => DTypeId::U8,
@@ -129,107 +141,465 @@ fn looks_like_safetensors_index(path: &std::path::Path) -> bool {
         .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
 }
 
-/// Loads a sharded checkpoint through its validated
-/// [`SafetensorsIndex`](crate::nn::safetensors_index::SafetensorsIndex) as one
-/// logical state dictionary.
-///
-/// Shard iteration order is sorted shard name, and the final key order of the
-/// snapshot is deterministic because `StateSnapshot` is order-independent.
-/// Structural honesty checks mirror the index contract: a shard containing a
-/// tensor the index does not map, a tensor mapped to two shards, or an index
-/// claim its shard does not contain are all errors naming the tensor and
-/// shard. Sharded checkpoints are external artifacts by construction, so
-/// entries load under foreign-file semantics (no `incin.format.version`
-/// requirement).
+// ---------------------------------------------------------------------------
+// Streaming safetensors access.
+//
+// A safetensors file is an 8-byte little-endian header length, the header JSON,
+// then raw tensor bytes in header-declared ranges. Nothing in the format
+// requires the payload to be resident to know where anything lives, so every
+// loader below reads prefix and header first, validates the declared layout,
+// and then reads one tensor's byte range at a time. Peak host residency for
+// checkpoint bytes is therefore bounded by the larger of (header length,
+// largest single tensor) rather than by checkpoint size, and at most one
+// shard file is ever open.
+// ---------------------------------------------------------------------------
+
+/// Operation name for header/structure failures raised while opening a
+/// safetensors stream.
 #[cfg(feature = "std")]
-pub(crate) fn deserialize_snapshot_safetensors_index(
-    path: &std::path::Path,
-) -> anyhow::Result<StateSnapshot> {
-    use crate::nn::safetensors_index::SafetensorsIndex;
-    use alloc::collections::BTreeSet;
-    use alloc::string::String;
+const OP_OPEN_STREAM: &str = "open safetensors stream";
 
-    let index = SafetensorsIndex::open(path).map_err(|error| anyhow::anyhow!("{error}"))?;
+/// Operation name for index-level checks (`total_size`, shard cross-checks,
+/// the unreferenced-sibling scan).
+#[cfg(feature = "std")]
+const OP_LOAD_INDEX: &str = "load safetensors index";
 
-    if let Some(declared) = index.total_size() {
-        let mut actual = 0u64;
-        for shard in index.shards() {
-            let len = std::fs::metadata(index.shard_path(shard))
-                .map_err(|e| anyhow::anyhow!("statting shard `{shard}` failed: {e}"))?
-                .len();
-            actual = actual.saturating_add(len);
-        }
-        if actual != declared {
-            return Err(anyhow::anyhow!(
-                "index declares total_size {declared} but its shards total {actual} bytes"
-            ));
-        }
+/// Operation name for payload-byte reads and per-tensor value validation.
+#[cfg(feature = "std")]
+const OP_READ_TENSOR: &str = "read safetensors tensor";
+
+/// Mirror of safetensors's private `MAX_HEADER_SIZE`. The upstream crate caps
+/// header JSON at 100 MB and refuses anything larger before parsing; a reader
+/// that parses the header itself must apply the same cap or a hostile file
+/// could make it allocate without bound.
+#[cfg(feature = "std")]
+const MAX_SAFETENSORS_HEADER_BYTES: u64 = 100_000_000;
+
+/// The fixed-width little-endian prefix every safetensors file starts with.
+#[cfg(feature = "std")]
+const SAFETENSORS_PREFIX_LEN: usize = 8;
+
+#[cfg(feature = "std")]
+fn malformed_open(reason: impl AsRef<str>) -> Error {
+    Error::MalformedArtifact {
+        operation: OP_OPEN_STREAM,
+        artifact: "safetensors file",
+        reason: ErrorMessage::new(reason),
+    }
+}
+
+#[cfg(feature = "std")]
+fn malformed_shard(reason: impl AsRef<str>) -> Error {
+    Error::MalformedArtifact {
+        operation: OP_LOAD_INDEX,
+        artifact: "safetensors shard",
+        reason: ErrorMessage::new(reason),
+    }
+}
+
+#[cfg(feature = "std")]
+fn malformed_index(reason: impl AsRef<str>) -> Error {
+    Error::MalformedArtifact {
+        operation: OP_LOAD_INDEX,
+        artifact: "safetensors index",
+        reason: ErrorMessage::new(reason),
+    }
+}
+
+#[cfg(feature = "std")]
+fn io_open(message: impl AsRef<str>) -> Error {
+    Error::Io {
+        operation: OP_OPEN_STREAM,
+        message: ErrorMessage::new(message),
+    }
+}
+
+#[cfg(feature = "std")]
+fn io_index(message: impl AsRef<str>) -> Error {
+    Error::Io {
+        operation: OP_LOAD_INDEX,
+        message: ErrorMessage::new(message),
+    }
+}
+
+#[cfg(feature = "std")]
+fn io_read(message: impl AsRef<str>) -> Error {
+    Error::Io {
+        operation: OP_READ_TENSOR,
+        message: ErrorMessage::new(message),
+    }
+}
+
+/// Random-access byte reads over one checkpoint file.
+///
+/// Implementations return exactly `len` bytes or an `io::Error`; they never
+/// return a short buffer. The streaming loaders ask for the header and then
+/// one tensor range at a time, so a [`ByteSource`] is also the seam where a
+/// test can measure how large any single read ever gets and how many files
+/// are open at once, without instrumenting the filesystem itself.
+#[cfg(feature = "std")]
+pub(crate) trait ByteSource {
+    /// Total length of the underlying file, captured when it was opened.
+    fn len(&self) -> u64;
+
+    /// Reads exactly `len` bytes starting at `offset`.
+    fn read_exact_at(&mut self, offset: u64, len: usize) -> std::io::Result<Vec<u8>>;
+}
+
+/// A [`ByteSource`] over one file, opened once and seeked per read.
+#[cfg(feature = "std")]
+pub(crate) struct FileByteSource {
+    file: std::fs::File,
+    len: u64,
+}
+
+#[cfg(feature = "std")]
+impl FileByteSource {
+    /// Opens `path` and records its length, so later reads need no stat.
+    pub(crate) fn open(path: &std::path::Path) -> Result<Self> {
+        let file = std::fs::File::open(path).map_err(|e| {
+            io_open(format!(
+                "opening safetensors file {} failed: {e}",
+                path.display()
+            ))
+        })?;
+        let len = file
+            .metadata()
+            .map_err(|e| {
+                io_open(format!(
+                    "statting safetensors file {} failed: {e}",
+                    path.display()
+                ))
+            })?
+            .len();
+        Ok(Self { file, len })
+    }
+}
+
+#[cfg(feature = "std")]
+impl ByteSource for FileByteSource {
+    fn len(&self) -> u64 {
+        self.len
     }
 
-    let mut snapshot = StateSnapshot::new();
-    let mut loaded: BTreeSet<String> = BTreeSet::new();
-    for shard in index.shards() {
-        let bytes = index
-            .read_shard(shard)
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-        let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
-        let metadata = header.metadata();
-        let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
-        for (name, view) in tensors.tensors() {
-            match index.shard_of(&name) {
-                None => {
-                    return Err(anyhow::anyhow!(
-                        "shard `{shard}` contains tensor `{name}`, which the index does not map"
-                    ));
-                }
-                Some(owner) if owner != shard => {
-                    return Err(anyhow::anyhow!(
-                        "tensor `{name}` is mapped to shard `{owner}` but also appears in shard `{shard}`"
-                    ));
-                }
-                Some(_) => {}
+    fn read_exact_at(&mut self, offset: u64, len: usize) -> std::io::Result<Vec<u8>> {
+        use std::io::{Read, Seek, SeekFrom};
+        self.file.seek(SeekFrom::Start(offset))?;
+        let mut buffer = vec![0u8; len];
+        self.file.read_exact(&mut buffer)?;
+        Ok(buffer)
+    }
+}
+
+/// Opens a file through the default [`FileByteSource`].
+#[cfg(feature = "std")]
+fn open_file_source(path: &std::path::Path) -> Result<FileByteSource> {
+    FileByteSource::open(path)
+}
+
+/// A safetensors header read far enough to place its tensors: the validated
+/// [`safetensors::tensor::Metadata`] (offsets, sizes, and dtype/shape
+/// agreement are all proven by its `Deserialize` impl) and the byte offset
+/// where the data section begins.
+#[cfg(feature = "std")]
+struct ParsedHeader {
+    header: safetensors::tensor::Metadata,
+    data_start: u64,
+}
+
+/// Reads only the prefix and header JSON of one safetensors file.
+///
+/// `subject` is a human label for the file - ``shard `model-00001-of-00002.safetensors` ``
+/// or ``file `model.safetensors` `` - and is embedded in every error so a
+/// malformed header always names the file it came from.
+///
+/// This deliberately does *not* call `SafeTensors::read_metadata`: that
+/// function requires the full file in memory to compare the declared layout
+/// against a buffer length, which is exactly the whole-file residency this
+/// loader exists to avoid. The same end-condition - header bytes plus declared
+/// data bytes must equal the real file length - is re-derived here from the
+/// file's own length.
+#[cfg(feature = "std")]
+fn read_safetensors_header<S: ByteSource>(source: &mut S, subject: &str) -> Result<ParsedHeader> {
+    let file_len = source.len();
+    let prefix = source
+        .read_exact_at(0, SAFETENSORS_PREFIX_LEN)
+        .map_err(|e| {
+            io_open(format!(
+                "reading the safetensors header of {subject} failed: {e}"
+            ))
+        })?;
+    // `read_exact_at`'s contract is exactly `len` bytes or an error, so the
+    // slice conversion cannot fail; it is the length field the caller asked
+    // for, validated by that contract.
+    let header_len_u64 = u64::from_le_bytes(
+        prefix[..SAFETENSORS_PREFIX_LEN]
+            .try_into()
+            .expect("read_exact_at returned exactly the requested prefix length"),
+    );
+    if header_len_u64 > MAX_SAFETENSORS_HEADER_BYTES {
+        return Err(malformed_open(format!(
+            "{subject} declares a {header_len_u64}-byte header; safetensors headers are capped at \
+             {MAX_SAFETENSORS_HEADER_BYTES} bytes"
+        )));
+    }
+    let header_len = usize::try_from(header_len_u64).map_err(|_| {
+        malformed_open(format!(
+            "{subject}: header length {header_len_u64} does not fit this platform"
+        ))
+    })?;
+    let header_bytes = source
+        .read_exact_at(SAFETENSORS_PREFIX_LEN as u64, header_len)
+        .map_err(|e| {
+            io_open(format!(
+                "reading the safetensors header of {subject} failed: {e}"
+            ))
+        })?;
+    let text = core::str::from_utf8(&header_bytes).map_err(|e| {
+        malformed_open(format!(
+            "the safetensors header of {subject} is not valid UTF-8: {e}"
+        ))
+    })?;
+    let header: safetensors::tensor::Metadata = serde_json::from_str(text).map_err(|e| {
+        malformed_open(format!(
+            "the safetensors header of {subject} is invalid: {e}"
+        ))
+    })?;
+    let data_start = (SAFETENSORS_PREFIX_LEN as u64)
+        .checked_add(header_len as u64)
+        .ok_or_else(|| {
+            malformed_open(format!(
+                "the safetensors header of {subject} overflows this platform"
+            ))
+        })?;
+    let data_len = header.data_len() as u64;
+    let expected = data_start.checked_add(data_len).ok_or_else(|| {
+        malformed_open(format!(
+            "the safetensors header of {subject} declares an overflowing data length"
+        ))
+    })?;
+    if expected != file_len {
+        return Err(malformed_open(format!(
+            "the safetensors header of {subject} declares {expected} total bytes ({data_start} \
+             header + {data_len} data) but the file is {file_len} bytes"
+        )));
+    }
+    Ok(ParsedHeader { header, data_start })
+}
+
+/// Resolves a tensor's state role from `incin.state.role.<name>` header
+/// metadata, defaulting to [`StateRole::Parameter`] when the key is absent -
+/// which it always is for a genuinely foreign file.
+///
+/// The `Err` string is the historical message (`unknown state role ... for
+/// entry ...`); the caller wraps it with the file's subject label.
+#[cfg(feature = "std")]
+fn state_role_for(
+    header: &safetensors::tensor::Metadata,
+    name: &str,
+) -> core::result::Result<StateRole, String> {
+    match header
+        .metadata()
+        .as_ref()
+        .and_then(|items| items.get(&format!("incin.state.role.{name}")))
+    {
+        Some(role_str) => match role_str.as_str() {
+            "parameter" => Ok(StateRole::Parameter),
+            "buffer" => Ok(StateRole::Buffer),
+            other => Err(format!("unknown state role {other:?} for entry {name}")),
+        },
+        None => Ok(StateRole::Parameter),
+    }
+}
+
+/// Reads `incin.format.version` from a header, if the file carries one.
+#[cfg(feature = "std")]
+fn declared_state_format_version(
+    header: &safetensors::tensor::Metadata,
+) -> core::result::Result<Option<u32>, String> {
+    header
+        .metadata()
+        .as_ref()
+        .and_then(|items| items.get(STATE_FORMAT_VERSION_KEY))
+        .map(|raw| {
+            raw.parse::<u32>().map_err(|_| {
+                format!("safetensors state file has a non-numeric format version {raw:?}")
+            })
+        })
+        .transpose()
+}
+
+/// Applies the strict single-file version contract of [`ModelExt::load`]: a
+/// file that did not come from a versioned incin build cannot be assumed to
+/// follow incin's role and dtype conventions, so it is refused by name before
+/// any tensor is read.
+#[cfg(feature = "std")]
+fn require_state_format_version(header: &safetensors::tensor::Metadata) -> Result<()> {
+    let declared = declared_state_format_version(header).map_err(malformed_open)?;
+    accept_state_format_version(declared, "safetensors")
+        .map_err(|e| malformed_open(e.to_string()))?;
+    Ok(())
+}
+
+/// When a single safetensors file must prove it was written by a versioned
+/// incin build before incin assumes the file follows incin conventions.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VersionGate {
+    /// The `ModelExt::load` contract: version required.
+    StrictInc,
+    /// Runtime foreign-file loading (the Hugging Face Hub case): no version
+    /// requirement, roles honored when present.
+    Foreign,
+}
+
+/// One tensor's placement inside its shard: everything needed to read it by
+/// byte range without parsing the header again.
+#[cfg(feature = "std")]
+struct TensorPlan {
+    dtype: DTypeDescriptor,
+    shape: Vec<usize>,
+    /// Byte range relative to the shard's data-section start.
+    range: (u64, u64),
+    role: StateRole,
+}
+
+/// One file's validated, payload-free layout. Building this proves roles,
+/// dtypes, shapes, and offsets are well formed; reading [`TensorPlan`]s from
+/// it never consults the header again.
+#[cfg(feature = "std")]
+struct ShardLayout {
+    /// Human label naming the file inside errors.
+    subject: String,
+    path: std::path::PathBuf,
+    /// Byte offset where this file's data section begins.
+    data_start: u64,
+    /// Tensor plans in sorted-name order, so payload reads are deterministic.
+    tensors: BTreeMap<String, TensorPlan>,
+}
+
+/// Turns a parsed header into per-tensor plans, validating every role and
+/// dtype now - before any payload byte is read, and therefore before any
+/// live module state could be touched.
+#[cfg(feature = "std")]
+fn build_shard_layout(
+    subject: &str,
+    path: std::path::PathBuf,
+    parsed: ParsedHeader,
+) -> Result<ShardLayout> {
+    let header_tensors = parsed.header.tensors();
+    let mut names: Vec<&String> = header_tensors.keys().collect();
+    names.sort_unstable();
+    let mut tensors = BTreeMap::new();
+    for name in names {
+        let info = header_tensors[name];
+        let role = state_role_for(&parsed.header, name)
+            .map_err(|reason| malformed_open(format!("{subject}: {reason}")))?;
+        let dtype = dtype_from_safetensors(info.dtype)
+            .map_err(|e| malformed_open(format!("{subject}: tensor `{name}`: {e}")))?;
+        tensors.insert(
+            name.clone(),
+            TensorPlan {
+                dtype,
+                shape: info.shape.clone(),
+                range: (info.data_offsets.0 as u64, info.data_offsets.1 as u64),
+                role,
+            },
+        );
+    }
+    Ok(ShardLayout {
+        subject: subject.to_string(),
+        path,
+        data_start: parsed.data_start,
+        tensors,
+    })
+}
+
+/// Proves one shard's header and the index agree, name for name.
+///
+/// Both directions matter: a shard carrying a tensor the index does not map
+/// (or maps to a different shard) would let a later consumer see a file the
+/// index never mentions, and a tensor the index maps but the shard lacks
+/// would silently disappear. Historical message wording is preserved - these
+/// strings are part of the loader's tested contract.
+#[cfg(feature = "std")]
+fn cross_check_index_shard(
+    index: &crate::nn::safetensors_index::SafetensorsIndex,
+    shard: &str,
+    parsed: &ParsedHeader,
+) -> Result<()> {
+    let header_tensors = parsed.header.tensors();
+    let mut names: Vec<&String> = header_tensors.keys().collect();
+    names.sort_unstable();
+    for name in names {
+        match index.shard_of(name) {
+            None => {
+                return Err(malformed_shard(format!(
+                    "shard `{shard}` contains tensor `{name}`, which the index does not map"
+                )));
             }
-            loaded.insert(String::from(&name));
-            let role = match metadata
-                .as_ref()
-                .and_then(|items| items.get(&alloc::format!("incin.state.role.{name}")))
-            {
-                Some(role_str) => match role_str.as_str() {
-                    "parameter" => StateRole::Parameter,
-                    "buffer" => StateRole::Buffer,
-                    other => anyhow::bail!("unknown state role {other:?} for entry {name}"),
-                },
-                None => StateRole::Parameter,
-            };
-            snapshot.insert(
-                StatePath::new(name)?,
-                StateValue::new(
-                    ShapeBuf::from_slice(view.shape()),
-                    dtype_from_safetensors(view.dtype())?,
-                    view.data().to_vec(),
-                    role,
-                )?,
-            )?;
+            Some(owner) if owner != shard => {
+                return Err(malformed_shard(format!(
+                    "tensor `{name}` is mapped to shard `{owner}` but also appears in shard \
+                     `{shard}`"
+                )));
+            }
+            Some(_) => {}
         }
     }
-
-    for (name, shard) in index.tensors() {
-        if !loaded.contains(name) {
-            return Err(anyhow::anyhow!(
+    for (name, owner) in index.tensors() {
+        if owner == shard && !header_tensors.contains_key(name) {
+            return Err(malformed_shard(format!(
                 "the index maps tensor `{name}` to shard `{shard}`, which does not contain it"
-            ));
+            )));
         }
     }
+    Ok(())
+}
 
-    // Duplicate ownership also hides outside the map: a sibling shard the
-    // index never references can carry a copy of a mapped tensor, and
-    // whichever file a later consumer happens to open would silently win.
+/// Re-derives the index's optional `total_size` claim from the filesystem.
+///
+/// This stats without reading: byte residency is untouched, and the check
+/// keeps its historical messages (`statting shard ...`, `total_size`).
+#[cfg(feature = "std")]
+fn verify_total_size(index: &crate::nn::safetensors_index::SafetensorsIndex) -> Result<()> {
+    let Some(declared) = index.total_size() else {
+        return Ok(());
+    };
+    let mut actual = 0u64;
+    for shard in index.shards() {
+        let len = std::fs::metadata(index.shard_path(shard))
+            .map_err(|e| io_index(format!("statting shard `{shard}` failed: {e}")))?
+            .len();
+        actual = actual.saturating_add(len);
+    }
+    if actual != declared {
+        return Err(malformed_index(format!(
+            "index declares total_size {declared} but its shards total {actual} bytes"
+        )));
+    }
+    Ok(())
+}
+
+/// Scans `.safetensors` files in the checkpoint directory that the index
+/// never references, refusing any that duplicates a mapped tensor.
+///
+/// Duplicate ownership also hides outside the map: a sibling shard the index
+/// never references can carry a copy of a mapped tensor, and whichever file a
+/// later consumer happens to open would silently win. Only headers are read -
+/// names are all this check needs - so the scan stays inside the same
+/// bounded-residency contract as the rest of the loader.
+#[cfg(feature = "std")]
+fn scan_unreferenced_shards<S: ByteSource>(
+    index: &crate::nn::safetensors_index::SafetensorsIndex,
+    open: &impl Fn(&std::path::Path) -> Result<S>,
+) -> Result<()> {
     let mapped: std::collections::BTreeSet<&str> = index.shards().into_iter().collect();
     let entries = std::fs::read_dir(index.root())
-        .map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?;
+        .map_err(|e| io_index(format!("listing the checkpoint directory failed: {e}")))?;
     for entry in entries {
         let path = entry
-            .map_err(|e| anyhow::anyhow!("listing the checkpoint directory failed: {e}"))?
+            .map_err(|e| io_index(format!("listing the checkpoint directory failed: {e}")))?
             .path();
         let is_shard_file = path
             .extension()
@@ -243,17 +613,174 @@ pub(crate) fn deserialize_snapshot_safetensors_index(
         if !is_shard_file || mapped.contains(file_name.as_str()) {
             continue;
         }
-        let bytes = std::fs::read(&path)
-            .map_err(|e| anyhow::anyhow!("reading unreferenced shard `{file_name}` failed: {e}"))?;
-        let tensors = safetensors::SafeTensors::deserialize(&bytes)?;
-        for (name, _) in tensors.tensors() {
-            if let Some(owner) = index.shard_of(&name) {
-                return Err(anyhow::anyhow!(
-                    "tensor `{name}` is mapped to shard `{owner}` but also appears in unreferenced shard `{file_name}`"
-                ));
+        let mut source = open(&path).map_err(|e| {
+            io_index(format!(
+                "reading unreferenced shard `{file_name}` failed: {e}"
+            ))
+        })?;
+        let subject = format!("unreferenced shard `{file_name}`");
+        let parsed = read_safetensors_header(&mut source, &subject)?;
+        for name in parsed.header.tensors().keys() {
+            if let Some(owner) = index.shard_of(name) {
+                return Err(malformed_shard(format!(
+                    "tensor `{name}` is mapped to shard `{owner}` but also appears in unreferenced \
+                     shard `{file_name}`"
+                )));
             }
         }
     }
+    Ok(())
+}
+
+/// Reads one planned tensor's bytes from its (already open) source.
+///
+/// The range was proven to fit the file when the header was accepted
+/// (`data_start + data_len == file_len`), so an error here means the file
+/// changed on disk or the device failed mid-read - never that the header
+/// lied. Either way the failure names the tensor, the shard, the offset, and
+/// the length it wanted.
+#[cfg(feature = "std")]
+fn read_tensor_bytes<S: ByteSource>(
+    source: &mut S,
+    layout: &ShardLayout,
+    name: &str,
+    plan: &TensorPlan,
+) -> Result<Vec<u8>> {
+    // `Metadata::validate` proved end >= start at header-accept time.
+    let len_u64 = plan.range.1 - plan.range.0;
+    let len = usize::try_from(len_u64).map_err(|_| {
+        malformed_open(format!(
+            "tensor `{name}` in {} has a {len_u64}-byte payload that does not fit this platform",
+            layout.subject
+        ))
+    })?;
+    // Both addends are bounded by the file length the header check proved, so
+    // the sum cannot overflow.
+    let offset = layout.data_start + plan.range.0;
+    source.read_exact_at(offset, len).map_err(|e| {
+        io_read(format!(
+            "reading tensor `{name}` from {} at offset {offset} ({len} bytes) failed: {e}",
+            layout.subject
+        ))
+    })
+}
+
+/// Wraps raw bytes into a validated [`StateValue`], naming the tensor and
+/// file when the payload disagrees with its own header.
+#[cfg(feature = "std")]
+fn build_state_value(
+    name: &str,
+    subject: &str,
+    plan: &TensorPlan,
+    bytes: Vec<u8>,
+) -> Result<StateValue> {
+    StateValue::new(
+        ShapeBuf::from_slice(&plan.shape),
+        plan.dtype,
+        bytes,
+        plan.role,
+    )
+    .map_err(|e| Error::MalformedArtifact {
+        operation: OP_READ_TENSOR,
+        artifact: "safetensors tensor",
+        reason: ErrorMessage::new(format!("tensor `{name}` in {subject}: {e}")),
+    })
+}
+
+/// Streams every tensor of one layout into `snapshot`, one byte range at a
+/// time, in sorted-name order. The source stays open across the loop and is
+/// dropped by the caller, so a shard costs exactly one open for both its
+/// header and all of its payloads.
+#[cfg(feature = "std")]
+fn stream_layout_payloads_into<S: ByteSource>(
+    source: &mut S,
+    layout: &ShardLayout,
+    snapshot: &mut StateSnapshot,
+) -> Result<()> {
+    for (name, plan) in &layout.tensors {
+        let bytes = read_tensor_bytes(source, layout, name, plan)?;
+        let value = build_state_value(name, &layout.subject, plan, bytes)?;
+        snapshot.insert(StatePath::new(name)?, value)?;
+    }
+    Ok(())
+}
+
+/// Loads a sharded checkpoint through its validated
+/// [`SafetensorsIndex`](crate::nn::safetensors_index::SafetensorsIndex) as one
+/// logical state dictionary.
+///
+/// Shard iteration order is sorted shard name, and the final key order of the
+/// snapshot is deterministic because `StateSnapshot` is order-independent.
+/// Structural honesty checks mirror the index contract: a shard containing a
+/// tensor the index does not map, a tensor mapped to two shards, or an index
+/// claim its shard does not contain are all errors naming the tensor and
+/// shard. Sharded checkpoints are external artifacts by construction, so
+/// entries load under foreign-file semantics (no `incin.format.version`
+/// requirement).
+///
+/// Each shard is opened once: its header is validated and cross-checked
+/// against the index, then its tensors stream into the snapshot one byte
+/// range at a time, then it is closed before the next opens.
+#[cfg(feature = "std")]
+pub(crate) fn deserialize_snapshot_safetensors_index(
+    path: &std::path::Path,
+) -> anyhow::Result<StateSnapshot> {
+    deserialize_snapshot_safetensors_index_via(path, open_file_source)
+}
+
+/// Injectable-opener form of [`deserialize_snapshot_safetensors_index`],
+/// identical in behavior. Tests wrap `open` to instrument how large a single
+/// read ever gets and how many files are open at once.
+#[cfg(feature = "std")]
+pub(crate) fn deserialize_snapshot_safetensors_index_via<S, F>(
+    path: &std::path::Path,
+    open: F,
+) -> anyhow::Result<StateSnapshot>
+where
+    S: ByteSource,
+    F: Fn(&std::path::Path) -> Result<S>,
+{
+    use crate::nn::safetensors_index::SafetensorsIndex;
+
+    let index = SafetensorsIndex::open(path)?;
+    verify_total_size(&index)?;
+    let mut snapshot = StateSnapshot::new();
+    for shard in index.shards() {
+        let shard_path = index.shard_path(shard);
+        let mut source = open(&shard_path)?;
+        let subject = format!("shard `{shard}`");
+        let parsed = read_safetensors_header(&mut source, &subject)?;
+        cross_check_index_shard(&index, shard, &parsed)?;
+        let layout = build_shard_layout(&subject, shard_path, parsed)?;
+        stream_layout_payloads_into(&mut source, &layout, &mut snapshot)?;
+        // `source` drops here: one open file per shard, never two.
+    }
+    scan_unreferenced_shards(&index, &open)?;
+    Ok(snapshot)
+}
+
+/// Reads one single safetensors file into a snapshot under the given version
+/// contract, streaming payload bytes one tensor at a time through one open
+/// handle.
+#[cfg(feature = "std")]
+fn snapshot_from_single_file_via<S, F>(
+    path: &std::path::Path,
+    gate: VersionGate,
+    open: F,
+) -> Result<StateSnapshot>
+where
+    S: ByteSource,
+    F: Fn(&std::path::Path) -> Result<S>,
+{
+    let mut source = open(path)?;
+    let subject = format!("file `{}`", path.display());
+    let parsed = read_safetensors_header(&mut source, &subject)?;
+    if gate == VersionGate::StrictInc {
+        require_state_format_version(&parsed.header)?;
+    }
+    let layout = build_shard_layout(&subject, path.to_path_buf(), parsed)?;
+    let mut snapshot = StateSnapshot::new();
+    stream_layout_payloads_into(&mut source, &layout, &mut snapshot)?;
     Ok(snapshot)
 }
 
@@ -264,19 +791,11 @@ pub(crate) fn deserialize_snapshot_safetensors(
     if looks_like_safetensors_index(path) {
         return deserialize_snapshot_safetensors_index(path);
     }
-    let bytes = std::fs::read(path)?;
-    let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
-    let metadata = header.metadata().as_ref();
-    let declared = metadata
-        .and_then(|items| items.get(STATE_FORMAT_VERSION_KEY))
-        .map(|raw| {
-            raw.parse::<u32>().map_err(|_| {
-                anyhow::anyhow!("safetensors state file has a non-numeric format version {raw:?}")
-            })
-        })
-        .transpose()?;
-    accept_state_format_version(declared, "safetensors")?;
-    read_safetensors_entries(&bytes, metadata)
+    Ok(snapshot_from_single_file_via(
+        path,
+        VersionGate::StrictInc,
+        open_file_source,
+    )?)
 }
 
 /// Parses a safetensors file into backend-neutral owned state, without
@@ -298,39 +817,11 @@ pub(crate) fn deserialize_snapshot_safetensors(
 pub(crate) fn deserialize_snapshot_safetensors_foreign(
     path: &std::path::Path,
 ) -> anyhow::Result<StateSnapshot> {
-    let bytes = std::fs::read(path)?;
-    let (_, header) = safetensors::SafeTensors::read_metadata(&bytes)?;
-    read_safetensors_entries(&bytes, header.metadata().as_ref())
-}
-
-#[cfg(feature = "std")]
-fn read_safetensors_entries(
-    bytes: &[u8],
-    metadata: Option<&std::collections::HashMap<String, String>>,
-) -> anyhow::Result<StateSnapshot> {
-    let tensors = safetensors::SafeTensors::deserialize(bytes)?;
-    let mut snapshot = StateSnapshot::new();
-    for (name, view) in tensors.tensors() {
-        let role = match metadata.and_then(|items| items.get(&format!("incin.state.role.{}", name)))
-        {
-            Some(role_str) => match role_str.as_str() {
-                "parameter" => StateRole::Parameter,
-                "buffer" => StateRole::Buffer,
-                other => anyhow::bail!("unknown state role {other:?} for entry {name}"),
-            },
-            None => StateRole::Parameter,
-        };
-        snapshot.insert(
-            StatePath::new(name)?,
-            StateValue::new(
-                ShapeBuf::from_slice(view.shape()),
-                dtype_from_safetensors(view.dtype())?,
-                view.data().to_vec(),
-                role,
-            )?,
-        )?;
-    }
-    Ok(snapshot)
+    Ok(snapshot_from_single_file_via(
+        path,
+        VersionGate::Foreign,
+        open_file_source,
+    )?)
 }
 
 #[cfg(feature = "std")]
@@ -402,6 +893,568 @@ struct StateWireEntry {
     role: StateRole,
 }
 
+// ---------------------------------------------------------------------------
+// Training checkpoints.
+//
+// A training checkpoint is one file holding everything a run needs to
+// resume: the model state, the optimizer state, the scheduler position, and
+// the epoch count. It is a postcard envelope like
+// `serialize_snapshot_postcard`, but with its own magic and version, so a
+// model state file can never be misread as a checkpoint or the reverse. The
+// optimizer section stores the same [`StateValue`]s a model snapshot holds;
+// [`optimizer_tensors_to_snapshot`] and [`snapshot_to_optimizer_tensors`]
+// translate between those values and a concrete optimizer's
+// `BTreeMap<String, Tensor<Dyn, B, K>>` state dictionaries.
+// ---------------------------------------------------------------------------
+
+/// Magic heading every training checkpoint file (`"CKPT"`).
+///
+/// A postcard payload is not self-describing, so without this a model state
+/// file could decode as a checkpoint envelope (or fail deep inside one).
+/// The magic is checked before the version, and a mismatch is refused by
+/// name.
+//
+#[cfg(feature = "std")]
+const TRAINING_CHECKPOINT_MAGIC: u32 = 0x434B5054;
+
+/// Schema version of the training checkpoint envelope.
+///
+/// Bumped under the same rule as [`STATE_FORMAT_VERSION`]: when a reader of
+/// the previous version would misread a file rather than fail to parse it.
+#[cfg(feature = "std")]
+pub const TRAINING_CHECKPOINT_VERSION: u32 = 1;
+
+/// Which half of a [`TrainingCheckpoint`] an entry belongs to.
+///
+/// Carried by [`CheckpointError::Entry`] so a failure names the section it
+/// came from, not just the entry.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CheckpointSection {
+    /// The model state snapshot.
+    Model,
+    /// The optimizer state snapshot.
+    Optimizer,
+}
+
+#[cfg(feature = "std")]
+impl core::fmt::Display for CheckpointSection {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Model => f.write_str("model"),
+            Self::Optimizer => f.write_str("optimizer"),
+        }
+    }
+}
+
+/// Minimal serializable scheduler position for a training checkpoint.
+///
+/// The schedulers in `crate::optim` carry no serialization of their own, and
+/// this envelope must not reach into their private step counters. Instead the
+/// trainer's per-epoch scheduler hook counts the steps it took and records
+/// the last learning rate it observed; resuming a decay schedule means
+/// rebuilding the scheduler and advancing it `steps` times, which this state
+/// makes exact. `kind` names the scheduler family (e.g. `"linear"`) so a
+/// checkpoint restored against the wrong schedule fails by inspection rather
+/// than by silently continuing a different decay.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SchedulerState {
+    /// The scheduler family name, chosen by the caller.
+    pub kind: String,
+    /// How many scheduler steps had been taken when the checkpoint saved.
+    pub steps: u64,
+    /// The learning rate observed after the last step, if any was taken.
+    pub last_lr: Option<f64>,
+}
+
+#[cfg(feature = "std")]
+impl SchedulerState {
+    /// Records an explicit scheduler position.
+    pub fn new(kind: impl Into<String>, steps: u64, last_lr: Option<f64>) -> Self {
+        Self {
+            kind: kind.into(),
+            steps,
+            last_lr,
+        }
+    }
+
+    /// The position before any scheduler step: zero steps, no observed rate.
+    pub fn initial(kind: impl Into<String>) -> Self {
+        Self::new(kind, 0, None)
+    }
+}
+
+/// Why a training checkpoint could not be written or read back.
+///
+/// Every variant is typed: a version refusal names both versions, a section
+/// failure names the section and entry, and an optimizer restore against the
+/// wrong dtype names the entry and both descriptors.
+#[cfg(feature = "std")]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CheckpointError {
+    /// The checkpoint file could not be opened, read, or written.
+    #[error("training checkpoint file failed: {message}")]
+    Io {
+        /// What the filesystem refused.
+        message: String,
+    },
+    /// The file is not a training checkpoint envelope: not postcard, wrong
+    /// magic, or an entry that fails [`StateValue`] validation.
+    #[error("training checkpoint is not a checkpoint envelope: {message}")]
+    Codec {
+        /// What the decode refused.
+        message: String,
+    },
+    /// The file declares a format version this build cannot read.
+    #[error(
+        "training checkpoint declares format version {found}, but this build reads at most \
+         version {supported}; upgrade incin to read it"
+    )]
+    UnsupportedVersion {
+        /// The version the file declares.
+        found: u32,
+        /// The newest version this build reads.
+        supported: u32,
+    },
+    /// An optimizer entry's dtype does not match the dtype the caller
+    /// restores into.
+    #[error(
+        "training checkpoint optimizer entry `{name}` has dtype {found:?} but restores into \
+         `{expected:?}`"
+    )]
+    OptimizerDtypeMismatch {
+        /// The entry that disagrees.
+        name: String,
+        /// The dtype the caller asked to restore.
+        expected: DTypeDescriptor,
+        /// The dtype the file carries.
+        found: DTypeDescriptor,
+    },
+    /// One entry of one section failed to convert.
+    #[error("training checkpoint {section} entry `{name}` is invalid: {message}")]
+    Entry {
+        /// Which half of the checkpoint the entry belongs to.
+        section: CheckpointSection,
+        /// The entry that failed.
+        name: String,
+        /// What the conversion refused.
+        message: String,
+    },
+}
+
+#[cfg(feature = "std")]
+impl From<CheckpointError> for Error {
+    fn from(error: CheckpointError) -> Self {
+        Error::Msg(error.to_string())
+    }
+}
+
+/// Everything a training run needs to resume, as owned backend-neutral
+/// state.
+///
+/// `model` restores through `crate::nn::load_state`; `optimizer` restores
+/// through [`snapshot_to_optimizer_tensors`] followed by the optimizer's own
+/// `load_state_dict`, which re-validates every entry against the live
+/// parameters. `epoch` counts completed epochs, so resuming starts at
+/// `epoch`; `scheduler` is the hook-observed position documented on
+/// [`SchedulerState`].
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingCheckpoint {
+    /// Completed epochs when the checkpoint saved.
+    pub epoch: u64,
+    /// The scheduler position when the checkpoint saved.
+    pub scheduler: SchedulerState,
+    /// The model state snapshot.
+    pub model: StateSnapshot,
+    /// The optimizer state snapshot (see [`optimizer_tensors_to_snapshot`]).
+    pub optimizer: StateSnapshot,
+}
+
+#[cfg(feature = "std")]
+impl TrainingCheckpoint {
+    /// Assembles a checkpoint from its pieces.
+    pub fn new(
+        epoch: u64,
+        scheduler: SchedulerState,
+        model: StateSnapshot,
+        optimizer: StateSnapshot,
+    ) -> Self {
+        Self {
+            epoch,
+            scheduler,
+            model,
+            optimizer,
+        }
+    }
+}
+
+/// The postcard payload's outermost record. `magic` is first so a model state
+/// file offered as a checkpoint is refused on the marker rather than decoded
+/// as a shifted envelope; `version` is second so a newer checkpoint is
+/// refused on the number rather than on a field this build cannot interpret.
+#[cfg(feature = "std")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct TrainingCheckpointEnvelope {
+    magic: u32,
+    version: u32,
+    epoch: u64,
+    scheduler: SchedulerState,
+    model: StateSnapshot,
+    optimizer: StateSnapshot,
+}
+
+/// Writes `checkpoint` to `path` as one postcard envelope file.
+#[cfg(feature = "std")]
+pub fn save_training_checkpoint(
+    path: &std::path::Path,
+    checkpoint: &TrainingCheckpoint,
+) -> core::result::Result<(), CheckpointError> {
+    let envelope = TrainingCheckpointEnvelope {
+        magic: TRAINING_CHECKPOINT_MAGIC,
+        version: TRAINING_CHECKPOINT_VERSION,
+        epoch: checkpoint.epoch,
+        scheduler: checkpoint.scheduler.clone(),
+        model: checkpoint.model.clone(),
+        optimizer: checkpoint.optimizer.clone(),
+    };
+    let bytes = postcard::to_stdvec(&envelope).map_err(|error| CheckpointError::Codec {
+        message: alloc::format!("training checkpoint envelope does not encode: {error}"),
+    })?;
+    std::fs::write(path, bytes).map_err(|error| CheckpointError::Io {
+        message: alloc::format!(
+            "writing training checkpoint file {} failed: {error}",
+            path.display()
+        ),
+    })
+}
+
+/// Reads one [`save_training_checkpoint`] file back into its pieces.
+///
+/// The envelope's magic and version are proven before any entry is trusted;
+/// entry validation itself happens in the [`StateSnapshot`] deserialization,
+/// which refuses a malformed entry with its byte-length reason.
+#[cfg(feature = "std")]
+pub fn load_training_checkpoint(
+    path: &std::path::Path,
+) -> core::result::Result<TrainingCheckpoint, CheckpointError> {
+    let bytes = std::fs::read(path).map_err(|error| CheckpointError::Io {
+        message: alloc::format!(
+            "reading training checkpoint file {} failed: {error}",
+            path.display()
+        ),
+    })?;
+    let envelope: TrainingCheckpointEnvelope =
+        postcard::from_bytes(&bytes).map_err(|error| CheckpointError::Codec {
+            message: alloc::format!(
+                "training checkpoint file {} is not a checkpoint envelope: {error}",
+                path.display()
+            ),
+        })?;
+    if envelope.magic != TRAINING_CHECKPOINT_MAGIC {
+        return Err(CheckpointError::Codec {
+            message: alloc::format!(
+                "training checkpoint file {} carries an unrecognized marker; it was not written \
+                 by save_training_checkpoint",
+                path.display()
+            ),
+        });
+    }
+    if envelope.version > TRAINING_CHECKPOINT_VERSION {
+        return Err(CheckpointError::UnsupportedVersion {
+            found: envelope.version,
+            supported: TRAINING_CHECKPOINT_VERSION,
+        });
+    }
+    Ok(TrainingCheckpoint::new(
+        envelope.epoch,
+        envelope.scheduler,
+        envelope.model,
+        envelope.optimizer,
+    ))
+}
+
+/// Persists one optimizer state dictionary as snapshot entries, through the
+/// same [`StateValue`]s (and therefore the same tensor serialization) the
+/// model checkpoint path uses.
+///
+/// Entries travel under their dictionary keys with [`StateRole::Buffer`]:
+/// optimizer state is not a learnable parameter, and the role keeps the two
+/// halves of a checkpoint from ever merging silently. The per-tensor bytes
+/// come from [`HostInterop::to_bytes`], the dtype from the storage when the
+/// backend exposes one and from `K` otherwise.
+#[cfg(feature = "std")]
+pub fn optimizer_tensors_to_snapshot<B, K>(
+    dict: &BTreeMap<String, Tensor<Dyn, B, K>>,
+) -> core::result::Result<StateSnapshot, CheckpointError>
+where
+    B: Backend + HostInterop,
+    K: DType,
+{
+    let mut snapshot = StateSnapshot::new();
+    for (name, tensor) in dict {
+        let storage = tensor.inner();
+        let shape = B::shape(storage);
+        let dtype =
+            B::storage_dtype(storage).unwrap_or_else(|| K::descriptor(&K::Field::default()));
+        let bytes = B::to_bytes(storage).map_err(|error| CheckpointError::Entry {
+            section: CheckpointSection::Optimizer,
+            name: name.clone(),
+            message: error.to_string(),
+        })?;
+        let value = StateValue::new(shape, dtype, bytes, StateRole::Buffer).map_err(|error| {
+            CheckpointError::Entry {
+                section: CheckpointSection::Optimizer,
+                name: name.clone(),
+                message: error.to_string(),
+            }
+        })?;
+        snapshot
+            .insert(
+                StatePath::new(name).map_err(|error| CheckpointError::Entry {
+                    section: CheckpointSection::Optimizer,
+                    name: name.clone(),
+                    message: error.to_string(),
+                })?,
+                value,
+            )
+            .map_err(|error| CheckpointError::Entry {
+                section: CheckpointSection::Optimizer,
+                name: name.clone(),
+                message: error.to_string(),
+            })?;
+    }
+    Ok(snapshot)
+}
+
+/// Rebuilds an optimizer state dictionary from snapshot entries, for the
+/// optimizer's own `load_state_dict` to validate against the live
+/// parameters.
+///
+/// Every entry must carry `K`'s dtype: anything else is an
+/// [`CheckpointError::OptimizerDtypeMismatch`] naming the entry and both
+/// descriptors, never a silent reinterpretation. `device` names where the
+/// restored storages live and must agree with the backend (for example
+/// `DeviceId::cpu()` on the CPU backend); the optimizer's `load_state_dict`
+/// then re-checks shape, dtype, and placement against each live parameter,
+/// so a checkpoint restored onto a different model is refused there rather
+/// than applied.
+#[cfg(feature = "std")]
+pub fn snapshot_to_optimizer_tensors<B, K>(
+    snapshot: &StateSnapshot,
+    device: &DeviceId,
+) -> core::result::Result<BTreeMap<String, Tensor<Dyn, B, K>>, CheckpointError>
+where
+    B: Backend + HostInterop,
+    K: DType,
+{
+    let expected_dtype = K::descriptor(&K::Field::default());
+    let mut dict = BTreeMap::new();
+    for (path, value) in snapshot.iter() {
+        let name = path.as_str().to_string();
+        if value.dtype() != expected_dtype {
+            return Err(CheckpointError::OptimizerDtypeMismatch {
+                name,
+                expected: expected_dtype,
+                found: value.dtype(),
+            });
+        }
+        let storage = B::from_bytes(value.bytes(), value.shape().dims(), value.dtype(), device)
+            .map_err(|error| CheckpointError::Entry {
+                section: CheckpointSection::Optimizer,
+                name: name.clone(),
+                message: error.to_string(),
+            })?;
+        let tensor = Tensor::<Dyn, B, K>::from_parts(
+            storage,
+            value.shape().clone(),
+            K::Field::default(),
+            <B::Device as Device>::Field::default(),
+            core::marker::PhantomData,
+        )
+        .map_err(|error| CheckpointError::Entry {
+            section: CheckpointSection::Optimizer,
+            name: name.clone(),
+            message: error.to_string(),
+        })?;
+        dict.insert(name, tensor);
+    }
+    Ok(dict)
+}
+
+/// A [`crate::nn::state::StateStream`] over safetensors files: the `path` is
+/// either a sharded-checkpoint index or a single safetensors file, and every
+/// payload reaches the caller one tensor at a time.
+///
+/// Construction validates everything that does *not* require payload bytes -
+/// the index cross-checks, `total_size`, the unreferenced-sibling scan, and
+/// every shard's header, roles, and dtypes - closing each file before opening
+/// the next, so a checkpoint whose structure is wrong fails before the load
+/// has staged anything. During placement at most one shard file is open: the
+/// previous handle is dropped before the next is opened, and tensors are read
+/// by byte range from the cached handle rather than by re-reading or
+/// re-parsing the file. Single-file streams keep their one handle from
+/// construction onward.
+///
+/// `F` is the opener; injecting it is how tests count opens and measure the
+/// size of the largest single read without touching the filesystem.
+#[cfg(feature = "std")]
+pub(crate) struct SafetensorsStateStream<S, F> {
+    /// One layout per shard (exactly one for a single-file stream), in sorted
+    /// shard-name order for indexes.
+    layouts: Vec<ShardLayout>,
+    /// Tensor name to layout index; built only after cross-checks proved
+    /// every name has exactly one owner.
+    tensor_shard: BTreeMap<String, usize>,
+    /// The shard currently open, if any: `(layout index, handle)`.
+    active: Option<(usize, S)>,
+    open: F,
+}
+
+#[cfg(feature = "std")]
+impl<S, F> SafetensorsStateStream<S, F>
+where
+    S: ByteSource,
+    F: Fn(&std::path::Path) -> Result<S>,
+{
+    /// Opens `path` - index or single file - through `open`, validating all
+    /// header-level structure eagerly and leaving no shard open except, for a
+    /// single file, its own handle.
+    pub(crate) fn open_with(path: &std::path::Path, open: F) -> Result<Self> {
+        if looks_like_safetensors_index(path) {
+            Self::open_index(path, open)
+        } else {
+            Self::open_single(path, open)
+        }
+    }
+
+    fn open_index(path: &std::path::Path, open: F) -> Result<Self> {
+        use crate::nn::safetensors_index::SafetensorsIndex;
+
+        let index = SafetensorsIndex::open(path)?;
+        verify_total_size(&index)?;
+        let mut layouts = Vec::new();
+        for shard in index.shards() {
+            let shard_path = index.shard_path(shard);
+            let mut source = open(&shard_path)?;
+            let subject = format!("shard `{shard}`");
+            let parsed = read_safetensors_header(&mut source, &subject)?;
+            cross_check_index_shard(&index, shard, &parsed)?;
+            layouts.push(build_shard_layout(&subject, shard_path, parsed)?);
+            // `source` drops here: construction holds at most one open file.
+        }
+        scan_unreferenced_shards(&index, &open)?;
+        let mut tensor_shard = BTreeMap::new();
+        for (layout_index, layout) in layouts.iter().enumerate() {
+            for name in layout.tensors.keys() {
+                let previous = tensor_shard.insert(name.clone(), layout_index);
+                debug_assert!(
+                    previous.is_none(),
+                    "cross-checks proved every tensor has exactly one owning shard"
+                );
+            }
+        }
+        Ok(Self {
+            layouts,
+            tensor_shard,
+            active: None,
+            open,
+        })
+    }
+
+    fn open_single(path: &std::path::Path, open: F) -> Result<Self> {
+        let mut source = open(path)?;
+        let subject = format!("file `{}`", path.display());
+        let parsed = read_safetensors_header(&mut source, &subject)?;
+        require_state_format_version(&parsed.header)?;
+        let layout = build_shard_layout(&subject, path.to_path_buf(), parsed)?;
+        let layouts = vec![layout];
+        let mut tensor_shard = BTreeMap::new();
+        for name in layouts[0].tensors.keys() {
+            tensor_shard.insert(name.clone(), 0);
+        }
+        Ok(Self {
+            layouts,
+            tensor_shard,
+            active: Some((0, source)),
+            open,
+        })
+    }
+}
+
+#[cfg(feature = "std")]
+impl<S, F> crate::nn::state::StateStream for SafetensorsStateStream<S, F>
+where
+    S: ByteSource,
+    F: Fn(&std::path::Path) -> Result<S>,
+{
+    fn paths(&self) -> Result<alloc::collections::BTreeSet<StatePath>> {
+        let mut paths = alloc::collections::BTreeSet::new();
+        for layout in &self.layouts {
+            for name in layout.tensors.keys() {
+                paths.insert(StatePath::new(name)?);
+            }
+        }
+        Ok(paths)
+    }
+
+    fn read(&mut self, path: &StatePath) -> Result<StateValue> {
+        let name = path.as_str();
+        let &layout_index =
+            self.tensor_shard
+                .get(name)
+                .ok_or_else(|| Error::InvalidModuleState {
+                    operation: "load state",
+                    reason: ErrorMessage::new(format!("missing state path {path}")),
+                })?;
+        if self.active.as_ref().map(|(index, _)| *index) != Some(layout_index) {
+            // Close the previous shard before opening the next: the number of
+            // concurrently open files never exceeds one, including across the
+            // switch.
+            self.active = None;
+            let shard_path = self.layouts[layout_index].path.clone();
+            let source = (self.open)(&shard_path)?;
+            self.active = Some((layout_index, source));
+        }
+        let (active, layouts) = (&mut self.active, &self.layouts);
+        // The branch above leaves exactly this layout's handle in place (or
+        // errors), and `tensor_shard` was built from these same layouts.
+        let source = &mut active
+            .as_mut()
+            .expect("the active handle for this layout was ensured above")
+            .1;
+        let layout = &layouts[layout_index];
+        let plan = layout
+            .tensors
+            .get(name)
+            .expect("tensor_shard only points at names its layout contains");
+        let bytes = read_tensor_bytes(source, layout, name, plan)?;
+        build_state_value(name, &layout.subject, plan, bytes)
+    }
+}
+
+/// The concrete stream [`SafetensorsStateStream::open`] returns: real files,
+/// default opener.
+#[cfg(feature = "std")]
+type FileSafetensorsStream =
+    SafetensorsStateStream<FileByteSource, fn(&std::path::Path) -> Result<FileByteSource>>;
+
+#[cfg(feature = "std")]
+impl SafetensorsStateStream<FileByteSource, fn(&std::path::Path) -> Result<FileByteSource>> {
+    /// Opens `path` - a sharded index or a single safetensors file - with the
+    /// default file opener. Single files must satisfy the strict
+    /// [`ModelExt::load`] version contract; index files are external by
+    /// construction and need no version key.
+    pub(crate) fn open(path: &std::path::Path) -> Result<FileSafetensorsStream> {
+        SafetensorsStateStream::open_with(
+            path,
+            open_file_source as fn(&std::path::Path) -> Result<FileByteSource>,
+        )
+    }
+}
+
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Serialization formats modules understand.
@@ -457,19 +1510,31 @@ impl<
     where
         <<B as crate::tensor::backend::StorageBackend>::Device as Device>::Field: Default,
     {
-        let snapshot = match format {
-            Format::Safetensors => deserialize_snapshot_safetensors(path),
-            Format::Postcard => deserialize_snapshot_postcard(path),
-            Format::ONNX => return Err(Error::Msg("ONNX is not a state format".into())),
+        match format {
+            Format::Safetensors => {
+                // Streamed placement: the file is validated header-first and
+                // its tensors reach the module one at a time, so a failure
+                // at any leaf clears staging and leaves the module exactly as
+                // it was - the same failure-atomicity `load_state` provides
+                // for snapshots, without ever holding the whole checkpoint on
+                // the host.
+                let mut stream: FileSafetensorsStream = SafetensorsStateStream::open(path)?;
+                crate::nn::state::load_state_streaming::<B, _, _>(self, &mut stream)
+            }
+            Format::Postcard => {
+                let snapshot =
+                    deserialize_snapshot_postcard(path).map_err(|e| Error::Msg(e.to_string()))?;
+                crate::nn::load_state::<B, _>(self, &snapshot)
+            }
+            Format::ONNX => Err(Error::Msg("ONNX is not a state format".into())),
         }
-        .map_err(|e| Error::Msg(e.to_string()))?;
-        crate::nn::load_state::<B, _>(self, &snapshot)
     }
 }
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
+    use crate::nn::state::StateStream;
 
     fn fixture() -> StateSnapshot {
         let mut snapshot = StateSnapshot::new();
@@ -767,5 +1832,711 @@ mod tests {
             "the refusal must say what the file is not, got: {error}"
         );
         std::fs::remove_file(path).ok();
+    }
+
+    /// A [`ByteSource`] wrapper recording the size of every single read and
+    /// the high-water mark of concurrently open sources: the measurement seam
+    /// for bounded host residency (issue #13 acceptance 1). It wraps the real
+    /// file opener, so the production loaders run unchanged underneath it.
+    struct CountingSource {
+        inner: FileByteSource,
+        stats: std::sync::Arc<std::sync::Mutex<CountingStats>>,
+    }
+
+    #[derive(Default)]
+    struct CountingStats {
+        open: usize,
+        concurrent: usize,
+        max_concurrent: usize,
+        max_read: usize,
+    }
+
+    impl Drop for CountingSource {
+        fn drop(&mut self) {
+            let mut guard = self.stats.lock().expect("stats mutex is not poisoned");
+            guard.concurrent -= 1;
+        }
+    }
+
+    impl ByteSource for CountingSource {
+        fn len(&self) -> u64 {
+            self.inner.len()
+        }
+
+        fn read_exact_at(&mut self, offset: u64, len: usize) -> std::io::Result<Vec<u8>> {
+            {
+                let mut guard = self.stats.lock().expect("stats mutex is not poisoned");
+                guard.max_read = guard.max_read.max(len);
+            }
+            self.inner.read_exact_at(offset, len)
+        }
+    }
+
+    /// A counting opener over the real file opener, sharing `stats` with the
+    /// test that created it.
+    fn counting_opener(
+        stats: &std::sync::Arc<std::sync::Mutex<CountingStats>>,
+    ) -> impl Fn(&std::path::Path) -> Result<CountingSource> {
+        let stats = std::sync::Arc::clone(stats);
+        move |path: &std::path::Path| -> Result<CountingSource> {
+            let inner = FileByteSource::open(path)?;
+            {
+                let mut guard = stats.lock().expect("stats mutex is not poisoned");
+                guard.open += 1;
+                guard.concurrent += 1;
+                guard.max_concurrent = guard.max_concurrent.max(guard.concurrent);
+            }
+            Ok(CountingSource {
+                inner,
+                stats: std::sync::Arc::clone(&stats),
+            })
+        }
+    }
+
+    /// Writes `snapshot` as two real shard files plus a
+    /// `*.safetensors.index.json` declaring `total_size`, the layout
+    /// `ModelExt::load` receives for a sharded checkpoint. Entries split by
+    /// half of the sorted path list. Returns the index path and both shard
+    /// paths in creation order (first half, second half).
+    fn write_sharded_checkpoint(
+        dir: &std::path::Path,
+        snapshot: &StateSnapshot,
+    ) -> (std::path::PathBuf, Vec<std::path::PathBuf>) {
+        let first_name = "model-00001-of-00002.safetensors";
+        let second_name = "model-00002-of-00002.safetensors";
+        let midpoint = snapshot.len() / 2;
+        let mut first = StateSnapshot::new();
+        let mut second = StateSnapshot::new();
+        for (index, (path, value)) in snapshot.iter().enumerate() {
+            let target = if index < midpoint {
+                &mut first
+            } else {
+                &mut second
+            };
+            target
+                .insert(path.clone(), value.clone())
+                .expect("snapshot paths are unique");
+        }
+        assert!(
+            !first.is_empty() && !second.is_empty(),
+            "both shards carry tensors"
+        );
+        let first_path = dir.join(first_name);
+        let second_path = dir.join(second_name);
+        serialize_snapshot_safetensors(&first, &first_path).expect("first shard is written");
+        serialize_snapshot_safetensors(&second, &second_path).expect("second shard is written");
+        let total = std::fs::metadata(&first_path)
+            .expect("first shard stat")
+            .len()
+            + std::fs::metadata(&second_path)
+                .expect("second shard stat")
+                .len();
+        let mut map = String::new();
+        for (index, (path, _)) in snapshot.iter().enumerate() {
+            let shard = if index < midpoint {
+                first_name
+            } else {
+                second_name
+            };
+            if index > 0 {
+                map.push(',');
+            }
+            map.push_str(&format!("\"{}\":\"{shard}\"", path.as_str()));
+        }
+        let json = format!("{{\"metadata\":{{\"total_size\":{total}}},\"weight_map\":{{{map}}}}}");
+        let index_path = dir.join("model.safetensors.index.json");
+        std::fs::write(&index_path, json).expect("index is written");
+        (index_path, vec![first_path, second_path])
+    }
+
+    /// The header JSON length declared by a shard's 8-byte prefix.
+    fn declared_header_len(path: &std::path::Path) -> usize {
+        let bytes = std::fs::read(path).expect("shard is readable");
+        u64::from_le_bytes(
+            bytes[..SAFETENSORS_PREFIX_LEN]
+                .try_into()
+                .expect("a written shard has its 8-byte prefix"),
+        ) as usize
+    }
+
+    /// The residency bound: no single read may exceed the header JSON or the
+    /// largest tensor - the larger of the two, never the sum of the shards.
+    fn residency_bound(snapshot: &StateSnapshot, shard_paths: &[std::path::PathBuf]) -> usize {
+        snapshot
+            .iter()
+            .map(|(_, value)| value.bytes().len())
+            .chain(shard_paths.iter().map(|path| declared_header_len(path)))
+            .max()
+            .expect("a checkpoint has at least one tensor or header")
+    }
+
+    /// Residency is measured at the reader seam (issue #13 acceptance 1): the
+    /// counting [`ByteSource`] wraps the real file opener while the
+    /// *production* sharded loader runs, recording the largest single
+    /// `read_exact_at` length and the high-water mark of concurrently open
+    /// sources. The assertions below are the acceptance criteria: one file
+    /// open at a time, one open per shard (header and payloads share it), and
+    /// no single read larger than the header or the largest tensor - which
+    /// proves peak host residency is bounded by the larger of those two
+    /// rather than by checkpoint size.
+    #[test]
+    fn a_sharded_snapshot_load_reads_one_tensor_range_at_a_time_with_one_file_open() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let expected = fixture();
+        let (index_path, shard_paths) = write_sharded_checkpoint(dir.path(), &expected);
+        let bound = residency_bound(&expected, &shard_paths);
+        let total_bytes: usize = shard_paths
+            .iter()
+            .map(|path| std::fs::metadata(path).expect("shard stat").len() as usize)
+            .sum();
+
+        let stats = std::sync::Arc::new(std::sync::Mutex::new(CountingStats::default()));
+        let actual =
+            deserialize_snapshot_safetensors_index_via(&index_path, counting_opener(&stats))
+                .expect("sharded fixture loads");
+        assert_eq!(actual, expected);
+
+        let stats = stats.lock().expect("stats mutex is not poisoned");
+        assert_eq!(
+            stats.max_concurrent, 1,
+            "at most one shard file is ever open"
+        );
+        assert_eq!(
+            stats.open, 2,
+            "exactly one open per shard: the header and every payload share it"
+        );
+        assert!(
+            stats.max_read <= bound,
+            "no single read exceeds the header or the largest tensor: {} > {bound}",
+            stats.max_read
+        );
+        assert!(
+            stats.max_read < total_bytes,
+            "the checkpoint is never read in one piece"
+        );
+    }
+
+    /// The same residency contract through the placement machinery (issue
+    /// #13 acceptance 1, sharded case): `StateStream::read` is exercised
+    /// directly - construction validated every header first, then one tensor
+    /// at a time is pulled while the counting opener watches, crossing shard
+    /// switches. The restored-module equality guarantee is covered by the
+    /// integration round-trip test; this test isolates the stream's I/O
+    /// residency, which is identical for any backend.
+    #[test]
+    fn placement_streams_one_tensor_at_a_time_with_one_file_open() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let expected = fixture();
+        let (index_path, shard_paths) = write_sharded_checkpoint(dir.path(), &expected);
+        let bound = residency_bound(&expected, &shard_paths);
+        let total_bytes: usize = shard_paths
+            .iter()
+            .map(|path| std::fs::metadata(path).expect("shard stat").len() as usize)
+            .sum();
+
+        let stats = std::sync::Arc::new(std::sync::Mutex::new(CountingStats::default()));
+        let mut stream = SafetensorsStateStream::open_with(&index_path, counting_opener(&stats))
+            .expect("stream validates every shard header");
+        let paths: Vec<StatePath> = stream.paths().expect("paths list").into_iter().collect();
+        assert_eq!(paths.len(), expected.len(), "every mapped path is readable");
+        let mut biggest = 0usize;
+        for path in &paths {
+            let value = StateStream::read(&mut stream, path).expect("tensor reads");
+            biggest = biggest.max(value.bytes().len());
+        }
+        let largest = expected
+            .iter()
+            .map(|(_, value)| value.bytes().len())
+            .max()
+            .expect("fixture has tensors");
+        assert_eq!(biggest, largest, "largest tensor seen");
+
+        let stats = stats.lock().expect("stats mutex is not poisoned");
+        assert_eq!(
+            stats.max_concurrent, 1,
+            "at most one shard file is ever open, including across shard switches"
+        );
+        assert!(
+            stats.open >= 2,
+            "each shard was opened at least for its header: {}",
+            stats.open
+        );
+        assert!(
+            stats.max_read <= bound,
+            "no single read exceeds the header or the largest tensor: {} > {bound}",
+            stats.max_read
+        );
+        assert!(
+            stats.max_read < total_bytes,
+            "the checkpoint is never read in one piece"
+        );
+    }
+
+    /// A read that fails partway through placement - here because the second
+    /// shard file is deleted after the stream validated it but before any
+    /// tensor from it is pulled - must surface a structured error naming the
+    /// shard (issue #13 acceptance 2, I/O side). The surviving first shard's
+    /// tensors read successfully first, so the failure lands mid-stream after
+    /// successful reads. Module-atomicity on failure is covered by the
+    /// integration shape-mismatch rollback test; this test isolates the
+    /// stream-level error contract without needing a backend.
+    #[test]
+    fn deleting_a_shard_after_opening_the_stream_fails_the_load_without_touching_the_module() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let before = fixture();
+        let (index_path, shard_paths) = write_sharded_checkpoint(dir.path(), &before);
+        let mut stream = SafetensorsStateStream::open(&index_path)
+            .expect("stream opens while both shards are present");
+        std::fs::remove_file(&shard_paths[1]).expect("second shard deletes");
+
+        let paths: Vec<StatePath> = stream.paths().expect("paths list").into_iter().collect();
+        let mut succeeded = 0usize;
+        let mut failure: Option<String> = None;
+        for path in &paths {
+            match StateStream::read(&mut stream, path) {
+                Ok(_) => succeeded += 1,
+                Err(error) => {
+                    failure = Some(error.to_string());
+                    break;
+                }
+            }
+        }
+        let message = failure.expect("the deleted shard must fail its read");
+        assert!(
+            message.contains("model-00002-of-00002.safetensors"),
+            "the error names the shard it could not re-open, got: {message}"
+        );
+        assert!(
+            succeeded >= 1,
+            "the surviving shard's tensors were already read - failure landed mid-stream \
+             after {succeeded} successful reads"
+        );
+    }
+
+    // Compile-level proof (issue #13 acceptance 3) lives in
+    // `tests/streaming_checkpoint.rs`, which coerces the public
+    // `ModelExt::load` entry for `WgpuBackendImpl` to a function pointer -
+    // instantiating `load_state_streaming::<WgpuBackendImpl, ..>` end to
+    // end. It cannot live here: unit tests inside `src/` cannot link the
+    // `incin_backends` dev-dependency (it cycles back into this crate's
+    // rlib).
+
+    // ------------------------------------------------------------------
+    // Training checkpoint tests.
+    //
+    // The envelope round-trips use plain snapshots (no backend involved).
+    // The optimizer tensor helpers are generic over a backend, so they run
+    // against a minimal in-test fake implementing exactly the surface the
+    // helpers need: `StorageBackend` metadata, `HostInterop` byte movement,
+    // and the `Backend`/`Capabilities` markers `Tensor` construction
+    // requires. Nothing executes; the fake only stores bytes.
+    // ------------------------------------------------------------------
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    struct CheckpointTestDeviceField;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    struct CheckpointTestDevice;
+
+    impl crate::tensor::device::Device for CheckpointTestDevice {
+        type Arg = ();
+        type Field = CheckpointTestDeviceField;
+
+        fn init(_arg: ()) -> CheckpointTestDeviceField {
+            CheckpointTestDeviceField
+        }
+
+        fn to_incin(_dev: &CheckpointTestDeviceField) -> Result<DeviceId> {
+            Ok(DeviceId::cpu())
+        }
+    }
+
+    #[derive(Debug, Clone, Default)]
+    struct CheckpointTestBackend;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct CheckpointTestStorage<K> {
+        meta: crate::exec::TensorMeta,
+        bytes: Vec<u8>,
+        _marker: core::marker::PhantomData<K>,
+    }
+
+    impl crate::tensor::backend::StorageBackend for CheckpointTestBackend {
+        const BACKEND_NAME: &'static str = "checkpoint-test";
+
+        type Storage<K: DType> = CheckpointTestStorage<K>;
+        type Device = CheckpointTestDevice;
+
+        fn metadata<K: DType>(storage: &Self::Storage<K>) -> &crate::exec::TensorMeta {
+            &storage.meta
+        }
+    }
+
+    impl crate::exec::Capabilities for CheckpointTestBackend {
+        fn support(&self, _query: &crate::exec::CapabilityQuery) -> crate::exec::SupportLevel {
+            crate::exec::SupportLevel::Unsupported(crate::exec::UnsupportedReason::Operation {
+                operation: crate::shapes::error::OperationKind::Storage,
+            })
+        }
+    }
+
+    impl crate::tensor::backend::Backend for CheckpointTestBackend {
+        type InnerBackend = Self;
+    }
+
+    impl crate::tensor::backend::HostReadback for CheckpointTestBackend {
+        fn float_to_vec1<K: DType>(storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<f64>> {
+            if K::descriptor(&K::Field::default()) != DTypeId::F32.descriptor() {
+                return Err(Error::InvalidModuleState {
+                    operation: "checkpoint-test float_to_vec1",
+                    reason: ErrorMessage::new("the test backend only reads f32"),
+                });
+            }
+            if storage.bytes.len() % 4 != 0 {
+                return Err(Error::InvalidByteLength {
+                    expected: storage.bytes.len() / 4 * 4,
+                    got: storage.bytes.len(),
+                });
+            }
+            Ok(storage
+                .bytes
+                .chunks_exact(4)
+                .map(|chunk| f32::from_le_bytes(chunk.try_into().expect("exact chunks")) as f64)
+                .collect())
+        }
+
+        fn int_to_vec1<K: DType>(_storage: &Self::Storage<K>) -> Result<alloc::vec::Vec<i64>> {
+            Err(Error::InvalidModuleState {
+                operation: "checkpoint-test int_to_vec1",
+                reason: ErrorMessage::new("the test backend holds no integers"),
+            })
+        }
+    }
+
+    impl HostInterop for CheckpointTestBackend {
+        fn to_bytes<K: DType>(storage: &Self::Storage<K>) -> Result<Vec<u8>> {
+            Ok(storage.bytes.clone())
+        }
+
+        fn from_bytes<K: DType>(
+            bytes: &[u8],
+            shape: &[usize],
+            dtype: DTypeDescriptor,
+            device: &DeviceId,
+        ) -> Result<Self::Storage<K>> {
+            if *device != DeviceId::cpu() {
+                return Err(Error::InvalidModuleState {
+                    operation: "checkpoint-test from_bytes",
+                    reason: ErrorMessage::new("the test backend only places on cpu:0"),
+                });
+            }
+            let mut elements = 1usize;
+            for dim in shape {
+                elements = elements.checked_mul(*dim).ok_or(Error::InvalidByteLength {
+                    expected: usize::MAX,
+                    got: bytes.len(),
+                })?;
+            }
+            let expected =
+                dtype.size_bytes(elements, crate::shapes::error::OperationKind::Storage)?;
+            if bytes.len() != expected {
+                return Err(Error::InvalidByteLength {
+                    expected,
+                    got: bytes.len(),
+                });
+            }
+            let meta = crate::exec::TensorMeta::contiguous(
+                ShapeBuf::from_slice(shape),
+                dtype,
+                *device,
+                crate::exec::Alignment::BYTE,
+                elements,
+            )
+            .map_err(|error| Error::InvalidModuleState {
+                operation: "checkpoint-test from_bytes",
+                reason: ErrorMessage::new(error.to_string()),
+            })?;
+            Ok(CheckpointTestStorage {
+                meta,
+                bytes: bytes.to_vec(),
+                _marker: core::marker::PhantomData,
+            })
+        }
+    }
+
+    fn checkpoint_test_tensor(
+        values: &[f32],
+        shape: &[usize],
+    ) -> Tensor<Dyn, CheckpointTestBackend, f32> {
+        let mut bytes = Vec::with_capacity(values.len() * 4);
+        for value in values {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let storage = CheckpointTestBackend::from_bytes(
+            &bytes,
+            shape,
+            DTypeId::F32.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .expect("test tensor bytes are well formed");
+        Tensor::<Dyn, CheckpointTestBackend, f32>::from_parts(
+            storage,
+            ShapeBuf::from_slice(shape),
+            Default::default(),
+            Default::default(),
+            core::marker::PhantomData,
+        )
+        .expect("test tensor parts are consistent")
+    }
+
+    fn checkpoint_scratch(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("incin-training-{name}-{}", std::process::id()))
+    }
+
+    fn checkpoint_fixture_snapshot(prefix: &str) -> StateSnapshot {
+        let mut snapshot = StateSnapshot::new();
+        for (index, shape) in [vec![2, 2], vec![3]].into_iter().enumerate() {
+            let numel: usize = shape.iter().product();
+            let bytes: Vec<u8> = (0..numel * 4).map(|byte| (byte + index) as u8).collect();
+            snapshot
+                .insert(
+                    StatePath::new(format!("{prefix}.entry_{index}"))
+                        .expect("fixture path is canonical"),
+                    StateValue::new(
+                        ShapeBuf::from_slice(&shape),
+                        DTypeId::F32.descriptor(),
+                        bytes,
+                        if prefix == "model" {
+                            StateRole::Parameter
+                        } else {
+                            StateRole::Buffer
+                        },
+                    )
+                    .expect("fixture value is valid"),
+                )
+                .expect("fixture paths are unique");
+        }
+        snapshot
+    }
+
+    #[test]
+    fn training_checkpoint_round_trips_model_optimizer_scheduler_and_epoch() {
+        let path = checkpoint_scratch("roundtrip.ckpt");
+        let expected = TrainingCheckpoint::new(
+            7,
+            SchedulerState::new("linear", 6, Some(0.05)),
+            checkpoint_fixture_snapshot("model"),
+            checkpoint_fixture_snapshot("optim"),
+        );
+        save_training_checkpoint(&path, &expected).expect("checkpoint saves");
+        let actual = load_training_checkpoint(&path).expect("checkpoint loads");
+        assert_eq!(actual, expected);
+        assert_eq!(actual.epoch, 7);
+        assert_eq!(actual.scheduler.steps, 6);
+        assert_eq!(actual.scheduler.last_lr, Some(0.05));
+        assert_eq!(actual.model.len(), 2);
+        assert_eq!(actual.optimizer.len(), 2);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_with_no_scheduler_steps_round_trips() {
+        let path = checkpoint_scratch("initial.ckpt");
+        let expected = TrainingCheckpoint::new(
+            0,
+            SchedulerState::initial("constant"),
+            StateSnapshot::new(),
+            StateSnapshot::new(),
+        );
+        save_training_checkpoint(&path, &expected).expect("checkpoint saves");
+        assert_eq!(
+            load_training_checkpoint(&path).expect("checkpoint loads"),
+            expected
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_model_state_file_by_marker() {
+        // A model state file is valid postcard but not a checkpoint
+        // envelope: loading it as a checkpoint must fail as a non-envelope,
+        // never decode into shifted fields.
+        let path = checkpoint_scratch("not-a-checkpoint.postcard");
+        serialize_snapshot_postcard(&checkpoint_fixture_snapshot("model"), &path)
+            .expect("state file is written");
+        let error = load_training_checkpoint(&path).expect_err("a state file is not a checkpoint");
+        assert!(
+            matches!(error, CheckpointError::Codec { .. }),
+            "the refusal must name the envelope, got: {error}"
+        );
+        assert!(
+            error.to_string().contains("not a checkpoint envelope"),
+            "got: {error}"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_decodable_file_with_a_wrong_marker() {
+        // Same envelope layout, wrong magic: proves the marker check fires
+        // for payloads that postcard *can* decode, not just for garbage.
+        #[derive(serde::Serialize)]
+        struct WrongMagicEnvelope {
+            magic: u32,
+            version: u32,
+            epoch: u64,
+            scheduler: SchedulerState,
+            model: StateSnapshot,
+            optimizer: StateSnapshot,
+        }
+        let path = checkpoint_scratch("wrong-magic.ckpt");
+        let envelope = WrongMagicEnvelope {
+            magic: 0xDEAD,
+            version: TRAINING_CHECKPOINT_VERSION,
+            epoch: 3,
+            scheduler: SchedulerState::initial("constant"),
+            model: StateSnapshot::new(),
+            optimizer: StateSnapshot::new(),
+        };
+        std::fs::write(
+            &path,
+            postcard::to_stdvec(&envelope).expect("encode envelope"),
+        )
+        .expect("fixture file is written");
+        let error = load_training_checkpoint(&path).expect_err("a wrong marker must be refused");
+        assert!(
+            matches!(error, CheckpointError::Codec { .. }),
+            "got: {error}"
+        );
+        assert!(error.to_string().contains("marker"), "got: {error}");
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_newer_version_with_both_numbers() {
+        let path = checkpoint_scratch("future.ckpt");
+        let envelope = TrainingCheckpointEnvelope {
+            magic: TRAINING_CHECKPOINT_MAGIC,
+            version: TRAINING_CHECKPOINT_VERSION + 1,
+            epoch: 0,
+            scheduler: SchedulerState::initial("constant"),
+            model: StateSnapshot::new(),
+            optimizer: StateSnapshot::new(),
+        };
+        std::fs::write(
+            &path,
+            postcard::to_stdvec(&envelope).expect("encode envelope"),
+        )
+        .expect("fixture file is written");
+        let error = load_training_checkpoint(&path).expect_err("a future version must be refused");
+        assert_eq!(
+            error,
+            CheckpointError::UnsupportedVersion {
+                found: TRAINING_CHECKPOINT_VERSION + 1,
+                supported: TRAINING_CHECKPOINT_VERSION,
+            }
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_garbage_as_a_non_envelope() {
+        let path = checkpoint_scratch("garbage.ckpt");
+        std::fs::write(&path, [0xffu8; 32]).expect("fixture file is written");
+        let error = load_training_checkpoint(&path).expect_err("garbage must be refused");
+        assert!(
+            matches!(error, CheckpointError::Codec { .. }),
+            "got: {error}"
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn training_checkpoint_refuses_a_missing_file_as_io() {
+        let error =
+            load_training_checkpoint(std::path::Path::new("/nonexistent-incin-dir/missing.ckpt"))
+                .expect_err("a missing file must be refused");
+        assert!(matches!(error, CheckpointError::Io { .. }), "got: {error}");
+    }
+
+    #[test]
+    fn optimizer_state_survives_a_snapshot_round_trip_byte_exact() {
+        let mut dict = BTreeMap::new();
+        dict.insert(
+            "m.weight".to_string(),
+            checkpoint_test_tensor(&[1.0, 2.0, 3.0, 4.0], &[2, 2]),
+        );
+        dict.insert(
+            "v.bias".to_string(),
+            checkpoint_test_tensor(&[0.5, -0.5, 1.5], &[3]),
+        );
+
+        let snapshot = optimizer_tensors_to_snapshot(&dict).expect("optimizer state persists");
+        assert_eq!(snapshot.len(), 2);
+        for (_, value) in snapshot.iter() {
+            assert_eq!(value.role(), StateRole::Buffer);
+            assert_eq!(value.dtype(), DTypeId::F32.descriptor());
+        }
+
+        let restored: BTreeMap<String, Tensor<Dyn, CheckpointTestBackend, f32>> =
+            snapshot_to_optimizer_tensors(&snapshot, &DeviceId::cpu())
+                .expect("optimizer state restores");
+        assert_eq!(restored.len(), 2);
+        for (name, tensor) in &restored {
+            let expected =
+                CheckpointTestBackend::to_bytes(dict[name].inner()).expect("expected bytes read");
+            assert_eq!(
+                CheckpointTestBackend::to_bytes(tensor.inner()).expect("restored bytes read"),
+                expected,
+                "entry {name} must restore byte-exact"
+            );
+        }
+    }
+
+    #[test]
+    fn optimizer_restore_refuses_a_dtype_mismatch_by_name() {
+        let mut snapshot = StateSnapshot::new();
+        snapshot
+            .insert(
+                StatePath::new("m.weight").expect("canonical path"),
+                StateValue::new(
+                    ShapeBuf::from_slice(&[2]),
+                    DTypeId::F64.descriptor(),
+                    vec![0u8; 16],
+                    StateRole::Buffer,
+                )
+                .expect("f64 fixture is valid"),
+            )
+            .expect("unique path");
+
+        let error = snapshot_to_optimizer_tensors::<CheckpointTestBackend, f32>(
+            &snapshot,
+            &DeviceId::cpu(),
+        )
+        .expect_err("an f64 entry must not restore into f32 tensors");
+        assert_eq!(
+            error,
+            CheckpointError::OptimizerDtypeMismatch {
+                name: "m.weight".to_string(),
+                expected: DTypeId::F32.descriptor(),
+                found: DTypeId::F64.descriptor(),
+            }
+        );
+    }
+
+    #[test]
+    fn optimizer_restore_refuses_a_foreign_device() {
+        let mut dict = BTreeMap::new();
+        dict.insert("m.weight".to_string(), checkpoint_test_tensor(&[1.0], &[1]));
+        let snapshot = optimizer_tensors_to_snapshot(&dict).expect("persists");
+        let error = snapshot_to_optimizer_tensors::<CheckpointTestBackend, f32>(
+            &snapshot,
+            &DeviceId::cuda(0),
+        )
+        .expect_err("a cuda device must not restore on the test backend");
+        assert!(
+            matches!(error, CheckpointError::Entry { ref name, .. } if name == "m.weight"),
+            "the failure must name the entry, got: {error}"
+        );
     }
 }

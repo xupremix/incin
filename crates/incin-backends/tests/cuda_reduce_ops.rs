@@ -1,4 +1,5 @@
-//! CUDA reduce operations: axis reductions, argmax/argmin, cumsum, topk.
+//! CUDA reduce operations: axis reductions, argmax/argmin, cumsum, topk,
+//! Welford var/std, argsort, and the composed norm rows.
 //!
 //! The previous version of this file was named for topk, cumsum, argmax and
 //! argmin, and asserted that `DTypeDescriptor::size_bytes` returns `Ok` for
@@ -10,18 +11,86 @@
 //! are written on the assumption that a suite asserting nothing was hiding
 //! something.
 //!
+//! Issue #87 adds three more claims this file pins on hardware:
+//!
+//! - axis-0 argmax/argmin/var/`std` must read the right rows (the
+//!   non-last-axis addressing fix), not a stride-1 mis-slice;
+//! - the six Welford `var`/`std` rows must record a tape entry and their
+//!   ones-seeded backward must match the closed-form gradient;
+//! - `Argsort` must return a permutation that actually addresses the input,
+//!   and `Norm` must match the host L1/L2 magnitudes while recording.
+//!
 //! Requires a GPU:
 //! `cargo test -p incin-backends --features cuda --test cuda_reduce_ops -- --ignored`.
 
 #![cfg(feature = "cuda")]
 
-use incin_backends::cuda::testing::{
-    argmax_argmin, cumsum, download_f32, download_i64, reduce, require_cuda, topk,
-    upload_f32_shaped,
+use incin_backends::cuda::{
+    CudaBackendImpl, tape_depth,
+    testing::{
+        argmax_argmin, cumsum, download_bytes, download_f32, download_i64, reduce, require_cuda,
+        topk, upload_f32_shaped, var_std,
+    },
 };
+use incin_core::backend_authoring::{AutogradBackend, Execute, StorageBackend};
+use incin_core::exec::catalog::{
+    ArgsortAttributes, AxisVarianceAttributes, IndexReductionAttributes, NormAttributes,
+    TopKAttributes, VarianceAttributes,
+};
+use incin_core::exec::{
+    CanonicalOperation, ExecutionContext, TapeStorage, TensorHandle, dispatch, op,
+};
+use incin_core::prelude::{CudaN, DTypeId};
+use incin_core::typenum::U0;
+
+type TestBackend = CudaBackendImpl<CudaN<U0>>;
+type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
 
 fn close(left: f64, right: f64) -> bool {
     (left - right).abs() <= 1e-5 * left.abs().max(right.abs()).max(1.0)
+}
+
+fn assert_close(got: &[f64], want: &[f64], tol: f64, what: &str) {
+    assert_eq!(got.len(), want.len(), "{what}: length mismatch");
+    for (i, (g, w)) in got.iter().zip(want).enumerate() {
+        assert!(
+            (g - w).abs() <= tol,
+            "{what}[{i}]: got {g}, want {w} (tol {tol})"
+        );
+    }
+}
+
+fn read_f32(storage: &TestStorage) -> Vec<f64> {
+    download_f32(storage)
+        .iter()
+        .map(|&v| f64::from(v))
+        .collect()
+}
+
+/// Reads a u32 index storage as host values. The index reductions honor
+/// the requested width, so dispatched u32 results arrive as 4-byte
+/// elements - not as the i64 the kernels used to write unconditionally.
+fn read_u32(storage: &TestStorage) -> Vec<u32> {
+    download_bytes(storage)
+        .chunks_exact(4)
+        .map(|c| u32::from_le_bytes(c.try_into().expect("4-byte chunk")))
+        .collect()
+}
+
+/// Dispatch a single-input op under a fresh default context, returning the
+/// output and how many tape entries the forward pushed.
+fn run1<O, A>(input: &TestStorage, attributes: A) -> (TestStorage, usize)
+where
+    O: CanonicalOperation<Attributes = A>,
+    TestBackend: Execute<O, Output = TestStorage>,
+    A: Clone,
+{
+    let context = ExecutionContext::new(TestBackend::new());
+    let inputs = [TensorHandle::from_storage::<TestBackend, f32, _>(input)];
+    let before = tape_depth();
+    let out = dispatch::execute::<O, _>(&context, attributes, &inputs)
+        .expect("an advertised reduction must execute");
+    (out, tape_depth() - before)
 }
 
 /// A 2x4 with a distinct maximum and minimum per row, so a reduction that
@@ -148,4 +217,354 @@ fn topk_returns_ordered_values_and_their_indices() {
             "topk index {index} does not point at the value it was returned with"
         );
     }
+}
+
+/// Issue #87: axis-0 argmax/argmin must index *rows*, not a flat offset.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn reductions_along_axis_zero_read_the_right_rows() {
+    require_cuda();
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+
+    // Columns of [[3, 1, 4, 1.5], [-2, 5, 0.5, -3]].
+    let max_idx = download_i64(&argmax_argmin("argmax", &input, Some(0)).expect("argmax axis0"));
+    let min_idx = download_i64(&argmax_argmin("argmin", &input, Some(0)).expect("argmin axis0"));
+    assert_eq!(max_idx, vec![0, 1, 0, 0], "argmax axis-0 positions");
+    assert_eq!(min_idx, vec![1, 0, 1, 1], "argmin axis-0 positions");
+
+    // Column variances, biased: [6.25, 4, 3.0625, 5.0625].
+    let var = var_std(&input, Some(0), false, false, false).expect("var axis0 launches");
+    assert_close(
+        &read_f32(&var),
+        &[6.25, 4.0, 3.0625, 5.0625],
+        1e-5,
+        "var axis0",
+    );
+    // Unbiased halves the divisor (n = 2): [12.5, 8, 6.125, 10.125].
+    let var_u = var_std(&input, Some(0), false, true, false).expect("var axis0 unbiased");
+    assert_close(
+        &read_f32(&var_u),
+        &[12.5, 8.0, 6.125, 10.125],
+        1e-5,
+        "var axis0 unbiased",
+    );
+    // Biased std of the same columns: [2.5, 2, 1.75, 2.25].
+    let std = var_std(&input, Some(0), false, false, true).expect("std axis0 launches");
+    assert_close(&read_f32(&std), &[2.5, 2.0, 1.75, 2.25], 1e-5, "std axis0");
+}
+
+/// Issue #87: the six Welford rows match the host formulas and record.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn variance_and_std_match_the_host_reference_and_record() {
+    require_cuda();
+    // Population variance of 1..=6 = 17.5/6 = 35/12; sample = 3.5.
+    let flat = upload_f32_shaped(&[6], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let (var, recorded) = run1::<op::VarianceAll, _>(&flat, VarianceAttributes { unbiased: false });
+    assert!(recorded >= 1, "var_all must record a tape entry");
+    assert_close(&read_f32(&var), &[35.0 / 12.0], 1e-5, "var_all biased");
+    let (var_u, _) = run1::<op::VarianceAll, _>(&flat, VarianceAttributes { unbiased: true });
+    assert_close(&read_f32(&var_u), &[3.5], 1e-5, "var_all unbiased");
+    let (std, recorded) = run1::<op::StdAll, _>(&flat, VarianceAttributes { unbiased: false });
+    assert!(recorded >= 1, "std_all must record a tape entry");
+    assert_close(
+        &read_f32(&std),
+        &[(35.0f64 / 12.0).sqrt()],
+        1e-5,
+        "std_all biased",
+    );
+
+    // matrix() grand mean 1.25, sum of squared deviations 54.
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+    let (var, _) = run1::<op::VarianceAll, _>(&input, VarianceAttributes { unbiased: false });
+    assert_close(&read_f32(&var), &[6.75], 1e-5, "matrix var_all biased");
+    let (var_u, _) = run1::<op::VarianceAll, _>(&input, VarianceAttributes { unbiased: true });
+    assert_close(
+        &read_f32(&var_u),
+        &[54.0 / 7.0],
+        1e-5,
+        "matrix var_all unbiased",
+    );
+    let (std, _) = run1::<op::StdAll, _>(&input, VarianceAttributes { unbiased: false });
+    assert_close(
+        &read_f32(&std),
+        &[6.75f64.sqrt()],
+        1e-5,
+        "matrix std_all biased",
+    );
+
+    // Per-row (axis 1) biased variance: [1.421875, 9.546875].
+    let (var_dim, recorded) = run1::<op::VarianceDim, _>(
+        &input,
+        AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        },
+    );
+    assert!(recorded >= 1, "var_dim must record a tape entry");
+    assert_close(
+        &read_f32(&var_dim),
+        &[1.421875, 9.546875],
+        1e-5,
+        "var_dim axis1 biased",
+    );
+    let (std_dim, recorded) = run1::<op::StdDim, _>(
+        &input,
+        AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        },
+    );
+    assert!(recorded >= 1, "std_dim must record a tape entry");
+    assert_close(
+        &read_f32(&std_dim),
+        &[1.421875f64.sqrt(), 9.546875f64.sqrt()],
+        1e-5,
+        "std_dim axis1 biased",
+    );
+
+    // keepdim keeps the reduced axis with extent one.
+    let (kept, _) = run1::<op::VarianceKeepDim, _>(
+        &input,
+        AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        },
+    );
+    assert_eq!(kept.shape.to_vec(), vec![2, 1], "var_keepdim shape");
+    assert_close(
+        &read_f32(&kept),
+        &[1.421875, 9.546875],
+        1e-5,
+        "var_keepdim values",
+    );
+    let (kept_std, recorded) = run1::<op::StdKeepDim, _>(
+        &input,
+        AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        },
+    );
+    assert!(recorded >= 1, "std_keepdim must record a tape entry");
+    assert_eq!(kept_std.shape.to_vec(), vec![2, 1], "std_keepdim shape");
+    assert_close(
+        &read_f32(&kept_std),
+        &[1.421875f64.sqrt(), 9.546875f64.sqrt()],
+        1e-5,
+        "std_keepdim values",
+    );
+}
+
+/// Issue #87: the recorded backward recipes land the closed-form gradient.
+///
+/// Seeds are the ones vector `AutogradBackend::backward` plants on a
+/// scalar-seeded walk, so each expectation is `d var / d x` (or `d std / d x`)
+/// with `grad_out = 1`.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn variance_and_std_backward_match_the_host_formulas() {
+    require_cuda();
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+    let input_id = TapeStorage::id(&input);
+
+    // std_all: d std / d x_i = (x_i - mean) / (n * std), n = 8, mean = 1.25.
+    let (out, recorded) = run1::<op::StdAll, _>(&input, VarianceAttributes { unbiased: false });
+    assert!(recorded >= 1, "std_all must record before backward");
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&out).expect("std_all backward on CUDA");
+    let gx = grads.get(input_id).expect("std_all grads reach the input");
+    let std = 6.75f64.sqrt();
+    let want: Vec<f64> = values
+        .iter()
+        .map(|&v| (f64::from(v) - 1.25) / (8.0 * std))
+        .collect();
+    assert_close(&read_f32(gx), &want, 1e-4, "std_all dx");
+
+    // var_dim axis 1: d var / d x = 2 * (x - mean_row) / n, n = 4.
+    let (out, recorded) = run1::<op::VarianceDim, _>(
+        &input,
+        AxisVarianceAttributes {
+            axis: 1,
+            unbiased: false,
+        },
+    );
+    assert!(recorded >= 1, "var_dim must record before backward");
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&out).expect("var_dim backward on CUDA");
+    let gx = grads.get(input_id).expect("var_dim grads reach the input");
+    let rows: Vec<&[f32]> = values.chunks(4).collect();
+    let want: Vec<f64> = rows
+        .iter()
+        .flat_map(|row| {
+            let mean = row.iter().map(|&v| f64::from(v)).sum::<f64>() / 4.0;
+            row.iter()
+                .map(|&v| 2.0 * (f64::from(v) - mean) / 4.0)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert_close(&read_f32(gx), &want, 1e-5, "var_dim dx");
+
+    // var_all: d var / d x_i = 2 * (x_i - mean) / n, n = 8.
+    let (out, recorded) =
+        run1::<op::VarianceAll, _>(&input, VarianceAttributes { unbiased: false });
+    assert!(recorded >= 1, "var_all must record before backward");
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&out).expect("var_all backward on CUDA");
+    let gx = grads.get(input_id).expect("var_all grads reach the input");
+    let want: Vec<f64> = values
+        .iter()
+        .map(|&v| 2.0 * (f64::from(v) - 1.25) / 8.0)
+        .collect();
+    assert_close(&read_f32(gx), &want, 1e-5, "var_all dx");
+}
+
+/// Issue #87: `Argsort` returns a permutation that addresses the input.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn argsort_returns_a_permutation_that_addresses_the_input() {
+    require_cuda();
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+
+    let ascending = ArgsortAttributes {
+        axis: 1,
+        descending: false,
+        index_dtype: DTypeId::U32.descriptor(),
+    };
+    let (idx, recorded) = run1::<op::Argsort, _>(&input, ascending);
+    // Argsort is training = false: no tape entry is owed.
+    assert_eq!(recorded, 0, "argsort must not record a tape entry");
+    let idx = read_u32(&idx);
+    // row 0: [3, 1, 4, 1.5] -> 1, 1.5, 3, 4 at [1, 3, 0, 2]
+    // row 1: [-2, 5, 0.5, -3] -> -3, -2, 0.5, 5 at [3, 0, 2, 1]
+    assert_eq!(idx, vec![1, 3, 0, 2, 3, 0, 2, 1], "argsort ascending");
+    for (flat, &position) in idx.iter().enumerate() {
+        let row = flat / 4;
+        let source = values[row * 4 + usize::try_from(position).unwrap()];
+        let below = if flat % 4 == 0 {
+            None
+        } else {
+            Some(values[row * 4 + usize::try_from(idx[flat - 1]).unwrap()])
+        };
+        if let Some(below) = below {
+            assert!(
+                f64::from(below) <= f64::from(source) + 1e-6,
+                "ascending order broken at {flat}: {below} !<= {source}"
+            );
+        }
+    }
+
+    let descending = ArgsortAttributes {
+        axis: 1,
+        descending: true,
+        index_dtype: DTypeId::U32.descriptor(),
+    };
+    let (idx, _) = run1::<op::Argsort, _>(&input, descending);
+    let idx = read_u32(&idx);
+    // row 0: [4, 3, 1.5, 1] at [2, 0, 3, 1]; row 1: [5, 0.5, -2, -3] at [1, 2, 0, 3].
+    assert_eq!(idx, vec![2, 0, 3, 1, 1, 2, 0, 3], "argsort descending");
+}
+
+/// Index reductions honor the requested output width.
+///
+/// The Tensor surface contracts u32 indices, but the kernels used to write
+/// i64 unconditionally: a u32 request allocated 4-byte elements the kernel
+/// filled 8 bytes at a time, and the u32 conversion refused the result.
+/// Dispatches argmax, argmin, topk, argsort and sort with u32 and checks
+/// positions, values, and the 4-byte element width end to end.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn index_reductions_honor_u32_output() {
+    require_cuda();
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+    // row 0: [3, 1, 4, 1.5]; row 1: [-2, 5, 0.5, -3].
+    let context = ExecutionContext::new(TestBackend::new());
+
+    let max_idx = read_u32(
+        &dispatch::execute::<op::ArgMax, TestBackend>(
+            &context,
+            IndexReductionAttributes {
+                axis: Some(1),
+                dtype: DTypeId::U32.descriptor(),
+            },
+            &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+        )
+        .expect("argmax dispatches"),
+    );
+    assert_eq!(max_idx, vec![2, 1], "argmax u32 positions");
+    let min_idx = read_u32(
+        &dispatch::execute::<op::ArgMin, TestBackend>(
+            &context,
+            IndexReductionAttributes {
+                axis: Some(1),
+                dtype: DTypeId::U32.descriptor(),
+            },
+            &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+        )
+        .expect("argmin dispatches"),
+    );
+    assert_eq!(min_idx, vec![1, 3], "argmin u32 positions");
+
+    let (top_vals, top_idx) = dispatch::execute::<op::TopK, TestBackend>(
+        &context,
+        TopKAttributes {
+            k: 2,
+            axis: 1,
+            largest: true,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+    )
+    .expect("topk dispatches");
+    let top_vals = read_f32(&top_vals);
+    let top_idx = read_u32(&top_idx);
+    assert_eq!(top_idx, vec![2, 0, 1, 2], "topk u32 indices");
+    assert_close(&top_vals, &[4.0, 3.0, 5.0, 0.5], 1e-5, "topk values");
+
+    let (sort_vals, sort_idx) = dispatch::execute::<op::Sort, TestBackend>(
+        &context,
+        ArgsortAttributes {
+            axis: 1,
+            descending: false,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(&input)],
+    )
+    .expect("sort dispatches");
+    let sort_vals = read_f32(&sort_vals);
+    let sort_idx = read_u32(&sort_idx);
+    assert_eq!(
+        sort_idx,
+        vec![1, 3, 0, 2, 3, 0, 2, 1],
+        "sort u32 permutation"
+    );
+    assert_close(
+        &sort_vals,
+        &[1.0, 1.5, 3.0, 4.0, -3.0, -2.0, 0.5, 5.0],
+        1e-5,
+        "sort values",
+    );
+}
+
+/// Issue #87: the composed `Norm` rows match L1/L2 and record.
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn norm_matches_the_host_magnitude_and_records() {
+    require_cuda();
+    let (shape, values) = matrix();
+    let input = upload_f32_shaped(&shape, &values);
+
+    let (l1, recorded) = run1::<op::Norm, _>(&input, NormAttributes { order: 1.0 });
+    assert!(recorded >= 1, "norm order 1 must record a tape entry");
+    // L1 of matrix(): 3+1+4+1.5+2+5+0.5+3 = 20.
+    assert_close(&read_f32(&l1), &[20.0], 1e-5, "norm order 1");
+
+    let (l2, recorded) = run1::<op::Norm, _>(&input, NormAttributes { order: 2.0 });
+    assert!(recorded >= 1, "norm order 2 must record a tape entry");
+    // L2: sqrt(9+1+16+2.25+4+25+0.25+9) = sqrt(66.5).
+    assert_close(&read_f32(&l2), &[66.5f64.sqrt()], 1e-5, "norm order 2");
 }

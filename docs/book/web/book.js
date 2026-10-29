@@ -316,7 +316,7 @@
 
     chapter.innerHTML = body;
     loadedSlug = item.slug;
-    document.title = item.title + " - The Incin Book";
+    document.title = item.title + " - " + (manifest.title || "The Incin Book");
 
     // Update active sidebar entry
     nav.querySelectorAll("a[data-slug]").forEach((link) => {
@@ -514,6 +514,38 @@
   document.addEventListener("click", navigate);
   window.addEventListener("popstate", loadRoute);
   window.addEventListener("hashchange", loadRoute);
+
+  /* ==========================================================================
+     Version Switcher (Stable <-> Next)
+     ========================================================================== */
+
+  /* The shell carries one link with a `data-version-base` attribute pointing
+     at the other book's directory (`next/` from stable, `../` from next).
+     Clicking it keeps the reader on the same chapter when the other book has
+     it, and falls back to that book's introduction otherwise. Plain hrefs are
+     the no-JavaScript fallback: they land on the other book's introduction. */
+  document.querySelectorAll("[data-version-base]").forEach((link) => {
+    link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const base = link.getAttribute("data-version-base");
+      // The attribute is authored in the shell, but validate it anyway: a
+      // switcher that navigates to whatever string an attribute carries is a
+      // script-injection sink if the template is ever edited carelessly.
+      const allowed = new Set(["next/", "../", "./"]);
+      if (!base || !allowed.has(base)) return;
+      const target = new URL(base, window.location.href);
+      if (target.origin !== window.location.origin) return;
+      const slug = route().slug;
+      try {
+        const response = await fetch(new URL("chapters.json", target));
+        const other = await response.json();
+        const kept = other.chapters.some((entry) => entry.slug === slug) ? slug : "introduction";
+        window.location.assign(`${target.href}#/${kept}`);
+      } catch (error) {
+        window.location.assign(target.href);
+      }
+    });
+  });
 
   // Initialize
   (async function init() {

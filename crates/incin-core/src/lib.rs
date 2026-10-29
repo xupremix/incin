@@ -5,6 +5,7 @@
 pub(crate) extern crate alloc;
 
 pub(crate) mod err;
+pub(crate) mod math;
 
 #[macro_use]
 mod operation_catalog;
@@ -24,6 +25,10 @@ pub mod exec;
 /// Capture-level graph representation shared by import and compiled previews.
 pub mod graph;
 mod graph_recording;
+/// Dropless grouped-GEMM MoE prototype (issue #102). The single public path
+/// is `experimental::moe`; this declaration stays private so the prototype
+/// cannot be reached outside the experimental namespace.
+mod moe_dropless;
 
 /// Bounded model-file readers (GGUF metadata, format inspection).
 pub mod io;
@@ -39,7 +44,11 @@ pub(crate) mod serialize;
 #[cfg(feature = "std")]
 /// Named serialization surface for applications that do not use the prelude.
 pub mod serialization {
-    pub use crate::serialize::{Format, ModelExt, STATE_FORMAT_VERSION};
+    pub use crate::serialize::{
+        CheckpointError, CheckpointSection, Format, ModelExt, STATE_FORMAT_VERSION, SchedulerState,
+        TRAINING_CHECKPOINT_VERSION, TrainingCheckpoint, load_training_checkpoint,
+        optimizer_tensors_to_snapshot, save_training_checkpoint, snapshot_to_optimizer_tensors,
+    };
 }
 #[cfg(feature = "std")]
 /// ONNX import and export helpers for graph interchange.
@@ -81,6 +90,10 @@ pub mod loss {
 
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
+    /// Dropless grouped-GEMM mixture-of-experts prototype (issue #102,
+    /// PROPOSALS.md D-111): P1 target path, CPU. Prototype-implemented,
+    /// pending maintainer ratification.
+    pub use crate::moe_dropless::{DroplessMoE, DroplessMoEBackend, ExpertMlp, GroupedExpert};
     #[cfg(feature = "compiled")]
     /// Preview graph plans and symbolic guards. The matching
     /// `incin-backends/compiled` feature supplies a CPU reference evaluator;
@@ -91,10 +104,11 @@ pub mod experimental {
         pub use crate::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
             CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
-            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
-            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusedKernelLowering, FusionBlocker,
+            FusionCandidate, FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal,
+            LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups,
             ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
-            WeightPrepacker,
+            WeightPrepacker, fusion_pattern_kind,
         };
     }
 }
@@ -106,17 +120,19 @@ pub mod backend_authoring {
         execute_shaped_with_payload, execute_with_payload,
     };
     pub use crate::exec::{
-        Alignment, AttributeContract, CanonicalOperation, Capabilities, CapabilityQuery,
-        CapabilityRegistry, Descriptor, DescriptorError, ExecutionContext, ExecutionDescriptor,
-        LogicalTensorMeta, LossScaling, OPERATION_CATALOG, Operation, OperationCatalogEntry,
-        OperationIdentity, OperationKey, PrecisionSpec, RuntimePrecisionPolicy, SupportLevel,
-        TensorMeta, UnsupportedReason, Validated, ValidatedInvocation, op,
+        Alignment, AttributeContract, BackwardFn, CanonicalOperation, Capabilities,
+        CapabilityQuery, CapabilityRegistry, Descriptor, DescriptorError, ExecutionContext,
+        ExecutionDescriptor, GradientMap, LogicalTensorMeta, LossScaling, OPERATION_CATALOG,
+        Operation, OperationCatalogEntry, OperationIdentity, OperationKey, PrecisionSpec,
+        RuntimePrecisionPolicy, SupportLevel, Tape, TapeNode, TapeStorage, TensorId, TensorMeta,
+        UnsupportedReason, Validated, ValidatedInvocation, op,
     };
     pub use crate::shapes::ShapeBuf;
     pub use crate::tensor::backend::{
-        AutogradBackend, Backend, Execute, ExecuteOutput, ExecutionRequest, HostInterop,
-        HostReadback, StorageBackend, StorageOutput, StorageTransfer, SupportsDType, TensorBackend,
-        TransferBackend, TransferTo, VariableBackend, VariableTransfer,
+        AutogradBackend, Backend, DifferentiableOp, Execute, ExecuteInto, ExecuteOutput,
+        ExecutionRequest, HostInterop, HostReadback, RecordingBackend, StorageBackend,
+        StorageOutput, StorageTransfer, SupportsDType, TensorBackend, TransferBackend, TransferTo,
+        VariableBackend, VariableTransfer,
     };
     /// Read the tracing graph mid-flight, without draining it.
     ///
@@ -171,6 +187,7 @@ pub mod prelude {
         NonFiniteSite, Result, convert_f64_to_i64,
     };
     pub use crate::SeqTy;
+    pub use crate::tensor::dtype::{F8E4M3, F8E5M2};
     pub use half::{bf16, f16};
 
     pub use crate::dim;
@@ -185,21 +202,31 @@ pub mod prelude {
 
     pub use super::exec::{AxisSet, RankSupport};
     pub use super::tensor::matmul::{StaticDim, StaticOrNamedDim};
-    pub use crate::metrics::{Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall};
+    pub use crate::metrics::{
+        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall, TopKAccuracy,
+    };
     pub use crate::nn::{
-        activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        activation::{GELU, LeakyReLU, LogSoftmax, ReLU, Sigmoid, Softmax, Swish, Tanh},
         avg_pool2d::AvgPool2d,
         batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d},
+        batch_norm1d::{BatchNorm1d, BatchNorm1dShape},
+        conv_transpose2d::{ConvTranspose2d, ConvTranspose2dShape},
         conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d},
         conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d},
         dropout::Dropout,
         embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding},
         flatten::{Flatten, FlattenAxes, StructuralFlatten},
-        init::{self, Fan, Init, InitContext, InitPlan, ParameterRole},
+        group_norm::{GroupNorm, GroupNormShape},
+        init::{
+            self, Fan, Init, InitContext, InitPlan, ParameterRole, orthogonal_,
+            orthogonal_with_gain, trunc_normal_, trunc_normal_with,
+        },
+        instance_norm::{InstanceNorm, InstanceNormShape},
         layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm},
         linear::{Linear, LinearBuilder, LinearShape, linear},
         loss::{
-            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
+            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NLLLoss, NoneReduction,
+            Reduction, ReductionMode, SmoothL1Loss, Sum,
         },
         lstm::{LSTM, LSTMBuilder, LSTMCell, LSTMCellBuilder, LstmShape, lstm, lstm_cell},
         max_pool2d::MaxPool2d,
@@ -216,6 +243,7 @@ pub mod prelude {
             StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
         },
         stats::{ComputeStats, LayerStats, ModelStats},
+        upsample::{Upsample, UpsampleMode},
     };
     pub use crate::seq;
     pub use crate::tensor::ops::index::IndexSpec;
@@ -238,10 +266,11 @@ pub mod prelude {
     pub use super::tensor::prelude::PlacedTensorError;
     pub use super::tensor::prelude::{
         ArgInto, BestDevice, BestDeviceAt, BoolDType, BuiltinDType, CheckedByteLen, ConstDType,
-        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, Device, DeviceId,
-        DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn, FloatDType, Grad, GradJoin,
-        IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0, QuantDType, RequiresGrad,
-        Tensor, TensorArgs, TensorArgsData, TensorElement, ToDevice, checked_byte_len_from_dims,
+        ConstDevice, Cpu, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind, DTypeRegistry,
+        Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet, DeviceSetError, Dyn,
+        FloatDType, Grad, GradJoin, IntDType, JoinedGrad, MatMulShape, NoGrad, PlainDType, Q8_0,
+        QuantDType, RequiresGrad, Tensor, TensorArgs, TensorArgsData, TensorElement, ToDevice,
+        checked_byte_len_from_dims,
     };
     #[cfg(feature = "cuda")]
     pub use super::tensor::prelude::{Cuda, CudaN};
@@ -259,10 +288,11 @@ pub mod prelude {
     #[cfg(feature = "std")]
     pub use crate::onnx::{OnnxExporter, OnnxImporter, export_to_onnx};
     pub use crate::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
+        Adam, AdamW, ConstantLR, ExponentialLR, Gradients, LRScheduler, LinearLR, LinearWarmup,
+        Optimizer, ParameterGroup, RMSprop, SGD,
     };
     #[cfg(feature = "std")]
-    pub use crate::optim::{CosineAnnealingLR, StepLR};
+    pub use crate::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
     #[cfg(feature = "std")]
     pub use crate::serialize::{Format, ModelExt};
     pub use crate::tensor::ops::reduce::ReduceSelector;

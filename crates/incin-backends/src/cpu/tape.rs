@@ -52,7 +52,7 @@ impl TapeStorage for CpuStorage {
     }
 
     fn accumulate(&self, contribution: &Self) -> Result<Self> {
-        Ok(add_cpu_storage(self, contribution))
+        add_cpu_storage(self, contribution)
     }
 
     fn has_non_finite(&self) -> Result<bool> {
@@ -61,6 +61,10 @@ impl TapeStorage for CpuStorage {
             CpuBuffer::F64(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::F16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             CpuBuffer::BF16(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
+            // E4M3 has no infinities (overflow saturates); NaN is still an
+            // overflow signal for the adaptive-scale loop.
+            CpuBuffer::F8E4M3(v) => v.iter().any(|x| x.is_nan()),
+            CpuBuffer::F8E5M2(v) => v.iter().any(|x| x.is_nan() || x.is_infinite()),
             // An integer buffer has no non-finite representation to find.
             _ => false,
         })
@@ -147,6 +151,90 @@ pub(crate) fn push(entry: TapeEntry) {
     }
 }
 
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// This is the one seam an external crate needs and previously could not
+/// touch: the thread-local push is `pub(crate)` by design, so a downstream
+/// `Execute` implementation could run its forward kernel but never leave a
+/// recipe behind, and `Tensor::backward` (via
+/// [`AutogradBackend::backward`](incin_core::backend_authoring::AutogradBackend))
+/// could never see the custom node. Recording here puts the custom node on
+/// the same tape, in the same order, under the same
+/// [`GradMode`](incin_core::exec::GradMode) gate as every built-in kernel, so
+/// mixed graphs of built-in and custom operations walk as one graph.
+///
+/// The recipe captures its saved values by move: clone what the backward pass
+/// needs out of the forward inputs before returning, and let the closure own
+/// them. A refused push (ambient `NoGrad`) drops the closure on the spot,
+/// releasing the saved values with it.
+pub fn record(entry: TapeNode<CpuStorage>) {
+    push(entry);
+}
+
+/// Discard every node on this thread's tape without walking it.
+///
+/// For harnesses that pose many forward passes on one thread and measure each
+/// one, not for training code: a training loop ends a graph with
+/// `backward`, which drains what it walks. Nodes abandoned between
+/// measurements would otherwise be counted against the next one, and the
+/// saved values their recipes captured would stay alive until the thread
+/// recorded over them.
+///
+/// Since #149 this is also the sanctioned release valve for inference and
+/// validation loops: a forward that is never followed by `backward` would
+/// otherwise retain its graph for the life of the thread. The re-export
+/// [`drain_tape`](super::drain_tape) is the public spelling; the contract is
+/// the same either way. Draining discards graphs, not gradients: call it only
+/// when no `backward` will follow on this thread, because a drained graph
+/// cannot be walked afterwards. Under a non-recording [`GradMode`](incin_core::exec::GradMode)
+/// nothing is recorded in the first place, so draining is a no-op rather
+/// than a requirement — prefer the disabled scope and keep this for graphs
+/// that were recorded before their consumer decided against `backward`.
+pub fn clear() {
+    TAPE.with(|t| {
+        let _ = t.borrow_mut().drain();
+    });
+}
+
+/// Drain this thread's tape and return the output identity of every node,
+/// in record order.
+///
+/// The conformance oracle's window into what a kernel recorded, beyond how
+/// much. `depth()` counts nodes, which cannot tell a composed implementation
+/// recording several intermediates from one operation recording its own
+/// output twice; the identities can, because intermediates each mint their
+/// own and a double record repeats one.
+#[must_use]
+pub fn drain_output_ids() -> alloc::vec::Vec<incin_core::exec::TensorId> {
+    TAPE.with(|t| {
+        t.borrow_mut()
+            .drain()
+            .into_iter()
+            .map(|node| node.output_id)
+            .collect()
+    })
+}
+
+impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::CpuBackendImpl<D>
+where
+    D: incin_core::tensor::device::Device,
+    K: incin_core::tensor::dtype::DType,
+{
+    fn record_custom(node: TapeNode<CpuStorage>) {
+        push(node);
+    }
+}
+
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of [`record`](self::record): the entry closure runs only
+/// when the effective [`GradMode`](incin_core::exec::GradMode) records, so a
+/// `NoGrad` forward pass pays one thread-local read instead of a saved-shape
+/// vector plus a boxed recipe per custom operation.
+pub fn record_with(entry: impl FnOnce() -> TapeNode<CpuStorage>) {
+    push_with(entry);
+}
+
 /// Number of entries currently on the tape.
 ///
 /// Public rather than `#[cfg(test)]` since `GRD-002`: the row's claim is that
@@ -219,7 +307,7 @@ fn emit_backward_telemetry(step: usize, n_ops: usize) {
 /// broadcast) - tape-internal accumulation only ever sums two gradients that
 /// have already been shape-matched to their target via `unbroadcast`, so no
 /// broadcast logic is needed here.
-fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
+fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> Result<CpuStorage> {
     debug_assert_eq!(
         a.shape, b.shape,
         "tape accumulation requires matching shapes"
@@ -253,16 +341,82 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
                 |s: &CpuStorage, i: &[usize]| s.get(i)
             )
         }
-        _ => {
+        (CpuBuffer::F16(_), CpuBuffer::F16(_)) => {
             add_variant!(
-                F32,
-                |s: &CpuStorage, i: &[usize]| s.get(i) as f32,
-                |s: &CpuStorage, i: &[usize]| s.get(i) as f32
+                F16,
+                |s: &CpuStorage, i: &[usize]| half::f16::from_f64(s.get(i)),
+                |s: &CpuStorage, i: &[usize]| half::f16::from_f64(s.get(i))
             )
+        }
+        (CpuBuffer::BF16(_), CpuBuffer::BF16(_)) => {
+            add_variant!(
+                BF16,
+                |s: &CpuStorage, i: &[usize]| half::bf16::from_f64(s.get(i)),
+                |s: &CpuStorage, i: &[usize]| half::bf16::from_f64(s.get(i))
+            )
+        }
+        (CpuBuffer::U8(_), CpuBuffer::U8(_)) => {
+            add_variant!(
+                U8,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8
+            )
+        }
+        (CpuBuffer::U32(_), CpuBuffer::U32(_)) => {
+            add_variant!(
+                U32,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u32,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u32
+            )
+        }
+        (CpuBuffer::I64(_), CpuBuffer::I64(_)) => {
+            add_variant!(
+                I64,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as i64,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as i64
+            )
+        }
+        (CpuBuffer::Bool(_), CpuBuffer::Bool(_)) => {
+            add_variant!(
+                Bool,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8,
+                |s: &CpuStorage, i: &[usize]| s.get(i) as u8
+            )
+        }
+        (CpuBuffer::Q8_0(_), _) | (_, CpuBuffer::Q8_0(_)) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: "autograd accumulate",
+            });
+        }
+        // Issue #95: accumulating into packed nibbles is not elementwise
+        // addition; same refusal as Q8_0 (a same-dtype FP4 pair must not
+        // fall through to the DTypeMismatch arm below).
+        (CpuBuffer::NVFP4(_), _) | (_, CpuBuffer::NVFP4(_)) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: "autograd accumulate",
+            });
+        }
+        (CpuBuffer::MXFP4(_), _) | (_, CpuBuffer::MXFP4(_)) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::MXFP4.descriptor(),
+                backend: "cpu",
+                op: "autograd accumulate",
+            });
+        }
+        _ => {
+            return Err(incin_core::error::Error::DTypeMismatch {
+                operation: "autograd accumulate",
+                expected: a.buffer.dtype_id().descriptor(),
+                actual: b.buffer.dtype_id().descriptor(),
+            });
         }
     };
 
-    CpuStorage::from_contiguous(new_buffer, &a.shape)
+    Ok(CpuStorage::from_contiguous(new_buffer, &a.shape))
 }
 
 /// Right-align `grad.shape` and `target_shape`; sum-reduce over any leading
@@ -271,6 +425,15 @@ fn add_cpu_storage(a: &CpuStorage, b: &CpuStorage) -> CpuStorage {
 /// `target_shape` has size 1 but `grad`'s corresponding axis is `>1`.
 ///
 /// A no-op (returns a clone) when `grad.shape.dims() == target_shape`.
+///
+/// Semantics (fail-closed, shared with the CUDA/WGPU tails): on success the
+/// result's shape equals `target_shape`, so it can always be accumulated
+/// into the target. A compatible grad of *lower* rank than the target - a
+/// scalar seed for `[1]` or `[3]`, the `[] -> [1]` case that used to panic
+/// in the keepdim loop - is expanded rather than reduced, because a scalar
+/// broadcasts to any shape under broadcast rules. A grad that does not
+/// broadcast *into* the target refuses with a named `ShapeMismatch`; the
+/// function never panics on rank-deficient input.
 pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<CpuStorage> {
     if grad.shape.dims() == target_shape {
         return Ok(grad.clone());
@@ -286,14 +449,47 @@ pub(crate) fn unbroadcast(grad: &CpuStorage, target_shape: &[usize]) -> Result<C
     }
 
     // Sum (with keepdim) over any axis where target_shape has size 1 but
-    // result's corresponding axis is >1.
-    for (i, &t_dim) in target_shape.iter().enumerate() {
-        if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i)?;
+    // result's corresponding axis is >1. Only when the ranks agree after
+    // the leading squeeze (grad rank >= target rank): that squeeze is what
+    // right-aligns the axes, so indexing `result.shape[i]` against
+    // `target_shape[i]` is sound only at equal rank. When the target
+    // outranks the grad - the scalar-seed case, e.g. `[] -> [1]` - there is
+    // no aligned axis to reduce; the tail below expands the smaller grad to
+    // the target shape instead of indexing past the reduced grad (the
+    // latent cross-backend panic this guards).
+    if result.shape.len() == target_shape.len() {
+        for (i, &t_dim) in target_shape.iter().enumerate() {
+            if t_dim == 1 && result.shape[i] != 1 {
+                result = sum_dim_keepdim(&result, i)?;
+            }
         }
     }
 
-    Ok(result)
+    if result.shape.dims() == target_shape {
+        return Ok(result);
+    }
+
+    // Fail-closed tail: the reduced grad must broadcast *into* the target
+    // (resolved shape equal to the target, not merely mutually
+    // broadcastable), or refuse with a named error rather than hand a
+    // wrong-shaped gradient on to accumulation. A compatible smaller grad -
+    // notably a scalar seed for a size-1 or size-3 target - then expands to
+    // exactly the target shape: `TapeStorage::accumulate` requires grads
+    // shape-matched to their target, and a scalar broadcasts to any shape.
+    // CPU expands metadata-only via `broadcast_as` (stride-0 views); the
+    // CUDA/WGPU tails materialize buffers (`cuda/tape.rs`, `wgpu/tape.rs`).
+    // All three backends agree on the resulting shape - see #121, which
+    // first pinned the accelerator half of this contract.
+    let resolved = crate::layout::broadcast_shape(result.shape.dims(), target_shape)?;
+    if resolved.as_slice() != target_shape {
+        return Err(incin_core::error::Error::ShapeMismatch {
+            op: "autograd unbroadcast",
+            expected: target_shape.to_vec(),
+            got: result.shape.dims().to_vec(),
+            msg: "the reduced gradient does not broadcast into the target shape".into(),
+        });
+    }
+    result.broadcast_as(target_shape)
 }
 
 /// Sum-reduce `storage` over `axis`, removing that axis from the shape
@@ -346,9 +542,38 @@ fn sum_dim_keepdim(storage: &CpuStorage, axis: usize) -> Result<CpuStorage> {
         CpuBuffer::F16(_) => reduce_variant!(F16, |v: f64| half::f16::from_f64(v)),
         CpuBuffer::BF16(_) => reduce_variant!(BF16, |v: f64| half::bf16::from_f64(v)),
 
+        // Reductions stay f32-only per the capability rows: no arithmetic
+        // is implemented on the fp8 element types, so summing into one
+        // would have to round per-add with no contract. Typed refusal,
+        // mirroring Q8_0 below.
+        CpuBuffer::F8E4M3(_) | CpuBuffer::F8E5M2(_) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: storage.buffer.descriptor(),
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
+
         CpuBuffer::Q8_0(_) => {
             return Err(incin_core::error::Error::UnsupportedDType {
                 dtype: incin_core::tensor::dtype::DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
+
+        // Issue #95: no unbroadcast-reduction over packed nibbles;
+        // dequantize first. Mirrors Q8_0 above.
+        CpuBuffer::NVFP4(_) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: "autograd unbroadcast",
+            });
+        }
+        CpuBuffer::MXFP4(_) => {
+            return Err(incin_core::error::Error::UnsupportedDType {
+                dtype: incin_core::tensor::dtype::DTypeId::MXFP4.descriptor(),
                 backend: "cpu",
                 op: "autograd unbroadcast",
             });
@@ -381,6 +606,7 @@ fn increment_index(idx: &mut [usize], shape: &[usize]) {
 mod tests {
     use super::*;
     use crate::cpu::storage::CpuBuffer;
+    use crate::quant::BlockQ8_0;
 
     /// `scalar`.
     fn scalar(v: f32) -> CpuStorage {
@@ -441,12 +667,142 @@ mod tests {
         assert_eq!(result.get(&[2]), 3.0);
     }
 
+    #[test]
+    /// `unbroadcast_incompatible_shapes_are_refused`.
+    fn unbroadcast_incompatible_shapes_are_refused() {
+        // A grad that no broadcast could have produced for this target must
+        // refuse rather than hand a wrong-shaped gradient on to accumulation
+        // (mirrors the CUDA/WGPU tails' `broadcast_shape` check; see #121).
+        let grad = vector(vec![1.0, 2.0, 3.0]);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+        let grad = matrix(vec![1.0; 6], 2, 3);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_singleton_axis_sums_with_keepdim`.
+    fn unbroadcast_singleton_axis_sums_with_keepdim() {
+        // grad shape [2,3] broadcast from [1,3]: the size-1 axis is kept,
+        // summing the two rows into one.
+        let grad = matrix(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let result = unbroadcast(&grad, &[1, 3]).unwrap();
+        assert_eq!(result.shape, vec![1, 3]);
+        assert_eq!(result.get(&[0, 0]), 5.0);
+        assert_eq!(result.get(&[0, 1]), 7.0);
+        assert_eq!(result.get(&[0, 2]), 9.0);
+    }
+
+    #[test]
+    /// `unbroadcast_leading_and_singleton_axes_combine`.
+    fn unbroadcast_leading_and_singleton_axes_combine() {
+        // grad shape [2,1,3] from a [3] target: leading dims squeeze away
+        // entirely before the keepdim pass runs.
+        let grad = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 6]), vec![2, 1, 3]);
+        let result = unbroadcast(&grad, &[3]).unwrap();
+        assert_eq!(result.shape, vec![3]);
+        assert_eq!(result.get(&[0]), 2.0);
+        assert_eq!(result.get(&[1]), 2.0);
+        assert_eq!(result.get(&[2]), 2.0);
+    }
+
+    #[test]
+    /// `q8_0_seed_is_refused_with_a_typed_error`.
+    fn q8_0_seed_is_refused_with_a_typed_error() {
+        // A quantized loss has no ones-like seed: refusal, not a silently
+        // dequantized float seed.
+        let block = BlockQ8_0 {
+            d: half::f16::from_f32(1.0),
+            qs: [1i8; 32],
+        };
+        let quantized = CpuStorage::from_contiguous(CpuBuffer::Q8_0(vec![block]), vec![32]);
+        assert!(matches!(
+            CpuStorage::ones_like(&quantized),
+            Err(incin_core::error::Error::UnsupportedDType { .. })
+        ));
+    }
+
+    #[test]
+    /// `q8_0_unbroadcast_reduction_is_refused`.
+    fn q8_0_unbroadcast_reduction_is_refused() {
+        // A quantized gradient that must be summed back cannot be reduced on
+        // the CPU: refusal, not a silently dequantized wrong-dtype sum.
+        let block = || BlockQ8_0 {
+            d: half::f16::from_f32(1.0),
+            qs: [1i8; 32],
+        };
+        let grad =
+            CpuStorage::from_contiguous(CpuBuffer::Q8_0(vec![block(), block()]), vec![2, 32]);
+        assert!(unbroadcast(&grad, &[32]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_materializes_to_full_width`.
+    fn unbroadcast_scalar_seed_materializes_to_full_width() {
+        // #121 pinned two halves of this contract: the CUDA/WGPU tails
+        // materialized a scalar seed for a `[3]` target, while CPU kept the
+        // scalar for its kernels' implicit broadcast. The unbroadcast fix
+        // (size-1 target panic) unified the three backends on the
+        // accumulator's own requirement - the result's shape equals the
+        // target, so it is always accumulable - so CPU materializes here
+        // too, metadata-only via `broadcast_as`.
+        let grad = scalar(2.0);
+        let result = unbroadcast(&grad, &[3]).expect("a compatible scalar seed expands");
+        assert_eq!(result.shape, vec![3]);
+        assert_eq!(result.get(&[0]), 2.0);
+        assert_eq!(result.get(&[1]), 2.0);
+        assert_eq!(result.get(&[2]), 2.0);
+    }
+
+    #[test]
+    /// `unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused`.
+    fn unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused() {
+        // Mutually-broadcastable is not enough: `[4]` and `[2,1]` resolve
+        // together to `[2,4]`, but `[4]` does not broadcast *into* `[2,1]`
+        // (a 4 cannot shrink onto a 1). Pre-fix this indexed past the grad
+        // in the keepdim loop and panicked; it must refuse by name instead.
+        let grad = vector(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(matches!(
+            unbroadcast(&grad, &[2, 1]),
+            Err(incin_core::error::Error::ShapeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_for_size_one_target_materializes`.
+    fn unbroadcast_scalar_seed_for_size_one_target_materializes() {
+        // Regression for the latent cross-backend panic: a size-1 target
+        // dimension at an index >= the grad's rank (here the whole target)
+        // used to index past the reduced grad in the keepdim loop. A scalar
+        // broadcasts to any shape under broadcast rules, so `[] -> [1]`
+        // expands to `[v]`, matching the #121 tail's `[3]` behavior.
+        let grad = scalar(2.0);
+        let result =
+            unbroadcast(&grad, &[1]).expect("a compatible scalar seed for a size-1 target expands");
+        assert_eq!(result.shape, vec![1]);
+        assert_eq!(result.get(&[0]), 2.0);
+    }
+
     // --- tape accumulation tests (CPUBACK-05) ---
 
     #[test]
     /// `backward_seeds_loss_gradient_with_ones`.
     fn backward_seeds_loss_gradient_with_ones() {
+        // D-06: an empty tape is a consumed graph, not a seed-only `Ok`.
+        let bare = scalar(5.0);
+        assert!(matches!(
+            backward(&bare),
+            Err(incin_core::error::Error::Backward(
+                incin_core::error::BackwardError::GraphConsumed
+            ))
+        ));
+        // Seeding still holds when a graph exists: the loss gradient is ones.
+        let x = scalar(1.0);
         let loss = scalar(5.0);
+        push(TapeEntry {
+            output_id: loss.id,
+            input_ids: vec![x.id],
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+        });
         let grads = backward(&loss).unwrap();
         let g = grads.get(loss.id).unwrap();
         assert_eq!(g.get(&[]), 1.0);
@@ -535,6 +891,71 @@ mod tests {
         assert_eq!(g.get(&[2]), 5.0);
     }
 
+    /// `f64_vector`.
+    fn f64_vector(v: Vec<f64>) -> CpuStorage {
+        let len = v.len();
+        CpuStorage::from_contiguous(CpuBuffer::F64(v), vec![len])
+    }
+
+    /// `f64_scalar`.
+    fn f64_scalar(v: f64) -> CpuStorage {
+        CpuStorage::from_contiguous(CpuBuffer::F64(vec![v]), vec![])
+    }
+
+    #[test]
+    /// `backward_accumulates_f64_contributions_without_downcasting`.
+    fn backward_accumulates_f64_contributions_without_downcasting() {
+        // The F64 twin of the F32 reuse test above: two consumers of one
+        // F64 input must sum in F64, so the stored gradient keeps its
+        // variant instead of collapsing to F32.
+        let x = f64_vector(vec![1.0, 2.0]);
+        let out1 = f64_vector(vec![10.0, 20.0]);
+        let out2 = f64_vector(vec![100.0, 200.0]);
+
+        let x_id = x.id;
+        let out1_id = out1.id;
+        let out2_id = out2.id;
+
+        push(TapeEntry {
+            output_id: out1_id,
+            input_ids: vec![x_id],
+            backward: Box::new(|grad_out: &CpuStorage| {
+                let data: Vec<f64> = (0..grad_out.shape[0])
+                    .map(|i| grad_out.get(&[i]) * 2.0)
+                    .collect();
+                Ok(vec![f64_vector(data)])
+            }),
+        });
+        push(TapeEntry {
+            output_id: out2_id,
+            input_ids: vec![x_id],
+            backward: Box::new(|grad_out: &CpuStorage| {
+                let data: Vec<f64> = (0..grad_out.shape[0])
+                    .map(|i| grad_out.get(&[i]) * 3.0)
+                    .collect();
+                Ok(vec![f64_vector(data)])
+            }),
+        });
+
+        let total_loss = f64_scalar(0.0);
+        push(TapeEntry {
+            output_id: total_loss.id,
+            input_ids: vec![out1_id, out2_id],
+            backward: Box::new(|_grad_out: &CpuStorage| {
+                Ok(vec![f64_vector(vec![1.0, 1.0]), f64_vector(vec![1.0, 1.0])])
+            }),
+        });
+
+        let grads = backward(&total_loss).unwrap();
+        let g = grads
+            .get(x_id)
+            .expect("x should have an accumulated gradient");
+        assert_eq!(g.shape, vec![2]);
+        assert!(matches!(&*g.buffer, CpuBuffer::F64(_)));
+        assert_eq!(g.get(&[0]), 5.0);
+        assert_eq!(g.get(&[1]), 5.0);
+    }
+
     #[test]
     /// `backward_drains_tape_and_second_call_is_not_contaminated`.
     fn backward_drains_tape_and_second_call_is_not_contaminated() {
@@ -604,6 +1025,27 @@ mod tests {
         // not look, and this used to be a separate method that aborted.
         let Err(err) = incin_core::exec::check_gradients(|| backward(&out)) else {
             panic!("a NaN gradient was not reported under NanPolicy::Reject");
+        };
+        assert!(matches!(
+            err,
+            incin_core::error::Error::Backward(incin_core::error::BackwardError::NonFinite { .. })
+        ));
+    }
+
+    #[test]
+    /// `an_infinite_gradient_is_returned_rather_than_panicked`.
+    fn an_infinite_gradient_is_returned_rather_than_panicked() {
+        // The infinity twin of the NaN case above: `has_non_finite` covers
+        // both, and the policy reports either as a typed error.
+        let x = scalar(1.0);
+        let out = scalar(2.0);
+        push(TapeEntry {
+            output_id: out.id,
+            input_ids: vec![x.id],
+            backward: Box::new(|_grad_out: &CpuStorage| Ok(vec![scalar(f32::INFINITY)])),
+        });
+        let Err(err) = incin_core::exec::check_gradients(|| backward(&out)) else {
+            panic!("an infinite gradient was not reported under NanPolicy::Reject");
         };
         assert!(matches!(
             err,

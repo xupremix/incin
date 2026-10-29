@@ -10,7 +10,7 @@ use crate::tensor::backend::Execute;
 use crate::tensor::backend::SupportsDType;
 use crate::tensor::base::Tensor;
 use crate::tensor::device::ConstDevice;
-use crate::tensor::dtype::BuiltinDType;
+use crate::tensor::dtype::ConstDType;
 use crate::tensor::grad::RequiresGrad;
 
 /// A Dropout layer.
@@ -108,7 +108,7 @@ impl TrainMode for Dropout {
 impl<
     S: Shape + DynShape,
     B: crate::tensor::backend::VariableBackend,
-    K: BuiltinDType,
+    K: ConstDType,
     G: RequiresGrad,
     L: crate::shapes::FreshDense<S>,
 > Module<Tensor<S, B, K, G, Local, L>> for Dropout

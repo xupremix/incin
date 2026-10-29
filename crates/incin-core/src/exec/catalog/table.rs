@@ -299,10 +299,27 @@ pub(super) const fn entry(
 ) -> OperationCatalogEntry {
     let (mut broadcasting, dtype, mut output, mut empty, numeric, mut gradient, layout) =
         profile_semantics(profile);
+    // Views everywhere (issue #113, orchestrator decision 2026-09-25,
+    // reversing the unrecorded materialize settlement this override used to
+    // state): `transpose` permutes shape and strides over the same buffer, so
+    // the `Shape` profile's `ViewWhenPossible` default -- which every other
+    // member keeps -- is the honest rule here too, and the result aliases its
+    // input (densify explicitly via `into_row_major`). `transpose_view` keeps
+    // the profile default and states the same semantic under its own name.
+    // CUDA still copies; that is a tracked deviation (see its capability row
+    // and `launch_transpose`), not a second contract.
     let accepted_ranks = match operation {
         OperationKind::MatMulExact | OperationKind::QuantizedMatMul => 2..=usize::MAX,
         OperationKind::Dot | OperationKind::Outer => 1..=1,
         OperationKind::BatchedMatMul | OperationKind::Addmm => 2..=3,
+        // Per-operand ranks are tighter and live in `operand_ranks`; this
+        // window is the loosest bound the three operands jointly admit
+        // (lhs rank 2, stacked rhs rank 3, offsets rank 1).
+        OperationKind::GroupedMatMul => 1..=3,
+        // Issue #104: the fused kernel indexes `[batch, heads, seq, head_dim]`
+        // directly, so unlike the composed row (rank two and up) the contract
+        // is exactly rank four on every operand.
+        OperationKind::FusedAttention => 4..=4,
         OperationKind::Rnn | OperationKind::Lstm => 2..=3,
         OperationKind::Conv1dExact => 2..=3,
         OperationKind::Conv2dExact
@@ -320,7 +337,10 @@ pub(super) const fn entry(
         _ => 0..=usize::MAX,
     };
     let output_arity = match operation {
-        OperationKind::TopK => 2..=2,
+        // Both carry the sorted values beside the permutation that
+        // produced them. `argsort` is the one-output form: it keeps the
+        // permutation alone.
+        OperationKind::TopK | OperationKind::Sort => 2..=2,
         OperationKind::Chunk | OperationKind::Split => 0..=usize::MAX,
         OperationKind::Rnn => 2..=2,
         OperationKind::Lstm => 3..=3,
@@ -349,11 +369,19 @@ pub(super) const fn entry(
             | OperationKind::Outer
             | OperationKind::Addmm
             | OperationKind::ScaledDotProductAttention
+            // Issue #104: same output-shape rule as the composed row, so
+            // path selection is invisible to the caller's types.
+            | OperationKind::FusedAttention
             | OperationKind::Linear
     ) {
         output = OutputRule::TypedInference;
     } else if matches!(operation, OperationKind::QuantizedMatMul) {
-        output = OutputRule::MatMul;
+        // The kernel contracts lhs [..., K] against rhs [N, K] on the
+        // trailing axis (not the generic MatMul lhs[-1]==rhs[-2]
+        // orientation), so the generic `MatMul` rule would certify the
+        // wrong geometry; the dedicated `TypedInference` branch below
+        // mirrors the `GroupedMatMul` override for the same reason.
+        output = OutputRule::TypedInference;
     } else if matches!(
         operation,
         OperationKind::Conv1dExact
@@ -388,6 +416,16 @@ pub(super) const fn entry(
             | OperationKind::TensorToBytes
     ) {
         output = OutputRule::HostValue;
+    } else if matches!(operation, OperationKind::NonZero) {
+        // The number of matching positions is a property of the values, not
+        // of the metadata the descriptor can see (#102). No shape inference
+        // can name the result before the kernel has read the operand.
+        output = OutputRule::DataDependent;
+    } else if matches!(operation, OperationKind::GroupedMatMul) {
+        // The generic `MatMul` rule broadcasts the stacked rhs's expert axis
+        // into the result; this operation drops it, writing one `[T, N]`
+        // buffer whose rows are addressed by the offsets operand instead.
+        output = OutputRule::TypedInference;
     }
     if matches!(
         operation,
@@ -424,10 +462,28 @@ pub(super) const fn entry(
             // state: the output is not a function of a value the tape could
             // perturb, it is a function of which slot the index names.
             | OperationKind::OneHot
+            // The coordinate rows `nonzero` returns are addresses, not
+            // values: which positions are non-zero is a discrete property
+            // the tape cannot perturb, the same reason `OneHot` sits here.
+            | OperationKind::NonZero
+            // Integer-index-in/integer-count-out has no meaningful cotangent, same reason as `OneHot`/`NonZero`.
+            | OperationKind::Bincount
     ) {
         gradient = GradientRule::None;
     } else if matches!(operation, OperationKind::ToDevice) {
         gradient = GradientRule::Defined;
+    }
+    // The quantize boundary records a tape entry whose backward is the
+    // straight-through estimator (issue #93, Decision 2): the cotangent
+    // passes through unchanged instead of the rounding being differentiated.
+    // `dequantize` is the dual half of the same boundary, so the roundtrip's
+    // backward is exactly the identity. `quantized_matmul` has no backward
+    // rule and keeps the profile default of `None`.
+    if matches!(
+        operation,
+        OperationKind::Quantize | OperationKind::Dequantize
+    ) {
+        gradient = GradientRule::StraightThrough;
     }
     if matches!(
         operation,
@@ -460,6 +516,15 @@ pub(super) const fn entry(
         empty,
         numeric,
         gradient,
+        // Issue #103 close-out: `TopK` and `Argsort` are deterministic.
+        // Evidence: CPU `topk`/`argsort`/`sort` all use stable `sort_by`
+        // (`cpu/ops/reduce/select.rs`); CUDA `Sort` and `Argsort` both
+        // delegate to the `topk` kernel (`cuda/executor.rs`, `cuda/backend/
+        // reduce.rs`), whose tie-break is earliest-index (`j < best_pos`)
+        // in a single-threaded per-slice launch; Metal `sort`/`topk` share
+        // `sort_pairs`' stable `sort_by`. All three match the "all three
+        // stable" prose, so only the random/sample/dropout/scatter rows
+        // opt out here.
         deterministic: !matches!(
             operation,
             OperationKind::UniformRandom
@@ -469,8 +534,6 @@ pub(super) const fn entry(
                 | OperationKind::Sample
                 | OperationKind::Dropout
                 | OperationKind::Scatter
-                | OperationKind::TopK
-                | OperationKind::Argsort
         ),
         layout,
         legacy_source,

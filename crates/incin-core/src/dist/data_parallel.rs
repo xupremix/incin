@@ -43,6 +43,13 @@ pub const fn validate_data_parallel_dtype(dtype: DTypeId) -> Result<(), DataPara
         DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(DataParallelError::UnsupportedGradientDType { dtype })
         }
+        // Issue #94: fp8 gradients refuse like Q8_0 — reduction needs a
+        // wider-precision scaled policy; dequantize first.
+        // Issue #95: block fp4 refuses for the same reason (plus the
+        // block/layout-aware contract the scalar interface disclaims).
+        DTypeId::F8E4M3 | DTypeId::F8E5M2 | DTypeId::NVFP4 | DTypeId::MXFP4 => {
+            Err(DataParallelError::UnsupportedGradientDType { dtype })
+        }
     }
 }
 

@@ -97,18 +97,48 @@ impl<S: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L
 {
     #[inline]
     /// Returns the number of dimensions (rank) of the tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.ones(shape![2, 3, 4]).unwrap();
+    /// assert_eq!(t.rank(), 3);
+    /// ```
     pub fn rank(&self) -> usize {
         self._shape.shape_buf().rank()
     }
 
     #[inline]
     /// Returns the total number of elements in the tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.ones(shape![2, 3, 4]).unwrap();
+    /// assert_eq!(t.numel(), 24);
+    /// ```
     pub fn numel(&self) -> usize {
         self._shape.shape_buf().numel().unwrap_or(0)
     }
 
     #[inline]
     /// Returns the dimensions of the tensor as a slice or container.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.ones(shape![2, 3, 4]).unwrap();
+    /// assert_eq!(t.dims().dims(), &[2, 3, 4]);
+    /// ```
     pub fn dims(&self) -> crate::shapes::ShapeBuf {
         self._shape.shape_buf().clone()
     }

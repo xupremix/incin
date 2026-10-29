@@ -3,6 +3,10 @@ use std::path::Path;
 use std::process::Command;
 
 fn check_fixture(name: &str, should_pass: bool, expected: &[&str]) {
+    check_fixture_features(name, should_pass, expected, &[]);
+}
+
+fn check_fixture_features(name: &str, should_pass: bool, expected: &[&str], features: &[&str]) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest = root
         .join("tests/consumer-fixtures")
@@ -26,6 +30,9 @@ fn check_fixture(name: &str, should_pass: bool, expected: &[&str]) {
     }
     if let Ok(path) = std::env::var("PATH") {
         cmd.env("PATH", path);
+    }
+    if !features.is_empty() {
+        cmd.arg("--features").arg(features.join(","));
     }
     let output = cmd
         .output()
@@ -82,7 +89,8 @@ fn test_fixture(name: &str) {
         .expect("consumer fixture cargo test invocation must start");
     assert!(
         output.status.success(),
-        "fixture {name} test failed:\n{}",
+        "fixture {name} test failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -90,7 +98,6 @@ fn test_fixture(name: &str) {
 #[test]
 fn stable_facade_consumer_contracts() {
     check_fixture("default-pass", true, &[]);
-    check_fixture("backend-authoring-pass", true, &[]);
     check_fixture("custom-op-cpu-pass", true, &[]);
     check_fixture("experimental-distributed-pass", true, &[]);
     check_fixture("experimental-compiled-pass", true, &[]);
@@ -133,6 +140,43 @@ fn stable_facade_consumer_contracts() {
         "default-alias-absent",
         false,
         &["no `DefaultBackend` in the root"],
+    );
+}
+
+#[test]
+fn backend_authoring_macros_preserve_execution_contracts() {
+    test_fixture("backend-authoring-pass");
+    let fixture = "backend-authoring-macro-fail";
+    check_fixture_features(fixture, true, &[], &["authoring"]);
+    check_fixture_features(
+        fixture,
+        false,
+        &[
+            "Execute<incin::backend_authoring::operations::op::Ones>",
+            "assert_executor",
+        ],
+        &["missing-executor"],
+    );
+    check_fixture_features(
+        fixture,
+        false,
+        &["mismatched types", "Vec<f64>"],
+        &["wrong-output"],
+    );
+    check_fixture_features(
+        fixture,
+        false,
+        &["CanonicalOperation", "Custom"],
+        &["custom-capability"],
+    );
+    check_fixture(
+        fixture,
+        false,
+        &[
+            "declare_capabilities",
+            "declare_executors",
+            "unresolved imports",
+        ],
     );
 }
 

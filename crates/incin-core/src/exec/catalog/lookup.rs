@@ -79,7 +79,7 @@ pub fn operation_semantics_document() -> alloc::string::String {
     use core::fmt::Write as _;
     let coverage = operation_coverage();
     let mut out = alloc::string::String::from(
-        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands.\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
+        "# Canonical operation semantics\n\nThis file is generated from `incin_core::exec::OPERATION_CATALOG`; the Rust catalog is authoritative. Families classify operations and never imply backend support. `TypedContract` and `TypedInference` refer to the exact descriptor's typed attribute validator and checked inference branch; they do not permit a backend-specific default. `Site` records where the result is produced and therefore whether `Execute<O>` can carry it: `Kernel`, `Creation` and `HostReadback` can, while `Mutation`, `DeviceTransfer` and `GraphState` cannot be expressed by that trait as it currently stands. `Gradient` is the derivative contract; `StraightThrough` marks the straight-through estimator (STE), an approximation rather than a true derivative: backward passes the cotangent through unchanged, which is the `quantize`/`dequantize` boundary's rule (PyTorch QAT's `FakeQuantize` behavior; a fixed clip range would zero the cotangent outside `|x| <= clip`, and Q8_0's per-block scale never saturates, so the pass-through is unconditional).\n\n| ID | Descriptor | Attributes | Site | Input/output arity | Rank | Broadcast | Dtype/output | Empty/non-finite | Gradient | Deterministic | Layout | Legacy mapping |\n|---|---|---|---|---|---|---|---|---|---|:--:|---|---|\n",
     );
     let _ = writeln!(
         out,
@@ -91,6 +91,9 @@ pub fn operation_semantics_document() -> alloc::string::String {
         let _ = writeln!(out, "| `{:?}` | {} |", site, count);
     }
     out.push('\n');
+    out.push_str(
+        "\n## Ordering contracts\n\n### `sort`, `argsort`, and `topk` tie-breaking\n\nAll three are **stable**: equal keys keep the order they arrived in, on every axis and in both directions. The CPU kernel calls Rust's stable `sort_by`, so a descending sort does not reverse a run of equal keys relative to the input - position `i` of a tie group is still the element the input's position `i` named. `argsort`'s permutation and `sort`'s dual output are therefore the same reordering, and `topk`'s indices within a boundary tie are the earliest arrivals. This is the same stability PyTorch documents for `torch.sort` and `torch.argsort`, and it is what lets a router group the same assignment the same way twice.\n\n### `scatter_add` determinism\n\nDuplicate destinations accumulate in **row-major order of `index`**, not in an atomic or race-dependent order. Floating-point addition is not associative, so that order is part of the contract rather than an implementation detail; it is why the catalog row claims determinism and why a backend summing with atomics could not advertise this operation.\n\n### Reduced-precision matmul accumulation\n\nThe `f16`/`bf16` matmul-family rows store half precision but never accumulate in it. The CUDA kernels convert each operand to `f32` on load, accumulate the tile in `f32`, and round once on store (`matmul_impl<__half, float>` / `matmul_impl<__nv_bfloat16, float>` in `crates/incin-backends/src/cuda/ops/kernels/matmul.cu:159-177`). The CPU kernels accumulate each output element in `f64` and narrow once (`gemm_f64` and the `scalar_gemm` fallback in `crates/incin-backends/src/cpu/ops/matmul/gemm.rs:205-228`, selected by the non-`f32` branch in `crates/incin-backends/src/cpu/ops/matmul/unbatched.rs:51-62`). The CPU-`f64` vs CUDA-`f32` asymmetry is deliberate: each backend keeps the wider accumulator its kernel already used rather than matching the other. What each side proves today is asymmetric too: the CPU pins half results within a half-ulp tolerance of the `f32` reference (`crates/incin-backends/src/cpu/ops/matmul/tests.rs:942-948`), while CUDA pins only exact small integers (`crates/incin-backends/tests/cuda_matmul_dtypes.rs`), which cannot distinguish the `f32` accumulator. A cross-backend half-tolerance proof needs CUDA hardware and is tracked by #82.",
+    );
     for row in OPERATION_CATALOG {
         let max_arity = if *row.input_arity.end() == usize::MAX {
             alloc::string::String::from("many")
@@ -102,9 +105,18 @@ pub fn operation_semantics_document() -> alloc::string::String {
         } else {
             row.output_arity.end().to_string()
         };
+        // The STE cell names the approximation outright rather than printing
+        // the variant alone: a reader of this table must be able to tell that
+        // `quantize`'s gradient is a deliberate estimate, not the derivative.
+        let gradient = match row.gradient {
+            GradientRule::StraightThrough => {
+                alloc::string::String::from("StraightThrough (approximation: STE)")
+            }
+            other => alloc::format!("{other:?}"),
+        };
         let _ = writeln!(
             out,
-            "| `{}` | `{}` | `{}` | `{:?}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{:?}` | {} | `{:?}` | `{}` |",
+            "| `{}` | `{}` | `{}` | `{:?}` | {}-{} / {}-{} | {}-{} | `{:?}` | `{:?}` / `{:?}` | `{:?}` / `{:?}` | `{}` | {} | `{:?}` | `{}` |",
             row.name,
             row.descriptor,
             row.attributes,
@@ -120,7 +132,7 @@ pub fn operation_semantics_document() -> alloc::string::String {
             row.output,
             row.empty,
             row.numeric,
-            row.gradient,
+            gradient,
             if row.deterministic { "yes" } else { "no" },
             row.layout,
             row.legacy_source,

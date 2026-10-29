@@ -1,5 +1,4 @@
 use super::*;
-use crate::tensor::dtype::traits::sealed;
 
 // ============================================================================
 // Q8_0 logical dtype marker
@@ -35,8 +34,6 @@ pub struct Q8_0;
 
 macro_rules! impl_plain_builtin_dtype {
     ($repr:ident, $t:ty, $kind:expr, $encoding:expr, $name:expr) => {
-        impl sealed::TensorElementSealed for $t {}
-
         impl DType for $t {
             /// No argument needed - the dtype is fixed by the Rust type itself.
             type Arg = ();
@@ -124,11 +121,27 @@ impl_plain_builtin_dtype!(
     StorageEncoding::scalar(2, 2),
     "bf16"
 );
+impl_plain_builtin_dtype!(
+    F8E4M3,
+    F8E4M3,
+    DTypeKind::Float,
+    StorageEncoding::scalar(1, 1),
+    "f8e4m3"
+);
+impl_plain_builtin_dtype!(
+    F8E5M2,
+    F8E5M2,
+    DTypeKind::Float,
+    StorageEncoding::scalar(1, 1),
+    "f8e5m2"
+);
 
 impl FloatDType for f32 {}
 impl FloatDType for f64 {}
 impl FloatDType for f16 {}
 impl FloatDType for bf16 {}
+impl FloatDType for F8E4M3 {}
+impl FloatDType for F8E5M2 {}
 
 impl IntDType for u8 {}
 impl IntDType for u32 {}
@@ -159,8 +172,6 @@ impl ConstDType for bool {
 impl BuiltinDType for bool {
     const DTYPE: DTypeId = DTypeId::Bool;
 }
-
-impl sealed::TensorElementSealed for bool {}
 
 impl PlainDType for bool {
     type Elem = bool;
@@ -204,6 +215,65 @@ impl BuiltinDType for Q8_0 {
 }
 
 impl QuantDType for Q8_0 {}
+
+// ============================================================================
+// NVFP4 / MXFP4 logical dtype markers (issue #95)
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// NVFP4 block-scaled 4-bit float: groups of 16 E2M1 elements share one
+/// FP8-E4M3 scale byte (9 bytes per block, interleaved scale-first).
+///
+/// **`NVFP4` is a logical dtype marker only**, exactly like [`Q8_0`]:
+/// no scalar element, no [`TensorElement`], no [`PlainDType`]. Physical data
+/// is stored as `BlockNVFP4` blocks in backend-specific storage. See
+/// [`crate::tensor::dtype::fp4`] for the codec, the pinned nibble order,
+/// and the error bound.
+pub struct NVFP4;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// MXFP4 block-scaled 4-bit float (OCP MX): groups of 32 E2M1 elements share
+/// one E8M0 power-of-two scale byte (17 bytes per block, interleaved
+/// scale-first).
+///
+/// Same marker-only status as [`Q8_0`]/[`NVFP4`]: backend block storage, no
+/// scalar element. See [`crate::tensor::dtype::fp4`].
+pub struct MXFP4;
+
+macro_rules! impl_block_builtin_dtype {
+    ($t:ty, $repr:ident, $name:expr, $encoding:expr) => {
+        impl DType for $t {
+            type Arg = ();
+            type Field = PhantomData<$t>;
+
+            fn init(_: Self::Arg) -> Self::Field {
+                PhantomData
+            }
+
+            fn descriptor(_: &Self::Field) -> DTypeDescriptor {
+                Self::DESCRIPTOR
+            }
+        }
+
+        impl ConstDType for $t {
+            const DESCRIPTOR: DTypeDescriptor = DTypeDescriptor::builtin(
+                DTypeId::$repr,
+                DTypeKey::new("incin", $name, 1),
+                DTypeKind::Quantized,
+                $encoding,
+            );
+        }
+
+        impl BuiltinDType for $t {
+            const DTYPE: DTypeId = DTypeId::$repr;
+        }
+
+        impl QuantDType for $t {}
+    };
+}
+
+impl_block_builtin_dtype!(NVFP4, NVFP4, "nvfp4", StorageEncoding::block(16, 9, 1));
+impl_block_builtin_dtype!(MXFP4, MXFP4, "mxfp4", StorageEncoding::block(32, 17, 1));
 
 impl Default for DTypeDescriptor {
     fn default() -> Self {

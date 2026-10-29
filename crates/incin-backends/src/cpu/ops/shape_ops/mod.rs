@@ -8,7 +8,9 @@
 //! reads or writes by index or predicate (masked fill, where, gather,
 //! index select, scatter); `linalg` is matmul and its neighbors (addmm,
 //! lerp, attention); `cmp` is elementwise comparison and scalar arithmetic;
-//! `triangular` is triu/tril/diag; `norm` is group/instance normalization.
+//! `triangular` is triu/tril/diag; `norm` is group/instance normalization;
+//! `fused_attention` is the online-softmax fused attention reference (issue
+//! #104).
 
 use incin_core::error::{BackendError, Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf, ShapeError};
@@ -29,6 +31,7 @@ use crate::cpu::tape::{self, TapeEntry};
 mod cmp;
 mod combine;
 mod convert;
+mod fused_attention;
 mod linalg;
 mod norm;
 mod select;
@@ -39,20 +42,21 @@ mod view;
 
 pub(crate) use cmp::{div_scalar_storage, elementwise_cmp, sub_scalar_storage};
 pub(crate) use combine::{
-    concat_storage, pad_storage, pixel_shuffle_storage, repeat_storage, stack_storage,
-    unfold_storage,
+    concat_storage, pad_storage, pixel_shuffle_storage, repeat_interleave_storage, repeat_storage,
+    stack_storage, unfold_storage,
 };
 pub(crate) use convert::{
-    float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage, int_to_vec1_storage,
-    tensor_to_dtype_storage,
+    canonical_to_dtype, float_to_scalar_storage, float_to_vec1_storage, int_to_scalar_storage,
+    int_to_vec1_storage,
 };
+pub(crate) use fused_attention::fused_attention_storage;
 pub(crate) use linalg::{
     addmm_storage, lerp_storage, matmul_storage, scaled_dot_product_attention_storage,
 };
 pub(crate) use norm::{group_norm_storage, instance_norm_storage};
 pub(crate) use select::{
-    gather_storage, index_select_storage, masked_fill_storage, one_hot_storage,
-    scatter_add_storage, scatter_storage, where_storage,
+    bincount_storage, gather_storage, index_select_storage, masked_fill_storage, nonzero_storage,
+    one_hot_storage, scatter_add_storage, scatter_storage, where_storage,
 };
 pub(crate) use triangular::{diag_storage, tril_storage, triu_storage};
 pub(crate) use view::{

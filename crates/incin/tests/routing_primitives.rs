@@ -1,0 +1,584 @@
+//! Routing primitives on the public API.
+//!
+//! Issue #103 lists the operations a mixture-of-experts layer needs and the
+//! catalog does not have. Four of the eight it names were already there
+//! (`log_softmax`, `logsumexp`, `one_hot`, `scatter_add`); this file covers
+//! the ones that arrived since. `repeat_interleave` expands a token once per
+//! expert it was routed to, `bincount` counts how many landed on each, and
+//! `sort` groups them. `nonzero` and `grouped_matmul` completed the set (#103).
+//!
+//! The kernels are gradchecked inside `incin-backends`. What is pinned here is
+//! the public surface: the operation dispatches under an active `GradMode`,
+//! records on the tape through `execute_shaped`, and delivers a gradient
+//! through `Gradients`.
+#![cfg(feature = "cpu")]
+
+use incin::prelude::*;
+
+/// B.
+type B = incin_backends::cpu::CpuBackendImpl;
+
+/// The distinction the operation exists for: `repeat` lays the axis down end
+/// to end, `repeat_interleave` repeats each element in place.
+///
+/// Both spellings produce the same extent, so a test that only checked the
+/// shape would pass on either one.
+#[test]
+fn it_repeats_each_element_where_repeat_tiles_the_whole_axis() -> Result<()> {
+    let x = Tensor::<s![3], B>::from_slice(&[1.0, 2.0, 3.0], ())?;
+
+    assert_eq!(
+        x.repeat_interleave(2, 0)?.to_vec1::<f32>()?,
+        vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0]
+    );
+    assert_eq!(
+        x.repeat(&[2])?.to_vec1::<f32>()?,
+        vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0],
+        "the two are the same function, so the interleave assertion proves nothing"
+    );
+    Ok(())
+}
+
+/// Only the named axis grows, and a negative axis counts from the end.
+#[test]
+fn it_expands_one_axis_and_accepts_a_negative_one() -> Result<()> {
+    let x = Tensor::<s![2, 3], B>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
+
+    let rows = x.repeat_interleave(2, 0)?;
+    assert_eq!(rows.dims().as_ref(), &[4, 3]);
+    assert_eq!(
+        rows.to_vec1::<f32>()?,
+        vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 4.0, 5.0, 6.0]
+    );
+
+    let columns = x.repeat_interleave(2, 1)?;
+    assert_eq!(columns.dims().as_ref(), &[2, 6]);
+    assert_eq!(
+        columns.to_vec1::<f32>()?,
+        vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0, 5.0, 6.0, 6.0]
+    );
+    assert_eq!(
+        x.repeat_interleave(2, -1)?.to_vec1::<f32>()?,
+        columns.to_vec1::<f32>()?
+    );
+    Ok(())
+}
+
+/// The gradient is the sum over each element's own block.
+///
+/// The weights are distinct powers of ten so that a backward which broadcast
+/// one position's cotangent, or summed the wrong block, lands on a different
+/// number rather than on a plausible one.
+#[test]
+fn the_gradient_sums_each_source_elements_block() -> Result<()> {
+    let x = Tensor::<s![3], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0], ())?;
+    let weights =
+        Tensor::<Dyn, B>::from_slice(&[1.0, 10.0, 100.0, 1000.0, 10_000.0, 100_000.0], vec![6])?;
+
+    let loss = x.repeat_interleave(2, 0)?.mul_exact(&weights)?.sum_all()?;
+    assert!((loss.to_scalar::<f32>()? - 332_211.0).abs() < 1e-1);
+
+    let grads = loss.backward()?;
+    assert_eq!(
+        grads.require(&x)?.to_vec1::<f32>()?,
+        vec![11.0, 1100.0, 110_000.0]
+    );
+    Ok(())
+}
+
+/// One repeat is the identity, not a rejection: a caller computing the count
+/// should not have to special-case the value one.
+#[test]
+fn a_single_repeat_is_the_identity() -> Result<()> {
+    let x = Tensor::<s![2, 2], B>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
+    let once = x.repeat_interleave(1, 0)?;
+    assert_eq!(once.dims().as_ref(), &[2, 2]);
+    assert_eq!(once.to_vec1::<f32>()?, x.to_vec1::<f32>()?);
+    Ok(())
+}
+
+/// Zero repeats and an out-of-range axis are refused, rather than producing a
+/// tensor that holds no values while claiming a geometry.
+#[test]
+fn it_refuses_a_zero_repeat_and_an_axis_it_does_not_have() -> Result<()> {
+    let x = Tensor::<s![3], B>::from_slice(&[1.0, 2.0, 3.0], ())?;
+    assert!(x.repeat_interleave(0, 0).is_err());
+    assert!(x.repeat_interleave(2, 3).is_err());
+    assert!(x.repeat_interleave(2, -2).is_err());
+    Ok(())
+}
+
+/// `bincount` turns an assignment into the per-slot counts a router needs.
+///
+/// The geometry that addressed the indices does not survive: a `[T, K]`
+/// top-k assignment counts into the same `[N]` histogram as a flat vector of
+/// the same indices.
+#[test]
+fn bincount_counts_every_index_whatever_shape_held_it() -> Result<()> {
+    let flat = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    assert_eq!(flat.bincount::<3>()?.to_vec1::<i64>()?, vec![2, 1, 3]);
+
+    let assignment = Tensor::<s![3, 2], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    assert_eq!(assignment.bincount::<3>()?.to_vec1::<i64>()?, vec![2, 1, 3]);
+
+    // Wider than the indices used: the unused slot counts zero rather than
+    // being absent, which is what keeps the offsets aligned with the experts.
+    assert_eq!(flat.bincount::<5>()?.to_vec1::<i64>()?, vec![2, 1, 3, 0, 0]);
+    Ok(())
+}
+
+/// The counts are the offsets, once scanned.
+///
+/// This is the composition the operation exists for: `bincount` then `cumsum`
+/// describes where each expert's rows begin in a grouped buffer, so the
+/// per-expert token count never becomes a tensor extent.
+#[test]
+fn the_counts_scan_into_the_offsets_a_grouped_buffer_needs() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    let offsets = assignment.bincount::<3>()?.cumsum(axis!(0))?;
+    assert_eq!(offsets.to_vec1::<i64>()?, vec![2, 3, 6]);
+    Ok(())
+}
+
+/// An index outside the range is refused, not dropped.
+///
+/// A dropped index leaves a count quietly low and every offset after it wrong
+/// by the same amount, which no consumer can distinguish from a genuinely
+/// empty bin.
+#[test]
+fn an_index_outside_the_range_is_refused() -> Result<()> {
+    let indices = Tensor::<s![3], B, i64>::from_slice(&[0, 3, 1], ())?;
+    assert!(
+        indices.bincount::<3>().is_err(),
+        "index 3 is outside 0..3 and was counted anyway"
+    );
+    let negative = Tensor::<s![2], B, i64>::from_slice(&[0, -1], ())?;
+    assert!(negative.bincount::<3>().is_err());
+    Ok(())
+}
+
+/// `sort` returns the values `argsort` leaves behind.
+///
+/// The permutation alone is enough only when the operand is still to hand to
+/// gather from. The contract pinned here is that the two agree: position `i`
+/// of the values is the element the permutation's position `i` names.
+#[test]
+fn it_returns_the_values_beside_the_permutation_that_made_them() -> Result<()> {
+    let x = Tensor::<s![5], B>::from_slice(&[3.0, 1.0, 4.0, 1.0, 5.0], ())?;
+
+    let (values, order) = x.sort(0, false)?;
+    assert_eq!(values.to_vec1::<f32>()?, vec![1.0, 1.0, 3.0, 4.0, 5.0]);
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 3, 0, 2, 4]);
+
+    // The permutation and the values describe the same reordering.
+    let source = x.to_vec1::<f32>()?;
+    let gathered: Vec<f32> = order
+        .to_vec1::<u32>()?
+        .into_iter()
+        .map(|index| source[index as usize])
+        .collect();
+    assert_eq!(gathered, values.to_vec1::<f32>()?);
+
+    // `argsort` beside it is the same permutation without the values.
+    assert_eq!(
+        x.argsort(0, false)?.to_vec1::<u32>()?,
+        order.to_vec1::<u32>()?
+    );
+    Ok(())
+}
+
+/// Descending is the same sort read the other way, and it is just as stable.
+#[test]
+fn it_sorts_descending_without_reversing_the_ties() -> Result<()> {
+    let x = Tensor::<s![5], B>::from_slice(&[3.0, 1.0, 4.0, 1.0, 5.0], ())?;
+
+    let (values, order) = x.sort(0, true)?;
+    assert_eq!(values.to_vec1::<f32>()?, vec![5.0, 4.0, 3.0, 1.0, 1.0]);
+    // The two ones are still 1 then 3. Reversing the ascending permutation
+    // would have put 3 first, which is the defect this asserts against.
+    assert_eq!(order.to_vec1::<u32>()?, vec![4, 2, 0, 1, 3]);
+    Ok(())
+}
+
+/// Equal keys keep the order they arrived in.
+///
+/// This is what lets a router group the same assignment the same way twice.
+/// An unstable sort would still return correct values, so an assertion on the
+/// values alone would pass while the grouping moved between runs.
+#[test]
+fn equal_keys_keep_the_order_they_arrived_in() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+
+    let (experts, order) = assignment.sort(0, false)?;
+    assert_eq!(experts.to_vec1::<i64>()?, vec![0, 0, 1, 2, 2, 2]);
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 5, 3, 0, 2, 4]);
+    Ok(())
+}
+
+/// The composition the operation exists for.
+///
+/// Sorting the assignment groups the tokens by expert; `bincount` scanned by
+/// `cumsum` says where each expert's block ends. Together they describe a
+/// grouped buffer without the per-expert token count ever being an extent.
+#[test]
+fn the_sorted_assignment_and_the_offsets_describe_the_same_grouping() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+
+    let (experts, order) = assignment.sort(0, false)?;
+    let offsets = assignment
+        .bincount::<3>()?
+        .cumsum(axis!(0))?
+        .to_vec1::<i64>()?;
+    assert_eq!(offsets, vec![2, 3, 6]);
+
+    // Every expert's block in the sorted keys is exactly the span its offsets
+    // name, so a grouped matmul can be handed the ranges rather than a shape.
+    let sorted = experts.to_vec1::<i64>()?;
+    let mut start = 0usize;
+    for (expert, end) in offsets.iter().enumerate() {
+        let end = *end as usize;
+        assert!(
+            sorted[start..end].iter().all(|slot| *slot == expert as i64),
+            "expert {expert} owns {start}..{end}, which holds {:?}",
+            &sorted[start..end]
+        );
+        start = end;
+    }
+
+    // And the permutation names, for each position in that grouping, the token
+    // whose row belongs there.
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 5, 3, 0, 2, 4]);
+    let original = assignment.to_vec1::<i64>()?;
+    for (position, token) in order.to_vec1::<u32>()?.into_iter().enumerate() {
+        assert_eq!(original[token as usize], sorted[position]);
+    }
+    Ok(())
+}
+
+/// A named axis sorts within its rows rather than across them.
+#[test]
+fn it_sorts_along_the_axis_it_is_given() -> Result<()> {
+    let x = Tensor::<s![2, 3], B>::from_slice(&[3.0, 1.0, 2.0, 9.0, 7.0, 8.0], ())?;
+
+    let (values, order) = x.sort(1, false)?;
+    // Row-major, so the flat buffer is the two rows end to end. Each row is
+    // sorted within itself; a sort that ran down the columns instead would
+    // have left the rows unchanged, since they are already ordered that way.
+    assert_eq!(values.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 7.0, 8.0, 9.0]);
+    // Each row's permutation is its own, and indexes within the row.
+    assert_eq!(order.to_vec1::<u32>()?, vec![1, 2, 0, 1, 2, 0]);
+    Ok(())
+}
+
+/// An axis the operand does not have is refused.
+#[test]
+fn it_refuses_an_axis_it_does_not_have() -> Result<()> {
+    let x = Tensor::<s![4], B>::from_slice(&[1.0, 2.0, 3.0, 4.0], ())?;
+    assert!(x.sort(1, false).is_err());
+    Ok(())
+}
+
+/// The permutation `sort` returns reorders rows directly.
+///
+/// `sort`, `argsort` and `topk` return proven row-major indices, and the
+/// operations that consume an index used to accept only the layout that claims
+/// nothing. So the grouping this file builds up to did not type-check: the
+/// permutation existed and could not be handed to the one method that applies
+/// it. A row-major tensor is a stronger claim than an unproven one, never a
+/// weaker one, so accepting it admits nothing the kernel was not already given.
+#[test]
+fn the_permutation_carries_the_token_rows_into_expert_order() -> Result<()> {
+    let assignment = Tensor::<s![6], B, i64>::from_slice(&[2, 0, 2, 1, 2, 0], ())?;
+    let rows = Tensor::<s![6, 2], B>::from_slice(
+        &[0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5],
+        (),
+    )?;
+
+    let (_, order) = assignment.sort(0, false)?;
+    let grouped = rows.index_select(axis!(0), &order)?;
+
+    // Tokens 1 and 5 went to expert 0, token 3 to expert 1, and 0, 2, 4 to
+    // expert 2, each block in arrival order.
+    assert_eq!(
+        grouped.to_vec1::<f32>()?,
+        vec![1.0, 1.5, 5.0, 5.5, 3.0, 3.5, 0.0, 0.5, 2.0, 2.5, 4.0, 4.5]
+    );
+    Ok(())
+}
+
+/// `topk`'s indices gather the values they name.
+///
+/// Gathering by the indices a top-k selection returned is the reason those
+/// indices exist, and it did not compile for the same reason as above.
+#[test]
+fn topk_indices_gather_the_values_they_name() -> Result<()> {
+    let logits = Tensor::<s![2, 3], B>::from_slice(&[0.1, 0.9, 0.5, 0.7, 0.2, 0.8], ())?;
+
+    let (values, indices) = logits.topk(2, axis!(1), true)?;
+    let gathered = logits.gather(axis!(1), &indices)?;
+
+    assert_eq!(gathered.to_vec1::<f32>()?, values.to_vec1::<f32>()?);
+    Ok(())
+}
+
+/// Expert outputs accumulate back through the same permutation.
+///
+/// The combine step of a router: each token's rows come back to its own
+/// position, and `scatter_add` is the form that sums rather than overwrites.
+#[test]
+fn scatter_add_takes_an_index_a_sort_produced() -> Result<()> {
+    let keys = Tensor::<s![4], B>::from_slice(&[3.0, 1.0, 2.0, 0.0], ())?;
+    let (sorted, order) = keys.sort(0, false)?;
+
+    let restored = Tensor::<s![4], B>::zeros(())?.scatter_add(axis!(0), &order, &sorted)?;
+
+    // Scattering the sorted keys back through their own permutation puts each
+    // one at the position it was read from.
+    assert_eq!(restored.to_vec1::<f32>()?, keys.to_vec1::<f32>()?);
+    Ok(())
+}
+
+/// `scatter_add` accumulates in a fixed order, so the low bits are stable.
+///
+/// Floating-point addition is not associative: if two runs of the same
+/// computation summed the same contributions in different orders, the results
+/// could differ in the last bit. The kernel sums in row-major order of the
+/// index operand, which is part of the contract (see
+/// `docs/OPERATION_SEMANTICS.md`), and this pins it from the public surface.
+#[test]
+fn scatter_add_is_bit_stable_across_runs() -> Result<()> {
+    let target = Tensor::<s![4], B>::from_slice(&[0.1f32, 0.2, 0.3, 0.4], ())?;
+    // Three writes to the same destination with values that do not sum
+    // exactly in f32, so a different order would change a low bit.
+    let index = Tensor::<s![3], B, i64>::from_slice(&[1, 1, 1], ())?;
+    let source = Tensor::<s![3], B>::from_slice(&[1.0e-8f32, 1.0, 1.0e8], ())?;
+
+    let first = target.scatter_add(axis!(0), &index, &source)?;
+    let second = target.scatter_add(axis!(0), &index, &source)?;
+    assert_eq!(
+        first.to_vec1::<f32>()?,
+        second.to_vec1::<f32>()?,
+        "the same inputs produced different low bits across runs"
+    );
+
+    // And the sum matches the documented row-major order: 0.2 + 1e-8 + 1.0 + 1e8.
+    let mut expected = 0.2f64;
+    for value in [1.0e-8f32, 1.0f32, 1.0e8f32] {
+        expected += f64::from(value);
+    }
+    let got = f64::from(first.to_vec1::<f32>()?[1]);
+    assert!(
+        (got - expected).abs() < 2.0,
+        "got {got}, expected ~{expected} in row-major index order"
+    );
+    Ok(())
+}
+
+/// The gradient of the stable router log-probabilities.
+///
+/// `d/dx sum(log_softmax(x)) = 1 - n * softmax(x)` along the normalized axis:
+/// each input earns one through its own output and pays its softmax share of
+/// the shared normalizer everyone else subtracts. This pins the backward from
+/// the public surface the router calls; the kernels are gradchecked inside
+/// `incin-backends`, and the forward stability (why this is not
+/// `softmax`-then-`log`) is pinned in `tensor_ops.rs`.
+#[test]
+fn the_gradient_of_the_stable_router_log_probabilities() -> Result<()> {
+    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 0.5, -1.0, 2.0], ())?;
+
+    let loss = x.log_softmax(1)?.sum_all()?;
+    let grads = loss.backward()?;
+    let got = grads.require(&x)?.to_vec1::<f32>()?;
+
+    // Closed form in f64: 1 - 3 * softmax(row).
+    let rows = [[1.0f64, 2.0, 3.0], [0.5, -1.0, 2.0]];
+    let mut expected = Vec::new();
+    for row in rows {
+        let max = row.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let exps: Vec<f64> = row.iter().map(|value| (value - max).exp()).collect();
+        let sum: f64 = exps.iter().sum();
+        expected.extend(exps.iter().map(|exp| 1.0 - 3.0 * exp / sum));
+    }
+    assert_eq!(got.len(), expected.len());
+    for (position, (got, want)) in got.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (f64::from(*got) - want).abs() < 1e-5,
+            "grad[{position}]: got {got}, want {want}"
+        );
+    }
+    Ok(())
+}
+
+/// The gradient of the normalizer is the softmax.
+///
+/// `d/dx logsumexp(x) = softmax(x)`: the shift by the axis maximum that keeps
+/// the forward finite at router magnitudes differentiates away, leaving each
+/// input earning its softmax share of the output. Same pinning rationale as
+/// the `log_softmax` test above: public surface here, kernel gradchecks in
+/// `incin-backends`, forward stability in `tensor_ops.rs`.
+#[test]
+fn the_gradient_of_the_normalizer_is_the_softmax() -> Result<()> {
+    let x = Tensor::<s![2, 3], B, f32, Grad>::from_slice(&[1.0, 2.0, 3.0, 0.5, -1.0, 2.0], ())?;
+
+    let loss = x.logsumexp(1)?.sum_all()?;
+    let grads = loss.backward()?;
+    let got = grads.require(&x)?.to_vec1::<f32>()?;
+
+    let rows = [[1.0f64, 2.0, 3.0], [0.5, -1.0, 2.0]];
+    let mut expected = Vec::new();
+    for row in rows {
+        let max = row.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let exps: Vec<f64> = row.iter().map(|value| (value - max).exp()).collect();
+        let sum: f64 = exps.iter().sum();
+        expected.extend(exps.iter().map(|exp| exp / sum));
+    }
+    assert_eq!(got.len(), expected.len());
+    for (position, (got, want)) in got.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (f64::from(*got) - want).abs() < 1e-5,
+            "grad[{position}]: got {got}, want {want}"
+        );
+    }
+    Ok(())
+}
+
+/// Sorting reorders; it does not differentiate.
+///
+/// `sort` returns `NoGrad` values and indices whatever the receiver was (the
+/// catalog row's `GradientRule::None`, same as `argsort`/`topk`), so a router
+/// cannot backpropagate through a grouping decision. The ascriptions below
+/// are the assertion: they stop compiling the day the signature starts
+/// claiming a gradient.
+#[test]
+fn sorting_reorders_without_differentiating() -> Result<()> {
+    let x = Tensor::<s![4], B, f32, Grad>::from_slice(&[3.0, 1.0, 2.0, 0.0], ())?;
+
+    type ValueTensor = Dense<s![4], B, f32, NoGrad>;
+    type IndexTensor = Dense<s![4], B, u32, NoGrad>;
+
+    let (values, indices) = x.sort(0, false)?;
+    let _: &ValueTensor = &values;
+    let _: &IndexTensor = &indices;
+    assert_eq!(values.to_vec1::<f32>()?, vec![0.0, 1.0, 2.0, 3.0]);
+    Ok(())
+}
+
+/// `nonzero` returns one coordinate row per non-zero element.
+///
+/// The count is data-dependent, so the result shape is `Dyn` and is read
+/// back from the storage the kernel produced rather than pre-asserted.
+#[test]
+fn nonzero_returns_one_coordinate_row_per_nonzero_element() -> Result<()> {
+    let mask = Tensor::<s![2, 3], B>::from_slice(&[1.0f32, 0.0, 2.0, 0.0, 0.0, 3.0], ())?;
+    let coordinates = mask.nonzero()?;
+
+    assert_eq!(coordinates.dims().as_ref(), &[3, 2]);
+    // Row-major: [0,0], [0,2], [1,2].
+    assert_eq!(coordinates.to_vec1::<i64>()?, vec![0, 0, 0, 2, 1, 2]);
+    Ok(())
+}
+
+/// An all-zero input yields the empty `[0, rank]` result, not an error.
+#[test]
+fn nonzero_of_an_empty_selection_is_an_empty_result() -> Result<()> {
+    let zeros = Tensor::<s![4], B>::zeros(())?;
+    let coordinates = zeros.nonzero()?;
+    assert_eq!(coordinates.dims().as_ref(), &[0, 1]);
+    Ok(())
+}
+
+/// `grouped_matmul` multiplies each expert's row block by its own weight.
+///
+/// The geometry is checkable by hand: two tokens, two experts, expert 0 owns
+/// both rows and expert 1 owns none, so the result is just `lhs @ rhs[0]`.
+#[test]
+fn grouped_matmul_applies_each_experts_weight_to_its_own_rows() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    let rhs =
+        Tensor::<s![2, 2, 2], B>::from_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], ())?;
+    let offsets = Tensor::<s![3], B, i64>::from_slice(&[0, 2, 2], ())?;
+
+    let out = lhs.grouped_matmul(&rhs, &offsets)?;
+    assert_eq!(out.dims().as_ref(), &[2, 2]);
+    // Expert 0's weights apply to both rows; expert 1 owns none.
+    assert_eq!(out.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 4.0]);
+    Ok(())
+}
+
+/// An expert with an empty span contributes nothing rather than erroring.
+///
+/// This is the empty-expert case a router produces when no token lands on an
+/// expert; the offsets still tile `[0, T)` and the result is unchanged.
+#[test]
+fn an_empty_expert_span_is_skipped_not_refused() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    // Expert 1 is empty (offsets 1..1); expert 0 owns both rows.
+    let rhs = Tensor::<s![3, 2, 2], B>::from_slice(
+        &[
+            1.0f32, 2.0, 3.0, 4.0, // expert 0
+            5.0, 6.0, 7.0, 8.0, // expert 1 (empty span)
+            9.0, 10.0, 11.0, 12.0, // expert 2 (empty span)
+        ],
+        (),
+    )?;
+    let offsets = Tensor::<s![4], B, i64>::from_slice(&[0, 2, 2, 2], ())?;
+
+    let out = lhs.grouped_matmul(&rhs, &offsets)?;
+    assert_eq!(out.dims().as_ref(), &[2, 2]);
+    assert_eq!(out.to_vec1::<f32>()?, vec![1.0, 2.0, 3.0, 4.0]);
+    Ok(())
+}
+
+/// The gradient reaches `lhs` and `rhs` through the composed tape entry.
+///
+/// `offsets` is an integer tile with no cotangent, so only the two matrices
+/// receive gradients - the same exclusion `scatter_add` applies to its index.
+#[test]
+fn the_gradient_reaches_both_matrices_and_not_the_offsets() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B, f32, Grad>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    let rhs = Tensor::<s![2, 2, 2], B, f32, Grad>::from_slice(
+        &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        (),
+    )?;
+    let offsets = Tensor::<s![3], B, i64>::from_slice(&[0, 1, 2], ())?;
+
+    let out = lhs.grouped_matmul(&rhs, &offsets)?;
+    // Row 0 uses expert 0, row 1 uses expert 1.
+    assert_eq!(
+        out.to_vec1::<f32>()?,
+        vec![1.0, 2.0, 7.0, 8.0],
+        "each row should use its own expert's weights"
+    );
+
+    let loss = out.sum_all()?;
+    let grads = loss.backward()?;
+    // d(sum)/d(lhs) = row 0 from expert 0's weights, row 1 from expert 1's.
+    assert_eq!(
+        grads.require(&lhs)?.to_vec1::<f32>()?,
+        vec![1.0 + 2.0, 3.0 + 4.0, 5.0 + 6.0, 7.0 + 8.0]
+    );
+    // d(sum)/d(rhs[e]) = lhs_rows^T @ ones for that expert's rows.
+    // Expert 0 got lhs row [1,0]; expert 1 got lhs row [0,1].
+    assert_eq!(
+        grads.require(&rhs)?.to_vec1::<f32>()?,
+        vec![1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0]
+    );
+    Ok(())
+}
+
+/// Offsets that do not tile `[0, T)` are refused rather than producing a
+/// tensor that silently drops or duplicates rows.
+#[test]
+fn offsets_that_do_not_tile_the_rows_are_refused() -> Result<()> {
+    let lhs = Tensor::<s![2, 2], B>::from_slice(&[1.0f32, 0.0, 0.0, 1.0], ())?;
+    let rhs =
+        Tensor::<s![2, 2, 2], B>::from_slice(&[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], ())?;
+    // Final offset is 1, not 2: expert rows do not cover the activation.
+    let bad = Tensor::<s![3], B, i64>::from_slice(&[0, 1, 1], ())?;
+    assert!(lhs.grouped_matmul(&rhs, &bad).is_err());
+
+    // Decreasing offsets name overlapping spans rather than a partition.
+    let decreasing = Tensor::<s![3], B, i64>::from_slice(&[0, 2, 1], ())?;
+    assert!(lhs.grouped_matmul(&rhs, &decreasing).is_err());
+    Ok(())
+}

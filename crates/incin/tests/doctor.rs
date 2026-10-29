@@ -157,6 +157,7 @@ avx2: unavailable (scalar path)
 [devices]
 cpu: compiled, available as cpu:0
 cuda: compiled, available as cuda:2
+rocm: not compiled
 wgpu: compiled, no device found
 
 [caches]
@@ -167,7 +168,7 @@ telemetry-runs: unset — no XDG data directory could be resolved
 cpu pointwise f32 rank 2 inference: native
 cpu pointwise f32 rank 2 training: native
 cpu matmul f32 rank 2 inference: native
-cpu matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matmul)
+cpu matmul f16 rank 2 inference: native
 cpu reduction f32 rank 2 inference: native
 cpu reduction f64 rank 2 inference: unsupported (dtype f64 is unsupported for reduction)
 cpu conv2d f32 rank 4 training: native
@@ -175,7 +176,7 @@ cpu normalization f32 rank 2 training: native
 cuda pointwise f32 rank 2 inference: native
 cuda pointwise f32 rank 2 training: native
 cuda matmul f32 rank 2 inference: native
-cuda matmul f16 rank 2 inference: unsupported (dtype f16 is unsupported for matmul)
+cuda matmul f16 rank 2 inference: native
 cuda reduction f32 rank 2 inference: native
 cuda reduction f64 rank 2 inference: native
 cuda conv2d f32 rank 4 training: native
@@ -371,6 +372,62 @@ fn a_backend_that_is_both_compiled_and_present_says_nothing() {
     assert_eq!(codes(&Report::gather(&host)), Vec::<&str>::new());
 }
 
+/// The ROCm row distinguishes all three states issue #6 AC2 requires.
+///
+/// `not compiled` (feature off), `compiled, no device found` (feature on, no
+/// HIP runtime — the only state a scaffolding build can reach on real
+/// hardware), and `compiled, available` (future HIP-backed host, exercised
+/// here through the mock). The warning fires exactly in the middle state.
+#[test]
+fn the_rocm_row_distinguishes_all_three_availability_states() {
+    let absent = Report::gather(&FakeHost::healthy());
+    let rocm = absent
+        .devices
+        .iter()
+        .find(|device| device.kind == "rocm")
+        .expect("the report always has a rocm row");
+    assert!(!rocm.compiled_in);
+    assert!(!rocm.available);
+    assert!(absent.to_text().contains("rocm: not compiled"));
+
+    let host = FakeHost {
+        compiled: vec![DeviceKind::Cpu, DeviceKind::Rocm],
+        present: vec![DeviceId::cpu()],
+        ..FakeHost::healthy()
+    };
+    let report = Report::gather(&host);
+    let text = report.to_text();
+    assert!(text.contains("rocm: compiled, no device found"));
+    let rocm_findings: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|finding| finding.message.contains("rocm"))
+        .collect();
+    assert_eq!(rocm_findings.len(), 1);
+    assert_eq!(rocm_findings[0].severity, Severity::Warning);
+    assert!(rocm_findings[0].code == "backend-unavailable");
+    assert!(
+        rocm_findings[0]
+            .remedy
+            .as_deref()
+            .unwrap_or_default()
+            .contains("ROCm/HIP")
+    );
+
+    let host = FakeHost {
+        compiled: vec![DeviceKind::Cpu, DeviceKind::Rocm],
+        present: vec![DeviceId::cpu(), DeviceId::rocm(0)],
+        ..FakeHost::healthy()
+    };
+    let report = Report::gather(&host);
+    assert!(
+        report
+            .to_text()
+            .contains("rocm: compiled, available as rocm:0")
+    );
+    assert_eq!(codes(&report), Vec::<&str>::new());
+}
+
 #[test]
 fn a_missing_toolchain_version_is_a_warning() {
     let host = FakeHost {
@@ -525,11 +582,11 @@ fn a_probe_reports_the_registrys_reason_for_a_rejection() {
 
 /// A rejected probe is reported, but it is not a *finding*.
 ///
-/// `f16` matmul and `f64` reduction are unsupported on the CPU registry, which
-/// is how the CPU backend is rather than something wrong with the machine.
-/// Making each one a note put two of them at the top of every healthy report,
-/// duplicating the probe section verbatim. This pins the decision, because the
-/// obvious "improvement" is to add them back.
+/// `f64` reduction is unsupported on the CPU registry, which is how the CPU
+/// backend is rather than something wrong with the machine. Promoting every
+/// rejection to a note put one at the top of every healthy report,
+/// duplicating the probe section verbatim. This pins the decision, because
+/// the obvious "improvement" is to add it back.
 #[test]
 fn an_unsupported_operation_is_reported_without_becoming_a_finding() {
     let report = Report::gather(&FakeHost::healthy());
@@ -593,7 +650,12 @@ fn the_subcommand_renders_text_by_default_and_json_on_request() {
 #[test]
 fn a_real_build_agrees_with_the_mock_about_whether_it_can_run() {
     let report = Report::gather(&HostMachine);
-    let any_backend = cfg!(any(feature = "cpu", feature = "cuda", feature = "wgpu"));
+    let any_backend = cfg!(any(
+        feature = "cpu",
+        feature = "cuda",
+        feature = "rocm",
+        feature = "wgpu"
+    ));
 
     let claims_none = report
         .findings
@@ -624,7 +686,7 @@ fn the_real_machine_produces_a_report() {
     assert_eq!(report.schema_version, SCHEMA_VERSION);
     assert!(!report.toolchain.incin.is_empty());
     assert!(!report.features.is_empty());
-    assert_eq!(report.devices.len(), 3);
+    assert_eq!(report.devices.len(), 4);
 
     let cpu = report
         .devices

@@ -3,7 +3,9 @@
 use super::error::IdentityError;
 #[cfg(feature = "cuda")]
 use incin_core::tensor::device::{Cuda, CudaN};
-use incin_core::{tensor::device::Cpu, tensor::device::DeviceKind, typenum::Unsigned};
+#[cfg(any(feature = "cuda", feature = "wgpu"))]
+use incin_core::typenum::Unsigned;
+use incin_core::{tensor::device::Cpu, tensor::device::DeviceKind};
 
 /// A stable backend-family tag.
 ///

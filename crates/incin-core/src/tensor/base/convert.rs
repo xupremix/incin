@@ -43,6 +43,21 @@ impl<B: Backend + AutogradBackend, K: FloatDType, P: Placement, L: crate::shapes
     Tensor<Nil, B, K, Grad, P, L>
 {
     /// Computes the backward pass for a scalar tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let x = Cpu.tensor([1.0f32, 2.0]).unwrap().require_grad();
+    /// let loss = x.mul_scalar(3.0).unwrap().sum_all().unwrap();
+    /// let grads = loss.backward().unwrap();
+    /// assert_eq!(
+    ///     grads.require(&x).unwrap().to_vec1::<f32>().unwrap(),
+    ///     vec![3.0, 3.0]
+    /// );
+    /// ```
     pub fn backward(&self) -> Result<crate::autograd::Gradients<B>> {
         B::backward(&self.inner).map(crate::autograd::Gradients::from_backend)
     }
@@ -115,6 +130,17 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S1>>
     /// A layout proof survives: `S2::try_from_dims` fails unless `S2` covers
     /// the very dims the tensor already has, so a `RowMajor` operand comes
     /// back as `RowMajor` over the identical strides.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let dyn_t = Cpu.ones(vec![2, 3]).unwrap();
+    /// let static_t = dyn_t.into_shape::<s![2, 3]>().unwrap();
+    /// assert_eq!(static_t.dims().dims(), &[2, 3]);
+    /// ```
     pub fn into_shape<S2: Shape + DynShape>(self) -> Result<Tensor<S2, B, K, G, Local, L>>
     where
         // The result is typed `S2`, so the layout has to describe `S2` as well.
@@ -131,6 +157,17 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S1>>
     ///
     /// Erases the *shape* proof, not the layout one. Widening `S` to `Dyn`
     /// leaves the buffer and its strides untouched.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.ones(shape![2, 3]).unwrap();
+    /// let d = t.into_dyn();
+    /// assert_eq!(d.dims().dims(), &[2, 3]);
+    /// ```
     pub fn into_dyn(self) -> Tensor<crate::shapes::Dyn, B, K, G, Local, L>
     where
         L: crate::shapes::Restatable + crate::shapes::Layout<crate::shapes::Dyn>,
@@ -152,6 +189,19 @@ impl<S1: Shape + DynShape, B: Backend, K: DType, G: RequiresGrad, L: Layout<S1>>
     }
 
     /// Copies and converts this tensor to a new static shape S2.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let dyn_t = Cpu.ones(vec![2, 3]).unwrap();
+    /// let static_t = dyn_t.to_shape::<s![2, 3]>().unwrap();
+    /// assert_eq!(static_t.dims().dims(), &[2, 3]);
+    /// // The source is borrowed, not consumed.
+    /// assert_eq!(dyn_t.dims().dims(), &[2, 3]);
+    /// ```
     pub fn to_shape<S2: Shape + DynShape>(&self) -> Result<Tensor<S2, B, K, G, Local, L>>
     where
         L: crate::shapes::Restatable + crate::shapes::Layout<S2>,
@@ -178,6 +228,18 @@ impl<S: Shape, B: Backend, K: FloatDType, L: Layout<S>> Tensor<S, B, K, NoGrad, 
     /// storage, so whatever was true of the buffer's strides is still true of
     /// them. The same reasoning as `Dropout`'s identity branch -- the result is
     /// the operand, so the operand's claim describes it.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// assert!(!t.requires_grad());
+    /// let tracked = t.require_grad();
+    /// assert!(tracked.requires_grad());
+    /// ```
     pub fn require_grad(self) -> Tensor<S, B, K, Grad, Local, L> {
         Tensor::from_shape_value_unchecked(
             B::fresh_autograd_identity(self.inner),
@@ -196,6 +258,19 @@ impl<S: Shape, B: Backend, K: DType, L: Layout<S>> Tensor<S, B, K, Grad, Local, 
     /// and its strides are untouched, only the tape identity changes.
     ///
     /// [`require_grad`]: Tensor::require_grad
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let tracked = Cpu.tensor([1.0f32, 2.0]).unwrap().require_grad();
+    /// assert!(tracked.requires_grad());
+    /// let freed = tracked.detach();
+    /// assert!(!freed.requires_grad());
+    /// assert_eq!(freed.to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn detach(self) -> Tensor<S, B, K, NoGrad, Local, L> {
         Tensor::from_shape_value_unchecked(
             B::fresh_autograd_identity(self.inner),

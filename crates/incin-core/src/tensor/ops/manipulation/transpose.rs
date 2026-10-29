@@ -22,14 +22,68 @@ impl<
     TLayout: Layout<S>,
 > Tensor<S, B, K, G, Local, TLayout>
 {
-    /// Transposes two axis selectors while preserving the strongest available
-    /// output shape proof.
+    /// Transposes two axis selectors, returning a strided view over the same buffer.
+    ///
+    /// #113 settled the split-brain this used to be: CPU returned a view while
+    /// CUDA returned a copy, so no type could honestly describe the result.
+    /// The contract is now views everywhere (the PyTorch pattern): the
+    /// operation permutes the shape and strides over the same buffer and does
+    /// no copy. A layout is only meaningful against the shape it describes,
+    /// and the shape changed here, so the result claims nothing (`Dyn`) --
+    /// precisely the same honest typing as
+    /// [`transpose_view`](Self::transpose_view), which is the same semantic
+    /// under a static-selector spelling.
+    ///
+    /// Aliasing is the contract, not an accident: the result shares its buffer
+    /// with the input, so a write through either handle is visible through the
+    /// other. Densifying is explicit via
+    /// [`into_row_major`](crate::tensor::base::Tensor::into_row_major), which
+    /// re-proves density where it holds and refuses a view rather than
+    /// copying -- fail-closed, so a hidden copy can never slip in. Consumers
+    /// that allocate (pointwise operations, matmul) already hand back dense,
+    /// typed results of their own.
+    ///
+    /// CUDA still copies: its matmul/reduce consumers refuse strided operands
+    /// and there is no device here to verify strided support on. That is a
+    /// tracked deviation (see the capability row and `launch_transpose`,
+    /// issue #113), not a second contract.
+    ///
+    /// Neither spelling is universally faster -- measured on a GTX 1650 the
+    /// view wins for a single consumer and loses from about four reads -- so
+    /// a caller that has measured its own regime and wants density says so
+    /// through the spelling above.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the axes are out of range for the runtime rank,
+    /// or when the backend refuses the operation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])
+    ///     .unwrap()
+    ///     .into_shape::<s![2, 2]>()
+    ///     .unwrap();
+    /// let swapped = t.transpose(axis!(0), axis!(1)).unwrap();
+    /// assert_eq!(swapped.dims().dims(), &[2, 2]);
+    /// assert_eq!(
+    ///     swapped.to_vec1::<f32>().unwrap(),
+    ///     vec![1.0, 3.0, 2.0, 4.0]
+    /// );
+    /// // A view is not dense, and the densify spelling refuses rather than
+    /// // copies: `into_row_major` fails here instead of hiding a copy.
+    /// assert!(swapped.into_row_major().is_err());
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn transpose<Lx, Rx>(
         &self,
         left: Lx,
         right: Rx,
-    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G>>
+    ) -> Result<Tensor<<() as AxisPairSelector<S, Lx, Rx>>::Output, B, K, G, Local>>
     where
         (): AxisPairSelector<S, Lx, Rx>,
         B: Execute<op::TransposeExact> + Capabilities,
@@ -68,9 +122,19 @@ impl<
 
     /// Transposes two axes without copying, when the backend can.
     ///
-    /// The counterpart to [`transpose_structural`](Self::transpose_structural),
-    /// which materialises: this permutes the shape and strides over the same
-    /// buffer and does no work on the device.
+    /// The same semantic as [`transpose`](Self::transpose) -- a strided view
+    /// sharing the input's buffer, layout `Dyn` -- under a static-selector
+    /// spelling: the axes are named in the type rather than passed as values.
+    /// Kept beside `transpose` because external code and tests name it; two
+    /// spellings for one semantic is duplication the views-everywhere decision
+    /// accepts rather than churns callers over (issue #113).
+    ///
+    /// Aliasing is the contract, not an accident: the result shares its buffer
+    /// with the input, so a write through either handle is visible through the
+    /// other. Densifying is explicit via
+    /// [`into_row_major`](crate::tensor::base::Tensor::into_row_major), which
+    /// re-proves density where it holds and refuses a view rather than
+    /// copying.
     ///
     /// Neither is universally faster, which is why both exist. Measured on a
     /// GTX 1650 for a transpose followed by pointwise consumption, the view
@@ -92,6 +156,19 @@ impl<
     ///
     /// Returns an error when the axes are out of range for the runtime rank, or
     /// when the backend refuses the operation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// use incin::shapes::idx::{Here, Next};
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let viewed = t.transpose_view::<Here, Next<Here>>().unwrap();
+    /// // Same elements with axes 0 and 1 exchanged; no element moved on device.
+    /// assert_eq!(viewed.to_vec1::<f32>().unwrap(), vec![1.0, 3.0, 2.0, 4.0]);
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn transpose_view<Lx, Rx>(&self) -> Result<Tensor<<S as SwapAxes<Lx, Rx>>::Output, B, K, G>>
     where

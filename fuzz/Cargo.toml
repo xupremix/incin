@@ -1,0 +1,45 @@
+# cargo-fuzz workspace for issue #48.
+#
+# Detached from the main workspace (the `[workspace]` table below) so
+# cargo-fuzz can build these bins with the pinned nightly and sanitizer
+# flags from `fuzz/rust-toolchain.toml` without touching the root graph.
+# Run from the repository root: `cargo fuzz run <target>`.
+[package]
+name = "incin-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+incin-core = { path = "../crates/incin-core", features = ["postcard"] }
+incin-backends = { path = "../crates/incin-backends", default-features = false, features = [
+    "std",
+    "cpu",
+] }
+
+[workspace]
+
+[[bin]]
+name = "onnx_parser"
+path = "fuzz_targets/onnx_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "state_envelope"
+path = "fuzz_targets/state_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gguf_reader"
+path = "fuzz_targets/gguf_reader.rs"
+test = false
+doc = false
+bench = false

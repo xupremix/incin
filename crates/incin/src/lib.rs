@@ -80,6 +80,7 @@
     include_str!("../../../docs/book/src/introduction.md"),
     include_str!("../../../docs/book/src/installation.md"),
     include_str!("../../../docs/book/src/editor_integrations.md"),
+    include_str!("../../../docs/book/src/cli_tooling.md"),
     include_str!("../../../docs/book/src/quickstart.md"),
     include_str!("../../../docs/book/src/tensors.md"),
     include_str!("../../../docs/book/src/shapes.md"),
@@ -95,6 +96,10 @@
     include_str!("../../../docs/book/src/distributed.md"),
     include_str!("../../../docs/book/src/metrics.md"),
     include_str!("../../../docs/book/src/saving_loading.md"),
+    include_str!("../../../docs/book/src/howto_training_loop.md"),
+    include_str!("../../../docs/book/src/howto_save_load.md"),
+    include_str!("../../../docs/book/src/howto_quantize.md"),
+    include_str!("../../../docs/book/src/howto_debug_shapes_errors.md"),
     include_str!("../../../docs/book/src/backends.md"),
     include_str!("../../../docs/book/src/target_api.md"),
     include_str!("../../../docs/book/src/backend_authoring.md"),
@@ -114,6 +119,16 @@
     include_str!("../../../docs/book/src/deep_lowering.md"),
     include_str!("../../../docs/book/src/deep_proofs.md"),
     include_str!("../../../docs/book/src/deep_macros_internals.md"),
+    include_str!("../../../docs/book/src/deep_autograd.md"),
+    include_str!("../../../docs/book-next/src/next_overview.md"),
+    include_str!("../../../docs/book-next/src/next_wgpu_gaps.md"),
+    include_str!("../../../docs/book-next/src/next_cuda.md"),
+    include_str!("../../../docs/book-next/src/next_metal.md"),
+    include_str!("../../../docs/book-next/src/next_quantized_training.md"),
+    include_str!("../../../docs/book-next/src/next_distributed_execution.md"),
+    include_str!("../../../docs/book-next/src/next_compiled_fusion.md"),
+    include_str!("../../../docs/book-next/src/next_normalization_dynamics.md"),
+    include_str!("../../../docs/book-next/src/next_custom_autograd.md"),
 )]
 mod book_docs {}
 
@@ -135,19 +150,21 @@ pub use incin_core::nn::state::{
     VisitStateMut,
 };
 pub use incin_core::optim::{
-    Adam, AdamW, ConstantLR, LRScheduler, LinearLR, Optimizer, OptimizerBackend, SGD,
+    Adam, AdamW, ConstantLR, ExponentialLR, LRScheduler, LinearLR, LinearWarmup, Optimizer,
+    OptimizerBackend, RMSprop, SGD,
 };
 #[cfg(feature = "std")]
-pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+pub use incin_core::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
 pub use incin_core::shapes::{Dyn, DynShape, Shape};
 pub use incin_core::tensor::device::{
-    Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+    Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
 };
 pub use incin_core::tensor::dtype::{
     BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
-    FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16, f16,
+    DTypeRegistry, FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16, f16,
 };
 pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
+pub use incin_core::tensor::ops::quantization::{FloatCapable, QuantCapable};
 
 /// Incin's target-backed adapter for model-ready MNIST batches.
 #[derive(Clone)]
@@ -225,6 +242,8 @@ impl MnistTargetExt for incin_data::vision::mnist::MnistDataset {
 pub use incin_core::tensor::device::{Cuda, CudaN};
 #[cfg(feature = "metal")]
 pub use incin_core::tensor::device::{Metal, MetalN};
+#[cfg(feature = "rocm")]
+pub use incin_core::tensor::device::{Rocm, RocmN};
 #[cfg(feature = "wgpu")]
 pub use incin_core::tensor::device::{Wgpu, WgpuN};
 
@@ -270,6 +289,10 @@ pub mod __macro_support {
 
 /// Unstable APIs that carry no compatibility guarantee.
 pub mod experimental {
+    /// Dropless grouped-GEMM mixture-of-experts prototype (issue #102,
+    /// PROPOSALS.md D-111): P1 target path, CPU. Prototype-implemented,
+    /// pending maintainer ratification.
+    pub use incin_core::experimental::{DroplessMoE, DroplessMoEBackend, ExpertMlp, GroupedExpert};
     /// Partial, fail-closed model import macros.
     pub use incin_macros::{autotune, import_model, model};
     #[cfg(feature = "distributed")]
@@ -291,10 +314,11 @@ pub mod experimental {
         pub use incin_core::experimental::compiled::{
             AllocationPlanner, ArtifactHeader, ArtifactVersion, BoundedPlanTuner, BufferSlot,
             CapturedGraph, CapturedNode, CompileOptions, CompiledArtifact, CompiledPlan,
-            ConstantFolder, DynamicShapePolicy, FusedKernel, FusionBlocker, FusionCandidate,
-            FusionPass, FusionPolicy, LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport,
+            ConstantFolder, DynamicShapePolicy, FusedKernel, FusedKernelLowering, FusionBlocker,
+            FusionCandidate, FusionPass, FusionPatternKind, FusionPolicy, GroupRefusal,
+            LivenessInterval, LivenessMap, MemoryPlan, PlanTuningReport, PlannedGroups,
             ReproducibilityManifest, SavedTensorSet, ShapeBucket, ShapeGuard, TuningUnavailable,
-            WeightPrepacker,
+            WeightPrepacker, fusion_pattern_kind,
         };
         /// Minimal graph and descriptor-building types for the preview CPU
         /// evaluator. These remain experimental with the rest of this module.
@@ -338,16 +362,16 @@ pub mod experimental {
             TwoRankBootstrapConfig,
         };
         pub use incin_core::dist::{
-            ActivationCheckpoint, AgreedPlan, CollectiveDType, CollectiveDescriptor,
-            CollectiveError, CollectiveKind, CollectivePlan, CollectivePlanBuilder,
-            CollectiveReductionDType, CollectiveTag, CommunicationEvidence, CompletePlacement,
-            ConstPlacement, ContextError, ContextFailure, DataParallelDType, DataParallelError,
-            DataParallelPlan, DataParallelPlanBuilder, DistributedContext,
+            ActivationCheckpoint, AgreedPlan, BucketError, BucketPlan, BucketPolicy,
+            CollectiveDType, CollectiveDescriptor, CollectiveError, CollectiveKind, CollectivePlan,
+            CollectivePlanBuilder, CollectiveReductionDType, CollectiveTag, CommunicationEvidence,
+            CompletePlacement, ConstPlacement, ContextError, ContextFailure, DataParallelDType,
+            DataParallelError, DataParallelPlan, DataParallelPlanBuilder, DistributedContext,
             DistributedContextHandle, DistributedContextState, DistributedError,
             DistributedIdentity, DistributedInputs, DistributedRule, ElementwisePlacement,
             FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
-            FsdpPlanBuilder, GPipe, GradientDescriptor, GradientId, GroupId, HybridPlanDType,
-            HybridPlanError, HybridPlanReport, HybridPlanner, HybridWorkload,
+            FsdpPlanBuilder, GPipe, GradientBucket, GradientDescriptor, GradientId, GroupId,
+            HybridPlanDType, HybridPlanError, HybridPlanReport, HybridPlanner, HybridWorkload,
             LOCAL_CUDA_DEVICE_ENV, LegalTransition, Local, Max, Mean, MemoryLimit, Min,
             OneForwardOneBackward, ParallelOptions, ParallelStrategy, ParallelStrategyKind,
             Partial, PartialReduction, PipelineAction, PipelineBoundaryId, PipelineClock,
@@ -380,8 +404,19 @@ pub mod experimental {
     #[cfg(feature = "train")]
     /// Preview training planner and trainer.
     pub mod training {
+        #[cfg(feature = "distributed")]
+        pub use crate::train::ShardingSpec;
+        #[cfg(feature = "distributed-reference")]
+        pub use crate::train::{BucketLaunch, ReferenceDataParallel, ReferenceRankSynchronizer};
         pub use crate::train::{
-            Decision, FitOutcome, HostMachine, Machine, Plan, TrainError, Trainer, TrainerBuilder,
+            CheckpointEvent, Decision, EarlyStopping, EpochEnd, FitConfig, FitOutcome, FitReport,
+            HostMachine, Machine, Monitor, Plan, SingleRankSynchronizer, TrainError, Trainer,
+            TrainerBuilder,
+        };
+        pub use incin_core::dist::sync::{
+            FsdpSynchronizer, GradientSynchronizer, ShardedGradients, SyncError,
+            all_gather_model_parameters, all_reduce_model_gradients, mask_gradients_to_owned_shard,
+            reduce_scatter_model_gradients,
         };
 
         /// Preview training-plan report renderer.
@@ -398,8 +433,12 @@ pub mod experimental {
 }
 
 #[cfg(feature = "backend-authoring")]
+mod backend_authoring_macros;
+
+#[cfg(feature = "backend-authoring")]
 /// Contracts and extension traits for backend authors.
 pub mod backend_authoring {
+    pub use crate::{declare_capabilities, declare_executors};
     pub use incin_core::backend_authoring::{
         Alignment, AttributeContract, AutogradBackend, Backend, Capabilities, CapabilityQuery,
         CapabilityRegistry, DescriptorError, Execute, ExecuteOutput, ExecutionContext,
@@ -458,19 +497,27 @@ pub mod test_utils {
 pub mod nn {
     pub use incin_core::nn::loss::{
         BCEWithLogitsShape, CrossEntropyReductionShape, CrossEntropyShape, L1ReductionShape,
-        L1Shape, MSEShape, Mean, NoneReduction, Reduction, ReductionMode, Sum,
+        L1Shape, MSEShape, Mean, NLLLoss, NoneReduction, Reduction, ReductionMode, SmoothL1Loss,
+        Sum,
     };
     pub use incin_core::nn::param;
     pub use incin_core::nn::{
-        AdaptiveAvgPool2d, AvgPool2d, BCEWithLogitsLoss, BatchNorm2d, BatchNormShape, Buffer,
-        ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape, CrossEntropyLoss, Dropout, ELU,
-        Embedding, EmbeddingShape, False, Flatten, GELU, Init, L1Loss, LSTM, LSTMCell, LayerNode,
-        LayerNorm, LayerNormShape, LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d,
-        Mish, ModelStats, Module, NamedLayers, OptionalField, Param, ParameterVisitor, RMSNorm,
-        RMSNormShape, RNN, RNNCell, ReLU, RnnShape, Sequential, Sigmoid, Softmax, Swish, Tanh,
-        TrainMode, TrainState, True, VisitParameters, batch_norm2d, conv1d, conv2d, embedding,
-        format_layer_summary, format_layer_summary_with_stats, layer_norm, linear, lstm, rms_norm,
-        rnn, sum_stats,
+        AdaptiveAvgPool2d, AttentionBackend, AttentionConfig, AttentionDirection, AvgPool2d,
+        BCEWithLogitsLoss, BatchNorm1d, BatchNorm1dShape, BatchNorm2d, BatchNormShape,
+        Bidirectional, Buffer, Causal, ComputeStats, Conv1d, Conv1dShape, Conv2d, Conv2dShape,
+        ConvTranspose2d, ConvTranspose2dShape, CrossAttention, CrossEntropyLoss, Dropout, ELU,
+        Embedding, EmbeddingShape, False, FeedForward, FeedForwardBackend, FeedForwardKind,
+        Flatten, GELU, GRU, GRUCell, GroupNorm, GroupNormShape, GruShape, Init, InstanceNorm,
+        InstanceNormShape, KvCache, L1Loss, LSTM, LSTMCell, LayerNode, LayerNorm, LayerNormShape,
+        LayerStats, Linear, LinearShape, LstmShape, MSELoss, MaxPool2d, Mish, MoE, MoEBackend,
+        ModelStats, Module, MultiHeadAttention, NamedLayers, NormPlacement, OptionalField, Param,
+        ParameterVisitor, PositionEncoding, RMSNorm, RMSNormShape, RNN, RNNCell, ReLU, RnnShape,
+        RotaryBackend, Router, RouterBackend, Routing, Sequential, Sigmoid, Softmax, Swish, Tanh,
+        TrainMode, TrainState, TransformerBackend, TransformerConfig, TransformerDecoderLayer,
+        TransformerEncoderLayer, TransformerLayer, True, Upsample, UpsampleMode, VisitParameters,
+        batch_norm2d, conv1d, conv2d, embedding, format_layer_summary,
+        format_layer_summary_with_stats, gru, gru_cell, layer_norm, linear, lstm, rms_norm, rnn,
+        sum_stats,
     };
     #[cfg(feature = "distributed")]
     pub use incin_core::nn::{TwoWayColumnLinearShape, TwoWayRowLinearShape};
@@ -480,17 +527,17 @@ pub mod nn {
 /// Optimization algorithms, loss functions, and learning rate schedulers.
 pub mod optim {
     pub use incin_core::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, OptimizerBackend,
-        ParameterGroup, SGD, clip_grad_norm, clip_grad_value,
+        Adam, AdamW, ConstantLR, ExponentialLR, Gradients, LRScheduler, LinearLR, LinearWarmup,
+        Optimizer, OptimizerBackend, ParameterGroup, RMSprop, SGD, clip_grad_norm, clip_grad_value,
     };
     #[cfg(feature = "std")]
-    pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+    pub use incin_core::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
 }
 
 /// Evaluation metrics (Accuracy, Precision, Recall, F1Score, MSE, ConfusionMatrix).
 pub mod metrics {
     pub use incin_core::metrics::{
-        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall,
+        Accuracy, ConfusionMatrix, F1Score, MSE, Mean, Metric, Precision, Recall, TopKAccuracy,
     };
 }
 
@@ -501,13 +548,15 @@ pub mod data {
     pub use incin_data::vision::mnist::MnistBatchTarget;
     pub use incin_data::{
         BatchResult, Collate, DataError, DataLoader, DataLoaderBuilder, Dataset, Downloader,
+        EpochBatches, EpochError,
     };
 }
 
 /// Data transformations and augmentation pipeline.
 pub mod transforms {
     pub use incin_data::transforms::{
-        CenterCrop, Compose, Normalize, RandomHorizontalFlip, Scale, Transform,
+        CenterCrop, Compose, Normalize, RandomCrop, RandomHorizontalFlip, Resize, Scale, ToTensor,
+        Transform,
     };
 }
 
@@ -586,6 +635,15 @@ pub type DefaultBackend = incin_backends::IncinBackend<incin_core::tensor::devic
 /// alias could only ever describe unproven tensors, and the operations that
 /// return a proof would have no writable return type on this side of the crate
 /// boundary. [`Dense`] is the shorthand for the row-major case.
+///
+/// # Examples
+///
+/// ```rust
+/// use incin::prelude::*;
+///
+/// let t = Tensor::<s![2, 3]>::zeros(()).unwrap();
+/// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![0.0; 6]);
+/// ```
 pub type Tensor<
     S,
     B = DefaultBackend,
@@ -641,6 +699,20 @@ pub type Dense<
 // `Tensor` above and `DefaultBackend` itself.
 #[cfg(feature = "cpu")]
 /// Linear.
+///
+/// A fully connected layer `y = x @ Wᵀ + b` over `s![InF, OutF]`, built with
+/// the default initialization policy.
+///
+/// # Examples
+///
+/// ```rust
+/// use incin::prelude::*;
+///
+/// let layer = Linear::<s![4, 2]>::build(()).unwrap();
+/// let x = Tensor::<s![2, 4]>::ones(()).unwrap();
+/// let out = layer.forward(x).unwrap();
+/// assert_eq!(out.dims().dims(), &[2, 2]);
+/// ```
 pub type Linear<S, B = DefaultBackend> = incin_core::nn::Linear<S, B>;
 #[cfg(not(feature = "cpu"))]
 /// Linear.
@@ -724,6 +796,22 @@ pub mod macros {
 }
 
 /// Prelude re-exporting high-frequency user types, macros, NN modules, and optimizers.
+///
+/// The facade has three import tiers:
+///
+/// * **User** — this prelude. Everything an ordinary model or training loop
+///   needs, behind the stable `std`/`cpu` surface.
+/// * **Backend authoring** — the `backend_authoring` module (behind the
+///   `backend-authoring` Cargo feature) plus `incin_backends::prelude`: the
+///   contracts a new backend implements against.
+/// * **Advanced** — the `advanced` module: structural shape proofs and
+///   type-level machinery for generic code below prelude control.
+///
+/// Which Cargo features each tier needs, and whether a feature is stable,
+/// preview, or hardware-gated, is declared per feature in the manifests'
+/// `[package.metadata.incin.feature-contract]` tables and rendered as
+/// `docs/FEATURE_MATRIX.md`; module-tier assignments live in
+/// `docs/public-api/API_TIERS.md`.
 pub mod prelude {
     pub use super::{Dense, Tensor};
     pub use incin_core::SeqTy;
@@ -744,14 +832,17 @@ pub mod prelude {
     // above rather than from here so it defaults its backend like `Tensor`.
     pub use incin_core::shapes::{Contiguous, FreshDense, Layout, RowMajor};
     pub use incin_core::tensor::device::{
-        ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+        ConstDevice, Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet,
+        DeviceSetError,
     };
     pub use incin_core::tensor::dtype::{
         BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
-        FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16, f16,
+        DTypeRegistry, FloatDType, IntDType, PlainDType, Q8_0, QuantDType, TensorElement, bf16,
+        f16,
     };
     pub use incin_core::tensor::grad::{Grad, NoGrad, RequiresGrad};
     pub use incin_core::tensor::matmul::MatMulShape;
+    pub use incin_core::tensor::ops::quantization::{FloatCapable, QuantCapable};
     pub use incin_core::tensor::transfer::ToDevice;
 
     pub use incin_core::exec::AxisSet;
@@ -767,6 +858,8 @@ pub mod prelude {
     pub use incin_core::tensor::device::{Cuda, CudaN};
     #[cfg(feature = "metal")]
     pub use incin_core::tensor::device::{Metal, MetalN};
+    #[cfg(feature = "rocm")]
+    pub use incin_core::tensor::device::{Rocm, RocmN};
     #[cfg(feature = "wgpu")]
     pub use incin_core::tensor::device::{Wgpu, WgpuN};
 
@@ -799,33 +892,46 @@ pub mod prelude {
     };
 
     pub use incin_core::nn::{
-        activation::{GELU, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        activation::{GELU, LeakyReLU, LogSoftmax, ReLU, Sigmoid, Softmax, Swish, Tanh},
+        attention::{AttentionConfig, CrossAttention, MultiHeadAttention, PositionEncoding},
         avg_pool2d::AvgPool2d,
         dropout::Dropout,
+        feed_forward::{FeedForward, FeedForwardKind},
         flatten::{Flatten, FlattenAxes, StructuralFlatten},
-        init::Init,
+        gru::{GRU, GRUCell},
+        init::{Init, orthogonal_, orthogonal_with_gain, trunc_normal_, trunc_normal_with},
         loss::{
-            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NoneReduction, Reduction,
+            BCEWithLogitsLoss, CrossEntropyLoss, L1Loss, MSELoss, Mean, NLLLoss, NoneReduction,
+            Reduction, SmoothL1Loss, Sum,
         },
         lstm::{LSTM, LSTMCell},
         max_pool2d::MaxPool2d,
         module::{Sequential, TrainMode},
+        moe::{FreezeExpert, MoE, MoEBackend, Router, RouterBackend, Routing, UnfreezeExpert},
         rms_norm::RMSNorm,
+        transformer::{
+            AttentionDirection, Bidirectional, Causal, NormPlacement, TransformerConfig,
+            TransformerDecoderLayer, TransformerEncoderLayer, TransformerLayer,
+        },
     };
 
     #[cfg(feature = "std")]
-    pub use incin_core::serialization::{Format, ModelExt, STATE_FORMAT_VERSION};
+    pub use incin_core::serialization::{
+        CheckpointError, Format, ModelExt, STATE_FORMAT_VERSION, SchedulerState,
+        TRAINING_CHECKPOINT_VERSION, TrainingCheckpoint, load_training_checkpoint,
+        save_training_checkpoint,
+    };
 
     pub use incin_core::exec::{LossScaleState, LossScaling};
     pub use incin_core::optim::{
-        Adam, AdamW, ConstantLR, Gradients, LRScheduler, LinearLR, Optimizer, ParameterGroup, SGD,
-        ScaledOptimizer,
+        Adam, AdamW, ConstantLR, ExponentialLR, Gradients, LRScheduler, LinearLR, LinearWarmup,
+        Optimizer, ParameterGroup, RMSprop, SGD, ScaledOptimizer,
     };
     #[cfg(feature = "std")]
-    pub use incin_core::optim::{CosineAnnealingLR, StepLR};
+    pub use incin_core::optim::{CosineAnnealingLR, CosineWithWarmup, StepLR};
 
     pub use incin_core::metrics::{
-        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall,
+        Accuracy, ConfusionMatrix, F1Score, MSE, Metric, Precision, Recall, TopKAccuracy,
     };
 
     #[cfg(feature = "distributed")]

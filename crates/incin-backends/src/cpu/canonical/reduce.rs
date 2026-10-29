@@ -177,6 +177,28 @@ impl<D: Device> Execute<op::Argsort> for CpuBackendImpl<D> {
     }
 }
 
+impl<D: Device> Execute<op::Sort> for CpuBackendImpl<D> {
+    type Output = (CpuStorage, CpuStorage);
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Sort, Self>,
+    ) -> Result<(CpuStorage, CpuStorage), BackendError> {
+        let operation = OperationKind::Sort;
+        let input = reduction_operand(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        let attributes = request.operation.descriptor().attributes();
+        dispatch_index_dtype!(operation, attributes.index_dtype, |KIndex| {
+            crate::cpu::ops::reduce::sort::<KIndex>(input, attributes.axis, attributes.descending)
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))
+        })
+    }
+}
+
 impl<D: Device> Execute<op::TopK> for CpuBackendImpl<D> {
     type Output = (CpuStorage, CpuStorage);
 

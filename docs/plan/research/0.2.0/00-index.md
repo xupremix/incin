@@ -46,6 +46,31 @@ themselves are left as written rather than edited in place.
 - **CUDA movement rows widened** -- transpose, broadcast, narrow and concat
   claim the dense storage set on CUDA after a byte-exact hardware matrix;
   catalog 174 operations, 164 backend-executable, oracle floor 163.
+- **GRD-006 remainder scoped** -- new report `grd-006-graph-owned-tapes.md`:
+  the unification half stays complete; the remainder (explicit graph values
+  replacing four thread-locals, saved-tensor lifetime owned by the graph,
+  checked node structure consuming the parked arity item) is staged so the
+  recent `tape_record` shims keep working through the migration.
+- **Custom-operation autograd reviewed and repaired** -- new report
+  `custom-op-autograd.md`, with the options not taken in
+  `custom-op-autograd-decisions.md`. The lever was the capability system
+  enforcing `training` in one direction only: the dispatcher refuses a training
+  query against a non-training row, and nothing checked that a row claiming
+  training actually records. The CPU oracle now runs all 2286 training tuples
+  with recording enabled and fails a row whose tape did not grow, which named
+  eight operations carrying no gradient at all (`sin`, `cos`, `log2`, `log10`,
+  `to_dtype` float-to-float, `frac`, `fmod`, `remainder`). Also lands
+  `Tensor::apply_op`, a public backend-generic `gradcheck`, and a uniform
+  `tape_record`/`tape_record_with` seam across all four backends.
+- **The construction and custom-operation surfaces reviewed as a whole** --
+  new report `architecture-review.md`. Four findings the earlier record
+  missed, of which the load-bearing one is that a custom forward kernel built
+  out of dispatched built-in operations had its gradient counted twice, with
+  nothing reporting it: the conformance oracle measured tape *depth*, which a
+  double record raises rather than lowers. That is repaired, and the oracle
+  gained the verdict that sees it. The report also corrects the record on the
+  per-backend and per-dtype multiplication a `DifferentiableOp` was thought to
+  imply, and section 4 carries the ordered list of what is next.
 
 **Corrections the later work forced**
 
@@ -143,13 +168,29 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
    resolves and the failing obligation lands on `(): Dim` one layer down where
    no curated message is attached. A named uninhabited bottom carrying both
    operands would fix it.
-5. #93 quantized contract (M): NumericDType marker, block-aware sharding,
-   type-enforced NoGrad. Gates #94/#95/#1.
+5. #93 quantized contract (M): **decisions settled 2026-09-24** — block
+   layout in format + block-aware sharding; STE gradient (PyTorch-style);
+   per-op admission (compile-fail static / typed Dyn error), not a blanket
+   NumericDType wall; comptime divisibility proofs; land tensor API now;
+   verify Q4_0/NVFP4/MXFP4 block generalization before freeze; bounds-only
+   admission with catalog gap documented. See `93-quantized-contract.md`;
+   block-generalization audit in `93-block-generalization.md`.
+   Gates #94/#95/#1.
 6. #102 MoE typing (M): static outer shapes + E+1 offset array.
+   Nameability audit in `102-nameable-spans.md` (2026-09-25): dynamic
+   spans are not usefully nameable — adopt offset-array-as-shape (option
+   C formalized) as target, option B as CPU interim behind one public
+   type; aux loss in `Module::Output` tuple (decided); E-const/k-const +
+   gate-weight-only gradients (defaults). Needs #100's mechanism.
 
 **Tier 2 — correctness bugs first**
 7. #103 scatter_add (S within M): see the correction above. Then the other 7
    routing primitives (nonzero waits on #102).
+7b. #113 transpose view-vs-copy: evidence memo in
+   `113-transpose-semantics.md` (2026-09-25) — SOTA survey + CPU
+   measurement; recommendation (materialize in `transpose`, keep
+   explicit `transpose_view`) awaits maintainer decision; CUDA-side
+   measurement needs the #82 runner.
 8. #90 dtype-parametric matmul (M): the f32 transmute is a latent unsoundness
    for bf16 storage; GemmComputeType mapping. Gates #2.
 
@@ -165,9 +206,28 @@ new hand-derived math. Tier 1 still needs `layer_norm`, `rms_norm`, `concat`,
     #106 last 6 (M, kernels partially exist unwired), #91 WGPU tiers
     (Tier 0 partly done; the rest blocked on a WGPU bool dtype).
 12. #101 attention modules (M/L), #104 KvCache first (S/M) then fused
-    attention (L), #8 execute_impls! (M), #96 descriptor-keyed subsystems (L),
+    attention (L), #8 execute_impls! (M), #96 descriptor-keyed subsystems (L)
+    — SOTA survey + decisions in `96-extension-points.md` (2026-09-25):
+    UNSEAL TensorElement with the POD bound (preconditions: NCCL
+    error-field honesty, consumer audit, BuiltinDType gates stay,
+    PROPOSALS.md ruling); two-tier device identity (first-class variants
+    for maintained backends incl. ROCm, External(DeviceKey) for third
+    party; Custom(u64) migrates),
     #94 FP8 (L) -> #95 FP4 (M) -> #3 (M) -> #1 (M), #99 FSDP tier (M) ->
     TP -> PP, #6 ROCm (M), streaming writes (M, 0.3.0 lane).
+
+## Forward-looking (post-0.2.0 inputs, 2026-09-25)
+- `moe-design-space.md`: 8 custom-MoE proposals (P1 dropless grouped-GEMM
+  over option-C offsets is the highest-leverage pick); FP8-per-expert,
+  FusedMoE kernel family, expert-parallel all-to-all, MoEfication
+  importer, load-balance telemetry.
+- `inference-engine-substrate.md`: staged serving roadmap — stage 1
+  starts with the generate loop + sampler (nothing else bottoms out
+  without it); paged KV, scheduler, GGUF import, quant, fused decode
+  follow in dependency order with test-shaped exit criteria.
+- `novel-solutions-platform.md`: friction audit (3 novelty walks with
+  stuck points) + top-3 unlocks (dtype checklist + guided refusals,
+  checked dtype dispatch in DifferentiableOp, DSL cliff expansion).
 
 ## Cross-cutting findings
 - **Dead/unwired code is a theme**: embedding.cu (non-conforming, unreferenced),

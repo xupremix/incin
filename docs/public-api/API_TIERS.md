@@ -21,6 +21,17 @@ it does not appear in a baseline. The governing rule is
 [API_DESIGN.md](../API_DESIGN.md): `pub(crate)` is the default, and a module
 earns `pub` only by being named in the table below.
 
+**A re-exported item carries the tier of the module it is re-exported into,
+not the tier of the module that defines it.** The tables below assign tiers to
+modules, which left the most commonly written call in the library without a
+stated compatibility status. `TargetExt` is defined in
+`incin_backends::target`, tier X, and re-exported into `incin::prelude`, tier
+S; the baseline records that as `pub use incin::prelude::TargetExt`. So
+`Cpu.zeros(shape![2, 3])` is a tier S call, with tier S's compatibility
+intent, and stays one for as long as the re-export does. This is not an
+inversion but what a facade is for: the expert-tier module is where a backend
+author reaches the trait, and the prelude is where a user reaches the method.
+
 ## `incin` — the facade
 
 | Module | Items | Tier | Notes |
@@ -77,7 +88,7 @@ supported import.
 | `dispatch` | 72 | X | Runtime backend selection for `Dyn`. |
 | `external` | 67 | X | Conformance harness for third-party backends. |
 | `prelude` | 50 | X | Documented in `lib.rs` as the single import surface for backend authors. |
-| `codegen` | 25 | X | `render_wgsl` / `render_msl` / `render_cuda` on `PointwiseOpSpec`. Deliberately frozen: this is what a new accelerator backend needs. |
+| `codegen` | 102 | X | The IR body seam: `IrExpr` → `fragment::lower_scalar` → `ScalarFragment`, the `catalog` pointwise vocabulary (`unary_fused_backward` is the shipped fused backward), and the experimental `dsl`/`jit` custom-op pair. Whole-kernel emitters with no consumer under `src/` were removed per #111. |
 | `nn_target` | 6 | X | |
 | `detect` | 6 | X | Runtime device detection. |
 | `simd` | 5 | X | Compile-time lane-width resolution (`simd_lanes` is a `const fn`) plus AVX2 detection. Kept public deliberately: it has a module doc comment and a curated crate-root re-export, and it resolves const-generic parameters rather than executing operations. |

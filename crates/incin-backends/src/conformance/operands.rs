@@ -215,7 +215,19 @@ fn role_buffer(tuple: &AdvertisedTuple, role: Role, length: usize) -> Result<Cpu
     match role {
         Role::Tuple => buffer(tuple.dtype, length),
         Role::Mask => Ok(CpuBuffer::Bool(alloc::vec![1; length])),
+        // `Float` stays pinned at `f32` even where the row widened past it
+        // (CUDA's `where_cond`/`masked_fill` rows now claim `FLOAT_AND_BOOL`):
+        // the fixture poses one representative float operand, the row's union
+        // is what admits the rest, and neither family varies with the tuple
+        // dtype - wider-dtype coverage lives in the backend's own tests.
         Role::Float | Role::FloatMatrix => buffer(DTypeId::F32.descriptor(), length),
+        // Grouped matrices pin f32 the way `FloatMatrix` does for
+        // `embedding_lookup`: `inference.rs` `require_float` refuses integer
+        // matrices, and integer tuples built integer matrices here for 12
+        // REJECTED findings. Offsets stay i64 below.
+        Role::GroupedActivation { .. } | Role::GroupedExperts { .. } => {
+            buffer(DTypeId::F32.descriptor(), length)
+        }
         Role::Index | Role::IndexVector => Ok(CpuBuffer::I64(alloc::vec![0; length])),
         // The shaped roles fix an extent, never a dtype. A convolution weight
         // and its activation must agree on dtype for the row to mean anything,
@@ -226,7 +238,22 @@ fn role_buffer(tuple: &AdvertisedTuple, role: Role, length: usize) -> Result<Cpu
         | Role::OutputVector
         | Role::ChannelVector
         | Role::TrailingVector
-        | Role::LinearWeight => buffer(tuple.dtype, length),
+        | Role::LinearWeight
+        // The quantized pair fixes extents, never dtypes, the same way: both
+        // operands carry the tuple's `q8_0`, which is what the descriptor's
+        // dtype gate requires and what the negative probe varies.
+        | Role::QuantizedLhs { .. }
+        | Role::QuantizedRhs { .. } => buffer(tuple.dtype, length),
+        // An i64 ramp tiling `[0, tokens)`, never a zero-fill: `expert_spans`
+        // in `cpu/ops/matmul/grouped.rs` requires a non-decreasing
+        // `[experts + 1]` tile from zero to the token count, and an all-zero
+        // tile would collapse every expert span to empty instead of tiling
+        // the rows.
+        Role::GroupedOffsets { experts, tokens } => Ok(CpuBuffer::I64(
+            (0..=experts)
+                .map(|step| (step * tokens / experts) as i64)
+                .collect(),
+        )),
     }
 }
 
@@ -382,6 +409,42 @@ pub(crate) fn operand(
         }
         (_, Role::Paired { rows, columns }) => paired(tuple.rank, rows, columns)?,
         (_, Role::LinearWeight) => linear_weight(&activation)?,
+        // The quantized lhs batches like a paired operand, because the kernel
+        // walks every leading axis generically; the rhs is a plain 2D weight
+        // at every tuple rank, because the kernel reads it as `[N, K]`
+        // outright and the descriptor pins it exactly.
+        (
+            _,
+            Role::QuantizedLhs {
+                tokens,
+                contracting,
+            },
+        ) => paired(tuple.rank, tokens, contracting)?,
+        (
+            _,
+            Role::QuantizedRhs {
+                out_rows,
+                contracting,
+            },
+        ) => alloc::vec![out_rows, contracting],
+        (
+            _,
+            Role::GroupedActivation {
+                tokens,
+                contracting,
+            },
+        ) => {
+            alloc::vec![tokens, contracting]
+        }
+        (
+            _,
+            Role::GroupedExperts {
+                experts,
+                contracting,
+                out_cols,
+            },
+        ) => alloc::vec![experts, contracting, out_cols],
+        (_, Role::GroupedOffsets { experts, .. }) => alloc::vec![experts + 1],
         (_, Role::ChannelVector) => channel_vector(&activation)?,
         (_, Role::TrailingVector) => trailing_vector(&activation)?,
         (Operands::UnaryScalar, _) => alloc::vec![1; tuple.rank],

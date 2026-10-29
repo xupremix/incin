@@ -1,8 +1,18 @@
-//! JIT compilation and dynamic kernel execution engine for IncinIR on CUDA and CPU.
+//! Dynamic execution of `KernelDefinition` custom operations on CUDA and the host CPU.
 //!
-//! Compiles, caches, and executes custom operations represented by `KernelDefinition` on the fly,
-//! providing zero-overhead execution for user-defined forward expressions and symbolically derived
-//! backward autograd passes.
+//! On CUDA, `CudaJitKernel` renders the definition's forward and backward
+//! sources and compiles them through the production NVRTC dispatcher, caching
+//! the loaded module per device: the compiled kernel runs at device speed.
+//!
+//! On the host, `CpuJitKernel` is a per-element tree-walking interpreter over
+//! `f64`. It exists to produce reference numbers for a definition — the CPU
+//! twin a hardware run is compared against — and carries the arithmetic cost
+//! of a tree walk per element. It is not a compiled kernel and not the path a
+//! production CPU operation takes; that path is `kernel::scalar` through the
+//! backend executors.
+//!
+//! Both directions of a definition carry backward passes derived
+//! symbolically from the forward expression.
 
 use super::ir::KernelDefinition;
 #[cfg(feature = "cuda")]
@@ -120,84 +130,6 @@ impl CudaJitKernel {
         }
 
         Ok(CudaStorage::new(Arc::new(output), inputs[0].shape.to_vec()))
-    }
-
-    /// Executes the symbolically generated backward pass for a given input tensor index.
-    pub fn launch_backward(
-        &self,
-        grad_out: &CudaStorage,
-        inputs: &[&CudaStorage],
-        input_idx: usize,
-    ) -> Result<CudaStorage> {
-        if input_idx >= self.definition.input_arity {
-            return Err(Error::Msg(alloc::format!(
-                "JIT backward input_idx {input_idx} out of range (arity {})",
-                self.definition.input_arity
-            )));
-        }
-        let first_buf = &*inputs[0].buffer;
-        let numel = crate::bytes::checked_numel(&inputs[0].shape)?;
-        let stream = first_buf.device.default_stream();
-
-        let mut grad_in = CudaBuffer {
-            len: numel,
-            dtype: self.definition.dtype.into(),
-            data: Arc::new(
-                stream
-                    .alloc_zeros::<u8>(crate::bytes::byte_len(
-                        self.definition.dtype,
-                        numel,
-                        OperationKind::Pointwise,
-                    )?)
-                    .map_err(|e| Error::Msg(alloc::format!("CUDA JIT alloc failed: {e:?}")))?,
-            ),
-            device: first_buf.device.clone(),
-            device_id: self.device_id,
-        };
-
-        if numel == 0 {
-            return Ok(CudaStorage::new(
-                Arc::new(grad_in),
-                inputs[input_idx].shape.to_vec(),
-            ));
-        }
-
-        let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(self.device_id)?;
-        let entry_point = alloc::format!("{}_backward_{input_idx}", self.definition.name);
-        let function = dispatcher.get_function(&self.module_name, &entry_point)?;
-
-        // SAFETY: Checked tensor shapes and dimensions; unique output buffer allocation.
-        unsafe {
-            let grad_in_u8 = Arc::get_mut(&mut grad_in.data).ok_or_else(|| {
-                Error::Msg("fresh CUDA JIT output was unexpectedly shared".into())
-            })?;
-            use cudarc::driver::PushKernelArg;
-            let block_size = 256u32;
-            let grid_size = (numel as u32).div_ceil(block_size);
-            let config = cudarc::driver::LaunchConfig {
-                grid_dim: (grid_size, 1, 1),
-                block_dim: (block_size, 1, 1),
-                shared_mem_bytes: 0,
-            };
-
-            let mut builder = stream.launch_builder(&function);
-            builder.arg(&*grad_out.buffer.data);
-            for input in inputs {
-                builder.arg(&*input.buffer.data);
-            }
-            builder.arg(&mut *grad_in_u8);
-            let numel_i32 =
-                i32::try_from(numel).map_err(|_| Error::Msg("numel overflow".into()))?;
-            builder.arg(&numel_i32);
-            builder.launch(config).map_err(|e| {
-                Error::Msg(alloc::format!("CUDA JIT backward launch failed: {e:?}"))
-            })?;
-        }
-
-        Ok(CudaStorage::new(
-            Arc::new(grad_in),
-            inputs[input_idx].shape.to_vec(),
-        ))
     }
 }
 

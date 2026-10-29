@@ -1,6 +1,12 @@
 # Installation
 
-Incin is on crates.io. Depend on the facade with:
+Incin is on crates.io. Add the facade to a binary crate:
+
+```bash
+cargo add incin
+```
+
+or write the dependency by hand:
 
 ```toml
 [dependencies]
@@ -18,6 +24,29 @@ incin = { path = "../incin/crates/incin" }
 The default feature set is `["std", "cpu"]`, a standard-library CPU build
 with no extra setup. That's enough for everything in this book except the
 [Backends](./backends.md) chapter.
+
+## Verifying the install
+
+Put this in `src/main.rs`:
+
+```rust
+use incin::prelude::*;
+
+fn main() -> Result<()> {
+    let x = Tensor::<s![2, 3], DefaultBackend>::zeros(())?;
+    println!("{:?}", x.dims());
+    Ok(())
+}
+```
+
+Then:
+
+```bash
+cargo run
+```
+
+If this compiles and prints `[2, 3]`, you're set up correctly — the shape
+in the type made it through the compiler, and the default backend ran it.
 
 ## Stability
 
@@ -52,11 +81,15 @@ that happens to depend on the facade.
 | Feature | What it enables |
 |---|---|
 | `cpu` | The CPU backend, `DefaultBackend`, `DefaultDevice`. On by default. |
+| `cpu-blas` | A blocked GEMM behind large f32 CPU matmuls. Off by default; the pure-Rust CPU kernels are complete without it. |
 | `cuda`, `wgpu`, `metal` | The respective accelerator backend. Read [Backends](./backends.md) before reaching for these; coverage is much narrower than CPU today. |
 | `backend-authoring` | Public contracts for implementing custom backends and operations. |
 | `train` | The preview automatic `Trainer`. |
 | `distributed` | Mesh/placement/collective planning: a design surface, not yet an execution path. |
 | `data-hub` | The Hugging Face Hub client at `incin::hub`. Off by default: it brings an async runtime and a second TLS stack into the graph. |
+
+The full, generated inventory — every feature, its tier, prerequisites, and
+hardware boundary — is [Every feature flag](./feature_flags.md).
 
 Enable what you need:
 
@@ -64,17 +97,3 @@ Enable what you need:
 [dependencies]
 incin = { path = "../incin/crates/incin", features = ["cpu"] }
 ```
-
-## Verifying the install
-
-```rust,no_run
-use incin::prelude::*;
-
-fn main() -> Result<()> {
-    let x = Tensor::<s![2, 3], DefaultBackend>::zeros(())?;
-    println!("{:?}", x.dims());
-    Ok(())
-}
-```
-
-If this compiles and prints `[2, 3]`, you're set up correctly.

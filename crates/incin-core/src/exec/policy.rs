@@ -303,6 +303,19 @@ pub struct ExecutionPolicy {
     /// NaN handling policy in force.
     pub nan_policy: NanPolicy,
     /// Runtime precision policy in force.
+    ///
+    /// Copied by [`ExecutionContext::from_scope`] from the ambient scope, so a
+    /// scope (the trainer's `fit` installs one) makes every eagerly built
+    /// context carry the plan's precision to
+    /// [`ExecutionRequest::context`](crate::tensor::backend::ExecutionRequest::context).
+    /// Dispatch acts on this axis before inference: its funnels run the
+    /// [`autocast`](crate::exec::autocast) allowlist (issue #2), casting
+    /// operands toward the active dtype - and widening reductions to the
+    /// exact accumulator - when a caster is installed and the backend's
+    /// capability rows admit the cast. An `fp32` policy carries no active
+    /// dtype, so dispatch casts nothing.
+    ///
+    /// [`ExecutionContext::from_scope`]: crate::exec::ExecutionContext::from_scope
     pub precision: crate::exec::RuntimePrecisionPolicy,
 }
 

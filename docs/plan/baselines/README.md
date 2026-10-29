@@ -60,3 +60,8 @@ Rules for comparisons:
   values in this document;
 - add a new benchmark ID if workload semantics change.
 
+CI compiles the benchmarks on every PR (`cargo bench -p incin --no-run` in
+the ledger job) so a bitrotted benchmark fails fast, but never executes
+them: timing gates need quiet hardware, and live performance gates are
+future work (TUN-008/CI-006).
+

@@ -121,9 +121,9 @@ impl Route {
 ///
 /// Every variant here states an operand contract that a capability row cannot.
 /// A row carries one dtype set applied to every operand in turn, which is why
-/// `declarations.rs` documents `INDEX_AND_F32_DTYPES` and `F32_AND_BOOL` as
-/// unions rather than as per-operand claims. The fixture is the only place that
-/// knows the split, so the split lives here.
+/// `declarations.rs` documents `INDEX_AND_F32_DTYPES`, `F32_AND_BOOL` and
+/// `FLOAT_AND_BOOL` as unions rather than as per-operand claims. The fixture
+/// is the only place that knows the split, so the split lives here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Operands {
     /// No operand at all.
@@ -173,8 +173,9 @@ impl Operands {
 ///
 /// A capability row applies one dtype set to every operand in turn, so a row
 /// whose operands genuinely differ has to state the *union* of what they carry.
-/// `declarations.rs` says so twice at length, for `INDEX_AND_F32_DTYPES` and
-/// for `F32_AND_BOOL`. The union is the loosest honest claim the row can make
+/// `declarations.rs` says so at length, for `INDEX_AND_F32_DTYPES`, for
+/// `F32_AND_BOOL`, and - since CUDA's `where_cond`/`masked_fill` rows widened
+/// past `f32` - for `FLOAT_AND_BOOL`. The union is the loosest honest claim the row can make
 /// and it is not a claim that either operand may be either dtype, so walking it
 /// and handing every operand the same dtype poses invocations the operation was
 /// never meant to accept.
@@ -251,6 +252,69 @@ pub(crate) enum Role {
     TrailingVector,
     /// A `[out, in]` projection, where `in` is the input's final extent.
     LinearWeight,
+    /// A quantized matmul lhs: `[...batch, tokens, contracting]`.
+    ///
+    /// The batch prefix is the ladder's, the way [`Role::Paired`] builds it:
+    /// the kernel contracts only the trailing axis and walks the rest
+    /// generically, so every tuple rank the row admits poses its own prefix.
+    /// Both operands carry the tuple's `q8_0`, which is what the descriptor's
+    /// dtype gate requires, so unlike the grouped roles below these deliberately
+    /// stay out of [`Role::carries_tuple_dtype`]'s exclusion list.
+    QuantizedLhs {
+        /// Token rows, the leading output extent beside the rhs rows.
+        tokens: usize,
+        /// Extent contracted against the rhs trailing axis, a multiple of 32.
+        contracting: usize,
+    },
+    /// A quantized matmul rhs: a plain 2D `[out_rows, contracting]` weight.
+    ///
+    /// Fixed rank two at every tuple rank, because the kernel reads the rhs as
+    /// `[N, K]` outright and the descriptor pins it exactly while the lhs keeps
+    /// the rank-at-least-two window. A [`Role::Paired`] cannot serve here: it
+    /// derives both trailing extents per tuple rank and shares the `K = 3`
+    /// the block kernel refuses.
+    QuantizedRhs {
+        /// Output rows, the trailing output extent.
+        out_rows: usize,
+        /// Extent contracted against the lhs trailing axis, a multiple of 32.
+        contracting: usize,
+    },
+    /// A grouped matmul activation: `[tokens, contracting]`.
+    ///
+    /// The token rows the offsets tile tiles into per-expert spans, read
+    /// against one `[contracting, out_cols]` slice of the expert stack each.
+    /// Fixed the way [`Role::FloatMatrix`] is, because the operation's own
+    /// ranks are what they are at every tuple rank the row admits.
+    GroupedActivation {
+        /// Token rows, tiled by the offsets operand.
+        tokens: usize,
+        /// Extent contracted against the expert stack's middle axis.
+        contracting: usize,
+    },
+    /// A grouped matmul expert stack: `[experts, contracting, out_cols]`.
+    ///
+    /// One `[contracting, out_cols]` weight per expert, stacked on axis zero
+    /// the way the kernel's `narrow` slices them back off.
+    GroupedExperts {
+        /// Expert slices stacked on axis zero.
+        experts: usize,
+        /// Extent contracted against the activation's final axis.
+        contracting: usize,
+        /// Output columns each expert writes.
+        out_cols: usize,
+    },
+    /// A grouped matmul offsets tile: `[experts + 1]`, an i64 ramp tiling
+    /// `[0, tokens)`.
+    ///
+    /// The one operand that pins a dtype of its own rather than carrying the
+    /// tuple's, the way [`Role::IndexVector`] does for the other mixed-dtype
+    /// rows.
+    GroupedOffsets {
+        /// Expert slices the tile separates, so one more entry than this.
+        experts: usize,
+        /// Token rows the tile spans, so its final entry.
+        tokens: usize,
+    },
 }
 
 impl Role {
@@ -274,7 +338,14 @@ impl Role {
     pub(crate) const fn carries_tuple_dtype(self) -> bool {
         !matches!(
             self,
-            Self::Mask | Self::Float | Self::FloatMatrix | Self::Index | Self::IndexVector
+            Self::Mask
+                | Self::Float
+                | Self::FloatMatrix
+                | Self::Index
+                | Self::IndexVector
+                | Self::GroupedActivation { .. }
+                | Self::GroupedExperts { .. }
+                | Self::GroupedOffsets { .. }
         )
     }
 }

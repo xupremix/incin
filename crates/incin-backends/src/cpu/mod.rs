@@ -35,6 +35,10 @@ pub(crate) mod creation;
 /// Finite-difference checks are compiled only for the CPU unit-test suite.
 #[cfg(test)]
 pub(crate) mod gradcheck;
+/// The public gradient checker's storage contract. Not test-gated: an
+/// implementation that existed only in this crate's tests would leave
+/// `incin_core::exec::gradcheck` unusable by the authors it is for.
+mod gradcheck_storage;
 pub(crate) mod ops;
 /// Internal storage types.
 pub(crate) mod storage;
@@ -52,12 +56,37 @@ pub(crate) mod var;
 //   - CpuBuffer         for pattern-matching in to_bytes / from_bytes
 pub use storage::{CpuBuffer, CpuStorage};
 pub use tape::CpuGrads;
+/// Discard every unevaluated node on this thread's tape without walking it.
+///
+/// The inference-loop release valve (#149): a forward that is never followed
+/// by `backward` would otherwise retain its graph for the life of the thread
+/// (an evaluation pass over a 1000-image subset grew RSS ~600 MB/epoch until
+/// OOM). Draining discards graphs, not gradients — call it only when no
+/// `backward` will follow on this thread. Pair with [`tape_depth`] to watch
+/// the gauge: depth that grows without bound across validation passes is the
+/// leak announcing itself before the OOM does. Prefer a non-recording
+/// [`GradMode`](incin_core::exec::GradMode) scope where the whole loop can
+/// run without recording; reach for this when the graph was already recorded.
+pub use tape::clear as drain_tape;
 /// Number of entries currently on this backend's autograd tape.
 ///
 /// Re-exported since `GRD-002`: the row claims a `NoGrad` chain records
 /// nothing, and its evidence test lives outside this crate. A guarantee
 /// nothing outside can observe is not a guarantee.
 pub use tape::depth as tape_depth;
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The downstream half of the custom-training contract: a foreign
+/// `Execute` implementation runs its forward kernel, then calls this with a
+/// [`TapeNode`](incin_core::exec::TapeNode) whose recipe maps one output
+/// gradient to one gradient per input. The node joins the same tape the
+/// built-in kernels record on, so `backward` walks mixed graphs as one.
+pub use tape::record as tape_record;
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of `tape_record`: the entry closure runs only when the
+/// ambient [`GradMode`](incin_core::exec::GradMode) records.
+pub use tape::record_with as tape_record_with;
 pub use var::CpuVar;
 
 /// The CPU pure-Rust `Backend` implementor.
@@ -107,10 +136,14 @@ pub(crate) fn validate_cpu_dtype(
                 | DTypeId::F64
                 | DTypeId::F16
                 | DTypeId::BF16
+                | DTypeId::F8E4M3
+                | DTypeId::F8E5M2
                 | DTypeId::U8
                 | DTypeId::U32
                 | DTypeId::I64
                 | DTypeId::Q8_0
+                | DTypeId::NVFP4
+                | DTypeId::MXFP4
                 | DTypeId::Bool
         )
     {
@@ -222,6 +255,18 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                 .iter()
                 .flat_map(|value| value.to_bits().to_ne_bytes())
                 .collect()),
+            // 1-byte dtypes with distinct Rust types: the bytes are the
+            // value, but the width alone must never decide the dtype (see
+            // the u8-collision audit, issue #94). These arms are keyed by
+            // buffer variant, not by width.
+            storage::CpuBuffer::F8E4M3(v) => Ok(v[offset..offset + num_elements]
+                .iter()
+                .map(|value| value.to_bits())
+                .collect()),
+            storage::CpuBuffer::F8E5M2(v) => Ok(v[offset..offset + num_elements]
+                .iter()
+                .map(|value| value.to_bits())
+                .collect()),
             storage::CpuBuffer::Q8_0(v) => Ok(v
                 .iter()
                 .flat_map(|block| {
@@ -232,6 +277,16 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                         .into_iter()
                         .chain(block.qs.iter().map(|value| *value as u8))
                 })
+                .collect()),
+            // Issue #95: block bytes are all `u8` (scale + packed nibbles),
+            // so the wire order is the field order — no endianness step.
+            storage::CpuBuffer::NVFP4(v) => Ok(v
+                .iter()
+                .flat_map(|block| core::iter::once(block.scale).chain(block.data.iter().copied()))
+                .collect()),
+            storage::CpuBuffer::MXFP4(v) => Ok(v
+                .iter()
+                .flat_map(|block| core::iter::once(block.scale).chain(block.data.iter().copied()))
                 .collect()),
         }
     }
@@ -299,6 +354,18 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                     .map(|chunk| half::bf16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])))
                     .collect(),
             ),
+            DTypeId::F8E4M3 => storage::CpuBuffer::F8E4M3(
+                bytes
+                    .iter()
+                    .map(|&b| incin_core::tensor::dtype::F8E4M3::from_bits(b))
+                    .collect(),
+            ),
+            DTypeId::F8E5M2 => storage::CpuBuffer::F8E5M2(
+                bytes
+                    .iter()
+                    .map(|&b| incin_core::tensor::dtype::F8E5M2::from_bits(b))
+                    .collect(),
+            ),
             DTypeId::Q8_0 => storage::CpuBuffer::Q8_0(
                 bytes
                     .chunks_exact(34)
@@ -310,6 +377,35 @@ impl<D: Device> incin_core::backend_authoring::HostInterop for CpuBackendImpl<D>
                         storage::BlockQ8_0 {
                             d: half::f16::from_bits(u16::from_ne_bytes([chunk[0], chunk[1]])),
                             qs,
+                        }
+                    })
+                    .collect(),
+            ),
+            // Issue #95: scale-first interleaved wire order (see
+            // `to_bytes` above): byte 0 is the block scale, the rest the
+            // packed nibbles. Lengths are pre-checked by `size_bytes`.
+            DTypeId::NVFP4 => storage::CpuBuffer::NVFP4(
+                bytes
+                    .chunks_exact(9)
+                    .map(|chunk| {
+                        let mut data = [0u8; 8];
+                        data.copy_from_slice(&chunk[1..]);
+                        storage::BlockNVFP4 {
+                            scale: chunk[0],
+                            data,
+                        }
+                    })
+                    .collect(),
+            ),
+            DTypeId::MXFP4 => storage::CpuBuffer::MXFP4(
+                bytes
+                    .chunks_exact(17)
+                    .map(|chunk| {
+                        let mut data = [0u8; 16];
+                        data.copy_from_slice(&chunk[1..]);
+                        storage::BlockMXFP4 {
+                            scale: chunk[0],
+                            data,
                         }
                     })
                     .collect(),

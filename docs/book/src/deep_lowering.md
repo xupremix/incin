@@ -177,6 +177,39 @@ Collapsing these three into one error type would discard exactly the
 information that tells you whether to fix your program, your policy, or
 your hardware budget.
 
+## Fusion: legality-checked pointwise groups (CMP-005)
+
+Above dispatch, the preview `compiled` pipeline can fuse chains of
+pointwise operations into a single kernel. This is form 3 of the three
+fusion forms in [Custom and fused operations](./custom_operations.md):
+combining several graph nodes belongs to compiler lowering, not to the
+operation-authoring API.
+
+`FusionPass` plans candidate groups under explicit legality gates, all of
+which must hold before a group is accepted (`0bd705a4`):
+
+| Gate | What it refuses |
+|---|---|
+| Elementwise-class table (`FusionPatternKind`) | any non-pointwise op (matmul, reductions, …) |
+| Single-output exclusivity | intermediates that are also graph outputs |
+| Exactly one consumer | intermediates read by more than one node |
+| Topological order | chains whose links are not sequential |
+| Uniform shape/dtype | mixed geometries inside one chain |
+| Memory-traffic benefit floor | groups that would not save reads/writes |
+| `SavedTensorSet` check | any intermediate backward needs (`#112`'s documented risk) |
+
+A group that passes every gate is rebuilt from the captured graph by
+`codegen::fragment::lower_scalar`, re-validating each link rather than
+trusting the pass, and rendered into the existing `kernel::scalar` template
+so strides, packing, autotune, and NVRTC are inherited unchanged. The chain
+is then one `KernelDefinition`: fused forward and gradient outputs are
+gated against stepwise (unfused) execution in both directions.
+
+`FusionPass::apply` still fails closed when no executable descriptor can be
+produced, so admission and the capability table are untouched by fusion.
+The NVRTC dispatch tail compiles and resolves under `#[ignore = "requires
+CUDA hardware"]`; CPU-JIT forward and gradient comparisons run in CI.
+
 ## Capture: recording what was validated
 
 Because every stage above runs before launch and produces one validated

@@ -2,23 +2,25 @@
 //!
 //! Same rationale as `compare` for being a dedicated kernel rather than a
 //! trip through the generic pointwise pipeline: `where_cond` reads three
-//! operands of two different dtypes (a `bool` mask, two `float` values), and
-//! `masked_fill` reads a `bool` mask beside a `float` operand and a scalar
+//! operands of two different dtypes (a `bool` mask, two float values), and
+//! `masked_fill` reads a `bool` mask beside a float operand and a scalar
 //! attribute - neither shape fits `launch_binary_op`, which reads and writes
 //! exactly two operands of one shared dtype. Both kernels are compiled once
 //! from `kernels/select.cu` and cached under the module name `select`, same
 //! pattern as `concat`/`shape_op`/`compare`.
 //!
-//! Only `f32` for the value operands, and only the contiguous,
-//! identically-shaped case, for the same byte-width reason `compare`
-//! documents: `kernels/select.cu` reads every value pointer as a hardcoded
-//! `float*`.
+//! Every float storage dtype the kernel exports an entry point for
+//! (`f32`/`f64`/`f16`/`bf16`, issue #90 slice 3), selected by the
+//! fail-closed maps below so a buffer can never reach a kernel typed for a
+//! different dtype. Only the contiguous, identically-shaped case: the
+//! executor broadcasts every operand to one shared shape first, the same
+//! precondition `compare` documents.
 
 use crate::cuda::storage::{CudaBuffer, CudaStorage};
 use alloc::sync::Arc;
 use incin_core::error::{Error, Result};
 use incin_core::shapes::error::OperationKind;
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 
 #[cfg(feature = "cuda")]
 const SELECT_SRC: &str = include_str!("kernels/select.cu");
@@ -56,92 +58,68 @@ fn require_same_device(a: &CudaStorage, b: &CudaStorage) -> Result<()> {
     Ok(())
 }
 
-/// Broadcasts a `bool` mask to `target_shape`.
+/// Zero-filled contiguous storage in `sample`'s dtype on `sample`'s device.
 ///
-/// Not `crate::cuda::ops::shape::launch_broadcast`: at the time this was
-/// written, that launched a `float*`-only `shape_op` which panicked on a
-/// 1-byte allocation, so the mask needed its own `unsigned char` kernel.
-/// `shape_op` has since grown width-parametric entry points that move `bool`
-/// correctly (measured on hardware), which may make this dedicated path
-/// redundant -- see #122. Until that is settled, this stays: it reuses
-/// `crate::cuda::ops::shape::prepare_shape_params` for the index arithmetic
-/// (identical to `shape_op`'s `op_mode == 3`) and launches `select.cu`'s
-/// `broadcast_bool_op` against the mask's own raw byte buffer directly.
+/// The `where_cond` backward needs a zeros operand in the *value* dtype, not
+/// `f32`: all-zero bytes are `+0.0` in every float encoding, so one
+/// zeroed allocation serves `f32`/`f64`/`f16`/`bf16` alike without a
+/// host fill per dtype.
 #[cfg(feature = "cuda")]
-pub(crate) fn launch_broadcast_bool_mask(
-    mask: &CudaStorage,
-    target_shape: &[usize],
-) -> Result<CudaStorage> {
-    require_bool_mask(mask, "where_cond")?;
-
-    let mask_b = &*mask.buffer;
-    let device_id = mask_b.device_id;
-    ensure_select_loaded(device_id)?;
-    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("select", "broadcast_bool_op")?;
-    let stream = mask_b.device.default_stream();
-
-    let n_elements = crate::bytes::checked_numel(target_shape)?;
-    let n_elements_u32 = crate::cuda::checked_u32(n_elements, "CUDA broadcast-mask element count")?;
-    let params = crate::cuda::ops::shape::prepare_shape_params(
-        3,
-        n_elements_u32,
-        target_shape,
-        &mask.shape,
-        &[],
+pub(crate) fn zeros_like(sample: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {
+    let numel = crate::bytes::checked_numel(shape)?;
+    let stream = sample.buffer.device.default_stream();
+    let data = crate::cuda::ops::alloc_zeroed_bytes(
+        &stream,
+        sample.buffer.dtype,
+        numel,
+        OperationKind::Storage,
     )?;
-    let params_u8: &[u8] = bytemuck::cast_slice(&params);
-    let params_dev = stream
-        .clone_htod(params_u8)
-        .map_err(|e| Error::Msg(format!("broadcast-mask params upload failed: {e:?}")))?;
-
-    let bool_dtype = DTypeId::Bool.descriptor();
-    let mut out_b = CudaBuffer {
-        len: n_elements,
-        dtype: bool_dtype,
-        data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
-            &stream,
-            bool_dtype,
-            n_elements,
-            OperationKind::Broadcast,
-        )?),
-        device: mask_b.device.clone(),
-        device_id,
+    let buffer = CudaBuffer {
+        len: numel,
+        dtype: sample.buffer.dtype,
+        data: Arc::new(data),
+        device: sample.buffer.device.clone(),
+        device_id: sample.buffer.device_id,
     };
+    Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
+}
 
-    if n_elements == 0 {
-        return Ok(CudaStorage::new(Arc::new(out_b), target_shape.to_vec()));
+/// The kernel entry point for a value dtype, or a typed refusal for anything
+/// `select.cu` does not export a `where_cond` name for. Fail-closed by
+/// construction: the launcher launches exactly this name, so a dtype without
+/// an entry can never reach a buffer reinterpreted as the wrong type. Same
+/// contract as `matmul_entry_point` in `cuda/ops/matmul.rs`.
+#[cfg(feature = "cuda")]
+fn where_cond_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok("where_cond_op"),
+        Some(DTypeId::F64) => Ok("where_cond_op_f64"),
+        Some(DTypeId::F16) => Ok("where_cond_op_f16"),
+        Some(DTypeId::BF16) => Ok("where_cond_op_bf16"),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op: "where_cond",
+        }),
     }
+}
 
-    let block_size: u32 = 256;
-    let grid_size = n_elements_u32.div_ceil(block_size);
-    let config = cudarc::driver::LaunchConfig {
-        grid_dim: (grid_size, 1, 1),
-        block_dim: (block_size, 1, 1),
-        shared_mem_bytes: 0,
-    };
-
-    // SAFETY: validated broadcast metadata fixes the 21-u32 parameter view,
-    // numel, and launch extent; out_b is freshly and uniquely allocated.
-    unsafe {
-        let params_u32 = params_dev.transmute::<u32>(21).ok_or_else(|| {
-            Error::Msg("broadcast-mask params buffer was not 21 u32s wide".into())
-        })?;
-        let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
-            .ok_or_else(|| {
-                Error::Msg("fresh CUDA broadcast-mask output was unexpectedly shared".into())
-            })?;
-        use cudarc::driver::PushKernelArg;
-        stream
-            .launch_builder(&function)
-            .arg(&*mask_b.data)
-            .arg(&mut *out_slice)
-            .arg(&params_u32)
-            .launch(config)
-            .map_err(|e| Error::Msg(format!("CUDA broadcast-mask launch failed: {e:?}")))?;
+/// The kernel entry point for a value dtype, or a typed refusal for anything
+/// `select.cu` does not export a `masked_fill` name for. Same fail-closed
+/// contract as [`where_cond_entry_point`].
+#[cfg(feature = "cuda")]
+fn masked_fill_entry_point(dtype: DTypeDescriptor) -> Result<&'static str> {
+    match dtype.builtin_id() {
+        Some(DTypeId::F32) => Ok("masked_fill_op"),
+        Some(DTypeId::F64) => Ok("masked_fill_op_f64"),
+        Some(DTypeId::F16) => Ok("masked_fill_op_f16"),
+        Some(DTypeId::BF16) => Ok("masked_fill_op_bf16"),
+        _ => Err(Error::UnsupportedDType {
+            dtype,
+            backend: "Cuda",
+            op: "masked_fill",
+        }),
     }
-
-    Ok(CudaStorage::new(Arc::new(out_b), target_shape.to_vec()))
 }
 
 #[cfg(feature = "cuda")]
@@ -157,8 +135,19 @@ pub(crate) fn launch_where_cond(
         )));
     }
     require_bool_mask(mask, "where_cond")?;
-    crate::cuda::backend::cuda_require_f32(on_true.buffer.dtype, "where_cond")?;
-    crate::cuda::backend::cuda_require_f32(on_false.buffer.dtype, "where_cond")?;
+    // One typed kernel reads both value operands, so a mixed pair is refused
+    // rather than reinterpreted - the same `DTypeMismatch` contract
+    // `launch_matmul` keeps.
+    if on_true.buffer.dtype != on_false.buffer.dtype {
+        return Err(Error::DTypeMismatch {
+            operation: "where_cond",
+            expected: on_true.buffer.dtype,
+            actual: on_false.buffer.dtype,
+        });
+    }
+    // Selects the entry point and refuses every dtype without one, before
+    // any buffer is reinterpreted.
+    let entry_point = where_cond_entry_point(on_true.buffer.dtype)?;
     require_same_device(mask, on_true)?;
     require_same_device(mask, on_false)?;
 
@@ -166,16 +155,16 @@ pub(crate) fn launch_where_cond(
     let device_id = mask.buffer.device_id;
     ensure_select_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("select", "where_cond_op")?;
+    let function = dispatcher.get_function("select", entry_point)?;
     let stream = mask.buffer.device.default_stream();
 
-    let f32_dtype = DTypeId::F32.descriptor();
+    let value_dtype = on_true.buffer.dtype;
     let mut out_b = CudaBuffer {
         len: numel,
-        dtype: f32_dtype,
+        dtype: value_dtype,
         data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
             &stream,
-            f32_dtype,
+            value_dtype,
             numel,
             OperationKind::Pointwise,
         )?),
@@ -197,7 +186,11 @@ pub(crate) fn launch_where_cond(
     };
 
     // SAFETY: checked broadcast shape and numel bound kernel views; out_b is
-    // fresh, so Arc::get_mut supplies the only mutable device handle.
+    // fresh, so Arc::get_mut supplies the only mutable device handle. The
+    // views pass through as byte buffers - the driver only needs the device
+    // address, the kernel is typed by the entry point, and
+    // `where_cond_entry_point` above established that the entry's type really
+    // is this buffer's dtype.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {
@@ -218,14 +211,12 @@ pub(crate) fn launch_where_cond(
     Ok(CudaStorage::new(Arc::new(out_b), mask.shape.to_vec()))
 }
 
-/// No tape entry is pushed here, matching `cpu::ops::shape_ops::masked_fill_storage`
-/// exactly: neither backend's `masked_fill` currently routes a gradient back
-/// to `input`, so a masked-fill result is a leaf on the tape on both. That is
-/// an existing, pre-`compare`/`select` gap shared by both backends rather
-/// than something this module introduces - fixing it would mean adding the
-/// same backward (`grad_input = masked_fill(grad_out, mask, 0.0)`) to CPU
-/// too, which is separate work, not a CUDA-only patch that would leave the
-/// two backends disagreeing on what `masked_fill` differentiates through.
+/// No tape entry is pushed here by design, not by omission: `launch_where_cond`
+/// follows the same split, and the `Execute<op::MaskedFill>` implementation in
+/// `cuda/executor.rs` pushes the backward (`grad_input = masked_fill(grad_out,
+/// mask, 0.0)`, mirroring CPU's `masked_fill_storage`) around this launch.
+/// Keeping the launch itself tape-free is what lets both the forward-only and
+/// the tracked call sites share it.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_masked_fill(
     input: &CudaStorage,
@@ -239,23 +230,25 @@ pub(crate) fn launch_masked_fill(
         )));
     }
     require_bool_mask(mask, "masked_fill")?;
-    crate::cuda::backend::cuda_require_f32(input.buffer.dtype, "masked_fill")?;
+    // Selects the entry point and refuses every dtype without one, before
+    // any buffer is reinterpreted.
+    let entry_point = masked_fill_entry_point(input.buffer.dtype)?;
     require_same_device(mask, input)?;
 
     let numel = crate::bytes::checked_numel(&input.shape)?;
     let device_id = input.buffer.device_id;
     ensure_select_loaded(device_id)?;
     let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
-    let function = dispatcher.get_function("select", "masked_fill_op")?;
+    let function = dispatcher.get_function("select", entry_point)?;
     let stream = input.buffer.device.default_stream();
 
-    let f32_dtype = DTypeId::F32.descriptor();
+    let value_dtype = input.buffer.dtype;
     let mut out_b = CudaBuffer {
         len: numel,
-        dtype: f32_dtype,
+        dtype: value_dtype,
         data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
             &stream,
-            f32_dtype,
+            value_dtype,
             numel,
             OperationKind::Pointwise,
         )?),
@@ -268,7 +261,6 @@ pub(crate) fn launch_masked_fill(
     }
 
     let numel_i32 = crate::cuda::checked_i32(numel, "element count")?;
-    let value_f32 = value as f32;
     let block_size: u32 = 256;
     let grid_size = (numel_i32 as u32).div_ceil(block_size);
     let config = cudarc::driver::LaunchConfig {
@@ -277,24 +269,173 @@ pub(crate) fn launch_masked_fill(
         shared_mem_bytes: 0,
     };
 
+    // The scalar at the kernel's own precision: `f32`/`f64` narrow from the
+    // `f64` attribute directly, while the half types round once through
+    // `f32` and pass their two-byte encoding - the driver needs the value
+    // width to match the entry point's parameter exactly.
+    //
     // SAFETY: checked mask/input/output shapes and numel bound this launch;
     // out_b is freshly allocated and uniquely owned.
+    macro_rules! launch_with_scalar {
+        ($scalar:ident, $out:ident) => {{
+            use cudarc::driver::PushKernelArg;
+            stream
+                .launch_builder(&function)
+                .arg(&*input.buffer.data)
+                .arg(&*mask.buffer.data)
+                .arg(&$scalar)
+                .arg(&mut *$out)
+                .arg(&numel_i32)
+                .launch(config)
+                .map_err(|e| Error::Msg(format!("CUDA masked_fill launch failed: {e:?}")))?;
+        }};
+    }
+    // SAFETY: the output buffer was allocated fresh for this launch, so it has
+    // no other owners and `Arc::get_mut` either succeeds or fails closed.
     unsafe {
         let out_slice: &mut cudarc::driver::CudaSlice<u8> = Arc::get_mut(&mut out_b.data)
             .ok_or_else(|| {
                 Error::Msg("fresh CUDA masked_fill output was unexpectedly shared".into())
             })?;
-        use cudarc::driver::PushKernelArg;
-        stream
-            .launch_builder(&function)
-            .arg(&*input.buffer.data)
-            .arg(&*mask.buffer.data)
-            .arg(&value_f32)
-            .arg(&mut *out_slice)
-            .arg(&numel_i32)
-            .launch(config)
-            .map_err(|e| Error::Msg(format!("CUDA masked_fill launch failed: {e:?}")))?;
+        match value_dtype.builtin_id() {
+            Some(DTypeId::F32) => {
+                let scalar = value as f32;
+                launch_with_scalar!(scalar, out_slice);
+            }
+            Some(DTypeId::F64) => {
+                let scalar = value;
+                launch_with_scalar!(scalar, out_slice);
+            }
+            Some(DTypeId::F16) => {
+                let scalar = half::f16::from_f32(value as f32).to_bits();
+                launch_with_scalar!(scalar, out_slice);
+            }
+            Some(DTypeId::BF16) => {
+                let scalar = half::bf16::from_f32(value as f32).to_bits();
+                launch_with_scalar!(scalar, out_slice);
+            }
+            // Unreachable: `masked_fill_entry_point` above already refused
+            // every dtype without an entry, so this arm only repeats its
+            // refusal to keep the match total without a panic.
+            _ => {
+                return Err(Error::UnsupportedDType {
+                    dtype: value_dtype,
+                    backend: "Cuda",
+                    op: "masked_fill",
+                });
+            }
+        }
     }
 
     Ok(CudaStorage::new(Arc::new(out_b), input.shape.to_vec()))
+}
+
+/// Pure entry-point selection: runs wherever the `cuda` feature is on,
+/// with no device required. The launcher launches exactly the name
+/// `where_cond_entry_point` returns, so proving the mapping here is proving
+/// a buffer can never reach a kernel typed for a different dtype.
+#[cfg(all(test, feature = "cuda"))]
+mod where_cond_entry_point_tests {
+    use super::where_cond_entry_point;
+    use incin_core::error::Error;
+    use incin_core::tensor::dtype::DTypeId;
+
+    #[test]
+    fn where_cond_entry_point_maps_each_float_and_refuses_the_rest() {
+        assert_eq!(
+            where_cond_entry_point(DTypeId::F32.descriptor()).unwrap(),
+            "where_cond_op"
+        );
+        assert_eq!(
+            where_cond_entry_point(DTypeId::F64.descriptor()).unwrap(),
+            "where_cond_op_f64"
+        );
+        assert_eq!(
+            where_cond_entry_point(DTypeId::F16.descriptor()).unwrap(),
+            "where_cond_op_f16"
+        );
+        assert_eq!(
+            where_cond_entry_point(DTypeId::BF16.descriptor()).unwrap(),
+            "where_cond_op_bf16"
+        );
+
+        for id in [
+            DTypeId::I64,
+            DTypeId::Bool,
+            DTypeId::U8,
+            DTypeId::U32,
+            DTypeId::Q8_0,
+        ] {
+            let error = match where_cond_entry_point(id.descriptor()) {
+                Ok(name) => panic!("{id:?} must be refused, got entry point {name:?}"),
+                Err(error) => error,
+            };
+            assert!(
+                matches!(
+                    error,
+                    Error::UnsupportedDType {
+                        backend: "Cuda",
+                        op: "where_cond",
+                        ..
+                    }
+                ),
+                "{id:?}: expected UnsupportedDType naming Cuda/where_cond, got {error:?}"
+            );
+        }
+    }
+}
+
+/// The `masked_fill` half of the entry-point contract: the launcher launches
+/// exactly the name `masked_fill_entry_point` returns, so proving the
+/// mapping here is proving a buffer can never reach a kernel typed for a
+/// different dtype. Runs wherever `cuda` is on, with no device.
+#[cfg(all(test, feature = "cuda"))]
+mod masked_fill_entry_point_tests {
+    use super::masked_fill_entry_point;
+    use incin_core::error::Error;
+    use incin_core::tensor::dtype::DTypeId;
+
+    #[test]
+    fn masked_fill_entry_point_maps_each_float_and_refuses_the_rest() {
+        assert_eq!(
+            masked_fill_entry_point(DTypeId::F32.descriptor()).unwrap(),
+            "masked_fill_op"
+        );
+        assert_eq!(
+            masked_fill_entry_point(DTypeId::F64.descriptor()).unwrap(),
+            "masked_fill_op_f64"
+        );
+        assert_eq!(
+            masked_fill_entry_point(DTypeId::F16.descriptor()).unwrap(),
+            "masked_fill_op_f16"
+        );
+        assert_eq!(
+            masked_fill_entry_point(DTypeId::BF16.descriptor()).unwrap(),
+            "masked_fill_op_bf16"
+        );
+
+        for id in [
+            DTypeId::I64,
+            DTypeId::Bool,
+            DTypeId::U8,
+            DTypeId::U32,
+            DTypeId::Q8_0,
+        ] {
+            let error = match masked_fill_entry_point(id.descriptor()) {
+                Ok(name) => panic!("{id:?} must be refused, got entry point {name:?}"),
+                Err(error) => error,
+            };
+            assert!(
+                matches!(
+                    error,
+                    Error::UnsupportedDType {
+                        backend: "Cuda",
+                        op: "masked_fill",
+                        ..
+                    }
+                ),
+                "{id:?}: expected UnsupportedDType naming Cuda/masked_fill, got {error:?}"
+            );
+        }
+    }
 }

@@ -649,9 +649,22 @@ impl TopologyFingerprint {
 
         digest = digest.number(self.devices.len() as u64);
         for identity in &self.devices {
+            let kind = identity.device.kind();
             digest = digest
-                .text(identity.device.kind().name())
-                .number(identity.device.ordinal() as u64)
+                .text(kind.name())
+                .number(identity.device.ordinal() as u64);
+            // The short `name()` is a diagnostic label, not an identity: two
+            // vendors can both ship an "npu". External families additionally
+            // hash their namespace and version, so a backend that bumps its
+            // topology encoding produces a different digest and old plans
+            // refuse on mismatch (D-110). Built-in families hash exactly what
+            // they always hashed.
+            if let Some(key) = kind.external_key() {
+                digest = digest
+                    .text(key.namespace())
+                    .number(u64::from(key.version()));
+            }
+            digest = digest
                 .text(&identity.persistent)
                 .text(&identity.architecture);
         }
@@ -851,20 +864,6 @@ pub enum BindError {
         rank: usize,
     },
 
-    #[error("rank 0 is architecture {expected} but rank {rank} is {found}")]
-    /// The mesh spans more than one compute architecture.
-    ///
-    /// Same family, different capabilities: the ranks do not agree on which
-    /// kernels exist, and a collective is a place where they all have to.
-    MixedArchitecture {
-        /// The architecture rank 0 established.
-        expected: String,
-        /// The architecture this rank has.
-        found: String,
-        /// The first rank that disagreed.
-        rank: usize,
-    },
-
     #[error("process layout {layout} does not describe a {world}-rank mesh")]
     /// The launcher's idea of the world disagrees with the type's.
     UnsupportedProcessLayout {
@@ -883,6 +882,21 @@ pub enum BindError {
         from: usize,
         /// The rank it could not reach.
         to: usize,
+    },
+
+    #[error("collective group along {} for rank {rank} has no members", axis.name())]
+    /// The mesh's own group table did not cover a rank the count guard checked.
+    ///
+    /// `axis` comes from the table itself and `rank` is below `M::WORLD`,
+    /// so `None` here means the type-level degrees disagree with the world
+    /// size - a broken mesh definition, not a launcher mistake. Returned
+    /// rather than panicked because `bind` already reports every other
+    /// binding failure as data.
+    InconsistentTopology {
+        /// The axis whose group was missing.
+        axis: MeshAxis,
+        /// The rank the group was requested for.
+        rank: usize,
     },
 }
 
@@ -939,21 +953,21 @@ impl<M: ValidMesh> DeviceMesh<M> {
                 });
             }
 
-            if let Some(head) = identities.first() {
-                if head.device.kind() != identity.device.kind() {
-                    return Err(BindError::MixedBackendFamily {
-                        expected: head.device.kind(),
-                        found: identity.device.kind(),
-                        rank,
-                    });
-                }
-                if head.architecture != identity.architecture {
-                    return Err(BindError::MixedArchitecture {
-                        expected: head.architecture.clone(),
-                        found: identity.architecture,
-                        rank,
-                    });
-                }
+            if let Some(head) = identities.first()
+                && head.device.kind() != identity.device.kind()
+            {
+                return Err(BindError::MixedBackendFamily {
+                    expected: head.device.kind(),
+                    found: identity.device.kind(),
+                    rank,
+                });
+                // Architectures are recorded per rank (fingerprint, plan
+                // validation) but never refused: heterogeneous meshes run
+                // collectives over whatever transport the library
+                // negotiates (SHM/PCIe fallback where P2P is absent),
+                // proven on sm_50+sm_75 hardware. Kernels are launched
+                // per-rank against each rank's own device, so a mixed
+                // pair needs no shared kernel set.
             }
 
             identities.push(identity);
@@ -975,7 +989,7 @@ impl<M: ValidMesh> DeviceMesh<M> {
             for from in 0..M::WORLD {
                 let members = groups
                     .group(axis, from)
-                    .expect("rank is below the world size the count guard already checked");
+                    .ok_or(BindError::InconsistentTopology { axis, rank: from })?;
                 for to in members {
                     if to == from {
                         continue;

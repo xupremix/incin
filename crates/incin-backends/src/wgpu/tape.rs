@@ -75,6 +75,37 @@ pub fn push(entry: TapeEntry) {
     }
 }
 
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The downstream half of the custom-training contract, mirroring
+/// `cpu::tape_record`: a foreign `Execute` implementation runs its forward
+/// kernel, then calls this with a `TapeNode` whose recipe maps one output
+/// gradient to one gradient per input. The node joins the same tape the
+/// built-in kernels record on, under the same `GradMode` gate, so mixed
+/// graphs walk as one graph. Recipes should stay in-kernel (broadcast,
+/// scale, elementwise launches): every host value access is a readback.
+pub fn record(entry: TapeNode<WgpuStorage>) {
+    push(entry);
+}
+
+/// Record a custom operation's backward recipe, building it only if kept.
+///
+/// The lazy form of [`record`](self::record): the entry closure runs only
+/// when the ambient `GradMode` records.
+pub fn record_with(entry: impl FnOnce() -> TapeNode<WgpuStorage>) {
+    push_with(entry);
+}
+
+impl<D, K> incin_core::backend_authoring::RecordingBackend<K> for super::WgpuBackendImpl<D>
+where
+    D: incin_core::tensor::device::Device,
+    K: incin_core::tensor::dtype::DType,
+{
+    fn record_custom(node: TapeNode<WgpuStorage>) {
+        push(node);
+    }
+}
+
 pub struct WgpuGrads {
     pub(crate) grads: GradientMap<WgpuStorage>,
 }
@@ -159,11 +190,29 @@ fn add_wgpu_storage(a: &WgpuStorage, b: &WgpuStorage) -> Result<WgpuStorage> {
             incin_core::error::Error::Msg("WGPU launch element count exceeds u32".into())
         })?,
     ]; // op_mode 0=add
-    dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params);
+    dispatch::dispatch_binary(&a.buffer, &b.buffer, &out_buf, &params)?;
     Ok(WgpuStorage::new(out_buf, a.shape.to_vec()))
 }
 
-pub fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuStorage> {
+/// `pub(crate)`, as on CPU and CUDA.
+///
+/// It was the one of the four that was public, and the four are not one
+/// contract: they differ in which reduce kernel they reach for (and, until
+/// the size-1-target panic fix, in how a reduced-all-the-way scalar seed
+/// was expanded - CPU/CUDA/WGPU now all expand a compatible smaller grad
+/// to the target shape; Metal still carries the unguarded keepdim loop). Exporting them
+/// as if they were one API is how a downstream recipe comes to depend on
+/// this backend's edge cases and finds another's. If un-broadcasting is
+/// ever offered downstream it belongs on a trait beside `TapeStorage`,
+/// written once.
+///
+/// Semantics (fail-closed, shared with CPU and CUDA): on success the
+/// result's shape equals `target_shape`, so it can always be accumulated
+/// into the target. A compatible grad of lower rank than the target - a
+/// scalar seed, e.g. `[] -> [1]` - expands (a scalar broadcasts to any
+/// shape); a grad that does not broadcast into the target refuses with a
+/// named `ShapeMismatch`. Never panics on rank-deficient input.
+pub(crate) fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuStorage> {
     if grad.shape == target_shape {
         return Ok(grad.clone());
     }
@@ -176,14 +225,44 @@ pub fn unbroadcast(grad: &WgpuStorage, target_shape: &[usize]) -> Result<WgpuSto
         result = sum_dim_squeeze(&result, 0)?;
     }
 
-    // Reduce keepdim dims
-    for (i, &t_dim) in target_shape.iter().enumerate() {
-        if t_dim == 1 && result.shape[i] != 1 {
-            result = sum_dim_keepdim(&result, i)?;
+    // Reduce keepdim dims. Only when the ranks agree after the leading
+    // squeeze (grad rank >= target rank): that squeeze right-aligns the
+    // axes, so indexing `result.shape[i]` against `target_shape[i]` is
+    // sound only at equal rank. When the target outranks the grad - the
+    // scalar-seed case, e.g. `[] -> [1]` - there is no aligned axis to
+    // reduce; the tail expands the smaller grad instead of indexing past
+    // it (the latent cross-backend panic this guards).
+    if result.shape.len() == target_shape.len() {
+        for (i, &t_dim) in target_shape.iter().enumerate() {
+            if t_dim == 1 && result.shape[i] != 1 {
+                result = sum_dim_keepdim(&result, i)?;
+            }
         }
     }
 
-    Ok(result)
+    if result.shape[..] == target_shape[..] {
+        return Ok(result);
+    }
+
+    // Expand what reduction left smaller: a reduced-all-the-way scalar seed
+    // reaches here with fewer elements than its target, and the kernels
+    // downstream do not broadcast scalars implicitly the way the CPU ones
+    // do, so handing the scalar on produces a shape the next launch refuses.
+    // `broadcast_shape` must resolve *to* the target, not merely be
+    // mutual: the materializer assumes a legal target (right-aligned
+    // broadcast into `target_shape`) and would otherwise read out of bounds
+    // on a shape like `[4] -> [2,1]`. Mirrors the CUDA tail (`cuda/tape.rs`)
+    // and the CPU tail (`cpu/tape.rs`).
+    let resolved = crate::layout::broadcast_shape(&result.shape, target_shape)?;
+    if resolved.as_slice() != target_shape {
+        return Err(incin_core::error::Error::ShapeMismatch {
+            op: "autograd unbroadcast",
+            expected: target_shape.to_vec(),
+            got: result.shape.to_vec(),
+            msg: "the reduced gradient does not broadcast into the target shape".into(),
+        });
+    }
+    crate::wgpu::backend::broadcast_storage(&result, target_shape)
 }
 
 fn sum_dim_squeeze(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
@@ -219,6 +298,118 @@ fn sum_dim_keepdim(storage: &WgpuStorage, axis: usize) -> Result<WgpuStorage> {
         axis_len,
         inner_stride,
         total,
-    );
+    )?;
     Ok(WgpuStorage::new(out_buf, out_shape))
+}
+
+#[cfg(test)]
+/// `tests`.
+mod tests {
+    use super::*;
+
+    /// `storage`.
+    fn storage(values: &[f32], shape: &[usize]) -> WgpuStorage {
+        let buffer =
+            WgpuBuffer::try_from_slice(values).expect("a WGPU adapter is available for tape tests");
+        WgpuStorage::new(buffer, shape.to_vec())
+    }
+
+    /// `scalar`.
+    fn scalar(v: f32) -> WgpuStorage {
+        storage(&[v], &[])
+    }
+
+    /// `vector`.
+    fn vector(v: &[f32]) -> WgpuStorage {
+        storage(v, &[v.len()])
+    }
+
+    /// `matrix`.
+    fn matrix(v: &[f32], rows: usize, cols: usize) -> WgpuStorage {
+        storage(v, &[rows, cols])
+    }
+
+    /// `read`.
+    fn read(storage: &WgpuStorage) -> Vec<f32> {
+        storage
+            .buffer
+            .to_vec::<f32>()
+            .expect("reading a contiguous f32 buffer back must succeed")
+    }
+
+    // --- unbroadcast tail tests (#121) ---
+
+    #[test]
+    /// `unbroadcast_scalar_seed_is_materialized_to_full_width`.
+    fn unbroadcast_scalar_seed_is_materialized_to_full_width() {
+        // The #121 tail: a reduced-all-the-way scalar seed for a `[3]`
+        // target must be materialized to full width here, because the WGPU
+        // kernels do not broadcast scalars implicitly the way the CPU ones
+        // do -- handing the scalar on produces a shape the next launch
+        // refuses (`iteration_plan: expected [], got [3]`).
+        let grad = scalar(2.0);
+        let result = unbroadcast(&grad, &[3]).expect("a compatible scalar seed expands");
+        assert_eq!(result.shape, vec![3]);
+        assert_eq!(read(&result), vec![2.0, 2.0, 2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_incompatible_shapes_are_refused`.
+    fn unbroadcast_incompatible_shapes_are_refused() {
+        // A grad that no broadcast could have produced for this target must
+        // refuse rather than hand a wrong-shaped gradient on to accumulation
+        // (mirrors the CPU/CUDA refusal tests; see #121).
+        let grad = vector(&[1.0, 2.0, 3.0]);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+        let grad = matrix(&[1.0; 6], 2, 3);
+        assert!(unbroadcast(&grad, &[4]).is_err());
+    }
+
+    #[test]
+    /// `unbroadcast_scalar_seed_for_size_one_target_materializes`.
+    fn unbroadcast_scalar_seed_for_size_one_target_materializes() {
+        // Regression for the latent cross-backend panic: a size-1 target
+        // dimension at an index >= the grad's rank (here the whole target)
+        // used to index past the reduced grad in the keepdim loop at
+        // `result.shape[i]`. A scalar broadcasts to any shape, so
+        // `[] -> [1]` expands to `[v]` - the same materialization the #121
+        // tail already performs for a `[3]` target.
+        let grad = scalar(2.0);
+        let result =
+            unbroadcast(&grad, &[1]).expect("a compatible scalar seed for a size-1 target expands");
+        assert_eq!(result.shape, vec![1]);
+        assert_eq!(read(&result), vec![2.0]);
+    }
+
+    #[test]
+    /// `unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused`.
+    fn unbroadcast_rank_deficit_that_cannot_broadcast_into_target_is_refused() {
+        // Mutually-broadcastable is not enough: `[4]` and `[2,1]` resolve
+        // together to `[2,4]`, but `[4]` does not broadcast *into* `[2,1]`.
+        // Pre-fix this indexed past the grad in the keepdim loop and
+        // panicked; it must refuse by name instead (mirrors the CPU test).
+        let grad = vector(&[1.0, 2.0, 3.0, 4.0]);
+        assert!(matches!(
+            unbroadcast(&grad, &[2, 1]),
+            Err(incin_core::error::Error::ShapeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    /// `unbroadcast_bias_vector_b_n_to_n`.
+    fn unbroadcast_bias_vector_b_n_to_n() {
+        // The reduction half of unbroadcast, which the tail must not
+        // disturb: grad shape [4,3] (B=4, N=3), summed back to [3].
+        let grad = matrix(
+            &[
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+            4,
+            3,
+        );
+        let result = unbroadcast(&grad, &[3]).expect("the bias reduction runs");
+        assert_eq!(result.shape, vec![3]);
+        // Column sums: col0 = 1+4+7+10=22, col1 = 2+5+8+11=26, col2 = 3+6+9+12=30
+        assert_eq!(read(&result), vec![22.0, 26.0, 30.0]);
+    }
 }

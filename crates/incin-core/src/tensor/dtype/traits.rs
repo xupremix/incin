@@ -53,19 +53,43 @@ pub trait ConstDType: DType<Arg = ()> {
 
 /// A [`ConstDType`] that additionally has a current built-in [`DTypeId`].
 ///
-/// All current Incin built-in dtypes (`f32`, `f64`, `f16`, `bf16`, `u8`,
-/// `u32`, `i64`, `Q8_0`) implement this.
+/// All current Incin built-in dtypes (`f32`, `f64`, `f16`, `bf16`, `f8e4m3`,
+/// `f8e5m2`, `u8`, `u32`, `i64`, `Q8_0`, `NVFP4`, `MXFP4`) implement this.
 ///
-/// Subsystems that still use the closed built-in `DTypeId` vocabulary
-/// (distributed plans, capability registry, operation catalog, serialization,
-/// backend kernel tables) should require `K: BuiltinDType` rather than
-/// requiring every `ConstDType` to have a built-in ID. This makes the
-/// temporary limitation explicit in the type system.
+/// # Where this bound is (and is not) required
 ///
-/// # Design boundary
+/// Most of the runtime stack accepts arbitrary [`DTypeDescriptor`]s through
+/// [`DTypeRegistry`]; you do **not** need this trait to register or use a
+/// custom dtype from outside the workspace. Storage, tensor construction,
+/// shape lowering, capability queries, the operation catalog, and
+/// storage/serialization are descriptor-driven, and external custom dtypes
+/// round-trip through `serde` without implementing `BuiltinDType`.
 ///
-/// A future phase will migrate those subsystems to accept arbitrary descriptors.
-/// Until then, `BuiltinDType` is the honest narrow bound.
+/// The bound remains on the parts of the system that still carry the closed
+/// built-in `DTypeId` vocabulary as a `const`:
+///
+/// - distributed collective descriptors and plan digests
+///   (`crates/incin-core/src/dist/plan/`), which fingerprint a plan by
+///   `DTypeId`;
+/// - the collective-tuning problem key
+///   (`CollectiveTuningProblem::new_static` in `incin-backends`), which
+///   caches candidate measurements by `DTypeId`;
+/// - the kernel table lookup in `incin-backends`, which resolves a
+///   `builtin_id()` for fast-path dispatch;
+/// - the `safetensors` snapshot export in
+///   `crates/incin-core/src/serialize.rs`, which matches a closed set of
+///   builtin IDs and returns a typed error for anything else (the postcard
+///   state envelope beside it is descriptor-driven and round-trips custom
+///   dtypes).
+///
+/// Requiring `BuiltinDType` at those sites makes the narrow vocabulary
+/// explicit in the type system instead of an implicit assumption. Custom
+/// dtypes continue through the descriptor-driven paths beside them
+/// (state/postcard serialization, registry-backed dtype descriptors,
+/// descriptor-keyed capability and catalog layers).
+///
+/// See issue #96 and `PROPOSALS.md` (D-110 TensorElement seal decision) for the
+/// record of which surfaces stay closed and why.
 pub trait BuiltinDType: ConstDType {
     /// The built-in `DTypeId` for this dtype.
     const DTYPE: DTypeId;
@@ -75,39 +99,32 @@ pub trait BuiltinDType: ConstDType {
 // TensorElement - ordinary Rust POD scalar element
 // ============================================================================
 
-pub(super) mod sealed {
-    pub trait TensorElementSealed {}
-}
-
-/// Marker trait enforcing that a tensor element type is POD, Zeroable, safe,
-/// and sealed (`SEC-005`). The set of implementors is limited to Incin's
-/// built-in scalar element types; custom logical [`DType`] implementations
-/// remain supported, but cannot provide a custom [`TensorElement`].
+/// Marker trait enforcing that a tensor element type is plain old data:
+/// every byte pattern the backend stores for values of this type must read
+/// back as a valid value of this type through host extraction.
+///
+/// The set of implementors is open (D-110, issue #96): any type satisfying
+/// the bounds below implements [`TensorElement`] through the blanket impl,
+/// including types from downstream crates. `f16`/`bf16` (foreign `half`-crate
+/// types) are the precedent that non-primitive POD types already qualify.
 ///
 /// Only scalar (non-block) dtypes have a `TensorElement`. Block-quantized
 /// dtypes such as `Q8_0` do NOT implement this - their physical representation
 /// is backend-specific and carries no per-element Rust type.
+///
+/// Closed consumers keep their own gates: distributed static planners and
+/// plan digests, the backend kernel-table fast paths, the catalog exact
+/// rules, and the `safetensors` export still require [`BuiltinDType`] or
+/// refuse unknown descriptors with a typed error. Opening this bound admits
+/// element access (slicing, typed construction, host interop); it does not
+/// admit execution on backends that never advertised the dtype.
 pub trait TensorElement:
-    sealed::TensorElementSealed
-    + bytemuck::NoUninit
-    + bytemuck::Zeroable
-    + Copy
-    + Debug
-    + Send
-    + Sync
-    + 'static
+    bytemuck::NoUninit + bytemuck::Zeroable + Copy + Debug + Send + Sync + 'static
 {
 }
 
 impl<T> TensorElement for T where
-    T: sealed::TensorElementSealed
-        + bytemuck::NoUninit
-        + bytemuck::Zeroable
-        + Copy
-        + Debug
-        + Send
-        + Sync
-        + 'static
+    T: bytemuck::NoUninit + bytemuck::Zeroable + Copy + Debug + Send + Sync + 'static
 {
 }
 
@@ -133,11 +150,15 @@ pub trait PlainDType: ConstDType {
 // Semantic marker traits
 // ============================================================================
 
-/// Marker for floating-point dtypes (`f32`/`f64`/`f16`/`bf16`).
+/// Marker for floating-point dtypes (`f32`/`f64`/`f16`/`bf16`/`f8e4m3`/`f8e5m2`).
 pub trait FloatDType: PlainDType {}
 /// Marker for integer dtypes (`u8`/`u32`/`i64`).
 pub trait IntDType: PlainDType {}
 /// Marker for the boolean dtype.
+///
+/// Bool storage is one byte per element, of which only `0` and `1` are
+/// valid bit patterns. Host extraction validates each byte and rejects
+/// anything else rather than reinterpreting it as `bool`.
 pub trait BoolDType: ConstDType {}
 /// Marker for block-quantized dtypes (e.g. `Q8_0`) - storage formats with
 /// their own internal scale/block structure, not plain scalar elements.

@@ -32,13 +32,12 @@ pub use telemetry::{TuningExplain, TuningProvenance};
 use crate::kernel::KernelAccess;
 #[cfg(any(feature = "autotune", test))]
 use crate::kernel::KernelKey;
+#[cfg(any(feature = "autotune", test))]
+use alloc::collections::{BTreeMap, BTreeSet};
+#[cfg(any(feature = "autotune", test))]
+use alloc::string::String;
 #[cfg(any(feature = "autotune", feature = "cuda", test))]
 use alloc::vec::Vec;
-#[cfg(any(feature = "autotune", test))]
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    string::String,
-};
 #[cfg(any(feature = "autotune", feature = "cuda", test))]
 use incin_core::error::{Error, Result};
 #[cfg(any(feature = "cuda", test))]
@@ -89,6 +88,25 @@ impl WorkloadBucket {
             packed_alignment: false,
         }
     }
+
+    /// A GEMM workload of shape `[m, k] @ [k, n]`, with `batch` naming the
+    /// flattened batch for a batched product (`None` is the plain rank-2
+    /// product, one batch).
+    ///
+    /// The bucket keys the vendor-vs-native selection cache in
+    /// `cuda/ops/gemm_select.rs`: `elements_log2` covers the output plane
+    /// (`m * n * batch`, saturating) and `reduction_log2` the contracting
+    /// dimension `k`, so one bucket spans the shapes whose vendor/native
+    /// tradeoff measures the same. Alignment is always false - the vendor
+    /// fit policies already refuse unaligned views before selection runs.
+    #[cfg(any(test, all(feature = "cuda-vendor", feature = "autotune")))]
+    pub(crate) fn gemm(m: usize, n: usize, k: usize, batch: Option<usize>) -> Self {
+        Self {
+            elements_log2: size_log2_bucket(m.saturating_mul(n).saturating_mul(batch.unwrap_or(1))),
+            reduction_log2: size_log2_bucket(k),
+            packed_alignment: false,
+        }
+    }
 }
 
 #[cfg(any(feature = "autotune", test))]
@@ -98,6 +116,27 @@ fn size_log2_bucket(size: usize) -> u8 {
     } else {
         (usize::BITS - (size - 1).leading_zeros()).min(u8::MAX.into()) as u8
     }
+}
+
+/// The stable problem id for one vendor-vs-native GEMM selection record
+/// (issue #85, item 10): `cuda/gemm/<plain|batched>/<dtype>`. The crossover
+/// a measurement learns depends on the arithmetic (dtype) and on whether
+/// the vendor call is a single GEMM or a strided-batched one, so those two
+/// axes are the key; the shape within an axis is the workload bucket's job.
+/// Dtypes with no vendor route share the `other` id - they never consult a
+/// crossover (selection reports `VendorUnavailable` first), so sharing an
+/// id cannot misroute them.
+#[cfg(any(test, all(feature = "cuda-vendor", feature = "autotune")))]
+pub(crate) fn gemm_problem_id(dtype: DTypeDescriptor, batched: bool) -> String {
+    let dtype_tag = match dtype.builtin_id() {
+        Some(DTypeId::F32) => "f32",
+        Some(DTypeId::F16) => "f16",
+        Some(DTypeId::BF16) => "bf16",
+        Some(DTypeId::F64) => "f64",
+        _ => "other",
+    };
+    let shape_tag = if batched { "batched" } else { "plain" };
+    format!("cuda/gemm/{shape_tag}/{dtype_tag}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -629,6 +668,50 @@ mod tests {
         assert_eq!(WorkloadBucket::reduction(17, 257).reduction_log2, 9);
         assert_eq!(elapsed_milliseconds_to_nanoseconds(0.125).unwrap(), 125_000);
         assert!(elapsed_milliseconds_to_nanoseconds(f32::NAN).is_err());
+    }
+
+    #[test]
+    fn gemm_buckets_cover_the_output_plane_and_the_contraction() {
+        // [4, 8] @ [8, 2]: 8 output elements (log2 bin 3), k = 8 (bin 3).
+        let plain = WorkloadBucket::gemm(4, 2, 8, None);
+        assert_eq!(plain.elements_log2, 3);
+        assert_eq!(plain.reduction_log2, 3);
+        assert!(!plain.packed_alignment);
+        // An unbatched product and batch-1 of the same shape share a bucket.
+        assert_eq!(plain, WorkloadBucket::gemm(4, 2, 8, Some(1)));
+        // Batch 4 quadruples the plane: 32 elements (bin 5).
+        let batched = WorkloadBucket::gemm(4, 2, 8, Some(4));
+        assert_eq!(batched.elements_log2, 5);
+        assert_eq!(batched.reduction_log2, 3);
+        assert_ne!(plain, batched);
+    }
+
+    #[test]
+    fn gemm_problem_ids_split_batchedness_and_dtype() {
+        assert_eq!(
+            gemm_problem_id(DTypeId::F32.descriptor(), false),
+            "cuda/gemm/plain/f32"
+        );
+        assert_eq!(
+            gemm_problem_id(DTypeId::F32.descriptor(), true),
+            "cuda/gemm/batched/f32"
+        );
+        assert_eq!(
+            gemm_problem_id(DTypeId::F16.descriptor(), false),
+            "cuda/gemm/plain/f16"
+        );
+        assert_eq!(
+            gemm_problem_id(DTypeId::BF16.descriptor(), true),
+            "cuda/gemm/batched/bf16"
+        );
+        assert_eq!(
+            gemm_problem_id(DTypeId::F64.descriptor(), false),
+            "cuda/gemm/plain/f64"
+        );
+        assert_eq!(
+            gemm_problem_id(DTypeId::I64.descriptor(), false),
+            "cuda/gemm/plain/other"
+        );
     }
 
     #[test]

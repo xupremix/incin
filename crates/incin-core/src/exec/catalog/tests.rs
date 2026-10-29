@@ -347,6 +347,8 @@ fn every_typed_output_rule_is_fail_closed_or_exactly_inferred() {
                 | OperationKind::Outer
                 | OperationKind::Addmm
                 | OperationKind::ScaledDotProductAttention
+                // Issue #104: same output-shape rule as the composed row.
+                | OperationKind::FusedAttention
                 | OperationKind::Linear
                 | OperationKind::EmbeddingExact
                 | OperationKind::Quantize
@@ -354,6 +356,8 @@ fn every_typed_output_rule_is_fail_closed_or_exactly_inferred() {
                 | OperationKind::SgdStep
                 | OperationKind::AdamStep
                 | OperationKind::AdamWStep
+                | OperationKind::GroupedMatMul
+                | OperationKind::QuantizedMatMul
         );
         assert!(
             inferred || *row.output_arity.end() == 0,
@@ -989,12 +993,17 @@ fn zero_output_gradient_and_determinism_exceptions_override_their_family() {
     }
 
     // Piecewise-constant unary functions are float-typed but have no
-    // useful gradient, unlike the rest of `UnaryFloat`.
+    // useful gradient, unlike the rest of `UnaryFloat`. `trunc`/`frac`
+    // included: their derivative is 1 almost everywhere but the CPU records
+    // no tape node, so the row must not claim gradient flow.
     for operation in [
         OperationKind::Step,
         OperationKind::Sign,
         OperationKind::Floor,
+        OperationKind::Ceil,
         OperationKind::Round,
+        OperationKind::Trunc,
+        OperationKind::Frac,
     ] {
         assert_eq!(
             catalog_entry(operation).unwrap().gradient,
@@ -1003,12 +1012,12 @@ fn zero_output_gradient_and_determinism_exceptions_override_their_family() {
         );
     }
 
-    for operation in [
-        OperationKind::UniformRandom,
-        OperationKind::Dropout,
-        OperationKind::TopK,
-        OperationKind::Argsort,
-    ] {
+    // Issue #103 close-out: `TopK`/`Argsort` left this list. All three
+    // ordering ops use a stable earliest-index tie-break on every backend
+    // (see the `deterministic` comment in `table.rs`), so they are
+    // deterministic; only sampling, dropout, and the overwriting scatter
+    // remain nondeterministic here.
+    for operation in [OperationKind::UniformRandom, OperationKind::Dropout] {
         assert!(
             !catalog_entry(operation).unwrap().deterministic,
             "{operation} is not deterministic",
@@ -1024,6 +1033,28 @@ fn zero_output_gradient_and_determinism_exceptions_override_their_family() {
         );
     }
     assert!(catalog_entry(OperationKind::Add).unwrap().same_device);
+}
+
+/// The quantize boundary claims the straight-through estimator, and only the
+/// boundary: its two halves record tape entries whose backward passes the
+/// cotangent through unchanged (issue #93, Decision 2), while a product over
+/// compressed blocks inherits no such claim from sharing the profile.
+#[test]
+fn quantize_and_dequantize_claim_the_straight_through_estimator() {
+    for operation in [OperationKind::Quantize, OperationKind::Dequantize] {
+        assert_eq!(
+            catalog_entry(operation).unwrap().gradient,
+            GradientRule::StraightThrough,
+            "{operation} records an STE tape entry, so its row must claim the approximation",
+        );
+    }
+    assert_eq!(
+        catalog_entry(OperationKind::QuantizedMatMul)
+            .unwrap()
+            .gradient,
+        GradientRule::None,
+        "quantized_matmul has no backward rule and must not inherit the boundary's claim",
+    );
 }
 
 /// Known inputs must never certify an unchecked output shape.
@@ -1089,17 +1120,22 @@ fn every_tensor_returning_row_declares_an_inference_source() {
                     | OperationKind::Scatter
                     | OperationKind::IndexSelect
                     | OperationKind::OneHot
+                    | OperationKind::Bincount
                     | OperationKind::EmbeddingExact
                     | OperationKind::Dot
                     | OperationKind::Outer
                     | OperationKind::Addmm
                     | OperationKind::ScaledDotProductAttention
+                    // Issue #104: same output-shape rule as the composed row.
+                    | OperationKind::FusedAttention
                     | OperationKind::Linear
                     | OperationKind::Quantize
                     | OperationKind::Dequantize
                     | OperationKind::SgdStep
                     | OperationKind::AdamStep
                     | OperationKind::AdamWStep
+                    | OperationKind::GroupedMatMul
+                    | OperationKind::QuantizedMatMul
             ),
             OutputRule::HostValue => false,
             _ => true,
@@ -1263,6 +1299,95 @@ fn frontend_shape_evidence_reaches_the_validated_descriptor() {
     assert_eq!(
         erased.validated().proof_level(),
         crate::exec::ProofLevel::Dynamic,
+    );
+}
+
+/// The attribute contract must run exactly once per typed lowering.
+///
+/// `infer_typed` validates before it infers outputs, then used to enter
+/// `validate_with_provenance`, which validated the very same
+/// `(operation, inputs)` again - a complete duplicate pass on every typed
+/// operation the framework executes. The second call cannot disagree with
+/// the first, so dropping it is behavior-preserving; this count is what
+/// keeps it dropped. Pre-dedup this observed 2.
+#[cfg(feature = "std")]
+#[test]
+fn typed_lowering_validates_the_attribute_contract_exactly_once() {
+    let _ = super::validated::take_attribute_validate_count();
+    let created = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    type Static23 = crate::shapes::DimCons<
+        typenum::U2,
+        crate::shapes::DimCons<typenum::U3, crate::shapes::Nil>,
+    >;
+    let expected = crate::shapes::ShapeValue::<Static23>::try_new(ShapeBuf::from_slice(&[2, 3]))
+        .expect("2x3 fits the static type");
+    ValidatedInvocation::<op::Zeros>::infer_typed(created, vec![], &expected)
+        .expect("a static creation request is legal");
+    assert_eq!(
+        super::validated::take_attribute_validate_count(),
+        1,
+        "typed lowering must validate the attribute contract exactly once"
+    );
+}
+
+/// The runtime path had the same duplicate: `infer_runtime` validated, then
+/// `validate_with_provenance` validated again over identical metadata.
+/// Pre-dedup this observed 2.
+#[cfg(feature = "std")]
+#[test]
+fn runtime_lowering_validates_the_attribute_contract_exactly_once() {
+    let _ = super::validated::take_attribute_validate_count();
+    let created = CreationAttributes {
+        shape: vec![2, 3],
+        dtype: DTypeId::F32.descriptor(),
+        device: DeviceId::cpu(),
+    };
+    ValidatedInvocation::<op::Zeros>::infer_runtime(created, vec![])
+        .expect("a dynamic creation request is legal");
+    assert_eq!(
+        super::validated::take_attribute_validate_count(),
+        1,
+        "runtime lowering must validate the attribute contract exactly once"
+    );
+}
+
+/// The stated-output entry point validates once, as it did before the dedup
+/// (it was never the duplicated path). Pinned so a future merge of the entry
+/// points cannot quietly reintroduce a second pass here too.
+#[cfg(feature = "std")]
+#[test]
+fn stated_output_validation_validates_the_attribute_contract_exactly_once() {
+    let _ = super::validated::take_attribute_validate_count();
+    let lhs = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[2, 1])),
+        dtype: None,
+        device: None,
+    };
+    let rhs = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[1, 3])),
+        dtype: None,
+        device: None,
+    };
+    let output = LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(&[2, 3])),
+        dtype: None,
+        device: None,
+    };
+    ValidatedInvocation::<op::Add>::validate(
+        NoAttributes,
+        vec![lhs, rhs],
+        vec![output],
+        crate::exec::ProofLevel::Dynamic,
+    )
+    .expect("2x1 plus 1x3 broadcasts to 2x3");
+    assert_eq!(
+        super::validated::take_attribute_validate_count(),
+        1,
+        "stated-output validation must validate the attribute contract exactly once"
     );
 }
 
@@ -1513,4 +1638,230 @@ fn a_typed_invocation_carries_a_static_element_count_to_the_backend() {
         "an unproven shape must never hand a backend a constant to bake in"
     );
     assert_eq!(erased_evidence.static_extents(), &[][..]);
+}
+
+/// Issue #104: `FusedAttention` descriptor contract tests.
+///
+/// The fused row mirrors the composed `ScaledDotProductAttention` output
+/// rule (`[batch, heads_q, seq_q, head_dim]`) while refusing, with typed
+/// errors, the head configurations no single kernel can serve.
+fn fused_meta(dims: &[usize]) -> LogicalTensorMeta {
+    LogicalTensorMeta {
+        shape: Some(ShapeBuf::from_slice(dims)),
+        dtype: None,
+        device: None,
+    }
+}
+
+fn fused_attrs(causal: bool) -> FusedAttentionAttributes {
+    FusedAttentionAttributes {
+        scale: None,
+        causal,
+    }
+}
+
+#[test]
+fn fused_attention_infers_the_composed_output_shape() {
+    // Plain multi-head attention: geometry passes through.
+    let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(false),
+        vec![
+            fused_meta(&[2, 4, 6, 8]),
+            fused_meta(&[2, 4, 6, 8]),
+            fused_meta(&[2, 4, 6, 8]),
+        ],
+    )
+    .expect("a well-formed fused invocation is legal");
+    assert_eq!(
+        invocation.validated().descriptor().outputs()[0]
+            .shape
+            .as_deref(),
+        Some(&[2, 4, 6, 8][..]),
+        "fused output must match the composed [batch, heads, seq, head_dim] rule"
+    );
+
+    // Grouped-query decode: eight query heads over two key/value heads, new
+    // queries against a longer cached prefix. The causal flag must not move
+    // the geometry: masking is a property, not a shape.
+    for causal in [false, true] {
+        let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            fused_attrs(causal),
+            vec![
+                fused_meta(&[1, 8, 2, 4]),
+                fused_meta(&[1, 2, 9, 4]),
+                fused_meta(&[1, 2, 9, 4]),
+            ],
+        )
+        .expect("a grouped-query decode invocation is legal");
+        assert_eq!(
+            invocation.validated().descriptor().outputs()[0]
+                .shape
+                .as_deref(),
+            Some(&[1, 8, 2, 4][..]),
+            "causal={causal}: fused output keeps the query geometry"
+        );
+    }
+
+    // Multi-query attention is the same kernel with one key/value head.
+    let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(true),
+        vec![
+            fused_meta(&[1, 4, 3, 8]),
+            fused_meta(&[1, 1, 3, 8]),
+            fused_meta(&[1, 1, 3, 8]),
+        ],
+    )
+    .expect("a multi-query invocation is legal");
+    assert_eq!(
+        invocation.validated().descriptor().outputs()[0]
+            .shape
+            .as_deref(),
+        Some(&[1, 4, 3, 8][..]),
+    );
+}
+
+#[test]
+fn fused_attention_refuses_bad_head_configs_with_typed_errors() {
+    // (query, key, value, expected attribute field)
+    type HeadCase = ([usize; 4], [usize; 4], [usize; 4], &'static str);
+    let cases: [HeadCase; 7] = [
+        // Eight query heads cannot split over three key/value heads.
+        ([1, 8, 4, 8], [1, 3, 4, 8], [1, 3, 4, 8], "heads"),
+        // No head configuration at all.
+        ([1, 0, 4, 8], [1, 2, 4, 8], [1, 2, 4, 8], "heads"),
+        ([1, 4, 4, 8], [1, 0, 4, 8], [1, 0, 4, 8], "heads"),
+        // Query and key widths disagree.
+        ([1, 4, 4, 8], [1, 4, 4, 6], [1, 4, 4, 6], "shape"),
+        // Key and value are different tensors' worth of geometry.
+        ([1, 4, 4, 8], [1, 4, 5, 8], [1, 4, 6, 8], "shape"),
+        // Batches disagree.
+        ([2, 4, 4, 8], [1, 4, 4, 8], [1, 4, 4, 8], "shape"),
+        // A zero head width is not a head.
+        ([1, 4, 4, 0], [1, 4, 4, 0], [1, 4, 4, 0], "shape"),
+    ];
+    for (query, key, value, field) in cases {
+        let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            fused_attrs(true),
+            vec![fused_meta(&query), fused_meta(&key), fused_meta(&value)],
+        )
+        .expect_err("a bad head config must not validate");
+        assert!(
+            matches!(
+                error,
+                DescriptorError::InvalidAttribute {
+                    operation: OperationKind::FusedAttention,
+                    attribute,
+                    ..
+                } if attribute == field
+            ),
+            "expected InvalidAttribute {{ attribute: {field} }}, got {error:?} \
+             for q={query:?} k={key:?} v={value:?}"
+        );
+    }
+}
+
+#[test]
+fn fused_attention_refuses_non_rank_four_operands() {
+    for dims in [
+        alloc::vec![2, 6, 8],
+        alloc::vec![2, 4, 6, 8, 1],
+        alloc::vec![48],
+    ] {
+        let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            fused_attrs(false),
+            vec![
+                fused_meta(&dims),
+                fused_meta(&[2, 4, 6, 8]),
+                fused_meta(&[2, 4, 6, 8]),
+            ],
+        )
+        .expect_err("a non-rank-4 operand must not validate");
+        assert!(
+            matches!(
+                error,
+                DescriptorError::InvalidAttribute {
+                    operation: OperationKind::FusedAttention,
+                    attribute: "rank",
+                    ..
+                }
+            ),
+            "expected a rank refusal, got {error:?} for {dims:?}"
+        );
+    }
+}
+
+#[test]
+fn fused_attention_refuses_a_bad_scale() {
+    for scale in [Some(0.0), Some(-1.0), Some(f64::NAN), Some(f64::INFINITY)] {
+        let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+            FusedAttentionAttributes {
+                scale,
+                causal: true,
+            },
+            vec![
+                fused_meta(&[1, 2, 4, 8]),
+                fused_meta(&[1, 2, 4, 8]),
+                fused_meta(&[1, 2, 4, 8]),
+            ],
+        )
+        .expect_err("a non-positive or non-finite scale must not validate");
+        assert!(
+            matches!(
+                error,
+                DescriptorError::InvalidAttribute {
+                    operation: OperationKind::FusedAttention,
+                    attribute: "scale",
+                    ..
+                }
+            ),
+            "expected a scale refusal, got {error:?} for {scale:?}"
+        );
+    }
+}
+
+#[test]
+fn fused_attention_takes_no_mask_operand() {
+    // Four inputs (a caller-supplied mask) is refused: the causal flag
+    // replaces the mask tensor. The attribute contract runs before the
+    // generic arity gate on this path, so the refusal arrives as a typed
+    // `InvalidAttribute` naming the arity, not as `DescriptorError::Arity`.
+    let error = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(true),
+        vec![
+            fused_meta(&[1, 2, 4, 8]),
+            fused_meta(&[1, 2, 4, 8]),
+            fused_meta(&[1, 2, 4, 8]),
+            fused_meta(&[1, 1, 4, 4]),
+        ],
+    )
+    .expect_err("a mask operand must not validate");
+    assert!(
+        matches!(
+            error,
+            DescriptorError::InvalidAttribute {
+                operation: OperationKind::FusedAttention,
+                attribute: "arity",
+                ..
+            }
+        ),
+        "expected an arity refusal, got {error:?}"
+    );
+}
+
+#[test]
+fn fused_attention_with_unknown_shapes_stays_unknown() {
+    let invocation = ValidatedInvocation::<op::FusedAttention>::infer_runtime(
+        fused_attrs(true),
+        vec![
+            LogicalTensorMeta::unknown(),
+            LogicalTensorMeta::unknown(),
+            LogicalTensorMeta::unknown(),
+        ],
+    )
+    .expect("unknown metadata must stay unknown, not fail");
+    assert_eq!(
+        invocation.validated().descriptor().outputs()[0].shape,
+        None,
+        "no shape may be inferred from unknown inputs"
+    );
 }

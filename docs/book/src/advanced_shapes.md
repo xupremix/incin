@@ -97,6 +97,13 @@ broadcasting cannot express.
 | `ShapeEq<S2>` | These two shapes are the same. Used by the exact-match operations. |
 | `BroadcastShape<S2>` | These two broadcast, and here is the `Output` shape. |
 
+Since #100, `where_cond` and `masked_fill` use `BroadcastShape` directionally
+instead of `ShapeEq`: the mask broadcasts *into* the data, and the `Output`
+pin keeps the data's own type (`where_cond` pins `Output = S2`, `masked_fill`
+pins `Output = S`), so a rank-deficit or size-1 mask is admitted while a mask
+that would *enlarge* the data has no matching `Output` impl. Exact-match
+operations (scatter, dot, lerp, `*_exact`) keep `ShapeEq`.
+
 Two constants on `Shape` carry the proof information the execution path uses:
 
 - **`PROOF`**: `Static` (rank and every extent known), `Mixed` (known rank,

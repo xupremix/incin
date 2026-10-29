@@ -1,0 +1,19 @@
+error[E0277]: the trait bound `Dyn: Contiguous` is not satisfied
+  --> tests/target_api_compile_fail/transpose_view_not_contiguous.rs:11:20
+   |
+11 |     let _ = viewed.reshape_view::<s![4]>()?;
+   |                    ^^^^^^^^^^^^ the trait `Contiguous` is not implemented for `Dyn`
+   |
+help: the trait `Contiguous` is implemented for `RowMajor`
+  --> $WORKSPACE/crates/incin-core/src/shapes/layout.rs
+   |
+   | impl Contiguous for RowMajor {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `incin_core::tensor::base::layout_proof::<impl incin_core::tensor::base::types::Tensor<S, B, K, G, P, L>>::reshape_view`
+  --> $WORKSPACE/crates/incin-core/src/tensor/base/layout_proof.rs
+   |
+   |     pub fn reshape_view<S2>(self) -> Result<Tensor<S2, B, K, G, P, RowMajor>>
+   |            ------------ required by a bound in this associated function
+   |     where
+   |         L: crate::shapes::Contiguous,
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `incin_core::tensor::base::layout_proof::<impl Tensor<S, B, K, G, P, L>>::reshape_view`

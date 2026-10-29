@@ -14,13 +14,14 @@
 use incin_core::backend_authoring::{Execute, op};
 use incin_core::exec::catalog::{
     AddmmAttributes, ArgsortAttributes, AttentionAttributes, AxisAttributes,
-    AxisVarianceAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes, DiagonalAttributes,
-    DropoutAttributes, DuplicateIndexRule, EpsilonAttributes, FlattenAttributes,
-    GroupNormAttributes, IndexReductionAttributes, LerpAttributes, LinearAttributes,
-    LossAttributes, LossReduction, NarrowAttributes, NoAttributes, NormAttributes,
-    OneHotAttributes, PadAttributes, QuantizationAttributes, RepeatAttributes, ScalarAttributes,
-    ScatterAttributes, ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes,
-    TransposeAttributes, VarianceAttributes,
+    AxisVarianceAttributes, BincountAttributes, ChunkAttributes, ClampAttributes, DTypeAttributes,
+    DiagonalAttributes, DropoutAttributes, DuplicateIndexRule, EpsilonAttributes,
+    FlattenAttributes, FusedAttentionAttributes, GroupNormAttributes, IndexReductionAttributes,
+    LerpAttributes, LinearAttributes, LossAttributes, LossReduction, NarrowAttributes,
+    NoAttributes, NormAttributes, OneHotAttributes, PadAttributes, QuantizationAttributes,
+    RepeatAttributes, RepeatInterleaveAttributes, ScalarAttributes, ScatterAttributes,
+    ShapeAttributes, SliceAttributes, SplitAttributes, TopKAttributes, TransposeAttributes,
+    VarianceAttributes,
 };
 use incin_core::exec::{CanonicalError, Capabilities, ExecutionContext, Operation, TensorHandle};
 use incin_core::shapes::error::OperationKind;
@@ -308,6 +309,17 @@ derived_attribute_shim!(repeating_twice, RepeatAttributes, |tuple| {
     }
 });
 
+// The axis is fixed at zero rather than derived from the tuple: every
+// accepted rank has an axis zero, and the fixture exists to prove the row
+// executes, not to sweep the axis.
+derived_attribute_shim!(interleaving_twice, RepeatInterleaveAttributes, |tuple| {
+    let _ = tuple;
+    RepeatInterleaveAttributes {
+        repeats: 2,
+        axis: 0,
+    }
+});
+
 // ============================================================================
 // Group tables
 // ============================================================================
@@ -476,7 +488,7 @@ family!(dropping, Operands::Unary, dropping_half, [Dropout]);
 
 // `where_cond` selects between two float operands with a bool mask, and
 // `masked_fill` overwrites a float operand where its mask is set. Both rows
-// declare `F32_AND_BOOL`, which is the union of the two operand dtypes and not
+// declare `FLOAT_AND_BOOL`, which is the union of the two operand dtypes and not
 // a claim that either operand may be either, so the roles state the split the
 // row cannot.
 typed_family!(
@@ -550,6 +562,68 @@ typed_family!(
     [MatMulExact, BatchedMatMul]
 );
 
+// The three extents a grouped product names: a `[T, K]` activation against an
+// `[E, K, N]` expert stack, agreeing on `K`, beside an `[E + 1]` offsets tile.
+// Fixed rather than ladder-derived, because the operation's own ranks are what
+// they are at every tuple rank the row admits: the activation is rank two, the
+// stack rank three, and the tile rank one, with the tile's entries evenly
+// splitting the token rows so no expert span is empty. Plain shim, since
+// `grouped_matmul` takes `NoAttributes`.
+const T: usize = 4;
+const E: usize = 2;
+
+typed_family!(
+    grouping,
+    Operands::Triple,
+    &[
+        Role::GroupedActivation {
+            tokens: T,
+            contracting: K
+        },
+        Role::GroupedExperts {
+            experts: E,
+            contracting: K,
+            out_cols: N
+        },
+        Role::GroupedOffsets {
+            experts: E,
+            tokens: T
+        }
+    ],
+    plain,
+    [GroupedMatMul]
+);
+
+// The two extents a quantized product names: a `[...batch, T, K]` lhs against
+// a plain 2D `[N, K]` weight, agreeing on `K` and writing `[...batch, T, N]`.
+// Fixed rather than ladder-derived, because a Q8_0 block shares one scale
+// across thirty-two contiguous values: `K` is the block width the kernel
+// refuses anything but a multiple of, which the shared `Paired` `K = 3`
+// cannot state, and the rhs is rank two at every tuple rank the row admits
+// while the lhs keeps the rank-at-least-two window. Both operands carry the
+// tuple's `q8_0`, which is what the descriptor's dtype gate requires; the
+// output is f32. Plain shim, since `quantized_matmul` takes `NoAttributes`.
+const QT: usize = 2;
+const QN: usize = 3;
+const QK: usize = 32;
+
+typed_family!(
+    quantized_product,
+    Operands::Binary,
+    &[
+        Role::QuantizedLhs {
+            tokens: QT,
+            contracting: QK
+        },
+        Role::QuantizedRhs {
+            out_rows: QN,
+            contracting: QK
+        }
+    ],
+    plain,
+    [QuantizedMatMul]
+);
+
 // `addmm` is the same product with an addend broadcast against it, so the
 // addend is the product's own shape. It comes first because that is the order
 // the inference reads: addend, then the two factors.
@@ -614,6 +688,32 @@ typed_family!(
     ],
     unmasked_attention,
     [ScaledDotProductAttention]
+);
+
+// `fused_attention` reads three rank-4 operands under one GQA geometry: the
+// query shares its batch with key/value, key and value share
+// `[batch, kv_heads, seq_kv, head_dim]`, and the query head count is a
+// multiple of the key/value one. The plain ladder already satisfies all
+// three at rank four (`[2, 3, 2, 2]` thrice: batch two against two, key
+// against value exactly, three heads against three), and the transpose every
+// other `Tuple` operand takes under the strided layout preserves the
+// agreement, so no per-operand role is needed. Unmasked and unscaled: the
+// default scale is `1/sqrt(head_dim)`, and a kernel ignoring the attributes
+// still has to run the geometry to produce anything.
+constant_attribute_shim!(
+    unmasked_unscaled_attention,
+    FusedAttentionAttributes,
+    FusedAttentionAttributes {
+        scale: None,
+        causal: false
+    }
+);
+
+family!(
+    attending_fused,
+    Operands::Triple,
+    unmasked_unscaled_attention,
+    [FusedAttention]
 );
 
 // `linear` projects the input's final extent through a `[out, in]` weight and
@@ -708,6 +808,31 @@ typed_family!(
     [OneHot]
 );
 
+// `bincount` reads the same integer operand and counts into the bins its
+// attributes name. The `Index` role fills it with zeros, which are in range
+// for any width of one or more; three instead of one for the reason above,
+// so a kernel sizing the histogram from an operand extent fails here.
+constant_attribute_shim!(
+    counting_three,
+    BincountAttributes,
+    BincountAttributes { bins: 3 }
+);
+
+typed_family!(
+    counting,
+    Operands::Unary,
+    &[Role::Index],
+    counting_three,
+    [Bincount]
+);
+
+// One integer operand in, one `[count, rank]` coordinate table out, and the
+// count is a property of the values no attribute names. The plain unary
+// ladder serves: every element is non-zero, so the scan always has rows to
+// report, and the all-zero input is a kernel unit test (`routing_primitives`)
+// rather than a tuple this harness must pose.
+family!(locating_nonzero, Operands::Unary, plain, [NonZero]);
+
 // The two halves of the block compression. Each names the representation it
 // *produces* rather than the one it reads, which is what `verify_outputs`
 // checks the attribute against, so the two dtypes are opposite ways round: the
@@ -791,13 +916,20 @@ family!(padding, Operands::UnaryAxis, padding_by_one, [Pad]);
 
 family!(repeating, Operands::UnaryAxis, repeating_twice, [Repeat]);
 
+family!(
+    interleaving,
+    Operands::UnaryAxis,
+    interleaving_twice,
+    [RepeatInterleave]
+);
+
 family!(chunking, Operands::UnaryAxis, one_chunk, [Chunk]);
 
 family!(splitting, Operands::UnaryAxis, splitting_by_one, [Split]);
 
 family!(order_statistic, Operands::UnaryAxis, largest_one, [TopK]);
 
-family!(sorting, Operands::UnaryAxis, ascending, [Argsort]);
+family!(sorting, Operands::UnaryAxis, ascending, [Argsort, Sort]);
 
 family!(grouped_norm, Operands::UnaryAxis, single_group, [GroupNorm]);
 

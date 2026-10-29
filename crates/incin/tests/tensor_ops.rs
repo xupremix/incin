@@ -4,6 +4,9 @@
 // operations retain known dimensions instead of erasing them to `Dyn`.
 #![allow(clippy::type_complexity)]
 use incin::prelude::*;
+/// `Local` left the facade prelude behind the `distributed` feature gate;
+/// import it from its ungated home so cpu-only feature sets keep compiling.
+use incin_core::dist::Local;
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
 type CpuBackendImpl = incin_backends::cpu::CpuBackendImpl;
@@ -480,8 +483,9 @@ fn test_manipulation_reshape_flatten() -> Result<()> {
 fn test_manipulation_transpose_squeeze() -> Result<()> {
     let t = Tensor::<s![2, 3], CpuBackendImpl>::from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], ())?;
 
-    // transpose
-    let tr_static: Tensor<s![3, 2], CpuBackendImpl> = t.clone().transpose(axis!(0), axis!(1))?;
+    // transpose is a view (#113 views-everywhere): no layout proof, so no
+    // `Dense` annotation -- the strides are permuted, not row-major.
+    let tr_static = t.clone().transpose(axis!(0), axis!(1))?;
     assert_eq!(tr_static.dims().dims(), &[3, 2]);
     let tr = t.clone().transpose(0isize, 1isize)?;
     assert_eq!(tr.dims().dims(), &[3, 2]);
@@ -489,7 +493,7 @@ fn test_manipulation_transpose_squeeze() -> Result<()> {
 
     let t3 = Tensor::<s![2, 3, 4], CpuBackendImpl>::ones(())?;
     let neg_axis: incin::advanced::ReverseAxis<incin::advanced::Here> = axis!(-1);
-    let tr_negative: Tensor<s![4, 3, 2], CpuBackendImpl> = t3.transpose(axis!(0), neg_axis)?;
+    let tr_negative = t3.transpose(axis!(0), neg_axis)?;
     assert_eq!(tr_negative.dims().as_ref(), &[4, 3, 2]);
 
     // squeeze (must be size 1)

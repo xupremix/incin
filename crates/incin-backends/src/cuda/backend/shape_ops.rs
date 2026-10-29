@@ -337,13 +337,22 @@ impl<D: Device> CudaBackendImpl<D> {
     }
 
     /// General N-D matrix product with NumPy-style batch broadcasting,
-    /// matching CPU's `matmul_storage` dispatcher. CUDA has no batched-GEMM
-    /// kernel, so unlike CPU's dedicated `batched_gemm`, the batch case here
-    /// is composed: broadcast both operands to the common batch shape,
-    /// flatten the batch axes into one, run 2D `matmul` per batch slice via
-    /// `narrow`, then `concat`/reshape the pieces back. Every step is
-    /// already tape-tracked, so the composite's backward is the tape replay
-    /// over them rather than new hand-derived math.
+    /// matching CPU's `matmul_storage` dispatcher. Since issue #85 the
+    /// batch first goes to `ops::matmul::try_launch_batched_matmul`: under
+    /// `cuda-vendor` a fitting contiguous `f32` rank-3 pair may be served
+    /// by one strided-batched cuBLASLt call, and a fitting pair otherwise
+    /// gets one native grid-z launch whose explicit slice strides carry
+    /// broadcasts the flat kernel can express (stride 0). That path pushes
+    /// a single tape entry whose backward re-enters it once per gradient.
+    /// When it reports `None` - a non-affine stride pattern, a batch over
+    /// the grid-z limit, a dtype without a batched entry, an offset or
+    /// padded view - the batch falls back to the composed form this
+    /// function had before #85: broadcast both operands to the common
+    /// batch shape, flatten the batch axes into one, run 2D `matmul` per
+    /// batch slice via `narrow`, then `concat`/reshape the pieces back.
+    /// Every step of the composed form is already tape-tracked, so its
+    /// backward is the tape replay over them rather than new hand-derived
+    /// math.
     pub(crate) fn batched_matmul<K: DType>(
         lhs: &<Self as StorageBackend>::Storage<K>,
         rhs: &<Self as StorageBackend>::Storage<K>,
@@ -379,6 +388,65 @@ impl<D: Device> CudaBackendImpl<D> {
         // path's reshape/narrow/concat overhead for it.
         if lhs_rank == 2 && rhs_rank == 2 {
             return Self::matmul::<K>(lhs, rhs);
+        }
+
+        // Issue #85: one launch for the whole batch when a path admits it
+        // (vendor first under `cuda-vendor`, then the native kernel), one
+        // tape entry whose backward differentiates both operands through
+        // the same path. `None` keeps the composed loop below - it
+        // computes the same product from tape-tracked 2D slices.
+        if let Some(product) = crate::cuda::ops::matmul::try_launch_batched_matmul(lhs, rhs)? {
+            let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, product.id);
+            let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+            let (lhs_shape, rhs_shape) = (lhs.shape.to_vec(), rhs.shape.to_vec());
+            let (lhs_rank, rhs_rank) = (lhs.shape.len(), rhs.shape.len());
+            crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+                output_id: out_id,
+                input_ids: vec![lhs_id, rhs_id],
+                backward: Box::new(move |grad_out: &CudaStorage| {
+                    // grad_lhs = grad_out @ rhs^T ; grad_rhs = lhs^T @ grad_out.
+                    // The transposes swap only the trailing matrix axes, so
+                    // each product still broadcasts against `grad_out`'s
+                    // batch exactly as the forward pair did; `unbroadcast`
+                    // then reduces the upstream batch axes back to each
+                    // operand's own shape. A refusal here means the flat
+                    // kernel cannot strided-read that gradient view: fail
+                    // closed with a named error rather than fall back to a
+                    // silently different recipe mid-replay.
+                    let rhs_t = crate::cuda::ops::shape::launch_transpose(
+                        &rhs_capture,
+                        rhs_rank - 2,
+                        rhs_rank - 1,
+                    )?;
+                    let grad_lhs =
+                        crate::cuda::ops::matmul::try_launch_batched_matmul(grad_out, &rhs_t)?
+                            .ok_or_else(|| {
+                                Error::Msg(
+                                    "batched matmul backward refused the transposed rhs; \
+                             failing closed rather than mis-striding the gradient"
+                                        .into(),
+                                )
+                            })?;
+                    let grad_lhs = crate::cuda::tape::unbroadcast(&grad_lhs, &lhs_shape)?;
+                    let lhs_t = crate::cuda::ops::shape::launch_transpose(
+                        &lhs_capture,
+                        lhs_rank - 2,
+                        lhs_rank - 1,
+                    )?;
+                    let grad_rhs =
+                        crate::cuda::ops::matmul::try_launch_batched_matmul(&lhs_t, grad_out)?
+                            .ok_or_else(|| {
+                                Error::Msg(
+                                    "batched matmul backward refused the transposed lhs; \
+                             failing closed rather than mis-striding the gradient"
+                                        .into(),
+                                )
+                            })?;
+                    let grad_rhs = crate::cuda::tape::unbroadcast(&grad_rhs, &rhs_shape)?;
+                    Ok(vec![grad_lhs, grad_rhs])
+                }),
+            });
+            return Ok(product);
         }
 
         let lhs_batch = &lhs.shape[..lhs_rank - 2];
@@ -427,6 +495,137 @@ impl<D: Device> CudaBackendImpl<D> {
         let refs: Vec<&<Self as StorageBackend>::Storage<K>> = slices.iter().collect();
         let stacked = Self::concat::<K>(&refs, 0)?;
         Self::reshape::<K>(&stacked, &out_shape)
+    }
+
+    /// Grouped (expert-tiled) matmul: `lhs [T, K]`, stacked `rhs [E, K, N]`,
+    /// and an i64 `offsets [E+1]` tiling `[0, T)` into per-expert row spans.
+    ///
+    /// Issue #103's CUDA half, mirroring `cpu::ops::matmul::grouped`: each
+    /// expert's block of rows multiplies its own `[K, N]` slice, an empty
+    /// span is skipped rather than refused, and the offsets are read back to
+    /// the host once (`E + 1` integers), validated with CPU's exact wording,
+    /// and never recorded — an integer tile has no cotangent, the same
+    /// exclusion `scatter_add` applies to its index. Forward runs one
+    /// tape-free `launch_matmul` per non-empty span and concatenates the
+    /// products in span order (the spans partition `[0, T)` increasingly, so
+    /// the concatenation lands every block at its own rows), then pushes one
+    /// `TapeEntry` for the whole product rather than one per expert. The
+    /// backward recomputes from the captured operands the same way CPU's
+    /// does: `grad_lhs` blocks concatenated in span order, `grad_rhs` as one
+    /// per-expert stack with zeros where a span was empty.
+    ///
+    /// The narrow/matmul path reads flat contiguous buffers (see
+    /// `launch_shape_op`), so this refuses a strided or non-zero-offset
+    /// operand fail-closed rather than mis-addressing it — the layout the
+    /// shared `embedding` capability row cannot narrow per-operation, the
+    /// same tightener the row's dtype union needs for the f32 matrices.
+    pub(crate) fn grouped_matmul<K: DType>(
+        lhs: &CudaStorage,
+        rhs: &CudaStorage,
+        offsets: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        require_dense(lhs, "lhs")?;
+        require_dense(rhs, "rhs")?;
+        require_dense(offsets, "offsets")?;
+        if lhs.shape.len() != 2 || rhs.shape.len() != 3 || offsets.shape.len() != 1 {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: vec![2, 3, 1],
+                got: vec![lhs.shape.len(), rhs.shape.len(), offsets.shape.len()],
+                msg: format!(
+                    "grouped_matmul requires lhs [T,K], rhs [E,K,N], offsets [E+1]; got lhs={:?}, rhs={:?}, offsets={:?}",
+                    lhs.shape, rhs.shape, offsets.shape
+                ),
+            });
+        }
+        let (tokens, contracting) = (lhs.shape[0], lhs.shape[1]);
+        let (experts, _, out_cols) = (rhs.shape[0], rhs.shape[1], rhs.shape[2]);
+        if contracting != rhs.shape[1] {
+            return Err(Error::ShapeMismatch {
+                op: "grouped_matmul",
+                expected: vec![contracting],
+                got: vec![rhs.shape[1]],
+                msg: format!(
+                    "grouped_matmul contracting dimensions differ: lhs K = {contracting}, rhs K = {}",
+                    rhs.shape[1]
+                ),
+            });
+        }
+        let spans = expert_spans(offsets, experts, tokens)?;
+
+        let mut products: Vec<CudaStorage> = Vec::new();
+        for (expert, &(start, end)) in spans.iter().enumerate() {
+            if start == end {
+                continue;
+            }
+            let rows = crate::cuda::ops::shape::launch_narrow(lhs, 0, start, end - start)?;
+            let weight_slice = crate::cuda::ops::shape::launch_narrow(rhs, 0, expert, 1)?;
+            let weight = CudaStorage::new(weight_slice.buffer.clone(), vec![contracting, out_cols]);
+            products.push(crate::cuda::ops::matmul::launch_matmul(&rows, &weight)?);
+        }
+        let out = if products.is_empty() {
+            // `tokens == 0` (the offsets still tile `[0, 0)`): no product to
+            // concatenate, so the zero-row result comes from the zeroed
+            // allocation directly.
+            zeros_dense(lhs, &[tokens, out_cols])?
+        } else {
+            let refs: Vec<&CudaStorage> = products.iter().collect();
+            crate::cuda::ops::shape::launch_concat(&refs, 0)?
+        };
+
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let spans_capture = spans.clone();
+        let (lhs_id, rhs_id, out_id) = (lhs.id, rhs.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                require_dense(grad_out, "gradient")?;
+                let mut lhs_blocks: Vec<CudaStorage> = Vec::new();
+                let mut rhs_blocks: Vec<CudaStorage> = Vec::new();
+                for (expert, &(start, end)) in spans_capture.iter().enumerate() {
+                    if start == end {
+                        rhs_blocks.push(zeros_dense(&rhs_capture, &[1, contracting, out_cols])?);
+                        continue;
+                    }
+                    let g_rows =
+                        crate::cuda::ops::shape::launch_narrow(grad_out, 0, start, end - start)?;
+                    let weight_slice =
+                        crate::cuda::ops::shape::launch_narrow(&rhs_capture, 0, expert, 1)?;
+                    let weight =
+                        CudaStorage::new(weight_slice.buffer.clone(), vec![contracting, out_cols]);
+                    let weight_t = crate::cuda::ops::shape::launch_transpose(&weight, 0, 1)?;
+                    lhs_blocks.push(crate::cuda::ops::matmul::launch_matmul(&g_rows, &weight_t)?);
+
+                    let lhs_rows = crate::cuda::ops::shape::launch_narrow(
+                        &lhs_capture,
+                        0,
+                        start,
+                        end - start,
+                    )?;
+                    let lhs_t = crate::cuda::ops::shape::launch_transpose(&lhs_rows, 0, 1)?;
+                    let grad_w = crate::cuda::ops::matmul::launch_matmul(&lhs_t, &g_rows)?;
+                    rhs_blocks.push(CudaStorage::new(
+                        grad_w.buffer.clone(),
+                        vec![1, contracting, out_cols],
+                    ));
+                }
+                let grad_lhs = if lhs_blocks.is_empty() {
+                    zeros_dense(&lhs_capture, &[lhs_capture.shape[0], contracting])?
+                } else {
+                    let refs: Vec<&CudaStorage> = lhs_blocks.iter().collect();
+                    crate::cuda::ops::shape::launch_concat(&refs, 0)?
+                };
+                let grad_rhs = if rhs_blocks.is_empty() {
+                    zeros_dense(&rhs_capture, &rhs_capture.shape)?
+                } else {
+                    let refs: Vec<&CudaStorage> = rhs_blocks.iter().collect();
+                    crate::cuda::ops::shape::launch_concat(&refs, 0)?
+                };
+                Ok(vec![grad_lhs, grad_rhs])
+            }),
+        });
+        Ok(out)
     }
 
     /// Materializes (see `reshape`'s doc for why).
@@ -550,7 +749,11 @@ impl<D: Device> CudaBackendImpl<D> {
                     }),
                     t_capture.shape.to_vec(),
                 );
-                let grad_input = crate::cuda::ops::shape::launch_scatter(
+                // Scatter-add, not scatter-overwrite: every index position
+                // contributes its cotangent, accumulating on duplicates to
+                // match CPU's `gather_storage` backward (`+=`). The plain
+                // scatter kept only one contribution there.
+                let grad_input = crate::cuda::ops::shape::launch_scatter_add(
                     &zero_base,
                     dim,
                     &index_capture,
@@ -568,11 +771,71 @@ impl<D: Device> CudaBackendImpl<D> {
         index: &CudaStorage,
         src: &CudaStorage,
     ) -> Result<CudaStorage> {
-        crate::cuda::ops::shape::launch_scatter(t, dim, index, src)
+        let out = crate::cuda::ops::shape::launch_scatter(t, dim, index, src)?;
+        // Backward mirrors CPU's `scatter_storage`: the input keeps its
+        // cotangent everywhere EXCEPT the positions a write overwrote (those
+        // land on the source instead), and the source receives the output
+        // cotangent only through the LAST write to each destination, because
+        // the forward's last-write-wins rule means earlier writes to the same
+        // position contributed nothing. The integer index operand is off the
+        // tape by construction, same as CPU.
+        let (index_capture, src_capture) = (index.clone(), src.clone());
+        let (t_id, src_id, out_id) = (t.id, src.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, src_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                // Scattering zeros over the same index zeroes exactly the
+                // overwritten positions however many writes collided there,
+                // which is the whole of the input path; no bookkeeping needed.
+                let zeros = Self::zeros::<K>(
+                    &src_capture.shape,
+                    DTypeId::F32.descriptor(),
+                    &DeviceId::cuda(src_capture.buffer.device_id),
+                )?;
+                let grad_t =
+                    crate::cuda::ops::shape::launch_scatter(grad_out, dim, &index_capture, &zeros)?;
+                // Source path gathers the output cotangent, then keeps only
+                // the last write per destination (row-major, like CPU).
+                // Unique indices are exact; duplicates previously returned
+                // every writer's copy (`[1,1]` for a `[0,1]` reference).
+                // Note the forward itself still races with duplicates -- the
+                // kernel stores with plain writes, so which value wins is
+                // nondeterministic on GPU while CPU keeps the last row-major
+                // write. A deterministic forward needs a bigger kernel (see
+                // follow-ups); this makes the backward match CPU semantics.
+                let grad_src = crate::cuda::ops::shape::launch_scatter_src_grad(
+                    grad_out,
+                    dim,
+                    &index_capture,
+                )?;
+                Ok(vec![grad_t, grad_src])
+            }),
+        });
+        Ok(out)
     }
 
     pub(crate) fn diag<K: DType>(t: &CudaStorage, diagonal: i64) -> Result<CudaStorage> {
-        crate::cuda::ops::shape::launch_diag(t, diagonal as i32)
+        let out = crate::cuda::ops::shape::launch_diag(t, diagonal as i32)?;
+        // Rank is 1 or 2 here: `launch_diag` refuses anything else before
+        // this line, so the branch below cannot see a shape the forward
+        // never produced.
+        let rank = t.shape.len();
+        let k = diagonal as i32;
+        let input_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        push_unary_tape_entry(t_id, out_id, move |grad_out| {
+            if rank == 1 {
+                // Construct's adjoint is the extract with the same offset:
+                // the cotangent square's diagonal, read in the order the
+                // forward wrote it. One kernel for both directions is what
+                // keeps the two forms consistent.
+                crate::cuda::ops::shape::launch_diag(grad_out, k)
+            } else {
+                crate::cuda::ops::shape::launch_diag_backward(grad_out, k, &input_shape)
+            }
+        });
+        Ok(out)
     }
 
     pub(crate) fn pad<K: DType>(
@@ -596,9 +859,91 @@ impl<D: Device> CudaBackendImpl<D> {
 
     pub(crate) fn repeat<K: DType>(t: &CudaStorage, repeats: &[usize]) -> Result<CudaStorage> {
         let out = crate::cuda::ops::shape::launch_repeat(t, repeats)?;
-        let t_shape = t.shape.clone();
-        push_unary_tape_entry(t.id, out.id, move |grad_out| {
-            crate::cuda::tape::unbroadcast(grad_out, &t_shape)
+        let source_shape = t.shape.clone();
+        let repeats_capture = repeats.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        push_unary_tape_entry(t_id, out_id, move |grad_out| {
+            crate::cuda::ops::shape::launch_repeat_backward(
+                grad_out,
+                &repeats_capture,
+                &source_shape,
+            )
+        });
+        Ok(out)
+    }
+
+    /// `repeat_interleave`: adjacent copies along `axis` (CPU's combine.rs
+    /// rule: the source coordinate divides where tiling would take a
+    /// remainder). The backward is a group-sum over each element's
+    /// `repeats` output copies, computed in the kernel in the same
+    /// `r`-ascending order CPU's row-major accumulation visits them.
+    /// (`repeat`'s multi-axis tile-sum has its own kernel —
+    /// `launch_repeat_backward` — and neither path goes through
+    /// `unbroadcast`, which cannot express a non-axis group reduction.)
+    pub(crate) fn repeat_interleave<K: DType>(
+        t: &CudaStorage,
+        repeats: usize,
+        axis: usize,
+    ) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::shape::launch_repeat_interleave(t, repeats, axis)?;
+        let original_shape = t.shape.clone();
+        let (t_id, out_id) = (t.id, out.id);
+        push_unary_tape_entry(t_id, out_id, move |grad_out| {
+            crate::cuda::ops::shape::launch_repeat_interleave_backward(
+                grad_out,
+                repeats,
+                axis,
+                &original_shape,
+            )
+        });
+        Ok(out)
+    }
+
+    /// `one_hot`: Bool rows of `depth`; no tape entry, matching CPU - the
+    /// output is a Boolean function of which slot an integer names, so
+    /// there is no cotangent to route. The descriptor already refused a
+    /// non-integer operand and a zero depth before this runs.
+    pub(crate) fn one_hot<K: DType>(t: &CudaStorage, depth: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::shape::launch_one_hot(t, depth)
+    }
+
+    /// `bincount`: i64 counts per bin; no tape entry, matching CPU. The
+    /// descriptor refused a zero bin count and a non-integer operand
+    /// before this runs; the launcher re-checks both fail-closed.
+    pub(crate) fn bincount<K: DType>(t: &CudaStorage, bins: usize) -> Result<CudaStorage> {
+        crate::cuda::ops::shape::launch_bincount(t, bins)
+    }
+
+    /// Deterministic `scatter_add` forward: the ordered two-pass kernel
+    /// accumulates in `j` row-major order with one f64 rounding, bitwise
+    /// matching CPU. The tape mirrors CPU's `scatter_add_storage`: the
+    /// input's cotangent is the output's untouched, the source's is the
+    /// output cotangent gathered at each recorded destination (zero where
+    /// the forward dropped an out-of-range write), and the integer index
+    /// operand stays off the tape. The scratch pair travels into the
+    /// closure so backward needs no host round-trip.
+    pub(crate) fn scatter_add<K: DType>(
+        t: &CudaStorage,
+        axis: usize,
+        index: &CudaStorage,
+        source: &CudaStorage,
+    ) -> Result<CudaStorage> {
+        let (out, scratch) =
+            crate::cuda::ops::shape::launch_scatter_add_ordered(t, axis, index, source)?;
+        let source_shape = source.shape.clone();
+        let (t_id, src_id, out_id) = (t.id, source.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id, src_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grad_t = grad_out.clone().with_fresh_autograd_identity();
+                let grad_src = crate::cuda::ops::shape::launch_scatter_add_backward_src(
+                    grad_out,
+                    &scratch,
+                    &source_shape,
+                )?;
+                Ok(vec![grad_t, grad_src])
+            }),
         });
         Ok(out)
     }
@@ -644,6 +989,113 @@ impl<D: Device> CudaBackendImpl<D> {
     }
 }
 
+/// Fail-closed layout gate for `grouped_matmul`'s narrow/matmul path.
+///
+/// `launch_shape_op` and the matmul kernel address storage as a flat
+/// contiguous buffer (they never receive strides or a view offset), so a
+/// strided or non-zero-offset operand would be read as if it were packed.
+/// The shared `embedding` capability row cannot narrow its layout claim
+/// per-operation — `OneHot`/`Bincount`/`ScatterAdd` are stride-aware — so
+/// the executor refuses here, the same tightener the row's dtype union
+/// needs for the f32 matrices.
+fn require_dense(t: &CudaStorage, name: &'static str) -> Result<()> {
+    if t.layout() != incin_core::exec::LayoutClass::Contiguous || t.offset_elements != 0 {
+        return Err(Error::Msg(format!(
+            "grouped_matmul requires contiguous {name} storage on CUDA (the narrow/matmul path \
+             reads flat buffers); got layout {:?}, strides {:?}, offset {}",
+            t.layout(),
+            t.strides,
+            t.offset_elements
+        )));
+    }
+    Ok(())
+}
+
+/// Zero-filled contiguous storage in `sample`'s dtype, for an empty expert
+/// stack or a `tokens == 0` product that has no kernel result to build on.
+fn zeros_dense(sample: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {
+    let numel = checked_numel(shape)?;
+    let stream = sample.buffer.device.default_stream();
+    let data = crate::cuda::ops::alloc_zeroed_bytes(
+        &stream,
+        sample.buffer.dtype,
+        numel,
+        OperationKind::Storage,
+    )?;
+    let buffer = CudaBuffer {
+        len: numel,
+        dtype: sample.buffer.dtype,
+        data: Arc::new(data),
+        device: sample.buffer.device.clone(),
+        device_id: sample.buffer.device_id,
+    };
+    Ok(CudaStorage::new(Arc::new(buffer), shape.to_vec()))
+}
+
+/// Validate that `offsets` is a non-decreasing i64 tile of `[0, T)` with
+/// exactly `E + 1` entries, then return the per-expert `(start, end)` spans.
+///
+/// Mirrors `cpu::ops::matmul::grouped::expert_spans`'s wording exactly so a
+/// refusal renders the same on either backend; the values are read back to
+/// the host once (`E + 1` integers), which is the only host interop this
+/// path performs.
+fn expert_spans(
+    offsets: &CudaStorage,
+    experts: usize,
+    tokens: usize,
+) -> Result<Vec<(usize, usize)>> {
+    if offsets.shape != [experts + 1] {
+        return Err(Error::ShapeMismatch {
+            op: "grouped_matmul",
+            expected: vec![experts + 1],
+            got: offsets.shape.to_vec(),
+            msg: format!(
+                "grouped_matmul offsets must have length E+1 = {}, got shape {:?}",
+                experts + 1,
+                offsets.shape
+            ),
+        });
+    }
+    let bytes = offsets
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*offsets.buffer.data)
+        .map_err(|error| {
+            Error::Msg(format!("grouped_matmul offsets readback failed: {error:?}"))
+        })?;
+    let raw: &[i64] = bytemuck::cast_slice(&bytes);
+    if raw.len() < experts + 1 {
+        return Err(Error::Msg(format!(
+            "grouped_matmul offsets buffer holds {} i64 values, need {}",
+            raw.len(),
+            experts + 1
+        )));
+    }
+    let mut values = Vec::with_capacity(experts + 1);
+    let mut previous = 0i64;
+    for (expert, &value) in raw.iter().enumerate().take(experts + 1) {
+        if value < 0 || value as usize > tokens {
+            return Err(Error::Msg(format!(
+                "grouped_matmul offsets[{expert}] = {value} is outside [0, {tokens}]"
+            )));
+        }
+        if value < previous {
+            return Err(Error::Msg(format!(
+                "grouped_matmul offsets must be non-decreasing; offsets[{expert}] = {value} < {previous}"
+            )));
+        }
+        previous = value;
+        values.push(value as usize);
+    }
+    if values.first() != Some(&0) || values.last() != Some(&tokens) {
+        return Err(Error::Msg(format!(
+            "grouped_matmul offsets must tile [0, {tokens}); got {values:?}"
+        )));
+    }
+    Ok(values.windows(2).map(|w| (w[0], w[1])).collect())
+}
+
 pub(crate) fn cuda_reshape_storage(t: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {
     CudaBackendImpl::<Cuda>::reshape::<f32>(t, shape)
 }
@@ -654,6 +1106,18 @@ pub(crate) fn cuda_transpose_storage(t: &CudaStorage, d1: usize, d2: usize) -> R
 
 pub(crate) fn cuda_matmul_storage(lhs: &CudaStorage, rhs: &CudaStorage) -> Result<CudaStorage> {
     CudaBackendImpl::<Cuda>::matmul::<f32>(lhs, rhs)
+}
+
+/// The batched dispatcher for rank >= 2 inputs, used by `op::Linear` so a
+/// leading batch on the input reaches the batched path (one native or
+/// vendor launch when the plan admits it, the composed loop otherwise)
+/// instead of `matmul`'s unbatched-2D refusal. Rank-2 pairs short-circuit
+/// inside `batched_matmul` to the same 2D `matmul` as before.
+pub(crate) fn cuda_batched_matmul_storage(
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+) -> Result<CudaStorage> {
+    CudaBackendImpl::<Cuda>::batched_matmul::<f32>(lhs, rhs)
 }
 
 pub(crate) fn cuda_broadcast_as_storage(t: &CudaStorage, shape: &[usize]) -> Result<CudaStorage> {

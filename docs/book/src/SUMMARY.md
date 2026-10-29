@@ -6,6 +6,7 @@
 
 - [Installation](./installation.md)
 - [Editor integrations](./editor_integrations.md)
+- [Command-line tooling: `cargo incin`](./cli_tooling.md)
 - [Quickstart](./quickstart.md)
 
 # Core concepts
@@ -21,7 +22,7 @@
 
 - [Layers and `#[module]`](./building_models.md)
 - [Sequential models](./sequential.md)
-- [A small Transformer-style block](./transformer.md)
+- [Transformers](./transformer.md)
 
 # Training
 
@@ -31,6 +32,13 @@
 - [Distributed planning](./distributed.md)
 - [Metrics](./metrics.md)
 - [Saving and loading](./saving_loading.md)
+
+# How-to
+
+- [Run a training loop](./howto_training_loop.md)
+- [Save and load a model](./howto_save_load.md)
+- [Quantize tensors and weights](./howto_quantize.md)
+- [Debug shape and dtype errors](./howto_debug_shapes_errors.md)
 
 # Backends
 
@@ -64,3 +72,4 @@ authoring and custom operations chapters above.
 - [Lowering: from descriptor to kernel](./deep_lowering.md)
 - [Proofs: how claims are checked](./deep_proofs.md)
 - [What the macros guarantee](./deep_macros_internals.md)
+- [Deep autograd: tapes, recipes, and custom training ops](./deep_autograd.md)

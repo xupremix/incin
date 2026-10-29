@@ -6,7 +6,8 @@ use super::rules::descriptor_min_rank;
 use super::tables::{CPU_CAPABILITIES, CUDA_CAPABILITIES, METAL_CAPABILITIES, WGPU_CAPABILITIES};
 use alloc::collections::BTreeSet;
 use incin_core::exec::{
-    CapabilityQuery, ImplementationKind, LayoutClass, MathMode, OPERATION_CATALOG, SupportLevel,
+    CapabilityQuery, CapabilityRule, GradientRule, ImplementationKind, LayoutClass, MathMode,
+    OPERATION_CATALOG, SupportLevel, catalog_entry,
 };
 use incin_core::tensor::device::DeviceKind;
 use incin_core::tensor::dtype::DTypeId;
@@ -232,6 +233,204 @@ fn mixed_mask_and_data_operations_admit_both_operand_dtypes_on_every_backend() {
                 "{device:?}: {operation} refuses a rank-1 bool mask, which a \
                  lower-rank-than-data mask broadcast would send",
             );
+        }
+    }
+}
+
+/// Issue #90: the CPU matmul rows widened from `F32_ONLY` to
+/// `FLOAT_DTYPES`. The exact rows (`MatMulExact`/`BatchedMatMul`/`Addmm`/
+/// `Linear`) and the coarse legacy `MatMul` row all have to agree on that
+/// set - an exact row that understates the coarse one beside it (or the
+/// reverse) would make `doctor`'s family probe and a real `matmul` call
+/// disagree about what runs. The non-float dtypes stay refused, and the
+/// three rows that deliberately did *not* widen
+/// (`ScaledDotProductAttention`/`Dot`/`Outer`, which moved to
+/// `composed_reduction` so they keep the F32_ONLY `$reduction` claim)
+/// refuse an f16 query by dtype rather than by accident.
+#[test]
+fn the_cpu_matmul_rows_admit_every_float_and_refuse_the_rest() {
+    use super::constants::FLOAT_DTYPES;
+    use incin_core::exec::{LayoutClass, MathMode, OperationIdentity, UnsupportedReason};
+    use incin_core::shapes::error::OperationKind as K;
+
+    // Every float storage dtype across the four rows that widened.
+    // Rank clears each row's floor (2 for `matmul`, 3 for `bmm`, 1 for
+    // `addmm`/`linear`); Contiguous and training are admitted by all.
+    let admitted: &[(K, DTypeId, usize)] = &[
+        (K::MatMulExact, DTypeId::BF16, 2),
+        (K::MatMulExact, DTypeId::F16, 2),
+        (K::MatMulExact, DTypeId::F32, 2),
+        (K::MatMulExact, DTypeId::F64, 2),
+        (K::BatchedMatMul, DTypeId::BF16, 3),
+        (K::BatchedMatMul, DTypeId::F16, 3),
+        (K::BatchedMatMul, DTypeId::F32, 3),
+        (K::BatchedMatMul, DTypeId::F64, 3),
+        (K::Addmm, DTypeId::BF16, 2),
+        (K::Addmm, DTypeId::F16, 2),
+        (K::Addmm, DTypeId::F32, 2),
+        (K::Addmm, DTypeId::F64, 2),
+        (K::Linear, DTypeId::BF16, 2),
+        (K::Linear, DTypeId::F16, 2),
+        (K::Linear, DTypeId::F32, 2),
+        (K::Linear, DTypeId::F64, 2),
+    ];
+    for &(operation, dtype, rank) in admitted {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank,
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        assert!(
+            !matches!(
+                support(DeviceKind::Cpu, &query),
+                SupportLevel::Unsupported(_)
+            ),
+            "CPU must admit {operation:?} at {dtype:?} rank {rank}, got {:?}",
+            support(DeviceKind::Cpu, &query)
+        );
+    }
+
+    // FLOAT_DTYPES is the whole widening: integer and boolean operands
+    // stay refused rather than riding the moved rows.
+    let refused: &[(K, DTypeId, usize)] = &[
+        (K::MatMulExact, DTypeId::I64, 2),
+        (K::MatMulExact, DTypeId::Bool, 2),
+        (K::BatchedMatMul, DTypeId::I64, 3),
+        (K::Addmm, DTypeId::I64, 2),
+        (K::Linear, DTypeId::I64, 2),
+    ];
+    for &(operation, dtype, rank) in refused {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: dtype.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank,
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        assert!(
+            matches!(
+                support(DeviceKind::Cpu, &query),
+                SupportLevel::Unsupported(_)
+            ),
+            "CPU must still refuse {operation:?} at {dtype:?}, got {:?}",
+            support(DeviceKind::Cpu, &query)
+        );
+    }
+
+    // The rows that did not widen stay honest: SDPA sits on f32-only
+    // `softmax`, Dot's `sum_all` always returns f32 storage, and Outer
+    // stays on the same narrow set CUDA advertises - an f16 query is
+    // refused by dtype, not by rank or layout.
+    for operation in [K::ScaledDotProductAttention, K::Dot, K::Outer] {
+        let query = CapabilityQuery {
+            operation: OperationIdentity::Builtin(operation),
+            dtype: DTypeId::F16.descriptor(),
+            layout: LayoutClass::Contiguous,
+            rank: descriptor_min_rank(operation),
+            training: true,
+            math_mode: MathMode::Precise,
+        };
+        assert!(
+            matches!(
+                support(DeviceKind::Cpu, &query),
+                SupportLevel::Unsupported(UnsupportedReason::DType { .. })
+            ),
+            "CPU {operation:?} must stay f32-only (moved to composed_reduction), got {:?}",
+            support(DeviceKind::Cpu, &query)
+        );
+    }
+
+    // The coarse legacy `MatMul` row has to match the exact row it stands
+    // beside: both claim FLOAT_DTYPES, neither trails the other at
+    // F32_ONLY.
+    let coarse = CPU_CAPABILITIES
+        .iter()
+        .find(|rule| rule.operation == K::MatMul)
+        .expect("CPU carries a coarse MatMul row");
+    assert_eq!(
+        coarse.dtypes, FLOAT_DTYPES,
+        "the coarse CPU MatMul row must match the exact MatMulExact row's FLOAT_DTYPES"
+    );
+}
+
+/// Issue #93: the quantize boundary's `training` flag is a per-backend fact
+/// about which kernels record a tape entry, so it is stated per operation
+/// rather than per group.
+///
+/// CPU's `quantize`/`dequantize` kernels push the straight-through entry and
+/// the catalog backs that with [`GradientRule::StraightThrough`], so those two
+/// rows admit training. CUDA's executor records the same STE entry (verified
+/// on hardware), so its two rows admit training as well.
+/// `quantized_matmul` has [`GradientRule::None`] and records nothing on any
+/// backend, so its row stays `false` everywhere. WGPU/Metal do not advertise
+/// the groups at all - fail-closed in both directions: a row claims training
+/// only where the implementation that must answer for it exists, and the
+/// catalog's gradient rule and the row never disagree.
+#[test]
+fn the_quantize_boundary_claims_training_only_where_a_kernel_records_it() {
+    use incin_core::shapes::error::OperationKind as K;
+
+    let training_of = |rules: &[CapabilityRule], operation: K| {
+        rules
+            .iter()
+            .find(|rule| rule.operation == operation)
+            .map(|rule| rule.training)
+    };
+    let gradient_of = |operation: K| catalog_entry(operation).map(|entry| entry.gradient);
+
+    // The two halves of the boundary record on CPU, and say so in both
+    // places the contract is written down.
+    for operation in [K::Quantize, K::Dequantize] {
+        assert_eq!(
+            training_of(CPU_CAPABILITIES, operation),
+            Some(true),
+            "CPU records the STE tape entry for {operation:?}, so its row must admit training"
+        );
+        assert_eq!(
+            gradient_of(operation),
+            Some(GradientRule::StraightThrough),
+            "{operation:?} records the STE tape entry, so its catalog row must claim the approximation"
+        );
+    }
+
+    // The product over compressed blocks inherits nothing from the boundary.
+    assert_eq!(
+        training_of(CPU_CAPABILITIES, K::QuantizedMatMul),
+        Some(false),
+        "quantized_matmul records no tape, so its row must refuse training"
+    );
+    assert_eq!(
+        gradient_of(K::QuantizedMatMul),
+        Some(GradientRule::None),
+        "quantized_matmul has no backward rule and must not inherit the boundary's claim"
+    );
+
+    // Every other backend: whatever it advertises of the three stays
+    // training-false until an executor there records a tape entry, except
+    // CUDA's quantize/dequantize pair, whose executor records the same STE
+    // entry as CPU's (hardware-verified), and WGPU's pair, whose executor
+    // records the same entry (software-adapter-verified: the quant tests
+    // assert one tape entry each). A backend that does not advertise
+    // one of them at all is fine - `None` is the fail-closed answer too.
+    for (device, rules) in [
+        (DeviceKind::Cuda, CUDA_CAPABILITIES),
+        (DeviceKind::Wgpu, WGPU_CAPABILITIES),
+        (DeviceKind::Metal, METAL_CAPABILITIES),
+    ] {
+        for operation in [K::Quantize, K::Dequantize, K::QuantizedMatMul] {
+            if let Some(training) = training_of(rules, operation) {
+                let expect_training = matches!(device, DeviceKind::Cuda | DeviceKind::Wgpu)
+                    && operation != K::QuantizedMatMul;
+                assert_eq!(
+                    training, expect_training,
+                    "{device:?} advertises {operation:?} with training = {training}, but its \
+                     executor records a tape for it: {expect_training}"
+                );
+            }
         }
     }
 }

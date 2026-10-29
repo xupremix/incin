@@ -1,8 +1,9 @@
-use crate::cpu::storage::{BlockQ8_0, CpuBuffer, CpuStorage};
+use crate::cpu::storage::{BlockMXFP4, BlockNVFP4, BlockQ8_0, CpuBuffer, CpuStorage};
 use incin_core::error::{Error, Result};
 use incin_core::shapes::{OperationKind, ShapeBuf};
 #[cfg(test)]
 use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::dtype::fp4;
 
 extern crate alloc;
 use alloc::vec::Vec;
@@ -45,24 +46,114 @@ pub(crate) fn quantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
 }
 
 pub(crate) fn dequantize_storage(t: &CpuStorage) -> Result<CpuStorage> {
-    let q8_data = match &*t.buffer {
-        CpuBuffer::Q8_0(v) => v,
+    match &*t.buffer {
+        CpuBuffer::Q8_0(q8_data) => {
+            let mut f32_data = Vec::with_capacity(q8_data.len() * 32);
+            for block in q8_data {
+                let d = block.d.to_f32();
+                for quantized in block.qs {
+                    f32_data.push(quantized as f32 * d);
+                }
+            }
+            Ok(CpuStorage::from_contiguous(
+                CpuBuffer::F32(f32_data),
+                &t.shape,
+            ))
+        }
+        // Issue #95: decode routes by buffer variant (the executor's
+        // `Dequantize` arm only narrows the float *output* dtype; the input
+        // variant selects the codec). Same straight-through status as Q8_0.
+        CpuBuffer::NVFP4(blocks) => {
+            let mut f32_data = Vec::with_capacity(blocks.len() * 16);
+            for block in blocks {
+                f32_data.extend_from_slice(&fp4::decode_nvfp4_block(block.scale, &block.data));
+            }
+            Ok(CpuStorage::from_contiguous(
+                CpuBuffer::F32(f32_data),
+                &t.shape,
+            ))
+        }
+        CpuBuffer::MXFP4(blocks) => {
+            let mut f32_data = Vec::with_capacity(blocks.len() * 32);
+            for block in blocks {
+                f32_data.extend_from_slice(&fp4::decode_mxfp4_block(block.scale, &block.data));
+            }
+            Ok(CpuStorage::from_contiguous(
+                CpuBuffer::F32(f32_data),
+                &t.shape,
+            ))
+        }
+        _ => Err(Error::UnsupportedBackendOperation {
+            op: "dequantize",
+            backend: "Cpu (expected Q8_0, NVFP4, or MXFP4 buffer)",
+        }),
+    }
+}
+
+/// Quantizes an `F32` buffer into NVFP4 blocks (16 values + E4M3 scale).
+///
+/// The TE recipe at `s_global = 1.0` (see
+/// [`fp4`](incin_core::tensor::dtype::fp4)): per block, `s = E4M3(amax/6)`,
+/// elements `RNE(x/s)`. Error bound: `|x - x_hat| <= 0.25 * block_amax`
+/// (proved in the `fp4` module docs).
+pub(crate) fn quantize_nvfp4_storage(t: &CpuStorage) -> Result<CpuStorage> {
+    let f32_data = match &*t.buffer {
+        CpuBuffer::F32(v) => v,
         _ => {
             return Err(Error::UnsupportedBackendOperation {
-                op: "dequantize",
-                backend: "Cpu (expected Q8_0 buffer)",
+                op: "quantize",
+                backend: "Cpu (expected F32 buffer)",
             });
         }
     };
-    let mut f32_data = Vec::with_capacity(q8_data.len() * 32);
-    for block in q8_data {
-        let d = block.d.to_f32();
-        for quantized in block.qs {
-            f32_data.push(quantized as f32 * d);
-        }
+    let n = f32_data.len();
+    if n % 16 != 0 {
+        return Err(Error::Msg(alloc::format!(
+            "quantize NVFP4 requires buffer length multiple of 16, got {}",
+            n
+        )));
+    }
+    let mut blocks = Vec::with_capacity(n / 16);
+    for chunk in f32_data.chunks_exact(16) {
+        let values: [f32; 16] = chunk.try_into().expect("chunks_exact(16) yields 16");
+        let (scale, data) = fp4::encode_nvfp4_block(&values);
+        blocks.push(BlockNVFP4 { scale, data });
     }
     Ok(CpuStorage::from_contiguous(
-        CpuBuffer::F32(f32_data),
+        CpuBuffer::NVFP4(blocks),
+        &t.shape,
+    ))
+}
+
+/// Quantizes an `F32` buffer into MXFP4 blocks (32 values + E8M0 scale).
+///
+/// Per block, `s = min E8M0 power of two >= amax/6`, elements `RNE(x/s)`.
+/// Error bound: `|x - x_hat| <= 0.5 * block_amax`.
+pub(crate) fn quantize_mxfp4_storage(t: &CpuStorage) -> Result<CpuStorage> {
+    let f32_data = match &*t.buffer {
+        CpuBuffer::F32(v) => v,
+        _ => {
+            return Err(Error::UnsupportedBackendOperation {
+                op: "quantize",
+                backend: "Cpu (expected F32 buffer)",
+            });
+        }
+    };
+    let n = f32_data.len();
+    if n % 32 != 0 {
+        return Err(Error::Msg(alloc::format!(
+            "quantize MXFP4 requires buffer length multiple of 32, got {}",
+            n
+        )));
+    }
+    let mut blocks = Vec::with_capacity(n / 32);
+    for chunk in f32_data.chunks_exact(32) {
+        let values: [f32; 32] = chunk.try_into().expect("chunks_exact(32) yields 32");
+        let (scale, data) = fp4::encode_mxfp4_block(&values);
+        blocks.push(BlockMXFP4 { scale, data });
+    }
+    Ok(CpuStorage::from_contiguous(
+        CpuBuffer::MXFP4(blocks),
         &t.shape,
     ))
 }
@@ -329,5 +420,195 @@ mod tests {
         } else {
             panic!("expected Error::UnsupportedDType, got {:?}", error);
         }
+    }
+
+    /// Issue #95: NVFP4 roundtrip meets the documented bound
+    /// (`|err| <= 0.25 * block_amax`), per block, over adversarial
+    /// magnitudes — tiny (scale-subnormal), grid-exact, mid-tie, and large.
+    #[test]
+    fn nvfp4_roundtrip_meets_quarter_amax_bound() {
+        // 4 blocks of 16: exact-grid, ties, small, large.
+        let mut data = vec![0.0f32; 64];
+        let grid = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0];
+        for (i, v) in data[0..16].iter_mut().enumerate() {
+            *v = grid[i % 8] * if i % 2 == 0 { 1.0 } else { -1.0 };
+        }
+        for (i, v) in data[16..32].iter_mut().enumerate() {
+            *v = 0.25 + i as f32 * 0.31; // tie-straddling sweep
+        }
+        for (i, v) in data[32..48].iter_mut().enumerate() {
+            *v = (i as f32 - 8.0) * 0.05; // amax 0.4: E4M3-normal scale
+        }
+        for (i, v) in data[48..64].iter_mut().enumerate() {
+            *v = (i as f32 - 8.0) * 17.3; // amax ~138, E4M3-normal scale
+        }
+        let storage = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![4, 16]);
+        let q = quantize_nvfp4_storage(&storage).unwrap();
+        assert_eq!(q.buffer.dtype_id(), DTypeId::NVFP4);
+        let back = dequantize_storage(&q).unwrap();
+        let out = match &*back.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => panic!("expected F32"),
+        };
+        for block in 0..4 {
+            let amax = data[block * 16..(block + 1) * 16]
+                .iter()
+                .map(|v| v.abs())
+                .fold(0.0f32, f32::max);
+            // Zero-ish blocks decode bit-exactly; otherwise the bound.
+            for i in 0..16 {
+                let err = (data[block * 16 + i] - out[block * 16 + i]).abs();
+                assert!(
+                    err <= 0.25 * amax,
+                    "NVFP4 block {block} elem {i}: {} vs {} (amax {amax})",
+                    data[block * 16 + i],
+                    out[block * 16 + i]
+                );
+            }
+        }
+        // The exact-grid block (block 0, amax 6 → scale E4M3(1)=1) is exact.
+        for i in 0..16 {
+            assert_eq!(out[i], data[i], "grid value {i} must round-trip exactly");
+        }
+    }
+
+    /// Issue #95: an NVFP4 block whose scale underflows E4M3 (block_amax/6
+    /// below 2^-9) decodes as zeros — a documented flush, with error bounded
+    /// by the block amax itself rather than the quarter-amax bound.
+    #[test]
+    fn nvfp4_subnormal_scale_block_flushes_to_zero() {
+        let data: Vec<f32> = (0..16).map(|i| (i as f32 - 8.0) * 1e-4).collect();
+        let storage = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![16]);
+        let q = quantize_nvfp4_storage(&storage).unwrap();
+        let back = dequantize_storage(&q).unwrap();
+        let out = match &*back.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => panic!("expected F32"),
+        };
+        let amax = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+        assert!(amax < 0.0117, "test premise: scale must underflow E4M3");
+        for (x, y) in data.iter().zip(out.iter()) {
+            assert_eq!(*y, 0.0);
+            assert!((x - y).abs() <= amax);
+        }
+    }
+
+    /// Issue #95: MXFP4 roundtrip meets `|err| <= 0.5 * block_amax`.
+    #[test]
+    fn mxfp4_roundtrip_meets_half_amax_bound() {
+        let mut data = vec![0.0f32; 64];
+        for (i, v) in data.iter_mut().enumerate() {
+            // Mixed magnitudes: sub-unit, unit, tens — amax ~30.
+            *v = ((i * 37) % 61) as f32 * 0.53 - 15.0;
+        }
+        data[0] = 0.0;
+        let storage = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![2, 32]);
+        let q = quantize_mxfp4_storage(&storage).unwrap();
+        assert_eq!(q.buffer.dtype_id(), DTypeId::MXFP4);
+        let back = dequantize_storage(&q).unwrap();
+        let out = match &*back.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => panic!("expected F32"),
+        };
+        for block in 0..2 {
+            let amax = data[block * 32..(block + 1) * 32]
+                .iter()
+                .map(|v| v.abs())
+                .fold(0.0f32, f32::max);
+            for i in 0..32 {
+                let err = (data[block * 32 + i] - out[block * 32 + i]).abs();
+                assert!(
+                    err <= 0.5 * amax,
+                    "MXFP4 block {block} elem {i}: {} vs {} (amax {amax})",
+                    data[block * 32 + i],
+                    out[block * 32 + i]
+                );
+            }
+        }
+    }
+
+    /// Issue #95: zero blocks are bit-exact zeros; misaligned lengths are
+    /// refused with the block size named.
+    #[test]
+    fn fp4_zero_blocks_are_exact_and_misaligned_lengths_refused() {
+        let zeros = CpuStorage::from_contiguous(CpuBuffer::F32(vec![0.0; 32]), vec![32]);
+        for (quantize, block_len) in [
+            (
+                quantize_nvfp4_storage as fn(&CpuStorage) -> Result<CpuStorage>,
+                16,
+            ),
+            (
+                quantize_mxfp4_storage as fn(&CpuStorage) -> Result<CpuStorage>,
+                32,
+            ),
+        ] {
+            let q = quantize(&zeros).unwrap();
+            let back = dequantize_storage(&q).unwrap();
+            let out = match &*back.buffer {
+                CpuBuffer::F32(v) => v,
+                _ => panic!("expected F32"),
+            };
+            assert!(out.iter().all(|&v| v == 0.0));
+            let odd = CpuStorage::from_contiguous(CpuBuffer::F32(vec![1.0; 20]), vec![20]);
+            let err = quantize(&odd).unwrap_err().to_string();
+            assert!(err.contains(&block_len.to_string()), "{err}");
+        }
+        // Non-F32 input is refused, like Q8_0's quantize.
+        let i64buf = CpuStorage::from_contiguous(CpuBuffer::I64(vec![1; 16]), vec![16]);
+        assert!(quantize_nvfp4_storage(&i64buf).is_err());
+    }
+
+    /// Issue #95, checkpoint-path proof at storage level: quantized FP4
+    /// blocks survive the `to_bytes`/`from_bytes` wire (scale-first
+    /// interleaved order) and decode back to the same values.
+    #[test]
+    fn fp4_blocks_survive_the_storage_wire() {
+        use crate::cpu::CpuBackendImpl;
+        use incin_core::backend_authoring::HostInterop;
+        use incin_core::tensor::device::{Cpu, DeviceId};
+        use incin_core::tensor::dtype::{MXFP4, NVFP4};
+
+        let data: Vec<f32> = (0..32).map(|i| (i as f32 - 16.0) * 0.77).collect();
+        let f32buf = CpuStorage::from_contiguous(CpuBuffer::F32(data.clone()), vec![2, 16]);
+
+        // NVFP4: [32] = two 16-blocks = 18 bytes on the wire.
+        let q = quantize_nvfp4_storage(&f32buf).unwrap();
+        let wire = CpuBackendImpl::<Cpu>::to_bytes::<NVFP4>(&q).unwrap();
+        assert_eq!(wire.len(), 18);
+        let back = CpuBackendImpl::<Cpu>::from_bytes::<NVFP4>(
+            &wire,
+            &[2, 16],
+            DTypeId::NVFP4.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .unwrap();
+        assert_eq!(back.buffer.dtype_id(), DTypeId::NVFP4);
+        let rt = dequantize_storage(&back).unwrap();
+        let out = match &*rt.buffer {
+            CpuBuffer::F32(v) => v,
+            _ => panic!("expected F32"),
+        };
+        let amax = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+        for (x, y) in data.iter().zip(out.iter()) {
+            assert!((x - y).abs() <= 0.25 * amax, "{x} vs {y}");
+        }
+
+        // MXFP4: [32] = one 32-block = 17 bytes on the wire.
+        let q = quantize_mxfp4_storage(&f32buf).unwrap();
+        let wire = CpuBackendImpl::<Cpu>::to_bytes::<MXFP4>(&q).unwrap();
+        assert_eq!(wire.len(), 17);
+        let back = CpuBackendImpl::<Cpu>::from_bytes::<MXFP4>(
+            &wire,
+            &[2, 16],
+            DTypeId::MXFP4.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .unwrap();
+        assert_eq!(back.buffer.dtype_id(), DTypeId::MXFP4);
+        assert_eq!(
+            CpuBackendImpl::<Cpu>::to_bytes::<MXFP4>(&back).unwrap(),
+            wire,
+            "wire bytes must round-trip bit-identically"
+        );
     }
 }

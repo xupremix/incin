@@ -90,6 +90,12 @@ macro_rules! incin_operation_catalog {
             (LogicalNot, "logical_not", Pointwise, Logical, NoAttributes, 1, 1, "::logical_not"),
 
             (ReshapeExact, "reshape", Storage, Shape, ShapeAttributes, 1, 1, "::reshape"),
+            // Views everywhere (#113, orchestrator decision 2026-09-25): the
+            // `transpose` row keeps the `Shape` profile, whose layout rule is
+            // `ViewWhenPossible` -- the result shares the input's buffer with
+            // permuted strides, aliasing documented on `Tensor::transpose`,
+            // densify explicitly via `into_row_major`. CUDA still copies as a
+            // tracked deviation (see its capability row and `launch_transpose`).
             (TransposeExact, "transpose", Storage, Shape, TransposeAttributes, 1, 1, "::transpose"),
             (TransposeView, "transpose_view", Storage, Shape, TransposeAttributes, 1, 1, "::transpose_view"),
             (MatMulExact, "matmul", Reduction, MatMul, NoAttributes, 2, 2, "::matmul"),
@@ -107,10 +113,15 @@ macro_rules! incin_operation_catalog {
             (Scatter, "scatter", Storage, Indexing, ScatterAttributes, 3, 3, "::scatter"),
             (ScatterAdd, "scatter_add", Storage, Indexing, ScatterAttributes, 3, 3, "::scatter_add"),
             (OneHot, "one_hot", Storage, Indexing, OneHotAttributes, 1, 1, "::one_hot"),
+            (Bincount, "bincount", Storage, Indexing, BincountAttributes, 1, 1, "::bincount"),
+            // The output extent is the count of non-zero elements, which no
+            // metadata inference can know before the values are read (#102).
+            (NonZero, "nonzero", Storage, Indexing, NoAttributes, 1, 1, "Tensor::nonzero"),
             (IndexSelect, "index_select", Storage, Indexing, AxisAttributes, 2, 2, "::index_select"),
             (MaskedFill, "masked_fill", Pointwise, Selection, ScalarAttributes, 2, 2, "::masked_fill"),
             (UnsqueezeExact, "unsqueeze", Storage, Shape, AxisAttributes, 1, 1, "::unsqueeze"),
             (Repeat, "repeat", Storage, Shape, RepeatAttributes, 1, 1, "::repeat"),
+            (RepeatInterleave, "repeat_interleave", Storage, Shape, RepeatInterleaveAttributes, 1, 1, "::repeat_interleave"),
             (Pad, "pad", Storage, Shape, PadAttributes, 1, 1, "::pad"),
             (Triu, "triu", Storage, Shape, DiagonalAttributes, 1, 1, "::triu"),
             (Tril, "tril", Storage, Shape, DiagonalAttributes, 1, 1, "::tril"),
@@ -119,7 +130,17 @@ macro_rules! incin_operation_catalog {
             (Split, "split", Storage, Shape, SplitAttributes, 1, 1, "Tensor::split"),
             (Addmm, "addmm", Reduction, MatMul, AddmmAttributes, 3, 3, "::addmm"),
             (BatchedMatMul, "bmm", Reduction, MatMul, NoAttributes, 2, 2, "::bmm"),
+            // Per-expert matmul over disjoint row ranges: lhs `[T, K]`, stacked
+            // rhs `[E, K, N]`, and i64 offsets `[E+1]` tiling `[0, T)` (#103).
+            (GroupedMatMul, "grouped_matmul", Reduction, MatMul, NoAttributes, 3, 3, "::grouped_matmul"),
             (ScaledDotProductAttention, "scaled_dot_product_attention", Reduction, Attention, AttentionAttributes, 3, 4, "::scaled_dot_product_attention"),
+            // Issue #104: the fused path is a distinct operation, not a flag
+            // on the composed one, so a backend advertises it only where the
+            // kernel exists. Same output-shape rule as the composed row;
+            // causal masking is a property of the attributes (a kernel can
+            // only skip blocks for a mask it knows is causal), so there is
+            // no mask operand and the arity is exactly three.
+            (FusedAttention, "fused_attention", Reduction, Attention, FusedAttentionAttributes, 3, 3, "::fused_attention"),
             (Unfold, "unfold", Storage, Shape, UnfoldAttributes, 1, 1, "::unfold"),
             (PixelShuffle, "pixel_shuffle", Storage, Shape, PixelShuffleAttributes, 1, 1, "::pixel_shuffle"),
             (GroupNorm, "group_norm", Normalization, Normalization, GroupNormAttributes, 1, 1, "::group_norm"),
@@ -156,6 +177,7 @@ macro_rules! incin_operation_catalog {
             (Cumsum, "cumsum", Reduction, Scan, AxisAttributes, 1, 1, "::cumsum"),
             (TopK, "topk", Reduction, IndexReduction, TopKAttributes, 1, 1, "::topk"),
             (Argsort, "argsort", Reduction, IndexReduction, ArgsortAttributes, 1, 1, "::argsort"),
+            (Sort, "sort", Reduction, IndexReduction, ArgsortAttributes, 1, 1, "::sort"),
             (Norm, "norm", Reduction, Reduction, NormAttributes, 1, 1, "Tensor::norm"),
             (VarianceAll, "var_all", Reduction, Reduction, VarianceAttributes, 1, 1, "Tensor::var_all"),
             (VarianceDim, "var_dim", Reduction, Reduction, AxisVarianceAttributes, 1, 1, "Tensor::var_dim"),

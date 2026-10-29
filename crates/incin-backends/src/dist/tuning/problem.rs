@@ -81,6 +81,11 @@ pub struct CollectiveTuningProblem {
 
 impl CollectiveTuningProblem {
     /// Build a problem whose operation, dtype, and element count are static.
+    ///
+    /// `K: BuiltinDType` is explicit (issue #96): the tuning cache key records
+    /// a built-in `DTypeId`, so a custom logical `ConstDType` without a
+    /// built-in id is refused here at compile time rather than silently
+    /// coerced onto a built-in's key.
     pub fn new_static<K, Elements, Operation>(
         group: GroupId,
         topology: &TopologyFingerprint,
@@ -88,13 +93,13 @@ impl CollectiveTuningProblem {
         workspace_budget_bytes: usize,
     ) -> Result<Self, CollectiveTuningError>
     where
-        K: ConstDType + CollectiveDType,
+        K: ConstDType + BuiltinDType + CollectiveDType,
         Elements: Unsigned + NonZero + IsLessOrEqual<U4294967295, Output = B1>,
         Operation: StaticCollectiveTuning<K, Elements>,
     {
         Self::new_dyn(
             Operation::KIND,
-            K::DESCRIPTOR.builtin_id().unwrap_or(DTypeId::F32),
+            K::DTYPE,
             Elements::USIZE,
             group,
             topology,

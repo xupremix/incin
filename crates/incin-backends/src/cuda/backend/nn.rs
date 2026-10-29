@@ -47,6 +47,37 @@ pub(crate) fn im2col_2d_tape(
     Ok(out)
 }
 
+/// Tape-tracked `launch_col2im_2d`, pairing it with `launch_im2col_2d` as its
+/// backward - the dual of [`im2col_2d_tape`]. `spec.h_out`/`spec.w_out` are
+/// the column matrix's spatial extent (the *input* spatial size for a
+/// transposed fold); `target_shape` is the scatter destination. The backward
+/// recomputes the forward's own `out_size` from the natural target, which
+/// equals `h_out` exactly (see `natural_transpose_out_size`'s inversion
+/// identity).
+pub(crate) fn col2im_2d_tape(
+    t: &CudaStorage,
+    target_shape: &[usize],
+    spec: crate::cuda::ops::conv::Col2Im2dSpec,
+) -> Result<CudaStorage> {
+    let out = crate::cuda::ops::conv::launch_col2im_2d(t, target_shape, spec)?;
+    let (t_id, out_id) = (t.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: vec![t_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            Ok(vec![crate::cuda::ops::conv::launch_im2col_2d(
+                grad_out,
+                spec.kh,
+                spec.kw,
+                spec.stride,
+                spec.padding,
+                spec.dilation,
+            )?])
+        }),
+    });
+    Ok(out)
+}
+
 /// Matches `cpu/ops/conv/helpers.rs::validate_groups` exactly.
 pub(crate) fn validate_conv_groups(
     op: &'static str,
@@ -202,4 +233,65 @@ impl<D: Device> CudaBackendImpl<D> {
             None => Ok(conv_out),
         }
     }
+
+    /// Tape-tracked `launch_adaptive_avg_pool2d`, pairing it with
+    /// `launch_adaptive_avg_pool2d_backward` - previously the forward ran as a
+    /// raw launch with no tape entry, so a gradient never reached the input.
+    /// Handles rank 3 and 4 like the launcher and its backward do.
+    pub(crate) fn adaptive_avg_pool2d(
+        t: &CudaStorage,
+        output_size: (usize, usize),
+    ) -> Result<CudaStorage> {
+        let out = crate::cuda::ops::pool::launch_adaptive_avg_pool2d(t, output_size)?;
+        let input_shape = t.shape.to_vec();
+        let (t_id, out_id) = (t.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![t_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                Ok(vec![
+                    crate::cuda::ops::pool::launch_adaptive_avg_pool2d_backward(
+                        grad_out,
+                        &input_shape,
+                    )?,
+                ])
+            }),
+        });
+        Ok(out)
+    }
+}
+
+/// Native single-pass online-softmax attention (issue #104): forward over
+/// query rows with GQA head mapping and causal masking, one tape entry
+/// whose backward recomputes weights from the stored per-row `(m, l)`
+/// through three row-parallel kernels - no score matrix is ever stored,
+/// mirroring the CPU kernel's contract. `scale` defaults to
+/// `1/sqrt(head_dim)` like the CPU geometry when `None`.
+pub(crate) fn fused_attention_storage(
+    q: &CudaStorage,
+    k: &CudaStorage,
+    v: &CudaStorage,
+    causal: bool,
+    scale: Option<f64>,
+) -> Result<CudaStorage> {
+    let (out, ml) = crate::cuda::ops::attention::launch_attention_forward(q, k, v, causal, scale)?;
+    let g = crate::cuda::ops::attention::geometry(q, k, v, scale)?;
+    let (q_saved, k_saved, v_saved, o_saved, ml_saved) =
+        (q.clone(), k.clone(), v.clone(), out.clone(), ml);
+    let (q_id, k_id, v_id, out_id) = (q.id, k.id, v.id, out.id);
+    crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+        output_id: out_id,
+        input_ids: alloc::vec![q_id, k_id, v_id],
+        backward: Box::new(move |grad_out: &CudaStorage| {
+            let delta = crate::cuda::ops::attention::launch_attention_delta(grad_out, &o_saved)?;
+            let dq = crate::cuda::ops::attention::launch_attention_dq(
+                &q_saved, &k_saved, &v_saved, grad_out, &ml_saved, &delta, &g, causal,
+            )?;
+            let (dk, dv) = crate::cuda::ops::attention::launch_attention_dkv(
+                &q_saved, &k_saved, &v_saved, grad_out, &ml_saved, &delta, &g, causal,
+            )?;
+            Ok(alloc::vec![dq, dk, dv])
+        }),
+    });
+    Ok(out)
 }

@@ -174,10 +174,127 @@ checked it on load. It does now, against `CHECKPOINT_MANIFEST_VERSION`.
 → 0.12, `safetensors` 0.4 → 0.8, `pollster` 0.3 → 1.0, and `criterion` 0.5 →
 0.8. These are internal; the facade API is unaffected.
 
+### `where_cond` and `masked_fill` masks now broadcast (#100)
+
+Both operations traded their `ShapeEq` bound for a directional
+`BroadcastShape` pin: the mask broadcasts *into* the data, and the `Output`
+keeps the data's own shape type - `where_cond` requires
+`S: BroadcastShape<S2, Output = S2>` (output is the data's `S2`), and
+`masked_fill` requires `S: BroadcastShape<S2, Output = S>` (output is the
+input's `S`). The pin's direction is the contract: a mask that would *enlarge*
+the data has no matching `Output` impl and cannot compile when typed, and
+`Dyn` operands are refused at run time (`mask must broadcast to the input
+shape` for `masked_fill`; the broadcast output rule for `where_cond`).
+Runtime-axis (`usize`) shapes are a known edge: for two equal `usize`-axis
+types the per-axis output normalizes to `BroadcastExtent<usize, usize>`, which
+is not the original type, so such pairs may fail the pin where `ShapeEq`
+accepted them; spell those axes with `Dyn` or a const extent instead.
+
+What this unlocks downstream: #101 (causal `[T, T]` masks over
+`[B, H, T, T]` scores without an explicit `broadcast_to`) and #102 (rank-deficit
+masks in the transformer book layers) can now be written against the public
+API. Coverage: `crates/incin/tests/broadcast_mask_ops.rs` (typed size-1 and
+rank-deficit masks, `Dyn` rejection messages, backward splits) and the CPU
+storage-level forward/backward/gradcheck tests in
+`crates/incin-backends/src/cpu/ops/shape_ops/tests.rs`.
+
+### Quantized dtype admission and block-aware checkpoints (#93)
+
+The quantized surface moved from backend-authoring-only to the tensor
+surface, and the elementwise float methods gained dtype-admission bounds.
+Breaking is accepted pre-1.0 (issue #93, Decision 5); the public-api
+baselines were updated deliberately with it.
+
+**New `FloatCapable`/`QuantCapable` bounds on unary methods.** Twenty-five
+elementwise unary methods (`abs`, `floor`, `ceil`, `round`, `sign`, `step`,
+`trunc`, `frac`, `mish`, `elu`, `powf`, `clamp`, `erf`, `rsqrt`, `log2`,
+`log10`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`,
+`atanh`) plus `norm` now require `K: FloatCapable`, and `dequantize`
+requires `K: QuantCapable`. Both traits blanket-admit every `FloatDType` /
+`QuantDType` plus `Dyn`, and both are exported from the `incin` root and
+prelude. What breaks: generic code spelled `K: DType` — or any bound that
+does not imply float-ness — that calls one of those methods no longer
+compiles, even when every instantiation is `f32`, because the bound is
+checked against your signature; the diagnostic is `E0277` and it names the
+trait (concretely `Q8_0` on `floor`/`mish` is pinned by the fixtures, and
+`dequantize` on a float operand by `dequantize_rejects_float_input`). Fix:
+raise your bound to `K: FloatCapable` — `K: FloatDType` also works, since
+the blanket impl derives `FloatCapable` from it. (A concrete `Dyn` dtype
+compiles against either trait and is refused at run time by the catalog's
+typed float rule when the operation has no path for it.) `sin` and `cos`
+deliberately keep the unbounded `K: DType` surface (in-crate generic
+callers such as rotary-table construction need them), so a quantized
+operand still compiles there and is refused at run time.
+
+**New `Tensor::quantize` / `Tensor::dequantize`.** `quantize(axis)` takes
+`K: FloatCapable` and returns a `Q8_0` tensor; `dequantize::<Kout>()` takes
+`K: QuantCapable` and any `FloatDType` `Kout`. `axis` must resolve to the
+last axis, whose extent must be a whole multiple of 32: a statically known
+violation fails compilation (`E0080`, "the last axis of a Q8_0 block must
+be a multiple of 32"), while a `Dyn` shape gets a typed error naming the
+axis, the actual extent and the block size. Both methods dispatch the
+catalog descriptors, so backend admission and validation are unchanged
+behind them.
+
+**Checkpoint sharding is block-aware.** `slice_bytes_for_rank` computes
+block-dtype shard spans through `StorageEncoding::size_bytes` and requires
+each rank's local extent along the shard axis to be a whole multiple of
+the block size; a mid-block boundary is refused ("local extent 24 is not a
+multiple of block size 32; shard boundary would fall mid-block") instead
+of being sliced arbitrarily. The sharded manifest's dtype record is now
+load-checked end to end: an unknown `DTypeKey` (including a known name at
+an unknown version) and an encoding that disagrees with the registered
+dtype are both refused rather than misread. The format commitment lives in
+`docs/COMPATIBILITY.md`.
+
+**New `GradientRule::StraightThrough` variant.** On the CPU backend
+`quantize` and `dequantize` now record an identity straight-through tape
+entry (STE, PyTorch QAT `FakeQuantize` behavior; Q8_0's per-block scale
+never saturates, so there is no clip masking — the CUDA kernels for these
+ops record no tape entry yet), and the catalog's `GradientRule`
+enum gained a `StraightThrough` variant to say so — the generated
+operation-semantics table renders it `StraightThrough (approximation:
+STE)`. Exhaustive matches on `GradientRule` in backend or catalog code
+must handle the new variant. Coverage: `crates/incin-core/tests/quantized_tensor_ops.rs`
+(10 runtime tests), `crates/incin-core/tests/checkpoint_block_quant.rs`
+(9), `crates/incin-backends/tests/quantize_ste.rs` (6), and four trybuild
+fixtures in `crates/incin-core/tests/compile_fail/`
+(`quantized_mish_admission`, `quantized_floor_admission`,
+`dequantize_rejects_float_input`, `quantize_block_axis_not_divisible`).
+
 ### Minimum supported Rust version
 
 `rust-version = "1.88"`, verified by a CI job pinned to exactly that toolchain
 rather than asserted. 1.87 is refused by the dependency graph.
+
+### External device identity replaces the opaque custom key (#96)
+
+`DeviceKind::Custom(u64)`, `DeviceId::custom(namespace, ord)`, and
+`DeviceKind::custom_key()` are removed (breaking is accepted pre-1.0, D-110).
+Third-party backends now name themselves with
+`DeviceKind::External(DeviceKey)`, a structured namespace + name + version
+key paralleling `DTypeKey`:
+
+```rust,ignore
+// before
+let id = DeviceId::custom(0x434f_4d50_414e_5901, 7);
+let key: Option<u64> = id.kind().custom_key();
+// after
+let key = DeviceKey::new("acme", "npu", 1);
+let id = DeviceId::external(key, 7);
+let recovered: Option<DeviceKey> = id.kind().external_key();
+```
+
+`DeviceKey`, `DeviceId::external`, and `DeviceKind::external_key` are exported
+from the `incin` root and prelude. `DeviceKind::name()` reports the key's
+device name (e.g. `"npu"`) instead of `"custom"`. Plan digests hash the
+namespace and version beside the name, so two vendors shipping an `"npu"`
+(or one vendor bumping its topology version) produce different digests and
+old plans refuse on mismatch. Device sets, mesh binding, and `to_device`
+compare the whole key: two namespaces sharing a name are different families
+(`DeviceSetError::Mixed` / `BindError::MixedBackendFamily`). The public-api
+baseline drift from the removal is recorded with the change, not regenerated
+here.
 
 ## R1 execution-policy migration
 
@@ -198,10 +315,14 @@ it was not a general execution guarantee.
 
 `DType` and `ConstDType` remain extensible for downstream logical dtypes that
 provide their own `DTypeDescriptor`; no `DTypeId` variant is required. The
-`TensorElement` marker is intentionally different: its implementation set is
-sealed to Incin's built-in scalar element types. Downstream code must not
-implement `TensorElement` for a custom Rust type. Block-quantized logical dtypes
-such as `Q8_0` likewise do not implement `PlainDType` or `TensorElement`.
+`TensorElement` marker is open since D-110 (issue #96): any plain-old-data
+newtype satisfying `bytemuck::NoUninit + Zeroable + Copy + Debug + Send +
+Sync + 'static` implements `TensorElement` through the blanket impl,
+including types from downstream crates. Block-quantized logical dtypes
+such as `Q8_0` still do not implement `PlainDType` or `TensorElement`, and
+the closed subsystems (distributed static planners/digests, kernel-table
+fast paths, catalog exact rules, the `safetensors` export) still require
+`BuiltinDType` or refuse unknown descriptors with a typed error.
 
 ---
 

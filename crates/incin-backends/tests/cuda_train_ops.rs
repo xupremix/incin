@@ -1,0 +1,547 @@
+//! Issue #84 training behaviours on CUDA: dropout's eval identity and
+//! counter-based mask reproducibility, `instance_norm` backward parity with
+//! the CPU composition, and one complete Linear -> cross-entropy -> SGD step.
+//!
+//! Every hardware test is `#[ignore]`d; `require_cuda` fails loudly rather
+//! than skipping, because reaching an `#[ignore]`d test is an explicit
+//! request for the hardware run. The dropout mask seams exist because
+//! `set_dropout_seed` is gated to unit-test builds and the process-wide draw
+//! offset cannot be reset from an integration crate: `dropout_mask_seeded`
+//! pins the (seed, offset) contract directly, and `dropout_mask` pins the
+//! production reservation behaviour on top of it.
+#![cfg(feature = "cuda")]
+
+use incin_backends::cuda::{
+    CudaBackendImpl, tape_depth,
+    testing::{
+        download_f32, dropout_mask, dropout_mask_seeded, require_cuda, sgd_step, upload_f32_shaped,
+        upload_i64,
+    },
+};
+use incin_core::backend_authoring::{
+    AutogradBackend, Execute, HostInterop, HostReadback, StorageBackend,
+};
+use incin_core::exec::catalog::{
+    DropoutAttributes, EpsilonAttributes, LinearAttributes, LossAttributes, LossReduction,
+    SgdAttributes,
+};
+use incin_core::exec::{
+    CanonicalOperation, ExecutionContext, TapeStorage, TensorHandle, dispatch, op,
+};
+use incin_core::prelude::{CudaN, DTypeId, DeviceId};
+use incin_core::typenum::U0;
+
+type TestBackend = CudaBackendImpl<CudaN<U0>>;
+type TestStorage = <TestBackend as StorageBackend>::Storage<f32>;
+#[cfg(feature = "cpu")]
+type Cpu = incin_backends::cpu::CpuBackendImpl<incin_core::tensor::device::Cpu>;
+
+fn assert_close(got: &[f64], want: &[f64], tol: f64, what: &str) {
+    assert_eq!(got.len(), want.len(), "{what}: length mismatch");
+    for (i, (g, w)) in got.iter().zip(want).enumerate() {
+        assert!(
+            (g - w).abs() <= tol,
+            "{what}[{i}]: got {g}, want {w} (tol {tol})"
+        );
+    }
+}
+
+fn read_f32(storage: &TestStorage) -> Vec<f64> {
+    download_f32(storage)
+        .iter()
+        .map(|&v| f64::from(v))
+        .collect()
+}
+
+fn scalar(storage: &TestStorage) -> f64 {
+    let values = download_f32(storage);
+    assert_eq!(values.len(), 1, "expected a scalar loss");
+    f64::from(values[0])
+}
+
+/// One f32 input through `dispatch`, returning the output and the tape
+/// entries the forward pushed.
+fn run1<O, A>(
+    context: &ExecutionContext<TestBackend>,
+    input: &TestStorage,
+    attributes: A,
+) -> (TestStorage, usize)
+where
+    O: CanonicalOperation<Attributes = A>,
+    TestBackend: Execute<O, Output = TestStorage>,
+{
+    let before = tape_depth();
+    let out = dispatch::execute::<O, TestBackend>(
+        context,
+        attributes,
+        &[TensorHandle::from_storage::<TestBackend, f32, _>(input)],
+    )
+    .expect("an advertised one-input CUDA operation must execute");
+    (out, tape_depth() - before)
+}
+
+/// Three f32 inputs (`linear`'s input, weight and bias) through `dispatch`.
+fn run3<O, A>(
+    context: &ExecutionContext<TestBackend>,
+    first: &TestStorage,
+    second: &TestStorage,
+    third: &TestStorage,
+    attributes: A,
+) -> (TestStorage, usize)
+where
+    O: CanonicalOperation<Attributes = A>,
+    TestBackend: Execute<O, Output = TestStorage>,
+{
+    let before = tape_depth();
+    let out = dispatch::execute::<O, TestBackend>(
+        context,
+        attributes,
+        &[
+            TensorHandle::from_storage::<TestBackend, f32, _>(first),
+            TensorHandle::from_storage::<TestBackend, f32, _>(second),
+            TensorHandle::from_storage::<TestBackend, f32, _>(third),
+        ],
+    )
+    .expect("an advertised three-input CUDA operation must execute");
+    (out, tape_depth() - before)
+}
+
+/// `cross_entropy_loss`: f32 logits, i64 class indices, explicit reduction.
+fn run_ce_with(
+    context: &ExecutionContext<TestBackend>,
+    logits: &TestStorage,
+    targets: &TestStorage,
+    reduction: LossReduction,
+) -> (TestStorage, usize) {
+    let before = tape_depth();
+    let out = dispatch::execute::<op::CrossEntropyLoss, TestBackend>(
+        context,
+        LossAttributes { reduction },
+        &[
+            TensorHandle::from_storage::<TestBackend, f32, _>(logits),
+            TensorHandle::from_storage::<TestBackend, i64, _>(targets),
+        ],
+    )
+    .expect("cross_entropy_loss must execute on CUDA");
+    (out, tape_depth() - before)
+}
+
+/// Elementwise losses (`mse_loss`, `l1_loss`, `bce_with_logits_loss`):
+/// f32 prediction against an f32 target, explicit reduction.
+fn run_pair_with<O>(
+    context: &ExecutionContext<TestBackend>,
+    pred: &TestStorage,
+    target: &TestStorage,
+    reduction: LossReduction,
+) -> (TestStorage, usize)
+where
+    O: CanonicalOperation<Attributes = LossAttributes>,
+    TestBackend: Execute<O, Output = TestStorage>,
+{
+    let before = tape_depth();
+    let out = dispatch::execute::<O, TestBackend>(
+        context,
+        LossAttributes { reduction },
+        &[
+            TensorHandle::from_storage::<TestBackend, f32, _>(pred),
+            TensorHandle::from_storage::<TestBackend, f32, _>(target),
+        ],
+    )
+    .expect("an advertised two-input CUDA loss must execute");
+    (out, tape_depth() - before)
+}
+
+/// `cross_entropy_loss`: f32 logits, i64 class indices.
+fn run_ce(
+    context: &ExecutionContext<TestBackend>,
+    logits: &TestStorage,
+    targets: &TestStorage,
+) -> (TestStorage, usize) {
+    run_ce_with(context, logits, targets, LossReduction::Mean)
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn dropout_eval_mode_is_the_identity_and_records_nothing() {
+    require_cuda();
+    let context = ExecutionContext::new(TestBackend::new());
+    let input = upload_f32_shaped(&[2, 3], &[1.0, -2.0, 3.5, 0.0, 4.0, -0.5]);
+    let input_id = TapeStorage::id(&input);
+    let (out, recorded) = run1::<op::Dropout, _>(
+        &context,
+        &input,
+        DropoutAttributes {
+            probability: 0.5,
+            training: false,
+        },
+    );
+    assert_eq!(
+        recorded, 0,
+        "eval-mode dropout is the clone-links-identity path: no tape entry"
+    );
+    assert_eq!(
+        TapeStorage::id(&out),
+        input_id,
+        "eval-mode dropout returns the same allocation"
+    );
+    assert_eq!(
+        read_f32(&out),
+        read_f32(&input),
+        "eval-mode dropout is the identity"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn dropout_mask_follows_the_explicit_seed_and_offset() {
+    require_cuda();
+    let first = download_f32(&dropout_mask_seeded(&[16], 7, 0));
+    let replay = download_f32(&dropout_mask_seeded(&[16], 7, 0));
+    assert_eq!(first, replay, "the same (seed, offset) must replay");
+    assert_eq!(first.len(), 16);
+    for (i, &v) in first.iter().enumerate() {
+        assert!(
+            (0.0..1.0).contains(&v),
+            "mask[{i}] = {v} must lie in [0, 1)"
+        );
+    }
+    let advanced = download_f32(&dropout_mask_seeded(&[16], 7, 16));
+    assert_ne!(
+        first, advanced,
+        "an advanced offset must draw a disjoint stream"
+    );
+    let reseeded = download_f32(&dropout_mask_seeded(&[16], 8, 0));
+    assert_ne!(
+        first, reseeded,
+        "a different seed must draw a different stream"
+    );
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn consecutive_production_dropout_draws_are_disjoint() {
+    require_cuda();
+    let first = download_f32(&dropout_mask(&[16]));
+    let second = download_f32(&dropout_mask(&[16]));
+    assert_eq!(first.len(), 16);
+    assert_ne!(
+        first, second,
+        "consecutive draws must reserve disjoint counter ranges even on the \
+         fixed default seed"
+    );
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn instance_norm_backward_matches_the_cpu_twin_on_cuda() {
+    // The descriptor validates [N, C, H, W], so this walks the full
+    // statistical path (mean -> sub -> rsqrt-of-variance -> scale) on rank
+    // four and pins CUDA's replay against the CPU composition under the
+    // same ones seed both backends' `backward` plants.
+    require_cuda();
+    const VALUES: [f32; 8] = [0.5, -1.0, 2.0, 1.0, 0.0, -0.5, 1.5, -2.0];
+    const SHAPE: [usize; 4] = [1, 2, 2, 2];
+
+    let context = ExecutionContext::new(TestBackend::new());
+    let input = upload_f32_shaped(&SHAPE, &VALUES);
+    let input_id = TapeStorage::id(&input);
+    let (out, recorded) =
+        run1::<op::InstanceNorm, _>(&context, &input, EpsilonAttributes { epsilon: 1e-5 });
+    assert!(
+        recorded >= 1,
+        "instance_norm advertises training = true, recorded {recorded}"
+    );
+    let grads = <TestBackend as AutogradBackend>::backward::<f32>(&out)
+        .expect("instance_norm backward on CUDA");
+    let gx = grads
+        .get(input_id)
+        .expect("instance_norm input receives a gradient");
+
+    let cpu_input = <Cpu as HostInterop>::from_bytes::<f32>(
+        bytemuck::cast_slice(&VALUES),
+        &SHAPE,
+        DTypeId::F32.descriptor(),
+        &DeviceId::cpu(),
+    )
+    .expect("uploading the CPU twin must succeed");
+    let cpu_context = ExecutionContext::new(Cpu::new());
+    let cpu_out = dispatch::execute::<op::InstanceNorm, _>(
+        &cpu_context,
+        EpsilonAttributes { epsilon: 1e-5 },
+        &[TensorHandle::from_storage::<Cpu, f32, _>(&cpu_input)],
+    )
+    .expect("CPU reference instance_norm executes");
+    let cpu_grads =
+        <Cpu as AutogradBackend>::backward::<f32>(&cpu_out).expect("instance_norm backward on CPU");
+    let cpu_gx = cpu_grads
+        .get(TapeStorage::id(&cpu_input))
+        .expect("CPU reference is missing a gradient");
+
+    let want_fwd = <Cpu as HostReadback>::float_to_vec1::<f32>(&cpu_out)
+        .expect("reading the CPU forward back");
+    assert_close(&read_f32(&out), &want_fwd, 1e-5, "instance_norm forward");
+    let want_dx =
+        <Cpu as HostReadback>::float_to_vec1::<f32>(cpu_gx).expect("reading the CPU gradient back");
+    assert_close(&read_f32(gx), &want_dx, 1e-5, "instance_norm dx");
+}
+
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn linear_cross_entropy_sgd_step_lowers_the_loss_on_cuda() {
+    // The issue's acceptance criterion: a full training step on CUDA.
+    // Linear -> cross-entropy -> backward produces finite, correctly shaped
+    // gradients for every operand, the fused SGD kernel moves the weights,
+    // and re-forwarding the stepped weights lowers the loss.
+    require_cuda();
+    let context = ExecutionContext::new(TestBackend::new());
+    let x = upload_f32_shaped(
+        &[4, 3],
+        &[
+            0.2, -0.4, 0.6, 1.0, 0.5, -0.8, -0.3, 0.9, 0.1, 0.7, -0.2, 0.4,
+        ],
+    );
+    let w = upload_f32_shaped(&[2, 3], &[0.1, 0.2, 0.3, -0.2, 0.4, -0.1]);
+    let b = upload_f32_shaped(&[2], &[0.05, -0.05]);
+    let targets = upload_i64(&[4], &[0, 1, 1, 0]);
+    let (x_id, w_id, b_id) = (
+        TapeStorage::id(&x),
+        TapeStorage::id(&w),
+        TapeStorage::id(&b),
+    );
+
+    let (logits, _) =
+        run3::<op::Linear, _>(&context, &x, &w, &b, LinearAttributes { has_bias: true });
+    let (loss, recorded) = run_ce(&context, &logits, &targets);
+    assert!(
+        recorded >= 1,
+        "the linear + cross-entropy forward must record, recorded {recorded}"
+    );
+    let before = scalar(&loss);
+    assert!(before.is_finite(), "loss must be finite, got {before}");
+
+    let grads =
+        <TestBackend as AutogradBackend>::backward::<f32>(&loss).expect("backward runs on CUDA");
+    let check = |grad: &TestStorage, want_len: usize, what: &str| {
+        let values = download_f32(grad);
+        assert_eq!(values.len(), want_len, "{what}: gradient shape");
+        assert!(
+            values.iter().all(|v| v.is_finite()),
+            "{what}: gradient must be finite"
+        );
+    };
+    let gx = grads.get(x_id).expect("dL/dx exists");
+    let gw = grads.get(w_id).expect("dL/dw exists");
+    let gb = grads.get(b_id).expect("dL/db exists");
+    check(gx, 12, "dL/dx");
+    check(gw, 6, "dL/dw");
+    check(gb, 2, "dL/db");
+
+    let w_next = sgd_step(&w, gw, &SgdAttributes { learning_rate: 0.1 })
+        .expect("the fused SGD step must run on CUDA");
+    assert_ne!(
+        download_f32(&w_next),
+        download_f32(&w),
+        "one SGD step must move the weights"
+    );
+
+    let (logits_after, _) = run3::<op::Linear, _>(
+        &context,
+        &x,
+        &w_next,
+        &b,
+        LinearAttributes { has_bias: true },
+    );
+    let (loss_after, _) = run_ce(&context, &logits_after, &targets);
+    let after = scalar(&loss_after);
+    assert!(
+        after < before,
+        "one SGD step must lower the loss: {before} -> {after}"
+    );
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn cross_entropy_matches_cpu_across_reductions() {
+    // First #84 slice: CUDA `cross_entropy_loss` forward + input-grad parity
+    // against the CPU oracle for every reduction mode. Small fixed logits
+    // (`[2, 3]`, targets `[0, 2]`) keep the log-softmax stable path exact;
+    // `backward` on the unreduced `[batch]` output seeds ones, exactly like
+    // the `instance_norm` twin above, so the `none` gradient is the
+    // per-sample `(softmax - onehot)` row without an extra seed.
+    require_cuda();
+    const LOGITS: [f32; 6] = [2.0, 1.0, 0.5, 0.5, 1.5, 0.0];
+    const TARGETS: [i64; 2] = [0, 2];
+    const LOGITS_SHAPE: [usize; 2] = [2, 3];
+    const TARGETS_SHAPE: [usize; 1] = [2];
+
+    let context = ExecutionContext::new(TestBackend::new());
+    let cpu_context = ExecutionContext::new(Cpu::new());
+    for reduction in [LossReduction::Mean, LossReduction::Sum, LossReduction::None] {
+        let what = match reduction {
+            LossReduction::Mean => "mean",
+            LossReduction::Sum => "sum",
+            LossReduction::None => "none",
+        };
+
+        let logits = upload_f32_shaped(&LOGITS_SHAPE, &LOGITS);
+        let targets = upload_i64(&TARGETS_SHAPE, &TARGETS);
+        let logits_id = TapeStorage::id(&logits);
+        let (out, recorded) = run_ce_with(&context, &logits, &targets, reduction);
+        assert!(
+            recorded >= 1,
+            "cross_entropy_loss advertises training = true ({what}), recorded {recorded}"
+        );
+        let grads = <TestBackend as AutogradBackend>::backward::<f32>(&out)
+            .expect("cross_entropy_loss backward on CUDA");
+        let gx = grads
+            .get(logits_id)
+            .expect("cross_entropy_loss logits receive a gradient");
+
+        let cpu_logits = <Cpu as HostInterop>::from_bytes::<f32>(
+            bytemuck::cast_slice(&LOGITS),
+            &LOGITS_SHAPE,
+            DTypeId::F32.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .expect("uploading the CPU logits must succeed");
+        let cpu_targets = <Cpu as HostInterop>::from_bytes::<i64>(
+            bytemuck::cast_slice(&TARGETS),
+            &TARGETS_SHAPE,
+            DTypeId::I64.descriptor(),
+            &DeviceId::cpu(),
+        )
+        .expect("uploading the CPU targets must succeed");
+        let cpu_out = dispatch::execute::<op::CrossEntropyLoss, _>(
+            &cpu_context,
+            LossAttributes { reduction },
+            &[
+                TensorHandle::from_storage::<Cpu, f32, _>(&cpu_logits),
+                TensorHandle::from_storage::<Cpu, i64, _>(&cpu_targets),
+            ],
+        )
+        .expect("CPU reference cross_entropy_loss executes");
+        let cpu_grads = <Cpu as AutogradBackend>::backward::<f32>(&cpu_out)
+            .expect("cross_entropy_loss backward on CPU");
+        let cpu_gx = cpu_grads
+            .get(TapeStorage::id(&cpu_logits))
+            .expect("CPU reference is missing a gradient");
+
+        let want_fwd = <Cpu as HostReadback>::float_to_vec1::<f32>(&cpu_out)
+            .expect("reading the CPU forward back");
+        assert_close(
+            &read_f32(&out),
+            &want_fwd,
+            1e-5,
+            &format!("cross_entropy forward ({what})"),
+        );
+        let want_dx = <Cpu as HostReadback>::float_to_vec1::<f32>(cpu_gx)
+            .expect("reading the CPU gradient back");
+        assert_close(
+            &read_f32(gx),
+            &want_dx,
+            1e-5,
+            &format!("cross_entropy dx ({what})"),
+        );
+    }
+}
+
+#[cfg(feature = "cpu")]
+#[test]
+#[ignore = "requires CUDA hardware"]
+fn mse_l1_bce_match_cpu_across_reductions() {
+    // Second #84 slice: CUDA `mse_loss`, `l1_loss` and
+    // `bce_with_logits_loss` forward + input-grad parity against the CPU
+    // oracle for every reduction mode, following the `cross_entropy`
+    // slice above. One shared `[2, 3]` pair keeps every loss exact:
+    // targets lie in `[0, 1]` so the BCE stable path is valid, and index
+    // 4 is an exact hit (`pred == target == 0.0`) so `l1_loss`'s
+    // `sign(0) = 0` slope and `mse_loss`'s zero error surface. `backward`
+    // on an unreduced output seeds ones, exactly like the twin above, so
+    // the `none` gradient is the per-element local gradient.
+    require_cuda();
+    const PRED: [f32; 6] = [1.0, -0.5, 0.25, 2.0, 0.0, -1.0];
+    const TARG: [f32; 6] = [0.0, 1.0, 0.5, 1.0, 0.0, 1.0];
+    const SHAPE: [usize; 2] = [2, 3];
+
+    let context = ExecutionContext::new(TestBackend::new());
+    let cpu_context = ExecutionContext::new(Cpu::new());
+
+    macro_rules! check_pair_loss {
+        ($op:ty, $name:literal) => {
+            for reduction in [LossReduction::Mean, LossReduction::Sum, LossReduction::None] {
+                let what = match reduction {
+                    LossReduction::Mean => "mean",
+                    LossReduction::Sum => "sum",
+                    LossReduction::None => "none",
+                };
+
+                let pred = upload_f32_shaped(&SHAPE, &PRED);
+                let targ = upload_f32_shaped(&SHAPE, &TARG);
+                let pred_id = TapeStorage::id(&pred);
+                let (out, recorded) = run_pair_with::<$op>(&context, &pred, &targ, reduction);
+                assert!(
+                    recorded >= 1,
+                    "{} advertises training = true ({what}), recorded {recorded}",
+                    $name,
+                );
+                let grads = <TestBackend as AutogradBackend>::backward::<f32>(&out)
+                    .expect(&format!("{} backward on CUDA", $name));
+                let gx = grads
+                    .get(pred_id)
+                    .expect(&format!("{} pred receives a gradient", $name));
+
+                let cpu_pred = <Cpu as HostInterop>::from_bytes::<f32>(
+                    bytemuck::cast_slice(&PRED),
+                    &SHAPE,
+                    DTypeId::F32.descriptor(),
+                    &DeviceId::cpu(),
+                )
+                .expect("uploading the CPU pred must succeed");
+                let cpu_targ = <Cpu as HostInterop>::from_bytes::<f32>(
+                    bytemuck::cast_slice(&TARG),
+                    &SHAPE,
+                    DTypeId::F32.descriptor(),
+                    &DeviceId::cpu(),
+                )
+                .expect("uploading the CPU target must succeed");
+                let cpu_out = dispatch::execute::<$op, _>(
+                    &cpu_context,
+                    LossAttributes { reduction },
+                    &[
+                        TensorHandle::from_storage::<Cpu, f32, _>(&cpu_pred),
+                        TensorHandle::from_storage::<Cpu, f32, _>(&cpu_targ),
+                    ],
+                )
+                .expect(&format!("CPU reference {} executes", $name));
+                let cpu_grads = <Cpu as AutogradBackend>::backward::<f32>(&cpu_out)
+                    .expect(&format!("{} backward on CPU", $name));
+                let cpu_gx = cpu_grads
+                    .get(TapeStorage::id(&cpu_pred))
+                    .expect("CPU reference is missing a gradient");
+
+                let want_fwd = <Cpu as HostReadback>::float_to_vec1::<f32>(&cpu_out)
+                    .expect("reading the CPU forward back");
+                assert_close(
+                    &read_f32(&out),
+                    &want_fwd,
+                    1e-5,
+                    &format!("{} forward ({what})", $name),
+                );
+                let want_dx = <Cpu as HostReadback>::float_to_vec1::<f32>(cpu_gx)
+                    .expect("reading the CPU gradient back");
+                assert_close(
+                    &read_f32(gx),
+                    &want_dx,
+                    1e-5,
+                    &format!("{} dx ({what})", $name),
+                );
+            }
+        };
+    }
+
+    check_pair_loss!(op::MseLoss, "mse_loss");
+    check_pair_loss!(op::L1Loss, "l1_loss");
+    check_pair_loss!(op::BceWithLogitsLoss, "bce_with_logits_loss");
+}

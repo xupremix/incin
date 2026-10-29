@@ -60,6 +60,47 @@ pub(crate) fn out_size(
     Ok((padded - effective_kernel) / stride + 1)
 }
 
+/// The natural (no `output_padding`) `conv_transpose2d` output size, matching
+/// `cpu/ops/conv/helpers.rs::natural_transpose_out_size`'s saturating formula.
+/// `output_padding` is deliberately NOT part of this (Pitfall 4) - it is a
+/// separate final zero-pad the caller applies after the fold.
+pub(crate) fn natural_transpose_out_size(
+    len: usize,
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    dilation: usize,
+) -> Result<usize> {
+    if kernel_size == 0 || stride == 0 || dilation == 0 {
+        return Err(ShapeError::InvalidParameter {
+            operation: OperationKind::Conv2d,
+            parameter: "kernel, stride, and dilation must be nonzero",
+            value: 0,
+        }
+        .into());
+    }
+    let unpadded = len
+        .saturating_sub(1)
+        .checked_mul(stride)
+        .and_then(|span| {
+            dilation
+                .checked_mul(kernel_size - 1)
+                .and_then(|kernel| span.checked_add(kernel))
+        })
+        .and_then(|span| span.checked_add(1))
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "transposed-convolution output dimension",
+        })?;
+    let twice_padding = padding
+        .checked_mul(2)
+        .ok_or(ShapeError::ArithmeticOverflow {
+            operation: OperationKind::Conv2d,
+            expression: "transposed-convolution padding",
+        })?;
+    Ok(unpadded.saturating_sub(twice_padding))
+}
+
 /// Parameters shared by the two-dimensional column-to-image launcher and its
 /// tape wrapper.
 #[derive(Clone, Copy, Debug)]

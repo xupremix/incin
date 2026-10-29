@@ -3,8 +3,9 @@ use super::*;
 /// Swap the two axes of a 2D `CpuStorage` (thin wrapper over
 /// `CpuStorage::transpose(0, 1)`, reused by the backward closure so the
 /// gradient composition is built from already-tested primitives rather than
-/// a bespoke derivation).
-pub(super) fn transpose_2d(t: &CpuStorage) -> CpuStorage {
+/// a bespoke derivation). `pub(crate)` so `grouped`'s backward can transpose
+/// an expert slice the same way.
+pub(crate) fn transpose_2d(t: &CpuStorage) -> CpuStorage {
     t.transpose(0, 1)
         .expect("2D transpose of a 2D matmul operand cannot fail")
 }

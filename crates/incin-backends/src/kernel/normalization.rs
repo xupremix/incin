@@ -8,9 +8,12 @@ use super::*;
 ///
 /// `layer_norm` reduces over the last axis per row, computed with a
 /// Welford accumulator so the pass is numerically stable without a second
-/// read of the row. `batch_norm` reads precomputed running statistics per
-/// channel rather than reducing at all, which is the inference form; it does
-/// not compute batch statistics on the fly.
+/// read of the row. `batch_norm` renders three kernels from one source:
+/// the inference form reads precomputed running statistics per channel
+/// without reducing at all; the `_training` form reduces each channel's
+/// own batch statistics (Welford, one block per channel) and optionally
+/// saves them; the `_backward` form replays those saved statistics into
+/// input, weight, and bias gradients (issue #123).
 ///
 /// `softmax` and `rms_norm` have no case here: both are answered by
 /// composing existing pointwise and reduction kernels in
@@ -307,6 +310,30 @@ extern "C" __global__ void {entry_point}_backward(
         "batch_norm" => format!(
             r#"
 {preamble}
+struct IncinWelford {{
+    {compute_type} mean;
+    {compute_type} m2;
+    int count;
+}};
+
+__device__ __forceinline__ IncinWelford incin_welford_combine(
+    IncinWelford left, IncinWelford right)
+{{
+    if (right.count == 0) return left;
+    if (left.count == 0) return right;
+    int count = left.count + right.count;
+    {compute_type} delta = right.mean - left.mean;
+    {compute_type} right_ratio = ({compute_type})right.count / ({compute_type})count;
+    IncinWelford combined;
+    combined.mean = left.mean + delta * right_ratio;
+    combined.m2 = left.m2 + right.m2 + delta * delta
+        * (({compute_type})left.count * ({compute_type})right.count / ({compute_type})count);
+    combined.count = count;
+    return combined;
+}}
+
+// Inference form (unchanged): one thread per element reads the precomputed
+// running statistics for its channel. No reduction, no statistics saved.
 extern "C" __global__ void {entry_point}(
     const {storage_type}* __restrict__ input,
     const {storage_type}* __restrict__ weight,
@@ -347,6 +374,247 @@ extern "C" __global__ void {entry_point}(
     {compute_type} inverse_std = {inverse_std};
     {compute_type} normalized = (value - mean) * inverse_std;
     output[idx] = {store_prefix}(normalized * scale + shift){store_suffix};
+}}
+
+// Training forward (issue #123): one block per channel reduces that
+// channel's OWN statistics over the batch and every spatial position --
+// `channel_elements` of them, never the running estimates, which are a
+// different quantity the inference kernel above reads. Welford over the
+// channel mirrors `layer_norm`'s row reduction so the mean and variance
+// backward replays are the ones that produced the output, not a second
+// pass that could drift from it. The population variance (`m2 / count`)
+// matches both the CPU training kernel and what the running statistics of
+// the inference path hold.
+//
+// `mean_out`/`rstd_out` receive one compute-precision value per channel
+// when `save_stats` is set. The pointers are always valid -- the launcher
+// substitutes a single-element scratch when nothing records -- and the
+// flag decides whether anything is written, exactly like `layer_norm`.
+extern "C" __global__ void {entry_point}_training(
+    const {storage_type}* __restrict__ input,
+    const {storage_type}* __restrict__ weight,
+    const {storage_type}* __restrict__ bias,
+    {storage_type}* __restrict__ output,
+    float eps,
+    int num_channels,
+    int spatial_size,
+    int channel_elements,
+    int has_weight,
+    int has_bias,
+    int input_offset,
+    int weight_offset,
+    int bias_offset,
+    {compute_type}* __restrict__ mean_out,
+    {compute_type}* __restrict__ rstd_out,
+    int save_stats)
+{{
+    int channel = blockIdx.x;
+    if (channel >= num_channels) return;
+    int tid = threadIdx.x;
+    int lane = tid & 31;
+    int warp = tid >> 5;
+    IncinWelford local = {{({compute_type})0.0, ({compute_type})0.0, 0}};
+    for (int i = tid; i < channel_elements; i += blockDim.x) {{
+        int batch = i / spatial_size;
+        int spatial = i - batch * spatial_size;
+        int idx = (batch * num_channels + channel) * spatial_size + spatial;
+        {compute_type} value = {load_prefix}input[input_offset + idx]{load_suffix};
+        local.count += 1;
+        {compute_type} delta = value - local.mean;
+        local.mean += delta / ({compute_type})local.count;
+        {compute_type} delta2 = value - local.mean;
+        local.m2 += delta * delta2;
+    }}
+    unsigned int active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        IncinWelford other;
+        other.mean = __shfl_down_sync(active, local.mean, delta);
+        other.m2 = __shfl_down_sync(active, local.m2, delta);
+        other.count = __shfl_down_sync(active, local.count, delta);
+        if (lane + delta < 32) local = incin_welford_combine(local, other);
+    }}
+    extern __shared__ unsigned char shared_raw[];
+    int warp_count = (blockDim.x + 31) >> 5;
+    {compute_type}* shared_mean = reinterpret_cast<{compute_type}*>(shared_raw);
+    {compute_type}* shared_m2 = shared_mean + warp_count;
+    int* shared_count = reinterpret_cast<int*>(shared_m2 + warp_count);
+    if (lane == 0) {{
+        shared_mean[warp] = local.mean;
+        shared_m2[warp] = local.m2;
+        shared_count[warp] = local.count;
+    }}
+    __syncthreads();
+    if (warp == 0) {{
+        local.mean = lane < warp_count ? shared_mean[lane] : ({compute_type})0.0;
+        local.m2 = lane < warp_count ? shared_m2[lane] : ({compute_type})0.0;
+        local.count = lane < warp_count ? shared_count[lane] : 0;
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            IncinWelford other;
+            other.mean = __shfl_down_sync(active, local.mean, delta);
+            other.m2 = __shfl_down_sync(active, local.m2, delta);
+            other.count = __shfl_down_sync(active, local.count, delta);
+            if (lane + delta < 32) local = incin_welford_combine(local, other);
+        }}
+        if (lane == 0) {{
+            shared_mean[0] = local.mean;
+            shared_m2[0] = local.m2 / ({compute_type})local.count;
+        }}
+    }}
+    __syncthreads();
+    {compute_type} mean = shared_mean[0];
+    {compute_type} variance = shared_m2[0];
+    {compute_type} inverse_std = {inverse_std};
+    // Saved for backward: the recipe replays these exact per-channel batch
+    // statistics rather than recomputing them, which would silently run
+    // under different numerical conditions than the Welford pass above.
+    if (save_stats && tid == 0) {{
+        mean_out[channel] = mean;
+        rstd_out[channel] = inverse_std;
+    }}
+    {compute_type} scale = has_weight
+        ? {load_prefix}weight[weight_offset + channel]{load_suffix}
+        : ({compute_type})1.0;
+    {compute_type} shift = has_bias
+        ? {load_prefix}bias[bias_offset + channel]{load_suffix}
+        : ({compute_type})0.0;
+    for (int i = tid; i < channel_elements; i += blockDim.x) {{
+        int batch = i / spatial_size;
+        int spatial = i - batch * spatial_size;
+        int idx = (batch * num_channels + channel) * spatial_size + spatial;
+        {compute_type} value = {load_prefix}input[input_offset + idx]{load_suffix};
+        {compute_type} normalized = (value - mean) * inverse_std;
+        output[idx] = {store_prefix}(normalized * scale + shift){store_suffix};
+    }}
+}}
+
+// Fused training backward (issue #123): one channel per block, like the
+// training forward above. Given the upstream gradient and the forward's
+// saved per-channel mean/rstd, with `xhat = (x - mean) * rstd` and
+// `gw = grad_output * weight` written per element:
+//
+//   bias_grad[c]    = sum over the channel of grad_output
+//   weight_grad[c]  = sum over the channel of grad_output * xhat
+//   input_grad      = rstd * (gw - mean(gw) - xhat * mean(gw * xhat))
+//
+// The weight enters *before* the means are taken: averaging grad_output
+// first and multiplying by weight after is the same only for uniform
+// weight, everywhere else wrong, and wrong in a way a uniform-gradient
+// smoke test cannot see (the same defect the layer_norm parity tests pin).
+// One block owns one channel, so the two per-channel sums are plain
+// writes, not atomics -- deterministic at the last ulp, unlike the
+// row-per-block layer_norm backward that shares columns across blocks.
+// The buffers for absent weight/bias are still valid allocations (scratch
+// sized for the full channel), so no launch ever passes a null pointer.
+extern "C" __global__ void {entry_point}_backward(
+    const {storage_type}* __restrict__ grad_output,
+    const {storage_type}* __restrict__ input,
+    const {storage_type}* __restrict__ weight,
+    const {compute_type}* __restrict__ mean,
+    const {compute_type}* __restrict__ rstd,
+    {storage_type}* __restrict__ grad_input,
+    {compute_type}* __restrict__ grad_weight,
+    {compute_type}* __restrict__ grad_bias,
+    int num_channels,
+    int spatial_size,
+    int channel_elements,
+    int has_weight,
+    int has_bias,
+    int grad_output_offset,
+    int input_offset,
+    int weight_offset)
+{{
+    int channel = blockIdx.x;
+    if (channel >= num_channels) return;
+    int tid = threadIdx.x;
+    int lane = tid & 31;
+    int warp = tid >> 5;
+    {compute_type} m = mean[channel];
+    {compute_type} s = rstd[channel];
+    {compute_type} w = has_weight
+        ? {load_prefix}weight[weight_offset + channel]{load_suffix}
+        : ({compute_type})1.0;
+    {compute_type} sum_g = ({compute_type})0.0;
+    {compute_type} sum_gw = ({compute_type})0.0;
+    {compute_type} sum_gx = ({compute_type})0.0;
+    {compute_type} sum_gwx = ({compute_type})0.0;
+    for (int i = tid; i < channel_elements; i += blockDim.x) {{
+        int batch = i / spatial_size;
+        int spatial = i - batch * spatial_size;
+        int idx = (batch * num_channels + channel) * spatial_size + spatial;
+        {compute_type} g = {load_prefix}grad_output[grad_output_offset + idx]{load_suffix};
+        {compute_type} x = {load_prefix}input[input_offset + idx]{load_suffix};
+        {compute_type} xhat = (x - m) * s;
+        {compute_type} gw = g * w;
+        sum_g += g;
+        sum_gw += gw;
+        sum_gx += g * xhat;
+        sum_gwx += gw * xhat;
+    }}
+    unsigned int active = __activemask();
+    for (int delta = 16; delta > 0; delta >>= 1) {{
+        sum_g += __shfl_down_sync(active, sum_g, delta);
+        sum_gw += __shfl_down_sync(active, sum_gw, delta);
+        sum_gx += __shfl_down_sync(active, sum_gx, delta);
+        sum_gwx += __shfl_down_sync(active, sum_gwx, delta);
+    }}
+    extern __shared__ unsigned char shared_raw[];
+    int warp_count = (blockDim.x + 31) >> 5;
+    {compute_type}* shared_sums = reinterpret_cast<{compute_type}*>(shared_raw);
+    if (lane == 0) {{
+        shared_sums[warp * 4] = sum_g;
+        shared_sums[warp * 4 + 1] = sum_gw;
+        shared_sums[warp * 4 + 2] = sum_gx;
+        shared_sums[warp * 4 + 3] = sum_gwx;
+    }}
+    __syncthreads();
+    if (warp == 0) {{
+        sum_g = ({compute_type})0.0;
+        sum_gw = ({compute_type})0.0;
+        sum_gx = ({compute_type})0.0;
+        sum_gwx = ({compute_type})0.0;
+        for (int wk = lane; wk < warp_count; wk += 32) {{
+            sum_g += shared_sums[wk * 4];
+            sum_gw += shared_sums[wk * 4 + 1];
+            sum_gx += shared_sums[wk * 4 + 2];
+            sum_gwx += shared_sums[wk * 4 + 3];
+        }}
+        active = __activemask();
+        for (int delta = 16; delta > 0; delta >>= 1) {{
+            sum_g += __shfl_down_sync(active, sum_g, delta);
+            sum_gw += __shfl_down_sync(active, sum_gw, delta);
+            sum_gx += __shfl_down_sync(active, sum_gx, delta);
+            sum_gwx += __shfl_down_sync(active, sum_gwx, delta);
+        }}
+        if (lane == 0) {{
+            shared_sums[0] = sum_g;
+            shared_sums[1] = sum_gw;
+            shared_sums[2] = sum_gx;
+            shared_sums[3] = sum_gwx;
+        }}
+    }}
+    __syncthreads();
+    {compute_type} mean_gw = shared_sums[1] / ({compute_type})channel_elements;
+    {compute_type} mean_gwx = shared_sums[3] / ({compute_type})channel_elements;
+    for (int i = tid; i < channel_elements; i += blockDim.x) {{
+        int batch = i / spatial_size;
+        int spatial = i - batch * spatial_size;
+        int idx = (batch * num_channels + channel) * spatial_size + spatial;
+        {compute_type} g = {load_prefix}grad_output[grad_output_offset + idx]{load_suffix};
+        {compute_type} x = {load_prefix}input[input_offset + idx]{load_suffix};
+        {compute_type} xhat = (x - m) * s;
+        {compute_type} gw = g * w;
+        {compute_type} dx = s * (gw - mean_gw - xhat * mean_gwx);
+        grad_input[idx] = {store_prefix}dx{store_suffix};
+    }}
+    if (tid == 0) {{
+        if (has_weight) {{
+            grad_weight[channel] = shared_sums[2];
+        }}
+        if (has_bias) {{
+            grad_bias[channel] = shared_sums[0];
+        }}
+    }}
 }}
 "#,
             preamble = scalar.preamble,

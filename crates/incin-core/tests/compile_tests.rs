@@ -32,8 +32,41 @@ fn compile_fail() {
 /// macro emits.
 fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
+        // Issue #101: the two head invariants are const asserts inside
+        // `MultiHeadAttention::build`, so a mismatched configuration fails
+        // here rather than at runtime.
+        (
+            "attention_d_model_head_mismatch",
+            "d_model must be divisible by n_heads",
+        ),
+        (
+            "attention_head_kv_mismatch",
+            "n_heads must be divisible by n_kv_heads",
+        ),
+        // Issue #93: block divisibility is a const assert on the static
+        // last-axis extent, so a non-multiple fails at monomorphization
+        // (E0080) rather than reaching the kernel.
+        (
+            "quantize_block_axis_not_divisible",
+            "must be a multiple of 32",
+        ),
+        // Issue #93: dtype admission is the `FloatCapable`/`QuantCapable`
+        // bound pair. Matched on the trait rather than the code: the point
+        // is that the admission bound is what refuses, naming the trait.
+        ("quantized_mish_admission", "FloatCapable"),
+        ("quantized_floor_admission", "FloatCapable"),
+        ("dequantize_rejects_float_input", "QuantCapable"),
         // Shape rules, all unsatisfied trait bounds.
         ("broadcast_static_mismatch", "E0277"),
+        // #100's directional broadcast pins on the mask operations. The
+        // non-broadcastable pair is refused deep in the per-axis rule (the
+        // same `(): Dim` resolution `broadcast_static_mismatch` records for
+        // `+`); the enlarging pairs are broadcast-compatible but resolve to
+        // the wrong `Output` for the pin, which the compiler reports as an
+        // associated-type mismatch rather than a missing impl.
+        ("where_cond_mask_not_broadcastable", "E0277"),
+        ("where_cond_mask_enlarges_data", "E0271"),
+        ("masked_fill_mask_enlarges_input", "E0271"),
         // A downstream layout cannot be minted by a constructor: `FreshDense` is sealed.
         ("layout_proof_cannot_be_forged", "E0277"),
         ("reshape_view_needs_contiguous", "E0277"),
@@ -90,7 +123,9 @@ fn expected_reasons() -> BTreeMap<&'static str, &'static str> {
         ("shape_trait_is_sealed", "E0277"),
         ("dim_trait_is_sealed", "E0277"),
         ("concrete_static_extent_is_sealed", "E0277"),
-        ("tensor_element_is_sealed", "E0277"),
+        // Issue #96 (D-110): the seal is gone, the POD proof obligation is
+        // not. A non-`NoUninit` type still fails the `TensorElement` bound.
+        ("tensor_element_requires_pod", "E0277"),
         // Macros, which emit their own diagnostics and carry no error code.
         ("macro_idx_invalid", "expected `..=`"),
         (

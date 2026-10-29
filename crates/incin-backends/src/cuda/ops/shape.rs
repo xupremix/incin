@@ -14,14 +14,14 @@ use incin_core::tensor::dtype::DTypeId;
 /// values (0=narrow, 2=transpose, 3=broadcast), same `aux` semantics (narrow
 /// start offsets, or transpose's per-output-dim source-dim map, offset by
 /// the output's padding amount so it indexes correctly into `multi_idx`).
-/// `pub(crate)` for `cuda::ops::select::launch_broadcast_bool_mask`, which
-/// reuses this to broadcast a `bool` mask through the exact same index
-/// arithmetic `shape_op`'s `op_mode == 3` uses, without going through
-/// `launch_broadcast` itself. That separation predates width-parametric
-/// `shape_op` entry points, which move 1-byte elements correctly today; see
-/// #122 for whether the dedicated mask path still earns its keep.
+///
+/// Private to this module since #122: the only out-of-module consumer was
+/// `select::launch_broadcast_bool_mask`, deleted once `shape_op`'s
+/// width-parametric entry points (`shape_op_8bit` and friends) let
+/// `launch_broadcast` below carry `bool` masks on the same path as every
+/// other dtype.
 #[cfg(feature = "cuda")]
-pub(crate) fn prepare_shape_params(
+fn prepare_shape_params(
     op_mode: u32,
     n_elements: u32,
     out_shape: &[usize],
@@ -220,6 +220,16 @@ pub(crate) fn launch_narrow(
 }
 
 /// Swaps dims `dim1`/`dim2`. Materializes (see `launch_narrow`'s doc for why).
+///
+/// TRACKED DEVIATION from the views-everywhere contract (issue #113,
+/// orchestrator decision 2026-09-25): the operation contract names a strided
+/// view sharing the input's buffer (`LayoutRule::ViewWhenPossible`, aliasing
+/// documented on `Tensor::transpose`), and this launcher instead runs a
+/// permutation kernel into a fresh contiguous allocation. It stays a copy
+/// because this backend's matmul/reduce consumers refuse strided operands and
+/// there is no device here to verify strided support on -- not because the
+/// contract allows two behaviours. Pending strided-consumer support verified
+/// on hardware; do not "fix" by relabelling the contract.
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_transpose(t: &CudaStorage, dim1: usize, dim2: usize) -> Result<CudaStorage> {
     let mut out_shape = t.shape.to_vec();
@@ -271,6 +281,13 @@ pub(crate) fn launch_transpose_view(
 /// Broadcasts `t` to `target_shape`. Materializes (see `launch_narrow`'s doc
 /// for why). Caller must validate shape compatibility first - this function
 /// assumes `target_shape` is already a legal broadcast target of `t.shape`.
+///
+/// Every dtype the backend can store rides this one path, `bool` masks
+/// included: `launch_shape_op` picks the kernel entry point by element width
+/// (`shape_op_8bit` for one-byte elements), so there is no separate
+/// bool-broadcast launcher anymore (#122 deleted the last one,
+/// `select::launch_broadcast_bool_mask`, after `shape_op` grew those
+/// width-parametric entry points).
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_broadcast(t: &CudaStorage, target_shape: &[usize]) -> Result<CudaStorage> {
     let launch_n = ShapeBuf::from_slice(target_shape).checked_numel(OperationKind::Broadcast)?;
@@ -540,6 +557,48 @@ extern "C" __global__ void incin_cuda_scatter(
     }
 }
 
+extern "C" __global__ void incin_cuda_scatter_add(
+    const float* __restrict__ input,
+    const int64_t* __restrict__ index,
+    const float* __restrict__ src,
+    float* __restrict__ output,
+    uint32_t* __restrict__ error_flag,
+    int numel_src,
+    int numel_out,
+    int rank,
+    const int* __restrict__ idx_shape,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ idx_strides,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides,
+    int dim)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < numel_out) {
+        output[idx] = input[idx];
+    }
+    __syncthreads();
+
+    if (idx < numel_src) {
+        int rem = idx;
+        int out_flat = 0;
+        for (int d = 0; d < rank; d++) {
+            int coord = rem / idx_strides[d];
+            rem = rem % idx_strides[d];
+            if (d == dim) {
+                int64_t target_i = index[idx];
+                if (target_i < 0 || target_i >= out_shape[dim]) {
+                    atomicExch(error_flag, 1);
+                    return;
+                }
+                coord = (int)target_i;
+            }
+            out_flat += coord * out_strides[d];
+        }
+        atomicAdd(&output[out_flat], src[idx]);
+    }
+}
+
 extern "C" __global__ void incin_cuda_triangular(
     const float* __restrict__ input,
     float* __restrict__ output,
@@ -655,6 +714,392 @@ extern "C" __global__ void incin_cuda_diag_2d_to_1d(
     if (r < rows && c < cols) {
         output[idx] = input[r * cols + c];
     }
+}
+
+// `repeat_interleave`: each output coordinate copies its source coordinate
+// with `axis` divided by `repeats` (adjacent copies, CPU's combine.rs rule).
+// `out_strides` decodes the output's row-major flat back into coordinates
+// (contiguous - the launcher supplies it); `in_strides` are the input's
+// physical strides, so a strided input reads through them, offset by
+// `input_offset`.
+//
+// The axis fold is deliberately branchless with respect to the decode loop:
+// folding `coord / repeats` under an `if (d == axis)` inside the loop
+// miscompiles under NVVM 7.0.1 (CUDA 12.6, observed on sm_75): the
+// range-splitting transform fast-forwards iterations below `min(axis, rank)`
+// as remainder-only steps, dropping their accumulation, so every row past
+// the first re-reads the first tile. The loop below is straight-line; the
+// axis correction is a single post-pass over loop-invariant values, which
+// leaves the faulty transform nothing to split on. Pinned by the hardware
+// tests `repeat_interleave_places_copies_adjacently` and
+// `repeat_interleave_reads_through_a_strided_view`.
+extern "C" __global__ void incin_cuda_repeat_interleave(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    int numel_out,
+    int rank,
+    int repeats,
+    int axis,
+    int input_offset,
+    const int* __restrict__ out_strides,
+    const int* __restrict__ in_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_out) return;
+    int rem = idx;
+    int in_flat = input_offset;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / out_strides[d];
+        rem = rem % out_strides[d];
+        in_flat += coord * in_strides[d];
+    }
+    // Each group of `repeats` adjacent output elements along `axis` shares
+    // one source element: fold that axis coordinate back down, replacing
+    // its contribution. `axis_dim` is recovered from the contiguous output
+    // strides (`stride[d - 1] == dim[d] * stride[d]`); `repeats >= 1` - the
+    // launcher refuses 0 - so the division is exact and total.
+    int axis_stride = out_strides[axis];
+    int axis_dim = (axis == 0 ? numel_out : out_strides[axis - 1]) / axis_stride;
+    int axis_coord = (idx / axis_stride) % axis_dim;
+    in_flat += (axis_coord / repeats - axis_coord) * in_strides[axis];
+    output[idx] = input[in_flat];
+}
+
+// Backward of `repeat_interleave`: each source element's cotangent is the
+// sum over its `repeats` output copies. Threads own source elements; the
+// inner loop walks the copies in `r = 0, 1, ...` order - the same order CPU's
+// row-major accumulation visits them (positions differing only at `axis` are
+// row-major ordered by that coordinate) - accumulating in `double` so the
+// single f32 rounding at the end matches CPU's f64 accumulation followed by
+// one `from_f64_values` conversion. `grad_out_strides` are the incoming
+// gradient's physical strides (it may arrive as a view); the source decodes
+// through `in_contig` because `idx` is the source's row-major flat.
+extern "C" __global__ void incin_cuda_repeat_interleave_backward(
+    const float* __restrict__ grad_out,
+    float* __restrict__ grad_in,
+    int numel_in,
+    int rank,
+    int repeats,
+    int axis,
+    int grad_offset,
+    const int* __restrict__ in_contig,
+    const int* __restrict__ grad_out_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_in) return;
+    double acc = 0.0;
+    for (int r = 0; r < repeats; r++) {
+        int rem = idx;
+        int out_flat = grad_offset;
+        for (int d = 0; d < rank; d++) {
+            int coord = rem / in_contig[d];
+            rem = rem % in_contig[d];
+            if (d == axis) coord = coord * repeats + r;
+            out_flat += coord * grad_out_strides[d];
+        }
+        acc += (double)grad_out[out_flat];
+    }
+    grad_in[idx] = (float)acc;
+}
+
+// `one_hot`: slot the target at `idx * depth + v` when `v` is inside
+// `[0, depth)`; out-of-range targets leave the row all-false (ONNX rule -
+// no error), matching CPU's `value >= 0 && value < depth` test. `out` is
+// Bool (1 byte). Decode of the target operand runs through `in_contig`
+// (logical row-major) with reads through `in_strides` (physical).
+extern "C" __global__ void incin_cuda_one_hot(
+    const int64_t* __restrict__ targets,
+    unsigned char* __restrict__ out,
+    int numel,
+    int rank,
+    int depth,
+    int input_offset,
+    const int* __restrict__ in_contig,
+    const int* __restrict__ in_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel) return;
+    int rem = idx;
+    int phys = input_offset;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / in_contig[d];
+        rem = rem % in_contig[d];
+        phys += coord * in_strides[d];
+    }
+    long long v = targets[phys];
+    if (v >= 0 && v < (long long)depth) {
+        out[(long long)idx * depth + v] = 1;
+    }
+}
+
+// `bincount`: one increment per element. The index operand is physically
+// i64 (u8/u32 storages cannot exist on CUDA), so every value is already a
+// finite whole number and CPU's fract/is_finite checks reduce to the range
+// test; an out-of-range value raises `error_flag` instead of silently
+// lowering a count (CPU's message is reproduced host-side). Increments use
+// unsigned-long-long atomics: non-negative integer addition is associative,
+// so the per-bin total is exact and order-independent - deterministic by
+// construction, unlike a float reduction.
+extern "C" __global__ void incin_cuda_bincount(
+    const int64_t* __restrict__ targets,
+    long long* __restrict__ counts,
+    uint32_t* __restrict__ error_flag,
+    int numel,
+    int rank,
+    int bins,
+    int input_offset,
+    const int* __restrict__ in_contig,
+    const int* __restrict__ in_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel) return;
+    int rem = idx;
+    int phys = input_offset;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / in_contig[d];
+        rem = rem % in_contig[d];
+        phys += coord * in_strides[d];
+    }
+    long long v = targets[phys];
+    if (v < 0 || v >= (long long)bins) {
+        atomicExch(error_flag, 1);
+        return;
+    }
+    atomicAdd((unsigned long long*)counts + v, 1ULL);
+}
+
+// Pass 1 of `scatter_add`: for each source index position `j`, compute the
+// destination flat index and the source's physical read offset, writing both
+// into `scratch = [dest(flat), src(phys)]`. Mirrors CPU exactly: the
+// destination coordinate at `axis` takes the index value with negatives
+// clamped to zero (Rust's `as usize` saturating cast), the flat is formed
+// from the OUTPUT's contiguous strides, and acceptance is a single
+// `flat < numel_out` test - CPU performs no per-coordinate bounds check, so
+// an out-of-range coordinate that still lands inside the buffer aliases to
+// that position, as this does. Rejected positions store `-1`. Two decode
+// passes avoid a coordinate buffer: one forms the index/source physical
+// addresses, the second forms the destination flat.
+extern "C" __global__ void incin_cuda_scatter_add_map(
+    const int64_t* __restrict__ index,
+    long long* __restrict__ scratch,
+    int numel_src,
+    int numel_out,
+    int rank,
+    int axis,
+    int index_offset,
+    int src_offset,
+    const int* __restrict__ out_shape,
+    const int* __restrict__ in_contig,
+    const int* __restrict__ index_strides,
+    const int* __restrict__ src_strides,
+    const int* __restrict__ out_contig)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= numel_src) return;
+
+    int rem = j;
+    long long index_phys = index_offset;
+    long long src_phys = src_offset;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / in_contig[d];
+        rem = rem % in_contig[d];
+        index_phys += (long long)coord * index_strides[d];
+        src_phys += (long long)coord * src_strides[d];
+    }
+    long long v = index[index_phys];
+    if (v < 0) v = 0;
+
+    rem = j;
+    long long dest = 0;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / in_contig[d];
+        rem = rem % in_contig[d];
+        if (d == axis) {
+            dest += v * (long long)out_contig[d];
+        } else {
+            dest += (long long)coord * out_contig[d];
+        }
+    }
+    if (dest >= (long long)numel_out) dest = -1;
+
+    scratch[j] = dest;
+    scratch[numel_src + j] = src_phys;
+}
+
+// Pass 2 of `scatter_add`: each output thread copies its input value, then
+// walks `j` in ascending order - CPU's row-major index iteration - adding
+// every source whose mapped destination is this output position, in `double`
+// and rounding once. That reproduces CPU's accumulate-in-f64-then-
+// `from_f64_values` rounding exactly for both f32 and i64 value operands
+// (integral doubles round-trip; the C cast truncates toward zero, which on
+// an integral value is exact). `input` is the untouched starting copy;
+// `dtype_code` selects f32 (0) or i64 (1). Note the tape's fixed summation
+// order differs from the pre-existing atomic `incin_cuda_scatter_add` (used
+// only by gather's backward), which is nondeterministic - this path is the
+// executor's forward and must match CPU bitwise.
+extern "C" __global__ void incin_cuda_scatter_add_ordered(
+    const void* __restrict__ input,
+    const void* __restrict__ src,
+    void* __restrict__ output,
+    const long long* __restrict__ scratch,
+    int numel_out,
+    int numel_src,
+    int rank,
+    int dtype_code,
+    int input_offset,
+    const int* __restrict__ out_contig,
+    const int* __restrict__ in_strides)
+{
+    int o = blockIdx.x * blockDim.x + threadIdx.x;
+    if (o >= numel_out) return;
+
+    int rem = o;
+    int in_flat = input_offset;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / out_contig[d];
+        rem = rem % out_contig[d];
+        in_flat += coord * in_strides[d];
+    }
+
+    double acc;
+    if (dtype_code == 0) {
+        acc = (double)((const float*)input)[in_flat];
+    } else {
+        acc = (double)((const long long*)input)[in_flat];
+    }
+    for (int j = 0; j < numel_src; j++) {
+        if (scratch[j] == (long long)o) {
+            if (dtype_code == 0) {
+                acc += (double)((const float*)src)[scratch[numel_src + j]];
+            } else {
+                acc += (double)((const long long*)src)[scratch[numel_src + j]];
+            }
+        }
+    }
+    if (dtype_code == 0) {
+        ((float*)output)[o] = (float)acc;
+    } else {
+        ((long long*)output)[o] = (long long)acc;
+    }
+}
+
+// `scatter_add`'s source cotangent: thread per index position `j`. CPU
+// accumulates `grad_source[flat_src] += grad_out[flat_dest]` over the writes
+// it recorded, but each recorded write's `flat_src` comes from `j`'s own
+// coordinates and `j` visits distinct coordinates, so the slots are distinct
+// and the `+=` degenerates to assignment: this is a gather of `grad_out` at
+// the recorded destination (or zero when the write was dropped) written at
+// `j`. `dtype_code` selects f32 (0) or i64 (1), matching the gradient's
+// dtype the same way CPU's `from_f64_values` on `grad_out.buffer` does.
+extern "C" __global__ void incin_cuda_scatter_add_backward(
+    const void* __restrict__ grad_out,
+    void* __restrict__ grad_src,
+    const long long* __restrict__ scratch,
+    int numel_src,
+    int rank,
+    int dtype_code,
+    int grad_offset,
+    const int* __restrict__ out_contig,
+    const int* __restrict__ grad_strides)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= numel_src) return;
+
+    long long dest = scratch[j];
+    if (dest < 0) {
+        if (dtype_code == 0) {
+            ((float*)grad_src)[j] = 0.0f;
+        } else {
+            ((long long*)grad_src)[j] = 0;
+        }
+        return;
+    }
+
+    int rem = (int)dest;
+    int phys = grad_offset;
+    for (int d = 0; d < rank; d++) {
+        int coord = rem / out_contig[d];
+        rem = rem % out_contig[d];
+        phys += coord * grad_strides[d];
+    }
+    if (dtype_code == 0) {
+        ((float*)grad_src)[j] = ((const float*)grad_out)[phys];
+    } else {
+        ((long long*)grad_src)[j] = ((const long long*)grad_out)[phys];
+    }
+}
+
+// `repeat` backward: the transpose of the forward's modulo map. Each output
+// coordinate copies `out_coord[d] % in_shape[d]`, so each source element is
+// copied to every coordinate `s[d] + t[d] * in_shape[d]` for
+// `t[d] in [0, repeats[d])`, and its cotangent is the sum over those tiles.
+//
+// Threads own source elements. The inner loop walks the tiles in mixed-radix
+// with the LAST axis varying fastest, which is row-major order over the
+// output coordinates (`out_coord[d]` increases with `t[d]`, and row-major
+// visits the last axis fastest) - the same order CPU's odometer accumulates
+// them in, so the f64 sums are bitwise identical. Accumulation is in
+// `double` with one f32 store at the end, matching CPU's f64 `grads` plus a
+// single `from_f64_values` rounding. `grad_strides` are the incoming
+// cotangent's physical strides (it may arrive as a view) and `grad_offset`
+// its base; the source decodes through `in_shape` because `idx` is the
+// source's row-major flat.
+extern "C" __global__ void incin_cuda_repeat_backward(
+    const float* __restrict__ grad_out,
+    float* __restrict__ grad_in,
+    int numel_in,
+    int rank,
+    int num_tiles,
+    int grad_offset,
+    const int* __restrict__ in_shape,
+    const int* __restrict__ repeats,
+    const int* __restrict__ grad_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_in) return;
+    double acc = 0.0;
+    for (int tile = 0; tile < num_tiles; tile++) {
+        int rem_t = tile;
+        int rem_s = idx;
+        int out_flat = grad_offset;
+        for (int d = rank - 1; d >= 0; d--) {
+            int t_d = rem_t % repeats[d];
+            rem_t /= repeats[d];
+            int s_d = rem_s % in_shape[d];
+            rem_s /= in_shape[d];
+            out_flat += (s_d + t_d * in_shape[d]) * grad_strides[d];
+        }
+        acc += (double)grad_out[out_flat];
+    }
+    grad_in[idx] = (float)acc;
+}
+
+// `diag` backward for the EXTRACT form (rank-two input -> rank-one output):
+// the input gradient is zero everywhere except the extracted diagonal, where
+// it carries the outgoing cotangent. The forward read position `i` from
+// `(r, c) = (i, i + diagonal)` when `diagonal >= 0` and from
+// `(i - diagonal, i)` otherwise, so the inverse maps back to `i = r` in the
+// first case and `i = c` in the second; `out_len` guards the read and leaves
+// the cell at zero when the cotangent is shorter than the diagonal.
+// `grad_strides[0]` and `grad_offset` let the cotangent arrive as a view.
+extern "C" __global__ void incin_cuda_diag_backward(
+    const float* __restrict__ grad_out,
+    float* __restrict__ grad_in,
+    int numel_in,
+    int cols,
+    int out_len,
+    int diagonal,
+    int grad_offset,
+    const int* __restrict__ grad_strides)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numel_in) return;
+    int r = idx / cols;
+    int c = idx % cols;
+    if ((long long)c != (long long)r + (long long)diagonal) return;
+    int i = diagonal >= 0 ? r : c;
+    if (i < 0 || i >= out_len) return;
+    grad_in[idx] = grad_out[grad_offset + i * grad_strides[0]];
 }
 "#;
 
@@ -1121,6 +1566,253 @@ pub(crate) fn launch_scatter(
     Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
 }
 
+/// Scatter-add: like [`launch_scatter`], except colliding writes sum via
+/// `atomicAdd` rather than the last one winning.
+///
+/// This is the backward of [`launch_gather`]: every output position routes
+/// its cotangent back to the source position its index named, accumulating
+/// where an index selects the same row twice (matching CPU's
+/// `gather_storage` backward, which does `grad_t_data[flat_dst] += ...`).
+/// The overwrite kernel kept only one contribution there, so duplicate
+/// indices diverged as `[1,1,0]` where the CPU reference is `[2,1,0]`.
+/// f32-only, like the scatter/gather pair it mirrors.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter_add(
+    input: &CudaStorage,
+    dim: usize,
+    index: &CudaStorage,
+    src: &CudaStorage,
+) -> Result<CudaStorage> {
+    if dim >= input.shape.len() {
+        return Err(Error::Msg(format!(
+            "CUDA scatter_add dimension {dim} is out of bounds for input shape {:?}",
+            input.shape
+        )));
+    }
+    let rank = input.shape.len();
+    if index.shape.len() != rank || src.shape.len() != rank {
+        return Err(Error::Msg(format!(
+            "CUDA scatter_add index and src rank must match input rank {rank}"
+        )));
+    }
+
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_scatter_add")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_shape = input.shape.to_vec();
+    let out_numel = out_shape.iter().product::<usize>();
+    let src_numel = src.shape.iter().product::<usize>();
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+
+    let mut out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+            Error::Msg(format!("CUDA scatter_add output allocation failed: {e:?}"))
+        })?),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    let out_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&out_shape).strides(),
+        "stride",
+    )?;
+    let in_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&input.shape).strides(),
+        "stride",
+    )?;
+    let idx_strides = checked_i32_vec(
+        crate::layout::contiguous_strides(&index.shape).strides(),
+        "stride",
+    )?;
+    let out_shape_i32 = checked_i32_vec(&out_shape, "shape")?;
+    let idx_shape_i32 = checked_i32_vec(&index.shape, "shape")?;
+
+    let out_shape_dev = stream
+        .clone_htod(&out_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let idx_shape_dev = stream
+        .clone_htod(&idx_shape_i32)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let out_strides_dev = stream
+        .clone_htod(&out_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let in_strides_dev = stream
+        .clone_htod(&in_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+    let idx_strides_dev = stream
+        .clone_htod(&idx_strides)
+        .map_err(|e| Error::Msg(format!("{e:?}")))?;
+
+    let block_size = 256u32;
+    let grid_size = checked_u32(out_numel.max(src_numel), "element count")?.div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let src_numel_i32 = checked_i32(src_numel, "element count")?;
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let dim_i32 = checked_i32(dim, "axis")?;
+
+    // SAFETY: Launches scatter_add kernel with bounds-checked parameters and device error flag.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&*index.buffer.data)
+            .arg(&*src.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&error_flag_dev)
+            .arg(&src_numel_i32)
+            .arg(&out_numel_i32)
+            .arg(&rank_i32)
+            .arg(&idx_shape_dev)
+            .arg(&out_shape_dev)
+            .arg(&idx_strides_dev)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .arg(&dim_i32)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA scatter_add launch failed: {e:?}")))?;
+    }
+
+    let mut host_err = [0u32; 1];
+    stream
+        .memcpy_dtoh(&error_flag_dev, &mut host_err)
+        .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+    if host_err[0] != 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Scatter,
+            reason: "index out of bounds",
+        }));
+    }
+
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+/// Scatter source-gradient with last-write-wins masking.
+///
+/// `launch_gather(grad_out, dim, index)` routes the output cotangent to
+/// every index position, but the scatter forward's last-write-wins rule
+/// means only the LAST write to each destination contributed: earlier
+/// writes to the same position earned no cotangent. With unique indices
+/// the gather is exact; with duplicates it over-counts (e.g. `[1,1]`
+/// where the CPU reference is `[0,1]`).
+///
+/// This gathers on-device, then zeroes non-surviving positions on the host:
+/// the index is read back, the last writer per destination is identified in
+/// row-major order (matching CPU's `scatter_storage` bookkeeping), and the
+/// gathered gradient is masked before re-upload. The host round-trips are
+/// the honest cost of deterministic duplicate handling without a bespoke
+/// on-device last-writer kernel; the forward race itself (which value wins
+/// with duplicates) remains nondeterministic -- see the shape_ops caller.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter_src_grad(
+    grad_out: &CudaStorage,
+    dim: usize,
+    index: &CudaStorage,
+) -> Result<CudaStorage> {
+    let gathered = launch_gather(grad_out, dim, index)?;
+    let src_numel = index.shape.iter().product::<usize>();
+    if src_numel == 0 {
+        return Ok(gathered);
+    }
+    // Read back the index as i64.
+    let index_bytes = index
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*index.buffer.data)
+        .map_err(|e| {
+            Error::Msg(format!(
+                "CUDA scatter src-grad index readback failed: {e:?}"
+            ))
+        })?;
+    let index_vals: Vec<i64> = bytemuck::cast_slice::<u8, i64>(&index_bytes).to_vec();
+
+    let idx_strides = crate::layout::contiguous_strides(&index.shape)
+        .strides()
+        .to_vec();
+    let out_strides = crate::layout::contiguous_strides(&grad_out.shape)
+        .strides()
+        .to_vec();
+    let out_numel: usize = grad_out.shape.iter().product::<usize>().max(1);
+    let dim_extent = grad_out.shape.get(dim).copied().unwrap_or(0);
+
+    // Last writer per destination flat index, in row-major src order.
+    let mut last_writer: alloc::collections::BTreeMap<usize, usize> =
+        alloc::collections::BTreeMap::new();
+    for src_flat in 0..src_numel {
+        // Decode row-major multi-index of src_flat within index.shape.
+        let mut rem = src_flat;
+        let mut dest_flat = 0usize;
+        let mut oob = false;
+        for (d, (&stride, &extent)) in idx_strides.iter().zip(index.shape.iter()).enumerate() {
+            let coord = rem / stride;
+            rem %= stride;
+            let _ = extent;
+            if d == dim {
+                let target = index_vals.get(src_flat).copied().unwrap_or(-1);
+                if target < 0 || (target as usize) >= dim_extent {
+                    oob = true;
+                    break;
+                }
+                dest_flat += (target as usize) * out_strides[d];
+            } else {
+                dest_flat += coord * out_strides[d];
+            }
+        }
+        if oob || dest_flat >= out_numel {
+            continue;
+        }
+        last_writer.insert(dest_flat, src_flat);
+    }
+    let surviving: alloc::collections::BTreeSet<usize> = last_writer.into_values().collect();
+
+    let grad_bytes = gathered
+        .buffer
+        .device
+        .default_stream()
+        .clone_dtoh(&*gathered.buffer.data)
+        .map_err(|e| Error::Msg(format!("CUDA scatter src-grad readback failed: {e:?}")))?;
+    let mut grad_vals: Vec<f32> = bytemuck::cast_slice::<u8, f32>(&grad_bytes).to_vec();
+    for (i, v) in grad_vals.iter_mut().enumerate() {
+        if !surviving.contains(&i) {
+            *v = 0.0;
+        }
+    }
+    let stream = gathered.buffer.device.default_stream();
+    let data = stream
+        .clone_htod(bytemuck::cast_slice(&grad_vals))
+        .map_err(|e| Error::Msg(format!("CUDA scatter src-grad upload failed: {e:?}")))?;
+    let buffer = CudaBuffer {
+        len: gathered.buffer.len,
+        dtype: gathered.buffer.dtype,
+        data: Arc::new(data),
+        device: gathered.buffer.device.clone(),
+        device_id: gathered.buffer.device_id,
+    };
+    Ok(CudaStorage::new(Arc::new(buffer), gathered.shape.to_vec()))
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_tril(input: &CudaStorage, diagonal: i32) -> Result<CudaStorage> {
     launch_triangular(input, diagonal, false)
@@ -1134,16 +1826,22 @@ pub(crate) fn launch_triu(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
 #[cfg(feature = "cuda")]
 fn launch_triangular(input: &CudaStorage, diagonal: i32, is_upper: bool) -> Result<CudaStorage> {
     let rank = input.shape.len();
-    if rank < 2 {
+    // Rank 1 is admitted (descriptor min_rank) and CPU keeps it: a single
+    // index is column `idx` of row 0, so the kernel runs unchanged with
+    // `rows = 1`. Only the empty shape has no row and no column.
+    if rank == 0 {
         return Err(Error::ShapeMismatch {
             op: if is_upper { "triu" } else { "tril" },
-            expected: vec![2],
-            got: vec![rank],
-            msg: "triangular operations require rank >= 2".into(),
+            expected: vec![1],
+            got: vec![0],
+            msg: "triangular operations require at least one dimension".into(),
         });
     }
-    let rows = input.shape[rank - 2];
-    let cols = input.shape[rank - 1];
+    let (rows, cols) = if rank == 1 {
+        (1, input.shape[0])
+    } else {
+        (input.shape[rank - 2], input.shape[rank - 1])
+    };
 
     let device_id = input.buffer.device_id;
     ensure_index_ops_loaded(device_id)?;
@@ -1205,6 +1903,676 @@ fn launch_triangular(input: &CudaStorage, diagonal: i32, is_upper: bool) -> Resu
     }
 
     Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+/// Uploads shape/stride vectors for kernel args, guaranteeing a non-empty
+/// allocation: a rank-0 operand leaves the vector empty, and an NVRTC pointer
+/// argument must still carry a dereferenceable address even though a rank-0
+/// launch never enters the loop that would read it.
+#[cfg(feature = "cuda")]
+fn dev_i32_arg(
+    stream: &Arc<cudarc::driver::CudaStream>,
+    values: &[usize],
+    field: &'static str,
+) -> Result<cudarc::driver::CudaSlice<i32>> {
+    let mut i32s = checked_i32_vec(values, field)?;
+    if i32s.is_empty() {
+        i32s.push(0);
+    }
+    stream
+        .clone_htod(&i32s)
+        .map_err(|e| Error::Msg(format!("{e:?}")))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_repeat_interleave(
+    input: &CudaStorage,
+    repeats: usize,
+    axis: usize,
+) -> Result<CudaStorage> {
+    if input.buffer.dtype.builtin_id() != Some(DTypeId::F32) {
+        return Err(Error::UnsupportedDType {
+            dtype: input.buffer.dtype,
+            backend: "Cuda",
+            op: "repeat_interleave",
+        });
+    }
+    if axis >= input.shape.len() {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "repeat_interleave axis is outside the operand's rank",
+        }));
+    }
+    if repeats == 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "repeat_interleave needs at least one repeat per element",
+        }));
+    }
+    let mut out_shape = input.shape.to_vec();
+    out_shape[axis] = out_shape[axis].checked_mul(repeats).ok_or_else(|| {
+        Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "interleaved output dimension overflows usize",
+        })
+    })?;
+
+    let rank = input.shape.len();
+    let out_numel = crate::bytes::checked_numel(&out_shape)?;
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_repeat_interleave")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_strides = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
+    let out_strides_dev = dev_i32_arg(&stream, &out_strides, "stride")?;
+    let in_strides_dev = dev_i32_arg(&stream, input.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, out_numel, OperationKind::Storage)?;
+    let out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+            Error::Msg(format!(
+                "CUDA repeat_interleave output allocation failed: {e:?}"
+            ))
+        })?),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+    if out_numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let numel_i32 = checked_i32(out_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let repeats_i32 = checked_i32(repeats, "repeats")?;
+    let axis_i32 = checked_i32(axis, "axis")?;
+    let offset_i32 = checked_i32(input.offset_elements, "input offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    let mut out_buffer = out_buffer;
+    // SAFETY: Launches repeat_interleave with bounds-checked parameters over a
+    // fresh output allocation.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*input.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&repeats_i32)
+            .arg(&axis_i32)
+            .arg(&offset_i32)
+            .arg(&out_strides_dev)
+            .arg(&in_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA repeat_interleave launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_repeat_interleave_backward(
+    grad_out: &CudaStorage,
+    repeats: usize,
+    axis: usize,
+    source_shape: &[usize],
+) -> Result<CudaStorage> {
+    let rank = source_shape.len();
+    if axis >= rank {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::RepeatInterleave,
+            reason: "repeat_interleave axis is outside the operand's rank",
+        }));
+    }
+    let numel_in = crate::bytes::checked_numel(source_shape)?;
+    let device_id = grad_out.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_repeat_interleave_backward")?;
+    let stream = grad_out.buffer.device.default_stream();
+
+    let in_contig = crate::layout::contiguous_strides(source_shape)
+        .strides()
+        .to_vec();
+    let in_contig_dev = dev_i32_arg(&stream, &in_contig, "stride")?;
+    let grad_strides_dev = dev_i32_arg(&stream, grad_out.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, numel_in, OperationKind::Storage)?;
+    let mut out_buffer = CudaBuffer {
+        len: numel_in,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+            Error::Msg(format!(
+                "CUDA repeat_interleave backward allocation failed: {e:?}"
+            ))
+        })?),
+        device: grad_out.buffer.device.clone(),
+        device_id,
+    };
+    if numel_in == 0 {
+        return Ok(CudaStorage::new(
+            Arc::new(out_buffer),
+            source_shape.to_vec(),
+        ));
+    }
+
+    let numel_i32 = checked_i32(numel_in, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let repeats_i32 = checked_i32(repeats, "repeats")?;
+    let axis_i32 = checked_i32(axis, "axis")?;
+    let offset_i32 = checked_i32(grad_out.offset_elements, "grad offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches the group-sum backward over a fresh allocation with
+    // validated strides and offsets.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_out.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&repeats_i32)
+            .arg(&axis_i32)
+            .arg(&offset_i32)
+            .arg(&in_contig_dev)
+            .arg(&grad_strides_dev)
+            .launch(config)
+            .map_err(|e| {
+                Error::Msg(format!(
+                    "CUDA repeat_interleave backward launch failed: {e:?}"
+                ))
+            })?;
+    }
+    Ok(CudaStorage::new(
+        Arc::new(out_buffer),
+        source_shape.to_vec(),
+    ))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_one_hot(t: &CudaStorage, depth: usize) -> Result<CudaStorage> {
+    if t.buffer.dtype.builtin_id() != Some(DTypeId::I64) {
+        return Err(Error::UnsupportedDType {
+            dtype: t.buffer.dtype,
+            backend: "Cuda",
+            op: "one_hot",
+        });
+    }
+    let rank = t.shape.len();
+    let numel = crate::bytes::checked_numel(&t.shape)?;
+    let mut out_shape = t.shape.to_vec();
+    out_shape.push(depth);
+    let out_total = crate::bytes::checked_numel(&out_shape)?;
+
+    let device_id = t.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_one_hot")?;
+    let stream = t.buffer.device.default_stream();
+
+    let in_contig = crate::layout::contiguous_strides(&t.shape)
+        .strides()
+        .to_vec();
+    let in_contig_dev = dev_i32_arg(&stream, &in_contig, "stride")?;
+    let in_strides_dev = dev_i32_arg(&stream, t.strides.strides(), "stride")?;
+
+    let bool_dtype = DTypeId::Bool.descriptor();
+    let mut out_buffer = CudaBuffer {
+        len: out_total,
+        dtype: bool_dtype,
+        data: Arc::new(crate::cuda::ops::alloc_zeroed_bytes(
+            &stream,
+            bool_dtype,
+            out_total,
+            OperationKind::Storage,
+        )?),
+        device: t.buffer.device.clone(),
+        device_id,
+    };
+    if numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), out_shape));
+    }
+
+    let numel_i32 = checked_i32(numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let depth_i32 = checked_i32(depth, "depth")?;
+    let offset_i32 = checked_i32(t.offset_elements, "input offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches one_hot over a fresh bool allocation with validated
+    // strides and offsets.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*t.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&depth_i32)
+            .arg(&offset_i32)
+            .arg(&in_contig_dev)
+            .arg(&in_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA one_hot launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_bincount(t: &CudaStorage, bins: usize) -> Result<CudaStorage> {
+    if bins == 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Bincount,
+            reason: "bincount needs at least one bin to count into",
+        }));
+    }
+    if t.buffer.dtype.builtin_id() != Some(DTypeId::I64) {
+        return Err(Error::UnsupportedDType {
+            dtype: t.buffer.dtype,
+            backend: "Cuda",
+            op: "bincount",
+        });
+    }
+    let rank = t.shape.len();
+    let numel = crate::bytes::checked_numel(&t.shape)?;
+    let bins_i32_val = checked_i32(bins, "bins")?;
+
+    let device_id = t.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_bincount")?;
+    let stream = t.buffer.device.default_stream();
+
+    let in_contig = crate::layout::contiguous_strides(&t.shape)
+        .strides()
+        .to_vec();
+    let in_contig_dev = dev_i32_arg(&stream, &in_contig, "stride")?;
+    let in_strides_dev = dev_i32_arg(&stream, t.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::I64, bins, OperationKind::Storage)?;
+    let mut counts_buffer =
+        CudaBuffer {
+            len: bins,
+            dtype: DTypeId::I64.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA bincount output allocation failed: {e:?}"))
+            })?),
+            device: t.buffer.device.clone(),
+            device_id,
+        };
+    if numel == 0 {
+        return Ok(CudaStorage::new(Arc::new(counts_buffer), alloc::vec![bins]));
+    }
+
+    let error_flag_dev = stream
+        .alloc_zeros::<u32>(1)
+        .map_err(|e| Error::Msg(format!("CUDA error flag allocation failed: {e:?}")))?;
+
+    let numel_i32 = checked_i32(numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let offset_i32 = checked_i32(t.offset_elements, "input offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches bincount with bounds-checked parameters and a device
+    // error flag; counts is a fresh zeroed i64 allocation.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut counts_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*t.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&error_flag_dev)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&bins_i32_val)
+            .arg(&offset_i32)
+            .arg(&in_contig_dev)
+            .arg(&in_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA bincount launch failed: {e:?}")))?;
+    }
+
+    let mut host_err = [0u32; 1];
+    stream
+        .memcpy_dtoh(&error_flag_dev, &mut host_err)
+        .map_err(|e| Error::Msg(format!("CUDA error flag readback failed: {e:?}")))?;
+    if host_err[0] != 0 {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Bincount,
+            reason: "bincount index is not a whole number inside the bin range",
+        }));
+    }
+    Ok(CudaStorage::new(Arc::new(counts_buffer), alloc::vec![bins]))
+}
+
+/// Deterministic `scatter_add` forward: builds the destination/source map,
+/// then accumulates each output position in one fixed thread so the result
+/// matches CPU bitwise. Returns `(output, scratch)`; the scratch pairs stay
+/// alive for the tape entry's backward.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter_add_ordered(
+    input: &CudaStorage,
+    axis: usize,
+    index: &CudaStorage,
+    src: &CudaStorage,
+) -> Result<(CudaStorage, CudaStorage)> {
+    let dtype_id = input.buffer.dtype.builtin_id();
+    let dtype_code = match dtype_id {
+        Some(DTypeId::F32) => 0i32,
+        Some(DTypeId::I64) => 1i32,
+        _ => {
+            return Err(Error::UnsupportedDType {
+                dtype: input.buffer.dtype,
+                backend: "Cuda",
+                op: "scatter_add",
+            });
+        }
+    };
+    if src.buffer.dtype != input.buffer.dtype {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::ScatterAdd,
+            reason: "scatter_add source operand must share the input's dtype",
+        }));
+    }
+    if index.buffer.dtype.builtin_id() != Some(DTypeId::I64) {
+        return Err(Error::UnsupportedDType {
+            dtype: index.buffer.dtype,
+            backend: "Cuda",
+            op: "scatter_add",
+        });
+    }
+    let rank = input.shape.len();
+    if axis >= rank {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::ScatterAdd,
+            reason: "scatter_add axis is outside the operand's rank",
+        }));
+    }
+    if index.shape.len() != rank || src.shape.len() != rank {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::ScatterAdd,
+            reason: "scatter_add index and source ranks must match the input rank",
+        }));
+    }
+    // The index names one destination per source element, so the two share
+    // a shape - but that shape is the iteration domain, not the input's:
+    // CPU walks the index positions and drops out-of-range destinations,
+    // and the map kernel below decodes positions with the index's own
+    // contiguous strides for the same reason.
+    if index.shape != src.shape {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::ScatterAdd,
+            reason: "scatter_add expects the index and source operands to share a shape",
+        }));
+    }
+
+    let out_shape = input.shape.to_vec();
+    let out_numel = crate::bytes::checked_numel(&out_shape)?;
+    let src_numel = crate::bytes::checked_numel(&src.shape)?;
+    let device_id = input.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let map_fn = dispatcher.get_function("index_ops", "incin_cuda_scatter_add_map")?;
+    let ord_fn = dispatcher.get_function("index_ops", "incin_cuda_scatter_add_ordered")?;
+    let stream = input.buffer.device.default_stream();
+
+    let out_contig = crate::layout::contiguous_strides(&out_shape)
+        .strides()
+        .to_vec();
+    let out_contig_dev = dev_i32_arg(&stream, &out_contig, "stride")?;
+    let in_strides_dev = dev_i32_arg(&stream, input.strides.strides(), "stride")?;
+    // The iteration domain is the index/source shape, which may differ
+    // from the input's: decode positions with the index's own contiguous
+    // strides, not the output's. (When the shapes coincide this is the
+    // same vector as `out_contig`, so admitted rows are unaffected.)
+    let idx_contig = crate::layout::contiguous_strides(&index.shape)
+        .strides()
+        .to_vec();
+    let idx_contig_dev = dev_i32_arg(&stream, &idx_contig, "stride")?;
+    let idx_strides_dev = dev_i32_arg(&stream, index.strides.strides(), "stride")?;
+    let src_strides_dev = dev_i32_arg(&stream, src.strides.strides(), "stride")?;
+    let out_shape_dev = dev_i32_arg(&stream, &out_shape, "shape")?;
+
+    // Scratch pairs `[dest; src_numel][src_phys; src_numel]`, zeroed so an
+    // empty source leaves only consulted-free zeros (the ordered kernel's
+    // inner loop runs `j < numel_src` times and never reads past it).
+    let scratch_len = src_numel.max(1) * 2;
+    let scratch_byte_len =
+        crate::bytes::byte_len(DTypeId::I64, scratch_len, OperationKind::Storage)?;
+    let scratch_buffer = CudaBuffer {
+        len: scratch_len,
+        dtype: DTypeId::I64.descriptor(),
+        data: Arc::new(stream.alloc_zeros::<u8>(scratch_byte_len).map_err(|e| {
+            Error::Msg(format!("CUDA scatter_add scratch allocation failed: {e:?}"))
+        })?),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+    let scratch = CudaStorage::new(Arc::new(scratch_buffer), alloc::vec![scratch_len]);
+
+    let out_byte_len =
+        crate::bytes::byte_len(input.buffer.dtype, out_numel, OperationKind::Storage)?;
+    let out_buffer = CudaBuffer {
+        len: out_numel,
+        dtype: input.buffer.dtype,
+        data: Arc::new(stream.alloc_zeros::<u8>(out_byte_len).map_err(|e| {
+            Error::Msg(format!("CUDA scatter_add output allocation failed: {e:?}"))
+        })?),
+        device: input.buffer.device.clone(),
+        device_id,
+    };
+
+    let out_numel_i32 = checked_i32(out_numel, "element count")?;
+    let src_numel_i32 = checked_i32(src_numel, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let axis_i32 = checked_i32(axis, "axis")?;
+    let idx_offset_i32 = checked_i32(index.offset_elements, "index offset")?;
+    let src_offset_i32 = checked_i32(src.offset_elements, "source offset")?;
+    let in_offset_i32 = checked_i32(input.offset_elements, "input offset")?;
+    let block_size = 256u32;
+
+    // Pass 1 runs even when the output is empty, so every source position's
+    // destination resolves to `-1` (an empty buffer accepts nothing) and the
+    // tape's backward sees the drops; its grid covers the source, not the
+    // output. With an empty source the zeros are never consulted: the ordered
+    // kernel's inner loop runs `j < 0` times.
+    if src_numel > 0 {
+        let map_grid = (src_numel_i32 as u32).div_ceil(block_size);
+        let map_config = cudarc::driver::LaunchConfig {
+            grid_dim: (map_grid, 1, 1),
+            block_dim: (block_size, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        // SAFETY: Launches the map kernel over the source with validated
+        // strides/offsets, writing the scratch pair allocation.
+        unsafe {
+            use cudarc::driver::PushKernelArg;
+            stream
+                .launch_builder(&map_fn)
+                .arg(&*index.buffer.data)
+                .arg(&*scratch.buffer.data)
+                .arg(&src_numel_i32)
+                .arg(&out_numel_i32)
+                .arg(&rank_i32)
+                .arg(&axis_i32)
+                .arg(&idx_offset_i32)
+                .arg(&src_offset_i32)
+                .arg(&out_shape_dev)
+                .arg(&idx_contig_dev)
+                .arg(&idx_strides_dev)
+                .arg(&src_strides_dev)
+                .arg(&out_contig_dev)
+                .launch(map_config)
+                .map_err(|e| Error::Msg(format!("CUDA scatter_add map launch failed: {e:?}")))?;
+        }
+    }
+    if out_numel == 0 {
+        return Ok((CudaStorage::new(Arc::new(out_buffer), out_shape), scratch));
+    }
+
+    // Pass 2: one thread per output position.
+    let ord_grid = (out_numel_i32 as u32).div_ceil(block_size);
+    let ord_config = cudarc::driver::LaunchConfig {
+        grid_dim: (ord_grid, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+    let mut out_buffer = out_buffer;
+    // SAFETY: Launches the ordered accumulation over the fresh output with
+    // validated strides/offsets; dtype_code was checked against the buffers.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&ord_fn)
+            .arg(&*input.buffer.data)
+            .arg(&*src.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&*scratch.buffer.data)
+            .arg(&out_numel_i32)
+            .arg(&src_numel_i32)
+            .arg(&rank_i32)
+            .arg(&dtype_code)
+            .arg(&in_offset_i32)
+            .arg(&out_contig_dev)
+            .arg(&in_strides_dev)
+            .launch(ord_config)
+            .map_err(|e| Error::Msg(format!("CUDA scatter_add ordered launch failed: {e:?}")))?;
+    }
+    Ok((CudaStorage::new(Arc::new(out_buffer), out_shape), scratch))
+}
+
+/// `scatter_add`'s source cotangent: gather `grad_out` at each recorded
+/// destination, zero where the forward dropped the write. The scratch pairs
+/// come from [`launch_scatter_add_ordered`].
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_scatter_add_backward_src(
+    grad_out: &CudaStorage,
+    scratch: &CudaStorage,
+    source_shape: &[usize],
+) -> Result<CudaStorage> {
+    let rank = source_shape.len();
+    let numel_src = crate::bytes::checked_numel(source_shape)?;
+    let dtype_code = match grad_out.buffer.dtype.builtin_id() {
+        Some(DTypeId::F32) => 0i32,
+        Some(DTypeId::I64) => 1i32,
+        _ => {
+            return Err(Error::UnsupportedDType {
+                dtype: grad_out.buffer.dtype,
+                backend: "Cuda",
+                op: "scatter_add backward",
+            });
+        }
+    };
+    let device_id = grad_out.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_scatter_add_backward")?;
+    let stream = grad_out.buffer.device.default_stream();
+
+    let out_contig = crate::layout::contiguous_strides(&grad_out.shape)
+        .strides()
+        .to_vec();
+    let out_contig_dev = dev_i32_arg(&stream, &out_contig, "stride")?;
+    let grad_strides_dev = dev_i32_arg(&stream, grad_out.strides.strides(), "stride")?;
+
+    let byte_len =
+        crate::bytes::byte_len(grad_out.buffer.dtype, numel_src, OperationKind::Storage)?;
+    let mut out_buffer = CudaBuffer {
+        len: numel_src,
+        dtype: grad_out.buffer.dtype,
+        data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+            Error::Msg(format!(
+                "CUDA scatter_add backward allocation failed: {e:?}"
+            ))
+        })?),
+        device: grad_out.buffer.device.clone(),
+        device_id,
+    };
+    if numel_src == 0 {
+        return Ok(CudaStorage::new(
+            Arc::new(out_buffer),
+            source_shape.to_vec(),
+        ));
+    }
+
+    let numel_i32 = checked_i32(numel_src, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let offset_i32 = checked_i32(grad_out.offset_elements, "grad offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches the backward gather over a fresh allocation with
+    // validated strides and offsets; scratch is the paired i64 scratch.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_out.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&*scratch.buffer.data)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&dtype_code)
+            .arg(&offset_i32)
+            .arg(&out_contig_dev)
+            .arg(&grad_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA scatter_add backward launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(
+        Arc::new(out_buffer),
+        source_shape.to_vec(),
+    ))
 }
 
 #[cfg(feature = "cuda")]
@@ -1422,6 +2790,102 @@ pub(crate) fn launch_repeat(input: &CudaStorage, repeats: &[usize]) -> Result<Cu
     Ok(CudaStorage::new(Arc::new(out_buffer), out_shape))
 }
 
+/// `repeat`'s cotangent: each source element's gradient is the sum over the
+/// output tiles that copied it. See `incin_cuda_repeat_backward` for why the
+/// tile walk is ordered the way it is and why the f64 sums are bitwise
+/// CPU-identical.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_repeat_backward(
+    grad_out: &CudaStorage,
+    repeats: &[usize],
+    source_shape: &[usize],
+) -> Result<CudaStorage> {
+    let rank = source_shape.len();
+    if repeats.len() != rank {
+        return Err(Error::Backend(BackendError::InvalidInput {
+            operation: OperationKind::Repeat,
+            reason: "repeat factors must match tensor rank",
+        }));
+    }
+    let numel_in = crate::bytes::checked_numel(source_shape)?;
+    let num_tiles = repeats.iter().try_fold(1usize, |acc, &factor| {
+        acc.checked_mul(factor)
+            .ok_or(ShapeError::ArithmeticOverflow {
+                operation: OperationKind::Repeat,
+                expression: "CUDA repeat tile count",
+            })
+    })?;
+
+    let device_id = grad_out.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_repeat_backward")?;
+    let stream = grad_out.buffer.device.default_stream();
+
+    let in_shape_dev = dev_i32_arg(&stream, source_shape, "shape")?;
+    let repeats_dev = dev_i32_arg(&stream, repeats, "repeats")?;
+    let grad_strides_dev = dev_i32_arg(&stream, grad_out.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, numel_in, OperationKind::Storage)?;
+    let mut out_buffer =
+        CudaBuffer {
+            len: numel_in,
+            dtype: DTypeId::F32.descriptor(),
+            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
+                Error::Msg(format!("CUDA repeat backward allocation failed: {e:?}"))
+            })?),
+            device: grad_out.buffer.device.clone(),
+            device_id,
+        };
+    // An empty source, or an empty tile set (some factor is 0), leaves every
+    // source gradient at zero - and keeps `cols`-style divisions inside the
+    // kernel off the zero-extent path the same way the forward does.
+    if numel_in == 0 || num_tiles == 0 {
+        return Ok(CudaStorage::new(
+            Arc::new(out_buffer),
+            source_shape.to_vec(),
+        ));
+    }
+
+    let numel_i32 = checked_i32(numel_in, "element count")?;
+    let rank_i32 = checked_i32(rank, "rank")?;
+    let num_tiles_i32 = checked_i32(num_tiles, "tile count")?;
+    let offset_i32 = checked_i32(grad_out.offset_elements, "grad offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches the tile-sum backward over a fresh allocation with
+    // validated strides, offsets, and a tile count the fold above proved
+    // non-overflowing.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_out.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&rank_i32)
+            .arg(&num_tiles_i32)
+            .arg(&offset_i32)
+            .arg(&in_shape_dev)
+            .arg(&repeats_dev)
+            .arg(&grad_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA repeat backward launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(
+        Arc::new(out_buffer),
+        source_shape.to_vec(),
+    ))
+}
+
 #[cfg(feature = "cuda")]
 pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStorage> {
     let rank = input.shape.len();
@@ -1555,4 +3019,88 @@ pub(crate) fn launch_diag(input: &CudaStorage, diagonal: i32) -> Result<CudaStor
             msg: "diag requires 1D or 2D tensor".into(),
         })
     }
+}
+
+/// `diag`'s cotangent for the EXTRACT form: zeros over the rank-2 input with
+/// the outgoing cotangent placed back on the extracted diagonal. The
+/// CONSTRUCT form's adjoint is the extract itself and goes through
+/// [`launch_diag`], keeping the two forms on one kernel and one
+/// out-length rule.
+#[cfg(feature = "cuda")]
+pub(crate) fn launch_diag_backward(
+    grad_out: &CudaStorage,
+    diagonal: i32,
+    input_shape: &[usize],
+) -> Result<CudaStorage> {
+    if input_shape.len() != 2 || grad_out.shape.len() != 1 {
+        return Err(Error::ShapeMismatch {
+            op: "diag",
+            expected: vec![1, 2],
+            got: vec![input_shape.len()],
+            msg: "diag backward needs a rank-2 input and a rank-1 cotangent".into(),
+        });
+    }
+    let cols = input_shape[1];
+    let numel_in = crate::bytes::checked_numel(input_shape)?;
+    let out_len = grad_out.shape[0];
+
+    let device_id = grad_out.buffer.device_id;
+    ensure_index_ops_loaded(device_id)?;
+    let dispatcher = crate::cuda::gpu::CpuCudaDispatcher::new(device_id)?;
+    let function = dispatcher.get_function("index_ops", "incin_cuda_diag_backward")?;
+    let stream = grad_out.buffer.device.default_stream();
+
+    let grad_strides_dev = dev_i32_arg(&stream, grad_out.strides.strides(), "stride")?;
+
+    let byte_len = crate::bytes::byte_len(DTypeId::F32, numel_in, OperationKind::Storage)?;
+    let mut out_buffer = CudaBuffer {
+        len: numel_in,
+        dtype: DTypeId::F32.descriptor(),
+        data: Arc::new(
+            stream
+                .alloc_zeros::<u8>(byte_len)
+                .map_err(|e| Error::Msg(format!("CUDA diag backward allocation failed: {e:?}")))?,
+        ),
+        device: grad_out.buffer.device.clone(),
+        device_id,
+    };
+    // No cell to fill (empty input) or no cotangent to place: the zeros
+    // already are the answer, and skipping the launch also keeps `idx /
+    // cols` off a zero `cols` the way every other launcher here does.
+    if numel_in == 0 || out_len == 0 {
+        return Ok(CudaStorage::new(Arc::new(out_buffer), input_shape.to_vec()));
+    }
+
+    let numel_i32 = checked_i32(numel_in, "element count")?;
+    let cols_i32 = checked_i32(cols, "extent")?;
+    let out_len_i32 = checked_i32(out_len, "element count")?;
+    let offset_i32 = checked_i32(grad_out.offset_elements, "grad offset")?;
+    let block_size = 256u32;
+    let grid_size = (numel_i32 as u32).div_ceil(block_size);
+    let config = cudarc::driver::LaunchConfig {
+        grid_dim: (grid_size, 1, 1),
+        block_dim: (block_size, 1, 1),
+        shared_mem_bytes: 0,
+    };
+
+    // SAFETY: Launches the diagonal scatter over a fresh allocation with
+    // validated extents and offsets; `numel_in > 0` proved `cols > 0`.
+    unsafe {
+        let out_u8 = Arc::get_mut(&mut out_buffer.data)
+            .ok_or_else(|| Error::Msg("Output buffer unexpectedly shared".into()))?;
+        use cudarc::driver::PushKernelArg;
+        stream
+            .launch_builder(&function)
+            .arg(&*grad_out.buffer.data)
+            .arg(&mut *out_u8)
+            .arg(&numel_i32)
+            .arg(&cols_i32)
+            .arg(&out_len_i32)
+            .arg(&diagonal)
+            .arg(&offset_i32)
+            .arg(&grad_strides_dev)
+            .launch(config)
+            .map_err(|e| Error::Msg(format!("CUDA diag backward launch failed: {e:?}")))?;
+    }
+    Ok(CudaStorage::new(Arc::new(out_buffer), input_shape.to_vec()))
 }

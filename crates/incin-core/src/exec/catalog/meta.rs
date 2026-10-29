@@ -50,18 +50,27 @@ attributes! {
     LerpAttributes { weight: f64 }
     ShapeAttributes { shape: Vec<usize> }
     RepeatAttributes { repeats: Vec<usize> }
+    RepeatInterleaveAttributes { repeats: usize, axis: usize }
     TransposeAttributes { first: usize, second: usize }
     NarrowAttributes { axis: usize, start: usize, length: usize }
     SliceAttributes { ranges: Vec<(usize, usize)> }
     FlattenAttributes { start_axis: usize, end_axis: usize }
     ScatterAttributes { axis: usize, duplicate_indices: DuplicateIndexRule }
     OneHotAttributes { depth: usize }
+    BincountAttributes { bins: usize }
     PadAttributes { padding: Vec<(usize, usize)>, value: f64 }
     DiagonalAttributes { offset: i64 }
     ChunkAttributes { chunks: usize, axis: usize }
     SplitAttributes { split_size: usize, axis: usize }
     AddmmAttributes { alpha: f64, beta: f64 }
     AttentionAttributes { scale: Option<f64>, has_mask: bool }
+    // Issue #104: the fused attention contract. `causal` is a property of
+    // the operation rather than a mask operand (a caller-supplied mask
+    // tensor cannot be block-skipped safely in general). The GQA grouping
+    // is derived from the operand shapes -- query heads over key/value
+    // heads -- and refused by validation when it does not divide, so it
+    // needs no attribute of its own.
+    FusedAttentionAttributes { scale: Option<f64>, causal: bool }
     UnfoldAttributes { axis: usize, size: usize, step: usize }
     PixelShuffleAttributes { upscale_factor: usize }
     GroupNormAttributes { groups: usize, epsilon: f64 }

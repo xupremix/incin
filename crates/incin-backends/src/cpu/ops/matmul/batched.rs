@@ -42,6 +42,7 @@ pub(crate) fn batched_matmul_impl(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<
 /// `B` slices from leaving `B + 1` entries on the tape, and stops the backward
 /// closure from pushing entries during a walk that has already drained it.
 fn batched_gemm(lhs: &CpuStorage, rhs: &CpuStorage) -> Result<CpuStorage> {
+    ensure_matmul_dtypes(lhs, rhs)?;
     let (lhs_rank, rhs_rank) = (lhs.shape.len(), rhs.shape.len());
     if lhs_rank < 2 || rhs_rank < 2 {
         return Err(Error::ShapeMismatch {

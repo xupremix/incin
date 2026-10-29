@@ -47,7 +47,8 @@ pub mod prelude {
     pub use super::base::PlacedTensorError;
     pub use super::base::Tensor;
     pub use super::device::{
-        ConstDevice, Cpu, Device, DeviceId, DeviceKind, DevicePreference, DeviceSet, DeviceSetError,
+        ConstDevice, Cpu, Device, DeviceId, DeviceKey, DeviceKind, DevicePreference, DeviceSet,
+        DeviceSetError,
     };
     #[cfg(feature = "cuda")]
     pub use super::device::{Cuda, CudaN};
@@ -59,7 +60,8 @@ pub mod prelude {
 
     pub use super::dtype::{
         BoolDType, BuiltinDType, ConstDType, DType, DTypeDescriptor, DTypeId, DTypeKey, DTypeKind,
-        FloatDType, IntDType, PlainDType, Q8_0, QuantDType, StorageEncoding, TensorElement,
+        DTypeRegistry, F8E4M3, F8E5M2, FloatDType, IntDType, MXFP4, NVFP4, PlainDType, Q8_0,
+        QuantDType, StorageEncoding, TensorElement,
     };
     pub use super::grad::{Grad, GradJoin, JoinedGrad, NoGrad, RequiresGrad};
     pub use super::matmul::MatMulShape;

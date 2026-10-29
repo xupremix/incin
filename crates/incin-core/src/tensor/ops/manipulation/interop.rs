@@ -30,6 +30,8 @@ pub(crate) fn is_valid_scalar_type<E: 'static>() -> bool {
         || tid == core::any::TypeId::of::<f64>()
         || tid == core::any::TypeId::of::<half::f16>()
         || tid == core::any::TypeId::of::<half::bf16>()
+        || tid == core::any::TypeId::of::<crate::tensor::dtype::F8E4M3>()
+        || tid == core::any::TypeId::of::<crate::tensor::dtype::F8E5M2>()
 }
 
 /// Whether `E` is the exact Rust type the tensor's `dtype` stores.
@@ -41,12 +43,16 @@ pub(crate) fn is_valid_scalar_type<E: 'static>() -> bool {
 /// `1065353216` rather than reporting a mismatch, which is a wrong answer
 /// with no error attached to it.
 ///
-/// `bool` is deliberately absent. It is not a stored dtype at all; both
-/// callers handle it before reaching here, as a per-element truthy test
-/// rather than a reinterpret.
+/// `bool` matches [`DTypeId::Bool`](crate::tensor::dtype::DTypeId::Bool),
+/// whose storage is one byte per element with only `0`/`1` valid; the
+/// callers validate each byte rather than reinterpreting it.
 ///
-/// `Q8_0` is also absent, and matches nothing: a block-quantized element has
+/// `Q8_0` is absent, and matches nothing: a block-quantized element has
 /// no scalar Rust type to be read as without dequantizing first.
+///
+/// Width is never consulted: `F8E4M3`/`F8E5M2` are 1 byte wide like `u8`
+/// and `bool`, and matching on width alone would misread one as the other.
+/// The `TypeId` equality below is what keeps them apart.
 pub(crate) fn scalar_type_matches_dtype<E: 'static>(
     dtype: crate::tensor::dtype::DTypeDescriptor,
 ) -> bool {
@@ -54,6 +60,8 @@ pub(crate) fn scalar_type_matches_dtype<E: 'static>(
     let tid = core::any::TypeId::of::<E>();
     match dtype.builtin_id() {
         Some(DTypeId::U8) => tid == core::any::TypeId::of::<u8>(),
+        Some(DTypeId::F8E4M3) => tid == core::any::TypeId::of::<crate::tensor::dtype::F8E4M3>(),
+        Some(DTypeId::F8E5M2) => tid == core::any::TypeId::of::<crate::tensor::dtype::F8E5M2>(),
         Some(DTypeId::U32) => tid == core::any::TypeId::of::<u32>(),
         Some(DTypeId::I64) => tid == core::any::TypeId::of::<i64>(),
         Some(DTypeId::BF16) => tid == core::any::TypeId::of::<half::bf16>(),
@@ -69,6 +77,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Cast the tensor's elements to another dtype.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// let d = t.to_dtype::<f64>().unwrap();
+    /// assert_eq!(d.to_vec1::<f64>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn to_dtype<T2: crate::tensor::dtype::DType<Arg = ()>>(
         &self,
     ) -> Result<crate::shapes::Dense<S, B, T2, G, Local>>
@@ -102,15 +121,26 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Extracts a single scalar value from a 0D or 1D tensor.
     /// This will bring the tensor data to the CPU and read the bytes.
     ///
-    /// `bool` is handled as a truthy (any-nonzero-byte) conversion rather
-    /// than a raw reinterpret, regardless of whether the tensor's actual
-    /// dtype element size happens to match `size_of::<bool>()`: `bool` has
-    /// only two valid bit patterns (`0x00`/`0x01`), and there is no
-    /// `DTypeId::Bool` (ONNX-style boolean tensors are stored as another
-    /// dtype, typically `U8`, and read out via this truthy conversion), so
-    /// reinterpreting an arbitrary stored byte as `bool` via
-    /// `read_unaligned` would be undefined behavior whenever that byte
-    /// isn't `0` or `1`.
+    /// `bool` tensors ([`DTypeId::Bool`](crate::tensor::dtype::DTypeId::Bool))
+    /// are stored as one byte per element, of which only `0` and `1` are
+    /// valid. Extraction validates each byte and rejects anything else
+    /// rather than reinterpreting an arbitrary stored byte as `bool` via
+    /// `read_unaligned`, which would be undefined behavior whenever that
+    /// byte isn't `0` or `1`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[7.0f32]]).unwrap(); // one element, any shape
+    /// let v: f32 = t.to_scalar().unwrap();
+    /// assert_eq!(v, 7.0);
+    /// // A multi-element tensor has no single scalar to extract.
+    /// let m = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// assert!(m.to_scalar::<f32>().is_err());
+    /// ```
     pub fn to_scalar<E: Copy + 'static>(&self) -> Result<E>
     where
         B: HostInterop,
@@ -160,6 +190,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                     )));
                 }
             };
+            debug_assert!(
+                scalar_type_matches_dtype::<E>(dtype),
+                "bool scalar read without a matching Bool dtype"
+            );
             // SAFETY: `E` is verified to be exactly `bool` above.
             return Ok(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
         }
@@ -174,12 +208,112 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                 elem_size
             )));
         }
+        debug_assert!(
+            scalar_type_matches_dtype::<E>(dtype),
+            "scalar read without a matching dtype"
+        );
         // SAFETY: `E` is verified to be a primitive scalar numeric type and bytes.len() == elem_size.
         let val = unsafe { core::ptr::read_unaligned(bytes.as_ptr() as *const E) };
         Ok(val)
     }
 
+    /// Extracts every element as the tensor's own statically-known element type.
+    ///
+    /// The typed counterpart to [`to_vec1`](Self::to_vec1): where `to_vec1::<E>`
+    /// checks at runtime that `E` is the dtype's stored Rust type, here the
+    /// compiler already knows it (`K: PlainDType`), so there is no `TypeId`
+    /// parameter to get wrong. The untyped `to_vec1` remains for `Dyn`-dtype
+    /// tensors, whose element type is only known at runtime.
+    ///
+    /// Element types the untyped extractor names (the built-ins) take exactly
+    /// the path they always took, including `bool`'s per-byte validation.
+    /// Any other `TensorElement` - post-D-110 this includes downstream POD
+    /// newtypes - is read through a size contract against the descriptor's
+    /// encoding instead: the chunk width must equal both `size_of::<Elem>()`
+    /// and the encoding's scalar width. Cross-type reinterpretation is
+    /// impossible here because the compiler pins the output to `K::Elem`;
+    /// what the size contract cannot check is whether a backend fabricated
+    /// byte patterns that are not valid values of a niche-carrying `Elem`,
+    /// which is why [`TensorElement`](crate::tensor::dtype::TensorElement)
+    /// documents the valid-value round-trip
+    /// as the implementor's proof obligation.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let values = t.to_vec_elem().unwrap();
+    /// assert_eq!(values, vec![1.0, 2.0, 3.0, 4.0]);
+    /// ```
+    pub fn to_vec_elem(&self) -> Result<alloc::vec::Vec<K::Elem>>
+    where
+        B: HostInterop,
+        K: crate::tensor::dtype::PlainDType,
+    {
+        if is_valid_scalar_type::<K::Elem>() {
+            return self.to_vec1::<K::Elem>();
+        }
+        let bytes = B::to_bytes(&self.inner)?;
+        let num_elements = S::checked_numel(
+            &self.shape_buf_value(),
+            crate::shapes::error::OperationKind::Storage,
+        )?;
+        let dtype = self.dtype();
+        let elem_size = core::mem::size_of::<K::Elem>();
+        let expected_elem_size = dtype.encoding().scalar_bytes().ok_or_else(|| {
+            crate::err::Error::Msg(alloc::format!(
+                "Element extraction requires a scalar encoding. Tensor dtype {:?} is block-packed and has no per-element Rust type",
+                dtype,
+            ))
+        })?;
+        if elem_size != expected_elem_size {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Element size mismatch converting to vec. Tensor dtype {:?} element size {} vs element type {} size {}",
+                dtype,
+                expected_elem_size,
+                core::any::type_name::<K::Elem>(),
+                elem_size,
+            )));
+        }
+        let expected_bytes = num_elements.checked_mul(elem_size).ok_or(
+            crate::shapes::error::ShapeError::ArithmeticOverflow {
+                operation: crate::shapes::error::OperationKind::Storage,
+                expression: "element count * element size",
+            },
+        )?;
+        if bytes.len() != expected_bytes {
+            return Err(crate::err::Error::Msg(alloc::format!(
+                "Size mismatch when converting to vec. Tensor dtype bytes: {}, expected: {}",
+                bytes.len(),
+                expected_bytes,
+            )));
+        }
+        let mut out = alloc::vec::Vec::with_capacity(num_elements);
+        for chunk in bytes.chunks_exact(elem_size) {
+            // SAFETY: `chunk` is exactly `size_of::<K::Elem>()` bytes, and
+            // `K::Elem` is this dtype's own stored element type (pinned by
+            // the `PlainDType` bound, not chosen by the caller), whose
+            // implementor upholds `TensorElement`'s valid-value round-trip.
+            let val = unsafe { core::ptr::read_unaligned(chunk.as_ptr() as *const K::Elem) };
+            out.push(val);
+        }
+        Ok(out)
+    }
+
     /// Extracts a 1D vector of scalars from this tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// assert_eq!(t.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+    /// ```
     pub fn to_vec1<E: Copy + 'static>(&self) -> Result<alloc::vec::Vec<E>>
     where
         B: HostInterop,
@@ -226,18 +360,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                         )));
                     }
                 };
+                debug_assert!(
+                    scalar_type_matches_dtype::<E>(dtype),
+                    "bool vector read without a matching Bool dtype"
+                );
                 // SAFETY: `E` is verified to be exactly `bool` above.
                 out.push(unsafe { core::ptr::read_unaligned(&val as *const bool as *const E) });
             }
             return Ok(out);
-        }
-
-        if !scalar_type_matches_dtype::<E>(dtype) {
-            return Err(crate::err::Error::Msg(alloc::format!(
-                "Type mismatch when converting to vec. Tensor dtype {:?} cannot be extracted as {}: the bytes would be reinterpreted rather than converted",
-                dtype,
-                core::any::type_name::<E>()
-            )));
         }
 
         let elem_size = core::mem::size_of::<E>();
@@ -260,10 +390,60 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         }
         let mut out = alloc::vec::Vec::with_capacity(num_elements);
         for chunk in bytes.chunks_exact(elem_size) {
+            debug_assert!(
+                scalar_type_matches_dtype::<E>(dtype),
+                "vector read without a matching dtype"
+            );
             // SAFETY: `E` is verified to be a primitive scalar type above and chunk is elem_size bytes.
             let val = unsafe { core::ptr::read_unaligned(chunk.as_ptr() as *const E) };
             out.push(val);
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_valid_scalar_type, scalar_type_matches_dtype};
+    use crate::tensor::dtype::{DTypeId, F8E4M3, F8E5M2};
+
+    /// The u8-width collision audit (issue #94): fp8 shares `scalar(1, 1)`
+    /// with `u8`/`bool`, so every 1-byte dtype must match only its own Rust
+    /// type. A width-only check would read fp8 bytes as `u8` integers.
+    #[test]
+    fn one_byte_dtypes_match_only_their_own_rust_type() {
+        assert!(scalar_type_matches_dtype::<u8>(DTypeId::U8.descriptor()));
+        assert!(!scalar_type_matches_dtype::<u8>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<u8>(
+            DTypeId::F8E5M2.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<u8>(DTypeId::Bool.descriptor()));
+
+        assert!(scalar_type_matches_dtype::<F8E4M3>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E4M3>(
+            DTypeId::F8E5M2.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E4M3>(
+            DTypeId::U8.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E5M2>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+        assert!(scalar_type_matches_dtype::<F8E5M2>(
+            DTypeId::F8E5M2.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<F8E5M2>(
+            DTypeId::U8.descriptor()
+        ));
+        assert!(!scalar_type_matches_dtype::<bool>(
+            DTypeId::F8E4M3.descriptor()
+        ));
+
+        assert!(is_valid_scalar_type::<F8E4M3>());
+        assert!(is_valid_scalar_type::<F8E5M2>());
     }
 }

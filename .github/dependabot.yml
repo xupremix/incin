@@ -19,6 +19,14 @@ updates:
       - dependencies
       - area:editor
       - type:maintenance
+    ignore:
+      # @types/vscode is not a dependency to keep current: it declares the
+      # oldest VS Code whose API the extension is allowed to reach for, and
+      # vsce refuses to package when it runs ahead of engines.vscode. Bumping
+      # it either breaks packaging or silently narrows who can install the
+      # extension, so the floor moves by hand when the extension needs a newer
+      # API, together with engines.vscode.
+      - dependency-name: "@types/vscode"
 
   - package-ecosystem: github-actions
     directory: /

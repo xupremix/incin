@@ -35,6 +35,11 @@ def disposition(path: str, code: str) -> tuple[str, str]:
         return ("macro-generated internal transition", "macro compile fixtures")
     if "panic!(\"paranoid-validation" in code:
         return ("opt-in invariant assertion", "exec proof tests")
+    if "refuses an oversized allocation" in code or "refuses an oversized upload" in code:
+        return (
+            "infallible API boundary: programmer error with explicit message; fallible twin returns typed Err",
+            "wgpu_launch_limits refusal tests; storage.rs pre-length limit check",
+        )
     return ("statically proven internal transition", "FND-003 classification and focused crate tests")
 
 

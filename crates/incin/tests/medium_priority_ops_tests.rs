@@ -62,7 +62,7 @@ fn test_fused_matmul_and_sdpa() -> Result<()> {
         &q,
         &k,
         &v,
-        None::<&Tensor<Dyn, DefaultBackend>>,
+        None::<&Tensor<Dyn, DefaultBackend, f32, NoGrad>>,
         None,
     )?;
     assert_eq!(attn.dims().to_vec(), vec![1, 2, 4]);

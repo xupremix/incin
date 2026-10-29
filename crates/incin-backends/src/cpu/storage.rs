@@ -15,7 +15,7 @@ use half::{bf16, f16};
 use incin_core::error::{Error, FloatToIntPolicy, Result, convert_f64_to_i64};
 use incin_core::exec::{Alignment, TensorMeta};
 use incin_core::tensor::device::DeviceId;
-use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId, F8E4M3, F8E5M2};
 
 use crate::cpu::stride;
 
@@ -30,6 +30,7 @@ use crate::cpu::stride;
 pub use incin_core::exec::TensorId;
 
 pub use crate::quant::BlockQ8_0;
+pub use crate::quant::{BlockMXFP4, BlockNVFP4};
 
 #[derive(Debug, Clone, PartialEq)]
 /// Implementation of `CpuBuffer` for the respective backend..
@@ -48,8 +49,16 @@ pub enum CpuBuffer {
     F16(Vec<f16>),
     /// `BF16`.
     BF16(Vec<bf16>),
+    /// `F8E4M3` (OCP E4M3, one byte per element).
+    F8E4M3(Vec<F8E4M3>),
+    /// `F8E5M2` (OCP E5M2, one byte per element).
+    F8E5M2(Vec<F8E5M2>),
     /// `Q8_0`.
     Q8_0(Vec<BlockQ8_0>),
+    /// `NVFP4` (16 E2M1 values + E4M3 scale per 9-byte block).
+    NVFP4(Vec<BlockNVFP4>),
+    /// `MXFP4` (32 E2M1 values + E8M0 scale per 17-byte block).
+    MXFP4(Vec<BlockMXFP4>),
     /// `Bool`.
     Bool(Vec<u8>),
 }
@@ -64,7 +73,11 @@ impl CpuBuffer {
             Self::I64(_) => DTypeId::I64,
             Self::F16(_) => DTypeId::F16,
             Self::BF16(_) => DTypeId::BF16,
+            Self::F8E4M3(_) => DTypeId::F8E4M3,
+            Self::F8E5M2(_) => DTypeId::F8E5M2,
             Self::Q8_0(_) => DTypeId::Q8_0,
+            Self::NVFP4(_) => DTypeId::NVFP4,
+            Self::MXFP4(_) => DTypeId::MXFP4,
             Self::Bool(_) => DTypeId::Bool,
         }
     }
@@ -82,7 +95,11 @@ impl CpuBuffer {
             Self::I64(_) => Alignment::of::<i64>(),
             Self::F16(_) => Alignment::of::<f16>(),
             Self::BF16(_) => Alignment::of::<bf16>(),
+            Self::F8E4M3(_) => Alignment::of::<F8E4M3>(),
+            Self::F8E5M2(_) => Alignment::of::<F8E5M2>(),
             Self::Q8_0(_) => Alignment::of::<BlockQ8_0>(),
+            Self::NVFP4(_) => Alignment::of::<BlockNVFP4>(),
+            Self::MXFP4(_) => Alignment::of::<BlockMXFP4>(),
             Self::Bool(_) => Alignment::of::<u8>(),
         }
     }
@@ -98,7 +115,11 @@ impl CpuBuffer {
             CpuBuffer::I64(v) => v.len(),
             CpuBuffer::F16(v) => v.len(),
             CpuBuffer::BF16(v) => v.len(),
+            CpuBuffer::F8E4M3(v) => v.len(),
+            CpuBuffer::F8E5M2(v) => v.len(),
             CpuBuffer::Q8_0(v) => v.len() * 32,
+            CpuBuffer::NVFP4(v) => v.len() * 16,
+            CpuBuffer::MXFP4(v) => v.len() * 32,
             CpuBuffer::Bool(v) => v.len(),
         }
     }
@@ -134,9 +155,23 @@ impl CpuBuffer {
                 CpuBuffer::BF16(v) => {
                     core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2)
                 }
+                CpuBuffer::F8E4M3(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len())
+                }
+                CpuBuffer::F8E5M2(v) => {
+                    core::slice::from_raw_parts(v.as_ptr() as *const u8, v.len())
+                }
                 CpuBuffer::Q8_0(v) => core::slice::from_raw_parts(
                     v.as_ptr() as *const u8,
                     v.len() * core::mem::size_of::<BlockQ8_0>(),
+                ),
+                CpuBuffer::NVFP4(v) => core::slice::from_raw_parts(
+                    v.as_ptr() as *const u8,
+                    v.len() * core::mem::size_of::<BlockNVFP4>(),
+                ),
+                CpuBuffer::MXFP4(v) => core::slice::from_raw_parts(
+                    v.as_ptr() as *const u8,
+                    v.len() * core::mem::size_of::<BlockMXFP4>(),
                 ),
                 CpuBuffer::Bool(v) => v.as_slice(),
             }
@@ -167,6 +202,12 @@ impl CpuBuffer {
             CpuBuffer::BF16(_) => {
                 CpuBuffer::BF16(values.into_iter().map(half::bf16::from_f64).collect())
             }
+            CpuBuffer::F8E4M3(_) => {
+                CpuBuffer::F8E4M3(values.into_iter().map(F8E4M3::from_f64).collect())
+            }
+            CpuBuffer::F8E5M2(_) => {
+                CpuBuffer::F8E5M2(values.into_iter().map(F8E5M2::from_f64).collect())
+            }
             CpuBuffer::Bool(_) => CpuBuffer::Bool(
                 values
                     .into_iter()
@@ -176,6 +217,20 @@ impl CpuBuffer {
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
                     dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "construct arithmetic result",
+                });
+            }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "construct arithmetic result",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
                     backend: "cpu",
                     op: "construct arithmetic result",
                 });
@@ -195,6 +250,8 @@ impl CpuBuffer {
             CpuBuffer::I64(v) => v[i] as f64,
             CpuBuffer::F16(v) => v[i].to_f64(),
             CpuBuffer::BF16(v) => v[i].to_f64(),
+            CpuBuffer::F8E4M3(v) => v[i].to_f64(),
+            CpuBuffer::F8E5M2(v) => v[i].to_f64(),
             CpuBuffer::Bool(v) => {
                 if v[i] != 0 {
                     1.0
@@ -205,6 +262,29 @@ impl CpuBuffer {
             CpuBuffer::Q8_0(v) => {
                 let block = &v[i / 32];
                 block.d.to_f64() * f64::from(block.qs[i % 32])
+            }
+            CpuBuffer::NVFP4(v) => {
+                use incin_core::tensor::dtype::fp4;
+                let block = &v[i / 16];
+                let byte = block.data[(i % 16) / 2];
+                let nibble = if i.is_multiple_of(2) {
+                    byte & 0x0F
+                } else {
+                    byte >> 4
+                };
+                f64::from(fp4::e2m1_to_f32(nibble))
+                    * f64::from(incin_core::tensor::dtype::F8E4M3::from_bits(block.scale).to_f32())
+            }
+            CpuBuffer::MXFP4(v) => {
+                use incin_core::tensor::dtype::fp4;
+                let block = &v[i / 32];
+                let byte = block.data[(i % 32) / 2];
+                let nibble = if i.is_multiple_of(2) {
+                    byte & 0x0F
+                } else {
+                    byte >> 4
+                };
+                f64::from(fp4::e2m1_to_f32(nibble)) * f64::from(fp4::e8m0_to_f32(block.scale))
             }
         }
     }
@@ -300,9 +380,25 @@ impl CpuStorage {
             CpuBuffer::I64(_) => CpuBuffer::I64(vec![1i64; total]),
             CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f64(1.0); total]),
             CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f64(1.0); total]),
+            CpuBuffer::F8E4M3(_) => CpuBuffer::F8E4M3(vec![F8E4M3::from_f64(1.0); total]),
+            CpuBuffer::F8E5M2(_) => CpuBuffer::F8E5M2(vec![F8E5M2::from_f64(1.0); total]),
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
                     dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "autograd seed",
+                });
+            }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "autograd seed",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
                     backend: "cpu",
                     op: "autograd seed",
                 });
@@ -326,9 +422,25 @@ impl CpuStorage {
             CpuBuffer::I64(_) => CpuBuffer::I64(vec![0i64; total]),
             CpuBuffer::F16(_) => CpuBuffer::F16(vec![half::f16::from_f32(0.0); total]),
             CpuBuffer::BF16(_) => CpuBuffer::BF16(vec![half::bf16::from_f32(0.0); total]),
+            CpuBuffer::F8E4M3(_) => CpuBuffer::F8E4M3(vec![F8E4M3::from_bits(0); total]),
+            CpuBuffer::F8E5M2(_) => CpuBuffer::F8E5M2(vec![F8E5M2::from_bits(0); total]),
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
                     dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "zeros_like",
+                });
+            }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "zeros_like",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
                     backend: "cpu",
                     op: "zeros_like",
                 });
@@ -421,8 +533,30 @@ impl CpuStorage {
                 values[flat].to_f64(),
                 FloatToIntPolicy::Exact,
             ),
+            CpuBuffer::F8E4M3(values) => convert_f64_to_i64(
+                operation,
+                DTypeId::F8E4M3.descriptor(),
+                values[flat].to_f64(),
+                FloatToIntPolicy::Exact,
+            ),
+            CpuBuffer::F8E5M2(values) => convert_f64_to_i64(
+                operation,
+                DTypeId::F8E5M2.descriptor(),
+                values[flat].to_f64(),
+                FloatToIntPolicy::Exact,
+            ),
             CpuBuffer::Q8_0(_) => Err(Error::UnsupportedDType {
                 dtype: DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: operation,
+            }),
+            CpuBuffer::NVFP4(_) => Err(Error::UnsupportedDType {
+                dtype: DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: operation,
+            }),
+            CpuBuffer::MXFP4(_) => Err(Error::UnsupportedDType {
+                dtype: DTypeId::MXFP4.descriptor(),
                 backend: "cpu",
                 op: operation,
             }),
@@ -590,9 +724,39 @@ impl CpuStorage {
                 }
                 CpuBuffer::BF16(out)
             }
+            CpuBuffer::F8E4M3(_) => {
+                let mut out: Vec<F8E4M3> = Vec::with_capacity(total);
+                for _ in 0..total {
+                    out.push(F8E4M3::from_f64(self.get(&multi_idx)));
+                    increment_index(&mut multi_idx, &self.shape);
+                }
+                CpuBuffer::F8E4M3(out)
+            }
+            CpuBuffer::F8E5M2(_) => {
+                let mut out: Vec<F8E5M2> = Vec::with_capacity(total);
+                for _ in 0..total {
+                    out.push(F8E5M2::from_f64(self.get(&multi_idx)));
+                    increment_index(&mut multi_idx, &self.shape);
+                }
+                CpuBuffer::F8E5M2(out)
+            }
             CpuBuffer::Q8_0(_) => {
                 return Err(Error::UnsupportedDType {
                     dtype: DTypeId::Q8_0.descriptor(),
+                    backend: "cpu",
+                    op: "materialize non-contiguous storage",
+                });
+            }
+            CpuBuffer::NVFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::NVFP4.descriptor(),
+                    backend: "cpu",
+                    op: "materialize non-contiguous storage",
+                });
+            }
+            CpuBuffer::MXFP4(_) => {
+                return Err(Error::UnsupportedDType {
+                    dtype: DTypeId::MXFP4.descriptor(),
                     backend: "cpu",
                     op: "materialize non-contiguous storage",
                 });
@@ -673,9 +837,47 @@ pub(crate) fn scatter_into_zeros(
             }
             CpuBuffer::BF16(out)
         }
+        CpuBuffer::F8E4M3(_) => {
+            let mut out: Vec<F8E4M3> = vec![F8E4M3::from_bits(0); total];
+            for _ in 0..value_count {
+                let mut flat_dest = 0usize;
+                for (axis, i) in multi_idx.iter().enumerate() {
+                    flat_dest += (region_start[axis] + i) * out_strides[axis];
+                }
+                out[flat_dest] = F8E4M3::from_f64(values.get(&multi_idx));
+                increment_index(&mut multi_idx, &values.shape);
+            }
+            CpuBuffer::F8E4M3(out)
+        }
+        CpuBuffer::F8E5M2(_) => {
+            let mut out: Vec<F8E5M2> = vec![F8E5M2::from_bits(0); total];
+            for _ in 0..value_count {
+                let mut flat_dest = 0usize;
+                for (axis, i) in multi_idx.iter().enumerate() {
+                    flat_dest += (region_start[axis] + i) * out_strides[axis];
+                }
+                out[flat_dest] = F8E5M2::from_f64(values.get(&multi_idx));
+                increment_index(&mut multi_idx, &values.shape);
+            }
+            CpuBuffer::F8E5M2(out)
+        }
         CpuBuffer::Q8_0(_) => {
             return Err(Error::UnsupportedDType {
                 dtype: DTypeId::Q8_0.descriptor(),
+                backend: "cpu",
+                op: "scatter gradient",
+            });
+        }
+        CpuBuffer::NVFP4(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::NVFP4.descriptor(),
+                backend: "cpu",
+                op: "scatter gradient",
+            });
+        }
+        CpuBuffer::MXFP4(_) => {
+            return Err(Error::UnsupportedDType {
+                dtype: DTypeId::MXFP4.descriptor(),
                 backend: "cpu",
                 op: "scatter gradient",
             });

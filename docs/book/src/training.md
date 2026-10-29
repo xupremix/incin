@@ -23,6 +23,14 @@ parameterize a loss's own type: `MSELoss<Sum>` sums instead of averaging,
 and `MSELoss<NoneReduction>` returns the per-element loss unreduced, each a
 different type rather than a runtime flag.
 
+Beyond MSE/L1/cross-entropy/BCE: `SmoothL1Loss` (Huber, configurable beta,
+linear past the kink with the sign slope), `NLLLoss` over log-probabilities
+(pair it with the `LogSoftmax` module), and token-level cross-entropy over
+`[B, T, C]` logits with `[B, T]` targets, which flattens onto the rank-2
+core and restores the `[B, T]` geometry for `NoneReduction` (no
+`ignore_index` convention: the rank-2 loss has none, so neither does this
+path).
+
 ## Optimizers
 
 ```rust,no_run
@@ -45,10 +53,15 @@ optim.step(&grads)?;
 # Ok::<(), incin::Error>(())
 ```
 
-`SGD` and `AdamW` use `from_module(&model, lr)` for the normal module path, or
-`from_group(ParameterGroup::from_module(&model)?, lr)` when a caller needs to
-assemble a homogeneous group explicitly. Both use `step(&grads)`. The
-learning rate is a public field (`optim.lr`), not hidden behind a setter.
+`SGD`, `Adam`, `AdamW` and `RMSprop` use `from_module(&model, lr)` for the
+normal module path, or `from_group(ParameterGroup::from_module(&model)?, lr)`
+when a caller needs to assemble a homogeneous group explicitly. `SGD`
+carries momentum (with velocity in its state dict), classic coupled weight
+decay, and a fail-closed Nesterov flag that refuses to step at zero
+momentum; `RMSprop` carries its squared average the same way. All use
+`step(&grads)` (`step_strict` refuses a partially-reached group instead of
+skipping it). The learning rate is a public field (`optim.lr`), not hidden
+behind a setter.
 
 A step that reaches *no* parameter in the group is an error, not a silent
 `Ok(())`. That case is nearly always a bug: a `Gradients` from a different
@@ -58,6 +71,37 @@ since the tape is thread-local. Skipping *some* parameters stays legal.
 One consequence worth knowing: a committed step reassigns parameter storage,
 so the `Gradients` value that produced it no longer matches anything. Collect
 fresh gradients for each step rather than reusing one across two.
+
+Resuming works the same way, plus one persisted counter. Adam and AdamW
+`state_dict` writes the `m`/`v` moments next to a scalar `step` entry, and
+`load_state_dict` restores all three, so bias correction continues with the
+same `t` the moments were accumulated under. Dictionaries written before the
+counter entry restore moments only and keep the loader's current counter
+(`set_step_count` sets one explicitly); a present-but-malformed counter is a
+typed error, never a silent default.
+
+### Per-parameter learning rates
+
+`set_param_lr("encoder.layer.0", 1e-5)` pins a rate for a parameter subtree
+(longest dotted-prefix match, segment-aware); unmatched parameters keep the
+base rate. Pins are absolute, so a scheduler ramp moves the base while pinned
+groups stay put; `clear_param_lrs` drops every pin. Overrides are validated
+at step time, naming the parameter, and are not part of `state_dict`
+(re-apply after loading, like `lr` itself):
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let model = Linear::<s![4, 2], B>::build(())?;
+let mut optim = SGD::<B>::from_module(&model, 1e-2)?;
+
+// Freeze the weight, train the bias.
+optim.set_param_lr("weight", 0.0);
+assert_eq!(optim.lr_for("weight"), 0.0);
+assert_eq!(optim.lr_for("bias"), 1e-2);
+# Ok::<(), incin::Error>(())
+```
 
 ## Gradient clipping
 
@@ -130,9 +174,13 @@ for _step in 0..3 {
 # Ok::<(), incin::Error>(())
 ```
 
-`ConstantLR`, `LinearLR`, `CosineAnnealingLR`, and `StepLR` all implement the
+`ConstantLR`, `LinearLR`, `CosineAnnealingLR`, `StepLR`,
+`ExponentialLR`, `LinearWarmup` and `CosineWithWarmup` all implement the
 same `LRScheduler` trait (`get_lr() -> f64`, `step(&mut self)`), so swapping
-one for another is a one-line change.
+one for another is a one-line change. Warmup schedulers ramp from zero over
+their warmup steps before following their decay; every optimizer binds with
+`optim.step_scheduler(&scheduler)`, which copies the current value into the
+base rate (per-parameter pins stay absolute).
 
 ## The whole loop
 
@@ -169,3 +217,19 @@ fn train() -> Result<()> {
 For a real dataset instead of a fixed tensor, see [Data
 loading](./data_loading.md); the loop shape is identical, just with a
 `DataLoader` iteration in place of the fixed `x`.
+
+## Precision and autocast
+
+The loop above is all-`f32`. When the `Trainer` runs it instead
+([Experimental](./experimental.md), feature `train`), a
+`RuntimePrecisionPolicy` rides along: under `mixed_bf16()`, allowlisted
+operands are cast at dispatch admission (for example `matmul` under a
+backend row that admits `bf16`), master weights stay `f32` because
+parameter creation is outside the allowlist, and `fit_scaled` runs the
+loop under dynamic loss scaling so small `f16` gradients survive
+underflow. The one refusal to memorize: an `f16`-active policy with an
+exact-`f32` accumulator and scaling disabled fails plan construction with
+`TrainError::UnsupportedPrecision` — `bf16` needs no scaling, `f16`
+without scaling is not a plan. The full policy, scaler-state, and fixture
+story lives with the `Trainer` in [Experimental](./experimental.md#the-preview-trainer);
+the hand-written loop here stays exact-precision on purpose.

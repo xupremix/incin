@@ -257,19 +257,26 @@ fn a_proven_tensor_reaches_every_converted_module() {
     let _ = incin_core::nn::Module::forward(&incin_core::nn::ReLU, t.clone());
 }
 
-/// Shape-changing operations really do produce dense buffers.
+/// Shape-changing operations state their result's layout honestly.
 ///
-/// This backs a claim the type system would otherwise make on faith. A
-/// reduction or a transpose cannot carry its operand's layout -- the shape
-/// changes, and a layout is only meaningful against the shape it describes --
-/// so its result's layout has to be *stated*. Stating `RowMajor` is only honest
-/// if the buffer is actually dense.
+/// This backs claims the type system would otherwise make on faith. A
+/// reduction or a pointwise operation cannot carry its operand's layout -- the
+/// shape changes, and a layout is only meaningful against the shape it
+/// describes -- so its result's layout has to be *stated*. Stating `RowMajor`
+/// is only honest if the buffer is actually dense, which is what the
+/// reductions and pointwise operations below check.
+///
+/// `transpose` is the exception that proves the rule: views everywhere (issue
+/// #113, decided 2026-09-25 following PyTorch) means it shares its input's
+/// buffer with permuted strides rather than allocating, so its result claims
+/// nothing (`Dyn`) and the dense assertions below do not apply to it -- the
+/// view-stride assertions after them do instead.
 ///
 /// Checked here at runtime rather than assumed, because the density is a
 /// property of what every current backend happens to do rather than something
-/// the operation contract states. If a backend ever returns a strided result,
-/// this fails and the type claim has to be withdrawn before it becomes a
-/// silent mis-read.
+/// the operation contract states. If a backend ever returns a strided result
+/// where dense is claimed, this fails and the type claim has to be withdrawn
+/// before it becomes a silent mis-read.
 #[test]
 fn shape_changing_operations_produce_dense_results() {
     use incin_core::shapes::idx::{ForwardAxis, Here};
@@ -281,11 +288,12 @@ fn shape_changing_operations_produce_dense_results() {
     assert_dense("mean", &t.mean(ForwardAxis::<Here>::default()).unwrap());
     assert_dense("neg", &t.neg().unwrap());
 
-    // `transpose` does *not*, on this backend. It returns a view: shape
-    // [4, 3] over strides [1, 4], sharing the original buffer. Asserted rather
-    // than assumed, because the CUDA backend materialises the same operation
-    // into a fresh contiguous buffer -- the two disagree, and a type claiming
-    // `RowMajor` for a transpose would be false on exactly one of them.
+    // `transpose` is a view on CPU under the views-everywhere contract -- that was issue #113,
+    // decided views-everywhere following PyTorch: the result shares the
+    // input's buffer with permuted strides, and densifying is explicit via
+    // `into_row_major`. (CUDA's `TransposeExact` still materialises as a tracked
+    // deviation; this CPU test pins the contract side.) Strides [1, 4] are the input's [4, 1] swapped for
+    // shape [4, 3]; [3, 1] would mean a backend quietly went back to copying.
     let transposed = t
         .transpose_structural::<Here, incin_core::shapes::idx::Next<Here>>()
         .unwrap();
@@ -296,7 +304,26 @@ fn shape_changing_operations_produce_dense_results() {
     assert_eq!(
         meta.strides().as_ref(),
         &[1, 4],
-        "CPU transpose is a view; if this becomes [3, 1] it started copying"
+        "CPU transpose shares the buffer with permuted strides; [3, 1] would mean it copied again"
+    );
+
+    // The public method makes the same honest claim at the type level: the
+    // result carries no layout proof (`Dyn`), because a view cannot state
+    // `RowMajor`.
+    let public = t
+        .transpose(
+            ForwardAxis::<Here>::default(),
+            ForwardAxis::<incin_core::shapes::idx::Next<Here>>::default(),
+        )
+        .expect("a 3x4 tensor transposes to 4x3");
+    let public_meta = <CpuBackendImpl as incin_core::backend_authoring::StorageBackend>::metadata::<
+        f32,
+    >(public.inner());
+    assert_eq!(public_meta.shape().as_ref(), &[4, 3]);
+    assert_eq!(
+        public_meta.strides().as_ref(),
+        &[1, 4],
+        "the public transpose must keep the view claim true"
     );
 }
 
@@ -324,30 +351,44 @@ fn transpose_view_permutes_metadata_without_copying() {
     );
 }
 
-/// The materialising transpose and the view disagree, which is the whole point.
+/// Both transpose spellings are views now, which is the point of #113's decision.
 ///
-/// Both are legal and neither is universally faster -- the view wins for a
-/// single consumer and loses from about four -- so the framework offers both
-/// and the caller chooses. This pins that they are actually different, since a
-/// backend quietly making them the same would remove the choice without
-/// removing the API.
+/// `transpose_structural` (the `TransposeExact` op) and `transpose_view` used
+/// to disagree -- copy vs view -- and this test pinned the difference, since a
+/// backend quietly making them the same would have removed the choice without
+/// removing the API. The views-everywhere decision (2026-09-25) removed that
+/// choice deliberately: one semantic, two selector spellings. So this pins
+/// the new unity with the same exactness it once pinned the difference with:
+/// same shape, same permuted strides [1, 4] through either spelling. A
+/// backend quietly copying in either spelling fails here rather than
+/// drifting.
 #[test]
-fn the_two_transposes_are_genuinely_different_operations() {
+fn the_two_transpose_spellings_are_both_views() {
     use incin_core::backend_authoring::StorageBackend;
     use incin_core::shapes::idx::{Here, Next};
 
     let t = incin_core::prelude::Tensor::<s![3, 4], CpuBackendImpl>::zeros(()).unwrap();
 
     let viewed = t.transpose_view::<Here, Next<Here>>().unwrap();
-    let copied = t.transpose_structural::<Here, Next<Here>>().unwrap();
+    let structural = t.transpose_structural::<Here, Next<Here>>().unwrap();
 
     let view_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(viewed.inner());
-    let copy_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(copied.inner());
+    let structural_meta = <CpuBackendImpl as StorageBackend>::metadata::<f32>(structural.inner());
 
-    assert_eq!(view_meta.shape().as_ref(), copy_meta.shape().as_ref());
-    // On CPU both are currently views, so the strides agree today. The shapes
-    // must always agree; the strides are what #113 is about.
-    assert_eq!(view_meta.strides().as_ref(), &[1, 4]);
+    assert_eq!(view_meta.shape().as_ref(), structural_meta.shape().as_ref());
+    // Same shape, same memory order: both permute the original's strides to
+    // [1, 4]. The strides are what #113 was about, and either spelling
+    // landing row-major at [3, 1] means it copied.
+    assert_eq!(
+        view_meta.strides().as_ref(),
+        &[1, 4],
+        "transpose_view permutes the strides; [3, 1] would mean it copied"
+    );
+    assert_eq!(
+        structural_meta.strides().as_ref(),
+        &[1, 4],
+        "the structural spelling is the same view; [3, 1] would mean it copied"
+    );
 }
 
 /// A constructor hands back the proof directly, with no runtime promotion.
@@ -710,6 +751,121 @@ fn a_loss_result_is_dense() {
     );
 }
 
+/// The loss methods accept a proven target, as their modules already did.
+///
+/// `a_loss_result_is_dense` above freed the module path, and the tensor method
+/// each module sits beside was left behind. `pred.mse_loss(&target)` took its
+/// prediction at any layout and its target only at the one that claims nothing,
+/// so a proven target was refused by the method and accepted by `MSELoss`,
+/// and a `softmax` output could not be the target of a distillation loss
+/// written against the method.
+///
+/// All four are called here, each through its convenience form, which delegates
+/// to the `_with` form, so both signatures are exercised by one call.
+#[test]
+fn a_loss_method_accepts_a_proven_target() {
+    use incin_core::prelude::*;
+
+    let prediction = incin_core::prelude::Tensor::<s![4], CpuBackendImpl>::zeros(()).unwrap();
+    let proven = incin_core::prelude::Tensor::<s![4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+
+    // Zero against one: the mean squared and mean absolute error are both one.
+    assert_eq!(
+        prediction
+            .mse_loss(&proven)
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap(),
+        vec![1.0]
+    );
+    assert_eq!(
+        prediction
+            .l1_loss(&proven)
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap(),
+        vec![1.0]
+    );
+    assert!(prediction.bce_with_logits_loss(&proven).is_ok());
+
+    // Cross-entropy reads its target as class indices rather than values.
+    let logits = incin_core::prelude::Tensor::<s![2, 3], CpuBackendImpl>::zeros(()).unwrap();
+    let classes = incin_core::prelude::Tensor::<s![2], CpuBackendImpl, i64>::zeros(())
+        .unwrap()
+        .into_row_major()
+        .expect("a fresh allocation is row-major");
+    // Uniform logits over three classes cost ln(3) whichever class is right.
+    let loss = logits
+        .cross_entropy_loss(&classes)
+        .unwrap()
+        .to_vec1::<f32>()
+        .unwrap()[0];
+    assert!((loss - 3.0f32.ln()).abs() < 1e-5, "got {loss}");
+}
+
+/// Joining two proven tensors does not require forgetting either proof.
+///
+/// The same asymmetry the indexing and loss methods had. `concat`, `stack`, the
+/// two legacy spellings of each and `outer` took their receiver at any layout
+/// and their second operand only at `Dyn`, so a row-major tensor could stand on
+/// the left of a join and was refused on the right. Every one is called here
+/// with a proven tensor on both sides.
+///
+/// `concat_structural` and `stack_structural` are deliberately absent. Their
+/// axis is a type no argument carries, so every caller names it in a turbofish,
+/// and a layout parameter would have to be named there too.
+#[test]
+fn a_joining_method_accepts_a_proven_second_operand() {
+    use incin_core::prelude::*;
+
+    let proven = |values: &[f32]| {
+        incin_core::prelude::Tensor::<s![2, 2], CpuBackendImpl>::from_slice(values, ())
+            .unwrap()
+            .into_row_major()
+            .expect("a fresh allocation is row-major")
+    };
+    let a = proven(&[1.0, 2.0, 3.0, 4.0]);
+    let b = proven(&[5.0, 6.0, 7.0, 8.0]);
+
+    let rows = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let columns = [1.0, 2.0, 5.0, 6.0, 3.0, 4.0, 7.0, 8.0];
+    assert_eq!(
+        a.concat(&b, axis!(0)).unwrap().to_vec1::<f32>().unwrap(),
+        rows
+    );
+    assert_eq!(
+        a.try_concat(&b, 1).unwrap().to_vec1::<f32>().unwrap(),
+        columns
+    );
+    assert_eq!(
+        a.concat_axis(&b, -1).unwrap().to_vec1::<f32>().unwrap(),
+        columns
+    );
+    assert_eq!(
+        a.stack(&b, axis!(0)).unwrap().to_vec1::<f32>().unwrap(),
+        rows
+    );
+    assert_eq!(a.try_stack(&b, 0).unwrap().shape_buf().as_ref(), &[2, 2, 2]);
+
+    let vector = |values: &[f32]| {
+        incin_core::prelude::Tensor::<s![2], CpuBackendImpl>::from_slice(values, ())
+            .unwrap()
+            .into_row_major()
+            .expect("a fresh allocation is row-major")
+    };
+    assert_eq!(
+        vector(&[1.0, 2.0])
+            .outer(&vector(&[3.0, 4.0]))
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap(),
+        vec![3.0, 4.0, 6.0, 8.0]
+    );
+}
+
 /// A layout is a *request* at construction, and the request can be refused.
 ///
 /// `FreshLayout::strides` is what the creation path allocates with, so a
@@ -804,8 +960,8 @@ fn channels_last_is_not_contiguous() {
 
 /// The order-statistic family allocates, so its results are dense too.
 ///
-/// `argmax`, `argmin`, `argsort` and `topk` were the reductions left stating
-/// nothing. They write fresh index buffers -- `argsort` and `topk` write two --
+/// `argmax`, `argmin`, `argsort`, `sort` and `topk` were the reductions left
+/// stating nothing. They write fresh buffers -- `sort` and `topk` write two --
 /// so the same rule applies, and the same strided operand is what makes the
 /// check non-vacuous.
 #[test]
@@ -847,6 +1003,11 @@ fn an_order_statistic_result_is_dense_even_from_a_strided_operand() {
         .unwrap();
     assert_dense("topk values", &values);
     assert_dense("topk indices", &indices);
+
+    // `sort` writes the same pair over the operand's own extents.
+    let (sorted, order) = strided.sort(0usize, false).unwrap();
+    assert_dense("sort values", &sorted);
+    assert_dense("sort indices", &order);
 }
 
 /// The spatial and embedding layers allocate, so their results are dense.

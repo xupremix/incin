@@ -6,11 +6,13 @@
 //! axis is not that a tensor can hold `f16`, it is that *holding* a dtype and
 //! *computing* in it are two different questions with two different answers.
 //!
-//! CPU today allocates all eight built-in dtypes but computes in far fewer:
-//! `matmul` is `f32` only, and elementwise arithmetic is float only. Those are
-//! declared facts, not accidents. `docs/capabilities.md` is generated from the
-//! same tables this example queries, so the table, the refusal message, and
-//! the kernel cannot disagree with each other.
+//! CPU today allocates all eight built-in dtypes but computes in a subset:
+//! `matmul` runs every float dtype (`bf16`, `f16`, `f32`, `f64`) and
+//! elementwise arithmetic is float only, so integer operands are refused
+//! rather than silently promoted. Those are declared facts, not accidents.
+//! `docs/capabilities.md` is generated from the same tables this example
+//! queries, so the table, the refusal message, and the kernel cannot
+//! disagree with each other.
 //!
 //! Run with: `cargo run -p incin --example dtypes --features cpu`
 
@@ -149,18 +151,21 @@ fn ask_first() {
 /// `Result` and panics on refusal, so code that wants to *handle* an
 /// unsupported dtype takes the method form.
 fn refusal() -> incin::Result<()> {
-    let lhs: Tensor<s![2, 2], B, f16> = Tensor::ones(())?;
-    let rhs: Tensor<s![2, 2], B, f16> = Tensor::ones(())?;
+    // Elementwise arithmetic is float-only, so an integer add is refused by
+    // the capability row that says so rather than promoted.
+    let lhs: Tensor<s![2, 2], B, i64> = Tensor::zeros(())?;
+    let rhs: Tensor<s![2, 2], B, i64> = Tensor::zeros(())?;
 
-    match lhs.matmul(&rhs) {
-        Ok(_) => println!("  f16 matmul succeeded, so this backend grew a kernel"),
-        Err(error) => println!("  f16 matmul refused: {error}"),
+    match lhs.try_add(&rhs) {
+        Ok(_) => println!("  i64 add succeeded, which the row does not claim"),
+        Err(error) => println!("  i64 add refused: {error}"),
     }
 
-    // The same operation in the dtype the row does advertise.
-    let lhs: Tensor<s![2, 2], B, f32> = Tensor::ones(())?;
+    // The same axis the other way: `matmul` runs every float dtype, so an
+    // f16 product succeeds.
+    let lhs: Tensor<s![2, 2], B, f16> = Tensor::ones(())?;
     let product = lhs.matmul(&lhs)?;
-    println!("  f32 matmul returned {:?}", product.dims());
+    println!("  f16 matmul returned {:?}", product.dims());
 
     Ok(())
 }

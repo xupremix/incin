@@ -19,6 +19,12 @@ pub(crate) fn reshape_storage(t: &CpuStorage, shape: &[usize]) -> Result<CpuStor
     Ok(out)
 }
 
+/// Transpose by permuting metadata: the views-everywhere construction.
+///
+/// Permutes shape and strides over the same buffer and does no copy, so the
+/// result aliases its input (issue #113). The backward mirrors the forward --
+/// the same swap is its own inverse -- and stays a view throughout: CPU
+/// consumers serve strided storage, so no cotangent needs densifying here.
 pub(crate) fn transpose_storage(t: &CpuStorage, dim1: usize, dim2: usize) -> Result<CpuStorage> {
     let out = t.transpose(dim1, dim2)?;
     let (t_id, out_id) = (t.id, out.id);

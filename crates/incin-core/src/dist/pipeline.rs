@@ -48,6 +48,11 @@ pub const fn validate_pipeline_dtype(dtype: DTypeId) -> Result<(), PipelineError
         DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(PipelineError::UnsupportedDType { dtype })
         }
+        // Issue #94: fp8 transfers refuse like Q8_0 (see collective.rs).
+        // Issue #95: block fp4 refuses likewise.
+        DTypeId::F8E4M3 | DTypeId::F8E5M2 | DTypeId::NVFP4 | DTypeId::MXFP4 => {
+            Err(PipelineError::UnsupportedDType { dtype })
+        }
     }
 }
 

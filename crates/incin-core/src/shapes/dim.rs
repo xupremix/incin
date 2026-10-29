@@ -53,7 +53,13 @@ pub trait Dim:
     /// preventing them from being silently downgraded to runtime checks.
     const STATIC_VALID: () = {
         if matches!(Self::STATIC, StaticExtent::Invalid) {
-            panic!("invalid static dimension expression");
+            // Const context: no `Result` to return, so this stays a panic,
+            // but it names the failed proof (`Dim::STATIC_VALID` over
+            // `Self::STATIC == StaticExtent::Invalid`) rather than a bare
+            // "invalid dimension".
+            panic!(
+                "Dim::STATIC_VALID: invalid static dimension expression (StaticExtent::Invalid)"
+            );
         }
     };
 
@@ -303,7 +309,11 @@ pub trait DimCompatible<Rhs: Dim>: Dim {
     /// Compile-time assertion over paired static extents.
     const STATIC_ASSERT: () = match (Self::STATIC, Rhs::STATIC) {
         (StaticExtent::Invalid, _) | (_, StaticExtent::Invalid) => {
-            panic!("Invalid static dimension expression");
+            // Const context: no `Result` to return, so this stays a panic,
+            // but it names the failed proof (`DimCompatible::STATIC_ASSERT`
+            // over the paired `STATIC` extents) rather than a bare "invalid
+            // dimension".
+            panic!("DimCompatible::STATIC_ASSERT: invalid static dimension expression");
         }
         (StaticExtent::Value(lhs), StaticExtent::Value(rhs)) => {
             assert!(lhs == rhs, "Statically incompatible dimensions");

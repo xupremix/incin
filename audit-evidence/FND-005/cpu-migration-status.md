@@ -4,7 +4,7 @@ Generated from `CPU_CAPABILITIES` and `incin_core::exec::OPERATION_CATALOG`; the
 
 The denominator is the number of operations that `Execute<O>` can carry at all, not the whole catalog. An operation whose `ExecutionSite` is not backend-executable is listed separately with the reason: it is a gap in the execution trait rather than an unwritten executor, and counting it here would describe work that cannot be done without changing the contract first.
 
-**164 of 164 backend-executable operations migrated**, out of 174 catalog operations in total.
+**170 of 170 backend-executable operations migrated**, out of 180 catalog operations in total.
 
 ## Backend-executable operations
 
@@ -104,10 +104,13 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `scatter` | `Kernel` | yes | `::scatter` |
 | `scatter_add` | `Kernel` | yes | `::scatter_add` |
 | `one_hot` | `Kernel` | yes | `::one_hot` |
+| `bincount` | `Kernel` | yes | `::bincount` |
+| `nonzero` | `Kernel` | yes | `Tensor::nonzero` |
 | `index_select` | `Kernel` | yes | `::index_select` |
 | `masked_fill` | `Kernel` | yes | `::masked_fill` |
 | `unsqueeze` | `Kernel` | yes | `::unsqueeze` |
 | `repeat` | `Kernel` | yes | `::repeat` |
+| `repeat_interleave` | `Kernel` | yes | `::repeat_interleave` |
 | `pad` | `Kernel` | yes | `::pad` |
 | `triu` | `Kernel` | yes | `::triu` |
 | `tril` | `Kernel` | yes | `::tril` |
@@ -116,7 +119,9 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `split` | `Kernel` | yes | `Tensor::split` |
 | `addmm` | `Kernel` | yes | `::addmm` |
 | `bmm` | `Kernel` | yes | `::bmm` |
+| `grouped_matmul` | `Kernel` | yes | `::grouped_matmul` |
 | `scaled_dot_product_attention` | `Kernel` | yes | `::scaled_dot_product_attention` |
+| `fused_attention` | `Kernel` | yes | `::fused_attention` |
 | `unfold` | `Kernel` | yes | `::unfold` |
 | `pixel_shuffle` | `Kernel` | yes | `::pixel_shuffle` |
 | `group_norm` | `Kernel` | yes | `::group_norm` |
@@ -148,6 +153,7 @@ The denominator is the number of operations that `Execute<O>` can carry at all, 
 | `cumsum` | `Kernel` | yes | `::cumsum` |
 | `topk` | `Kernel` | yes | `::topk` |
 | `argsort` | `Kernel` | yes | `::argsort` |
+| `sort` | `Kernel` | yes | `::sort` |
 | `norm` | `Kernel` | yes | `Tensor::norm` |
 | `var_all` | `Kernel` | yes | `Tensor::var_all` |
 | `var_dim` | `Kernel` | yes | `Tensor::var_dim` |

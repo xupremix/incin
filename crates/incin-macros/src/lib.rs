@@ -12,6 +12,7 @@
 //! * **`#[module]`**: Derives neural network module traits automatically for structs, similar to `#[derive(Module)]` but specifically tailored for Incin.
 //! * **`model!("model.onnx", Name)`**: Compiles an ONNX model file into a fully-typed Rust module structurally matching the ONNX graph.
 //! * **`import_model!("model.onnx", Name)`**: Compiles an ONNX model file into a fully-typed Rust module structurally matching the ONNX graph.
+//! * **`define_backend_operations!`**: Declares a downstream backend's `Execute` shells and companion capability routing with expansion-time coverage checks.
 #[macro_use]
 extern crate alloc;
 
@@ -21,6 +22,8 @@ use proc_macro::TokenStream;
 mod arg_into;
 mod autotune;
 mod axis;
+/// Procedural backend-authoring surface for downstream devices.
+mod backend_operations;
 
 /// Internal helper module for tensor index and slicing macro.
 mod idx;
@@ -367,6 +370,104 @@ pub fn i(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn axis(input: TokenStream) -> TokenStream {
     axis::axis(input)
+}
+
+/// Declare a downstream backend's executors and capability routing in one place.
+///
+/// This is the public form of the workspace-private executor macros: each
+/// entry names an operation type, its exact `Output`, and the handler that
+/// runs it. The generated `Execute` shell passes `&self` and the original
+/// validated `ExecutionRequest` by value to the handler and returns its
+/// `Result<Output, BackendError>` unchanged. Output is never converted, so
+/// storage, scalar, vector, tuple, and multi-output results all work.
+///
+/// The optional companion `capabilities` block routes built-in capability
+/// queries to support handlers and proves every advertised operation has an
+/// executor. Advertising an operation there without an executor entry fails
+/// the build with an error naming the operation; a built-in executor entry
+/// without a capability entry fails the same way. Custom operations stay
+/// executor-only: their admission answers through `Execute::supports_custom`,
+/// not through `Capabilities`.
+///
+/// Only concrete backend types are accepted (`MyBackend`, `MyBackend<Cpu>`);
+/// generic parameters and `where` clauses are not.
+///
+/// ## Example
+///
+/// ```rust
+/// use incin::backend_authoring::{
+///     CapabilityQuery, ExecutionContext, ExecutionRequest, ShapeBuf, StorageBackend,
+///     SupportLevel, TensorMeta, execute, operations::{CreationAttributes, op},
+/// };
+/// use incin::{BackendError, Cpu, DType};
+/// use incin_macros::define_backend_operations;
+/// use incin::prelude::{DTypeId, DeviceId};
+///
+/// struct ShapeBackend;
+///
+/// impl StorageBackend for ShapeBackend {
+///     const BACKEND_NAME: &'static str = "shape-example";
+///     type Storage<K: DType> = TensorMeta;
+///     type Device = Cpu;
+///
+///     fn metadata<K: DType>(storage: &TensorMeta) -> &TensorMeta {
+///         storage
+///     }
+/// }
+///
+/// fn zeros_shape(
+///     _: &ShapeBackend,
+///     request: ExecutionRequest<'_, op::Zeros, ShapeBackend>,
+/// ) -> Result<ShapeBuf, BackendError> {
+///     Ok(ShapeBuf::from_slice(
+///         &request.operation.descriptor().attributes().shape,
+///     ))
+/// }
+///
+/// fn support(_: &ShapeBackend, _: &CapabilityQuery) -> SupportLevel {
+///     SupportLevel::Native
+/// }
+///
+/// define_backend_operations! {
+///     for ShapeBackend {
+///         op::Zeros => ShapeBuf = zeros_shape;
+///     }
+///     capabilities for ShapeBackend {
+///         op::Zeros => support;
+///     }
+/// }
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let context = ExecutionContext::new(ShapeBackend);
+///     let shape = execute::<op::Zeros, _>(
+///         &context,
+///         CreationAttributes {
+///             shape: vec![2, 3],
+///             dtype: DTypeId::F32.descriptor(),
+///             device: DeviceId::cpu(),
+///         },
+///         &[],
+///     )?;
+///     assert_eq!(shape, ShapeBuf::from_slice(&[2, 3]));
+///     Ok(())
+/// }
+/// ```
+///
+/// ## Path resolution
+///
+/// The expansion names `::incin::backend_authoring::…` absolutely, so it
+/// resolves against the crate rather than against whatever the caller happens
+/// to have in scope - including a module of their own called `incin`
+/// (`CI-005`).
+///
+/// The one form it cannot survive is a *package* rename in the caller's
+/// `Cargo.toml` (`incin_x = { package = "incin" }`), because `::incin` then
+/// names a crate that is not there. Resolving the real name requires reading
+/// the caller's manifest at expansion time, which the macro policy in
+/// `PROPOSALS.md` forbids.
+#[proc_macro]
+pub fn define_backend_operations(input: TokenStream) -> TokenStream {
+    backend_operations::define_backend_operations(input)
 }
 
 /// A macro to construct typed logical device mesh specifications ergonomically.

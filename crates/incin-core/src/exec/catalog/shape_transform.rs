@@ -18,6 +18,10 @@ pub enum ShapeTransform<'a> {
         end: usize,
     },
     Repeat(&'a [usize]),
+    RepeatInterleave {
+        axis: usize,
+        repeats: usize,
+    },
     Pad(&'a [(usize, usize)]),
     Diagonal(i64),
     Unfold {

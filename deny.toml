@@ -26,6 +26,13 @@ ignore = [
     # (`cudarc`, `ggml-quants`, `metal`), none of which incin controls, so the
     # only action available is to record that it was seen and judged.
     { id = "RUSTSEC-2024-0436", reason = "unmaintained, not vulnerable; transitive through cudarc/ggml-quants/metal" },
+    # `zip` 7.2.0 arrives only through candle-core 0.9, which pins the 7.x
+    # line; the three advisories are fixed in 9.0. Moving Candle is a separate
+    # API migration. Candle itself is a dev-dependency of incin-core here, so
+    # none of this is reachable from a shipped Incin crate.
+    { id = "RUSTSEC-2026-0367", reason = "candle-core 0.9 pins zip 7.x; dev-dependency graph only" },
+    { id = "RUSTSEC-2026-0368", reason = "candle-core 0.9 pins zip 7.x; dev-dependency graph only" },
+    { id = "RUSTSEC-2026-0369", reason = "candle-core 0.9 pins zip 7.x; dev-dependency graph only" },
 ]
 
 [licenses]

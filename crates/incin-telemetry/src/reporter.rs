@@ -25,6 +25,44 @@ use alloc::string::{String, ToString};
 /// `reporter.scalar("loss", step, value)` instead of hand-constructing a
 /// `ScalarEvent` - this is `docs/growth/05-observability-and-scaffolding.md`
 /// Task 05.1's ergonomic entry point.
+///
+/// # Examples
+///
+/// ```rust
+/// use incin_telemetry::events::{
+///     EpochEvent, GradientNormEvent, GraphSnapshotEvent, HyperparamEvent, MemoryEvent,
+///     ScalarEvent, WeightNormEvent,
+/// };
+/// use incin_telemetry::reporter::Reporter;
+/// use std::sync::Mutex;
+///
+/// struct Collecting {
+///     scalars: Mutex<Vec<ScalarEvent>>,
+/// }
+///
+/// impl Reporter for Collecting {
+///     fn log_scalar(&self, event: ScalarEvent) {
+///         self.scalars.lock().unwrap().push(event);
+///     }
+///     fn log_gradient_norm(&self, _event: GradientNormEvent) {}
+///     fn log_weight_norm(&self, _event: WeightNormEvent) {}
+///     fn log_memory(&self, _event: MemoryEvent) {}
+///     fn log_epoch(&self, _event: EpochEvent) {}
+///     fn log_hyperparam(&self, _event: HyperparamEvent) {}
+///     fn log_graph_snapshot(&self, _event: GraphSnapshotEvent) {}
+/// }
+///
+/// let reporter = Collecting {
+///     scalars: Mutex::new(Vec::new()),
+/// };
+/// reporter.scalar("loss", 7, 0.25);
+///
+/// let events = reporter.scalars.lock().unwrap();
+/// assert_eq!(events.len(), 1);
+/// assert_eq!(events[0].name, "loss");
+/// assert_eq!(events[0].step, 7);
+/// assert_eq!(events[0].value, 0.25);
+/// ```
 pub trait Reporter {
     /// Emit a scalar metric event.
     fn log_scalar(&self, event: ScalarEvent);

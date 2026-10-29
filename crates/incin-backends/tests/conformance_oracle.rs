@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 
-/// Operations the harness reaches today, out of the 164 the CPU backend has an
+/// Operations the harness reaches today, out of the 170 the CPU backend has an
 /// executor for.
 ///
 /// Exact rather than slack, because the point of a ratchet is that it cannot
@@ -25,20 +25,48 @@ use incin_backends::conformance::{Coverage, Verdict, run_cpu_self_check};
 /// removed or a capability row was narrowed, and either should be a deliberate
 /// edit in the same commit rather than a number quietly absorbing it.
 ///
-/// The one outstanding is `quantized_matmul`, and it is outstanding because two
-/// contracts disagree rather than because the harness cannot build an operand.
-/// The catalog gives it `OutputRule::MatMul`, which requires `lhs[-1] ==
-/// rhs[-2]`; the CPU kernel reads the right operand as `[n, k]`, because a
+/// No exact identity is outstanding. `quantized_matmul` was the last: two
+/// contracts disagreed rather than the harness being unable to build an
+/// operand. The catalog gave it `OutputRule::MatMul`, which requires `lhs[-1]
+/// == rhs[-2]`; the CPU kernel reads the right operand as `[n, k]`, because a
 /// block encoding shares one scale across thirty-two consecutive values and so
 /// can only be contracted along its contiguous axis. A square operand satisfies
 /// both and would report an agreement that is not there.
+///
+/// `grouped_matmul` was outstanding because its three operands carry three
+/// different ranks: a rank-two activation, a rank-three expert stack, and a
+/// rank-one offsets tile, with a contracting-extent agreement between the
+/// first two and a `[0, T)` tiling the third must satisfy. The zero-filled
+/// index roles cannot produce that tile, so the fixture needs roles of its
+/// own.
 ///
 /// `quantize` and `dequantize` were counted with the same reason until this
 /// floor and did not need one. `block_extents` widens the ladder's last extent
 /// to a whole block, which is the shape a block encoding can hold, and the
 /// block size is the dtype registry's rather than a number this harness
 /// invented.
-const COVERED_OPERATION_FLOOR: usize = 163;
+///
+/// `nonzero` and `fused_attention` landed with floor 168. `nonzero` rides
+/// the plain unary ladder: every element is non-zero, so the scan always has
+/// rows to report. `fused_attention` rides the same ladder thrice: rank four
+/// is `[2, 3, 2, 2]` on every operand, which satisfies the GQA geometry
+/// (matching batches, key against value exactly, three query heads against
+/// three key/value ones), and the shared transpose preserves the agreement
+/// under the strided layout.
+///
+/// `grouped_matmul` landed with floor 169. Its `GroupedActivation` /
+/// `GroupedExperts` roles pin f32 (integer tuples would otherwise build
+/// integer matrices the descriptor float rule rejects) and `GroupedOffsets`
+/// carries an i64 `[0, 2, 4]` tile over `T=4, K=3, N=2, E=2`.
+///
+/// `quantized_matmul` landed with floor 170. Its `QuantizedLhs` /
+/// `QuantizedRhs` roles carry the tuple's `q8_0` on both operands (the
+/// descriptor's dtype gate refuses anything else) over `T=2, N=3, K=32`:
+/// a `[...batch, 2, 32]` lhs against a plain 2D `[3, 32]` weight, which is
+/// the `[N, K]` geometry the catalog states since the kernel contracts the
+/// trailing axes. `K` is the Q8_0 block width the kernel refuses anything
+/// but a multiple of, so the shared `Paired` `K=3` extents cannot serve.
+const COVERED_OPERATION_FLOOR: usize = 170;
 
 #[test]
 fn the_cpu_backend_executes_every_advertised_tuple_it_is_asked_about() {

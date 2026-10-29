@@ -25,7 +25,10 @@ std = [
     "rand/std_rng",
     "rand/thread_rng",
     "rand_distr/std",
-    "half/std"
+    "half/std",
+    "serde/std",
+    "serde_json/std",
+    "dep:rayon",
 ]
 # Enables Incin's built-in pure-Rust CPU backend. Declares `std` for the same
 # reason `cuda` and `wgpu` do: the kernels reach for `Vec` and `Box` through the
@@ -46,12 +49,16 @@ cuda-vendor = ["cuda"]
 wgpu = ["std", "dep:wgpu", "dep:pollster", "incin-core/wgpu"]
 # Enables Incin's native Metal backend for Apple Silicon.
 metal = ["std", "incin-core/metal"]
+# Enables Incin's ROCm backend scaffolding for AMD GPUs (issue #6).
+# Detection and storage metadata only: no HIP bindings are vendored, so no
+# device memory is allocated and the capability table is empty.
+rocm = ["std", "incin-core/rocm"]
 # Enables MPS and MPSGraph structured primitives for Apple Silicon.
 metal-mps = ["metal"]
 
 
 # Benchmarks legal CUDA launch configurations and caches the selected candidate.
-autotune = ["cuda"]
+autotune = ["cuda", "dep:fs2"]
 # Enables the external Candle backend at `incin_backends::external::candle`.
 external-candle = ["std", "dep:candle-core", "dep:candle-nn"]
 # Connects backend execution and autograd events to `incin-telemetry`.
@@ -78,6 +85,7 @@ cuda-vendor = { tier = "preview", owner = "backends", prerequisites = ["cuda"], 
 wgpu = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "wgpu" }
 metal = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "apple-silicon" }
 metal-mps = { tier = "preview", owner = "backends", prerequisites = ["metal"], hardware = "apple-silicon" }
+rocm = { tier = "preview", owner = "backends", prerequisites = ["std"], hardware = "rocm" }
 autotune = { tier = "preview", owner = "backends", prerequisites = ["cuda"], hardware = "cuda" }
 external-candle = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }
 telemetry = { tier = "stable", owner = "backends", prerequisites = ["std"], hardware = "none" }
@@ -102,14 +110,29 @@ rand_distr = { version = "0.6", default-features = false, features = ["alloc"] }
 half = { workspace = true, default-features = false }
 thiserror = { workspace = true, default-features = false }
 bytemuck = { version = "1.25", default-features = false, features = ["derive"] }
-ggml-quants = "0.1.0"
 incin-telemetry = { path = "../incin-telemetry", version = "0.1.0", optional = true }
-rayon = "1.10.0"
+# `ggml-quants` was removed here (it is dead weight: unused by every module,
+# test, and example in this crate): it unified `half/std` and `rayon` (both
+# std-only) into every build, including `--no-default-features`. `incin-core`
+# keeps it as a dev-only test oracle; nothing here needs it, so it is gone
+# rather than optional.
+# `rayon` parallels only under `std` (cpu kernels via `cpu = ["std"]`, and the
+# `simd` helpers behind `#[cfg(all(feature = "std", ...))]`), so it rides the
+# `std` feature instead of every build.
+rayon = { version = "1.10.0", optional = true }
 matrixmultiply = { version = "0.3.11", optional = true }
-log = "0.4.22"
-fs2 = "0.4.3"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.120"
+# `fs2` is file locking: std-only by nature, used only by the
+# `autotune`-gated persistent tuning cache. A `[dev-dependencies]` copy below
+# keeps `#[cfg(test)]` builds of that module working without `autotune`.
+fs2 = { version = "0.4.3", optional = true }
+serde = { version = "1.0.228", default-features = false, features = ["derive", "alloc"] }
+# `serde_json` is std-only by default but fully usable (slice/vec/value APIs)
+# on `alloc` alone, which is all `tuning/cache` and `conformance/artifact`
+# use. `std` re-enables its `std` feature above, so default builds are unchanged.
+serde_json = { version = "1.0.120", default-features = false, features = ["alloc"] }
+# Pure-Rust `f64` math for the unconditional `codegen` IR evaluator, which must
+# build without `std` (same spec as `incin-core`).
+libm = { version = "0.2", default-features = false }
 
 # WGPU Backend
 wgpu = { version = "22.0.0", optional = true }
@@ -122,9 +145,24 @@ cudarc = { version = "0.19.8", optional = true, features = ["cuda-12000", "nvrtc
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 
+# Both examples use the CPU backend as their reference implementation, so a
+# `cuda`-only or `wgpu`-only build cannot compile them. Declaring that here is
+# what lets `cargo check --all-targets` succeed in those configurations rather
+# than failing on an unresolved `incin_backends::cpu`.
+[[example]]
+name = "calibration_update"
+required-features = ["cpu"]
+
+[[example]]
+name = "polar_cartesian"
+required-features = ["cpu"]
+
 [dev-dependencies]
 trybuild = "1.0.117"
 tempfile = "3.27"
+# Non-`autotune` `#[cfg(test)]` builds of `tuning/cache` (and any test-only
+# file-locking helper) still need file locking: see the `fs2` note above.
+fs2 = "0.4.3"
 
 [lints]
 workspace = true

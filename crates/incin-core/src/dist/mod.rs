@@ -16,6 +16,8 @@ pub mod context;
 #[cfg(feature = "distributed")]
 pub mod data_parallel;
 #[cfg(feature = "distributed")]
+pub mod execute;
+#[cfg(feature = "distributed")]
 pub mod fsdp;
 #[cfg(feature = "distributed")]
 pub mod mesh;
@@ -26,6 +28,7 @@ pub mod placement;
 pub mod plan;
 #[cfg(feature = "distributed")]
 pub mod rule;
+pub mod sync;
 #[cfg(feature = "distributed")]
 pub mod tensor_parallel;
 
@@ -50,6 +53,8 @@ pub use data_parallel::{
     DataParallelDType, DataParallelError, DataParallelPlan, DataParallelPlanBuilder,
     GradientDescriptor, GradientId, TwoRankDataParallel, validate_data_parallel_dtype,
 };
+#[cfg(feature = "distributed")]
+pub use execute::{BucketError, BucketPlan, BucketPolicy, GradientBucket, bucket_plan};
 #[cfg(feature = "distributed")]
 pub use fsdp::{
     FsdpError, FsdpMemoryReport, FsdpParameterDescriptor, FsdpParameterId, FsdpPlan,
@@ -84,6 +89,11 @@ pub use rule::{
     LegalTransition, PlacementTransition, PlacementTransitionRule, ReduceShardedAxis,
     ShardDivisible, ShardRemainderPolicy, ValidatedDistributed, validate_pipeline_stage,
     validate_shard, validate_transition,
+};
+pub use sync::{
+    FsdpSynchronizer, GradientSynchronizer, ShardedGradients, SyncError,
+    all_gather_model_parameters, all_reduce_model_gradients, mask_gradients_to_owned_shard,
+    reduce_scatter_model_gradients,
 };
 #[cfg(feature = "distributed")]
 pub use tensor_parallel::{

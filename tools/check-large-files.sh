@@ -15,8 +15,31 @@ declare -A explained=(
     [crates/incin-macros/src/generated/onnx.rs]=1
     [crates/incin-core/src/shapes/shape.rs]=1
     [crates/incin-core/src/nn/param.rs]=1
+    [crates/incin-backends/src/codegen/ir.rs]=1
     [crates/incin-backends/src/cuda/executor.rs]=1
+    [crates/incin-backends/src/wgpu/executor.rs]=1
     [crates/incin-backends/src/cuda/ops/shape.rs]=1
+    [crates/incin-backends/src/cuda/ops/norm.rs]=1
+    [crates/incin-backends/src/cuda/backend/tests.rs]=1
+    [crates/incin-backends/src/metal/backend.rs]=1
+    [crates/incin-backends/src/metal/executor.rs]=1
+    [crates/incin-core/src/tensor/ops/manipulation/indexing.rs]=1
+    [crates/incin-core/src/tensor/ops/reduce.rs]=1
+    [crates/incin-core/src/nn/attention.rs]=1
+    [crates/incin/src/train.rs]=1
+    [crates/incin-backends/src/cpu/canonical/tests.rs]=1
+    [crates/incin-backends/src/wgpu/backend/nn.rs]=1
+    [crates/incin-backends/src/cuda/backend/elementwise.rs]=1
+    [crates/incin-core/src/nn/state.rs]=1
+    [crates/incin-core/src/serialize.rs]=1
+    [crates/incin-backends/src/cpu/ops/shape_ops/tests.rs]=1
+    [crates/incin-core/src/tensor/device.rs]=1
+    [crates/incin-backends/src/cpu/ops/matmul/tests.rs]=1
+    [crates/incin-backends/src/cuda/ops/matmul.rs]=1
+    [crates/incin-backends/src/wgpu/backend/indexing.rs]=1
+    [crates/incin-backends/src/wgpu/backend/shape_ops.rs]=1
+    [crates/incin-core/src/optim/optimizers.rs]=1
+    [crates/incin-data/src/loader.rs]=1
 )
 
 mapfile -t actual < <(

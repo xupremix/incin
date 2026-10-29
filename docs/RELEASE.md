@@ -1,5 +1,8 @@
 # Release integrity
 
+> Operator procedure lives in [`RELEASING.md`](./RELEASING.md); this file
+> defines the gates the procedure operates. Read both before tagging.
+
 `release.yml` is a gated artifact pipeline. A push still wakes the workflow for
 `v*` tags, but its preflight accepts only `vMAJOR.MINOR.PATCH` tags, optionally
 with a SemVer prerelease suffix. It checks that the runner is checked out at

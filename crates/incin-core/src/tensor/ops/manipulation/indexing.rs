@@ -7,8 +7,9 @@ use crate::err::Result;
 use crate::exec::Capabilities;
 use crate::exec::ExecutionDescriptor;
 use crate::exec::catalog::{
-    AxisAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta, NarrowAttributes,
-    NoAttributes, OneHotAttributes, ScatterAttributes, SliceAttributes, UnfoldAttributes, op,
+    AxisAttributes, BincountAttributes, DiagonalAttributes, DuplicateIndexRule, LogicalTensorMeta,
+    NarrowAttributes, NoAttributes, OneHotAttributes, ScatterAttributes, SliceAttributes,
+    UnfoldAttributes, op,
 };
 use crate::exec::context::ExecutionContext;
 use crate::exec::dispatch;
@@ -16,7 +17,9 @@ use crate::exec::request::TensorHandle;
 use crate::shapes::Layout;
 use crate::shapes::error::OperationKind;
 use crate::shapes::shape::shape_buf_from_dims;
-use crate::shapes::{AppendDim, ConstDim, Dyn, DynShape, Shape, ShapeBuf, ShapeValue};
+use crate::shapes::{
+    AppendDim, ConstDim, DimCons, Dyn, DynShape, Nil, Shape, ShapeBuf, ShapeValue,
+};
 use crate::tensor::base::Tensor;
 use crate::tensor::dtype::DType;
 use crate::tensor::grad::RequiresGrad;
@@ -83,9 +86,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![3, 3], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![3, 3]).unwrap();
     /// let s = t.slice(&[IndexSpec::All, IndexSpec::Index(0)]).unwrap();
     /// ```
     pub fn slice(&self, specs: &[IndexSpec]) -> Result<Tensor<Dyn, B, K, G>>
@@ -103,9 +107,10 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// ```rust
     /// # extern crate incin_core as incin;
     /// # fn main() -> incin::prelude::Result<()> {
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let tensor = Tensor::<s![2, 4, 4], DefaultBackend>::ones(())?;
+    /// let tensor = Cpu.ones(shape![2, 4, 4])?;
     /// let sliced = tensor.get(vec![
     ///     IndexSpec::Index(0),
     ///     IndexSpec::Range(1, 3),
@@ -253,6 +258,19 @@ impl<
 > Tensor<S, B, K, G, P, L>
 {
     /// Slices a tensor based on python-like slicing syntax via the `idx!` macro.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// use incin::advanced::idx;
+    /// let t = Cpu.tensor([[0.0f32, 1.0, 2.0], [3.0, 4.0, 5.0]]).unwrap();
+    /// let s = t.slice_idx::<idx![0..1, 1..3]>().unwrap();
+    /// assert_eq!(s.dims().dims(), &[1, 2]);
+    /// assert_eq!(s.to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn slice_idx<T: crate::shapes::idx::SliceTarget<S>>(
         &self,
     ) -> Result<Tensor<T::Output, B, K, G, P>>
@@ -327,9 +345,10 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![10], DefaultBackend>::ones(()).unwrap();
+    /// let t = Cpu.ones(shape![10]).unwrap();
     /// let n = t.try_narrow(0isize, 2, 5).unwrap(); // shape [5]
     /// ```
     pub fn try_narrow<A>(
@@ -387,6 +406,25 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     Tensor<S, B, K, G, Local, L>
 {
     /// Fills elements where `mask` is true with `value`.
+    ///
+    /// The mask broadcasts into the input (`S: BroadcastShape<S2, Output = S>`,
+    /// #100's directional pin): a rank-deficit or size-1 mask such as
+    /// `[1, 1, T, T]` against `[B, H, T, T]` data is admitted, while a mask
+    /// that would *enlarge* the input has no `Output = S` impl and cannot
+    /// compile. The result always keeps the input's shape type `S`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let a = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// let b = Cpu.tensor([2.0f32, 2.0, 2.0]).unwrap();
+    /// let mask = a.gt(&b).unwrap(); // [false, false, true]
+    /// let filled = a.masked_fill(&mask, 0.0).unwrap();
+    /// assert_eq!(filled.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 0.0]);
+    /// ```
     pub fn masked_fill<
         S2: Shape,
         G2: RequiresGrad,
@@ -398,7 +436,7 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         value: Sc,
     ) -> Result<Tensor<S, B, K, G, Local, crate::shapes::RowMajor>>
     where
-        S: ShapeEq<S2>,
+        S: crate::shapes::broadcast::BroadcastShape<S2, Output = S>,
         B: Execute<op::MaskedFill>,
         <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
     {
@@ -409,10 +447,28 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Gathers values along `dim` specified by `index`.
-    pub fn gather<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+    /// let index = Cpu.tensor([[0u32, 2]]).unwrap();
+    /// let g = t.gather(1isize, &index).unwrap();
+    /// assert_eq!(g.to_vec1::<f32>().unwrap(), vec![1.0, 3.0]);
+    /// ```
+    pub fn gather<
+        A,
+        S2: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        L2: Layout<S2>,
+    >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
     ) -> Result<crate::shapes::Dense<S2, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
@@ -445,6 +501,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Scatters `src` values along `dim` into `self` using `index`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let base = Cpu.zeros(shape![3]).unwrap();
+    /// let index = Cpu.tensor([1u32, 2]).unwrap();
+    /// let src = Cpu.tensor([5.0f32, 6.0]).unwrap();
+    /// let out = base.scatter(0isize, &index, &src).unwrap();
+    /// assert_eq!(out.to_vec1::<f32>().unwrap(), vec![0.0, 5.0, 6.0]);
+    /// ```
     pub fn scatter<
         A,
         S2: Shape,
@@ -452,11 +521,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         KInt: crate::tensor::dtype::DType,
         G2: RequiresGrad,
         G3: RequiresGrad,
+        L2: Layout<S2>,
+        L3: Layout<S3>,
     >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
-        src: &Tensor<S3, B, K, G3>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
+        src: &Tensor<S3, B, K, G3, Local, L3>,
     ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
@@ -512,12 +583,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
     /// // Two sources, both aimed at slot 0, as a token routed to two experts.
-    /// let base = Tensor::<s![3], DefaultBackend>::zeros(()).unwrap();
-    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 0], ()).unwrap();
-    /// let src = Tensor::<s![2], DefaultBackend>::from_slice(&[2.0, 3.0], ()).unwrap();
+    /// let base = Cpu.zeros(shape![3]).unwrap();
+    /// let index = Cpu.tensor([0u32, 0]).unwrap();
+    /// let src = Cpu.tensor([2.0f32, 3.0]).unwrap();
     /// let summed = base.scatter_add(0, &index, &src).unwrap();
     /// // Both contributions land. `scatter` would have kept only the 3.0.
     /// assert_eq!(summed.to_vec1::<f32>().unwrap(), vec![5.0, 0.0, 0.0]);
@@ -529,11 +601,13 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         KInt: crate::tensor::dtype::DType,
         G2: RequiresGrad,
         G3: RequiresGrad,
+        L2: Layout<S2>,
+        L3: Layout<S3>,
     >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
-        src: &Tensor<S3, B, K, G3>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
+        src: &Tensor<S3, B, K, G3, Local, L3>,
     ) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         A: AxisSelectorArg<S>,
@@ -593,10 +667,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
     /// // Two tokens routed to experts 0 and 2 of 3.
-    /// let index = Tensor::<s![2], DefaultBackend, u32>::from_slice(&[0, 2], ()).unwrap();
+    /// let index = Cpu.tensor([0u32, 2]).unwrap();
     /// let dispatch = index.one_hot::<3>().unwrap();
     /// assert_eq!(
     ///     dispatch.to_vec1::<bool>().unwrap(),
@@ -652,11 +727,103 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
         )
     }
 
+    /// Counts how many times each of `N` slots appears in this index tensor.
+    ///
+    /// The result is the histogram, rank one and `N` wide, whatever geometry
+    /// addressed the indices: a `[T, K]` assignment of `T` tokens to `K`
+    /// experts each counts into the same `[N]` row. Running `cumsum` over it
+    /// gives the offsets that describe where each expert's rows begin in a
+    /// grouped buffer, which is how a router avoids making the per-expert
+    /// token count a tensor extent.
+    ///
+    /// An index outside `0..N` is refused rather than dropped. A dropped index
+    /// would leave a count that is quietly low, and every offset after it
+    /// wrong by the same amount. [`Self::one_hot`] beside this takes the other
+    /// answer, an all-`false` row, because ONNX `OneHot` specifies it and
+    /// because an encoding that names no slot is still a well-formed row; a
+    /// count has no such reading.
+    ///
+    /// The output is `i64` and carries no gradient: it is a function of which
+    /// slot each index names, not of a value the tape can perturb.
+    ///
+    /// # Examples
+    ///
+    /// Counts include every index in a multidimensional input; unused slots
+    /// remain zero.
+    ///
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let index = Cpu.tensor([[2u32, 0], [2, 1]])?;
+    /// let counts = index.bincount::<4>()?;
+    /// assert_eq!(counts.to_vec1::<i64>()?, vec![1, 1, 2, 0]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[allow(clippy::type_complexity)]
+    pub fn bincount<const N: usize>(
+        &self,
+    ) -> Result<
+        crate::shapes::Dense<DimCons<ConstDim<N>, Nil>, B, i64, crate::tensor::grad::NoGrad, Local>,
+    >
+    where
+        DimCons<ConstDim<N>, Nil>: DynShape,
+        B: Execute<op::Bincount> + Capabilities,
+        <B as Execute<op::Bincount>>::Output: Into<B::Storage<i64>>,
+    {
+        let output_shape =
+            ShapeValue::<DimCons<ConstDim<N>, Nil>>::try_new(ShapeBuf::from_slice(&[N]))
+                .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        // Disabled rather than this tensor's own mode, the same reason
+        // `one_hot` gives: the result is `NoGrad` whatever the receiver was.
+        let context = ExecutionContext::from_scope(B::default())
+            .with_grad_mode(crate::exec::GradMode::Disabled);
+        let inner = crate::exec::GradMode::Disabled
+            .restrict(|| {
+                dispatch::execute_shaped::<op::Bincount, B, DimCons<ConstDim<N>, Nil>>(
+                    &context,
+                    BincountAttributes { bins: N },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        crate::shapes::Dense::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            core::marker::PhantomData,
+            self._device.clone(),
+            crate::tensor::grad::NoGrad::init(()),
+        )
+    }
+
     /// Selects slices along `dim` given 1D `index`.
-    pub fn index_select<A, S2: Shape, KInt: crate::tensor::dtype::DType, G2: RequiresGrad>(
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0], [5.0, 6.0]]).unwrap();
+    /// let order = Cpu.tensor([2u32, 0]).unwrap();
+    /// let sel = t.index_select(0isize, &order).unwrap();
+    /// assert_eq!(sel.to_vec1::<f32>().unwrap(), vec![5.0, 6.0, 1.0, 2.0]);
+    /// ```
+    pub fn index_select<
+        A,
+        S2: Shape,
+        KInt: crate::tensor::dtype::DType,
+        G2: RequiresGrad,
+        L2: Layout<S2>,
+    >(
         &self,
         axis: A,
-        index: &Tensor<S2, B, KInt, G2>,
+        index: &Tensor<S2, B, KInt, G2, Local, L2>,
     ) -> Result<crate::shapes::Dense<A::Output, B, K, G, Local>>
     where
         A: ReplaceAxisSelector<S>,
@@ -711,6 +878,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Returns upper triangular part of matrix.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let u = t.triu(0).unwrap();
+    /// assert_eq!(u.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 0.0, 4.0]);
+    /// ```
     pub fn triu(&self, k: i64) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::Triu> + Capabilities,
@@ -738,6 +916,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Returns lower triangular part of matrix.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let l = t.tril(0).unwrap();
+    /// assert_eq!(l.to_vec1::<f32>().unwrap(), vec![1.0, 0.0, 3.0, 4.0]);
+    /// ```
     pub fn tril(&self, k: i64) -> Result<crate::shapes::Dense<S, B, K, G, Local>>
     where
         B: Execute<op::Tril> + Capabilities,
@@ -765,6 +954,17 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts or constructs diagonal tensor.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]]).unwrap();
+    /// let d = t.diag(0).unwrap();
+    /// assert_eq!(d.to_vec1::<f32>().unwrap(), vec![1.0, 4.0]);
+    /// ```
     pub fn diag(&self, k: i64) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         B: Execute<op::Diag> + Capabilities,
@@ -814,6 +1014,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// The explicit output type preserves the selector's shape proof. The
     /// nested generic return is intentionally allowed here because replacing
     /// it with a dynamic tensor would discard that proof.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0, 4.0, 5.0]).unwrap();
+    /// let parts = t.chunk(2, 0isize).unwrap();
+    /// assert_eq!(parts.len(), 2);
+    /// assert_eq!(parts[0].to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0]);
+    /// assert_eq!(parts[1].to_vec1::<f32>().unwrap(), vec![4.0, 5.0]);
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn chunk<A>(
         &self,
@@ -856,6 +1069,19 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// The explicit output type preserves the selector's shape proof. The
     /// nested generic return is intentionally allowed here because replacing
     /// it with a dynamic tensor would discard that proof.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0, 4.0, 5.0]).unwrap();
+    /// let parts = t.split(2, 0isize).unwrap();
+    /// assert_eq!(parts.len(), 3);
+    /// assert_eq!(parts[0].to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// assert_eq!(parts[2].to_vec1::<f32>().unwrap(), vec![5.0]);
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn split<A>(
         &self,
@@ -891,6 +1117,18 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     }
 
     /// Extracts sliding window slices along `dim`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0, 4.0]).unwrap();
+    /// let w = t.unfold(0, 2, 2).unwrap();
+    /// assert_eq!(w.dims().dims(), &[2, 2]);
+    /// assert_eq!(w.to_vec1::<f32>().unwrap(), vec![1.0, 2.0, 3.0, 4.0]);
+    /// ```
     pub fn unfold(
         &self,
         dim: usize,
@@ -959,11 +1197,19 @@ pub(crate) fn execute_masked_fill_descriptor<
     value: f64,
 ) -> Result<Tensor<S, B, K, G1, Local, crate::shapes::RowMajor>>
 where
-    S: ShapeEq<S2>,
+    // #100's directional pin: the mask `S2` broadcasts *into* the input `S`,
+    // so the broadcast of the pair resolves to the input's own shape type and
+    // the output keeps `S`. `ShapeEq` stays for the exact-match ops (scatter,
+    // dot, lerp, `*_exact`); it was over-strict here and rejected the
+    // rank-deficit masks NumPy/PyTorch admit.
+    S: crate::shapes::broadcast::BroadcastShape<S2, Output = S>,
     B: Execute<op::MaskedFill>,
     <B as Execute<op::MaskedFill>>::Output: Into<B::Storage<K>>,
 {
-    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    // Forces the pinned broadcast pair's output to be a well-formed static
+    // shape before any storage is touched, mirroring `broadcast_to`'s use of
+    // the same constant (reshape.rs).
+    <<S as crate::shapes::broadcast::BroadcastShape<S2>>::Output as Shape>::STATIC_VALID;
     let h_input = TensorHandle::from_storage::<B, K, Local>(&input.inner);
     let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
     let shape_val = input._shape.clone();
@@ -1002,11 +1248,18 @@ pub(crate) fn execute_where_cond_descriptor<
     // one of three operands' layouts, none of which describes what was written.
 ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor>>
 where
-    S: ShapeEq<S2>,
+    // #100's directional pin: the mask `S` broadcasts *into* the data `S2`,
+    // so the broadcast of the trio resolves to the data's own shape type and
+    // the output keeps `S2`. The descriptor's `OutputRule::Broadcast` re-checks
+    // the same direction at runtime (its inferred shape must equal the `S2`
+    // the caller holds), which is what fails closed for `Dyn` operands.
+    S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
     B: Execute<op::WhereCond>,
     <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
 {
-    <S as ShapeEq<S2>>::ASSERT_SHAPES_MATCH;
+    // Same well-formedness forcing `broadcast_to` applies to its pinned pair
+    // (#100), here over the data's output type.
+    <S2 as Shape>::STATIC_VALID;
     let h_mask = TensorHandle::from_storage::<B, bool, Local>(&mask.inner);
     let h_true = TensorHandle::from_storage::<B, K, Local>(&on_true.inner);
     let h_false = TensorHandle::from_storage::<B, K, Local>(&on_false.inner);
@@ -1032,13 +1285,32 @@ impl<S: Shape + DynShape, B: Backend + Capabilities + Default, G: RequiresGrad, 
     Tensor<S, B, bool, G, Local, L>
 {
     /// Conditional selection: picks elements from `on_true` where `self` is true, and `on_false` elsewhere.
+    ///
+    /// The mask (`self`, shape `S`) broadcasts into the data operands (shape
+    /// `S2`): `S: BroadcastShape<S2, Output = S2>` is #100's directional pin,
+    /// so a causal `[T, T]` mask selects over `[B, H, T, T]` scores without an
+    /// explicit `broadcast_to`, and the result keeps the data's `S2` type. A
+    /// mask larger than the data has no matching `Output` and cannot compile.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let a = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap();
+    /// let b = Cpu.tensor([10.0f32, 20.0, 30.0]).unwrap();
+    /// let mask = a.gt(&Cpu.tensor([1.5f32, 1.5, 1.5]).unwrap()).unwrap();
+    /// let out = mask.where_cond(&a, &b).unwrap();
+    /// assert_eq!(out.to_vec1::<f32>().unwrap(), vec![10.0, 2.0, 3.0]);
+    /// ```
     pub fn where_cond<S2: Shape, K: DType, G2: RequiresGrad, L2: Layout<S2>>(
         &self,
         on_true: &Tensor<S2, B, K, G2, Local, L2>,
         on_false: &Tensor<S2, B, K, G2, Local, L2>,
     ) -> Result<Tensor<S2, B, K, G2, Local, crate::shapes::RowMajor>>
     where
-        S: ShapeEq<S2>,
+        S: crate::shapes::broadcast::BroadcastShape<S2, Output = S2>,
         B: Execute<op::WhereCond>,
         <B as Execute<op::WhereCond>>::Output: Into<B::Storage<K>>,
     {

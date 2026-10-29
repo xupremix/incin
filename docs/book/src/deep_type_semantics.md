@@ -162,6 +162,28 @@ backends declare per-operation dtype support through
 [`SupportsDType`](./backend_authoring.md), and an unsupported pairing is a
 compile error naming both sides.
 
+One more step, and it is the one that separates an extension point from a
+demo: register the descriptor if your tensors are ever written to disk.
+
+```rust,ignore
+DTypeRegistry::register(PACKED_3X5)?;      // once, at startup
+let model = load_checkpoint("model.safetensors")?;  // now readable
+```
+
+`DTypeKey` holds `&'static str`, and a key read back off the wire holds owned
+`String`s, so deserializing one means finding the `'static` descriptor it
+names. Built-ins resolve through a match arm. A custom dtype has nothing to
+match against until it is registered, and an unregistered key is refused
+rather than guessed at. Registration has to happen before the load, not before
+first use: nothing can detect a late one, because the failure it causes has
+already happened by the time anything could look.
+
+Registering the same key twice with the same descriptor is fine, which is what
+lets two crates depend on a third that registers its own dtype without
+ordering themselves. Registering it with a *different* descriptor is refused,
+because the alternative is reading the second caller's tensors with the first
+caller's encoding: a silent corruption rather than a load failure.
+
 ## Defining your own devices
 
 Devices come in three tiers of compile-time knowledge:

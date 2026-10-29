@@ -15,6 +15,12 @@
 //! | [`MaxPool2d`] | 2D Max Pooling |
 //! | [`AvgPool2d`] | 2D Average Pooling |
 //! | [`Embedding`] | Embedding lookup table |
+//! | [`MultiHeadAttention`] | Multi-head / grouped-query attention with rotary positions (issue #101) |
+//! | [`CrossAttention`] | Attention over two sequences: queries from one, keys/values from another (issue #101) |
+//! | [`FeedForward`] | Position-wise feed-forward block, including gated SwiGLU |
+//! | [`TransformerEncoderLayer`] | Bidirectional self-attention + feed-forward with residuals and norms |
+//! | [`TransformerDecoderLayer`] | Causal (masked) self-attention + feed-forward with residuals and norms |
+//! | [`MoE`] | Sparse mixture of experts with soft top-k routing (issue #102) |
 //!
 //! ## Activations
 //!
@@ -42,6 +48,10 @@
 //! |--------|-------------|
 //! | [`RNNCell`] | Single Elman RNN step |
 //! | [`RNN`] | Multi-step sequence RNN |
+//! | [`GRUCell`] | Single gated recurrent unit step |
+//! | [`GRU`] | Multi-step sequence GRU layer |
+//! | [`LSTMCell`] | Single long short-term memory step |
+//! | [`LSTM`] | Multi-step sequence LSTM layer |
 //!
 //! ## Parameters & Buffers
 //!
@@ -51,22 +61,38 @@
 pub mod activation;
 /// `adaptive_avg_pool2d`.
 pub mod adaptive_avg_pool2d;
+/// Multi-head attention, grouped-query attention and rotary positions.
+pub mod attention;
 /// `avg_pool2d`.
 pub mod avg_pool2d;
 /// `batch_norm`.
 pub mod batch_norm;
+/// `batch_norm1d`.
+pub mod batch_norm1d;
 /// `conv1d`.
 pub mod conv1d;
 /// `conv2d`.
 pub mod conv2d;
+/// `conv_transpose2d`.
+pub mod conv_transpose2d;
 /// Randomly zeroes activations during training.
 pub mod dropout;
 /// `embedding`.
 pub mod embedding;
+/// Position-wise feed-forward networks, including the gated SwiGLU shape.
+pub mod feed_forward;
 /// `flatten`.
 pub mod flatten;
+/// `group_norm`.
+pub mod group_norm;
+/// The gated recurrent unit, alongside `rnn` and `lstm`.
+pub mod gru;
 /// `init`.
 pub mod init;
+/// `instance_norm`.
+pub mod instance_norm;
+/// Typed preallocated key/value cache for incremental decoding (issue #104).
+pub mod kv_cache;
 /// `layer_norm`.
 pub mod layer_norm;
 /// `linear`.
@@ -79,6 +105,8 @@ pub mod lstm;
 pub mod max_pool2d;
 /// `module`.
 pub mod module;
+/// Typed sparse mixture-of-experts routing (issue #102).
+pub mod moe;
 /// `optional`.
 pub mod optional;
 /// `param`.
@@ -97,21 +125,38 @@ pub mod save;
 pub mod state;
 /// `stats`.
 pub mod stats;
+/// Transformer encoder and decoder layers.
+pub mod transformer;
+/// `upsample`.
+pub mod upsample;
 
 pub use activation::{ELU, GELU, Mish, ReLU, Sigmoid, Softmax, Swish, Tanh};
 pub use adaptive_avg_pool2d::AdaptiveAvgPool2d;
+pub use attention::{
+    AttentionBackend, AttentionConfig, AttentionCrossover, AttentionPath, AttentionPreference,
+    AttentionSelection, AttentionSelectionSource, CrossAttention, FusedAttentionBackend,
+    FusedAttentionOutput, MultiHeadAttention, PositionEncoding, RotaryBackend,
+    fused_or_composed_attention, select_attention_path,
+};
 pub use avg_pool2d::AvgPool2d;
 pub use batch_norm::{BatchNorm2d, BatchNorm2dBuilder, BatchNormShape, batch_norm2d};
+pub use batch_norm1d::{BatchNorm1d, BatchNorm1dShape};
+pub use conv_transpose2d::{ConvTranspose2d, ConvTranspose2dShape, transpose_out_size};
 pub use conv1d::{Conv1d, Conv1dBuilder, Conv1dShape, conv1d};
 pub use conv2d::{Conv2d, Conv2dBuilder, Conv2dShape, conv2d};
 pub use dropout::Dropout;
 pub use embedding::{Embedding, EmbeddingBuilder, EmbeddingShape, embedding};
+pub use feed_forward::{FeedForward, FeedForwardBackend, FeedForwardKind};
 pub use flatten::{Flatten, FlattenAxes, StructuralFlatten};
+pub use group_norm::{GroupNorm, GroupNormShape};
+pub use gru::{GRU, GRUBuilder, GRUCell, GRUCellBuilder, GruShape, gru, gru_cell};
 pub use init::{
     Fan, Init, InitContext, InitPlan, ParameterRole, constant, kaiming_normal,
     kaiming_normal_with_a, kaiming_uniform, kaiming_uniform_with_a, normal, ones, rand, randn,
     uniform, xavier_normal, xavier_uniform, zeros,
 };
+pub use instance_norm::{InstanceNorm, InstanceNormShape};
+pub use kv_cache::KvCache;
 pub use layer_norm::{LayerNorm, LayerNormBuilder, LayerNormShape, layer_norm};
 pub use linear::{Linear, LinearBuilder, LinearShape, linear};
 #[cfg(feature = "distributed")]
@@ -124,6 +169,7 @@ pub use module::{
     VisitParameters, assign_sequential_names, clean_type_name, format_layer_summary,
     format_layer_summary_with_stats, update_node_name_prefix,
 };
+pub use moe::{FreezeExpert, MoE, MoEBackend, Router, RouterBackend, Routing, UnfreezeExpert};
 pub use optional::{False, OptionalField, True};
 pub use param::{Buffer, Frozen, Param, TrainState, Trainable};
 pub use rms_norm::{RMSNorm, RMSNormBuilder, RMSNormShape, rms_norm};
@@ -141,3 +187,8 @@ pub use state::{
     StateVisitor, VisitState, VisitStateMut, collect_state, load_state,
 };
 pub use stats::{ComputeStats, LayerStats, ModelStats, sum_stats};
+pub use transformer::{
+    AttentionDirection, Bidirectional, Causal, NormPlacement, TransformerBackend,
+    TransformerConfig, TransformerDecoderLayer, TransformerEncoderLayer, TransformerLayer,
+};
+pub use upsample::{Upsample, UpsampleMode};

@@ -20,6 +20,7 @@ never embedded in diagnostics.
 | Module/state dictionary | `Error::InvalidModuleState` |
 | Malformed model/data/artifact | `Error::MalformedArtifact` |
 | I/O and resource bounds | `Error::Io`, `Error::ResourceLimit` |
+| KV cache capacity overflow (#104) | `Error::CacheCapacityExceeded` |
 | Internal invariant | `Error::InternalInvariant` |
 
 `ErrorMessage` truncates external diagnostic text at a UTF-8 boundary to

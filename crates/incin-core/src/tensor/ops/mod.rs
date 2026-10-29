@@ -1,5 +1,7 @@
 /// `binary`.
 pub mod binary;
+/// `fp8`.
+pub mod fp8;
 /// `index`.
 pub mod index;
 /// `loss`.
@@ -8,12 +10,15 @@ pub mod loss;
 pub mod manipulation;
 /// `module`.
 pub mod module;
+/// `quantization`.
+pub mod quantization;
 /// `reduce`.
 pub mod reduce;
 /// `unary`.
 pub mod unary;
 
 pub use index::{DTypeEq, IndexArgs, IndexSpec, ShapeEq};
+pub use quantization::{FloatCapable, QuantCapable};
 
 /// Resolves the deliberately infallible Rust operator surface.
 ///

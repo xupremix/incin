@@ -188,10 +188,13 @@ impl<
         + Execute<op::AddScalar>,
     K: DType,
     Train: TrainState,
+    G: crate::tensor::grad::RequiresGrad
+        + crate::tensor::grad::GradJoin<G, Output = G>
+        + crate::tensor::grad::GradJoin<Train::TensorGrad>,
     L: crate::shapes::Layout<InS>
         + crate::shapes::Layout<crate::shapes::Dyn>
         + crate::shapes::Restatable,
-> Module<Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>> for RMSNorm<S, B, K, Train>
+> Module<Tensor<InS, B, K, G, Local, L>> for RMSNorm<S, B, K, Train>
 where
     <InS as ReduceKeepAt<FromEnd<Here>>>::Output: DynShape,
     <B as Execute<op::SumKeepDim>>::Output: Into<B::Storage<K>>,
@@ -203,13 +206,19 @@ where
 {
     /// `Dense`: the chain ends in `broadcast_mul`, which allocates, and
     /// `into_shape` re-describes that buffer without moving it.
-    type Output = crate::shapes::Dense<InS, B, K, Train::TensorGrad, Local>;
+    type Output = crate::shapes::Dense<
+        InS,
+        B,
+        K,
+        crate::tensor::grad::JoinedGrad<G, Train::TensorGrad>,
+        Local,
+    >;
     type Error = Error;
 
     #[inline]
     fn forward(
         &self,
-        x: Tensor<InS, B, K, crate::tensor::grad::NoGrad, Local, L>,
+        x: Tensor<InS, B, K, G, Local, L>,
     ) -> core::result::Result<Self::Output, Error> {
         // RMSNorm: x * weight / sqrt(mean(x^2) + eps)
         let weight = self.weight.as_tensor()?.into_dyn();

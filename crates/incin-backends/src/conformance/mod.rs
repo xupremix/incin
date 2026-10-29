@@ -32,13 +32,27 @@
 //! of the harness is actually reading. A backend whose executors trusted the
 //! dispatcher instead would fail here, which is the point.
 //!
-//! It does **not** check values, and it does not check gradients. Values are
-//! meaningless while the oracle and the subject are the same backend, and they
-//! become meaningful the moment a second backend runs through the same driver.
-//! Gradients are a separate harness rather than another axis on this loop: the
-//! `Training` column is a claim about a derivative, and checking a derivative
-//! means finite differences or a recorded reference, not a second call to the
-//! same dispatcher.
+//! It does **not** check values. Values are meaningless while the oracle and
+//! the subject are the same backend, and they become meaningful the moment a
+//! second backend runs through the same driver. (`tests/conformance_values.rs`
+//! checks CPU forward values against an independent `f64` oracle.)
+//!
+//! Gradients are checked one level down, in
+//! [`check_gradients`](crate::conformance::check_gradients): the tape-depth probe
+//! here says a training row recorded *something*, and the central-difference
+//! sweep there says the something it recorded computes the right derivative.
+//! A `Training: yes` row with a wrong or missing backward fails the harness,
+//! which is the check that would have caught the pre-#93 gaps.
+//!
+//! The full registry-enumerated matrix across every backend family lives in
+//! [`run_matrix`](crate::conformance::run_matrix): the CPU leg executes, and the CUDA, WGPU, and Metal legs
+//! enumerate their registries with explicit
+//! [`SkipReason::NoDevice`](crate::conformance::SkipReason::NoDevice)
+//! verdicts until the #82 runner gives them a device. The machine-readable
+//! artifact the documentation generator reads is
+//! [`Artifact`](crate::conformance::Artifact), and the one
+//! tolerance table every comparison here uses is
+//! [`Tolerance`](crate::conformance::Tolerance).
 //!
 //! # Coverage is a number, not a wall
 //!
@@ -58,6 +72,16 @@ mod operands;
 mod plan;
 mod shaped;
 
+/// The machine-readable artifact: schema, version, and writer.
+mod artifact;
+/// Gradient correctness for training rows: analytic recipes against central
+/// differences.
+mod gradient;
+/// The registry-enumerated matrix across every backend family.
+mod matrix;
+/// The one tolerance table every comparison in this harness reads.
+mod tolerance;
+
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -70,6 +94,19 @@ use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 pub use fixtures::Coverage;
 pub use plan::{AdvertisedTuple, RANK_CAP, advertised_tuples};
 
+pub use artifact::{
+    Artifact, CellRecord, DEFAULT_PATH, ExampleTuple, LegSummary, SCHEMA_VERSION, SkippedGroup,
+};
+pub use gradient::{
+    GRADIENT_OPERATION_FLOOR, GRADIENT_OPERATIONS, GradientObservation, GradientVerdict,
+    check_gradients, findings_text as gradient_findings_text,
+};
+pub use matrix::{
+    CellVerdict, MatrixCell, MatrixReport, SkipReason, map_oracle_verdict, run_matrix,
+};
+pub use tolerance::{EXCEPTIONS, Tolerance, for_dtype, for_operation, gradient_options};
+
+use crate::cpu::tape;
 use fixtures::{Route, Subject};
 
 /// What running one advertised tuple concluded.
@@ -78,6 +115,12 @@ use fixtures::{Route, Subject};
 /// because a report that lumps them together costs a reader the triage the
 /// harness already did.
 #[derive(Debug, Clone, PartialEq, Eq)]
+// This enum exists to grow: every new class of conformance finding is a new
+// variant, and `RecordedOneOutputTwice` was added after `RecordedNothing` had
+// been the only recording verdict for a whole release cycle. Marking it
+// non-exhaustive is what keeps the next one from being a breaking change for
+// anyone matching on a report.
+#[non_exhaustive]
 pub enum Verdict {
     /// The tuple ran and produced a result. The advertisement holds.
     Executed,
@@ -94,6 +137,34 @@ pub enum Verdict {
     /// error contract says a bad invocation comes back as a value, and a
     /// panic past admission is as much a contract break as one before it.
     Panicked(String),
+    /// The tuple ran, and the row said it trains, but the kernel recorded
+    /// nothing on the tape, and the operation is not one of the declared
+    /// zero-derivative ones.
+    ///
+    /// A capability defect of the quietest kind. The dispatcher enforces the
+    /// row in one direction only: a query asking for training is refused when
+    /// the row does not claim it (`exec::capability`). Nothing enforced the
+    /// converse, so a row could claim training while its kernel forgot to
+    /// push, and the result is a graph with a hole in it. `backward` then
+    /// reaches the operations below the hole and not the ones above, the
+    /// optimizer skips the parameters it found no gradient for, and the run
+    /// finishes having trained part of the model.
+    RecordedNothing,
+    /// Two tape nodes from one invocation claimed the same output identity.
+    ///
+    /// The mirror image of [`RecordedNothing`](Self::RecordedNothing), and
+    /// invisible to the same measurement: recording twice makes the tape grow,
+    /// so a depth comparison reports the row as holding. The reverse walk then
+    /// finds both nodes, hands each the same output gradient, and sums two
+    /// contributions into every input, so every gradient below the operation
+    /// is doubled. Nothing else catches it. The shapes agree, the arity check
+    /// passes, and the number that comes out is plausible.
+    ///
+    /// Recording several nodes is not itself a finding, and cannot be: a
+    /// composed implementation records one per intermediate. What is never
+    /// legitimate is two of them naming one value, because a fresh allocation
+    /// mints a fresh identity.
+    RecordedOneOutputTwice(usize),
     /// Nothing was concluded, because the harness could not pose the question.
     NotCovered(Coverage),
 }
@@ -104,7 +175,12 @@ impl Verdict {
     pub const fn is_finding(&self) -> bool {
         matches!(
             self,
-            Self::Refused(_) | Self::Rejected(_) | Self::Failed(_) | Self::Panicked(_)
+            Self::Refused(_)
+                | Self::Rejected(_)
+                | Self::Failed(_)
+                | Self::Panicked(_)
+                | Self::RecordedNothing
+                | Self::RecordedOneOutputTwice(_)
         )
     }
 }
@@ -198,6 +274,21 @@ impl OracleReport {
                 Verdict::Panicked(why) => {
                     alloc::format!("  PANICKED {}: {why}\n", observation.tuple.label())
                 }
+                Verdict::RecordedOneOutputTwice(nodes) => alloc::format!(
+                    "  DOUBLE RECORD {}: {nodes} tape nodes were pushed and two of them \
+                     claim the same output, so the reverse walk runs both recipes against \
+                     one gradient and doubles every input below this operation. A kernel \
+                     that composes built-in operations must run them with recording \
+                     disabled.\n",
+                    observation.tuple.label()
+                ),
+                Verdict::RecordedNothing => alloc::format!(
+                    "  NO RECIPE {}: the row claims training and the kernel recorded no \
+                     tape node, so a graph through this operation has a hole in it. Give \
+                     the kernel a backward rule, or, if its derivative is genuinely zero \
+                     or undefined, add it to `carries_no_gradient` with the reason.\n",
+                    observation.tuple.label()
+                ),
                 _ => String::new(),
             };
             out.push_str(&line);
@@ -276,17 +367,110 @@ fn execute_tuple(
     // instead has broken it, and a harness that dies on the first one reports
     // a single tuple where a reader wanted all of them. This caught
     // `dot`'s validation indexing into a rank-zero shape.
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        (fixture.run)(context, tuple, route, &handles)
-    }));
+    //
+    // A training tuple runs inside an enabled `GradMode` and is measured. The
+    // tape is thread-local and the harness is single-threaded per test, so the
+    // depth before and after bracket exactly this invocation. `Enabled` is set
+    // explicitly rather than inherited: the ambient default already records,
+    // but a harness that depended on the default would stop measuring anything
+    // the day the default changed, and would report every row as holding.
+    let before = tape::depth();
+    let outcome = incin_core::exec::GradMode::Enabled.scope(|| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (fixture.run)(context, tuple, route, &handles)
+        }))
+    });
+    let recorded = tape::depth() > before;
+
+    // How much a kernel recorded is not the only question worth asking of it.
+    // `depth` counts nodes, and a count cannot separate a composed
+    // implementation recording its intermediates from one operation recording
+    // its own output twice: 90 of the tuples posed here are declared `Native`
+    // and legitimately record between two and thirteen nodes, so there is no
+    // expected count to compare against. The identities can separate them,
+    // because each intermediate allocation mints its own, so a repeated output
+    // identity is never a composition and always two recipes claiming one
+    // value.
+    //
+    // The identities are collected only for the training tuples that recorded
+    // something, and the rest take the cheaper drain. Either way the tape is
+    // emptied: the harness poses thousands of tuples on one thread, and nodes
+    // left behind would make the next measurement read this one's.
+    let duplicate_output = if tuple.training && recorded {
+        let mut output_ids = tape::drain_output_ids();
+        let node_count = output_ids.len();
+        output_ids.sort_unstable();
+        output_ids.dedup();
+        if output_ids.len() == node_count {
+            None
+        } else {
+            Some(node_count)
+        }
+    } else {
+        tape::clear();
+        None
+    };
 
     match outcome {
+        Ok(Ok(())) if duplicate_output.is_some() => {
+            Verdict::RecordedOneOutputTwice(duplicate_output.unwrap_or_default())
+        }
+        Ok(Ok(())) if tuple.training && !recorded && !carries_no_gradient(tuple) => {
+            Verdict::RecordedNothing
+        }
         Ok(Ok(())) => Verdict::Executed,
         Ok(Err(error)) => classify(&error),
         Err(_) => Verdict::Panicked(
             "panicked; the descriptor contract requires a returned error".to_string(),
         ),
     }
+}
+
+/// Operations that legitimately record nothing under training.
+///
+/// A capability row claiming `training` says the operation *runs* in a
+/// training graph, not that it carries gradient into its inputs. For most
+/// operations those are the same thing, and an operation that runs under
+/// training and pushes no node has a hole where its derivative should be. For
+/// these, recording nothing is the derivative.
+///
+/// Declared here, by hand, with a reason each, rather than inferred. There is
+/// no way to look at a kernel and tell "this has no derivative" apart from
+/// "this forgot to write one", which is exactly the confusion that let `sin`
+/// and `cos` sit in the second group looking like the first. A new operation
+/// is a finding until somebody writes down which group it is in.
+///
+/// The longer-term shape is a differentiability property on the catalog
+/// operation itself, so a custom operation could declare it too. That belongs
+/// on the operation rather than on a backend's capability row, since whether
+/// `floor` has a derivative is not a fact about CPU.
+fn carries_no_gradient(tuple: &AdvertisedTuple) -> bool {
+    // A cast is differentiable exactly when both ends are floating. The
+    // integer end of one truncates, so its derivative is zero almost
+    // everywhere and passing a gradient through would report a sensitivity
+    // the forward pass does not have. The tuple's dtype is the end that
+    // varies, so a non-float one here is an integer cast.
+    if tuple.operation == OperationKind::ToDType {
+        return !tuple.dtype.builtin_id().is_some_and(DTypeId::is_float);
+    }
+
+    matches!(
+        tuple.operation,
+        // Piecewise constant. The derivative is zero wherever it exists, and
+        // zero is a gradient rather than a missing one.
+        OperationKind::Sign
+            | OperationKind::Floor
+            | OperationKind::Ceil
+            | OperationKind::Round
+            | OperationKind::Trunc
+            // Reads indices and writes an indicator. There is no dense input
+            // to be sensitive to.
+            | OperationKind::OneHot
+            // Reads the same indices and writes how many landed in each slot.
+            // Perturbing an index does not move a count continuously; it moves
+            // one count to another slot.
+            | OperationKind::Bincount
+    )
 }
 
 /// Pose one advertised tuple: the registry must admit it and the backend must
@@ -306,11 +490,21 @@ fn pose(context: &ExecutionContext<Subject>, tuple: &AdvertisedTuple) -> Verdict
 /// handed to an operation whose descriptor requires a float is refused two
 /// layers before the kernel, and a check that stopped there would report the
 /// contract holding while never having reached the kernel at all.
+///
+/// The halves ride this list since issue #90 widened the matmul family
+/// (`MatMulExact`/`BatchedMatMul`/`Addmm`/`Linear`) to `FLOAT_DTYPES`: a
+/// `F32_ONLY` row beside them (`Dot`, `Outer`, `ScaledDotProductAttention`,
+/// every reduction and norm) that quietly executed an `f16` operand would be
+/// unadvertised-but-executed, and a probe set without halves could never
+/// observe it. Rows that do advertise halves filter them back out below, so
+/// they pay nothing for the wider list.
 fn unadvertised_dtypes(operation: OperationKind) -> Vec<DTypeDescriptor> {
-    const CANDIDATES: [DTypeId; 5] = [
+    const CANDIDATES: [DTypeId; 7] = [
         DTypeId::Bool,
         DTypeId::U8,
         DTypeId::I64,
+        DTypeId::F16,
+        DTypeId::BF16,
         DTypeId::F32,
         DTypeId::F64,
     ];

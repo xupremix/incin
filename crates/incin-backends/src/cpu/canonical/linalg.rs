@@ -11,11 +11,16 @@ use incin_core::tensor::dtype::DTypeId;
 use crate::cpu::CpuBackendImpl;
 use crate::cpu::canonical::common::{admitted, operand, reduction_operand, training_mode};
 use crate::cpu::capability::CPU_NAME;
-use crate::cpu::ops::quant::{dequantize_storage, quantize_storage, quantized_matmul_storage};
+use crate::cpu::ops::matmul::grouped_matmul_impl;
+use crate::cpu::ops::quant::{
+    dequantize_storage, quantize_mxfp4_storage, quantize_nvfp4_storage, quantize_storage,
+    quantized_matmul_storage,
+};
 use crate::cpu::ops::shape_ops::{
     addmm_storage, reshape_storage, transpose_storage, unsqueeze_storage,
 };
 use crate::cpu::storage::CpuStorage;
+use crate::cpu::tape::{self, TapeEntry};
 use crate::descriptor_bind::{invalid, kernel_error};
 
 fn binary_operands<'a, D: Device>(
@@ -70,16 +75,26 @@ impl<D: Device> Execute<op::MatMulExact> for CpuBackendImpl<D> {
         };
         let lhs = operand(lhs, operation)?;
         let rhs = operand(rhs, operation)?;
+        // The capability row states FLOAT_DTYPES - the union across
+        // operands - so the real constraint (both sides the *same* float
+        // dtype) cannot live in the row. Mirror `GroupedMatMul`'s executor
+        // re-check below: refuse a non-float or mixed pair fail-closed
+        // before `admitted` or the kernel is consulted. Dispatch-level
+        // calls already stop earlier at the descriptor's same-dtype rule;
+        // this is the layer that answers direct `Execute` and
+        // `Route::PastAdmission` invocations.
+        let lhs_dtype = lhs.metadata().dtype();
+        let rhs_dtype = rhs.metadata().dtype();
+        if !lhs_dtype.is_float() || lhs_dtype != rhs_dtype {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: lhs_dtype,
+                },
+            ));
+        }
         for storage in [lhs, rhs] {
-            if storage.metadata().dtype() != DTypeId::F32.descriptor() {
-                return Err(BackendError::unsupported(
-                    CPU_NAME,
-                    UnsupportedReason::DType {
-                        operation,
-                        dtype: storage.metadata().dtype(),
-                    },
-                ));
-            }
             admitted(self, operation, storage, training_mode(request.context))?;
         }
         crate::cpu::ops::shape_ops::matmul_storage(lhs, rhs)
@@ -185,13 +200,40 @@ impl<D: Device> Execute<op::Quantize> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         let dtype = request.operation.descriptor().attributes().dtype;
-        if dtype != DTypeId::Q8_0.descriptor() {
+        // Issue #95: the target block dtype rides the `Quantize` attribute
+        // (same descriptor the capability row admits). Unreachable until the
+        // catalog + capability rows admit FP4 — but the routing is what makes
+        // that admission light up CPU execution with no further code change.
+        let output = if dtype == DTypeId::Q8_0.descriptor() {
+            quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))?
+        } else if dtype == DTypeId::NVFP4.descriptor() {
+            quantize_nvfp4_storage(input)
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))?
+        } else if dtype == DTypeId::MXFP4.descriptor() {
+            quantize_mxfp4_storage(input)
+                .map_err(|error| kernel_error(CPU_NAME, operation, error))?
+        } else {
             return Err(BackendError::unsupported(
                 CPU_NAME,
                 UnsupportedReason::DType { operation, dtype },
             ));
-        }
-        quantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+        };
+        // Straight-through estimator (issue #93, Decision 2): the forward is
+        // the true block-quantized value, and the backward passes the
+        // cotangent through unchanged - `grad_in = grad_out` - rather than
+        // differentiating the rounding, which has no derivative. Q8_0 scales
+        // each block by its own `max_abs / 127`, so nothing saturates and
+        // there is no clip range to zero outside of; a fixed-range format
+        // would mask with `1{|x| <= clip}` here. PyTorch QAT's
+        // `FakeQuantize` rule, documented as an approximation in the
+        // generated operation semantics (`GradientRule::StraightThrough`).
+        let (input_id, output_id) = (input.id, output.id);
+        tape::push_with(|| TapeEntry {
+            output_id,
+            input_ids: vec![input_id],
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+        });
+        Ok(output)
     }
 }
 
@@ -216,7 +258,20 @@ impl<D: Device> Execute<op::Dequantize> for CpuBackendImpl<D> {
                 UnsupportedReason::DType { operation, dtype },
             ));
         }
-        dequantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))
+        let output =
+            dequantize_storage(input).map_err(|error| kernel_error(CPU_NAME, operation, error))?;
+        // The dual of `quantize`'s straight-through node: decoding a block
+        // encoding has no derivative either, so the cotangent passes to the
+        // quantized operand unchanged. Together the two identity recipes make
+        // `dequantize(quantize(x))` backward exactly the identity, which is
+        // the boundary contract in issue #93, Decision 2.
+        let (input_id, output_id) = (input.id, output.id);
+        tape::push_with(|| TapeEntry {
+            output_id,
+            input_ids: vec![input_id],
+            backward: Box::new(|grad_out: &CpuStorage| Ok(vec![grad_out.clone()])),
+        });
+        Ok(output)
     }
 }
 
@@ -295,6 +350,49 @@ impl<D: Device> Execute<op::BatchedMatMul> for CpuBackendImpl<D> {
             training_mode(request.context),
         )?;
         crate::cpu::ops::shape_ops::matmul_storage(lhs, rhs)
+            .map_err(|error| kernel_error(CPU_NAME, operation, error))
+    }
+}
+
+impl<D: Device> Execute<op::GroupedMatMul> for CpuBackendImpl<D> {
+    type Output = CpuStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupedMatMul, Self>,
+    ) -> Result<CpuStorage, BackendError> {
+        let operation = OperationKind::GroupedMatMul;
+        let [lhs, rhs, offsets] = ternary_operands(
+            self,
+            request.inputs,
+            operation,
+            training_mode(request.context),
+        )?;
+        // The offsets operand is i64 by the descriptor's per-operand contract;
+        // the matrices must both be f32 (or both f64), which `writes_f32`
+        // inside the kernel re-checks because the capability row states the
+        // union of i64 and f32 and cannot carry the tighter split.
+        if offsets.metadata().dtype() != DTypeId::I64.descriptor() {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: offsets.metadata().dtype(),
+                },
+            ));
+        }
+        let lhs_dtype = lhs.metadata().dtype();
+        let rhs_dtype = rhs.metadata().dtype();
+        if !lhs_dtype.is_float() || lhs_dtype != rhs_dtype {
+            return Err(BackendError::unsupported(
+                CPU_NAME,
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: lhs_dtype,
+                },
+            ));
+        }
+        grouped_matmul_impl(lhs, rhs, offsets)
             .map_err(|error| kernel_error(CPU_NAME, operation, error))
     }
 }

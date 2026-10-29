@@ -143,5 +143,10 @@ pub const fn validate_hybrid_plan_dtype(dtype: DTypeId) -> Result<(), HybridPlan
         DTypeId::U8 | DTypeId::U32 | DTypeId::I64 | DTypeId::Q8_0 | DTypeId::Bool => {
             Err(HybridPlanError::UnsupportedDType { dtype })
         }
+        // Issue #94: fp8 plans refuse like Q8_0 (see collective.rs).
+        // Issue #95: block fp4 refuses likewise.
+        DTypeId::F8E4M3 | DTypeId::F8E5M2 | DTypeId::NVFP4 | DTypeId::MXFP4 => {
+            Err(HybridPlanError::UnsupportedDType { dtype })
+        }
     }
 }

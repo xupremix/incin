@@ -237,6 +237,46 @@ fn dyn_matmul_contracts_batched_operands() {
 }
 
 #[test]
+fn dyn_matmul_broadcasts_batch_dims_like_the_catalog() {
+    // A size-1 batch on the lhs stretches to the rhs's leading extent, so the
+    // frontend and `OutputRule::MatMul` agree on `[5,3,6]` rather than
+    // disagreeing inside `MatMulRule::agree`.
+    let out = <Dyn as MatMulShape<Dyn>>::output_shape(
+        &ShapeBuf::from_slice(&[1, 3, 4]),
+        &ShapeBuf::from_slice(&[5, 4, 6]),
+    )
+    .unwrap();
+    assert_eq!(out.as_ref(), &[5, 3, 6]);
+
+    // The mirror: lhs carries the batch, rhs is size-1.
+    let out = <Dyn as MatMulShape<Dyn>>::output_shape(
+        &ShapeBuf::from_slice(&[5, 3, 4]),
+        &ShapeBuf::from_slice(&[1, 4, 6]),
+    )
+    .unwrap();
+    assert_eq!(out.as_ref(), &[5, 3, 6]);
+
+    // A size-1 batch on *both* sides stays size-1 rather than unwrapping.
+    let out = <Dyn as MatMulShape<Dyn>>::output_shape(
+        &ShapeBuf::from_slice(&[1, 5, 8]),
+        &ShapeBuf::from_slice(&[8, 5]),
+    )
+    .unwrap();
+    assert_eq!(out.as_ref(), &[1, 5, 5]);
+
+    // Unequal non-1 batches are still refused, with the batch axis named.
+    let err = <Dyn as MatMulShape<Dyn>>::output_shape(
+        &ShapeBuf::from_slice(&[2, 3, 4]),
+        &ShapeBuf::from_slice(&[5, 4, 6]),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, ShapeError::DimensionMismatch { .. }),
+        "unexpected error {err}"
+    );
+}
+
+#[test]
 fn dynamic_matmul_requires_explicit_flattening() {
     // Matmul never silently folds a higher-rank lhs into a matrix. Callers
     // must make that layout change explicit before the contraction rule runs.

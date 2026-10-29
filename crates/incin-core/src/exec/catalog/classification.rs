@@ -154,6 +154,15 @@ pub enum GradientRule {
     Piecewise,
     /// Derivative undefined at stated points; kernels may emit NaN.
     Undefined,
+    /// The straight-through estimator (STE): an approximation, not the true
+    /// derivative. Backward passes the cotangent through unchanged where the
+    /// forward transform (here, block quantization's rounding) has no
+    /// derivative. This is the `quantize`/`dequantize` boundary's rule (issue
+    /// #93, Decision 2) and matches PyTorch QAT's `FakeQuantize`; a fixed
+    /// clip range would zero the cotangent outside `|x| <= clip`, but Q8_0's
+    /// per-block scale never
+    /// saturates, so the pass-through is unconditional.
+    StraightThrough,
     /// Fixed by typed inference rather than a listed rule.
     TypedContract,
 }

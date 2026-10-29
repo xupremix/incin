@@ -334,6 +334,23 @@ impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad, L: Layout<S
     Tensor<S, B, bool, G, Local, L>
 {
     /// Element-wise logical AND.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// // Bool tensors come from comparisons.
+    /// let a = Cpu.tensor([1.0f32, 0.0, 3.0]).unwrap()
+    ///     .gt(&Cpu.tensor([0.5f32, 0.5, 1.5]).unwrap()).unwrap();
+    /// let b = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap()
+    ///     .gt(&Cpu.tensor([1.5f32, 1.5, 1.5]).unwrap()).unwrap();
+    /// assert_eq!(
+    ///     a.logical_and(&b).unwrap().to_vec1::<bool>().unwrap(),
+    ///     vec![false, false, true]
+    /// );
+    /// ```
     pub fn logical_and<S2: Shape, G2: RequiresGrad, L2: Layout<S2>>(
         &self,
         rhs: &Tensor<S2, B, bool, G2, Local, L2>,
@@ -349,6 +366,22 @@ impl<S: Shape, B: Backend + Capabilities + Default, G: RequiresGrad, L: Layout<S
     }
 
     /// Element-wise logical OR.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let a = Cpu.tensor([1.0f32, 0.0, 3.0]).unwrap()
+    ///     .gt(&Cpu.tensor([0.5f32, 0.5, 1.5]).unwrap()).unwrap();
+    /// let b = Cpu.tensor([1.0f32, 2.0, 3.0]).unwrap()
+    ///     .gt(&Cpu.tensor([1.5f32, 1.5, 1.5]).unwrap()).unwrap();
+    /// assert_eq!(
+    ///     a.logical_or(&b).unwrap().to_vec1::<bool>().unwrap(),
+    ///     vec![true, true, true]
+    /// );
+    /// ```
     pub fn logical_or<S2: Shape, G2: RequiresGrad, L2: Layout<S2>>(
         &self,
         rhs: &Tensor<S2, B, bool, G2, Local, L2>,
@@ -394,6 +427,16 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
     Tensor<S, B, K, G, Local, L>
 {
     /// Subtracts a scalar: `self - scalar`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([1.0f32, 2.0]).unwrap();
+    /// assert_eq!(t.sub_scalar(5.0).unwrap().to_vec1::<f32>().unwrap(), vec![-4.0, -3.0]);
+    /// ```
     pub fn sub_scalar(&self, val: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::SubScalar>,
@@ -410,6 +453,16 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
     }
 
     /// Divides by a scalar: `self / scalar`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([2.0f32, 4.0]).unwrap();
+    /// assert_eq!(t.div_scalar(2.0).unwrap().to_vec1::<f32>().unwrap(), vec![1.0, 2.0]);
+    /// ```
     pub fn div_scalar(&self, val: f64) -> Result<Tensor<S, B, K, G, Local, RowMajor>>
     where
         B: Execute<op::DivScalar>,
@@ -426,6 +479,20 @@ impl<S: Shape, B: Backend + Capabilities + Default, K: DType, G: RequiresGrad, L
     }
 
     /// Linear interpolation: `self + weight * (end - self)`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let start = Cpu.tensor([0.0f32, 0.0]).unwrap();
+    /// let end = Cpu.tensor([10.0f32, 20.0]).unwrap();
+    /// assert_eq!(
+    ///     start.lerp(&end, 0.5).unwrap().to_vec1::<f32>().unwrap(),
+    ///     vec![5.0, 10.0]
+    /// );
+    /// ```
     pub fn lerp<S2: Shape, G2: RequiresGrad, L2: Layout<S2>>(
         &self,
         end: &Tensor<S2, B, K, G2, Local, L2>,

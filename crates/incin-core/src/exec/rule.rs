@@ -6,14 +6,13 @@
 use super::catalog::{
     AxisAttributes, Descriptor, LogicalTensorMeta, NoAttributes, ShapeAttributes, op,
 };
-use super::proof::Validated;
+use super::proof::{ShapeEvidence, Validated};
 use super::spec::ExecutionDescriptor;
-use crate::shapes::ProofLevel;
 use crate::shapes::ShapeBuf;
 use crate::shapes::error::{Axis, DimensionConstraint, OperationKind, RankExpectation, ShapeError};
 use crate::shapes::idx::AxisSelector;
 use crate::shapes::reshape::ReshapeShape;
-use crate::shapes::shape::{DynShape, Shape, ShapeValue};
+use crate::shapes::shape::{DynShape, Shape};
 use crate::shapes::shape_ops::{ReduceAt, ReduceKeepAt};
 use crate::tensor::matmul::MatMulShape;
 
@@ -62,6 +61,65 @@ fn agree(
         }
     }
     Ok(())
+}
+
+/// Check the descriptor's runtime output against the frontend output type
+/// `Out` and seal it with that type's full [`ShapeEvidence`].
+///
+/// The rule-side construction path ([`Descriptor::infer_runtime`]) attaches
+/// only a proof level with empty static geometry: it knows the operation was
+/// checked, not which shape type the frontend proved. The rule holds that type
+/// (`Self::Output`), so before the static extents on
+/// [`ShapeEvidence::of`] travel to a backend this helper discharges three
+/// obligations:
+///
+/// 1. the descriptor actually carries an output shape;
+/// 2. the runtime dimensions the catalog inferred are accepted by
+///    `Out::validate_dims` - the same check [`shape_buf_from_dims`] performs
+///    when rebuilding a typed field from computed dimensions. Going through
+///    `validate_dims` rather than zipping `STATIC_EXTENTS` is deliberate: the
+///    recursive check keeps validating past [`MAX_STATIC_RANK`], where the
+///    const extent buffer is truncated to silence. A manual zip would stop
+///    checking at the buffer bound and accept a shape it cannot see - fail
+///    open, which is the one direction this layer may not go;
+/// 3. only then is `ShapeEvidence::of::<Out>()` minted, because a static
+///    extent the runtime shape contradicts is a miscompile, not a missed
+///    optimisation.
+///
+/// A rejection is remapped to `operation` with the real rank, matching
+/// [`shape_buf_from_dims`]'s convention, so the diagnostic names the rule that
+/// failed rather than the generic `Storage` identity the recursive check
+/// carries. `fallback_rank` is used only when obligation 1 fails and there is
+/// no runtime shape to measure.
+///
+/// [`shape_buf_from_dims`]: crate::shapes::shape::shape_buf_from_dims
+/// [`MAX_STATIC_RANK`]: crate::shapes::MAX_STATIC_RANK
+fn seal_output<O, Out: Shape>(
+    operation: OperationKind,
+    fallback_rank: usize,
+    descriptor: Validated<Descriptor<O>>,
+) -> Result<Validated<Descriptor<O>>, ShapeError>
+where
+    O: super::catalog::Operation,
+{
+    let actual = descriptor
+        .descriptor()
+        .output_shape()
+        .ok_or(ShapeError::TargetShapeRejected {
+            operation,
+            rank: fallback_rank,
+        })?;
+    Out::validate_dims(actual.as_ref()).map_err(|error| match error {
+        ShapeError::TargetShapeRejected { .. } => ShapeError::TargetShapeRejected {
+            operation,
+            rank: actual.rank(),
+        },
+        other => other,
+    })?;
+    Ok(Validated::new_with_evidence(
+        descriptor.into_descriptor(),
+        ShapeEvidence::of::<Out>(),
+    ))
 }
 
 fn cursor_axis<C: crate::shapes::idx::AxisCursor>(rank: usize) -> Result<usize, ShapeError> {
@@ -127,10 +185,7 @@ where
                     rank: expected.rank(),
                 })?;
         agree(OperationKind::MatMul, &expected, actual)?;
-        Ok(Validated::new(
-            descriptor.into_descriptor(),
-            ProofLevel::of::<L>().meet(ProofLevel::of::<R>()),
-        ))
+        seal_output::<_, Self::Output>(OperationKind::MatMul, expected.rank(), descriptor)
     }
 }
 
@@ -169,10 +224,7 @@ where
                 rank: operands.1.rank(),
             },
         })?;
-        Ok(Validated::new(
-            descriptor.into_descriptor(),
-            ProofLevel::of::<S>().meet(ProofLevel::of::<T>()),
-        ))
+        seal_output::<_, T>(OperationKind::Reshape, operands.1.rank(), descriptor)
     }
 }
 
@@ -233,10 +285,7 @@ where
                     rank: expected.rank(),
                 })?;
         agree(OperationKind::SumDim, &expected, actual)?;
-        Ok(Validated::new(
-            descriptor.into_descriptor(),
-            ProofLevel::of::<S>(),
-        ))
+        seal_output::<_, Self::Output>(OperationKind::SumDim, expected.rank(), descriptor)
     }
 }
 
@@ -281,19 +330,6 @@ where
                 rank: operands.rank(),
             },
         })?;
-        let actual =
-            descriptor
-                .descriptor()
-                .output_shape()
-                .ok_or(ShapeError::TargetShapeRejected {
-                    operation: OperationKind::SumKeepDim,
-                    rank: operands.rank(),
-                })?;
-        let expected = ShapeValue::<<S as ReduceKeepAt<C>>::Output>::try_new(actual.clone())?;
-        agree(OperationKind::SumKeepDim, expected.shape_buf(), actual)?;
-        Ok(Validated::new(
-            descriptor.into_descriptor(),
-            ProofLevel::of::<S>(),
-        ))
+        seal_output::<_, Self::Output>(OperationKind::SumKeepDim, operands.rank(), descriptor)
     }
 }

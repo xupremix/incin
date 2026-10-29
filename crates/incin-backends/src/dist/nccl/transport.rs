@@ -229,13 +229,16 @@ impl NcclTransport {
         P: Placement,
     {
         let mut context_guard = ContextOperationGuard::new(&self.distributed_context)?;
-        let dtype = parameter
-            .builtin_dtype_id()
-            .ok_or(NcclTransportError::Collective(
-                CollectiveError::UnsupportedDType {
-                    dtype: parameter.dtype().builtin_id().unwrap_or(DTypeId::F32),
-                },
-            ))?;
+        let descriptor = parameter.dtype();
+        let dtype = parameter.builtin_dtype_id().ok_or_else(|| {
+            let key = descriptor.key();
+            NcclTransportError::InvalidBuffer(format!(
+                "NCCL data-parallel gradient requires a built-in collective dtype, got custom dtype {}/{}@{} with no DTypeId",
+                key.namespace(),
+                key.name(),
+                key.version(),
+            ))
+        })?;
         validate_data_parallel_dtype(dtype)?;
         let parameter_storage = parameter.inner();
         let input = gradients
@@ -270,13 +273,16 @@ impl NcclTransport {
         P: Placement,
     {
         let mut context_guard = ContextOperationGuard::new(&self.distributed_context)?;
-        let dtype = input
-            .builtin_dtype_id()
-            .ok_or(NcclTransportError::Collective(
-                CollectiveError::UnsupportedDType {
-                    dtype: input.dtype().builtin_id().unwrap_or(DTypeId::F32),
-                },
-            ))?;
+        let descriptor = input.dtype();
+        let dtype = input.builtin_dtype_id().ok_or_else(|| {
+            let key = descriptor.key();
+            NcclTransportError::InvalidBuffer(format!(
+                "NCCL tensor-parallel collective requires a built-in collective dtype, got custom dtype {}/{}@{} with no DTypeId",
+                key.namespace(),
+                key.name(),
+                key.version(),
+            ))
+        })?;
         validate_tensor_parallel_dtype(dtype)?;
         let input = input.inner();
         let descriptor =
@@ -431,13 +437,16 @@ impl NcclTransport {
         P: Placement,
     {
         let mut context_guard = ContextOperationGuard::new(&self.distributed_context)?;
-        let dtype = input
-            .builtin_dtype_id()
-            .ok_or(NcclTransportError::Collective(
-                CollectiveError::UnsupportedDType {
-                    dtype: input.dtype().builtin_id().unwrap_or(DTypeId::F32),
-                },
-            ))?;
+        let descriptor = input.dtype();
+        let dtype = input.builtin_dtype_id().ok_or_else(|| {
+            let key = descriptor.key();
+            NcclTransportError::InvalidBuffer(format!(
+                "NCCL pipeline transfer requires a built-in collective dtype, got custom dtype {}/{}@{} with no DTypeId",
+                key.namespace(),
+                key.name(),
+                key.version(),
+            ))
+        })?;
         validate_pipeline_dtype(dtype)?;
         let input = input.inner();
         let descriptor =

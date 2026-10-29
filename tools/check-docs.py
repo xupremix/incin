@@ -10,6 +10,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 SUMMARY = ROOT / "docs/book/src/SUMMARY.md"
+NEXT_SUMMARY = ROOT / "docs/book-next/src/SUMMARY.md"
 FEATURES = ROOT / "crates/incin/Cargo.toml"
 FEATURE_DOC = ROOT / "docs/book/src/feature_flags.md"
 FEATURE_MATRIX = ROOT / "docs/FEATURE_MATRIX.md"
@@ -109,12 +110,21 @@ def main() -> int:
             errors.append(f"SUMMARY.md links to missing chapter {slug}.md")
 
     facade = FACADE_LIB.read_text()
-    included = set(re.findall(r'include_str!\("\.\./\.\./\.\./docs/book/src/([\w-]+)\.md"\)', facade))
+    included = set(re.findall(r'include_str!\("\.\./\.\./\.\./docs/book(?:-next)?/src/([\w-]+)\.md"\)', facade))
+    next_chapters = set(re.findall(r"\]\(\./([\w-]+)\.md\)", NEXT_SUMMARY.read_text()))
+    for slug in next_chapters:
+        if not (NEXT_SUMMARY.parent / f"{slug}.md").exists():
+            errors.append(f"book-next SUMMARY.md links to missing chapter {slug}.md")
+    if len(next_chapters) != len(re.findall(r"\]\(\./([\w-]+)\.md\)", NEXT_SUMMARY.read_text())):
+        errors.append("book-next SUMMARY.md contains duplicate chapter links")
     for slug in chapters:
         if slug not in included:
             errors.append(f"book chapter `{slug}.md` is missing from the Cargo-backed doctest aggregation")
-    for slug in sorted(included - set(chapters)):
-        errors.append(f"Cargo-backed doctest aggregation includes chapter not listed in SUMMARY.md: {slug}.md")
+    for slug in sorted(next_chapters):
+        if slug not in included:
+            errors.append(f"book-next chapter `{slug}.md` is missing from the Cargo-backed doctest aggregation")
+    for slug in sorted(included - set(chapters) - next_chapters):
+        errors.append(f"Cargo-backed doctest aggregation includes chapter not listed in a SUMMARY.md: {slug}.md")
 
     expected = {
         (package, feature)
@@ -151,6 +161,7 @@ def main() -> int:
         return 1
     print(
         f"docs checks passed: {len(chapters)} book chapters, "
+        f"{len(next_chapters)} book-next chapters, "
         f"{len(facade_features())} facade features, and {len(expected)} crate feature declarations"
     )
     return 0

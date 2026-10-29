@@ -111,8 +111,49 @@ model-ready image and integer-label tensors with `NoGrad` markers.
 ## Transforms
 
 `incin_data::transforms` has the common image-augmentation set:
-`CenterCrop`, `Compose`, `Normalize`, `RandomHorizontalFlip`, and `Scale`,
-implementing a shared `Transform` trait, composable with `Compose`.
+`CenterCrop`, `Compose`, `Normalize`, `RandomCrop`, `RandomHorizontalFlip`,
+`Resize`, `Scale` and `ToTensor`, implementing a shared `Transform` trait,
+composable with `Compose` (`ToTensor` casts without rescaling; pair it with
+`Scale` for `[0, 1]`).
+
+## Catalog datasets
+
+Besides MNIST (`vision::mnist::MnistDataset`), the catalog ships
+`vision::fashion_mnist::FashionMnistDataset` (same 28x28 IDX layout,
+clothing articles) and `vision::cifar::{Cifar10Dataset, Cifar100Dataset}`
+(32x32 RGB binary records, channel-major). All three yield
+`(Vec<f32>, u8)` items normalized to `[0, 1]` with `NoGrad` labels, so the
+same target adapters batch any of them; CIFAR stacks `[batch, 3, 32, 32]`
+through `CifarCollate`. CIFAR reads the extracted official tarballs from
+disk (the downloader only fetches single `.gz` members, so `new` names the
+files it needs instead of pretending to fetch a tarball).
+
+## Hugging Face Hub
+
+The catalog covers bundled vision datasets. Anything else arrives through
+the Hub client (`incin::hub`, facade feature `data-hub`, which brings an
+async runtime and a second TLS stack — off by default for exactly that
+reason):
+
+```rust,ignore
+use incin::hub::{HubApi, download, from_pretrained};
+
+// Requires network; constructing the client does not.
+let api = HubApi::new()?; // honors INCIN_HUB_CACHE_DIR and INCIN_HUB_TOKEN
+let path = api.model("org/resnet18").get("model.safetensors")?;
+let state = from_pretrained("org/resnet18", None)?; // downloads + loads
+```
+
+Models and datasets are separate Hub namespaces, so they are separate
+methods: `api.model(id)` and `api.dataset(id)`, with `download` /
+`download_dataset` shortcuts for single files. `get` returns the cached
+path immediately when the file is already local. `load_safetensors` and
+`from_pretrained` load through the *foreign* snapshot path: a Hub file was
+written by whatever produced the repository and carries no
+`incin.format.version` key, so the stricter own-format loader would refuse
+it. Restore the snapshot into your module with the state machinery from
+[Save and load](./howto_save_load.md), supplying any missing running
+statistics the way that chapter describes.
 
 ## Data-parallel sampling
 

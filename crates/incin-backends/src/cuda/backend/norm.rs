@@ -8,7 +8,10 @@
 //! recipe answers zero gradients of the recorded shapes directly.
 
 use super::*;
-use crate::cuda::ops::norm::{launch_layer_norm, launch_layer_norm_backward};
+use crate::cuda::ops::norm::{
+    BatchNormGrads, launch_batch_norm_backward, launch_batch_norm_training, launch_layer_norm,
+    launch_layer_norm_backward,
+};
 use crate::cuda::storage::CudaBuffer;
 use incin_core::exec::GradMode;
 
@@ -32,6 +35,88 @@ impl<D: Device> CudaBackendImpl<D> {
             &log_probs,
             crate::kernel::KernelSpecialization::NONE,
         )
+    }
+
+    /// Training-mode batch norm with a backward replaying the saved
+    /// per-channel batch statistics (issue #123).
+    ///
+    /// The fused forward reduces each channel's *own* statistics over the
+    /// batch and every spatial position -- never the running estimates,
+    /// which are an inference quantity -- exactly when the ambient
+    /// [`GradMode`](incin_core::exec::GradMode) records, and pushes one
+    /// entry replaying those statistics. The fused backward derives input,
+    /// weight, and bias gradients from them plus the upstream gradient in
+    /// one channel-per-block launch, so the statistics' own dependency on
+    /// every element of the channel (most of what batch norm contributes
+    /// to the gradient) is carried rather than dropped.
+    ///
+    /// With no recording caller this behaves like a plain launch: no
+    /// statistics are kept, nothing is pushed, and the returned storage is
+    /// an ordinary output. `eps` arrives narrowed to `f32` already; the
+    /// kernel takes no wider scalar, and an `f64` handed to a `float`
+    /// parameter shifts every argument after it rather than converting.
+    ///
+    /// The running statistics are *not* updated here, and cannot be: they
+    /// arrive as shared references, and mutating an operand is not
+    /// something the execution contract carries. This matches CPU's
+    /// `batch_norm_training_impl`. Training mode does not read them at
+    /// all -- normalization uses the batch's statistics -- so they are
+    /// accepted for arity and ignored, again like CPU.
+    pub(crate) fn batch_norm<K: DType>(
+        input: &<Self as StorageBackend>::Storage<K>,
+        weight: Option<&<Self as StorageBackend>::Storage<K>>,
+        bias: Option<&<Self as StorageBackend>::Storage<K>>,
+        eps: f32,
+    ) -> Result<<Self as StorageBackend>::Storage<K>> {
+        let input: &CudaStorage = input;
+        let weight: Option<&CudaStorage> = weight;
+        let bias: Option<&CudaStorage> = bias;
+        let recording = GradMode::current().records();
+        let (out, stats) = launch_batch_norm_training(input, weight, bias, eps, recording)?;
+        if !recording {
+            return Ok(out);
+        }
+        // A recording forward always saves statistics; the `None` case is
+        // unreachable unless the launcher's `save_stats` contract breaks,
+        // and answering that with a named error beats unwinding inside a
+        // tape closure.
+        let Some(stats) = stats else {
+            return Err(Error::Msg(
+                "CUDA batch norm training forward saved no statistics under a recording grad mode"
+                    .into(),
+            ));
+        };
+        let input_id = input.id;
+        let mut input_ids = alloc::vec![input_id];
+        let mut has_weight = false;
+        if let Some(parameter) = weight {
+            input_ids.push(parameter.id);
+            has_weight = true;
+        }
+        let mut has_bias = false;
+        if let Some(parameter) = bias {
+            input_ids.push(parameter.id);
+            has_bias = true;
+        }
+        let out_id = out.id;
+        let (input_saved, weight_saved, bias_saved) =
+            (input.clone(), weight.cloned(), bias.cloned());
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids,
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grads = launch_batch_norm_backward(
+                    grad_out,
+                    &input_saved,
+                    weight_saved.as_ref(),
+                    bias_saved.as_ref(),
+                    &stats.mean,
+                    &stats.rstd,
+                )?;
+                batch_norm_backward_outputs(grads, has_weight, has_bias)
+            }),
+        });
+        Ok(out)
     }
 
     /// RMS normalization with a backward replaying the saved norm factor.
@@ -225,6 +310,45 @@ fn backward_outputs(
         )),
         (false, _) => Ok(out),
     }
+}
+
+/// The batch-norm twin of [`backward_outputs`] (issue #123): hand back
+/// input, then weight and bias, in exactly the order the tape entry's
+/// `input_ids` named them. A forward that ran with a weight but whose
+/// backward produced none would shift every following id onto the wrong
+/// tensor, so each present operand's gradient is required, not optional
+/// at this boundary.
+fn batch_norm_backward_outputs(
+    grads: BatchNormGrads,
+    has_weight: bool,
+    has_bias: bool,
+) -> Result<alloc::vec::Vec<CudaStorage>> {
+    let BatchNormGrads {
+        input,
+        weight,
+        bias,
+    } = grads;
+    let mut out = alloc::vec![input];
+    match (has_weight, weight) {
+        (true, Some(dw)) => out.push(dw),
+        (true, None) => {
+            return Err(Error::Msg(
+                "CUDA batch norm backward produced no weight gradient for a weighted forward"
+                    .into(),
+            ));
+        }
+        (false, _) => {}
+    }
+    match (has_bias, bias) {
+        (true, Some(db)) => out.push(db),
+        (true, None) => {
+            return Err(Error::Msg(
+                "CUDA batch norm backward produced no bias gradient for a biased forward".into(),
+            ));
+        }
+        (false, _) => {}
+    }
+    Ok(out)
 }
 
 /// Zero gradients for an empty batch: no rows ran forward, so no kernel runs

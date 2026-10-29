@@ -18,6 +18,14 @@ pub use backend::{CudaBackendImpl, CudaGrads, CudaVar};
 /// nothing, and its evidence test lives outside this crate. A guarantee
 /// nothing outside can observe is not a guarantee.
 pub use tape::depth as tape_depth;
+/// Record a custom operation's backward recipe on this thread's tape.
+///
+/// The CUDA instantiation of the custom-training contract documented at
+/// `crate::cpu::tape_record`. Hardware-executed coverage arrives with the
+/// GPU execution runner (#82).
+pub use tape::record as tape_record;
+/// Record a custom operation's backward recipe, building it only if kept.
+pub use tape::record_with as tape_record_with;
 
 pub(crate) fn checked_u32(
     value: usize,

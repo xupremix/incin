@@ -1,10 +1,29 @@
+error[E0277]: the trait bound `incin_core::exec::op::Add: DifferentiableOp<StorageOnly>` is not satisfied
+  --> tests/compile_fail/execute_is_not_blanket.rs:23:26
+   |
+23 |     requires_broadcast::<StorageOnly>();
+   |                          ^^^^^^^^^^^ the trait `DifferentiableOp<StorageOnly>` is not implemented for `incin_core::exec::op::Add`
+   |
+help: the trait `Execute<O>` is implemented for `TracingBackend<B>`
+  --> src/tensor/tracing.rs
+   |
+   | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
+   | |     crate::tensor::backend::Execute<O> for TracingBackend<B>
+   | |____________________________________________________________^
+   = note: required for `StorageOnly` to implement `Execute<incin_core::exec::op::Add>`
+note: required by a bound in `requires_broadcast`
+  --> tests/compile_fail/execute_is_not_blanket.rs:20:26
+   |
+20 | fn requires_broadcast<B: Execute<op::Add>>() {}
+   |                          ^^^^^^^^^^^^^^^^ required by this bound in `requires_broadcast`
+
 error[E0277]: the trait bound `StorageOnly: Execute<incin_core::exec::op::Add>` is not satisfied
   --> tests/compile_fail/execute_is_not_blanket.rs:23:26
    |
 23 |     requires_broadcast::<StorageOnly>();
    |                          ^^^^^^^^^^^ unsatisfied trait bound
    |
-help: the trait `Execute<incin_core::exec::op::Add>` is not implemented for `StorageOnly`
+help: the trait `RecordingBackend<_>` is not implemented for `StorageOnly`
   --> tests/compile_fail/execute_is_not_blanket.rs:8:1
    |
  8 | struct StorageOnly;
@@ -15,6 +34,73 @@ help: the trait `Execute<O>` is implemented for `TracingBackend<B>`
    | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
    | |     crate::tensor::backend::Execute<O> for TracingBackend<B>
    | |____________________________________________________________^
+   = note: required for `StorageOnly` to implement `Execute<incin_core::exec::op::Add>`
+note: required by a bound in `requires_broadcast`
+  --> tests/compile_fail/execute_is_not_blanket.rs:20:26
+   |
+20 | fn requires_broadcast<B: Execute<op::Add>>() {}
+   |                          ^^^^^^^^^^^^^^^^ required by this bound in `requires_broadcast`
+
+error[E0277]: the trait bound `StorageOnly: Execute<incin_core::exec::op::Add>` is not satisfied
+  --> tests/compile_fail/execute_is_not_blanket.rs:23:26
+   |
+23 |     requires_broadcast::<StorageOnly>();
+   |                          ^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Capabilities` is not implemented for `StorageOnly`
+  --> tests/compile_fail/execute_is_not_blanket.rs:8:1
+   |
+ 8 | struct StorageOnly;
+   | ^^^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Capabilities`
+  --> src/exec/capability.rs
+   |
+   | impl Capabilities for CapabilityRegistry {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `CapabilityRegistry`
+   |
+  ::: src/tensor/tracing.rs
+   |
+   | impl<B: Backend> Capabilities for TracingBackend<B> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `TracingBackend<B>`
+   = note: required for `StorageOnly` to implement `Execute<incin_core::exec::op::Add>`
+note: required by a bound in `requires_broadcast`
+  --> tests/compile_fail/execute_is_not_blanket.rs:20:26
+   |
+20 | fn requires_broadcast<B: Execute<op::Add>>() {}
+   |                          ^^^^^^^^^^^^^^^^ required by this bound in `requires_broadcast`
+
+error[E0277]: the trait bound `TensorMeta: StorageOutput` is not satisfied
+  --> tests/compile_fail/execute_is_not_blanket.rs:23:26
+   |
+23 |     requires_broadcast::<StorageOnly>();
+   |                          ^^^^^^^^^^^ the trait `StorageOutput` is not implemented for `TensorMeta`
+   |
+help: the trait `Execute<O>` is implemented for `TracingBackend<B>`
+  --> src/tensor/tracing.rs
+   |
+   | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
+   | |     crate::tensor::backend::Execute<O> for TracingBackend<B>
+   | |____________________________________________________________^
+   = note: required for `StorageOnly` to implement `Execute<incin_core::exec::op::Add>`
+note: required by a bound in `requires_broadcast`
+  --> tests/compile_fail/execute_is_not_blanket.rs:20:26
+   |
+20 | fn requires_broadcast<B: Execute<op::Add>>() {}
+   |                          ^^^^^^^^^^^^^^^^ required by this bound in `requires_broadcast`
+
+error[E0277]: the trait bound `TensorMeta: TapeStorage` is not satisfied
+  --> tests/compile_fail/execute_is_not_blanket.rs:23:26
+   |
+23 |     requires_broadcast::<StorageOnly>();
+   |                          ^^^^^^^^^^^ the trait `TapeStorage` is not implemented for `TensorMeta`
+   |
+help: the trait `Execute<O>` is implemented for `TracingBackend<B>`
+  --> src/tensor/tracing.rs
+   |
+   | / impl<B: Backend + crate::tensor::backend::Execute<O>, O: crate::exec::catalog::Operation>
+   | |     crate::tensor::backend::Execute<O> for TracingBackend<B>
+   | |____________________________________________________________^
+   = note: required for `StorageOnly` to implement `Execute<incin_core::exec::op::Add>`
 note: required by a bound in `requires_broadcast`
   --> tests/compile_fail/execute_is_not_blanket.rs:20:26
    |

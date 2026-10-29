@@ -201,6 +201,20 @@ impl<
 > Tensor<S, B, K, G, P, L>
 {
     /// Sums over a static, named, or runtime axis selector.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])?;
+    /// assert_eq!(t.sum(axis!(0))?.to_vec1::<f32>()?, vec![4.0, 6.0]);
+    /// assert_eq!(t.sum(axis!(1))?.to_vec1::<f32>()?, vec![3.0, 7.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn sum<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -272,6 +286,22 @@ impl<
     }
 
     /// Sums over a static, named, or runtime axis selector while retaining it.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])?;
+    /// let kept = t.sum_keepdim(axis!(1))?;
+    /// // The reduced axis survives as extent one instead of disappearing.
+    /// assert_eq!(kept.dims().dims(), &[2, 1]);
+    /// assert_eq!(kept.to_vec1::<f32>()?, vec![3.0, 7.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn sum_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -282,6 +312,20 @@ impl<
     }
 
     /// Computes the mean over a static, named, or runtime axis selector.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])?;
+    /// assert_eq!(t.mean(axis!(0))?.to_vec1::<f32>()?, vec![2.0, 3.0]);
+    /// assert_eq!(t.mean(axis!(1))?.to_vec1::<f32>()?, vec![1.5, 3.5]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn mean<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -292,6 +336,21 @@ impl<
     }
 
     /// Computes the mean over a static, named, or runtime axis selector and retains it.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])?;
+    /// let kept = t.mean_keepdim(axis!(0))?;
+    /// assert_eq!(kept.dims().dims(), &[1, 2]);
+    /// assert_eq!(kept.to_vec1::<f32>()?, vec![2.0, 3.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn mean_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -302,6 +361,20 @@ impl<
     }
 
     /// Computes the maximum over a static, named, or runtime axis selector.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0], [3.0, 4.0]])?;
+    /// assert_eq!(t.max(axis!(0))?.to_vec1::<f32>()?, vec![3.0, 5.0]);
+    /// assert_eq!(t.max(axis!(1))?.to_vec1::<f32>()?, vec![5.0, 4.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn max<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -312,6 +385,21 @@ impl<
     }
 
     /// Computes the maximum over a static, named, or runtime axis selector and retains it.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0], [3.0, 4.0]])?;
+    /// let kept = t.max_keepdim(axis!(1))?;
+    /// assert_eq!(kept.dims().dims(), &[2, 1]);
+    /// assert_eq!(kept.to_vec1::<f32>()?, vec![5.0, 4.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn max_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -338,9 +426,10 @@ impl<
     /// # Examples
     /// ```rust
     /// # extern crate incin_core as incin;
-    /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
     /// use incin::prelude::*;
-    /// let t = Tensor::<s![3], DefaultBackend>::from_slice(&[300.0, 300.0, 300.0], ()).unwrap();
+    /// let t = Cpu.tensor([300.0f32, 300.0, 300.0]).unwrap();
     /// let total = t.logsumexp(0).unwrap().to_vec1::<f32>().unwrap()[0];
     /// // ln(3 * e^300) = 300 + ln(3). Summing the exponentials directly would
     /// // have overflowed to infinity three times over before the logarithm.
@@ -357,6 +446,20 @@ impl<
 
     /// [`Self::logsumexp`] over a static, named, or runtime axis selector,
     /// retaining the reduced axis as size one.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// let t = Cpu.tensor([300.0f32, 300.0, 300.0]).unwrap();
+    /// let kept = t.logsumexp_keepdim(0).unwrap();
+    /// // The axis survives as extent 1 instead of disappearing.
+    /// assert_eq!(kept.dims().dims(), &[1]);
+    /// let total = kept.to_vec1::<f32>().unwrap()[0];
+    /// assert!((total - (300.0 + 3.0f32.ln())).abs() < 1e-2);
+    /// ```
     pub fn logsumexp_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -369,6 +472,20 @@ impl<
     }
 
     /// Computes the minimum over a static, named, or runtime axis selector.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0], [3.0, 4.0]])?;
+    /// assert_eq!(t.min(axis!(0))?.to_vec1::<f32>()?, vec![1.0, 4.0]);
+    /// assert_eq!(t.min(axis!(1))?.to_vec1::<f32>()?, vec![1.0, 3.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn min<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Drop, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -379,6 +496,21 @@ impl<
     }
 
     /// Computes the minimum over a static, named, or runtime axis selector and retains it.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0], [3.0, 4.0]])?;
+    /// let kept = t.min_keepdim(axis!(0))?;
+    /// assert_eq!(kept.dims().dims(), &[1, 2]);
+    /// assert_eq!(kept.to_vec1::<f32>()?, vec![1.0, 4.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn min_keepdim<A>(&self, axis: A) -> Result<crate::shapes::Dense<A::Keep, B, K, G, P>>
     where
         A: ReduceSelector<S>,
@@ -586,9 +718,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let s = t.sum_all().unwrap(); // shape is ()
         /// ```
         sum_all, SumAll
@@ -600,9 +733,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let m = t.mean_all().unwrap(); // shape is ()
         /// ```
         mean_all, MeanAll
@@ -614,9 +748,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let m = t.max_all().unwrap(); // shape is ()
         /// ```
         max_all, MaxAll
@@ -628,9 +763,10 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
         /// # Examples
         /// ```rust
         /// # extern crate incin_core as incin;
-        /// # type DefaultBackend = incin_backends::cpu::CpuBackendImpl;
+        /// # use incin_backends::prelude::*;
+        /// # use incin_core::tensor::device::Cpu;
         /// use incin::prelude::*;
-        /// let t = Tensor::<s![2, 2], DefaultBackend>::ones(()).unwrap();
+        /// let t = Cpu.ones(shape![2, 2]).unwrap();
         /// let m = t.min_all().unwrap(); // shape is ()
         /// ```
         min_all, MinAll
@@ -642,6 +778,22 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     );
 
     /// Computes a cumulative sum along a static, named, or signed runtime axis.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 2.0], [3.0, 4.0]])?;
+    /// let running = t.cumsum(axis!(0))?;
+    /// // A scan, not a reduction: the shape is preserved.
+    /// assert_eq!(running.dims().dims(), &[2, 2]);
+    /// assert_eq!(running.to_vec1::<f32>()?, vec![1.0, 2.0, 4.0, 6.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn cumsum<A: ReduceSelector<S>>(
         &self,
         axis: A,
@@ -676,8 +828,25 @@ impl<S: Shape, B: Backend, K: crate::tensor::dtype::DType, G: RequiresGrad, L: L
     }
 
     /// Computes the vector p-norm (`p` norm: 1.0 = L1, 2.0 = L2) over all elements.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let v = Cpu.tensor([3.0f32, 4.0])?;
+    /// assert_eq!(v.norm(1.0)?.to_scalar::<f32>()?, 7.0);
+    /// // Pythagorean triple: sqrt(3^2 + 4^2) = 5.
+    /// let l2 = v.norm(2.0)?.to_scalar::<f32>()?;
+    /// assert!((l2 - 5.0).abs() < 1e-5);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn norm(&self, p: f64) -> Result<crate::shapes::Dense<crate::shapes::Nil, B, K, G, Local>>
     where
+        K: crate::tensor::ops::quantization::FloatCapable,
         G: crate::tensor::grad::GradJoin<G, Output = G>,
         B: Execute<op::Mul>
             + Execute<op::Abs>
@@ -769,6 +938,21 @@ where
     }
 
     /// Computes argmax along a static, named, or runtime axis selector.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0, 2.0], [7.0, 0.0, 3.0]])?;
+    /// // The index dtype is u32. Per row: 5 then 7. Per column: 7, 5, 3.
+    /// assert_eq!(t.argmax(axis!(1))?.to_vec1::<u32>()?, vec![1, 0]);
+    /// assert_eq!(t.argmax(axis!(0))?.to_vec1::<u32>()?, vec![1, 0, 1]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn argmax<A>(
         &self,
         axis: A,
@@ -796,6 +980,20 @@ where
     }
 
     /// Computes argmin along a static, named, or runtime axis selector.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0, 2.0], [7.0, 0.0, 3.0]])?;
+    /// // Row 0 bottoms out at 1 (index 0); row 1 at 0 (index 1).
+    /// assert_eq!(t.argmin(axis!(1))?.to_vec1::<u32>()?, vec![0, 1]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn argmin<A>(
         &self,
         axis: A,
@@ -824,6 +1022,22 @@ where
 
     /// Computes the top `k` elements of the tensor along the given dimension.
     /// Returns a tuple of `(values, indices)`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([[1.0f32, 5.0, 2.0], [7.0, 0.0, 3.0]])?;
+    /// let (values, indices) = t.topk(2, axis!(1), true)?;
+    /// // Two largest per row, beside the positions they came from.
+    /// assert_eq!(values.to_vec1::<f32>()?, vec![5.0, 2.0, 7.0, 3.0]);
+    /// assert_eq!(indices.to_vec1::<u32>()?, vec![1, 2, 0, 2]);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[allow(clippy::type_complexity)]
     pub fn topk<A>(
         &self,
@@ -926,6 +1140,23 @@ where
     }
 
     /// Sorts the elements of the tensor along the given dimension and returns the sorted indices.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let values = Cpu.tensor([30.0f32, 10.0, 20.0])?;
+    /// let ascending = values.argsort(0, false)?;
+    /// let descending = values.argsort(0, true)?;
+    /// assert_eq!(ascending.to_vec1::<u32>()?, vec![1, 2, 0]);
+    /// assert_eq!(descending.to_vec1::<u32>()?, vec![0, 2, 1]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn argsort(
         &self,
         dim: usize,
@@ -965,6 +1196,109 @@ where
             crate::tensor::grad::NoGrad::init(()),
         )
     }
+
+    /// Sorts along `dim`, returning the sorted values beside the permutation
+    /// that produced them.
+    ///
+    /// [`Self::argsort`] returns that permutation alone, which is enough only
+    /// when the values are still to hand. Grouping tokens by the expert each
+    /// was routed to needs both: the sorted expert ids say where one expert's
+    /// block ends and the next begins, and recovering them from the
+    /// permutation costs a `gather` this operation has already performed.
+    ///
+    /// The order is stable. Equal elements keep the order they arrived in, so
+    /// the permutation is a function of the operand rather than of how the
+    /// sort broke its ties, and a router that sorts the same assignment twice
+    /// groups it the same way twice.
+    ///
+    /// Forward-only, like [`Self::topk`] and [`Self::argsort`] beside it: both
+    /// outputs are `NoGrad` whatever the receiver was. Sorting is a
+    /// permutation and a permutation does have an adjoint, so this is a
+    /// narrower contract than the values require rather than an absence of
+    /// one; it is the contract the whole `IndexReduction` profile declares,
+    /// and widening it is a change to the profile rather than to this method.
+    ///
+    /// # Examples
+    ///
+    /// Sorting token assignments groups expert IDs while preserving the original
+    /// order of tokens assigned to the same expert in either direction.
+    ///
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let assignment = Cpu.tensor([2.0f32, 0.0, 2.0, 1.0])?;
+    /// let (experts, order) = assignment.sort(0, false)?;
+    /// assert_eq!(experts.to_vec1::<f32>()?, vec![0.0, 1.0, 2.0, 2.0]);
+    /// assert_eq!(order.to_vec1::<u32>()?, vec![1, 3, 0, 2]);
+    /// let (experts, order) = assignment.sort(0, true)?;
+    /// assert_eq!(experts.to_vec1::<f32>()?, vec![2.0, 2.0, 1.0, 0.0]);
+    /// assert_eq!(order.to_vec1::<u32>()?, vec![0, 2, 3, 1]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[allow(clippy::type_complexity)]
+    pub fn sort(
+        &self,
+        dim: usize,
+        descending: bool,
+    ) -> Result<(
+        crate::shapes::Dense<S, B, K, crate::tensor::grad::NoGrad, Local>,
+        crate::shapes::Dense<S, B, u32, crate::tensor::grad::NoGrad, Local>,
+    )>
+    where
+        B: Execute<op::Sort> + crate::exec::Capabilities,
+        <B as Execute<op::Sort>>::Output: Into<(B::Storage<K>, B::Storage<u32>)>,
+    {
+        // Disabled rather than this tensor's own mode, the same reason
+        // `argsort` above gives: the results are `NoGrad` whatever the
+        // receiver was, and that is a statement about what runs rather than
+        // only about which APIs the results offer.
+        let axis = crate::shapes::idx::AxisSelector::normalize_unsigned(dim, self.rank())?;
+        let output_shape = crate::shapes::ShapeValue::<S>::try_new(self.shape_buf().clone())
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = ExecutionContext::from_scope(B::default()).with_grad_mode(GradMode::Disabled);
+        // One proof per output, as `topk` does. Sorting reorders an axis
+        // rather than resizing it, so both geometries are the operand's own,
+        // and stating them twice is what stops a kernel returning a shape the
+        // frontend would then assert into a tensor unchecked.
+        let expected = (output_shape.clone(), output_shape.clone());
+        let (values_inner, indices_inner) = GradMode::Disabled
+            .restrict(|| {
+                crate::exec::dispatch::execute_shaped_n::<op::Sort, B, _>(
+                    &context,
+                    crate::exec::catalog::ArgsortAttributes {
+                        axis,
+                        descending,
+                        index_dtype: DTypeId::U32.descriptor(),
+                    },
+                    &[input],
+                    &expected,
+                )
+            })?
+            .into();
+
+        let values =
+            crate::shapes::Dense::<S, B, K, crate::tensor::grad::NoGrad, Local>::from_parts(
+                values_inner,
+                output_shape.shape_buf().clone(),
+                self._dtype.clone(),
+                self._device.clone(),
+                crate::tensor::grad::NoGrad::init(()),
+            )?;
+        let indices =
+            crate::shapes::Dense::<S, B, u32, crate::tensor::grad::NoGrad, Local>::from_parts(
+                indices_inner,
+                output_shape.shape_buf().clone(),
+                core::marker::PhantomData,
+                self._device.clone(),
+                crate::tensor::grad::NoGrad::init(()),
+            )?;
+        Ok((values, indices))
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -993,6 +1327,22 @@ where
     <B as Execute<op::MulScalar>>::Output: Into<B::Storage<K>>,
 {
     /// Computes the variance over all elements.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0, 4.0])?;
+    /// // Population variance divides by n; unbiased by n - 1.
+    /// assert!((t.var_all(false)?.to_scalar::<f32>()? - 1.25).abs() < 1e-6);
+    /// let unbiased = t.var_all(true)?.to_scalar::<f32>()?;
+    /// assert!((unbiased - 5.0f32 / 3.0).abs() < 1e-6);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn var_all(
         &self,
         unbiased: bool,
@@ -1015,6 +1365,21 @@ where
     }
 
     /// Computes the standard deviation over all elements.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # extern crate incin_core as incin;
+    /// # use incin_backends::prelude::*;
+    /// # use incin_core::tensor::device::Cpu;
+    /// use incin::prelude::*;
+    /// # fn main() -> Result<()> {
+    /// let t = Cpu.tensor([1.0f32, 2.0, 3.0, 4.0])?;
+    /// let sigma = t.std_all(false)?.to_scalar::<f32>()?;
+    /// // The square root of the population variance, 1.25.
+    /// assert!((sigma - 1.25f32.sqrt()).abs() < 1e-6);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn std_all(
         &self,
         unbiased: bool,

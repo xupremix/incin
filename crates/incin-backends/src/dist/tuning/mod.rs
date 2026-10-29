@@ -26,7 +26,7 @@ use incin_core::dist::{
 };
 use incin_core::exec::{Determinism, ReduceOp};
 use incin_core::shapes::error::OperationKind;
-use incin_core::tensor::dtype::{ConstDType, DTypeId};
+use incin_core::tensor::dtype::{BuiltinDType, ConstDType, DTypeId};
 use incin_core::typenum::{B1, IsLessOrEqual, NonZero, PowerOfTwo, U2, U32, U4294967295, Unsigned};
 
 mod algorithms;

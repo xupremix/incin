@@ -102,8 +102,9 @@ each one carries (`Role`).
 `Role` exists because a capability row applies one dtype set to every operand
 in turn. A row can never state that operand zero is an integer index and
 operand one is a float table; the honest thing it can say is the union of the
-two, and `declarations.rs` says so at length for `INDEX_AND_F32_DTYPES` and
-`F32_AND_BOOL`. Walking that union and handing every operand the same dtype
+two, and `declarations.rs` says so at length for `INDEX_AND_F32_DTYPES`,
+`F32_AND_BOOL` and - since CUDA's `where_cond`/`masked_fill` rows widened
+past `f32` - `FLOAT_AND_BOOL`. Walking that union and handing every operand the same dtype
 poses invocations the operation was never meant to accept, so the fixture
 states the split the row cannot.
 

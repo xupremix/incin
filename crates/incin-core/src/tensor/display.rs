@@ -80,7 +80,9 @@ fn format_floats(values: &[f64]) -> Vec<String> {
     });
     let scientific = max_abs > SCI_UPPER || (min_abs.is_finite() && min_abs < SCI_LOWER);
 
-    let all_integral = values.iter().all(|v| !v.is_finite() || v.fract() == 0.0)
+    let all_integral = values
+        .iter()
+        .all(|v| !v.is_finite() || crate::math::fract_f64(*v) == 0.0)
         && values.iter().any(|v| v.is_finite());
 
     values

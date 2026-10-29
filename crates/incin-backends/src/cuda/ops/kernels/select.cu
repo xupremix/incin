@@ -1,31 +1,36 @@
+#include <cuda_fp16.h>
+#include <cuda_bf16.h>
+
 // Mask-driven selection, the counterpart to `compare.cu`'s mask *producers*:
 // these two kernels are what a `bool` mask is actually for. Both read a
 // `bool` mask as `unsigned char` -- the same 0x00/0x01 encoding `compare.cu`
-// writes -- alongside `float` data, and write a fresh `float` result. Both
-// require every operand pre-broadcast to one contiguous shape and element
-// count by the Rust launcher, the same precondition `compare.cu` states, so
-// neither kernel does any stride or shape bookkeeping of its own.
+// writes -- alongside float data, and write a fresh result in the same float
+// dtype. Both require every operand pre-broadcast to one contiguous shape and
+// element count by the Rust launcher, the same precondition `compare.cu`
+// states, so neither kernel does any stride or shape bookkeeping of its own.
 //
-// That broadcast is what the third kernel below, `broadcast_bool_op`, does
-// for the `bool` mask itself, before either kernel above ever runs: a mask
-// can legitimately arrive at a lower rank than the data it selects between
-// (`where_cond`'s output shape is the broadcast of all three operands), and
-// `shape.cu`'s own `shape_op` cannot answer that -- its data pointers are a
-// hardcoded `float*`/`float*`, four bytes per element, and a `bool` buffer
-// is one. This kernel is `shape_op`'s `op_mode == 3` case, verbatim, ported
-// to `unsigned char`; the params layout it reads is exactly the one
-// `shape.cu`'s own header comment documents, produced by the same
-// `prepare_shape_params(3, ...)` on the Rust side.
-
-typedef unsigned int uint32_t;
+// Broadcasting a lower-rank `bool` mask up to that shared shape is the
+// launcher's job too, and since #122 it rides `shape.cu`'s own width-
+// parametric `shape_op_8bit` through `shape::launch_broadcast`, like every
+// other dtype -- the dedicated `broadcast_bool_op` this file used to carry
+// was deleted as redundant.
+//
+// One template serves every float storage dtype (`f32`/`f64`/`f16`/`bf16`,
+// issue #90 slice 3), the same shape `embedding.cu` uses: the mask stays
+// `unsigned char` in all of them, only the value pointers and -- for
+// `masked_fill` -- the scalar parameter change type. Each dtype gets its own
+// `extern "C"` entry point so the Rust launcher's entry-point map stays
+// fail-closed: a dtype without an entry can never reach a buffer
+// reinterpreted as the wrong type.
 
 // `where_cond(mask, on_true, on_false)`: picks `on_true[idx]` where the mask
 // is set, `on_false[idx]` otherwise.
-extern "C" __global__ void where_cond_op(
+template <typename T>
+__device__ void where_cond_impl(
     const unsigned char* __restrict__ mask,
-    const float* __restrict__ on_true,
-    const float* __restrict__ on_false,
-    float* __restrict__ out,
+    const T* __restrict__ on_true,
+    const T* __restrict__ on_false,
+    T* __restrict__ out,
     int numel
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -36,11 +41,12 @@ extern "C" __global__ void where_cond_op(
 // `masked_fill(input, mask, value)`: overwrites the masked positions with a
 // scalar, an attribute rather than an operand, so it is a kernel parameter
 // here rather than a third pointer.
-extern "C" __global__ void masked_fill_op(
-    const float* __restrict__ input,
+template <typename T>
+__device__ void masked_fill_impl(
+    const T* __restrict__ input,
     const unsigned char* __restrict__ mask,
-    float value,
-    float* __restrict__ out,
+    T value,
+    T* __restrict__ out,
     int numel
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -48,36 +54,82 @@ extern "C" __global__ void masked_fill_op(
     out[idx] = mask[idx] ? value : input[idx];
 }
 
-// Broadcasts a `bool` mask to `out_shape` -- `shape.cu`'s `shape_op`
-// `op_mode == 3` case, ported from `float`/`float` to `unsigned char`/
-// `unsigned char`. `idx` ranges over `out_shape` (`params[2]` elements);
-// `params[3..9]` is `out_shape` and `params[9..15]` is the mask's own shape,
-// both right-aligned/padded to 6 dims with leading 1s, exactly as
-// `shape.cu`'s header comment documents.
-extern "C" __global__ void broadcast_bool_op(
-    const unsigned char* __restrict__ inp,
-    unsigned char* __restrict__ out,
-    const uint32_t* __restrict__ params
+extern "C" __global__ void where_cond_op(
+    const unsigned char* __restrict__ mask,
+    const float* __restrict__ on_true,
+    const float* __restrict__ on_false,
+    float* __restrict__ out,
+    int numel
 ) {
-    const uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t n = params[2];
-    if (idx >= n) return;
+    where_cond_impl<float>(mask, on_true, on_false, out, numel);
+}
 
-    uint32_t multi_idx[6] = {0, 0, 0, 0, 0, 0};
-    uint32_t rem = idx;
-    for (int d = 5; d >= 0; d--) {
-        uint32_t s = params[3 + d];
-        multi_idx[d] = rem % s;
-        rem = rem / s;
-    }
-    uint32_t in_flat = 0;
-    uint32_t in_stride = 1;
-    for (int d = 5; d >= 0; d--) {
-        uint32_t s = params[9 + d];
-        uint32_t out_coord = multi_idx[d];
-        uint32_t in_coord = (s == 1) ? 0 : out_coord;
-        in_flat += in_coord * in_stride;
-        in_stride *= s;
-    }
-    out[idx] = inp[in_flat];
+extern "C" __global__ void where_cond_op_f64(
+    const unsigned char* __restrict__ mask,
+    const double* __restrict__ on_true,
+    const double* __restrict__ on_false,
+    double* __restrict__ out,
+    int numel
+) {
+    where_cond_impl<double>(mask, on_true, on_false, out, numel);
+}
+
+extern "C" __global__ void where_cond_op_f16(
+    const unsigned char* __restrict__ mask,
+    const __half* __restrict__ on_true,
+    const __half* __restrict__ on_false,
+    __half* __restrict__ out,
+    int numel
+) {
+    where_cond_impl<__half>(mask, on_true, on_false, out, numel);
+}
+
+extern "C" __global__ void where_cond_op_bf16(
+    const unsigned char* __restrict__ mask,
+    const __nv_bfloat16* __restrict__ on_true,
+    const __nv_bfloat16* __restrict__ on_false,
+    __nv_bfloat16* __restrict__ out,
+    int numel
+) {
+    where_cond_impl<__nv_bfloat16>(mask, on_true, on_false, out, numel);
+}
+
+extern "C" __global__ void masked_fill_op(
+    const float* __restrict__ input,
+    const unsigned char* __restrict__ mask,
+    float value,
+    float* __restrict__ out,
+    int numel
+) {
+    masked_fill_impl<float>(input, mask, value, out, numel);
+}
+
+extern "C" __global__ void masked_fill_op_f64(
+    const double* __restrict__ input,
+    const unsigned char* __restrict__ mask,
+    double value,
+    double* __restrict__ out,
+    int numel
+) {
+    masked_fill_impl<double>(input, mask, value, out, numel);
+}
+
+extern "C" __global__ void masked_fill_op_f16(
+    const __half* __restrict__ input,
+    const unsigned char* __restrict__ mask,
+    __half value,
+    __half* __restrict__ out,
+    int numel
+) {
+    masked_fill_impl<__half>(input, mask, value, out, numel);
+}
+
+extern "C" __global__ void masked_fill_op_bf16(
+    const __nv_bfloat16* __restrict__ input,
+    const unsigned char* __restrict__ mask,
+    __nv_bfloat16 value,
+    __nv_bfloat16* __restrict__ out,
+    int numel
+) {
+    masked_fill_impl<__nv_bfloat16>(input, mask, value, out, numel);
 }

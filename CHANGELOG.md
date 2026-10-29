@@ -10,6 +10,519 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Added: a numeric gradient check for the embedding table, because a uniform
+  seed cannot tell "the right number of terms" from "the right terms".** The
+  embedding backward already had `backward_repeated_index_accumulates_not_
+  overwrites`, which pins the headline risk exactly: with a uniform seed it
+  asserts `2.0` for a row addressed twice against `1.0` for one addressed
+  once, which an overwrite cannot produce. What a uniform seed *cannot*
+  distinguish is a backward that accumulates the correct number of
+  contributions from the wrong output positions - and that is demonstrated,
+  not asserted: injecting a backward that gives every row the cotangent of
+  output position 0 leaves both hand-written tests green while failing both
+  new ones. So the two new checks seed the loss with a distinct value per
+  output position, which turns the expected answer from a count into a
+  specific sum, and hold both index ranks to a central difference rather than
+  one being held by proxy. The 2-D index shape is included because the
+  backward walks leading axes with an odometer, and a 2-D index is the only
+  thing that makes that walk mean anything; the existing repeated-index test
+  uses a 1-D index, where the walk never runs.
+
+- **Added: numerical gradient coverage for attention, which had only ever been
+  checked for being finite.** Scaled dot-product attention is the one
+  composition in the CPU backend with three differentiable projections, a
+  scale, a softmax and an optional additive mask, and no check ever compared
+  any of it to a derivative. The existing coverage asserts that training
+  produces *finite non-zero* gradients - which a wrong gradient passes, since
+  a factor-of-two Jacobian is still finite, still non-zero, and still trains.
+  Three checks now sweep all three projections against central differences:
+  bare, with an additive mask pushed far enough down that the masked
+  positions carry an exponentially small share, and with an explicit scale so
+  a kernel applying the `1/sqrt(d_k)` default twice would be caught. All
+  three pass, so the composition was already correct - the value being that
+  it is now checked rather than assumed.
+
+  What this covers is a *composition* gap rather than a miswritten formula:
+  there is no hand-written softmax backward here, since the softmax is
+  assembled from six recorded steps and its Jacobian is emergent. A
+  tape-silent step among the six would leave every gradient finite,
+  non-zero and correctly shaped - precisely what the old assertions looked
+  at.
+
+  The checks were validated by dropping the negation on `sub`'s right-hand
+  cotangent, which fails all three while the conv checks correctly ignore it.
+  Worth recording the injection that did *not* fail them: scaling the scores
+  by a constant, a real forward fault that changes the attention
+  distribution, leaves every gradient check green. A central difference
+  validates the backward against its own forward, so a wrong forward moves
+  both sides together. That is the same blind spot `gradcheck_ops` documents,
+  and the reason a forward still needs a value test.
+
+- **Fixed: the CPU batch-norm parity tests were checking a formula instead of
+  the kernel.** Five CUDA parity tests take their CPU reference from
+  `cpu_batch_norm_training_grads`, which could not read `dw` and `db` off the
+  CPU tape and so substituted a closed-form per-channel sum for them - the
+  comparison was CUDA against a formula in a test file, and the host guard
+  that validated the formula with finite differences validated nothing about
+  the backend. Now that the CPU affine is on the tape, the helper reads all
+  four gradients from the tape, so those five tests compare two independent
+  implementations of the same derivative, and the host guard checks the tape
+  itself. Worth noting the guard *passes*: it was written when the CPU tape
+  path did not exist, and the real tape agrees with the formula it replaced,
+  which is independent confirmation of the batch-norm fix above.
+
+- **Corrected the account of why the convolution bias lost its gradient.**
+  `a4b9a6e7` attributed it to `add_storage` being untracked. It is not -
+  `add_storage` is recorded and its backward unbroadcasts both operands,
+  which is exactly the bias gradient. The defect was solely the inherent
+  `reshape` ahead of it: that form returns a fresh storage under a new id and
+  records no node, so the recorded add keyed its cotangent on the temporary
+  and the parameter's own id appeared in no tape node. Same single root cause
+  as the batch-norm affine, which makes the two fixes one bug found twice
+  rather than two. The fix and the tests were right; the explanation was not,
+  and a wrong explanation in a doc comment is a trap for the next reader.
+
+- **Added: gradient coverage for the normalization affine, which had only ever
+  been checked on the input.** `layer_norm_gradcheck` closes over its weight
+  and bias and differentiates only the input, so it says nothing about the two
+  parameters - which for a normalization layer is the half that actually
+  learns. Two checks now put both on the tape (`gradcheck` requires a gradient
+  for every input it is handed), one biased and one not, since the no-bias path
+  builds a zero buffer that reaches the same tracked add and a backward that
+  assumed a bias was present would pass the first and fail the second. RMS
+  norm's weight had no gradient coverage at all - only a forward test and a
+  shape test - so an RMS norm whose weight stopped training would have
+  satisfied the entire suite; it is now swept against a central difference.
+  All three pass: unlike the conv bias, the CPU implementations hand their
+  affine straight to a tracked `mul`/`add` with no reshape in between, and
+  they were already correct.
+
+- **Fixed: the convolution bias got no gradient at all on the CPU backend.**
+  `conv1d`, `conv2d` and `conv_transpose2d` each folded a per-channel bias
+  into the output by reaching the add through the *inherent* `reshape`:
+  `bias.reshape(&[1, cout, 1, 1])`. The add was never the problem - `add_storage`
+  is recorded and its backward unbroadcasts both operands, which is exactly
+  the bias gradient. The reshape was: the inherent form returns a fresh
+  storage under a **new id** and records no node, so the recorded add keyed
+  its bias cotangent on the temporary's id and the parameter's own id
+  appeared in no tape node anywhere. `backward` produced *no gradient and no
+  error* for the bias - a missing gradient being visible only to something
+  that asks for one. Every biased convolution on this backend trained with its
+  bias frozen at its initialization, and because the forward was always
+  correct, nothing about the loss curve would have said so. This was also a
+  cross-backend disagreement rather than a local mistake: WGPU reached the
+  same forward through a recorded reshape, broadcast and add, so CPU and GPU
+  returned different gradients for the same model. The bias gradient is a
+  sum over the non-channel axes, which is exactly what the backward of a
+  broadcast produces - so the fix routes the bias through recorded steps
+  (`reshape_storage`, then `broadcast_as_storage`, then the add), with both
+  steps needed because a broadcast cannot raise rank. Same root cause as the
+  batch-norm affine above: an inherent reshape severing a parameter's id.
+  `conv1d`'s module doc had claimed the bias gradient was "free via
+  composition"; the composition it had in mind was not happening, because
+  the reshape it relied on records nothing.
+
+- **Added: gradient coverage for the convolution geometry that was
+  unexercised.** Both existing convolution gradchecks used `[1,1,4,4]`
+  against a `[1,1,2,2]` kernel with stride 1, no padding, no dilation and one
+  group, and seeded the backward with `sum_all`. That is the single
+  configuration in which conv's index arithmetic cannot go wrong: with one
+  channel in and out and unit stride, no padding and no dilation, every
+  window starts at `(y * kh + ky, x * kw + kx)` - one offset term - and
+  every weight element is used equally often. Fifteen new rows vary stride,
+  padding, dilation, grouping, asymmetric stride/padding, and a batched
+  multi-channel case with all of them at once. They also seed the backward
+  with a distinct ramp per output element instead of a uniform one, which
+  matters for the weight gradient in particular: under a uniform seed it is
+  just the number of times each weight element is used, so two elements
+  mispaired between positions of equal count agree however wrongly they were
+  paired. All fifteen passed on the first run, so the stride, padding,
+  dilation and grouping arithmetic was already correct - which is the useful
+  outcome, and the reason the missing bias gradient stands out against it.
+
+- **`gradcheck_ops`: ask every operation the same mechanical question.**
+  `gradcheck_model` checks compositions; this checks the operation surface
+  one row at a time - 47 rows covering axis reductions, structural moves
+  whose backward is a scatter (narrow, pad, expand, concat, stack, split,
+  repeat, unfold, gather), the elementwise derivatives, whole-tensor
+  reductions, both norms and all three losses. A per-operation test pins the
+  operation someone thought to test against an answer someone wrote down; a
+  sweep asks instead whether each gradient *is* the derivative of the
+  function it claims to differentiate, which finds what nobody thought to
+  look for. It found none on this pass, which is worth saying plainly - but
+  it also had to be shown capable of failing, and that is the part worth
+  keeping. Two CPU kernels were broken on purpose: `reverse_cumsum` scanning
+  forward instead of backward (the prefix/suffix confusion `cumsum`'s
+  Jacobian turns on) failed exactly 1 of 47 rows while the other 46 stayed
+  green, naming all four bad elements at 175% relative error; and
+  `tape::unbroadcast` returning the cotangent unreduced - the shape of the
+  batch-norm defect below - failed loudly. The tolerances are derived from
+  the loss's own f32 roundoff amplified by the step rather than guessed, and
+  the step is near the central difference's balance point, which is worth
+  noting because the obvious `1e-3` is ten times too small for f32 and
+  reports a `tanh` element as failing by 5% when both sides are `2e-3` and
+  differ only by noise. The example also records what this class of oracle
+  structurally cannot see: a uniform factor of two anywhere in a backward
+  recipe scales the analytic and numeric gradients alike, so it is invisible
+  to any central difference and has to be caught by a loss value or a
+  training run instead.
+
+- **`numerical_edge_cases`: what the framework does at zero, at infinity,
+  and at the boundary.** Every other example stays comfortably inside the
+  reals, which is the right way to demonstrate a framework and the wrong
+  way to find out what it does where a kernel's special-case handling
+  lives - which is exactly where an optimization that speeds up the common
+  case can quietly change the uncommon one. This pins both halves of the
+  contract, with the reasoning for each. The guarded half:
+  `NanPolicy::Reject` and the `check_gradients` shorthand turn a non-finite
+  gradient into a typed error naming the tensor and the recipe, while a
+  plain `backward` returns the infinities - an asymmetry that is
+  deliberate and worth stating, because a run that silently poisoned its
+  weights looks exactly like a run with a bad learning rate. The
+  unguarded half: division by zero, `log(0)`, `sqrt` of a negative and
+  `inf - inf` all produce the IEEE answer and no error, because a model
+  that legitimately computes `log(0)` during a warmup should not be
+  stopped by the type system - the cost is that a NaN has to be looked
+  for, and the guarded gradient pass is the cheap place to look. Also
+  pinned, because both surprise people: `x^0 == 1` even at `x == 0` and
+  `(-1)^-1 == -1`, a power with a non-integer exponent is `NaN` on a
+  negative base, reductions propagate a NaN rather than skipping it, and
+  `softmax`/`log_softmax` stay stable at `[1000, -1000]`.
+
+- **`trainer_fit`: the automatic `Trainer` driven end to end.** Every
+  other training example writes the loop out by hand, which is the right
+  way to learn the framework and the wrong way to check that a loop is
+  correct - a loop bug and a working loop produce the same falling loss.
+  This one drives `Trainer::fit` on a small synthetic classification
+  problem and checks three things, in increasing order of how much they
+  would catch. That the run trains: the loss of a fixed probe batch is
+  taken from the *same model instance* before and after, since
+  `Linear::build` initializes randomly and two instances differ for
+  reasons that have nothing to do with the optimizer - a finite
+  `final_loss` proves nothing, because a loop that ran the forward and
+  never stepped would produce one. That the bookkeeping is exact:
+  `epochs` and `batches` are counted by the trainer, and a count that
+  drifts by one is invisible in a loss curve. And that a plan for
+  hardware which does not exist is *refused* rather than silently
+  narrowed to the CPU - the same model, batches and optimizer, asked for
+  three absent GPUs, which is the sentence the `Trainer` exists to make
+  true ("easy" must not mean "silently ran on the CPU instead"). Which of
+  the two refusals fires - at planning, when the backend family is not
+  compiled in, or at the first batch, when it is - is printed rather than
+  assumed, because the difference is the difference between "you need a
+  Cargo feature" and "that device is not there". An empty dataset is
+  checked too: zero batches and no loss say so honestly, where a loss of
+  `0.0` would be an invention.
+
+- **`gradcheck_model`: a central-difference gradient oracle for whole
+  compositions.** Every per-operation gradient test in this repository
+  checks one backward recipe against a hand-computed answer, which leaves
+  the thing that actually breaks untested: the composition. Six
+  individually-correct recipes wired together in the wrong order, or with
+  one axis transposed, train to a loss that decreases and means nothing -
+  it just decreases a little more slowly than it should, which no
+  "the loss went down" threshold can catch. This example perturbs one
+  weight element, re-runs the forward, and compares the slope against the
+  analytic gradient: an oracle that never asks the framework what the
+  derivative is, so it is a stranger to a transposed operand, a dropped
+  term, a sign or a constant factor, and the report names the element that
+  disagreed. Five cases - `matmul -> relu -> sum_all`, `batch_norm ->
+  relu -> sum_all` (the only step among them whose gradient is a reduction
+  over its own input), a broadcast multiply and reduce, `index_select`
+  with a thrice-repeated index so a scatter that overwrites instead of
+  accumulating fails loudly, and a matmul followed by a broadcast. It
+  found the CPU batch-norm gradient defect below on its first run. Two
+  coverage limits are named in the example rather than papered over:
+  `conv2d` at the `Tensor` level admits only fully static input and weight
+  shapes, and a module's parameters are not reachable either, so a
+  parameter gradient of a `seq![]` stack has no public read path today.
+
+- **WGPU comparison and logical operations (#91 Tier-3).** The six
+  numeric comparisons (`cmp_eq`..`cmp_ge`) and the three logicals
+  (`logical_and`, `logical_or`, `logical_not`) now have WGPU `Execute`
+  rows: operands stay `F32_ONLY` for the comparisons and `BOOL_ONLY` for
+  the logicals, results carry the API-boundary `Bool` dtype over the
+  physical `f32` 0/1 encoding `masked_fill`/`where_cond` already consume,
+  and no tape entry is pushed (matching CPU/CUDA, whose
+  `descriptor_training` resolves these rows `false`). The kernels ride
+  `binary.wgsl` modes 7–14 and `unary.wgsl` mode 34; `binary.wgsl`'s
+  mode 8 was rewritten from `!=` to `!(==)` because naga lowers `!=` to
+  *ordered* not-equal and answered `false` for `nan != nan` where CPU
+  answers `true`. f16/bf16 remain refused by dtype across the whole
+  WGPU registry (no `SHADER_F16` query, no bf16 feature bit), documented
+  in `wgpu/capability.rs`'s audit comment. Tests: `wgpu_comparison` 8/8,
+  `wgpu_f16_audit` 2/2.
+
+- **Metal deferred operations batch (#92 follow-up).** Ten more `Execute`
+  rows land beside the Batch-A surface: `instance_norm` (per-sample,
+  per-channel, composed from the shared statistical helpers),
+  `pad`/`repeat` (taped host walks in `metal/layout.rs`),
+  `batched_matmul` (strided-batch over leading dims, joining the
+  composed-matmul group with `scaled_dot_product_attention`),
+  the three forward-only order statistics `argmax`/`sort`/`topk` (i64
+  results, no tape — `descriptor_training` resolves them `false`),
+  `scatter` (ternary input/index/source walk) and `one_hot` (bool-mask
+  host walk, no tape entry even though the embedding group hardcodes
+  `training = true`, the same claim CUDA makes), and `to_dtype`
+  (bidirectional casts among the storage dtypes Metal admits, riding the
+  `broadcast` group since the cast walks host bytes dtype-parametrically
+  in `metal/convert.rs`). Tests: `metal_gap_ops` covers all ten on the
+  host-side path; the runtime kernels remain macOS-gated.
+
+- **CUDA narrow dtype capability rows.** Ten standalone wide rows in
+  `capability/tables.rs` widen identities that the shared declaration
+  groups still floor at `F32_ONLY`: the eight composed byte-movement
+  rewrites (`flatten`, `squeeze`, `unsqueeze`, `stack`, `slice`, `chunk`,
+  `split`, `broadcast_left`) now admit the dense storage set
+  (`i64`, `bf16`, `f16`, `f32`, `f64`, `bool`) with `training = true`
+  verified by the tape entries their rewrite steps push;
+  `pixel_shuffle`/`unfold` widen as native reshape/transpose chains over
+  the same measured kernels; `tensor_to_bytes` widens per the readback
+  contract (length-check only, never reinterprets elements); and
+  `maximum`/`minimum`/`abs_diff`/`lerp` leave `native_tensor` for the
+  `elementwise` group now that #86 closed their half/double kernels.
+  `support()` is any-row-match, so real invocations resolve against the
+  wider claim while the group row keeps its narrower documented floor.
+  Tests: `cuda_dtype_rows` — 4 admission tests pass host-side, 7
+  `#[ignore]`d hardware tests.
+
+- **CUDA `grouped_matmul` for the routing primitives catalog (#103).**
+  The expert-tiled matmul that issue #103 added to the CPU catalog now has
+  a CUDA `Execute` row: `lhs [T, K]`, stacked `rhs [E, K, N]`, and an i64
+  `offsets [E + 1]` tile validated with CPU's exact refusal wording
+  (length, range, non-decreasing, and exact `[0, T)` coverage) after a
+  single host readback of the `E + 1` integers. Forward runs one tape-free
+  `launch_matmul` per non-empty span and concatenates the products in span
+  order — an empty expert contributes nothing rather than erroring, the
+  empty-expert case a router produces when no token lands on an expert —
+  and pushes one composed `TapeEntry` for the whole product so the tape
+  sees a single entry rather than one per expert. Backward recomputes
+  `grad_lhs` and `grad_rhs` from the captured operands the same way CPU's
+  does; the integer offsets stay off the tape, the same exclusion
+  `scatter_add` applies to its index. The capability row joins CUDA's
+  `embedding` group (the `INDEX_AND_F32_DTYPES` union one row cannot state
+  any more tightly), the executor re-checks the i64-offsets and
+  same-float-matrices split the row cannot carry, and a strided or
+  non-zero-offset operand is refused fail-closed before the flat-buffer
+  narrow/matmul path could mis-address it.
+
+- **FSDP/ZeRO sharded execution for the automatic `Trainer` (#99).**
+  `TrainerBuilder::sharding(ShardingSpec::Fsdp { stage })` makes `fit`
+  and `fit_scaled` lower ZeRO-2 to a reduce-scatter of gradients and
+  ZeRO-1 to all-reduce-then-mask, step, and all-gather parameters back
+  into a full replica - through `with_fsdp_synchronizer`, refused before
+  the first batch if absent or world-mismatched
+  (`TrainError::FsdpUnavailable`). `incin_core::dist::sync` gains the
+  `FsdpSynchronizer` trait, `reduce_scatter_model_gradients`,
+  `mask_gradients_to_owned_shard`, `all_gather_model_parameters`, and the
+  `ShardedGradients` report whose byte accessors measure the `1/N`-vs-`N`
+  fanout the stage exists for. Proven on CPU: scripted two-rank
+  arithmetic, divisibility/rank refusals before the offending collective,
+  ZeRO-1/ZeRO-2 buffer equivalence, and a two-rank ZeRO-2 trajectory equal
+  to the single-device full-batch reference. ZeRO-3 is refused at build
+  (`TrainError::UnsupportedShardingStage`); TP/PP execution and NCCL
+  transport remain the documented hardware-gated gaps.
+
+- **Mixture-of-experts typing for the facade (#102).** `incin::nn::Router`
+  and `incin::nn::MoE` are typed modules: a bias-free top-k gate over `E`
+  experts and a fixed expert array visited as `experts.N.*`. The reference
+  forward is the dense masked path from the #102 research note — one-hot
+  assignments scaled into per-expert weight columns — so no token is
+  silently dropped. Capacity-factor drop and the aux load-balancing loss
+  remain deferred gaps; `Routing::expert_offsets` exposes the exclusive
+  `[E + 1]` scan without host interop. Array trait impls
+  (`VisitState`/`NamedLayers`/`ComputeStats`/…) let `MoE` participate in
+  state round-trips and summaries like any other module.
+
+- **Data-parallel gradient synchronization for the automatic `Trainer`
+  (#97).** `incin::experimental::training` gains a `GradientSynchronizer`
+  seam (`with_synchronizer`) that mean-reduces model gradients after every
+  `backward()` and before the optimizer step. `SingleRankSynchronizer` is
+  the bit-identical identity for single-device runs; multi-device plans
+  without a synchronizer still fail closed with
+  `TrainError::CollectivesUnavailable`, and a synchronizer whose
+  world/device/rank disagree with the plan fail with
+  `TrainError::SynchronizerMismatch`. Aggregation math and a two-rank
+  protocol exchange are proven on CPU; real multi-rank transport remains
+  gated on the unset `HARDWARE_CUDA_RUNNER` (issue #82).
+
+- **Metal Batch-A pointwise executors and attention-block ops (#92).**
+  Host-side `Execute` coverage for the full unary/scalar/clamp/`atan2`/
+  `fmod`/`remainder` set, plus `softmax`, `log_softmax`, `layer_norm`,
+  `rms_norm`, and the layout family (`transpose`, `narrow`, `slice`,
+  `concat`, `stack`, `squeeze`, `unsqueeze`), `tril`/`triu`,
+  CUDA-matching `dropout`, `linear`, and `scaled_dot_product_attention`.
+  Each row is advertised only with a working executor;
+  `BatchNorm`/`GroupNorm` stay unadvertised because no Metal kernel backs
+  them. Dispatch-level tests in `metal_attention_ops` pin the coverage on
+  Linux (the Metal feature compiles and runs host-side methods without a
+  macOS runtime).
+
+- **Cross-attention completes the attention modules (#101).**
+  `incin::nn::CrossAttention` composes the same four projections over two
+  inputs: queries from one `[batch, seq, d_model]` sequence, keys and values
+  from another, with `forward` taking the tuple `(query, memory)` and both
+  sequence lengths free to differ. The head invariants are compile-time
+  (`const { assert! }` inside `build`, exactly as in `MultiHeadAttention`);
+  with `AttentionConfig::causal` the mask is rectangular — query row `i`
+  sees memory columns `0 ..= i`. Fixed memory is projected once by
+  `prefill_memory` into a caller-owned `KvCache` and then read (never
+  appended to) by `forward_with_cache(step, query_pos, &cache)`, a `NoGrad`
+  decode step whose rotary positions and causal diagonal both continue from
+  `query_pos`.
+
+- **Typed KV cache and fused-attention path for incremental decode (#104).**
+  `incin::nn::KvCache` is a preallocated `[batch, kv_heads, capacity,
+  head_dim]` buffer (static rank-4 shape; `Dyn` is rejected at construction)
+  with `append`/`kv`/`reset`. Overflow raises the new
+  `Error::CacheCapacityExceeded`; geometry mismatches raise
+  `Error::InvalidModuleState`. `MultiHeadAttention::forward_with_cache` runs
+  one decode step against a caller-owned cache: absolute-position rotary,
+  append, then causal attention over the stored prefix, all under
+  `GradMode::Disabled` with a `NoGrad` result. Evaluation and zero-dropout
+  `forward` now dispatch the catalog's `scaled_dot_product_attention` row
+  (mask operand decoupled from q/k/v's gradient type); training with
+  attention-weight dropout keeps the manual path because the fused row has no
+  dropout operand. The CPU row still composes matmul/softmax internally — a
+  flash-style online-softmax kernel remains open on #104.
+
+- **The kernel IR can express the transcendental and rounding pointwise
+  operations.** `IrUnaryOp` gains `Tan`, `Asin`, `Acos`, `Atan`, `Sinh`,
+  `Cosh`, `Asinh`, `Acosh`, `Atanh`, `Erf` and the rounding family `Floor`,
+  `Ceil`, `Round` and `Trunc`; `IrBinaryOp` gains quadrant-aware `Atan2`, which
+  is not composable from `Atan` because the correction is a branch on the signs
+  of both operands. Each carries a derivative rule, so `IrExpr::diff` covers
+  them, and each numeric definition is stated once in `IrUnaryOp::apply` and
+  `IrBinaryOp::apply`, which constant folding and `IrExpr::eval` now both route
+  through rather than repeating.
+
+  `codegen::catalog` does not yet name these operations, so nothing changes
+  about the kernels the CUDA backend emits today. Adopting them replaces a
+  hand-written CUDA literal with a generated one, and the only check that the
+  two agree needs a GPU, so the adoption and the hardware run belong in the
+  same change. The module documentation says which operation to look at first
+  and why.
+
+- **The conformance oracle can see a surplus tape node, not only a missing
+  one.** `RecordedNothing` catches a training row whose kernel pushes nothing,
+  which leaves a hole in the graph. Its mirror image went uncovered: a kernel
+  that records the same output twice makes the tape *grow*, so a depth
+  comparison reports the row as holding while the reverse walk runs both
+  recipes against one gradient and doubles every input below the operation.
+
+  A node count cannot separate the two. Measured over the whole training set,
+  361 tuples record nothing, 1178 record one node, and 203 record between two
+  and thirteen; of those, 90 are declared `Native`, so `ImplementationKind`
+  does not separate them either. What does separate them is the output
+  identity, because every intermediate allocation mints its own, so a repeated
+  one is never a composition. `Verdict::RecordedOneOutputTwice` reports it, and
+  the enum is now `#[non_exhaustive]` so the next finding class is not a
+  breaking change.
+
+- **A custom dtype can survive a checkpoint.** `DTypeRegistry` is the
+  process-wide map from a wire key back to the descriptor that defines it.
+  Custom dtypes could already be defined, dispatched and executed, because
+  `CapabilityRule::dtypes` and `CapabilityQuery::dtype` are both
+  descriptor-keyed and never needed widening. What they could not do is be
+  read back: `DTypeKey` holds `&'static str`, a key off the wire holds owned
+  `String`s, and resolving one meant finding the `'static` descriptor it
+  names. Built-ins have a match arm for that. Everything else had a refusal
+  that named the missing piece in as many words.
+
+  Built-ins are not stored in the registry, since that would give one key two
+  sources of truth. An unregistered key is still refused rather than guessed
+  at, and the message now names the call that fixes it. Registering the same
+  key twice with the same descriptor is idempotent, so two crates depending on
+  a third that registers its own dtype need not order themselves; registering
+  it with a different descriptor is refused rather than applied, because the
+  alternative is reading the second caller's tensors with the first caller's
+  encoding, which is a silent corruption rather than a load failure.
+
+  `Error::DTypeRegistration` is new, on the already `#[non_exhaustive]`
+  `Error`.
+
+- **`ExecuteInto` collapses the two bounds a dispatched built-in costs into
+  one.** A kernel written as dispatched built-ins paid `B: Execute<op::X>` and
+  `<B as Execute<op::X>>::Output: Into<B::Storage<K>>` for every operation it
+  used, so a ten-operation recipe carried twenty bounds and half of them named
+  `Output`, an associated type the author never wrote. `B: ExecuteInto<op::X,
+  K>` says both, and carries `Capabilities` as a supertrait, so dispatch asks
+  for nothing further.
+
+  The conversion is a method on the trait rather than an empty marker, and
+  that is the whole trick. An alias carrying the `Into` bound only in its
+  blanket impl's where-clause compiles at the declaration and fails at the
+  use, because Rust does not propagate a blanket impl's where-clause back to
+  generic code: a helper that writes `.map(Into::into)` still owes the
+  obligation and reports it one level down. `ExecuteInto::dispatch_into`
+  discharges it inside the blanket impl, where it is in scope.
+
+  Nothing is given up. `Execute` is untouched and `Output` stays an associated
+  type, which is what lets an operation return a pair, a `ShapeBuf` or a
+  scalar. An operation whose output is not storage simply has no
+  implementation, and a multi-output operation never had one to lose.
+  `crates/incin-core/tests/custom_op_composition.rs` carries both of its
+  recipes on the new bound, which is what took `Capabilities` and `Execute`
+  out of its imports entirely.
+
+- **`Tensor::apply_op` runs a custom operation without leaving tensor space.**
+  Reaching a custom operation used to mean assembling a `TensorHandle`,
+  building an execution context, dispatching, and lifting the result back with
+  `try_from_storage`, restating the shape, dtype, device and gradient marker
+  by hand at the end. All four were already known, so none of them was a
+  question worth asking, and each restated by hand was a chance to restate it
+  wrong. One call now covers it, and the result is an ordinary tensor that
+  built-in operations and `backward` treat like any other.
+
+  Recording is not the caller's concern either: if the operation implements
+  `DifferentiableOp` the blanket `Execute` records during dispatch, and if it
+  does not the operation is forward-only. Neither needs a different call. The
+  ambient gradient mode is narrowed by the input tensor's own marker first, so
+  a `NoGrad` input records nothing however the operation was written.
+
+  It is deliberately the single-input, shape-preserving case, which is what a
+  fused activation, a custom loss term or a quantization stub is. Anything
+  wider goes through `Tensor::apply_op_n`, below.
+
+- **`Tensor::apply_op_n` extends that to several inputs and a new output
+  shape.** The shape is a parameter, because a shape-changing operation's
+  output geometry is the operation author's knowledge and nothing on the
+  framework side can infer it. Everything else is inherited from the receiver
+  exactly as in `apply_op`, so the dtype, the device and the gradient marker
+  are still never restated and the caller still never builds a handle.
+
+  The extra operands are borrowed storage rather than borrowed tensors. A
+  slice of `&Self` would force every operand to share the receiver's shape and
+  layout, which rules out the operations the method exists for: a two-operand
+  kernel whose operands have different geometry, a matrix multiply over
+  `[m, k]` and `[k, n]` being the obvious one. Dispatch asks for none of that,
+  since `TensorHandle::from_storage` is parameterized by backend, dtype and
+  placement alone, and `Tensor::inner` is public, so the call site reads
+  `&[w.inner()]`. The receiver is the first input and the slice follows in
+  order, and the gradient mode comes from the receiver's marker alone, which
+  is the rule `apply_op` and the explicit dispatch path already follow.
+
+  Only a multi-output operation still needs `execute_shaped_n`, because there
+  is no single tensor for a method like this to hand back.
+
+- **`incin_core::exec::gradcheck` is public, and backend generic.** A backward
+  recipe is the part of a custom operation that fails quietly: a wrong forward
+  kernel produces visibly wrong numbers, a wrong recipe produces a model that
+  trains slightly worse. The book used to tell authors there was no public
+  helper and to write a central-difference sweep themselves, including
+  choosing a step size, which is the part that is easy to get wrong. In `f32`
+  the step that minimises total error is near `1e-2`; the `1e-4` that looks
+  conservative sits at its own noise floor, where a real defect and a rounding
+  artifact are indistinguishable.
+
+  It lives in the core, beside `DifferentiableOp`, because it is part of the
+  custom-operation contract rather than a CPU convenience. `GradCheckStorage`
+  is everything it needs of a backend: read one element, perturb one element,
+  and run the backward pass. `GradCheckReport` names the input, the element,
+  both values and the relative error rather than returning a bare number, and
+  its `Display` says what a constant-factor failure means as against a single
+  disagreeing element.
+
 - **Every operation's example is written for that operation, compiled, and run.**
   The reference used to show examples harvested from the book, which made
   coverage an accident of what the prose happened to demonstrate -- and at some
@@ -30,7 +543,523 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and is wired into CI. It checks what is shipped rather than re-drafting, so
   the examples that never compiled are not re-proposed on every run.
 
+- **Mixed-precision autocast sits at the execution boundary (#2).**
+  `incin_core::exec::autocast` installs a `SemanticProfile` that says which
+  operations may compute in a lower precision: BinaryBroadcast, MatMul and
+  Attention downcast their operands to the working dtype, while Reduction
+  and Loss widen to the accumulator, so a sensitive sum never accumulates
+  in the dtype it is running in. The profile is gated on the capability
+  registry -- a backend without the row never enters the path -- and an
+  fp32 working dtype short-circuits to a no-op. `fit` and `fit_scaled`
+  install it around a block, the dispatch funnels gained `+ 'static` bounds
+  so a stored profile can be read back, and the optimizer step contexts pin
+  `RuntimePrecisionPolicy::fp32()` so training arithmetic is never silently
+  downcast. Three tests in `crates/incin/tests/precision_fixtures.rs` pin
+  the downcast/widen split, and the API baseline records
+  `InstalledAutocast` and `AutocastBackend`.
+
+- **Checkpoints and safetensors load as streams (#13).**
+  `serialize.rs` grows a `ByteSource` reader for safetensors: the 100MB
+  header cap mirrors the buffered path, each tensor's byte range is read
+  without materialising the file, one shard stays open across reads, and
+  the index is cross-checked against the shards it names. `nn/state.rs`
+  gains `StateStream` and `load_state_streaming`, which compare the path
+  set on disk against the one the checkpoint expects, re-read aliases from
+  their new homes, and stage a load as prepare then commit, with rollback
+  on a shape mismatch and finalize on success.
+  `crates/incin-core/tests/streaming_checkpoint.rs` covers multi-shard
+  round-trips, a mid-staging mismatch that rolls back, a missing tensor, a
+  truncated shard, a missing path, and binding the result on WGPU; unit
+  tests in `serialize.rs` pin residency.
+
+- **WGPU runs the indexing, mask and cross-entropy operations (#91).**
+  `wgpu/backend/indexing.rs` implements embedding, gather and index_select
+  as host-walks, plus `Execute` for MaskedFill and WhereCond through
+  `select.wgsl` and for EmbeddingExact. The storage tables admit u8, u32,
+  i64 and bool (bool stored as f32 physically), `broadcast_storage` keeps
+  its operand's dtype while a new `broadcast_storage_raw` serves untaped
+  bool masks, and `SupportsDType<bool>` lands in the contract.
+  `cross_entropy_loss` composes from indexing plus an f32 row
+  (INDEX_AND_F32_DTYPES), and batch_norm's training path composes through
+  `sum_keepdim` instead of refusing outright. Dropout now clone-links its
+  identity rather than copying data, and `wgpu_indexing.rs` and
+  `wgpu_cross_entropy.rs` pin the new surface.
+
+- **An experimental compiled-fusion lowering seam (#112).**
+  `FusedKernelLowering` in `incin-core`'s `compiled::fusion` names the
+  contract a lowering must meet, with `UnsupportedDtype` and
+  `BoundaryCount` blockers for the two reasons a lowering may refuse;
+  `incin-backends` ships `PointwiseScalarLowering` through the crate-private
+  `codegen::fuser`, and fused output and gradients are compared against the
+  unfused run. The seam is re-exported as `incin::experimental::compiled`,
+  the module docs now claim no *proven* lowering rather than no lowering at
+  all, and `FusionPolicy::Enabled` remains unavailable.
+
+- **Broadcast-mask operations are pinned from both directions (#100).**
+  The `BroadcastShape` bounds added for where_cond and masked_fill now have
+  compile-fail fixtures -- `where_cond_mask_not_broadcastable` (E0277),
+  `where_cond_mask_enlarges_data` (E0271) and
+  `masked_fill_mask_enlarges_input` -- beside a compile-pass case
+  (`where_cond_broadcast_mask.rs`) and the runtime suite
+  `crates/incin/tests/broadcast_mask_ops.rs`; D-109 in `PROPOSALS.md`
+  records the decision.
+
+- **Custom dtypes state their boundaries in code and in the book (#96).**
+  `CollectiveTuningProblem::new_static` now requires
+  `K: ConstDType + BuiltinDType + CollectiveDType` and fingerprints with
+  `K::DTYPE` instead of `unwrap_or(F32)`, so a dtype without a builtin id
+  is refused at the type rather than at the fingerprint. The refusal is
+  pinned by `custom_dtype_missing_builtin_id` under both
+  `collective_tuning_compile_fail/` and `hybrid_plan_compile_fail/`, and a
+  new section in `docs/book/src/backend_authoring.md` -- "Custom dtypes and
+  devices: current boundaries (issue #96)" -- writes the limits down.
+
+- **CPU matmul accepts f16 and bf16 (#90).**
+  MatMulExact and the composed `bmm`, `addmm` and `linear` move from
+  F32_ONLY to FLOAT_DTYPES, so a half-precision matmul runs instead of
+  refusing; a host gate, `ensure_matmul_dtypes`, raises `DTypeMismatch`
+  for mixed pairs and `UnsupportedDType` for the rest, and is called from
+  both `matmul_forward` and `batched_gemm`. SDPA, Dot and Outer keep
+  F32_ONLY through `composed_reduction`. Tests cover f16 and bf16 values
+  and result dtypes, a batched f16 case, the mixed-pair refusal, f16
+  backward, and the capability rows; on CUDA the per-dtype entry maps are
+  checked pure (`matmul_entry_point`, `matmul_batched_entry_point`) with
+  `cuda_matmul_dtypes.rs` `#[ignore]`d for hardware, and
+  `capabilities.md` is regenerated.
+
+- **CUDA closes its pointwise, reduction, indexing, convolution and
+  batched-GEMM gaps (#85, #86, #87, #88, #106).** `frac`, `atan2`, `fmod`
+  and `remainder` record gradients -- remainder composed from `fmod` plus
+  an euclid adjustment -- checked in `cuda_pointwise_gap.rs`. Reductions
+  fix their axis-0 row addressing, var and std gain a Welford tape recipe
+  (`push_var_std_tape_entry`), TopK and the six var/std capability rows
+  move to f32-only `native_tensor`, `cuda_reduce_ops.rs` expands, and
+  `testing.rs` grows a `var_std` seam. Gather, Scatter and IndexSelect
+  gain INDEX_AND_F32_DTYPES rows on both the CUDA and WGPU tables, with
+  `incin_cuda_repeat_backward` and `incin_cuda_diag_backward` kernels, and
+  tril/triu admit rank 1 through `launch_triangular`
+  (`cuda_indexing_admission.rs`, `cuda_indexing_layout.rs`). Convolution
+  gains `col2im_2d_tape`, transpose reports its natural output size, and
+  adaptive average pooling records a tape entry (`cuda_conv_spatial.rs`).
+  `matmul.cu` gains batched GEMM -- a `blockIdx.z` batch loop, stride-0
+  broadcast operands, refusal past 65535 batches -- and under
+  `cuda-vendor`, cuBLASLt strided-batched paths
+  (`try_launch_batched_matmul`,
+  `CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET`) take over
+  (`cuda_gemm_batched.rs`, `OperandMeta` in `cuda/ops/mod.rs`). The new
+  `cuda_loss_ops.rs` and `cuda_train_ops.rs` suites run the loss and
+  training surface: dropout through a `dropout_draws` seam, instance_norm
+  backward parity, and a full train step (#84).
+
+- **Hardware runners are registered in one documented place (#82).**
+  `hardware.yml` opens with the registration steps: runner labels as JSON
+  in `HARDWARE_*_RUNNER` variables via `gh variable set`, the notice that
+  an unset variable is a no-op, and the optional
+  `HARDWARE_METAL_RUNNER`. `CONTRIBUTING.md` gains a "Registering a
+  hardware runner" section, and `PROJECT_STATUS.md` points at it.
+
+- **Tensor-level quantized dtype contract (#93).** `Tensor::quantize(axis)`
+  and `Tensor::dequantize::<Kout>()` bring `Q8_0` onto the stable tensor
+  surface behind two new admission traits — `FloatCapable` (blanket over
+  `FloatDType` + `Dyn`) and `QuantCapable` (blanket over `QuantDType` +
+  `Dyn`), exported from the facade root and prelude. Admission is
+  compile-time where the dtype is static: 25 elementwise unary methods plus
+  `norm` bound `K: FloatCapable`, so a `Q8_0` operand there is `E0277`
+  naming the trait, and `dequantize` on a float is `E0277` naming
+  `QuantCapable` — pinned by the trybuild fixtures `quantized_mish_admission`,
+  `quantized_floor_admission` and `dequantize_rejects_float_input`;
+  `Dyn` operands fall through to the catalog's typed descriptor refusals.
+  Block divisibility is proved twice: a const assert fails monomorphization
+  (`E0080`, "the last axis of a Q8_0 block must be a multiple of 32") for
+  static shapes — pinned by `quantize_block_axis_not_divisible` — while
+  `Dyn` reports axis, extent and block size as a typed
+  error. On the CPU backend `quantize`/`dequantize` record identity
+  straight-through tape entries — PyTorch QAT's `FakeQuantize` rule, an
+  approximation, with Q8_0's per-block `max_abs/127` scale never
+  saturating and so no clip masking (CUDA's quantize kernels record none
+  yet) — and the catalog gains `GradientRule::StraightThrough`. Sharded
+  checkpoints now slice block dtypes only at whole-block boundaries
+  (mid-block shard → descriptive error) and refuse `DTypeKey` version /
+  encoding mismatches on load rather than misread bytes (format commitment
+  in `docs/COMPATIBILITY.md`); `DTypeRule::Quantized` deliberately stays at
+  `quantize`/`dequantize`/`quantized_matmul` for this release (Decision 7).
+  Tests: trybuild `compile_fail` 4/4, `quantized_tensor_ops` 10/10,
+  `checkpoint_block_quant` 9/9, `quantize_ste` 6/6.
+
+- **`vision_live`: a live training dashboard over both ten-way vision
+  corpora, and a CIFAR-10 recipe that actually learns.** One example,
+  `--dataset fashion|cifar` (default `fashion`), serving the live training
+  state per request on a loopback port: loss curve, test accuracy, and a
+  gallery that names the classes instead of printing indices. Both corpora
+  are ten-way, so the model, the loop and the page are one code path; only
+  the geometry, the class names and the budget differ. CIFAR-10's tarball
+  extracts through `Cifar10Dataset::new` (the crate's own
+  traversal-guarded extractor) into `cifar-10-batches-bin`, giving
+  50000/10000 images, labels 0..9 and channel planes at offsets
+  0/1024/2048; the run prints all three facts before it trains, because a
+  dashboard is not evidence.
+
+  The recipe is the ordinary small-image one and every piece is load-
+  bearing: per-channel standardization from each corpus's own statistics;
+  train-only random crop with a 4-pixel pad plus a horizontal flip, through
+  `incin::transforms` rather than hand-rolled; a VGG-style stack of
+  convolution + batch norm + ReLU with widths 16/32/64 and three 2x2 pools;
+  AdamW with decoupled weight decay, a 300-step warmup and cosine annealing
+  to a hundredth of the peak; a Fisher-Yates shuffle per epoch from a
+  six-line LCG, because the example takes no `rand` dependency of its own.
+  Dropout is deliberately absent - the test pass cannot switch the model to
+  evaluation mode without also switching batch norm onto running statistics
+  `forward` has never written, and half a mechanism is worse than none.
+
+  Measured on a 4-core CPU, `cpu-blas` on, ten epochs over 4000 CIFAR-10
+  training images and 1250 total optimizer steps: loss 2.1181 -> 1.4492 and
+  test accuracy 0.294 -> **0.460** on a 1000-image test subset, against 0.10
+  chance. That is 0.29 -> 0.46 for the same training subset, and the gain is
+  not a longer schedule - the previous three-budget experiment (0.26 /
+  0.28-0.29 / 0.29) had already shown the budget was not the binding
+  constraint. The previous network had no normalization, no augmentation and
+  a flat learning rate. Fashion-MNIST moved the same way on the same recipe - eight epochs over
+  3000 images and 752 optimizer steps, about sixteen minutes: loss 1.8271 ->
+  0.5409 and test accuracy 0.714 -> **0.822** on a 1000-image test subset,
+  from 0.72 for the previous network. Accuracy before the first epoch is
+  already 0.714 because batch norm plus standardization let the first
+  hundred steps do real work, where the previous network was still at 0.49
+  after six.
+
+  The example's `[[example]]` entry still requires only `cpu`, and a
+  default build trains the same model to the same accuracy - just slowly.
+  The CPU `conv2d` is im2col plus a batched matmul, so the optional
+  `cpu-blas` feature lands squarely on the hot loop: the same four-step
+  CIFAR-10 batch measured 2m15s on a default build and 31s with it (4.4x) on
+  a 4-core CPU, which is the difference between a demo that finishes and
+  one that does not. The doc comment says so and gives the flagged command.
+
+### Changed
+
+- **`vision_live` runs its evaluation pass under a disabled gradient
+  scope, and stops growing without bound.** An evaluation forward that is
+  never followed by a `backward` has nothing to drain its autograd tape,
+  so every saved tensor the forward's recipes captured stayed alive: the
+  example's memory grew by roughly 600 MB per epoch, linearly, and a
+  twelve-epoch run reached 8.5 GB before the box took it. The fix is the
+  framework's own `incin_core::exec::GradMode::Disabled.scope`, which is
+  documented to record nothing and retain no backward-only tensor, and
+  which is also the semantically right thing for a test pass. Measured over
+  the same eight epochs of a 128-image run with a 1000-image test subset,
+  peak resident memory fell from 5448 MB to 684 MB and stopped being linear
+  in the epoch count. The scoped gradient policy has no facade alias by
+  design, so the example names the `incin_core` path; that is the same
+  choice the book already documents.
+
+- **CUDA fused attention tiles the query axis above eight rows (#104).**
+  The forward gained a second entry family, `attn_fwd_tiled_*`, covering
+  `ATTN_QBLOCK = 4` query rows per block: one key/value load per (block,
+  key) instead of per (query row, key), and one block-wide reduction tree
+  for all four rows' scores instead of four of them
+  (`block_reduce_sum_q`). Global key/value streaming and the reduction
+  count both fall by four, and a causal block stops at its last row's key
+  bound, which is coarse block-sparse skipping. The arithmetic and its
+  order are unchanged - a masked key is excluded from its own row's dot
+  and then given a score of `-1e300`, which is arithmetically inert
+  rather than skipped - so the output is bit-identical to the one-row
+  kernel and the `1e-4`/`1e-9`/`1e-2` parity tolerances are untouched.
+  Short sequences, including the `Sq == 1` decode step, stay on the
+  one-row kernel: tiling trades blocks for traffic, and the tiled
+  reduction scratch (`QBLOCK * head_dim` doubles) degrades to it above
+  48 KiB rather than asking for a carveout. `ATTN_QBLOCK` in the `.cu`
+  and `QBLOCK` in the launcher are the same number written twice, since
+  the host has to size the grid and the kernel has to decompose
+  `blockIdx`. Measured on a GTX 1650 SUPER (CC 7.5), two runs of 20
+  iterations each: a 1x4x512x4096x64 forward takes 0.473 and 0.478 ms
+  one-row-per-block against 0.449 and 0.451 ms tiled (about 5%), and a
+  cache-resident 1x8x256x256x64 forward 0.032/0.029 ms against
+  0.029/0.030 ms, which is inside run-to-run noise. The traffic and
+  reduction cuts are real and the wall clock barely moves, because the
+  kernel accumulates in `f64` to match the CPU twin and is bound by
+  double-precision arithmetic on a consumer part. That is
+  also why the tensor-core path stays unstarted: CC 7.5 tensor cores have
+  no `f64` accumulate, so it is a contract decision, not a kernel one.
+  `block_reduce_sum` (the one-row reduction) has a latent read-after-write
+  race on `red[0]` between the final barrier and the next call's first
+  store; it is left alone because its barrier count is the decode path's
+  cost, and the new multi-value reduction carries a leading barrier that
+  does not. Tests: `cuda_fused_attention` hardware set 10/10, four of them
+  new (tile tails 8/10/9/8, a `kv_lead` prefill, a tiled backward, and a
+  two-geometry timing print).
+
+- **`transpose` materialises on every backend and states `RowMajor` (#113).**
+  The split brain is settled: CPU's `TransposeExact` used to return a view
+  where CUDA returned a copy, so no type could honestly describe the result.
+  CPU now copies into a fresh dense row-major buffer (its backward
+  materialises the inverse the same way CUDA's does), CUDA and WGPU already
+  did, and the generated operation contract's layout rule for `transpose`
+  reads `FreshContiguous` rather than the `Shape` profile's default. The
+  public `transpose` therefore returns `Tensor<..., RowMajor>`, so
+  `reshape_view` is reachable straight after one; `transpose_structural` and
+  `transpose_runtime` keep their conservative `Dyn`. The no-copy half is
+  unchanged and explicitly named: `transpose_view` still permutes strides
+  over the same buffer and still returns `Dyn`, and WGPU still refuses to
+  advertise it until its pointwise shaders take strides. A CPU/WGPU parity
+  suite pins the same constants on both backends, and a compile-fail fixture
+  pins that a view result cannot satisfy `reshape_view`'s contiguity bound.
+
+- **Continuous fuzzing for the three adversarial parsers (#48).** The threat
+  model names malformed ONNX, state checkpoints and GGUF as adversarial
+  inputs; each now has a cargo-fuzz target under `fuzz/` driving the same
+  file-path entry points a caller uses (`OnnxImporter::import`,
+  `ModelExt::load(Format::Postcard, ..)`, `io::inspect_file`) with bounded
+  inputs, and `.github/workflows/fuzz.yml` runs all three for a fixed budget
+  on a schedule. The property suites already run under the normal workspace
+  test command.
+
+  `tools/fuzz-budget.sh` is the local mirror of that schedule: the same
+  three targets, the pinned nightly from `fuzz/rust-toolchain.toml`, 60
+  seconds per target by default and a 65536-byte `max_len`.
+  `fuzz/corpus/` and `fuzz/artifacts/` are gitignored, so a local run
+  leaves no run-state behind to commit.
+
+- **The library's own documentation now builds tensors from a target value.**
+  `Tensor`'s rustdoc and the thirty method examples under `incin-core` used
+  `Tensor::<s![2, 3], B>::zeros(())`; they use `Cpu.zeros(shape![2, 3])`.
+  The book already taught the target form and never mentioned the other, so
+  the type's own documentation was the last place teaching the path with the
+  unreadable diagnostics: the leading unit is a supplied-argument marker
+  rather than decoration, so a device selector has to shift to second
+  position, and passing one alone is read as the shape and reported as an
+  unsatisfied `ArgInto` bound naming none of the four things it is about.
+
+  The tuple constructors are unchanged and undeprecated. Deprecating them is
+  a several-hundred-call-site migration rather than an attribute, which is
+  measured in D17 of the 0.2.0 decision record, and it is its own change.
+
+- **`API_TIERS.md` says what tier a re-exported item carries.** The tables
+  assign tiers to modules, which left the most commonly written call in the
+  library unstated rather than wrong: `TargetExt` is defined in
+  `incin_backends::target`, tier X, and re-exported into `incin::prelude`,
+  tier S. A re-export carries the tier of the module it is re-exported into,
+  so `Cpu.zeros(shape![2, 3])` is a tier S call.
+
+- **Codegen is adopt-or-delete (#111).** Seven emitters -- `fusion`,
+  `scheduler`, `strided`, `pointwise`, `reduction`, `normalization` and
+  `vectorized` -- and their pointwise test are deleted, about 113KB of
+  source; the catalog, fragment, IR, DSL and JIT layers stay, along with
+  the crate-private fuser the new lowering seam calls. `codegen/mod.rs`'s
+  header now says what remains, and `codegen/jit.rs`'s is corrected:
+  `CpuJitKernel` is the f64 tree-walking reference, not a compiled kernel.
+  `docs/book/src/custom_operations.md` gains an experimental
+  expression-DSL section, `codegen_nvrtc_smoke.rs` renders only what is
+  retained, the public-api baseline `incin-backends-cpu.txt` drops 352
+  lines, and `API_TIERS.md`'s codegen row goes from 25 items to 102.
+
 ### Fixed
+
+- **`BatchNorm2d` was a fixed per-channel affine, not batch normalization.**
+  `Module::forward` passed `training: false` into `BatchNormAttributes` and
+  `with_training(false)` on every call, with no field to change it and no
+  `TrainMode` impl. The layer therefore always normalized by
+  `running_mean = 0` and `running_var = 1` - the values its builder
+  initializes them to - making it `weight * x + bias`, i.e. a per-channel
+  scale and shift with no normalization at all, and identical whether the
+  model was training or evaluating. `BatchNorm1d` has had
+  `is_training`/`TrainMode` and a batch-statistics path throughout, and its
+  own doc comment named the 2d layer as the exception. This closes that:
+  `is_training: bool` defaults to `true`, `TrainMode::set_training` moves
+  it, and `forward` now normalizes by the batch's own mean and variance in
+  training mode and by the running buffers in evaluation mode - passing the
+  running buffers as operands only in the latter case, which is the operand
+  discipline `BatchNorm1d` already used. New `crates/incin-core/tests/nn_batch_norm2d.rs`
+  (6 tests) pins the hand-computed batch statistics, per-channel
+  normalization against a whole-tensor one, the train/eval split on one
+  input, the mode surviving `freeze`/`unfreeze`, and that a built layer
+  starts in training mode.
+  One limitation is unchanged and is *not* fixed here: `forward` still never
+  writes `running_mean`/`running_var`, because they arrive as shared
+  references the execution contract does not carry mutations through. A
+  layer trained and then switched to evaluation mode therefore needs its
+  running statistics supplied from outside, or should be left in training
+  mode when the evaluation batch is large enough for its statistics to
+  stand in for the population's. That gap is now recorded in
+  `whats_not_finished.md` rather than only in a doc comment.
+
+- **`Dyn × Dyn` matmul broadcasts its batch dims (#91).** The frontend
+  shape rule took `lhs[..len-1]` and appended `n`, dropping `rhs`'s batch
+  entirely, while the structural impl and the catalog's `OutputRule::MatMul`
+  both right-aligned-broadcast. `[1,3,4] x [5,4,6]` therefore computed a
+  frontend `[1,3,6]` against the catalog's `[5,3,6]` and failed
+  `MatMulRule::agree` with an equality error on axis 0. The Dyn path now
+  uses the same `broadcast_dim_slices` as the structural path; a size-1
+  batch still does not unwrap, and unequal non-1 batches still refuse.
+
+- **Every public type carrying an attribute was missing from the API site's
+  type index.** `build-api-site-data.py` matched declarations with a pattern
+  anchored at `^pub`, and the reviewed baselines print a type's attributes
+  ahead of its declaration on the same line. A `#[non_exhaustive] pub enum`
+  therefore never matched, and the type simply was not in `api-types.json`.
+
+  Forty-nine were absent, including `Error`, `BackendError`, `ShapeError`,
+  `DTypeId`, `OperationKind` and `UnsupportedReason`: the error and identifier
+  types a reader is most likely to look up. The pattern now allows leading
+  attributes.
+
+  Nothing reported it because the generator has no expected count to check
+  against, and the gap only became visible when `conformance::Verdict` was
+  marked `#[non_exhaustive]` and disappeared from a file it had been in.
+
+- **A custom operation whose forward kernel used built-in operations got its
+  gradient counted twice.** `DifferentiableOp::forward` ran under whatever
+  gradient mode was ambient. Building a kernel out of dispatched built-ins is
+  the obvious way to avoid writing the same loop once per backend, but each of
+  those records a node of its own against the storage the custom node is about
+  to be recorded for, so two nodes carried one output identity and the reverse
+  walk summed both into every input. The result was not a crash or a missing
+  gradient: it was a plausible number that was exactly twice the right one.
+  `forward` now runs under a disabled recording scope, so the custom node is
+  the single authority on the operation's derivative, and
+  `crates/incin-core/tests/custom_op_composition.rs` pins the number.
+
+  One consequence is worth stating, because the documentation said otherwise.
+  A recipe written as dispatched built-ins now covers every backend that
+  implements them and every dtype they accept, from one implementation, which
+  is what the module documentation previously described as two implementations
+  each with its own recipe.
+
+- **`tools/build-api-examples.py --check` rewrote a tracked file and reported
+  success.** It called the same emit path the write mode calls, so the
+  committed harness was replaced by the generator's version before anything
+  was checked, and a harness that had drifted arbitrarily far still passed.
+  Underneath that, the generator emitted one blank line the committed file did
+  not carry, so regenerating always produced a diff no gate explained. Check
+  mode now compares and fails with the regeneration command, neither the
+  harness nor `docs/api-examples.json` is written under `--check`, and the two
+  agree.
+
+- **`cargo check --all-targets` failed on a `cuda`-only or `wgpu`-only
+  build.** Two examples and part of the CUDA test module use the CPU backend
+  as their reference implementation and named it unconditionally. The examples
+  now declare `required-features = ["cpu"]` and the CPU-parity tests carry the
+  matching gate, so those configurations build every target while the combined
+  `cpu,cuda` and `cpu,wgpu` builds keep every test they had.
+
+- **The public gradient checker builds without `std`.** `GradMode::scope`
+  installs a thread-local and is gated on `std`; `incin_core::exec::gradcheck`
+  is not gated, and called it to run its probe forwards under `NoGrad`. The
+  effect was that `incin-core` stopped compiling in every feature
+  configuration without `std`. No test could have caught it, because every
+  backend feature implies `std`; `cargo xtask feature-matrix` is the gate that
+  did. The call is now `restrict`, the ungated tighten-only direction, which
+  delegates to `scope` where there is a thread-local to install into and is a
+  no-op where there is no ambient tape to record onto in the first place.
+- **The CPU backend implements the public gradient checker.** The
+  implementation was written inside `cpu::gradcheck`, which is `#[cfg(test)]`,
+  so `incin_core::exec::gradcheck` compiled and was unusable by anyone
+  outside this crate: the trait it needs had no implementation in a shipped
+  build. It now lives in its own module that is not test-gated, and
+  perturbing an operand whose dtype cannot be perturbed returns an error
+  rather than panicking. The downstream fixture in
+  `crates/incin-core/tests/custom_training.rs` uses the public checker
+  instead of hand-rolling a two-point difference, which is both the proof it
+  works from outside and the example the chapters point at.
+
+  The checker's probe forwards run under `NoGrad`. Each one runs the whole
+  forward, and a recording probe would push a graph nothing will ever drain:
+  two nodes per element per input, held with their saved values, for the
+  length of the sweep.
+
+- **The custom-operation chapters point at the real gradient check.** They
+  described sweeping a recipe against central finite differences without
+  naming an API to do it with, because until now there was none. Both
+  chapters now show `incin_core::exec::gradcheck`, say what its report means,
+  and state the guarantee that a capability row claiming `training` is tested
+  for actually recording a node. The un-broadcast note is corrected: all four
+  backends keep that helper internal deliberately, since they are four
+  implementations rather than one contract.
+
+- **The higher-order ceiling is written down.** `BackwardFn` is over storage
+  and every backend runs the walk under `GradMode::Disabled`, so a backward
+  pass cannot be differentiated. That was true and undocumented, and the note
+  claiming a recipe may itself record, "as every convolution backward on the
+  CPU backend does", was false: those recipes call raw kernel helpers, and
+  anything they did record would be refused by the disabled scope. The
+  by-value signature is still right, for re-entrancy, which is the reason now
+  given.
+
+- **All four backends present the same recording seam.** `tape_record` and
+  `tape_record_with` are the two names a downstream `Execute` implementation
+  needs, and Metal had only the first while its `tape` module was the one of
+  the four left `pub`. The most important boundary in the crate, whether a
+  third party can add a differentiable operation, therefore differed by
+  backend for no stated reason. Metal gains `tape_depth` and
+  `tape_record_with` and its module joins the other three at `pub(crate)`.
+
+- **A capability row claiming `training` now has to record a node.** The
+  dispatcher enforced the row in one direction only: a query asking for
+  training is refused when the row does not claim it, and nothing checked the
+  converse. A row could therefore claim training while its kernel pushed
+  nothing, which puts a hole in the graph rather than a wrong number in it.
+  The CPU conformance oracle now runs every training tuple inside an enabled
+  `GradMode` and fails the row if the tape did not grow. That is what found
+  the six operations below.
+
+  Operations whose derivative is genuinely zero or undefined are declared, by
+  hand and with a reason each, in `carries_no_gradient`: `sign`, `floor`,
+  `ceil`, `round`, `trunc` are piecewise constant, and `one_hot` reads
+  indices. A new operation is a finding until somebody writes down which
+  group it belongs to, because there is no way to tell "has no derivative"
+  from "forgot to write one" by looking at a kernel.
+
+- **A mid-graph dtype change carries its gradient.** Casting to `f64` for a
+  delicate step and back is ordinary practice, and it detached the graph:
+  everything upstream of the cast received nothing. `to_dtype` between two
+  floating dtypes now records the identity and casts the gradient back to the
+  input's dtype. A cast to an integer still records nothing, which is its real
+  derivative.
+
+- **`frac`, `fmod` and `remainder` record a gradient.** `frac` passes it
+  through, and both modulus operations use one rule: every modulus here is
+  `r = a - b * q` for a locally constant integer `q`, so `dr/da = 1` and
+  `dr/db = -q`. `q` is recovered as `(a - r) / b` from the values rather than
+  recomputed with a rounding rule, which is exact for whichever convention the
+  forward used and stops the two recipes drifting from their kernels.
+
+- **`sin`, `cos`, `log2` and `log10` record a gradient.** All four advertised
+  training-mode execution and pushed nothing on the tape, so a graph
+  containing one came apart at that operation: `backward` reached everything
+  below it and nothing above, and the optimizer skipped the parameters it
+  found no gradient for without an error. Sinusoidal position encodings and
+  rotary embeddings are the shapes where that bites, and a wrong forward value
+  would have been visible where a missing gradient was not. Each now goes
+  through the derivative-recording path with its own backward kernel
+  (`d/dx cos = -sin`, `d/dx log2 = 1/(x ln 2)`, `d/dx log10 = 1/(x ln 10)`;
+  `sin` reuses `cos`), and each is checked against central differences.
+
+  `sign`, `floor`, `ceil` and `round` stay on the non-recording path. Their
+  derivative is zero wherever it exists, which is a gradient, not a missing
+  one.
+
+- **Reachability on the tape is a set, not a linear scan.**
+  `Tape::drain_reachable` runs once per training step over the whole graph and
+  tested membership with `Vec::contains`, which made collecting the reachable
+  subgraph quadratic in graph size. The set is never iterated in insertion
+  order, only asked whether it holds an id, so a `BTreeSet` costs nothing and
+  removes the quadratic term. The doc comment now also states the ordering
+  assumption the single reverse pass depends on.
+
+- **`GradientMap`'s doc no longer contradicts its own API.** The type comment
+  said the map was private and that nothing outside needed to write it, sitting
+  directly above a public `insert`. That method is real and needed:
+  `AutogradBackend::set_grad` is how a post-backward rescale such as clipping is
+  written once against the trait instead of once per backend. The comment now
+  says so, and says that the write is a replacement rather than an
+  accumulation.
+
+- **A CUDA backward pass no longer panics when it un-broadcasts.** Every CUDA
+  recipe with a broadcast operand reaches `sum_dim_keepdim` through
+  `unbroadcast`, and that helper unwrapped its reduction launch. `GRD-005` made
+  `BackwardFn` fallible precisely to remove panics from the reverse walk, and
+  this was the site that kept one: a failed reduction aborted the process
+  instead of returning the structured error the walk is built to propagate.
+  `sum_dim_keepdim` and `sum_dim_squeeze` now return `Result` and
+  `unbroadcast` forwards it.
 
 - **Examples sit with the operation they demonstrate**, in its expanded row,
   rather than pooled at the end of the section, and a code block scrolls inside
@@ -39,7 +1068,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   open -- the case that was missing, since the previous overflow checks only
   ever looked at closed rows.
 
+- **Two compile-fail snapshots caught up with the bounds they pin.**
+  `q8_problem.stderr` now names `BuiltinDType`, which #96 puts on
+  `CollectiveTuningProblem::new_static`, and
+  `unsupported_dtype_backend_pair.stderr` gains the `SupportsDType<bool>`
+  line that #91's bool contract added to the candidate list.
+
 ### Changed
+
+- **BREAKING: `DifferentiableOp::backward` receives its operation's
+  attributes.** The signature gains a `&Self::Attributes` parameter between
+  the saved values and the output gradient, and the trait gains
+  `Self::Attributes: Send + Sync`, which the recorded recipe needs because it
+  holds a copy of the payload and the tape's `BackwardFn` is `Send + Sync`.
+
+  `forward` already received the attributes; `backward` did not, so an
+  operation whose derivative depends on its own configuration had nowhere to
+  read it from. A leaky ReLU is the smallest case: its slope had to be copied
+  into `Saved` for `backward` to reach it, which puts the configuration on
+  every recorded node a second time and makes `Saved` mean both what the
+  kernel computed and what the caller asked for. PyTorch's `ctx` carries both;
+  JAX returns residuals from a rule that already had the parameters in scope.
+
+  Updating an implementation means adding the parameter, and `_attributes` is
+  the whole change for an operation that does not need it. The bound sits on
+  the trait rather than the blanket `Execute` so that an attribute type that
+  does not satisfy it is reported against the `impl DifferentiableOp` that
+  introduced it, rather than as a missing `Execute`.
 
 - **BREAKING: the layout parameter moved from the marker onto the trait.**
   `Layout` is now `Layout<S>`, and `RowMajor` and `ChannelsLast` are unit
@@ -87,6 +1142,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Public custom-backward recording for CPU training ops.**
+  `incin_backends::cpu::tape_record` (and the lazy `tape_record_with`) lets
+  a downstream `Execute` implementation leave a VJP recipe on the same
+  thread-local tape the built-in kernels record on, under the same `GradMode`
+  gate. Previously the push was `pub(crate)`, so a custom operation could run
+  forward but never train. `Tape`, `TapeNode`, `TapeStorage`, `BackwardFn`,
+  `GradientMap`, and `TensorId` are also re-exported from
+  `backend_authoring`, and `crates/incin-core/tests/custom_training.rs`
+  proves the contract from a user crate's perspective: forward, recorded
+  backward through the standard pass, finite-difference cross-check, `NoGrad`
+  silence, and an `f16` typed refusal for an `f32`-only kernel. WGPU, CUDA,
+  and Metal expose the same `tape_record` surface (`wgpu` executed on the
+  software adapter with its own training fixture; CUDA ships an
+  `#[ignore]`d hardware twin; Metal is compile-checked pending real
+  kernels).
+- **`DifferentiableOp`: custom training without hand-built nodes.**
+  Implementing `Execute` by hand meant naming output ids, ordering input id
+  vectors, and remembering to record — all conventions the compiler could
+  not see. The new trait takes a forward kernel and a backward rule over one
+  backend's storage plus one dtype each; a blanket `Execute` builds the
+  node, derives identities from the storages, forwards admission to a
+  per-query `supports`, and records through a new `RecordingBackend` seam
+  implemented by all four training backends. Multi-output operations keep
+  the explicit `tape_record` path, and the walk now refuses arity-mismatched
+  recipes instead of zipping silently (see Fixed).
 - **`Nhwc<S, B>`, the channels-last spelling that writes the shape once.**
   `Dense<S, B>` has always existed for the row-major case, and its own
   documentation names the reason: the layout is congruent with the shape it
@@ -111,6 +1191,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Activation modules train in any gradient state.** `GELU`, `Swish`,
+  `Mish`, `ELU`, `Softmax`, `Sigmoid`, and `Tanh` implemented `Module`
+  for `NoGrad` inputs only, while `ReLU` was already generic over `G`
+  and every op underneath records its backward. All seven now mirror
+  `ReLU`, so they compose inside `Sequential` and gradient-tracked
+  forwards; the looped-transformer fixture runs its MLP through
+  `SeqTy!(Linear, GELU, Linear)` end to end.
+- **Adam/AdamW `state_dict` persists the step counter.** The dictionary gains
+  a scalar `step` entry next to `m.*`/`v.*`, and `load_state_dict` restores
+  it, so a resumed run bias-corrects with the same `t` the moments were
+  accumulated under instead of silently mis-correcting until the counters
+  realigned (previously repaired by hand with `set_step_count`).
+  Dictionaries predating the entry restore moments only and keep the
+  loader's counter; a malformed entry is a typed error. Saving now requires
+  the backend's `Full` creation row for the parameter dtype, and loading the
+  `HostReadback` profile — both hold for every in-tree backend.
+- **WGPU `unbroadcast` materializes scalar seeds (#121).** Reduced leading
+  and size-1 axes as before, then handed anything smaller straight on, so a
+  reduced-all-the-way scalar seed reached recipes needing full width. It now
+  compatibility-checks and materializes through the existing broadcast
+  kernel, mirroring the CUDA tail. The reported sub/abs/`mean_all`
+  composition passes on the software adapter either way (WGPU recipes grow
+  through `broadcast_as`); the tail closes the same latent hole for fused
+  and external recipes, pinned by a new end-to-end regression test.
 - **CUDA launch parameters no longer truncate silently.** The grid dimensions
   and kernel ABI arguments are `u32`/`i32`; several launch paths narrowed a
   `usize` with a bare `as`, which wraps past the type's maximum and launches an
@@ -131,6 +1235,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   added, and `tools/check-large-files.sh` had been failing on them. Both now
   carry a named reason and a stated extraction target in `docs/HANDOFF.md`,
   which is what that gate asks for.
+- **A backward pass over an empty tape is a `GraphConsumed` error, not a
+  seed-only `Ok`.** The tape drains into the walk that consumes it (D-06),
+  so a second `backward()` from the same loss -- or a `backward` on a thread
+  that never recorded the forward pass -- returned the ones seed as if it
+  were a gradient and trained on nothing. `backward` and `backward_with_seed`
+  now refuse an empty node list with
+  `Error::Backward(BackwardError::GraphConsumed)`, pinned by core and CPU
+  tape tests asserting the error rather than the seed.
 
 ### Removed
 
@@ -197,9 +1309,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   answers, sweeps every input element against central finite differences
   (worst relative error `1e-11`), asserts the contract refusals, and fits
   `(r, theta)` to a target point by gradient descent through nothing but its
-  own backward. The one seam it does not cross is the backend's thread-local
-  tape push, which stays `pub(crate)` by design; an in-tree backend would move
-  the same node construction into its `Execute` impl.
+   own backward. Multi-output operations keep the explicit public
+   `tape_record` path -- one node per output cannot be derived from a single
+   return type, so there is no `DifferentiableOp` blanket impl for this shape;
+   an in-tree backend moves the same node construction into its `Execute` impl
+   and records via `tape_record`, while a single-output op implements
+   `DifferentiableOp` instead.
 
 - **Typed dispatch takes N outputs with per-output dtypes.** `execute_shaped`
   held exactly one `&ShapeValue<S>`, so a multi-output operation -- TopK's
@@ -934,6 +2049,271 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - `DuplicateIndexRule` is `#[non_exhaustive]`.
+
+### Added
+
+- **`incin::nn` composes a transformer instead of leaving it to be
+  hand-assembled.** `FeedForward` is the position-wise half, in `Relu`, `Gelu`
+  and gated `SwiGlu` form, and `TransformerLayer` puts self-attention and
+  feed-forward each behind a residual and a `LayerNorm`, in pre-norm or
+  post-norm placement. The direction is a type parameter with two aliases,
+  `TransformerEncoderLayer` and `TransformerDecoderLayer`: two structs would be
+  two copies of one forward pass, and a `causal: bool` field would make masking
+  a value that no signature could require. `build` overwrites
+  `config.attention.causal` with the marker's constant, so
+  `layer.config.attention.causal` reads back what the layer does rather than
+  what was asked for.
+
+  `crates/incin/tests/gpt_decoder_model.rs` trains a two-block decoder-only
+  model on CPU end to end, token ids in and logits over the vocabulary out, and
+  round-trips the whole thing through `collect_state`/`load_state`. The Book's
+  Transformers chapter includes that file in full, so the prose and the
+  compiled proof cannot drift apart. `MultiHeadAttention`, `FeedForward` and
+  `TransformerLayer` also gained the `ShapeInfo` implementations the
+  `#[module]` derive requires of every field.
+
+- **`GRU` and `GRUCell` sit alongside `RNN` and `LSTM`.** Six projections, the
+  same builder typestate as the gated cell (`no_input_bias`, `no_hidden_bias`,
+  `no_bias`, `frozen`, and the four `*_init` setters), the `gru_cell()` and
+  `gru()` free functions, and the parameter and state visitors. The reset gate
+  multiplies the recurrent projection alone, so the candidate is
+  `tanh(W_in x + r * (W_hn h))`. `crates/incin/tests/gru_module.rs` asserts
+  that against the other placement rather than only against the cell's own
+  output: a test that rebuilds the recurrence from the layer's own projections
+  agrees with itself under either spelling, and proves nothing.
+
+- **`LayerNorm::build_full`** takes the channel count, dtype, device and
+  epsilon as ordinary runtime arguments. The `LayerArgInto` impls are written
+  for concrete types, so a module generic over its backend and element could
+  not name one, which is exactly what a composed transformer layer is.
+
+### Fixed
+
+- **An `Embedding` could not be trained through the module path.** Its `Module`
+  implementation named `NoGrad` as the output's requirement, so a lookup's
+  result never carried one and `backward` had nothing to walk back to the
+  table. The kernel had been recording the node all along; the layer above it
+  discarded the type that makes the node reachable, and the layer is how anyone
+  uses it. The output is now the parameter's requirement, and the execution
+  context is built from the weight's own gradient field rather than defaulted.
+  Code that fed a trainable embedding sees its forward output change from
+  `NoGrad` to that requirement, which is the fix rather than a side effect
+  of it.
+
+- **`LSTMCell` and `LSTM` had the same defect, and could not be checkpointed
+  either.** `Module` was implemented only for a `NoGrad` operand, and only over
+  the static `(In, Out)` pair although the struct is parameterized by
+  `LstmShape`, so the implementation was narrower than the type it belonged to
+  and narrower than the `RNN` beside it, which was already generic over both.
+  Separately, neither type implemented `VisitState` or `VisitStateMut`, so
+  `collect_state` refused an `LSTM` outright: the one recurrent layer that
+  could not train also could not be saved. Both implementations are now generic
+  over the shape and over the operand's requirement, and the state visitors
+  exist. The layout parameter narrowed on the way: it now also requires
+  `Layout<Dyn>` and `Restatable`, which is what the per-step reshapes have
+  always needed.
+
+### Added
+
+- **`repeat_interleave` is a catalog operation.** It repeats each element in
+  place, where `repeat` tiles the whole axis: `[a, b]` becomes `[a, a, b, b]`
+  rather than `[a, b, a, b]`. Composing one from the other needs a reshape on
+  either side, and expanding one token per expert it was routed to is the
+  interleaving form, so issue #103 lists it among the operations a
+  mixture-of-experts layer cannot be written without.
+
+  The row is `Storage`/`Shape` beside `repeat`, CPU-native over the same eight
+  dtypes, with a defined gradient: each source element takes the sum over the
+  block of outputs it reached. The output extent is the input's multiplied by
+  the factor, so the shape is `Dyn` for the same reason `repeat`'s is, and the
+  minimum rank is one rather than `repeat`'s zero, because this operation names
+  an axis and a scalar does not have one.
+
+  Four of the eight operations that issue lists were already in the catalog
+  with tensor methods and CPU executors: `log_softmax`, `logsumexp`, `one_hot`
+  and `scatter_add`.
+
+- **`bincount` counts how many indices land in each slot.** The second of the
+  routing primitives issue #103 asks for: `index.bincount::<N>()` returns the
+  `[N]` histogram as `i64`, and `cumsum` over it gives the offsets that say
+  where each expert's rows begin in a grouped buffer. That composition is why
+  the per-expert token count never has to become a tensor extent, and it is
+  covered as a test rather than only described.
+
+  The geometry that addressed the indices does not survive: a `[T, K]` top-k
+  assignment counts into the same row as a flat vector of the same indices.
+  The width is a const parameter, so the output shape stays static.
+
+  An index outside `0..N` is refused rather than dropped. Dropping one leaves
+  a count quietly low and every offset after it wrong by the same amount, and
+  nothing downstream can tell that from a genuinely empty bin. The row carries
+  no gradient and says so: perturbing an index does not move a count
+  continuously, it moves one count to another slot.
+
+- **`sort` returns the values `argsort` leaves behind.** The permutation alone
+  is enough only while the operand is still to hand to gather from, and
+  grouping tokens by the expert each was routed to wants both halves: the
+  sorted expert ids say where one expert's block ends and the next begins,
+  which is the same boundary `bincount` scanned by `cumsum` describes, and the
+  permutation is what carries the token rows into that order.
+
+  Two outputs over one catalog row, the way `topk` beside it is built, but
+  reusing `ArgsortAttributes` rather than declaring a second identical type,
+  the way `scatter_add` reuses `scatter`'s. Sorting reorders an axis rather
+  than resizing it, so both outputs are the operand's own geometry; that is
+  what separates the row from `topk`, whose axis shrinks to `k`. The values
+  come back in the dtype they were read in, so the row sits with `argsort`
+  over all eight CPU dtypes rather than in the f32-only group.
+
+  The order is stable. Equal elements keep the order they arrived in, so the
+  permutation is a function of the operand rather than of how the comparison
+  broke a tie, and a router that sorts the same assignment twice groups it the
+  same way twice. Descending is the same guarantee read the other way round
+  rather than the ascending permutation reversed.
+
+  Forward-only, like the `topk` and `argsort` rows beside it: both outputs are
+  `NoGrad` whatever the receiver was. Sorting is a permutation and a
+  permutation does have an adjoint, so this is the `IndexReduction` profile's
+  contract rather than a property of the operation, and widening it is a
+  change to that profile.
+
+  What issue #103 still lists after this change is `nonzero` alone, which
+  waits on the shape decision in #102 since its output extent depends on its
+  data.
+
+### Fixed
+
+- **`topk` advertised one dtype on CPU for a kernel that handles eight.** The
+  row sat in the f32-only reduction group, and the comment holding it there
+  said its value buffer was built as f32 whatever the operand held. That was
+  true once. The kernel stopped doing it when the index reductions were made
+  to produce the dtype they were asked for: the fixed `CpuBuffer::F32` became
+  the operand's own buffer, so an f64 or f16 operand no longer comes back
+  relabelled and narrowed. The capability row stayed behind, and the reason
+  written beside it had outlived the code it described.
+
+  A user asking for the top `k` of an f64 tensor was refused at admission by a
+  backend whose kernel would have answered correctly. CUDA had already
+  declared `bf16`, `f16`, `f32` and `f64` where CPU declared `f32` alone,
+  which is the disagreement that makes the row rather than the kernel the
+  thing that was wrong.
+
+  `topk` now sits with `argsort` and `sort`, whose value buffers are built the
+  same way, over the same eight CPU dtypes. The conformance oracle poses it
+  over every one of them, and a test pins the value dtype rather than only
+  that the call was admitted, since admission is what changed.
+
+- **The API reference showed no example for `add_scalar`, `zeros` or `sum`.**
+  `tools/build-api-examples.py` writes a worked call per operation from its
+  catalog entry, compiles them all, and drops whatever rustc rejects. Fourteen
+  were being dropped for reasons in the generator rather than in the API, so
+  the reference was silently blank for operations a reader is most likely to
+  look up first.
+
+  Three causes. The creation family read its method name out of the catalog's
+  source mapping, and `Descriptor<op::Zeros>` partitions on the first `::`
+  into `Zeros>`, so every one of them emitted `Cpu.Zeros>(..)`, which does not
+  parse; those examples also annotated the result `Dense<..>`, claiming a
+  layout the constructor does not prove. The axis reductions used the
+  catalog's exact identity as the method, but `sum_dim` is spelled that way to
+  keep it apart from `sum_all` and the method a caller types is `sum`. The
+  order statistics were handed the one-axis call, which fits `argmax` and
+  fits none of `topk`, `argsort` and `sort`.
+
+  Each name is now the operation's own spelling where the source mapping is
+  not a method path, checked against the public-API baseline rather than
+  guessed: the `Execute<op::SumDim>` bound sits on `Tensor::sum`. Coverage
+  goes from 59 operations to 73. `prod_dim` still has none, correctly, because
+  it has no tensor method at all.
+
+- **The example generator now asks the public API which method serves an
+  operation, instead of guessing from the catalog's spelling.** A method that
+  runs an operation states it in its where-clause as `Execute<op::Add>`, and
+  that bound is the one place the pairing is written down and checked by the
+  compiler. The generator reads it from the committed public-API baseline, so
+  it stays offline and reproducible for the drift check CI runs.
+
+  That settles the arithmetic, comparison and logical families together.
+  `a.add(&b)` resolved to `std::ops::Add::add`, `a.cmp_eq(&b)` to nothing, and
+  every logical example built its operands with that same missing `cmp_gt`, so
+  it failed on the line before the operation it existed to show. Where several
+  methods execute one operation the choice is ordered: the operation's own
+  name, then the fallible `try_` form the book leads with, then the exact and
+  broadcasting spellings, then a lone candidate, which is how `cmp_eq` reaches
+  `eq`. The order matters for `Mul`, whose bound also sits on `dot`, `norm` and
+  `outer`.
+
+  Seven more take a signature their family's generic form did not: `arange`,
+  `linspace` and `full` take values rather than a shape; `to_vec1` is reached
+  through host interop rather than an operation bound; `detach` exists only on
+  a tracked tensor and `backward` only on a tracked scalar.
+
+  Coverage is 93 of 177. The ten still without one have no `Tensor` method a
+  reader could call: the axis forms of `var`, `std` and `prod` are executed only
+  inside the backend, the `var_*` constructors are reached through parameter
+  initialisation, and `sample` is a distribution-authoring call that needs a
+  device field.
+
+- **`gather`, `scatter`, `scatter_add` and `index_select` refused the indices
+  the library's own sorting operations return.** Each typed its index operand,
+  and the source operand of the two scatters, with the default layout
+  parameter, which is `Dyn`: the layout that claims nothing. `sort`, `argsort`
+  and `topk` return a proven row-major result. A method that accepts only an
+  unproven layout rejects a proven one, so the permutation `sort` produces could
+  not be handed to the one method that applies it, and the indices `topk`
+  produces could not be gathered by. Grouping tokens by expert, the composition
+  issue #103 is built around, needs exactly that hand-off.
+
+  Each parameter is now generic over its layout, as `masked_fill`'s mask in the
+  same file already was. No kernel sees anything new: `Dyn` already admitted a
+  tensor of any layout at run time, and a row-major tensor is a stronger claim
+  than that rather than a different one, so the change is only in what the type
+  lets through. None of the four is called with an explicit turbofish anywhere
+  in the workspace, so an inferred call is unaffected.
+
+- **`mse_loss`, `l1_loss`, `bce_with_logits_loss` and `cross_entropy_loss`
+  refused a proven target while accepting a proven prediction.** Their receiver
+  was generic over its layout and their `target` was pinned to `Dyn`, so the
+  same method took a row-major tensor on one side and rejected it on the other.
+  The target of a distillation loss is typically a `softmax` output, which is
+  row-major, and so could not be written against these methods at all.
+
+  This is the surface an earlier fix stopped short of. That change freed the
+  module path, `MSELoss::forward` and its siblings, and widened the shared
+  helper every loss method calls, which already took both operands at any
+  layout; the eight public signatures in front of that helper kept the old
+  bound. They are generic over the target's layout now, the helper's `_, _`
+  inference reaches the new parameter unchanged, and nothing else in the
+  workspace needed editing.
+
+  **Breaking** for a caller who names the `_with` forms' generics explicitly:
+  `mse_loss_with::<R, S2, G2>` is now `mse_loss_with::<R, S2, G2, L2>`, and the
+  same for the other three. The reduction mode cannot be inferred, so a direct
+  call to a `_with` form has to write the turbofish, and `_` is enough for the
+  new position. The only such calls in the workspace were the four convenience
+  methods delegating to their own `_with` form, and the loss modules, which is
+  how a reduction is usually chosen, are unaffected.
+
+- **`concat`, `stack` and `outer` refused a proven tensor as their second
+  operand.** The same asymmetry again: each took its receiver at any layout and
+  its second operand only at `Dyn`, so a row-major tensor could stand on the
+  left of a join and was refused on the right. `try_concat`, `concat_axis` and
+  `try_stack`, the hidden legacy spellings, had it too, as did the private
+  helper `concat` and `try_concat` both route through. All six are generic over
+  the second operand's layout now, and a test joins two proven tensors through
+  each.
+
+  `concat_structural` and `stack_structural` keep the old bound, deliberately.
+  Their axis is a type no argument carries, so every caller names it in a
+  turbofish, and a layout parameter would have to be named there as well: a
+  break at every call site, including two compile-fail tests whose expected
+  diagnostics would change with it. That trade is a separate decision, and the
+  two stay consistent with each other in the meantime.
+
+  One compile-fail snapshot moved. `eq_canonical_absent` checks that a method
+  named `eq_canonical` does not exist, and rustc's hint beside that error quotes
+  `concat`'s signature as a near miss; the quoted lines are the only change, and
+  the error the test exists to pin is the same.
 
 ## [0.1.0] - 2026-08-25
 

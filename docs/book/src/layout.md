@@ -287,18 +287,24 @@ a style choice:
   `masked_fill`, `where_cond`, `lerp`, `cumsum`, every reduction, `matmul`,
   `addmm`, `Linear`, `BatchNorm2d`, `RmsNorm`, the loss family and the
   order-statistic family, the convolutions, `AvgPool2d`, `Embedding` and the
-  manipulation surface — `concat`, `gather`, `pad`, `triu` and the rest — do
+  manipulation surface — `concat`, `gather`, `pad`, `triu`, `transpose` and
+  the rest — do
   this, so a
   proof appears out of the middle of a chain and `reshape_view` is reachable at
   the end of one. The claim is *stated*, never carried: carrying the operand's
   layout would propagate only what the caller already had, and would be false
   the moment a non-row-major layout exists.
-- **An operation whose result's memory order is not settled states `Dyn`.**
-  A layout describes one geometry and cannot be carried to another, and
-  shape-changing operations do not agree across backends: CPU `transpose`
-  returns a view while CUDA's returns a copy. Until that is settled
-  ([#113](https://github.com/xupremix/incin/issues/113)) the honest answer is
-  to claim nothing, and `into_row_major` recovers a proof where one is wanted.
+- **An operation whose result's memory order it has not proved states `Dyn`.**
+  A layout describes one geometry and cannot be carried to another, and a view
+  is exactly the case where the packed proof does not exist: `reshape`,
+  `narrow`, `flatten` and the other view-producing shape operations claim
+  nothing, and `into_row_major` recovers a proof where one is wanted.
+  `transpose` itself used to sit here, split across backends — CPU returned a
+  view while CUDA returned a copy — until
+  [#113](https://github.com/xupremix/incin/issues/113) settled it: every
+  backend that advertises the operation now materialises, so `transpose`
+  moved up into the list above, and the no-copy half lives on
+  `transpose_view`, which returns `Dyn` because that is what a view is.
 - **A shape *reinterpretation* keeps the proof.** `into_shape`, `into_dyn` and
   `to_shape` look like shape changes and are not: they re-describe the same
   extents under a different shape type, over the same buffer, with the same

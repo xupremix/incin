@@ -162,11 +162,16 @@ async function run() {
     const fill = meter.querySelector(".api-fill");
     const stepClass = [...fill.classList].find((c) => c.indexOf("cov-") === 0);
     check(stepClass, "a bar carries no coverage step class");
-    check(stepClass === "cov-" + have,
-      "a bar reading " + have + "/" + denom + " is painted " + stepClass);
+    /* The ramp has nine steps for any number of element types, so the step is
+       derived from the fraction rather than equal to the raw count. This used
+       to be 1:1 only because the dtype list happened to have nine entries. */
+    const step = Math.min(9, Math.max(1, Math.round((have / denom) * 9)));
+    check(stepClass === "cov-" + step,
+      "a bar reading " + have + "/" + denom + " is painted " + stepClass +
+      ", not cov-" + step);
     const painted = w.getComputedStyle(fill).backgroundColor;
-    check(painted === swatches[have - 1],
-      "a bar reading " + have + " is not painted its own step's colour");
+    check(painted === swatches[step - 1],
+      "a bar reading " + have + " is not painted its step's colour");
   }
 
   /* Implementation is marked once, beside the operation, and only where it
@@ -231,13 +236,18 @@ async function run() {
 
   /* Counts that come from a source the crate owns, so a section quietly
      rendering nothing -- an extractor that stopped matching, a payload key
-     that moved -- fails here rather than shipping an empty tab. */
+     that moved -- fails here rather than shipping an empty tab. The expected
+     counts are read from the payload rather than hardcoded: the dtype list
+     grew from nine to thirteen entries, and a literal here turned a new dtype
+     into a test failure instead of a page update. */
+  const DATA = JSON.parse(doc().getElementById("api-data").textContent);
+  check(DATA && DATA.operations.length > 0, "the page payload did not load");
   const counts = {
-    dtypes: [".api-card", 9],
-    backends: [".api-card", 4],
-    flow: [".api-step", 4],
-    layouts: [".api-card", 9],
-    target: [".api-tyrow", 21],
+    dtypes: [".api-card", DATA.dtypes.length],
+    backends: [".api-card", DATA.backendDetail.length],
+    flow: [".api-step", DATA.authoring.length],
+    layouts: [".api-card", DATA.layouts.items.length],
+    target: [".api-tyrow", DATA.targetApi.length],
   };
   for (const tab of tabs) {
     const id = tab.dataset.sec;

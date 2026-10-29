@@ -1066,3 +1066,217 @@ fn topk_typed_path_checks_both_geometries() {
         "expected an indexed shape refusal, got {error:?}"
     );
 }
+
+#[test]
+fn sort_returns_the_values_beside_a_stable_permutation() {
+    use incin_core::exec::catalog::ArgsortAttributes;
+    use incin_core::shapes::{ShapeBuf, ShapeValue};
+    let context = context();
+    // Two pairs of ties, so a permutation that is merely correct is
+    // distinguishable from one that is stable.
+    let input = storage(&[2.0, 0.0, 2.0, 1.0, 0.0], &[5]);
+    let attrs = ArgsortAttributes {
+        axis: 0,
+        descending: false,
+        index_dtype: DTypeId::U32.descriptor(),
+    };
+    let good = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[5])).unwrap();
+    let (values, indices) = dispatch::execute_shaped_n::<op::Sort, TestBackend, _>(
+        &context,
+        attrs,
+        &[handle(&input)],
+        &(good.clone(), good.clone()),
+    )
+    .expect("sort travels the typed path");
+    let values: CpuStorage = values;
+    let indices: CpuStorage = indices;
+    // Sorting reorders the axis rather than resizing it, unlike `topk` above.
+    assert_eq!(values.shape, vec![5]);
+    assert_eq!(indices.shape, vec![5]);
+    for (position, expected) in [0.0, 0.0, 1.0, 2.0, 2.0].iter().enumerate() {
+        assert_eq!(values.get(&[position]), *expected);
+    }
+    // Both ties keep the order they arrived in: 1 before 4, and 0 before 2.
+    for (position, expected) in [1.0, 4.0, 3.0, 0.0, 2.0].iter().enumerate() {
+        assert_eq!(indices.get(&[position]), *expected);
+    }
+
+    // A tampered second proof is refused with its index, not reshaped into.
+    let lying = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[4])).unwrap();
+    let error = dispatch::execute_shaped_n::<op::Sort, TestBackend, _>(
+        &context,
+        ArgsortAttributes {
+            axis: 0,
+            descending: false,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[handle(&input)],
+        &(good, lying),
+    )
+    .expect_err("a wrong second geometry must be refused");
+    assert!(
+        matches!(
+            error,
+            incin_core::exec::dispatch::CanonicalError::Descriptor(
+                incin_core::exec::catalog::DescriptorError::MetadataMismatch {
+                    output: 1,
+                    field: "shape",
+                    ..
+                }
+            )
+        ),
+        "expected an indexed shape refusal, got {error:?}"
+    );
+}
+
+#[test]
+fn topk_returns_its_values_in_the_dtype_it_read_them_in() {
+    use incin_core::exec::catalog::TopKAttributes;
+    use incin_core::shapes::{ShapeBuf, ShapeValue};
+    // The row advertised `f32` alone until this test's subject changed: the
+    // kernel used to build a fixed `CpuBuffer::F32` whatever it read, so an
+    // f64 operand came back relabelled and narrowed. It now builds from the
+    // operand's own buffer, which is what lets the row claim the same eight
+    // dtypes `argsort` and `sort` beside it do.
+    let input = CpuStorage::try_from_contiguous(CpuBuffer::F64(vec![3.0, 1.0, 4.0, 1.5]), vec![4])
+        .expect("test storage must be well formed");
+    let context = context();
+    let good = ShapeValue::<incin_core::shapes::Dyn>::try_new(ShapeBuf::from_slice(&[2])).unwrap();
+    let (values, _indices) = dispatch::execute_shaped_n::<op::TopK, TestBackend, _>(
+        &context,
+        TopKAttributes {
+            k: 2,
+            axis: 0,
+            largest: true,
+            index_dtype: DTypeId::U32.descriptor(),
+        },
+        &[TensorHandle::from_storage::<TestBackend, f64, Local>(
+            &input,
+        )],
+        &(good.clone(), good),
+    )
+    .expect("an f64 operand is one of the dtypes the row advertises");
+    let values: CpuStorage = values;
+    assert_eq!(
+        values.buffer.dtype_id(),
+        DTypeId::F64,
+        "the values must keep the operand's dtype, not be relabelled f32"
+    );
+    assert!(matches!(&*values.buffer, CpuBuffer::F64(held) if held == &vec![4.0, 3.0]));
+}
+
+// --- Issue #90: CPU matmul dtype parametrization through dispatch ---
+
+fn f16_storage(values: &[f32], shape: &[usize]) -> CpuStorage {
+    CpuStorage::try_from_contiguous(
+        CpuBuffer::F16(values.iter().map(|&v| half::f16::from_f32(v)).collect()),
+        shape,
+    )
+    .expect("test storage must be well formed")
+}
+
+fn f16_handle(storage: &CpuStorage) -> TensorHandle<'_> {
+    TensorHandle::from_storage::<TestBackend, half::f16, Local>(storage)
+}
+
+#[test]
+/// `dispatch_admits_an_f16_matmul`.
+///
+/// The capability row widened to FLOAT_DTYPES, the descriptor already
+/// accepts any same-dtype float pair, and the executor's pair check passes
+/// when both operands agree - so a full `dispatch::execute` must run the
+/// product and hand back f16 storage, not refuse at admission.
+fn dispatch_admits_an_f16_matmul() {
+    let context = context();
+    // [[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]].
+    let lhs = f16_storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+    let rhs = f16_storage(&[7.0, 8.0, 9.0, 10.0, 11.0, 12.0], &[3, 2]);
+
+    let out = dispatch::execute::<op::MatMulExact, _>(
+        &context,
+        NoAttributes,
+        &[f16_handle(&lhs), f16_handle(&rhs)],
+    )
+    .expect("an f16 matmul is one of the dtypes the row advertises");
+
+    assert_eq!(out.shape.to_vec(), vec![2, 2]);
+    assert_eq!(out.buffer.dtype_id(), DTypeId::F16);
+    assert_eq!(out.get(&[0, 0]), 58.0);
+    assert_eq!(out.get(&[0, 1]), 64.0);
+    assert_eq!(out.get(&[1, 0]), 139.0);
+    assert_eq!(out.get(&[1, 1]), 154.0);
+}
+
+#[test]
+/// `dispatch_refuses_a_mixed_dtype_matmul_at_the_descriptor`.
+///
+/// FLOAT_DTYPES is the union the single capability row can state; the
+/// equality constraint (both operands the same float dtype) lives one layer
+/// earlier, in the descriptor's same-dtype rule, and answers before the
+/// executor or the kernel is ever consulted. The message has to name that
+/// reason so a caller is not left guessing which operand to convert.
+fn dispatch_refuses_a_mixed_dtype_matmul_at_the_descriptor() {
+    let context = context();
+    let lhs = storage(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
+    let rhs = CpuStorage::try_from_contiguous(
+        CpuBuffer::F64(vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]),
+        vec![3, 2],
+    )
+    .expect("test storage must be well formed");
+
+    let error = dispatch::execute::<op::MatMulExact, _>(
+        &context,
+        NoAttributes,
+        &[
+            handle(&lhs),
+            TensorHandle::from_storage::<TestBackend, f64, Local>(&rhs),
+        ],
+    )
+    .expect_err("a mixed f32/f64 pair must be refused before execution");
+    let message = format!("{error}");
+    assert!(
+        message.contains("same dtype"),
+        "the refusal must name the same-dtype reason, not just fail: {message}"
+    );
+}
+
+/// RMS norm's weight is a `Param` reached through a tracked `mul`, so it
+/// should receive a gradient. Nothing checked that: the only RMS norm
+/// gradient coverage in the tree was on `Linear`'s promoted row, and the
+/// norm itself was checked for its forward and its shape. An RMS norm whose
+/// weight silently stopped training would satisfy every test here, so the
+/// weight is put through the numeric sweep like the conv biases were.
+///
+/// The loss is a ramp over the output rather than a sum: a uniform seed makes
+/// the weight gradient the row sums of the seed, which is insensitive to
+/// *which* output element each weight entry was paired with.
+#[test]
+fn rms_norm_weight_receives_a_gradient_matching_a_central_difference() {
+    let context = context();
+    let input = storage(&[1.0, 2.0, 3.0, 4.0], &[1, 4]);
+    let weight = storage(&[0.5, 1.5, -0.5, 2.0], &[4]);
+
+    let op = |inputs: &[CpuStorage]| -> CpuStorage {
+        let out = dispatch::execute::<op::RmsNorm, _>(
+            &context,
+            EpsilonAttributes { epsilon: 0.0 },
+            &[handle(&inputs[0]), handle(&inputs[1])],
+        )
+        .expect("rms_norm executes");
+        let elements = crate::cpu::stride::validated_numel(out.shape.dims());
+        let seed: Vec<f32> = (0..elements)
+            .map(|i| ((i * 7 + 3) % 13) as f32 * 0.11 - 0.6)
+            .collect();
+        let seed = CpuStorage::from_contiguous(CpuBuffer::F32(seed), out.shape.dims());
+        let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed)
+            .expect("the seed multiplies onto the norm output");
+        dispatch::execute::<op::SumAll, _>(&context, NoAttributes, &[handle(&weighted)])
+            .expect("sum_all executes")
+    };
+
+    let max_rel_err = gradcheck(op, &[input, weight], crate::cpu::gradcheck::F32_STEP);
+    assert!(
+        max_rel_err < crate::cpu::gradcheck::GRAD_TOL,
+        "rms_norm weight gradcheck too high: {max_rel_err:.6}"
+    );
+}

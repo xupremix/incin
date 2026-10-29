@@ -253,8 +253,11 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>
     ///
     /// # Errors
     ///
-    /// Returns an error only if the runtime dimensions cannot be resolved for
-    /// `S2`; the shape-compatibility question is already settled statically.
+    /// Returns an error if the runtime dimensions cannot be resolved for
+    /// `S2`, or if the runtime element count disagrees with the statically
+    /// proven one: the shape-compatibility question is settled statically,
+    /// but the buffer the tensor actually holds can still disagree with its
+    /// shape type, and that disagreement is refused rather than asserted.
     pub fn reshape_view<S2>(self) -> Result<Tensor<S2, B, K, G, P, RowMajor>>
     where
         L: crate::shapes::Contiguous,
@@ -283,19 +286,23 @@ impl<S: Shape, B: Backend, K: DType, G: RequiresGrad, P: Placement, L: Layout<S>
         }
 
         // The element counts were proven equal by the `ElementCount` bound, so
-        // this cannot disagree with the source. Asserted anyway: the bound
+        // this cannot disagree with the source. Checked anyway: the bound
         // reasons about the shape *types*, and this is the buffer the tensor
-        // actually holds.
+        // actually holds. A disagreement means the runtime shape and the
+        // shape type disagree, which a `debug_assert` would let through in
+        // release builds and reinterpret the wrong elements.
         let source_numel: usize = B::metadata::<K>(&self.inner)
             .shape()
             .as_ref()
             .iter()
             .product();
         let target_numel: usize = dims.iter().product();
-        debug_assert_eq!(
-            source_numel, target_numel,
-            "ElementCount proved these equal; a difference means the runtime shape and the shape type disagree"
-        );
+        if source_numel != target_numel {
+            return Err(Error::InternalInvariant {
+                operation: "reshape_view",
+                reason: "runtime element count disagrees with the statically proven count",
+            });
+        }
 
         let reshaped =
             crate::shapes::ShapeValue::<S2>::try_new(crate::shapes::ShapeBuf::from_slice(&dims))?;

@@ -164,3 +164,55 @@ pub(super) fn without_batch_axis(storage: CpuStorage, added: bool) -> Result<Cpu
         Ok(storage)
     }
 }
+
+/// Adds a per-output-channel convolution bias, keeping the bias reachable
+/// from the graph.
+///
+/// The gradient of a bias is the sum of the output cotangent over every
+/// axis except the channel axis, and the recorded `add` already produces
+/// exactly that: `add_storage`'s backward unbroadcasts both operands. So
+/// the add was never the problem.
+///
+/// The problem was how the bias reached it. All three conv kernels wrote:
+///
+/// ```text
+/// let bias_shaped = bias.reshape(&[1, cout, 1, 1])?;
+/// add_storage(&conv_out, &bias_shaped)
+/// ```
+///
+/// `CpuStorage::reshape` is the *inherent* one: it returns a fresh storage
+/// under a **new id** and records no node. The add is recorded, but it keys
+/// its bias cotangent on the id of the temporary it was handed - so the
+/// parameter's own id appeared in no tape node anywhere, and `backward` had
+/// nothing to report under it. No gradient, and no error either, since a
+/// missing gradient is visible only to something that asks for one.
+///
+/// Every biased convolution on this backend therefore trained with its bias
+/// frozen at initialization, with a forward that was always correct and so a
+/// loss curve that said nothing about it. This was a cross-backend
+/// disagreement rather than a local mistake: WGPU reaches the same forward
+/// through a recorded reshape, broadcast and add, so the two backends
+/// returned different gradients for the same model.
+///
+/// `conv1d`'s module doc had claimed the bias gradient was "free via
+/// composition"; the composition it described was not happening, because
+/// the reshape it relied on records nothing.
+///
+/// The fix replaces the inherent reshape with `reshape_storage`, which is
+/// recorded and keeps the parameter's id in the chain, and broadcasts
+/// explicitly rather than letting the add infer it. Both steps are needed:
+/// a broadcast cannot raise rank, so the reshape has to come first.
+pub(crate) fn add_conv_bias_tracked(
+    conv_out: &CpuStorage,
+    bias: &CpuStorage,
+    bcast_shape: &[usize],
+) -> Result<CpuStorage> {
+    let reshaped = crate::cpu::ops::shape_ops::reshape_storage(bias, bcast_shape)?;
+    let stretched =
+        crate::cpu::ops::shape_ops::broadcast_as_storage(&reshaped, conv_out.shape.dims())?;
+    crate::cpu::ops::elementwise::add_storage_with_shape(
+        conv_out,
+        &stretched,
+        conv_out.shape.dims(),
+    )
+}

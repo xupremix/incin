@@ -24,49 +24,149 @@ backend registrations rather than written by hand:
 
 | Backend | Operations advertised | Tier |
 |---|---:|---|
-| CPU | 158 | complete, and the only one verified by execution |
-| CUDA | 79 | preview |
-| WGPU | 64 | preview |
-| Metal | 34 | preview |
+| CPU | 170 | complete, and the only one verified across the full catalog |
+| CUDA | 169 | preview, hardware-proven on NVIDIA GPUs (see below) |
+| WGPU | 168 | preview, software-adapter execution evidence |
+| Metal | 117 | preview, host-side math + macOS Apple-Silicon job |
 
 Those are counts from the `Element types by operation and backend` matrix, so
 they say what each backend *advertises*, which is not the same as what it has
 been observed to compute. Two caveats belong next to the numbers:
 
 - **Advertised is not trainable.** The per-backend tables carry a `Training`
-  column. CUDA marks 67 of its 93 rows trainable; `batch_norm` is
-  `Training: no`, so it is forward-only and cannot appear in a backward pass.
-  Metal marks 23 of 48 trainable, WGPU 53 of 76.
-- **Metal is the least proven of the three.** Its own feature description
-  calls its executors stubs pending MTL-002/003, and every Metal row reports
-  `Implementation: native`, so that column does not distinguish a finished
-  kernel from a placeholder. Read Metal's 25 as a registry claim, not a
-  capability.
+  column. CPU marks 129 of its 170 backend-executable operations trainable;
+  CUDA 124 of 169; WGPU 127 of 168; Metal 88 of 117.
+- **Metal is the least proven of the three.** Metal execution is still
+  host-side: `MetalStorage` wraps a host `Vec<u8>`, there is no Metal API
+  dependency, and the MSL sources are included as strings rather than
+  submitted to an `MTLDevice`. The macOS Apple-Silicon job therefore exercises
+  host math on Apple hardware, not Metal compute. Metal also has the largest
+  coverage gap (63 dashed rows, 10 of them non-backend execution sites), with
+  spatial operations, comparisons, and quantization still unadvertised, and
+  every Metal row reports `Implementation: native` where that column cannot
+  distinguish a finished kernel from a placeholder. Read Metal's 117 as a
+  registry claim, not a capability proof.
 
 The previews all cover basic arithmetic (`add`/`sub`/`mul`/`div`), reductions,
-`matmul`, and `conv2d`/pooling. WGPU additionally advertises thirteen unary
-activations (`relu`, `step`, `mish`, `elu`, `gelu`, `abs`, `exp`, `neg`,
-`sqrt`, `log`, `tanh`, `sigmoid`, `swish`), which Metal does not, plus
-`maximum`/`minimum`/`abs_diff` and the shape views `transpose`, `flatten`,
-`squeeze` and `unsqueeze`. CUDA and WGPU both advertise `softmax` and
-`rms_norm`, trainable and composed from primitives rather than fused; CUDA
-adds the two forward-only normalizations above.
+`matmul`, and thirteen unary activations (`relu`, `step`, `mish`, `elu`,
+`gelu`, `abs`, `exp`, `neg`, `sqrt`, `log`, `tanh`, `sigmoid`, `swish`) —
+including Metal, which gained the Batch-A pointwise rows in `cbe7bac5`/`bf042c80`.
+WGPU and Metal both advertise `softmax`/`log_softmax`, `rms_norm`, and the
+composed losses; WGPU additionally covers `conv2d`/pooling, the normalization
+family through `group_norm`/`instance_norm`, `embedding`, `dropout`, and
+attention (`scaled_dot_product_attention`). CUDA adds the full training path
+(batch-norm training, losses, dropout, embedding) with native and composed
+rows.
 
-What **no** accelerator backend has: any loss function, `embedding`,
-`dropout`, or `group_norm`.
+What the accelerator previews still lack relative to CPU:
 
-Concretely: you can allocate tensors, run matrix arithmetic, and apply an
-activation on a GPU today, but you cannot train the models in this book's
-[Building models](./building_models.md) chapter on one. Two independent things
-are missing, not one: every loss function is CPU-only, and where a
-normalization layer does exist on CUDA it has no backward. CPU is where real
-training happens right now.
+- **WGPU/Metal:** `cmp_*` and `logical_*` (bool rows need a multi-dtype
+  advertising policy; WGPU storage admits ints/bools but `native_precision`
+  only names `f32` compute). Metal also lacks spatial ops and bool-mask
+  select ops.
+- **WGPU:** compute (including `matmul`) is `f32`-only even though storage
+  accepts `u8`/`u32`/`i64`/`bool`.
+- **CUDA:** the `#[ignore]`d hardware suites run on real NVIDIA hardware:
+  matmul dtype parity, quantized matmul, losses, pointwise, reductions,
+  indexing, conv/pool/cast, batch-norm, fused attention (native
+  online-softmax, f32/f64/f16/bf16), quantize/dequantize STE, and the
+  two-rank NCCL harness (proven on a heterogeneous sm_50+sm_75 pair).
+  No automated runner is registered in CI yet (`HARDWARE_CUDA_RUNNER`).
+
+Concretely: you can allocate tensors, run matrix arithmetic, apply
+activations, losses, and normalization on a GPU today, train attention
+on WGPU, and run fused attention plus NCCL collectives on CUDA.
+Advertised is not the same as hardware-proven everywhere: every-PR CI
+runs a WGPU **software** adapter (lavapipe) suite, and the CUDA training
+path additionally carries real-device evidence (issues #82 and #83
+track the automated runner). CPU remains where verified training happens
+for the complete catalog.
 
 This is not a documentation gap to work around by trying harder; it's
 missing kernels. A backend that doesn't support an operation refuses it with
 a typed `UnsupportedReason` rather than doing something wrong silently, so
 you'll find out immediately rather than discover it three epochs in, but
 the fix is writing the kernel, not finding the right incantation.
+
+### The cuBLASLt matmul path (CUDA, #85)
+
+CUDA's `MatMulExact` dispatch tries cuBLASLt first for plain, epilogue-free
+requests and falls back to the NVRTC tiled kernel on any non-fit. The path
+forces `CUBLAS_COMPUTE_32F` rather than cudarc's safe wrapper, which would
+silently pick TF32 against the `MathMode::Precise` capability claim. A
+request fits only when both operands are `f32`, on the same device, rank 2,
+contiguous at offset zero (`4023ceed`, `cuda/ops/cublaslt.rs`). The coarse
+`MatMul` capability row moved `F32_ONLY` → `FLOAT_DTYPES` to match the exact
+row #90 widened, so a coarse row no longer under-advertises work the exact
+row already claims.
+
+Epilogue requests (bias plus optional ReLU/GELU) fail closed: there is no
+configuration in which an epilogue is requested and a kernel that omits it
+is allowed to run. The epilogue surface is therefore strictly narrower than
+the plain-product surface.
+
+**Verification status:** hardware-proven. The vendor-vs-native agreement
+test plus six value tests run on NVIDIA hardware (GTX 1650 SUPER); the
+cuBLASLt numerics match the native kernel where both claim the shape.
+
+### Fused attention on CUDA (#104)
+
+CUDA ships a native single-pass online-softmax kernel: forward over query
+rows with GQA head mapping and causal masking, one tape entry whose
+backward recomputes weights from stored per-row statistics — no score
+matrix, no atomics. `f32`/`f64`/`f16`/`bf16` over contiguous rank-4
+(double accumulation, single rounding at store). Verified against the CPU
+twin on hardware: multi-head and grouped-query causal decode forward,
+`f64` forward, `f32` backward gradients, one-entry tape depth, and typed
+refusals (rank, scale, head divisibility, strided operands, dtype mixes).
+Observed half drift stays an order of magnitude inside the test bounds.
+The kernel loops carry no axis conditionals: an `if (d == axis)` decode
+form was proven to miscompile under NVVM 7.0.1 on sm_75 (range-splitting
+dropping accumulation), so new kernels must keep the decode loop
+straight-line — see `repeat_interleave`'s comment in `cuda/ops/shape.rs`.
+
+### NCCL loopback and heterogeneous meshes (#97, #99)
+
+The two-process two-rank harness (static `f32` plus dynamic `f64`
+all-reduce, cursor accounting, divergent-plan rejection) runs green on a
+heterogeneous sm_50+sm_75 pair: NCCL 2.18.1 builds an SHM ring (no P2P
+between the cards) and the sums are bit-correct on both ranks. A
+single-process two-GPU loopback test pins the transport half wherever two
+GPUs and libnccl exist. Meshes bind mixed architectures by decision —
+per-rank architectures stay in the fingerprint, but the bind no longer
+refuses them, since kernels launch per-rank and collectives ride whatever
+transport the library negotiates. Running the harness needs `libnccl.so`
+visible to the dynamic loader (a pip install ships only `libnccl.so.2`;
+symlink it) plus two CUDA ordinals.
+
+### WGPU runtime evidence: Batches A–C, attention, cross-entropy (#91)
+
+WGPU's first #91 gap-closure batch landed 24 operations, every one executed
+on the local Vulkan adapter against a CPU-twin reference: `sign`/`floor`/
+`ceil`/`round`, the full trig and inverse-trig families including
+hyperbolics, `erf`/`rsqrt`/`log2`/`log10`/`trunc`/`frac`, scalar forms of
+`add`/`sub`/`mul`/`div`, `powf`/`clamp`, and `atan2`/`fmod`/`remainder`,
+plus backward kernels for `sin` (cosine gradient) and `clamp` (masked
+gradient) (`c9c0d035`, `crates/incin-backends/tests/wgpu_pointwise_gap.rs`).
+Batch B (`631e5a1d`, `wgpu_batch_b.rs`) added structural, normalization
+(`layer_norm`/`group_norm`/`batch_norm`), loss (`mse`/`l1`), and matmul rows;
+Batch C (`wgpu_batch_c.rs`) added `instance_norm`, dropout, BCE, SDPA, and
+structural repeat/pad/chunk/split. Attention runs end-to-end against a CPU
+twin — non-causal, causal, grouped-query, and rotary — plus a training smoke
+that `backward`s to finite, non-zero projection gradients
+(`0623e762`, `wgpu_attention.rs`). Cross-entropy records and backpropagates
+against the hand-computed `(softmax − onehot) / batch` reference
+(`wgpu_cross_entropy.rs`). The whole `wgpu_*.rs` suite is 95+ test functions
+and runs green under every-PR CI's lavapipe software-adapter job.
+
+This is the accelerator surface with real execution evidence in the tree:
+CPU (complete catalog) and the WGPU software adapter (lavapipe/Vulkan) both
+compute and are compared against host references. Skipped rows (the
+comparison and logical families) are blocked on a multi-dtype advertising
+policy, not only on kernels — WGPU storage admits `u8`/`u32`/`i64`/`bool`,
+but `native_precision` only claims `f32` compute, so a comparison the
+catalog types as `bool` cannot be honestly registered until the backend
+grows a bool compute path.
 
 ## Picking a backend at compile time
 

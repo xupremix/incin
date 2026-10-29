@@ -48,7 +48,9 @@ let x = Tensor::<s![2, 4], B>::ones(())?;
 let a = ReLU.forward(x.clone())?;
 let b = GELU.forward(x.clone())?;
 let c = Sigmoid.forward(x.clone())?;
-let d = Tanh.forward(x)?;
+let d = Tanh.forward(x.clone())?;
+let e = LeakyReLU::new().forward(x.clone())?;
+let f = LogSoftmax::new(1).forward(x)?;
 # Ok::<(), incin::Error>(())
 ```
 
@@ -78,7 +80,6 @@ assert_eq!(h.dims().as_ref(), &[1, 4, 3, 3]);
 one-element shape tuple, `(Channels,)`, and their `build` arguments are
 whatever the static shape didn't already fix: an epsilon (and, for batch
 norm, a momentum):
-
 ```rust,no_run
 use incin::prelude::*;
 type B = DefaultBackend;
@@ -90,6 +91,34 @@ let h = bn.forward(x)?;
 let ln = LayerNorm::<s![8], B>::build(1e-5_f32)?; // eps
 let x2 = Tensor::<s![2, 8], B>::ones(())?;
 let h2 = ln.forward(x2)?;
+# Ok::<(), incin::Error>(())
+```
+
+`GroupNorm` takes `(Groups, Channels)` plus epsilon, `InstanceNorm` takes
+`(Channels,)` plus epsilon (one group per channel), and `BatchNorm1d`
+mirrors `BatchNorm2d` for rank-2 `[N, C]` and rank-3 `[N, C, L]` inputs
+with `(eps, momentum, affine, track_running_stats)` build arguments.
+`ConvTranspose2d` inverts a convolution's downsampling (stride, padding,
+output padding, dilation and groups per the op contract), and `Upsample`
+resizes spatially (nearest-neighbor):
+
+```rust,no_run
+use incin::nn::{BatchNorm1d, GroupNorm, Upsample};
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let gn = GroupNorm::<Dyn, B>::build((4usize, 2usize, 1e-5_f32, true))?;
+let x = Tensor::<s![1, 4, 8, 8], B>::ones(())?;
+let h = gn.forward(x)?;
+
+let bn1 = BatchNorm1d::<s![4], B>::build((1e-5_f32, 0.1_f32, true, true))?;
+let x = Tensor::<s![2, 4, 8], B>::ones(())?;
+let h = bn1.forward(x)?;
+
+let up = Upsample::nearest(2, 2)?;
+let x = Tensor::<s![1, 1, 4, 4], B>::ones(())?;
+let h = up.forward(x)?;
+assert_eq!(h.dims().as_ref(), &[1, 1, 8, 8]);
 # Ok::<(), incin::Error>(())
 ```
 
@@ -137,6 +166,49 @@ assert_eq!(h_final.dims().as_ref(), &[2, 6]);
 # Ok::<(), incin::Error>(())
 ```
 
+## GRU
+
+`GRU`'s shape is `(InFeatures, OutFeatures)` and, like `LSTM`, it takes its
+initial state explicitly. There is one state tensor rather than two, and the
+wrapper returns the whole output sequence next to the final hidden state:
+
+```rust,no_run
+use incin::prelude::*;
+type B = DefaultBackend;
+
+let gru = GRU::<s![4, 6], B>::new(GRUCell::<s![4, 6], B>::build(())?);
+
+// [batch, seq, in_features]
+let x = Tensor::<s![2, 5, 4], B>::ones(())?.require_grad();
+let h0 = Tensor::<s![2, 6], B>::zeros(())?.require_grad();
+
+let (sequence, last) = gru.forward((x, h0))?;
+assert_eq!(sequence.dims().as_ref(), &[2, 5, 6]);
+assert_eq!(last.dims().as_ref(), &[2, 6]);
+# Ok::<(), incin::Error>(())
+```
+
+The reset gate multiplies the recurrent projection alone, so the candidate is
+`tanh(W_in x + r * (W_hn h))` rather than `tanh(r * (W_in x + W_hn h))`.
+Applying it to the sum is a different model, and
+[`crates/incin/tests/gru_module.rs`](../../../crates/incin/tests/gru_module.rs)
+asserts the two spellings apart rather than only against itself.
+
+`require_grad` above is not decoration. All three recurrent layers carry the
+operand's gradient requirement through `forward` rather than discarding it, and
+the multi-step wrappers join each step's requirement back onto the loop
+variable's own, so a trainable layer's sequence pass is a training pass. Feeding
+one a tensor that requires no gradient is an inference pass on a frozen layer,
+which is `freeze()`.
+
+## Attention and transformer layers
+
+`MultiHeadAttention`, `FeedForward`, `TransformerEncoderLayer` and
+`TransformerDecoderLayer` are ordinary layers in this sense too, but they have
+enough of their own contract  -  grouped-query attention, rotary buffers, the
+norm placement, and a direction that is a type rather than a flag  -  that they
+have their own chapter: [Transformers](./transformer.md).
+
 ## Custom modules with `#[module]`
 
 The `#[module]` attribute macro derives composable module traits for structs by
@@ -164,6 +236,30 @@ You can selectively disable derived trait implementations:
 * `#[state(name = "custom_name")]`: Overrides the deterministic key used in state snapshots and checkpoints for this field.
 * `#[parallel(mesh = "m", stage = 0)]`: Declares distributed pipeline and mesh stage placement for the field.
 * `#[shard(axis = "dp")]`: Specifies distributed tensor sharding along a mesh axis.
+
+```rust,no_run
+use incin::prelude::*;
+
+type B = DefaultBackend;
+
+#[module]
+pub struct WithCache {
+    fc: Linear<s![8, 8], B>,
+    // Never a parameter, never checkpointed, never transferred:
+    #[module(ignore)]
+    step: usize,
+    // Snapshots under "backbone" instead of "trunk":
+    #[state(name = "backbone")]
+    trunk: Linear<s![8, 8], B>,
+}
+# fn main() -> Result<()> {
+let model = WithCache { fc: Linear::build(())?, step: 0, trunk: Linear::build(())? };
+let group = incin::optim::ParameterGroup::<B, f32>::from_module(&model)?;
+// fc and trunk contribute weight+bias each; step contributes nothing.
+assert_eq!(group.len(), 4);
+# Ok(())
+# }
+```
 
 ### Training and evaluation modes (`TrainMode`)
 

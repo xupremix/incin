@@ -5,19 +5,19 @@
 //! `StorageBackend`/`Capabilities`/`Execute` contract, so the descriptor path
 //! is not a CPU-only construction.
 
-use alloc::sync::Arc;
 use incin_core::backend_authoring::{Execute, ExecutionRequest, StorageBackend, op};
-use incin_core::error::BackendError;
-use incin_core::exec::catalog::LossReduction;
+use incin_core::error::{BackendError, Error};
+use incin_core::exec::catalog::{DuplicateIndexRule, LossReduction};
 use incin_core::exec::{Capabilities, CapabilityQuery, SupportLevel, UnsupportedReason};
 use incin_core::shapes::OperationKind;
-use incin_core::tensor::device::{Device, DeviceId, DeviceKind};
-use incin_core::tensor::dtype::DTypeId;
+use incin_core::tensor::device::{Device, DeviceKind};
+use incin_core::tensor::dtype::{DTypeDescriptor, DTypeId};
 use incin_core::tensor::reduction::Reduction;
 
 use super::backend::CudaBackendImpl;
-use super::storage::{CudaBuffer, CudaStorage};
+use super::storage::CudaStorage;
 use crate::descriptor_bind::{invalid, kernel_error};
+use half::{bf16, f16};
 
 impl<D: Device> Capabilities for CudaBackendImpl<D> {
     fn support(&self, query: &CapabilityQuery) -> SupportLevel {
@@ -198,8 +198,21 @@ impl<D: Device> Execute<op::MatMulExact> for CudaBackendImpl<D> {
         let rhs = rhs
             .downcast_ref::<CudaStorage>()
             .ok_or_else(|| invalid(OperationKind::MatMulExact, "rhs is not CUDA storage"))?;
-        Self::matmul::<f32>(lhs, rhs)
-            .map_err(|e| kernel_error("Cuda", OperationKind::MatMulExact, e))
+        // `Tensor::matmul` routes every rank through this identity and the
+        // capability row admits 2..=MAX, so a batched pair has to reach
+        // `batched_matmul` - which since issue #85 tries one native (or
+        // `cuda-vendor` cuBLASLt) batched launch first and only composes
+        // tape-tracked reshapes/narrows around this same 2D kernel when
+        // the plan refuses - instead of `matmul`'s unbatched-2D refusal.
+        // The pure 2D case keeps `matmul`'s own error wording for the
+        // inner-dimension mismatch callers see.
+        if lhs.shape.len() == 2 && rhs.shape.len() == 2 {
+            Self::matmul::<f32>(lhs, rhs)
+                .map_err(|e| kernel_error("Cuda", OperationKind::MatMulExact, e))
+        } else {
+            Self::batched_matmul::<f32>(lhs, rhs)
+                .map_err(|e| kernel_error("Cuda", OperationKind::MatMulExact, e))
+        }
     }
 }
 
@@ -331,6 +344,26 @@ fn downcast<'a>(
         .ok_or_else(|| invalid(operation, name))
 }
 
+/// [`kernel_error`], but a launcher's already-typed [`Error::Backend`] is
+/// returned as-is.
+///
+/// The index ops (`gather`/`scatter`/`index_select`/`embedding`) raise
+/// [`BackendError::InvalidInput`] when an index value falls outside the
+/// axis it names — a refusal of the operand, not a device failure.
+/// Handing that to [`kernel_error`] flattens it into `Execution` with the
+/// `InvalidInput` text buried in the message, so a caller matching on the
+/// typed variant sees "the backend executed something and it failed" for
+/// an input that was rejected before any element was read. The GPU never
+/// touches the out-of-range element either way: the kernel's `error_flag`
+/// fires before the load. This stays local to the index executors rather
+/// than changing the shared helper, which is not this lane's file.
+fn index_kernel_error(operation: OperationKind, error: Error) -> BackendError {
+    match error {
+        Error::Backend(inner) => inner,
+        other => kernel_error("Cuda", operation, other),
+    }
+}
+
 /// Fused Welford kernel, normalizing over the trailing axes the weight's own
 /// shape names. The forward saves its per-row statistics when the ambient
 /// grad mode records, and the recipe replays exactly those statistics, so
@@ -367,12 +400,17 @@ impl<D: Device> Execute<op::LayerNorm> for CudaBackendImpl<D> {
     }
 }
 
-/// Per-channel normalization by running statistics. Inference only, and
-/// refused rather than approximated for a training-mode request: the kernel
-/// this calls only reads precomputed `running_mean`/`running_variance`, it
-/// does not reduce the batch's own statistics the way CPU's second kernel
-/// does, so admitting `attributes.training` here would return a plausible
-/// wrong answer instead of an error.
+/// Per-channel normalization. Training mode delegates to the tape-tracked
+/// `CudaBackendImpl::batch_norm` (issue #123): that method reduces each
+/// channel's own batch statistics in the fused forward, saves them when
+/// the ambient grad mode records, and pushes one entry whose fused
+/// backward produces input, weight, and bias gradients from them -- the
+/// same composition CPU's second kernel performs, so a training-mode
+/// request no longer has to be refused. Inference mode keeps the
+/// dedicated `launch_batch_norm`, which reads only the precomputed
+/// `running_mean`/`running_variance` and records nothing: its statistics
+/// are constants with respect to the input, so there is no batch
+/// dependency to differentiate through.
 impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -381,13 +419,6 @@ impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
     ) -> Result<CudaStorage, BackendError> {
         let operation = OperationKind::BatchNorm;
         let attributes = request.operation.descriptor().attributes();
-        if attributes.training {
-            return Err(invalid(
-                operation,
-                "CUDA batch norm has no on-the-fly batch statistics kernel yet; only \
-                 inference mode, driven by a running mean and variance, is implemented",
-            ));
-        }
         let Some((input, optional)) = request.inputs.split_first() else {
             return Err(invalid(
                 operation,
@@ -405,6 +436,21 @@ impl<D: Device> Execute<op::BatchNorm> for CudaBackendImpl<D> {
                 operation,
                 "batch norm was given more operands than its presence flags account for",
             ));
+        }
+        if attributes.training {
+            // Training normalizes by the batch's statistics, so the running
+            // pair is accepted for arity (the descriptor requires it when
+            // present) and ignored, exactly like CPU's training branch.
+            let input = downcast(input, operation, "input is not CUDA storage")?;
+            let weight = weight
+                .map(|value| downcast(value, operation, "weight is not CUDA storage"))
+                .transpose()?;
+            let bias = bias
+                .map(|value| downcast(value, operation, "bias is not CUDA storage"))
+                .transpose()?;
+            let epsilon = narrowed_epsilon(operation, attributes.epsilon)?;
+            return CudaBackendImpl::<D>::batch_norm::<f32>(input, weight, bias, epsilon)
+                .map_err(|e| kernel_error("Cuda", operation, e));
         }
         let (Some(running_mean), Some(running_variance)) = (running_mean, running_variance) else {
             return Err(invalid(
@@ -722,6 +768,81 @@ impl<D: Device> Execute<op::Split> for CudaBackendImpl<D> {
     }
 }
 
+/// Issue #85 slice 7: one fused kernel for `addend + lhs @ rhs` at unit scales.
+///
+/// Under `cuda-vendor`, a request the cuBLASLt epilogue policy admits
+/// (f32 throughout, a rank-2 product, contiguous offset-0 operands, and
+/// a rank-1 bias vector of the output width) is served by a single
+/// `cublaslt::try_launch_matmul` call with `Some(addend)` - product and
+/// bias in one launch, no `mul_scalar`/`add` intermediates - and records
+/// one tape entry whose backward replays the same identities the
+/// composed path would have pushed separately (`unbroadcast` into the
+/// addend, `grad @ rhs^T` into the left, `lhs^T @ grad` into the
+/// right, through the same tape-free launches `matmul`'s own backward
+/// uses). Anything the policy refuses (non-f32 dtypes, batched ranks,
+/// matrix addends, strided or offset views, any vendor failure) returns
+/// `None` and the caller keeps its existing `batched_matmul` + scale +
+/// add composition, which computes the identical values: the vendor
+/// path stays advisory here, and a missed fusion is never a wrong value
+/// or a missing gradient. (The epilogue's fail-closed contract binds
+/// callers with no fallback; this caller has one, so falling back
+/// cannot drop the bias.) Without `cuda-vendor` the `cublaslt` module
+/// does not exist and every request takes the composed path directly.
+fn try_fused_biased_gemm(
+    addend: &CudaStorage,
+    lhs: &CudaStorage,
+    rhs: &CudaStorage,
+) -> Option<CudaStorage> {
+    #[cfg(feature = "cuda-vendor")]
+    {
+        let fused =
+            match crate::cuda::ops::cublaslt::try_launch_matmul(lhs, rhs, Some(addend), None) {
+                Ok(Some(product)) => product,
+                Ok(None) | Err(_) => return None,
+            };
+        let (addend_shape, lhs_shape, rhs_shape) = (
+            addend.shape.to_vec(),
+            lhs.shape.to_vec(),
+            rhs.shape.to_vec(),
+        );
+        let (lhs_rank, rhs_rank) = (lhs.shape.len(), rhs.shape.len());
+        let (lhs_capture, rhs_capture) = (lhs.clone(), rhs.clone());
+        let (addend_id, lhs_id, rhs_id, out_id) = (addend.id, lhs.id, rhs.id, fused.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![addend_id, lhs_id, rhs_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                let grad_addend = crate::cuda::tape::unbroadcast(grad_out, &addend_shape)?;
+                let rhs_t = crate::cuda::ops::shape::launch_transpose(
+                    &rhs_capture,
+                    rhs_rank - 2,
+                    rhs_rank - 1,
+                )?;
+                let grad_lhs = crate::cuda::tape::unbroadcast(
+                    &crate::cuda::ops::matmul::launch_matmul(grad_out, &rhs_t)?,
+                    &lhs_shape,
+                )?;
+                let lhs_t = crate::cuda::ops::shape::launch_transpose(
+                    &lhs_capture,
+                    lhs_rank - 2,
+                    lhs_rank - 1,
+                )?;
+                let grad_rhs = crate::cuda::tape::unbroadcast(
+                    &crate::cuda::ops::matmul::launch_matmul(&lhs_t, grad_out)?,
+                    &rhs_shape,
+                )?;
+                Ok(vec![grad_addend, grad_lhs, grad_rhs])
+            }),
+        });
+        Some(fused)
+    }
+    #[cfg(not(feature = "cuda-vendor"))]
+    {
+        let _ = (addend, lhs, rhs);
+        None
+    }
+}
+
 /// N-D batched matrix product, whose operand rank contract differs from the
 /// plain `matmul` row and so does not share its registration.
 impl<D: Device> Execute<op::BatchedMatMul> for CudaBackendImpl<D> {
@@ -742,6 +863,16 @@ impl<D: Device> Execute<op::BatchedMatMul> for CudaBackendImpl<D> {
 }
 
 /// Fused `beta * mat + alpha * (mat1 @ mat2)`.
+///
+/// At unit scales with a vector addend this is one fused cuBLASLt bias
+/// epilogue (issue #85 slice 7); anything else keeps the
+/// `batched_matmul` + scale + add composition, which computes the
+/// identical values. Dispatch's descriptor admits only rank-2+
+/// addends (`table.rs`: `Addmm => 2..=3`), so dispatch-routed requests
+/// always take the composition; the fused attempt serves the fitting
+/// (rank-1 vector) invocations that reach this executor directly, and
+/// lights up with no code change if the catalog ever admits them
+/// through dispatch.
 impl<D: Device> Execute<op::Addmm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -757,6 +888,12 @@ impl<D: Device> Execute<op::Addmm> for CudaBackendImpl<D> {
         let rhs = downcast(rhs, operation, "mat2 is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
         (|| {
+            if attrs.alpha == 1.0
+                && attrs.beta == 1.0
+                && let Some(fused) = try_fused_biased_gemm(mat, lhs, rhs)
+            {
+                return Ok(fused);
+            }
             let product = CudaBackendImpl::<D>::batched_matmul::<f32>(lhs, rhs)?;
             let scaled_product =
                 CudaBackendImpl::<D>::mul_scalar_float::<f32>(&product, attrs.alpha)?;
@@ -829,6 +966,16 @@ impl<D: Device> Execute<op::Outer> for CudaBackendImpl<D> {
 /// Scaled dot-product attention, with the mask as an optional fourth
 /// operand. The attribute set says whether a mask is present, so the operand
 /// count and the declared contract have to agree before anything runs.
+///
+/// Issue #85 (g): without a mask, rank-4 contiguous float operands that fit
+/// the fused kernel's geometry run it (single-pass online softmax, one tape
+/// entry) instead of the bmm→scale→add→softmax→bmm composition below. Any
+/// explicit mask — including a causal-shaped additive one — stays on the
+/// composition: the fused kernel only knows `causal: false/true` from its
+/// own attributes, and this row carries no causal flag to map a mask tensor
+/// to. Strided, non-rank-4, or non-float operands likewise fall through; the
+/// composition computes identical values, only with more traffic and more
+/// tape entries.
 impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
     type Output = CudaStorage;
     fn execute(
@@ -854,6 +1001,23 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
             .map(|m| downcast(m, operation, "mask is not CUDA storage"))
             .transpose()?;
         (|| {
+            // No mask means non-causal, which the fused kernel speaks
+            // directly; `geometry` is the single eligibility gate (rank-4,
+            // contiguous, GQA-divisible, float, sane scale), so anything it
+            // refuses is exactly what the kernel cannot run. The fused path
+            // records its own recompute tape entry, keeping training parity
+            // with the composition.
+            if mask.is_none()
+                && crate::cuda::ops::attention::geometry(query, key, value, attrs.scale).is_ok()
+            {
+                return crate::cuda::backend::nn::fused_attention_storage(
+                    query,
+                    key,
+                    value,
+                    false,
+                    attrs.scale,
+                );
+            }
             let key_rank = key.shape.len();
             let key_t = if key_rank >= 2 {
                 CudaBackendImpl::<D>::transpose::<f32>(key, key_rank - 2, key_rank - 1)?
@@ -873,9 +1037,9 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CudaBackendImpl<D> {
                 None => scaled_scores,
             };
             let attention_axis = masked_scores.shape.len().saturating_sub(1);
-            // The tracked softmax, not the fused launch: attention trains, so
-            // every link in its chain must record, and the raw launch records
-            // nothing.
+            // The composed fallback for masked/strided/non-rank-4 shapes:
+            // the tracked softmax records like every other link, so the
+            // chain trains exactly as before the fused fast path above.
             let attention = CudaBackendImpl::<D>::softmax::<f32>(&masked_scores, attention_axis)?;
             CudaBackendImpl::<D>::batched_matmul::<f32>(&attention, value)
         })()
@@ -994,6 +1158,32 @@ impl_cuda_cmp![
 /// the mask is set and to `grad_false` where it is not is exactly what
 /// `where_cond(mask, grad_out, zeros)`/`where_cond(mask, zeros, grad_out)`
 /// compute.
+/// Broadcast a `where_cond` value operand to the shared output shape, in its
+/// own dtype.
+///
+/// The turbofish is dispatched on the storage dtype rather than left at the
+/// `f32` these calls used to hardcode. `broadcast_as`'s `K` is phantom at
+/// runtime - the width-parametric `launch_broadcast` underneath moves bytes
+/// for every dtype - but spelling the real dtype keeps the call honest about
+/// what it carries, and a dtype with no spelling is refused here instead of
+/// silently riding the `f32` path.
+fn broadcast_select_value<D: Device>(
+    storage: &CudaStorage,
+    shape: &[usize],
+) -> Result<CudaStorage, Error> {
+    match storage.buffer.dtype.builtin_id() {
+        Some(DTypeId::F32) => CudaBackendImpl::<D>::broadcast_as::<f32>(storage, shape),
+        Some(DTypeId::F64) => CudaBackendImpl::<D>::broadcast_as::<f64>(storage, shape),
+        Some(DTypeId::F16) => CudaBackendImpl::<D>::broadcast_as::<f16>(storage, shape),
+        Some(DTypeId::BF16) => CudaBackendImpl::<D>::broadcast_as::<bf16>(storage, shape),
+        _ => Err(Error::UnsupportedDType {
+            dtype: storage.buffer.dtype,
+            backend: "Cuda",
+            op: "where_cond",
+        }),
+    }
+}
+
 impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
     type Output = CudaStorage;
 
@@ -1020,40 +1210,40 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
         let mask_b = if mask.shape == out_shape {
             mask.clone()
         } else {
-            // The dedicated bool-mask broadcast, not the generic one: see
-            // `cuda::ops::select::launch_broadcast_bool_mask`'s doc and #122
-            // for whether that separation still earns its keep.
-            crate::cuda::ops::select::launch_broadcast_bool_mask(mask, &out_shape)
+            // Raw `launch_broadcast`, not the tape-recording `broadcast_as`:
+            // a `bool` mask has nowhere to send a gradient, the same reason
+            // `impl_cuda_cmp!` above calls the raw launch. Since #122 this
+            // is the width-parametric `shape_op` path every other broadcast
+            // takes - the dedicated `bool` launcher is gone.
+            crate::cuda::ops::shape::launch_broadcast(mask, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };
         let true_b = if on_true.shape == out_shape {
             on_true.clone()
         } else {
-            CudaBackendImpl::<D>::broadcast_as::<f32>(on_true, &out_shape)
+            broadcast_select_value::<D>(on_true, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };
         let false_b = if on_false.shape == out_shape {
             on_false.clone()
         } else {
-            CudaBackendImpl::<D>::broadcast_as::<f32>(on_false, &out_shape)
+            broadcast_select_value::<D>(on_false, &out_shape)
                 .map_err(|e| kernel_error("Cuda", operation, e))?
         };
 
         let out = crate::cuda::ops::select::launch_where_cond(&mask_b, &true_b, &false_b)
             .map_err(|e| kernel_error("Cuda", operation, e))?;
 
-        let device_id = mask_b.buffer.device_id;
         let (mask_capture, out_shape_capture) = (mask_b.clone(), out_shape.clone());
         let (true_id, false_id, out_id) = (true_b.id, false_b.id, out.id);
         crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
             output_id: out_id,
             input_ids: vec![true_id, false_id],
             backward: Box::new(move |grad_out: &CudaStorage| {
-                let zeros = CudaBackendImpl::<D>::zeros::<f32>(
-                    &out_shape_capture,
-                    incin_core::tensor::dtype::DTypeId::F32.descriptor(),
-                    &incin_core::tensor::device::DeviceId::cuda(device_id),
-                )?;
+                // In the value dtype, not `f32`: `grad_out` already carries
+                // it, so `zeros_like` reads it off the gradient rather than
+                // naming a dtype of its own.
+                let zeros = crate::cuda::ops::select::zeros_like(grad_out, &out_shape_capture)?;
                 let grad_true =
                     crate::cuda::ops::select::launch_where_cond(&mask_capture, grad_out, &zeros)?;
                 let grad_false =
@@ -1066,10 +1256,13 @@ impl<D: Device> Execute<op::WhereCond> for CudaBackendImpl<D> {
     }
 }
 
-/// Overwrites the masked positions with the declared scalar. No tape entry:
-/// see `cuda::ops::select::launch_masked_fill`'s own doc for why this
-/// matches CPU's existing (gradient-less) behaviour rather than diverging
-/// from it.
+/// Overwrites the masked positions with the declared scalar, then pushes the
+/// backward CPU's `masked_fill_storage` proves: the filled value is a
+/// constant, so the gradient reaches only the input, with positions under a
+/// true mask zeroed (`grad_input = masked_fill(grad_out, mask, 0.0)`). The
+/// previous revision pushed no entry and claimed that matched CPU's
+/// gradient-less behaviour; CPU's `masked_fill_backward_passes_through_only_
+/// unmasked_positions` test shows it never was gradient-less.
 impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
     type Output = CudaStorage;
 
@@ -1087,18 +1280,54 @@ impl<D: Device> Execute<op::MaskedFill> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let mask = downcast(mask, operation, "mask is not CUDA storage")?;
         let value = request.operation.descriptor().attributes().value;
-        crate::cuda::ops::select::launch_masked_fill(input, mask, value)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        // #100's public API admits masks that broadcast into the input
+        // (rank-deficit or size-1 axes); the launcher itself stays strict
+        // about one shared shape, so the mask is materialized to the input's
+        // geometry here - the same pre-broadcast `Execute<WhereCond>` has
+        // always done for its mask (`launch_broadcast`, non-tape-recording:
+        // a `bool` mask has nowhere to send a gradient).
+        let mask = if mask.shape == input.shape {
+            mask.clone()
+        } else {
+            let broadcasted = crate::layout::broadcast_shape(&mask.shape, &input.shape)
+                .map_err(|e| kernel_error("Cuda", operation, e))?;
+            if input.shape != broadcasted {
+                return Err(invalid(
+                    operation,
+                    "mask shape must broadcast to input shape without enlarging it",
+                ));
+            }
+            crate::cuda::ops::shape::launch_broadcast(mask, &input.shape)
+                .map_err(|e| kernel_error("Cuda", operation, e))?
+        };
+        let out = crate::cuda::ops::select::launch_masked_fill(input, &mask, value)
+            .map_err(|e| kernel_error("Cuda", operation, e))?;
+        let mask_capture = mask.clone();
+        let (input_id, out_id) = (input.id, out.id);
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: vec![input_id],
+            backward: Box::new(move |grad_out: &CudaStorage| {
+                Ok(vec![crate::cuda::ops::select::launch_masked_fill(
+                    grad_out,
+                    &mask_capture,
+                    0.0,
+                )?])
+            }),
+        });
+        Ok(out)
     }
 }
 
 /// `LogicalAnd`/`LogicalOr`: both operands and the output are `bool`, unlike
 /// `where_cond`/`masked_fill`'s mixed `bool`+`f32`, so the capability row
 /// this answers to is `Bool`-only rather than a union - no `F32_AND_BOOL`
-/// reasoning needed. Broadcasting still goes through
-/// `cuda::ops::select::launch_broadcast_bool_mask`, the same non-`shape_op`
-/// path `impl_cuda_cmp!`/`Execute<op::WhereCond>` use, since `shape_op`'s
-/// `float*` kernel still cannot answer a 1-byte dtype.
+/// reasoning needed. Broadcasting the two operands to one shape goes
+/// through `cuda::ops::shape::launch_broadcast` - the same raw,
+/// non-tape-recording path `impl_cuda_cmp!` and `Execute<op::WhereCond>`
+/// use. Since #122 that path moves these one-byte operands through
+/// `shape_op`'s width-parametric entry points directly; the dedicated
+/// `bool`-mask launcher it replaces was deleted as redundant.
 macro_rules! impl_cuda_logical_binary {
     ($(($op:ident, $func:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
@@ -1119,13 +1348,13 @@ macro_rules! impl_cuda_logical_binary {
                 let lhs_b = if lhs.shape == out_shape {
                     lhs.clone()
                 } else {
-                    crate::cuda::ops::select::launch_broadcast_bool_mask(lhs, &out_shape)
+                    crate::cuda::ops::shape::launch_broadcast(lhs, &out_shape)
                         .map_err(|e| kernel_error("Cuda", operation, e))?
                 };
                 let rhs_b = if rhs.shape == out_shape {
                     rhs.clone()
                 } else {
-                    crate::cuda::ops::select::launch_broadcast_bool_mask(rhs, &out_shape)
+                    crate::cuda::ops::shape::launch_broadcast(rhs, &out_shape)
                         .map_err(|e| kernel_error("Cuda", operation, e))?
                 };
                 crate::cuda::ops::logical::$func(&lhs_b, &rhs_b)
@@ -1359,7 +1588,7 @@ impl<D: Device> Execute<op::EmbeddingExact> for CudaBackendImpl<D> {
         let indices = downcast(indices, operation, "indices is not CUDA storage")?;
         let weight = downcast(weight, operation, "weight is not CUDA storage")?;
         CudaBackendImpl::<D>::embedding::<f32, i64>(weight, indices)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1377,7 +1606,7 @@ impl<D: Device> Execute<op::Gather> for CudaBackendImpl<D> {
         let index = downcast(index, operation, "index is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
         CudaBackendImpl::<D>::gather::<f32, i64>(input, axis, index)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1396,7 +1625,7 @@ impl<D: Device> Execute<op::Scatter> for CudaBackendImpl<D> {
         let src = downcast(src, operation, "src is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
         CudaBackendImpl::<D>::scatter::<f32, i64>(input, axis, index, src)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+            .map_err(|e| index_kernel_error(operation, e))
     }
 }
 
@@ -1560,8 +1789,41 @@ impl<D: Device> Execute<op::Lerp> for CudaBackendImpl<D> {
     }
 }
 
-macro_rules! impl_cuda_index_reduction {
-    ($(($op:ident, $method:ident)),* $(,)?) => {$(
+/// Dispatches an index-width-typed CUDA reduction on the descriptor's
+/// requested index dtype, mirroring the CPU `dispatch_index_dtype` set
+/// (u8/u32/i64). Anything else is refused with the backend named: the
+/// kernels write exactly the selected width, and launching any other
+/// width into the allocated buffer would mis-shape the output (this is
+/// what the hardcoded i64 below used to do to every u32 request).
+macro_rules! dispatch_cuda_index_dtype {
+    ($operation:expr, $dtype:expr, |$index:ident| $body:expr) => {{
+        let operation = $operation;
+        let desc: incin_core::tensor::dtype::DTypeDescriptor = $dtype;
+        match desc.builtin_id() {
+            Some(DTypeId::U8) => {
+                type $index = u8;
+                $body
+            }
+            Some(DTypeId::U32) => {
+                type $index = u32;
+                $body
+            }
+            Some(DTypeId::I64) => {
+                type $index = i64;
+                $body
+            }
+            _ => Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: desc,
+                },
+            )),
+        }
+    }};
+}
+
+macro_rules! impl_cuda_index_reduction {    ($(($op:ident, $method:ident)),* $(,)?) => {$(
         impl<D: Device> Execute<op::$op> for CudaBackendImpl<D> {
             type Output = CudaStorage;
             fn execute(
@@ -1574,11 +1836,10 @@ macro_rules! impl_cuda_index_reduction {
                 };
                 let input = downcast(input, operation, "input is not CUDA storage")?;
                 let attrs = request.operation.descriptor().attributes();
-                match attrs.axis {
-                    Some(axis) => CudaBackendImpl::<D>::$method::<i64>(input, Some(axis)),
-                    None => CudaBackendImpl::<D>::$method::<i64>(input, None),
-                }
-                .map_err(|e| kernel_error("Cuda", operation, e))
+                dispatch_cuda_index_dtype!(operation, attrs.dtype, |KIndex| {
+                    CudaBackendImpl::<D>::$method::<KIndex>(input, attrs.axis)
+                        .map_err(|e| kernel_error("Cuda", operation, e))
+                })
             }
         }
     )*};
@@ -1598,8 +1859,10 @@ impl<D: Device> Execute<op::TopK> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
-        CudaBackendImpl::<D>::topk::<i64>(input, attrs.k, attrs.axis, attrs.largest)
-            .map_err(|e| kernel_error("Cuda", operation, e))
+        dispatch_cuda_index_dtype!(operation, attrs.index_dtype, |KIndex| {
+            CudaBackendImpl::<D>::topk::<KIndex>(input, attrs.k, attrs.axis, attrs.largest)
+                .map_err(|e| kernel_error("Cuda", operation, e))
+        })
     }
 }
 
@@ -1624,6 +1887,23 @@ impl<D: Device> Execute<op::Quantize> for CudaBackendImpl<D> {
         }
         crate::cuda::ops::quant::launch_quantize_q8_0(input)
             .map_err(|e| kernel_error("Cuda", operation, e))
+            .inspect(|output| {
+                // Straight-through estimator (issue #93, Decision 2), mirroring
+                // CPU's `quantize_storage` recipe: the forward is the true
+                // block-quantized value and the backward passes the cotangent
+                // to the float source unchanged (`grad_in = grad_out`).
+                // Shapes match (the launcher preserves `input.shape`), so a
+                // clone is correctly shaped; the single input is the float
+                // source, not a scale/param.
+                let (input_id, output_id) = (input.id, output.id);
+                crate::cuda::tape::record_with(|| crate::cuda::tape::TapeEntry {
+                    output_id,
+                    input_ids: alloc::vec![input_id],
+                    backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                        Ok(alloc::vec![grad_out.clone()])
+                    }),
+                });
+            })
     }
 }
 
@@ -1648,6 +1928,21 @@ impl<D: Device> Execute<op::Dequantize> for CudaBackendImpl<D> {
         }
         crate::cuda::ops::quant::launch_dequantize_q8_0(input)
             .map_err(|e| kernel_error("Cuda", operation, e))
+            .inspect(|output| {
+                // Dual of `quantize`'s straight-through node: decoding a block
+                // encoding has no derivative either, so the cotangent passes
+                // to the quantized operand unchanged. Together the two
+                // identity recipes make `dequantize(quantize(x))` backward
+                // exactly the identity (issue #93, Decision 2).
+                let (input_id, output_id) = (input.id, output.id);
+                crate::cuda::tape::record_with(|| crate::cuda::tape::TapeEntry {
+                    output_id,
+                    input_ids: alloc::vec![input_id],
+                    backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                        Ok(alloc::vec![grad_out.clone()])
+                    }),
+                });
+            })
     }
 }
 
@@ -1707,17 +2002,40 @@ impl<D: Device> Execute<op::Linear> for CudaBackendImpl<D> {
 
         let transposed =
             crate::cuda::backend::shape_ops::cuda_transpose_storage(weight, 0, 1).map_err(wrap)?;
-        let product = crate::cuda::backend::shape_ops::cuda_matmul_storage(rows, &transposed)
-            .map_err(wrap)?;
-        let projected = match bias {
-            None => product,
-            Some(bias) => crate::cuda::backend::elementwise::cuda_add_storage(
-                &product,
-                bias,
-                crate::kernel::KernelSpecialization::NONE,
-            )
-            .map_err(wrap)?,
+        // Since issue #85 this goes through the batched dispatcher rather
+        // than the rank-2-only 2D launcher: a leading batch on the input
+        // (`[B..., T, in]`) reaches one native/vendor batched launch or the
+        // composed loop, while a rank-2 input short-circuits inside
+        // `batched_matmul` to the exact same 2D `matmul` (and tape entry)
+        // this call always made. Before that swap a rank-3+ Linear failed
+        // here inside `matmul`'s unbatched-2D check.
+        //
+        // Since issue #85 slice 7 a bias beside a rank-2 product goes to
+        // one fused cuBLASLt bias epilogue instead of the separate add
+        // pass below; anything the epilogue policy refuses keeps the
+        // `batched_matmul` + add composition, which computes the identical
+        // values.
+        let product = match bias {
+            Some(bias) => match try_fused_biased_gemm(bias, rows, &transposed) {
+                Some(fused) => fused,
+                None => {
+                    let product = crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(
+                        rows,
+                        &transposed,
+                    )
+                    .map_err(wrap)?;
+                    crate::cuda::backend::elementwise::cuda_add_storage(
+                        &product,
+                        bias,
+                        crate::kernel::KernelSpecialization::NONE,
+                    )
+                    .map_err(wrap)?
+                }
+            },
+            None => crate::cuda::backend::shape_ops::cuda_batched_matmul_storage(rows, &transposed)
+                .map_err(wrap)?,
         };
+        let projected = product;
 
         if unbatched {
             let out_dim = projected.shape[projected.shape.len() - 1];
@@ -1752,12 +2070,7 @@ impl<D: Device> Execute<op::Dropout> for CudaBackendImpl<D> {
                 .map_err(wrap);
         }
 
-        let draw = Self::rand::<f32>(
-            &input.shape,
-            DTypeId::F32.descriptor(),
-            &DeviceId::cuda(input.buffer.device_id),
-        )
-        .map_err(wrap)?;
+        let draw = crate::cuda::ops::dropout::launch_dropout_mask(&input.shape).map_err(wrap)?;
         let shifted = crate::cuda::backend::elementwise::cuda_add_scalar_float(
             &draw,
             -attributes.probability,
@@ -1820,6 +2133,16 @@ impl<D: Device> Execute<op::Conv1dExact> for CudaBackendImpl<D> {
         };
         let (cout, cin_g, k_len) = (weight.shape[0], weight.shape[1], weight.shape[2]);
 
+        // conv1d records ONE tape entry for the whole conv2d composition.
+        // The reshapes and the conv2d pieces push their entries while the
+        // forward runs; the entries this composition added (everything past
+        // `before`, so an enclosing graph keeps its own) are then drained
+        // off and folded into a single entry that replays them with the
+        // output cotangent. Values and gradients are identical to the
+        // recorded composition - the same closures run, only collapsed one
+        // level - which is what the tape-depth contract pins.
+        let recording = incin_core::exec::GradMode::current().records();
+        let before = crate::cuda::tape::depth();
         let act_2d =
             crate::cuda::backend::shape_ops::cuda_reshape_storage(activation, &[b, cin, 1, len])
                 .map_err(wrap)?;
@@ -1838,13 +2161,63 @@ impl<D: Device> Execute<op::Conv1dExact> for CudaBackendImpl<D> {
         .map_err(wrap)?;
 
         let out_len = out_2d.shape[3];
-        if unbatched {
+        let out = if unbatched {
             crate::cuda::backend::shape_ops::cuda_reshape_storage(&out_2d, &[cout, out_len])
-                .map_err(wrap)
+                .map_err(wrap)?
         } else {
             crate::cuda::backend::shape_ops::cuda_reshape_storage(&out_2d, &[b, cout, out_len])
-                .map_err(wrap)
+                .map_err(wrap)?
+        };
+        let out_2d_shape = out_2d.shape.to_vec();
+        let composed = {
+            let mut prefix = crate::cuda::tape::drain_all();
+            let mine = prefix.split_off(before);
+            for entry in prefix {
+                crate::cuda::tape::push(entry);
+            }
+            mine
+        };
+        if !recording || composed.is_empty() {
+            // No entry, mirroring an unrecorded op: without a recording
+            // grad mode there is nothing to replay, and an empty capture
+            // would make the replay fail closed instead of running.
+            return Ok(out);
         }
+        let (act_id, weight_id, out_id) = (activation.id, weight.id, out.id);
+        let mut input_ids = alloc::vec![act_id, weight_id];
+        if let Some(bias) = bias {
+            input_ids.push(bias.id);
+        }
+        let composed = std::sync::Mutex::new(Some(composed));
+        crate::cuda::tape::push(crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: input_ids.clone(),
+            backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                // The capture runs once per drain, like any tape node: the
+                // walk drains entries, so a second walk never reaches this
+                // closure with nodes still inside. Take them out here; a
+                // missing capture fails closed as a consumed graph.
+                let nodes = composed
+                    .lock()
+                    .map_err(|_| Error::Msg("conv1d replay lock poisoned".into()))?
+                    .take()
+                    .ok_or(incin_core::error::BackwardError::GraphConsumed)?;
+                let grad_out_2d =
+                    crate::cuda::backend::shape_ops::cuda_reshape_storage(grad_out, &out_2d_shape)?;
+                let grads =
+                    incin_core::exec::tape::backward_with_seed(nodes, &out_2d, &grad_out_2d)?;
+                let mut contributions = alloc::vec::Vec::with_capacity(input_ids.len());
+                for id in &input_ids {
+                    contributions.push(grads.get(*id).cloned().ok_or_else(|| {
+                        Error::Msg(
+                            "conv1d replay reached no gradient for a declared operand".into(),
+                        )
+                    })?);
+                }
+                Ok(contributions)
+            }),
+        });
+        Ok(out)
     }
 }
 
@@ -1874,10 +2247,48 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
             .transpose()?;
         let wrap = |e| kernel_error("Cuda", operation, e);
 
-        let [stride_h, _stride_w] = attributes.stride;
-        let [pad_h, _pad_w] = attributes.padding;
-        let [out_pad_h, out_pad_w] = attributes.output_padding;
-        let [dil_h, _dil_w] = attributes.dilation;
+        let isotropic = |pair: [usize; 2], reason: &'static str| -> Result<usize, BackendError> {
+            if pair[0] == pair[1] {
+                Ok(pair[0])
+            } else {
+                Err(invalid(operation, reason))
+            }
+        };
+        let stride = isotropic(
+            attributes.stride,
+            "conv_transpose2d strides differ per axis; the routed kernel takes one stride for both",
+        )?;
+        let padding = isotropic(
+            attributes.padding,
+            "conv_transpose2d paddings differ per axis; the routed kernel takes one padding for \
+             both",
+        )?;
+        let output_padding = isotropic(
+            attributes.output_padding,
+            "conv_transpose2d output paddings differ per axis; the routed kernel takes one for \
+             both",
+        )?;
+        let dilation = isotropic(
+            attributes.dilation,
+            "conv_transpose2d dilations differ per axis; the routed kernel takes one dilation for \
+             both",
+        )?;
+        if attributes.groups != 1 {
+            return Err(kernel_error(
+                "Cuda",
+                operation,
+                incin_core::error::Error::ShapeMismatch {
+                    op: "conv_transpose2d",
+                    expected: vec![1],
+                    got: vec![attributes.groups],
+                    msg: format!(
+                        "conv_transpose2d: only groups == 1 is supported on CudaBackendImpl, \
+                         got groups={}",
+                        attributes.groups
+                    ),
+                },
+            ));
+        }
 
         let unbatched = activation.shape.len() == 3;
         let (b, cin, h, w) = if unbatched {
@@ -1895,15 +2306,33 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
                 activation.shape[3],
             )
         };
-        let (_cin_w, cout, kh, kw) = (
+        let (w_cin, cout, kh, kw) = (
             weight.shape[0],
             weight.shape[1],
             weight.shape[2],
             weight.shape[3],
         );
+        if w_cin != cin {
+            return Err(kernel_error(
+                "Cuda",
+                operation,
+                incin_core::error::Error::ShapeMismatch {
+                    op: "conv_transpose2d",
+                    expected: vec![cin],
+                    got: vec![w_cin],
+                    msg: format!(
+                        "conv_transpose2d: weight's Cin ({w_cin}) does not match input Cin ({cin})"
+                    ),
+                },
+            ));
+        }
 
-        let h_out = (h - 1) * stride_h + dil_h * (kh - 1) + 1 + out_pad_h - 2 * pad_h;
-        let w_out = (w - 1) * stride_h + dil_h * (kw - 1) + 1 + out_pad_w - 2 * pad_h;
+        let h_nat =
+            crate::cuda::ops::conv::natural_transpose_out_size(h, kh, stride, padding, dilation)
+                .map_err(wrap)?;
+        let w_nat =
+            crate::cuda::ops::conv::natural_transpose_out_size(w, kw, stride, padding, dilation)
+                .map_err(wrap)?;
 
         let act_4d = if unbatched {
             crate::cuda::backend::shape_ops::cuda_reshape_storage(activation, &[1, cin, h, w])
@@ -1940,18 +2369,37 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
             crate::cuda::backend::shape_ops::cuda_concat_storage(&refs, 0).map_err(wrap)?
         };
 
-        let spec = crate::cuda::ops::conv::Col2Im2dSpec {
-            h_out,
-            w_out,
-            kh,
-            kw,
-            stride: stride_h,
-            padding: pad_h,
-            dilation: dil_h,
+        // The column matrix's spatial extent is the *input* spatial size (the
+        // transpose fold scatters from input positions); the scatter target is
+        // the natural output size. `output_padding` is a trailing zero-pad
+        // after the fold, not part of the col2im geometry (Pitfall 4).
+        let natural = crate::cuda::backend::nn::col2im_2d_tape(
+            &cols,
+            &[b, cout, h_nat, w_nat],
+            crate::cuda::ops::conv::Col2Im2dSpec {
+                h_out: h,
+                w_out: w,
+                kh,
+                kw,
+                stride,
+                padding,
+                dilation,
+            },
+        )
+        .map_err(wrap)?;
+
+        let out_4d = if output_padding > 0 {
+            CudaBackendImpl::<D>::pad::<f32>(
+                &natural,
+                &[(0, 0), (0, 0), (0, output_padding), (0, output_padding)],
+                0.0,
+            )
+            .map_err(wrap)?
+        } else {
+            natural
         };
-        let target_shape = vec![b, cout, h_out, w_out];
-        let out_4d =
-            crate::cuda::ops::conv::launch_col2im_2d(&cols, &target_shape, spec).map_err(wrap)?;
+        let final_h = out_4d.shape[2];
+        let final_w = out_4d.shape[3];
 
         let with_bias = match bias {
             Some(b_storage) => {
@@ -1971,8 +2419,11 @@ impl<D: Device> Execute<op::ConvTranspose2d> for CudaBackendImpl<D> {
         };
 
         if unbatched {
-            crate::cuda::backend::shape_ops::cuda_reshape_storage(&with_bias, &[cout, h_out, w_out])
-                .map_err(wrap)
+            crate::cuda::backend::shape_ops::cuda_reshape_storage(
+                &with_bias,
+                &[cout, final_h, final_w],
+            )
+            .map_err(wrap)
         } else {
             Ok(with_bias)
         }
@@ -1992,33 +2443,8 @@ impl<D: Device> Execute<op::AdaptiveAvgPool2dExact> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let [out_h, out_w] = request.operation.descriptor().attributes().output;
-        let output_size = (out_h, out_w);
-        let wrap = |e| kernel_error("Cuda", operation, e);
-
-        let unbatched = input.shape.len() == 3;
-        let promoted;
-        let x = if unbatched {
-            promoted = crate::cuda::backend::shape_ops::cuda_reshape_storage(
-                input,
-                &[1, input.shape[0], input.shape[1], input.shape[2]],
-            )
-            .map_err(wrap)?;
-            &promoted
-        } else {
-            input
-        };
-
-        let pooled =
-            crate::cuda::ops::pool::launch_adaptive_avg_pool2d(x, output_size).map_err(wrap)?;
-        if unbatched {
-            crate::cuda::backend::shape_ops::cuda_reshape_storage(
-                &pooled,
-                &[pooled.shape[1], pooled.shape[2], pooled.shape[3]],
-            )
-            .map_err(wrap)
-        } else {
-            Ok(pooled)
-        }
+        Self::adaptive_avg_pool2d(input, (out_h, out_w))
+            .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
 
@@ -2129,7 +2555,7 @@ impl<D: Device> Execute<op::IndexSelect> for CudaBackendImpl<D> {
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let index = downcast(index, operation, "index is not CUDA storage")?;
         let axis = request.operation.descriptor().attributes().axis;
-        let wrap = |e| kernel_error("Cuda", operation, e);
+        let wrap = |e| index_kernel_error(operation, e);
 
         let mut idx_expanded_shape = vec![1usize; input.shape.len()];
         idx_expanded_shape[axis] = index.shape.iter().product::<usize>();
@@ -2141,7 +2567,14 @@ impl<D: Device> Execute<op::IndexSelect> for CudaBackendImpl<D> {
         let idx_broadcasted =
             crate::cuda::backend::shape_ops::cuda_broadcast_as_storage(&idx_reshaped, &out_shape)
                 .map_err(wrap)?;
-        crate::cuda::ops::shape::launch_gather(input, axis, &idx_broadcasted).map_err(wrap)
+        // The tape-tracked gather, not the raw `launch_gather`: the raw launch
+        // runs the kernel but records nothing, so the input gradient was
+        // silently absent. The tracked form's backward (scatter the upstream
+        // gradient back through the index, accumulating repeated selections)
+        // is what CPU's `index_select_storage` proves. The reshape/broadcast
+        // above already pushed their own exact-inverse entries, so the
+        // composite's backward is the tape replay over all three.
+        CudaBackendImpl::<D>::gather::<f32, i64>(input, axis, &idx_broadcasted).map_err(wrap)
     }
 }
 
@@ -2255,28 +2688,61 @@ impl<D: Device> Execute<op::ToDType> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let target_dtype = request.operation.descriptor().attributes().dtype;
-        if input.buffer.dtype == target_dtype {
-            return Ok(input.clone());
-        }
-        let total = input.shape.iter().product::<usize>();
-        let byte_len = crate::bytes::byte_len(target_dtype, total, operation)
-            .map_err(|e| kernel_error("Cuda", operation, e))?;
-        let stream = input.buffer.device.default_stream();
-        let out_buffer = CudaBuffer {
-            len: total,
-            dtype: target_dtype,
-            data: Arc::new(stream.alloc_zeros::<u8>(byte_len).map_err(|e| {
-                kernel_error(
-                    "Cuda",
-                    operation,
-                    incin_core::error::Error::Msg(format!("{e:?}")),
-                )
-            })?),
-            device: input.buffer.device.clone(),
-            device_id: input.buffer.device_id,
-        };
-        Ok(CudaStorage::new(Arc::new(out_buffer), input.shape.to_vec()))
+        cuda_to_dtype_storage(input, target_dtype, operation)
     }
+}
+
+/// Real dtype conversion backing `Execute<op::ToDType>`.
+///
+/// Since #106(a) this is a single on-device type-code kernel
+/// (`cuda/ops/kernels/cast.cu` via `launch_cast`), not a host round-trip.
+/// Support is decided by the dtype pair, never by the values: targets outside
+/// `{f32,f64,f16,bf16,i64}` are refused the way CPU's `tensor_to_dtype_storage`
+/// refuses them (Q8_0 is block-packed, Bool has no conversion, U8/U32 are not
+/// CUDA storage dtypes). Same-dtype is a clone. Float-to-float records a tape
+/// entry whose backward casts the gradient back to the source dtype, matching
+/// CPU's `canonical_to_dtype`; integer and bool sources record nothing.
+fn cuda_to_dtype_storage(
+    input: &CudaStorage,
+    target_dtype: DTypeDescriptor,
+    operation: OperationKind,
+) -> Result<CudaStorage, BackendError> {
+    let unsupported = |dtype: DTypeDescriptor| {
+        BackendError::unsupported("Cuda", UnsupportedReason::DType { operation, dtype })
+    };
+    // Same target family the cast kernel admits; anything else (Q8_0, Bool,
+    // U8/U32, custom) has no honest CUDA path.
+    match target_dtype.builtin_id() {
+        Some(DTypeId::F32 | DTypeId::F64 | DTypeId::I64 | DTypeId::F16 | DTypeId::BF16) => {}
+        _ => return Err(unsupported(target_dtype)),
+    }
+    if input.buffer.dtype == target_dtype {
+        return Ok(input.clone());
+    }
+    let source_dtype = input.buffer.dtype;
+    let out = crate::cuda::ops::cast::launch_cast(input, target_dtype)
+        .map_err(|e| kernel_error("Cuda", operation, e))?;
+    // Float-to-float only: an integer cast truncates, so its derivative is
+    // zero almost everywhere and recording it would report a sensitivity the
+    // forward does not have (CPU's `canonical_to_dtype` records nothing for
+    // those either). The backward runs under `GradMode::Disabled` (see
+    // `cuda::tape::backward`), so the recursive cast cannot re-record.
+    let both_float = source_dtype.builtin_id().is_some_and(DTypeId::is_float)
+        && target_dtype.builtin_id().is_some_and(DTypeId::is_float);
+    if both_float {
+        let (input_id, out_id) = (input.id, out.id);
+        crate::cuda::tape::record_with(|| crate::cuda::tape::TapeEntry {
+            output_id: out_id,
+            input_ids: alloc::vec![input_id],
+            backward: alloc::boxed::Box::new(move |grad_out: &CudaStorage| {
+                Ok(alloc::vec![crate::cuda::ops::cast::launch_cast(
+                    grad_out,
+                    source_dtype
+                )?])
+            }),
+        });
+    }
+    Ok(out)
 }
 
 fn cuda_loss_reduction(reduction: LossReduction) -> Reduction {
@@ -2365,10 +2831,44 @@ pub(crate) fn cuda_bce_with_logits_loss_storage(
     target: &CudaStorage,
     reduction: incin_core::tensor::reduction::Reduction,
 ) -> Result<CudaStorage, incin_core::error::Error> {
-    let max_x_0 = crate::cuda::backend::elementwise::cuda_relu_storage(
-        pred,
-        crate::kernel::KernelSpecialization::NONE,
-    )?;
+    // Issue #84: CPU uses `canonical_relu` under `GradMode::Disabled` plus a
+    // hand-pushed tape entry whose slope is `0.5` at exactly zero, because
+    // the subgradient of `max(x, 0)` at `x = 0` is defined as `0.5` there
+    // (matching PyTorch and the CPU reference test
+    // `bce_with_logits_zero_logit_backward_matches_sigmoid_minus_target`).
+    // The stock `cuda_relu_storage` derivative (`x > 0.0f ? 1.0f : 0.0f`)
+    // answers `0` at zero, which would disagree with the CPU backend. The
+    // forward runs under `GradMode::Disabled` so relu records nothing, then
+    // the custom entry below is pushed with the CPU's slope table.
+    let max_x_0 = incin_core::exec::GradMode::Disabled.scope(|| {
+        crate::cuda::backend::elementwise::cuda_relu_storage(
+            pred,
+            crate::kernel::KernelSpecialization::NONE,
+        )
+    })?;
+    {
+        let pred_id = pred.id;
+        let out_id = max_x_0.id;
+        let pred_capture = pred.clone();
+        crate::cuda::backend::elementwise::push_unary_tape_entry(
+            pred_id,
+            out_id,
+            move |grad_out| {
+                let deriv = crate::cuda::ops::elementwise::launch_unary_op(
+                    "bce_relu_grad",
+                    "x == 0.0f ? 0.5f : (x > 0.0f ? 1.0f : 0.0f)",
+                    &pred_capture,
+                )?;
+                crate::cuda::ops::elementwise::launch_binary_op(
+                    "mul",
+                    "a * b",
+                    grad_out,
+                    &deriv,
+                    &grad_out.shape,
+                )
+            },
+        );
+    }
     let x_times_z = crate::cuda::backend::elementwise::cuda_mul_storage(
         pred,
         target,
@@ -2454,6 +2954,36 @@ impl<D: Device> Execute<op::CrossEntropyLoss> for CudaBackendImpl<D> {
     }
 }
 
+impl<D: Device> Execute<op::FusedAttention> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::FusedAttention, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::FusedAttention;
+        let [query, key, value] = request.inputs else {
+            return Err(invalid(
+                operation,
+                "fused attention expects exactly query, key and value",
+            ));
+        };
+        let query = downcast(query, operation, "query is not CUDA storage")?;
+        let key = downcast(key, operation, "key is not CUDA storage")?;
+        let value = downcast(value, operation, "value is not CUDA storage")?;
+        let attributes = request.operation.descriptor().attributes();
+        let wrap = |e| kernel_error("Cuda", operation, e);
+        crate::cuda::backend::nn::fused_attention_storage(
+            query,
+            key,
+            value,
+            attributes.causal,
+            attributes.scale,
+        )
+        .map_err(wrap)
+    }
+}
+
 impl<D: Device> Execute<op::Norm> for CudaBackendImpl<D> {
     type Output = CudaStorage;
 
@@ -2517,13 +3047,231 @@ impl<D: Device> Execute<op::Argsort> for CudaBackendImpl<D> {
         };
         let input = downcast(input, operation, "input is not CUDA storage")?;
         let attrs = request.operation.descriptor().attributes();
-        CudaBackendImpl::<D>::argsort::<i64>(input, attrs.axis, attrs.descending)
+        dispatch_cuda_index_dtype!(operation, attrs.index_dtype, |KIndex| {
+            CudaBackendImpl::<D>::argsort::<KIndex>(input, attrs.axis, attrs.descending)
+                .map_err(|e| kernel_error("Cuda", operation, e))
+        })
+    }
+}
+
+impl<D: Device> Execute<op::Sort> for CudaBackendImpl<D> {
+    type Output = (CudaStorage, CudaStorage);
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Sort, Self>,
+    ) -> Result<(CudaStorage, CudaStorage), BackendError> {
+        let operation = OperationKind::Sort;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "sort expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        let dim_len = *input
+            .shape
+            .get(attrs.axis)
+            .ok_or_else(|| invalid(operation, "sort axis is outside the operand's rank"))?;
+        // `topk` with `k = axis length` IS the sort: it returns every value
+        // ordered plus the permutation, exactly the pair `Sort` owes, so no
+        // gather (and no tape entry - `Sort`'s row is training=false) is
+        // needed. `descending` maps to `largest`. The index width follows
+        // the requested `index_dtype` like every other index reduction.
+        dispatch_cuda_index_dtype!(operation, attrs.index_dtype, |KIndex| {
+            CudaBackendImpl::<D>::topk::<KIndex>(input, dim_len, attrs.axis, attrs.descending)
+                .map_err(|e| kernel_error("Cuda", operation, e))
+        })
+    }
+}
+
+impl<D: Device> Execute<op::LogSoftmax> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSoftmax, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::LogSoftmax;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "log_softmax expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        crate::cuda::backend::elementwise::cuda_log_softmax::<D>(input, axis)
             .map_err(|e| kernel_error("Cuda", operation, e))
     }
 }
 
+impl<D: Device> Execute<op::LogSumExpKeepDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSumExpKeepDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::LogSumExpKeepDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "logsumexp_keepdim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<D>(input, axis)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::LogSumExpDim> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::LogSumExpDim, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::LogSumExpDim;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "logsumexp_dim expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let axis = request.operation.descriptor().attributes().axis;
+        let wrap = |e| kernel_error("Cuda", operation, e);
+        // Keepdim composition first, then squeeze through `squeeze` (a
+        // tape-tracked `reshape` wrapper) rather than a bare reshape, so the
+        // chain's gradient arrives with the squeezed shape - the same reason
+        // CPU routes through `squeeze_storage`.
+        let kept = crate::cuda::backend::elementwise::cuda_logsumexp_keepdim::<D>(input, axis)
+            .map_err(wrap)?;
+        CudaBackendImpl::<D>::squeeze::<f32>(&kept, axis).map_err(wrap)
+    }
+}
+
+impl<D: Device> Execute<op::RepeatInterleave> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::RepeatInterleave, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::RepeatInterleave;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "repeat_interleave expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        CudaBackendImpl::<D>::repeat_interleave::<f32>(input, attrs.repeats, attrs.axis)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::OneHot> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::OneHot, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::OneHot;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "one_hot expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        // No dtype guard here: the descriptor's per-operand contract names
+        // operand zero an integer index before this row is consulted (CPU's
+        // impl says the same); the launcher still refuses anything that is
+        // not physically i64, the only integer storage CUDA can create.
+        let depth = request.operation.descriptor().attributes().depth;
+        CudaBackendImpl::<D>::one_hot::<i64>(input, depth)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::Bincount> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::Bincount, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::Bincount;
+        let [input] = request.inputs else {
+            return Err(invalid(operation, "bincount expects 1 input"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let bins = request.operation.descriptor().attributes().bins;
+        CudaBackendImpl::<D>::bincount::<i64>(input, bins)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::ScatterAdd> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::ScatterAdd, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::ScatterAdd;
+        let [input, index, source] = request.inputs else {
+            return Err(invalid(operation, "scatter_add expects 3 inputs"));
+        };
+        let input = downcast(input, operation, "input is not CUDA storage")?;
+        let index = downcast(index, operation, "index is not CUDA storage")?;
+        let source = downcast(source, operation, "source is not CUDA storage")?;
+        let attrs = request.operation.descriptor().attributes();
+        // The mirror of CPU's guard: summing is the operation rather than a
+        // mode of it, and a caller who asked for last-write-wins on this
+        // descriptor has asked for `scatter` and should be told so.
+        if attrs.duplicate_indices != DuplicateIndexRule::Accumulate {
+            return Err(invalid(
+                operation,
+                "scatter_add accumulates duplicate indices and implements no other rule; \
+                 use scatter for last-write-wins",
+            ));
+        }
+        CudaBackendImpl::<D>::scatter_add::<f32>(input, attrs.axis, index, source)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+impl<D: Device> Execute<op::GroupedMatMul> for CudaBackendImpl<D> {
+    type Output = CudaStorage;
+    fn execute(
+        &self,
+        request: ExecutionRequest<'_, op::GroupedMatMul, Self>,
+    ) -> Result<CudaStorage, BackendError> {
+        let operation = OperationKind::GroupedMatMul;
+        let [lhs, rhs, offsets] = request.inputs else {
+            return Err(invalid(operation, "grouped_matmul expects 3 inputs"));
+        };
+        let lhs = downcast(lhs, operation, "lhs is not CUDA storage")?;
+        let rhs = downcast(rhs, operation, "rhs is not CUDA storage")?;
+        let offsets = downcast(offsets, operation, "offsets is not CUDA storage")?;
+        // The offsets operand is i64 by the descriptor's per-operand contract;
+        // the matrices must share one float dtype, which the capability row's
+        // INDEX_AND_F32 union cannot state — the same tightener CPU's
+        // GroupedMatMul executor applies for the same reason.
+        if offsets.dtype() != DTypeId::I64.descriptor() {
+            return Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: offsets.dtype(),
+                },
+            ));
+        }
+        let lhs_dtype = lhs.dtype();
+        let rhs_dtype = rhs.dtype();
+        if !lhs_dtype.is_float() || lhs_dtype != rhs_dtype {
+            return Err(BackendError::unsupported(
+                "Cuda",
+                UnsupportedReason::DType {
+                    operation,
+                    dtype: lhs_dtype,
+                },
+            ));
+        }
+        CudaBackendImpl::<D>::grouped_matmul::<f32>(lhs, rhs, offsets)
+            .map_err(|e| kernel_error("Cuda", operation, e))
+    }
+}
+
+/// Same compile-time obligation as the CPU one: every identity the CUDA
+/// declaration advertises must have an `Execute` impl. Group entries are
+/// bare `Op` idents or `(Op, training)` pairs (the quantization groups);
+/// the training flag is a capability claim, so both spellings assert the
+/// executor and neither is read here.
 macro_rules! assert_every_advertised_cuda_row_executes {
-    (; $($group:ident = [$($operation:ident),* $(,)?]),* $(,)?) => {
+    (; $($group:ident = [$($entry:tt),* $(,)?]),* $(,)?) => {
         const _: () = {
             const fn executes<O, B>()
             where
@@ -2533,7 +3281,15 @@ macro_rules! assert_every_advertised_cuda_row_executes {
             }
 
             const fn assert_all<D: Device>() {
-                $($(executes::<op::$operation, CudaBackendImpl<D>>();)*)*
+                macro_rules! assert_entry {
+                    (($operation:ident, $training:expr)) => {
+                        executes::<op::$operation, CudaBackendImpl<D>>()
+                    };
+                    ($operation:ident) => {
+                        executes::<op::$operation, CudaBackendImpl<D>>()
+                    };
+                }
+                $( $(assert_entry!($entry);)*)*
             }
 
             assert_all::<incin_core::tensor::device::Cuda>();

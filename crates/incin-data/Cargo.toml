@@ -19,7 +19,7 @@ documentation = "https://docs.rs/incin-data"
 # fetch their own archives; nothing here pulls an async runtime.
 default = ["download"]
 # HTTP download and gzip extraction, used by the bundled dataset fetchers.
-download = ["dep:ureq", "dep:flate2"]
+download = ["dep:ureq", "dep:flate2", "dep:tar"]
 # The Hugging Face Hub client. Not a default: it brings an async runtime and a
 # second TLS stack into the dependency graph of every crate that depends on the
 # facade, for an API most training code never calls.
@@ -36,6 +36,7 @@ thiserror = { workspace = true }
 rand = "0.10"
 ureq = { version = "3.3.0", optional = true }
 flate2 = { version = "1.1.9", optional = true }
+tar = { version = "0.4.46", optional = true }
 
 [dev-dependencies]
 incin-backends = { path = "../incin-backends", default-features = false, features = ["std", "cpu"] }

@@ -93,6 +93,40 @@ pub(crate) fn layer_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
 ///
 /// Formula: `((t - rm) / sqrt(rv + eps)) * weight + bias`, all broadcast.
 #[allow(clippy::extra_unused_type_parameters)]
+/// Expands a per-channel parameter `[C]` to `bcast_shape` along a path the
+/// tape can walk back.
+///
+/// Two steps, both recorded, and both necessary:
+///
+/// * `broadcast_as` expands axes within a rank, so `[C]` has to become
+///   `[1, C, 1, ..., 1]` first. `reshape` is its own inverse, which is the
+///   right rule for that step - nothing is being summed.
+/// * `broadcast_as` then fills in the batch and spatial axes, and *its*
+///   inverse is `unbroadcast`, the sum over the axes it expanded. That is
+///   what turns the `[B, C, H, W]` gradient into the per-channel sum a
+///   `[C]` parameter needs.
+///
+/// The defect this replaced: both call sites used the inherent
+/// `CpuStorage::reshape`, which records no node at all. The parameter was
+/// therefore not reachable from the graph, so `backward` produced no
+/// gradient for it - and no error either, since a missing gradient is only
+/// visible to something that asks for one. The affine scale and shift of
+/// every batch norm on this backend stayed at their initialization.
+fn bcast_param(s: &CpuStorage, channel_dim: usize, bcast_shape: &[usize]) -> Result<CpuStorage> {
+    if s.shape.dims() == bcast_shape {
+        return Ok(s.clone());
+    }
+    let mut middle = alloc::vec![1usize; bcast_shape.len()];
+    middle[channel_dim] = s.shape[0];
+    let middle = crate::cpu::ops::shape_ops::reshape_storage(s, &middle)?;
+    crate::cpu::ops::shape_ops::broadcast_as_storage(&middle, bcast_shape)
+}
+
+/// The device and dtype parameters are part of this kernel family's shape and
+/// are unused here, exactly as in `batch_norm_training_impl` below; the
+/// attribute is on the function rather than the lint so the reason travels
+/// with it.
+#[allow(clippy::extra_unused_type_parameters)]
 pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     t: &CpuStorage,
     w: Option<&CpuStorage>,
@@ -118,10 +152,15 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
         CpuStorage::from_contiguous(CpuBuffer::F32(vec![fill; n]), bcast_shape.clone())
     };
 
-    // Reshape a provided storage to bcast_shape (it arrives as a flat [C] vector).
-    // CpuStorage::reshape is the inherent method (not tape-tracked here -
-    // these are treated as fixed parameters, not differentiated inputs).
+    // The running statistics arrive as a flat [C] vector and are fixed
+    // parameters, not differentiated inputs, so the inherent reshape is the
+    // right tool for them: it records nothing, and nothing wants recording.
     let reshape_to_bcast = |s: &CpuStorage| -> Result<CpuStorage> { s.reshape(&bcast_shape) };
+
+    // `weight` and `bias` are `Param`s and *are* differentiated, so they go
+    // through the tape-tracked path. See `bcast_param`.
+    let broadcast_to_bcast =
+        |s: &CpuStorage| -> Result<CpuStorage> { bcast_param(s, channel_dim, &bcast_shape) };
 
     let rm_s;
     let rm_ref: CpuStorage = match rm {
@@ -144,7 +183,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     let w_s;
     let w_ref: CpuStorage = match w {
         Some(s) => {
-            w_s = reshape_to_bcast(s)?;
+            w_s = broadcast_to_bcast(s)?;
             w_s
         }
         None => make_buf(1.0),
@@ -153,7 +192,7 @@ pub(crate) fn batch_norm_impl<D: incin_core::tensor::device::Device, K: DType>(
     let b_s;
     let b_ref: CpuStorage = match b {
         Some(s) => {
-            b_s = reshape_to_bcast(s)?;
+            b_s = broadcast_to_bcast(s)?;
             b_s
         }
         None => make_buf(0.0),
@@ -244,16 +283,19 @@ pub(crate) fn batch_norm_training_impl<D: incin_core::tensor::device::Device, K:
     let std = crate::cpu::ops::elementwise::canonical_sqrt(&variance_eps)?;
     let normalized = crate::cpu::ops::elementwise::div_storage(&centered, &std)?;
 
+    // The affine scale and shift are differentiated, so they take the
+    // tape-tracked expansion. See `bcast_param` for what was wrong with the
+    // inherent reshape that used to stand here.
     let scaled = match w {
         Some(weight) => {
-            let weight = weight.reshape(&bcast_shape)?;
+            let weight = bcast_param(weight, channel_dim, &bcast_shape)?;
             crate::cpu::ops::elementwise::mul_storage(&normalized, &weight)?
         }
         None => normalized,
     };
     match b {
         Some(bias) => {
-            let bias = bias.reshape(&bcast_shape)?;
+            let bias = bcast_param(bias, channel_dim, &bcast_shape)?;
             crate::cpu::ops::elementwise::add_storage(&scaled, &bias)
         }
         None => Ok(scaled),
@@ -427,6 +469,83 @@ mod tests {
         assert!(
             max_rel_err < GRAD_TOL,
             "layer_norm gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
+    /// `layer_norm_gradcheck_weight_and_bias`.
+    ///
+    /// The check above closes over `weight` and `bias` and differentiates only
+    /// the input, so it says nothing about the two parameters - which is the
+    /// half that a normalization layer actually learns through, and the half
+    /// that was silently missing from CPU batch norm in `51123813` and from
+    /// all three conv biases in `a4b9a6e7`. Here both are inputs to the
+    /// sweep, so `gradcheck` requires a gradient for each.
+    ///
+    /// The loss is seeded per output element rather than summed, for the
+    /// reason the conv checks document: under a uniform seed the weight
+    /// gradient is dominated by the mean-removal term and a broadcast
+    /// misrouting is easy to miss.
+    fn layer_norm_gradcheck_weight_and_bias() {
+        let eps = 1e-5f32;
+        let max_rel_err = gradcheck(
+            |inputs: &[CpuStorage]| -> CpuStorage {
+                let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+                    &inputs[0],
+                    &inputs[1],
+                    Some(&inputs[2]),
+                    eps,
+                )
+                .unwrap();
+                // Inputs are ramped rather than constant, so every entry of
+                // the seed differs and no row's cotangent pattern is degenerate.
+                let elements = crate::cpu::stride::validated_numel(out.shape.dims());
+                let seed: Vec<f32> = (0..elements)
+                    .map(|i| ((i * 7 + 3) % 13) as f32 * 0.11 - 0.6)
+                    .collect();
+                let seed = CpuStorage::from_contiguous(CpuBuffer::F32(seed), out.shape.dims());
+                let weighted = crate::cpu::ops::elementwise::mul_storage(&out, &seed).unwrap();
+                crate::cpu::ops::reduce::sum_all(&weighted).unwrap()
+            },
+            &[
+                matrix(vec![0.5f32, -1.0, 2.0, 1.0, 0.0, -0.5], 2, 3),
+                vec1(vec![2.0f32, 1.0, 0.5]),
+                vec1(vec![0.1f32, -0.1, 0.2]),
+            ],
+            F32_STEP,
+        );
+        assert!(
+            max_rel_err < GRAD_TOL,
+            "layer_norm affine gradcheck too high: {max_rel_err:.6}"
+        );
+    }
+
+    #[test]
+    /// `layer_norm_gradcheck_weight_without_bias`.
+    ///
+    /// The no-bias path builds a zero-filled buffer the shape of the weight,
+    /// which reaches the same tracked `add` as a real bias. A backward that
+    /// assumed a bias was present would pass the biased case and fail here,
+    /// so the two are pinned separately.
+    fn layer_norm_gradcheck_weight_without_bias() {
+        let eps = 1e-5f32;
+        let max_rel_err = gradcheck(
+            |inputs: &[CpuStorage]| -> CpuStorage {
+                let out = layer_norm_impl::<incin_core::tensor::device::Cpu, f32>(
+                    &inputs[0], &inputs[1], None, eps,
+                )
+                .unwrap();
+                crate::cpu::ops::reduce::sum_all(&out).unwrap()
+            },
+            &[
+                matrix(vec![0.5f32, -1.0, 2.0, 1.0, 0.0, -0.5], 2, 3),
+                vec1(vec![2.0f32, 1.0, 0.5]),
+            ],
+            F32_STEP,
+        );
+        assert!(
+            max_rel_err < GRAD_TOL,
+            "layer_norm weight-only gradcheck too high: {max_rel_err:.6}"
         );
     }
 

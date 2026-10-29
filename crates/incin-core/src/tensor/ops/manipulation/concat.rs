@@ -118,20 +118,21 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// named selectors preserve the input rank when the input shape carries
     /// rank information.
     #[allow(clippy::type_complexity)]
-    pub fn concat<S2, A>(
+    pub fn concat<S2, A, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         axis: A,
     ) -> Result<crate::shapes::Dense<<A as ConcatSelector<S, S2>>::Output, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         A: ConcatSelector<S, S2>,
         <A as ConcatSelector<S, S2>>::Output: Shape,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
         let dim = axis.resolve(self.shape_buf().rank())?;
-        self.concat_resolved::<S2, <A as ConcatSelector<S, S2>>::Output>(other, dim)
+        self.concat_resolved::<S2, <A as ConcatSelector<S, S2>>::Output, L2>(other, dim)
     }
 
     /// Advanced structural concatenation retained for shape-proof internals.
@@ -194,26 +195,28 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Legacy dynamic concatenation entry point. Prefer [`Self::concat`] with
     /// an `axis!` selector or signed `isize`.
     #[doc(hidden)]
-    pub fn try_concat<S2>(
+    pub fn try_concat<S2, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         dim: usize,
     ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
-        self.concat_resolved::<S2, Dyn>(other, dim)
+        self.concat_resolved::<S2, Dyn, L2>(other, dim)
     }
 
-    fn concat_resolved<S2, Out>(
+    fn concat_resolved<S2, Out, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         dim: usize,
     ) -> Result<crate::shapes::Dense<Out, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         Out: Shape,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
@@ -292,13 +295,14 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Legacy signed-axis spelling. Prefer [`Self::concat`] with an `isize`.
     #[doc(hidden)]
-    pub fn concat_axis<S2>(
+    pub fn concat_axis<S2, L2>(
         &self,
-        other: &Tensor<S2, B, K, G>,
+        other: &Tensor<S2, B, K, G, Local, L2>,
         axis: isize,
     ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
     where
         S2: Shape,
+        L2: Layout<S2>,
         B: Execute<op::ConcatExact> + Capabilities,
         <B as Execute<op::ConcatExact>>::Output: Into<B::Storage<K>>,
     {
@@ -415,9 +419,9 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
 
     /// Stacks `self` with `other` along a static, named, or signed axis selector.
     #[allow(clippy::type_complexity)]
-    pub fn stack<A>(
+    pub fn stack<A, L2: Layout<S>>(
         &self,
-        other: &Tensor<S, B, K, G>,
+        other: &Tensor<S, B, K, G, Local, L2>,
         axis: A,
     ) -> Result<crate::shapes::Dense<<A as StackSelector<S>>::Output, B, K, G, Local>>
     where
@@ -459,7 +463,11 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
     /// Legacy dynamic stacking entry point. Prefer [`Self::stack`] with an
     /// `axis!` selector or signed `isize`.
     #[doc(hidden)]
-    pub fn try_stack(&self, other: &Tensor<S, B, K, G>, dim: usize) -> Result<Tensor<Dyn, B, K, G>>
+    pub fn try_stack<L2: Layout<S>>(
+        &self,
+        other: &Tensor<S, B, K, G, Local, L2>,
+        dim: usize,
+    ) -> Result<Tensor<Dyn, B, K, G>>
     where
         B: Execute<op::StackExact> + Capabilities,
         <B as Execute<op::StackExact>>::Output: Into<B::Storage<K>>,
@@ -543,6 +551,66 @@ impl<S: Shape + DynShape, B: Backend, K: crate::tensor::dtype::DType, G: Require
                     RepeatAttributes {
                         repeats: repeats.to_vec(),
                     },
+                    &[input],
+                    &output_shape,
+                )
+            })?
+            .into();
+        Tensor::from_parts(
+            inner,
+            output_shape.shape_buf().clone(),
+            self._dtype.clone(),
+            self._device.clone(),
+            self._grad.clone(),
+        )
+    }
+
+    /// Repeats each element `repeats` times along `dim`, in place of tiling
+    /// the whole axis.
+    ///
+    /// `repeat` lays the axis down end to end, so `[a, b]` repeated twice is
+    /// `[a, b, a, b]`; this repeats each element in turn, so the same input is
+    /// `[a, a, b, b]`. Expanding one token per selected expert is the second
+    /// one, and composing it out of the first needs a reshape on either side.
+    ///
+    /// The output extent is the input's multiplied by `repeats`, so the shape
+    /// is `Dyn` for the same reason [`Self::repeat`]'s is: the factor is a
+    /// runtime argument rather than a const parameter.
+    pub fn repeat_interleave(
+        &self,
+        repeats: usize,
+        dim: isize,
+    ) -> Result<crate::shapes::Dense<Dyn, B, K, G, Local>>
+    where
+        B: Capabilities + Execute<op::RepeatInterleave>,
+        <B as Execute<op::RepeatInterleave>>::Output: Into<B::Storage<K>>,
+    {
+        let rank = self.shape_buf().len();
+        let axis = crate::shapes::idx::AxisSelector::new(&[dim])
+            .normalize(rank)
+            .map(|axes| axes[0])
+            .map_err(|_| {
+                crate::err::Error::Shape(crate::shapes::ShapeError::InvalidAxis {
+                    axis: dim.unsigned_abs(),
+                    rank,
+                })
+            })?;
+        let mut out_shape = self.shape_buf().as_ref().to_vec();
+        out_shape[axis] = out_shape[axis].checked_mul(repeats).ok_or_else(|| {
+            crate::err::Error::Shape(crate::shapes::ShapeError::ArithmeticOverflow {
+                operation: OperationKind::RepeatInterleave,
+                expression: "repeat_interleave output extent",
+            })
+        })?;
+        let output_shape = ShapeValue::<Dyn>::try_new(ShapeBuf::from_slice(&out_shape))
+            .map_err(crate::err::Error::Shape)?;
+        let input = TensorHandle::from_storage::<B, K, Local>(&self.inner);
+        let context = crate::tensor::grad::execution_context::<B, G>(&self._grad);
+        let inner = G::grad_mode(&self._grad)
+            .restrict(|| {
+                dispatch::execute_shaped::<op::RepeatInterleave, B, Dyn>(
+                    &context,
+                    crate::exec::catalog::RepeatInterleaveAttributes { repeats, axis },
                     &[input],
                     &output_shape,
                 )

@@ -18,6 +18,14 @@ pub(super) const ALL_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::F64.descriptor(),
     DTypeId::Q8_0.descriptor(),
     DTypeId::Bool.descriptor(),
+    // Issue #94: the fp8 pair rides the storage/shape rows whose kernels
+    // never read values (allocation, byte moves, contiguous reshape) or
+    // whose CPU kernels convert explicitly. No accelerator invocation
+    // passes ALL_DTYPES (CUDA uses CUDA_BOOL_SAFE_STORAGE_DTYPES, WGPU
+    // and Metal use F32_ONLY / CUDA_STORAGE_DTYPES), so this stays a
+    // CPU-only admission and the fp8 unsupported-hardware audit holds.
+    DTypeId::F8E4M3.descriptor(),
+    DTypeId::F8E5M2.descriptor(),
 ];
 pub(super) const FLOAT_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::BF16.descriptor(),
@@ -32,10 +40,15 @@ pub(super) const CUDA_STORAGE_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::F32.descriptor(),
     DTypeId::F64.descriptor(),
 ];
-/// `CUDA_STORAGE_DTYPES` plus `bool`, for the specific CUDA rows verified
-/// safe for a 1-byte dtype: `storage` (allocation/`to_bytes`/`from_bytes`)
-/// and `reshape` (metadata-only, no kernel launch either way) never assume a
-/// fixed element width the way `broadcast_as`'s `shape_op` kernel does.
+/// `CUDA_STORAGE_DTYPES` plus `bool`, `u8` and `u32`, for the specific CUDA
+/// rows verified safe for 1-byte and 4-byte dtypes: `storage`
+/// (allocation/`to_bytes`/`from_bytes`) and `reshape` (metadata-only, no
+/// kernel launch either way) never assume a fixed element width, and the
+/// movement kernels (`shape_op`'s `8bit`/`16bit`/`32bit`/`64bit` entry
+/// points, `concat`'s `8bit`/`16bit`/`32bit`/`64bit` entry points) select by
+/// element width and do no arithmetic, so a 1-byte `u8` and a 4-byte `u32`
+/// move byte-exact there (`tests/cuda_shape_dtypes.rs`'s byte-exact matrix
+/// covers both widths end to end).
 /// Deliberately a separate constant rather than widening
 /// `CUDA_STORAGE_DTYPES` itself: Metal's own `broadcast` row still reuses
 /// that constant and has the identical `shape_op`-style byte-width
@@ -43,6 +56,8 @@ pub(super) const CUDA_STORAGE_DTYPES: &[DTypeDescriptor] = &[
 /// the shared constant in place would have silently widened Metal's
 /// unverified claim too.
 pub(super) const CUDA_BOOL_SAFE_STORAGE_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
     DTypeId::I64.descriptor(),
     DTypeId::BF16.descriptor(),
     DTypeId::F16.descriptor(),
@@ -51,6 +66,31 @@ pub(super) const CUDA_BOOL_SAFE_STORAGE_DTYPES: &[DTypeDescriptor] = &[
     DTypeId::Bool.descriptor(),
 ];
 pub(super) const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
+/// Exactly the dtypes the CPU fused-attention kernel executes: `f32` and
+/// `f64` natively (issue #104). Not `F32_ONLY` (that would understate the
+/// f64 path) and not `FLOAT_DTYPES` (that would over-advertise f16/bf16,
+/// which the kernel refuses with `UnsupportedDType`, deferred to #90).
+pub(super) const F32_AND_F64: &[DTypeDescriptor] =
+    &[DTypeId::F32.descriptor(), DTypeId::F64.descriptor()];
+/// Storage dtypes a WGPU allocation can honestly hold and round-trip:
+/// `f32` compute storage, `bool` as a physical `f32` of 0.0/1.0 (WGSL
+/// storage buffers cannot hold `bool`), and the integer widths the indexing
+/// paths need for index operands (`u8`/`u32`/`i64` at their own physical
+/// widths).
+///
+/// Deliberately a separate constant rather than widening `F32_ONLY`: the
+/// fill/random creation paths still build a host `Vec<f32>` regardless of
+/// the requested dtype, so `Zeros`/`Ones`/`Full` and the sampling rows stay
+/// on `F32_ONLY` and only `Storage` (allocation/`to_bytes`/`from_bytes`),
+/// `TensorFromData`/`TensorFromBytes`, and the indexing capability rows
+/// below draw from this wider set.
+pub(super) const WGPU_STORAGE_DTYPES: &[DTypeDescriptor] = &[
+    DTypeId::U8.descriptor(),
+    DTypeId::U32.descriptor(),
+    DTypeId::I64.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::Bool.descriptor(),
+];
 /// The union of `where_cond`'s/`masked_fill`'s value dtype and their `bool`
 /// mask operand's, for the same reason `INDEX_AND_F32_DTYPES` exists:
 /// `dispatch::execute` (`crates/incin-core/src/exec/dispatch.rs`'s
@@ -65,6 +105,31 @@ pub(super) const F32_ONLY: &[DTypeDescriptor] = &[DTypeId::F32.descriptor()];
 /// per-operand split this row cannot state on its own.
 pub(super) const F32_AND_BOOL: &[DTypeDescriptor] =
     &[DTypeId::F32.descriptor(), DTypeId::Bool.descriptor()];
+/// The union of `where_cond`'s/`masked_fill`'s widened value dtype and their
+/// `bool` mask operand's, for the same reason `F32_AND_BOOL` exists:
+/// `dispatch::execute` (`crates/incin-core/src/exec/dispatch.rs`'s
+/// `admit_invocation`) checks *every* operand's dtype against the one
+/// resolved capability row in turn, so a row narrower than the union of what
+/// every operand actually carries makes the operation unreachable - the
+/// `mask` operand would fail dtype admission before either kernel ever
+/// launches. Not a claim that either operand may be *either* dtype: the
+/// descriptor's own per-operand contract (`exec/catalog`'s
+/// `WhereCond`/`MaskedFill` arms) and `cuda::ops::select`'s own
+/// `require_bool_mask`/entry-point checks enforce the real, tighter
+/// per-operand split this row cannot state on its own.
+///
+/// Deliberately a separate constant rather than widening `F32_AND_BOOL` in
+/// place: the WGPU `where_cond`/`masked_fill` rows still answer to that
+/// narrower set, and widening the shared constant would have silently
+/// widened an unverified claim too - the same discipline
+/// `CUDA_BOOL_SAFE_STORAGE_DTYPES` documents above.
+pub(super) const FLOAT_AND_BOOL: &[DTypeDescriptor] = &[
+    DTypeId::BF16.descriptor(),
+    DTypeId::F16.descriptor(),
+    DTypeId::F32.descriptor(),
+    DTypeId::F64.descriptor(),
+    DTypeId::Bool.descriptor(),
+];
 /// `logical_and`/`logical_or`/`logical_not`: every operand and the output
 /// are `bool`, unlike `where_cond`/`masked_fill`'s mixed `F32_AND_BOOL`, so
 /// one dtype suffices - no union needed.
@@ -80,6 +145,11 @@ pub(super) const NON_QUANTIZED: &[DTypeDescriptor] = &[
     DTypeId::F32.descriptor(),
     DTypeId::F64.descriptor(),
     DTypeId::Bool.descriptor(),
+    // Issue #94, same CPU-only reasoning as ALL_DTYPES above: admits fp8
+    // sources to ToDType (the return leg), TensorFromData, and fill on CPU
+    // only. Block-quantized Q8_0 stays excluded everywhere.
+    DTypeId::F8E4M3.descriptor(),
+    DTypeId::F8E5M2.descriptor(),
 ];
 /// The union of an integer index operand's dtypes and an f32 data operand's.
 ///

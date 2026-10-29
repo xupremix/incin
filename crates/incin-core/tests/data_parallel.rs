@@ -233,3 +233,110 @@ fn static_dp_contract_rejections_are_compile_errors() {
         );
     }
 }
+
+// ============================================================================
+// Bucketed execution lowering (issue #97, in-process slice)
+// ============================================================================
+
+/// Bucketing tests build wider plans: `sizes.len()` `f32` gradients with
+/// the given element counts, in order.
+fn sized_plan(sizes: &[usize]) -> DataParallelPlan {
+    let bound = mesh(0);
+    let mut builder = DataParallelPlanBuilder::new(&bound, 0);
+    for (index, elements) in sizes.iter().enumerate() {
+        builder
+            .push_static::<f32>(
+                GradientId::new(index as u64 + 1).unwrap(),
+                *elements,
+                StreamId::new(index as u32),
+            )
+            .unwrap();
+    }
+    builder.finish().unwrap()
+}
+
+#[test]
+fn single_tensor_policy_issues_one_collective_per_gradient() {
+    use incin_core::dist::{BucketPolicy, bucket_plan};
+
+    let plan = sized_plan(&[10, 20, 30]);
+    let lowered = bucket_plan(&plan, BucketPolicy::SingleTensor).unwrap();
+    assert_eq!(lowered.len(), 3);
+    assert_eq!(lowered.tensor_count(), 3);
+    assert_eq!(lowered.collectives_saved(), 0);
+    for (index, bucket) in lowered.buckets().iter().enumerate() {
+        assert_eq!(bucket.index(), index);
+        assert_eq!(bucket.tensor_count(), 1);
+    }
+}
+
+#[test]
+fn count_policy_chunks_trailing_remainder_into_its_own_bucket() {
+    use incin_core::dist::{BucketPolicy, bucket_plan};
+
+    let plan = sized_plan(&[4, 4, 4, 4, 4]);
+    let lowered = bucket_plan(&plan, BucketPolicy::Count { max_tensors: 2 }).unwrap();
+    assert_eq!(lowered.len(), 3, "2 + 2 + 1 trailing");
+    assert_eq!(lowered.tensor_count(), 5);
+    assert_eq!(lowered.collectives_saved(), 2);
+    let counts: Vec<usize> = lowered
+        .buckets()
+        .iter()
+        .map(|bucket| bucket.tensor_count())
+        .collect();
+    assert_eq!(counts, vec![2, 2, 1]);
+    // Launch order follows plan order: sequences increase across buckets.
+    let mut previous = None;
+    for bucket in lowered.buckets() {
+        if let Some(previous) = previous {
+            assert!(bucket.first_sequence() > previous);
+        }
+        previous = Some(bucket.last_sequence());
+        assert!(bucket.last_sequence() >= bucket.first_sequence());
+    }
+}
+
+#[test]
+fn bytes_policy_accounts_f64_protocol_width_and_keeps_oversized_tensors_whole() {
+    use incin_core::dist::{BucketPolicy, bucket_plan};
+
+    // 10 f32 elements = 80 protocol bytes each: the first two tensors
+    // share a bucket (80 < 100 stays open, 160 closes it), while an
+    // oversized tensor is never split even when it alone exceeds the
+    // budget.
+    let plan = sized_plan(&[10, 10, 100]);
+    let lowered = bucket_plan(&plan, BucketPolicy::Bytes { max_bytes: 100 }).unwrap();
+    assert_eq!(lowered.len(), 2);
+    let elements: Vec<usize> = lowered
+        .buckets()
+        .iter()
+        .map(|bucket| bucket.elements())
+        .collect();
+    assert_eq!(elements, vec![20, 100]);
+    assert_eq!(lowered.buckets()[1].bytes(), 100 * 8);
+
+    let wide = sized_plan(&[10, 10, 10, 10]);
+    let merged = bucket_plan(&wide, BucketPolicy::Bytes { max_bytes: 160 }).unwrap();
+    assert_eq!(merged.len(), 2, "80+80 closes, then 80+80 closes");
+    assert_eq!(merged.collectives_saved(), 2);
+}
+
+#[test]
+fn zero_budgets_refuse_before_any_rank_can_run() {
+    use incin_core::dist::{BucketError, BucketPolicy, bucket_plan};
+
+    let plan = sized_plan(&[4, 4]);
+    assert_eq!(
+        bucket_plan(&plan, BucketPolicy::Bytes { max_bytes: 0 }).unwrap_err(),
+        BucketError::ZeroBytes
+    );
+    assert_eq!(
+        bucket_plan(&plan, BucketPolicy::Count { max_tensors: 0 }).unwrap_err(),
+        BucketError::ZeroTensors
+    );
+    assert_eq!(
+        BucketPolicy::Bytes { max_bytes: 0 }.validate(),
+        Err(BucketError::ZeroBytes)
+    );
+    assert!(BucketPolicy::default() != BucketPolicy::SingleTensor);
+}

@@ -1,0 +1,15 @@
+[package]
+name = "incin-facade-backend-authoring-macro-fail"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[features]
+authoring = ["fire/backend-authoring"]
+missing-executor = ["authoring"]
+wrong-output = ["authoring"]
+custom-capability = ["authoring"]
+
+[dependencies]
+fire = { package = "incin", path = "../../..", default-features = false, features = ["std"] }

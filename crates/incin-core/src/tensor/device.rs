@@ -385,6 +385,81 @@ mod metal_static {
 #[cfg(feature = "metal")]
 pub use metal_static::MetalN;
 
+#[cfg(feature = "rocm")]
+mod rocm_partial {
+    use super::{Device, DeviceId, Result};
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    /// **Tier 2** ROCm device: backend kind known at compile time, ordinal
+    /// supplied at runtime as a `usize`.
+    pub struct Rocm {
+        ordinal: usize,
+    }
+
+    impl Rocm {
+        /// Selects a logical ROCm device ordinal without claiming that the
+        /// device exists on the current host.
+        #[must_use]
+        pub const fn new(ordinal: usize) -> Self {
+            Self { ordinal }
+        }
+
+        /// Returns the selected logical ordinal.
+        #[must_use]
+        pub const fn ordinal(&self) -> usize {
+            self.ordinal
+        }
+    }
+
+    impl Device for Rocm {
+        type Arg = Self;
+        type Field = Self;
+
+        fn to_incin(dev: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::rocm(dev.ordinal))
+        }
+
+        fn init(arg: Self::Arg) -> Self::Field {
+            arg
+        }
+    }
+}
+
+#[cfg(feature = "rocm")]
+pub use rocm_partial::Rocm;
+
+#[cfg(feature = "rocm")]
+mod rocm_static {
+    use super::{ConstDevice, Device, DeviceId, PhantomData, Result};
+    use core::fmt::Debug;
+    use typenum::{U0, Unsigned};
+
+    #[derive(Debug, Default, Clone, PartialEq, Eq)]
+    /// **Tier 3** ROCm device: both backend kind and device ordinal `N` are known at compile time.
+    pub struct RocmN<N: Unsigned = U0>(PhantomData<N>);
+
+    impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> ConstDevice
+        for RocmN<N>
+    {
+    }
+
+    impl<N: Unsigned + 'static + Send + Sync + Clone + Eq + PartialEq + Debug> Device for RocmN<N> {
+        type Arg = ();
+        type Field = PhantomData<Self>;
+
+        fn to_incin(_: &Self::Field) -> Result<DeviceId> {
+            Ok(DeviceId::rocm(N::USIZE))
+        }
+
+        fn init(_: Self::Arg) -> Self::Field {
+            PhantomData
+        }
+    }
+}
+
+#[cfg(feature = "rocm")]
+pub use rocm_static::RocmN;
+
 // ============================================================================
 // CPU - always fully static (there is only one CPU)
 // ============================================================================
@@ -417,9 +492,92 @@ impl Device for Cpu {
 // DeviceId and DeviceKind - runtime device identity
 // ============================================================================
 
+/// A stable, extensible device key for third-party backends.
+///
+/// Logical device identity is independent of any Rust type or any
+/// [`DeviceKind`] variant. Two devices are the same backend family when they
+/// have the same `DeviceKey`, paralleling [`DTypeKey`](crate::tensor::dtype::DTypeKey)
+/// (namespace + name + version).
+///
+/// Built-in Incin backends use first-class [`DeviceKind`] variants, not this
+/// type. Custom devices should use a project-specific namespace to avoid
+/// collisions; a backend that changes its topology encoding bumps the version
+/// so old plans refuse on mismatch instead of misreading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DeviceKey {
+    namespace: &'static str,
+    name: &'static str,
+    version: u32,
+}
+
+impl serde::Serialize for DeviceKey {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        (self.namespace, self.name, self.version).serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DeviceKey {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let (namespace, name, version) =
+            <(alloc::string::String, alloc::string::String, u32)>::deserialize(deserializer)?;
+        // The wire owns its strings; the key must be `'static`. Unlike
+        // `DTypeKey`, there is no device registry to recover canonical
+        // `&'static str` from, so the owned components are interned by
+        // leaking. One small allocation per deserialized key is the cost of
+        // an open device namespace without a central registry.
+        Ok(Self {
+            namespace: alloc::boxed::Box::leak(namespace.into_boxed_str()),
+            name: alloc::boxed::Box::leak(name.into_boxed_str()),
+            version,
+        })
+    }
+}
+
+impl DeviceKey {
+    /// Constructs a new `DeviceKey` from its three components.
+    ///
+    /// The combination of `(namespace, name, version)` must be unique across
+    /// all backends you use together. The `"incin"` namespace is reserved for
+    /// built-in Incin backends.
+    pub const fn new(namespace: &'static str, name: &'static str, version: u32) -> Self {
+        Self {
+            namespace,
+            name,
+            version,
+        }
+    }
+
+    /// The namespace component (e.g. `"acme"` for a third-party backend).
+    pub const fn namespace(self) -> &'static str {
+        self.namespace
+    }
+
+    /// The device name component (e.g. `"npu"`).
+    pub const fn name(self) -> &'static str {
+        self.name
+    }
+
+    /// The version component. Start at `1`; increment when the topology or
+    /// placement encoding changes in an incompatible way.
+    pub const fn version(self) -> u32 {
+        self.version
+    }
+}
+
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 /// The runtime-identifiable backend family a `DeviceId` belongs to.
+///
+/// Maintained backends get first-class variants. Third-party backends name
+/// themselves with [`DeviceKind::External`], which carries a [`DeviceKey`]
+/// owned by the external backend, so adding a backend does not require
+/// changing this enum (D-110, issue #96).
 pub enum DeviceKind {
     /// The CPU backend family.
     Cpu,
@@ -429,16 +587,30 @@ pub enum DeviceKind {
     Wgpu,
     /// The Metal backend family for Apple Silicon.
     Metal,
-    /// An externally defined backend family identified by a stable namespace key.
+    /// The ROCm/HIP backend family for AMD GPUs.
+    ///
+    /// First-class variant per the issue #6 decision (maintained backends get
+    /// variants; third-party backends use [`DeviceKind::External`]). Scaffolding
+    /// only so far: identity, an ordinal detection stub, and storage shells.
+    /// No HIP bindings are vendored, so no kernels are advertised.
+    Rocm,
+    /// An externally defined backend family identified by a stable
+    /// namespace key.
     ///
     /// The key is owned by the external backend. Incin does not interpret it,
     /// so adding a backend does not require changing this enum.
-    Custom(u64),
+    External(DeviceKey),
 }
 
 impl DeviceKind {
     /// The lowercase name used in diagnostics, generated documentation, and
     /// `cargo incin doctor`'s report.
+    ///
+    /// External backends report their key's device name (e.g. `"npu"` for
+    /// `DeviceKey::new("acme", "npu", 1)`), so diagnostics name names instead
+    /// of opaque integers. The name alone is not an identity: plan digests
+    /// additionally hash the namespace and version (see
+    /// `dist::mesh::TopologyFingerprint::digest`).
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -446,14 +618,16 @@ impl DeviceKind {
             Self::Cuda => "cuda",
             Self::Wgpu => "wgpu",
             Self::Metal => "metal",
-            Self::Custom(_) => "custom",
+            Self::Rocm => "rocm",
+            Self::External(key) => key.name(),
         }
     }
 
-    /// Returns the external namespace key, if this is a custom backend kind.
-    pub const fn custom_key(self) -> Option<u64> {
+    /// Returns the external device key, if this is an externally defined
+    /// backend family.
+    pub const fn external_key(self) -> Option<DeviceKey> {
         match self {
-            Self::Custom(key) => Some(key),
+            Self::External(key) => Some(key),
             _ => None,
         }
     }
@@ -524,14 +698,22 @@ impl DeviceId {
         }
     }
 
+    /// A ROCm device at ordinal `ord`.
+    pub fn rocm(ord: usize) -> Self {
+        Self {
+            kind: DeviceKind::Rocm,
+            ordinal: ord,
+        }
+    }
+
     /// An externally defined backend device at ordinal `ord`.
     ///
-    /// `namespace` must be a stable key chosen by the external backend. The
-    /// key is carried through metadata and serialization without requiring
-    /// Incin to know the backend's type.
-    pub const fn custom(namespace: u64, ord: usize) -> Self {
+    /// `key` must be a stable [`DeviceKey`] chosen by the external backend
+    /// (namespace + name + version). The key is carried through metadata and
+    /// serialization without requiring Incin to know the backend's type.
+    pub const fn external(key: DeviceKey, ord: usize) -> Self {
         Self {
-            kind: DeviceKind::Custom(namespace),
+            kind: DeviceKind::External(key),
             ordinal: ord,
         }
     }
@@ -550,6 +732,11 @@ pub const fn wgpu_is_available() -> bool {
 /// Whether this build was compiled with the `metal` feature enabled.
 pub const fn metal_is_available() -> bool {
     cfg!(feature = "metal")
+}
+/// Whether this build was compiled with the `rocm` feature enabled
+/// (does not check for actual ROCm hardware/drivers at runtime).
+pub const fn rocm_is_available() -> bool {
+    cfg!(feature = "rocm")
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -599,6 +786,26 @@ pub struct WgpuDevice {
 }
 
 impl WgpuDevice {
+    /// Creates a new instance with the given device ordinal.
+    pub fn new(id: usize) -> Self {
+        Self { id }
+    }
+
+    /// Returns the logical device ordinal.
+    #[must_use]
+    pub const fn ordinal(self) -> usize {
+        self.id
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+/// A ROCm device index, used as a hashable/orderable key distinct from
+/// the type-level `Rocm`/`RocmN<N>` markers.
+pub struct RocmDevice {
+    id: usize,
+}
+
+impl RocmDevice {
     /// Creates a new instance with the given device ordinal.
     pub fn new(id: usize) -> Self {
         Self { id }
@@ -941,6 +1148,45 @@ mod tests {
         assert_eq!(Metal::to_incin(&field).unwrap(), DeviceId::metal(2));
     }
 
+    #[test]
+    fn rocm_device_identity_follows_variant_conventions() {
+        let id = DeviceId::rocm(0);
+        assert_eq!(id.kind(), DeviceKind::Rocm);
+        assert_eq!(id.kind().name(), "rocm");
+        assert_eq!(id.kind().external_key(), None);
+        assert_eq!(id.ordinal(), 0);
+        assert_eq!(DeviceId::rocm(2).ordinal(), 2);
+        assert_eq!(rocm_is_available(), cfg!(feature = "rocm"));
+        let key = RocmDevice::new(3);
+        assert_eq!(key.ordinal(), 3);
+    }
+
+    #[test]
+    fn rocm_device_identity_round_trips_through_serde() {
+        let id = DeviceId::rocm(1);
+        let wire = serde_json::to_string(&id).expect("a device id always serializes");
+        let recovered: DeviceId = serde_json::from_str(&wire).expect("a rocm device id reads back");
+        assert_eq!(recovered, id);
+        assert_eq!(recovered.kind().name(), "rocm");
+    }
+
+    #[cfg(feature = "rocm")]
+    #[test]
+    fn test_rocm_tier2_runtime_ordinal() {
+        let field = <Rocm as Device>::init(Rocm::new(2));
+        assert_eq!(field.ordinal(), 2);
+        assert_eq!(Rocm::to_incin(&field).unwrap(), DeviceId::rocm(2));
+    }
+
+    #[cfg(feature = "rocm")]
+    #[test]
+    fn test_rocm_tier3_static_ordinal() {
+        use typenum::U1;
+        let field = <RocmN<U1> as Device>::init(());
+        let id = RocmN::<U1>::to_incin(&field).unwrap();
+        assert_eq!(id, DeviceId::rocm(1));
+    }
+
     #[cfg(feature = "wgpu")]
     #[test]
     fn test_wgpu_tier3_static_ordinal() {
@@ -960,9 +1206,47 @@ mod tests {
 
     #[test]
     fn external_device_identity_is_open_and_stable() {
-        let id = DeviceId::custom(0x434f_4d50_414e_5901, 7);
-        assert_eq!(id.kind().name(), "custom");
-        assert_eq!(id.kind().custom_key(), Some(0x434f_4d50_414e_5901));
+        let key = DeviceKey::new("acme", "npu", 1);
+        let id = DeviceId::external(key, 7);
+        assert_eq!(id.kind(), DeviceKind::External(key));
+        assert_eq!(id.kind().name(), "npu");
+        assert_eq!(id.kind().external_key(), Some(key));
         assert_eq!(id.ordinal(), 7);
+        assert_eq!(key.namespace(), "acme");
+        assert_eq!(key.name(), "npu");
+        assert_eq!(key.version(), 1);
+    }
+
+    #[test]
+    fn external_keys_distinguish_namespaces_sharing_a_name() {
+        // Two vendors shipping an "npu" are different families: digests and
+        // device sets must tell them apart even though `name()` reports the
+        // same short device name for both.
+        let acme = DeviceKey::new("acme", "npu", 1);
+        let emca = DeviceKey::new("emca", "npu", 1);
+        assert_ne!(acme, emca);
+        assert_eq!(DeviceId::external(acme, 0).kind().name(), "npu");
+        let set = DeviceSet::new([DeviceId::external(acme, 0), DeviceId::external(emca, 0)]);
+        assert_eq!(
+            set,
+            Err(DeviceSetError::Mixed {
+                first: DeviceKind::External(acme),
+                found: DeviceKind::External(emca),
+            })
+        );
+        // Same key at two ordinals is one family and a valid set.
+        let pair = DeviceSet::new([DeviceId::external(acme, 0), DeviceId::external(acme, 1)])
+            .expect("two ordinals of one external family are a valid set");
+        assert_eq!(pair.kind(), Some(DeviceKind::External(acme)));
+    }
+
+    #[test]
+    fn external_device_identity_round_trips_through_serde() {
+        let id = DeviceId::external(DeviceKey::new("acme", "npu", 2), 3);
+        let wire = serde_json::to_string(&id).expect("a device id always serializes");
+        let recovered: DeviceId =
+            serde_json::from_str(&wire).expect("an external device id reads back");
+        assert_eq!(recovered, id);
+        assert_eq!(recovered.kind().name(), "npu");
     }
 }

@@ -12,6 +12,10 @@ pub mod capability;
 #[cfg(feature = "std")]
 pub mod capability_docs;
 pub mod codegen;
+/// Executable lowering of proven CMP-005 fusion groups: one group, one kernel
+/// (`#112`), behind the core `FusedKernelLowering` contract.
+#[cfg(feature = "compiled")]
+pub mod compiled_fusion;
 #[macro_use]
 #[cfg(any(
     feature = "cpu",
@@ -67,7 +71,9 @@ pub(crate) mod iteration;
 
 pub(crate) mod layout;
 
-#[cfg(any(feature = "cpu", feature = "cuda"))]
+// Q8_0/FP4 block layouts are shared by every backend that stores them,
+// including WGPU's host-side quantize path, so the module is not CPU/CUDA-only.
+#[cfg(any(feature = "cpu", feature = "cuda", feature = "wgpu"))]
 pub(crate) mod quant;
 
 /// Compile-time SIMD lane-width resolution for type-specialized kernels.
@@ -147,11 +153,16 @@ pub mod wgpu;
 #[cfg(feature = "metal")]
 pub mod metal;
 
+/// ROCm backend scaffolding (issue #6): identity, detection stub, storage
+/// shells, and the exact empty capability table. No HIP bindings yet.
+#[cfg(feature = "rocm")]
+pub mod rocm;
+
 /// The registry-driven conformance oracle: every capability row a backend
 /// advertises, expanded into tuples and executed.
 ///
 /// Gated on `cpu` because the CPU backend is the oracle. It is the only
-/// backend with an executor for all 158 backend-executable catalog operations,
+/// backend with an executor for all 164 backend-executable catalog operations,
 /// and any other choice of reference would be a second implementation that can
 /// itself be wrong.
 #[cfg(feature = "cpu")]

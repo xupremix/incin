@@ -473,6 +473,34 @@ body.sidebar-hidden .sidebar {
   border-color: var(--menu-bar-border);
 }
 
+/* Version switcher (Stable <-> Next) */
+.version-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 13px;
+  color: var(--icons);
+  border: 1px solid var(--menu-bar-border);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.6rem;
+  white-space: nowrap;
+}
+
+.version-current {
+  font-weight: 600;
+  color: var(--fg-heading);
+}
+
+.version-link {
+  color: var(--icons);
+  text-decoration: none;
+}
+
+.version-link:hover {
+  color: var(--icons-hover);
+  text-decoration: underline;
+}
+
 /* Theme Dropdown */
 .theme-wrapper {
   position: relative;

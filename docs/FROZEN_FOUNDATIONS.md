@@ -58,8 +58,8 @@ The current execution contract is the descriptor and `Execute<O>` path above.
 Each step is blocked by the one above it, and the reason is stated rather than
 implied.
 
-The canonical CPU migration is complete for all 158 backend-executable
-operations. Sixteen catalog entries remain at explicit non-backend execution
+The canonical CPU migration is complete for all 164 backend-executable
+operations. Ten catalog entries remain at explicit non-backend execution
 sites and are not counted as missing kernel executors.
 
 The dtype-set blocker is closed. `embedding` and `cross_entropy_loss` were the

@@ -1,5 +1,8 @@
 # Releasing Incin
 
+> Gate definitions live in [`RELEASE.md`](./RELEASE.md); this file is the
+> operator procedure that runs inside them.
+
 Pushing a tag beginning with `v` builds, verifies, and uploads a **draft**
 release. The tagged commit must already be reachable from `master`. The
 workflow does not make the release public. Inspect the draft and its checksums

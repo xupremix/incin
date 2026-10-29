@@ -628,6 +628,57 @@ fn a_large_product_agrees_with_the_kernel_that_is_always_correct() {
     }
 }
 
+/// A strided rhs large enough to cross the packing threshold repacks to
+/// contiguous and agrees with the scalar kernel: the packed path is the
+/// transposed-operand pattern every backward pass presents, and only normal
+/// `f32` rounding separates it from the always-correct kernel.
+#[test]
+fn a_large_strided_rhs_packs_and_agrees_with_the_kernel_that_is_always_correct() {
+    let (m, k, n) = (128, 96, 64);
+    debug_assert!(
+        m * k * n >= 64 * 64 * 64,
+        "test must cross the packing threshold"
+    );
+    let lhs = matrix(
+        (0..m * k)
+            .map(|x| ((x % 17) as f32 - 8.0) * 0.125)
+            .collect(),
+        m,
+        k,
+    );
+    // A [n,k] buffer read as a transposed [k,n] view: column stride k, so
+    // the SIMD path declines and only the packed path stands between this
+    // problem and the slow `f64` scalar loop.
+    let rhs = matrix(
+        (0..k * n)
+            .map(|x| ((x % 23) as f32 - 11.0) * 0.0625)
+            .collect(),
+        n,
+        k,
+    )
+    .transpose(0, 1)
+    .unwrap();
+    let (lhs_view, rhs_view) = (MatrixView::trailing(&lhs), MatrixView::trailing(&rhs));
+    assert_ne!(
+        rhs_view.col_stride, 1,
+        "test setup must present a strided rhs"
+    );
+    let mut packed = vec![0f32; m * n];
+    assert!(
+        packed_rhs_gemm(m, k, n, lhs_view, rhs_view, &mut packed),
+        "a large strided rhs must take the packed path"
+    );
+    let mut scalar = vec![0f32; m * n];
+    scalar_gemm(m, k, n, lhs_view, rhs_view, &mut scalar);
+    for (index, (got, want)) in packed.iter().zip(&scalar).enumerate() {
+        let tolerance = 1e-3 * want.abs().max(1.0);
+        assert!(
+            (got - want).abs() <= tolerance,
+            "element {index} was {got}, scalar kernel says {want}"
+        );
+    }
+}
+
 /// A contiguous non-`f32` matmul used to return all zeros: the
 /// row-streaming branch was chosen on stride alone and then bailed out on
 /// finding a buffer it could not read, leaving the zeroed output as the
@@ -787,7 +838,7 @@ fn a_broadcast_non_contiguous_operand_matches_its_per_slice_reference() {
     }
 }
 
-/// An operand whose batch axes are broadcast on both sides at once, which
+/// Batch axes broadcast on both sides at once, which
 /// is where a batch index that ignores the coalescing the plan performs
 /// would go wrong. `[2,1,3,4]` against `[1,5,4,6]` broadcasts each
 /// operand along the axis the other one owns.
@@ -819,4 +870,352 @@ fn batch_axes_broadcast_on_both_sides_index_the_right_slices() {
             );
         }
     }
+}
+
+// --- Issue #90: half-precision matmul matches the f32 reference ---
+//
+// The `FLOAT_DTYPES` capability rows are only honest if a half matmul
+// computes the same product as the f32 one up to the error half rounding
+// itself introduces. The exact-value tests below pin exact results for
+// exactly representable integers; these pin the tolerance contract for
+// values: inputs round to half on the way in (relative error at most one
+// ulp: 2^-10 for f16, 2^-7 for bf16), the kernel accumulates the widened
+// products (f64 on CPU, f32 on CUDA's `matmul.cu`), and the result rounds
+// back to half on the way out. Propagating the input rounding through K
+// terms plus one output rounding gives an a-priori absolute bound of
+// `(K + 1) * ulp * max|term|`; the tests assert four times that bound, so
+// a failure means the kernel did something other than round-then-multiply,
+// not that the bound was tight.
+//
+// The CUDA side of this contract is pinned on hardware by
+// `matmul_multiplies_f16_operands`/`matmul_multiplies_bf16_operands`
+// (`cuda/backend/tests.rs`, `#[ignore = "requires CUDA hardware"]`),
+// which use exactly representable integers for the same reason the
+// exact-value tests below do; the tolerance half of the contract can only
+// run on CPU here.
+
+/// Deterministic mixed-sign values in [-0.45, 0.45]: dense enough in both
+/// half formats that every rounding direction is exercised, small enough
+/// that f16 (max 65504) never overflows no matter how K grows.
+fn parity_values(count: usize) -> Vec<f32> {
+    (0..count)
+        .map(|i| ((i * 37) % 19) as f32 * 0.05 - 0.45)
+        .collect()
+}
+
+/// The absolute tolerance for one half dtype over an inner dimension of
+/// `k`: four times the `(K + 1) * ulp * max|term|` bound derived above,
+/// with `max|term|` measured from the f32 inputs, not assumed.
+fn half_tolerance(ulp: f64, k: usize, max_abs_term: f64) -> f64 {
+    4.0 * (k as f64 + 1.0) * ulp * max_abs_term
+}
+
+fn max_abs_term(lhs: &[f32], rhs: &[f32]) -> f64 {
+    let lhs_max = lhs.iter().map(|v| v.abs()).fold(0.0f32, f32::max) as f64;
+    let rhs_max = rhs.iter().map(|v| v.abs()).fold(0.0f32, f32::max) as f64;
+    lhs_max * rhs_max
+}
+
+fn half_storage(values: &[f32], dtype: DTypeId, shape: Vec<usize>) -> CpuStorage {
+    let buffer = match dtype {
+        DTypeId::F16 => CpuBuffer::F16(values.iter().map(|&v| half::f16::from_f32(v)).collect()),
+        DTypeId::BF16 => CpuBuffer::BF16(values.iter().map(|&v| half::bf16::from_f32(v)).collect()),
+        _ => panic!("parity helper only builds half buffers"),
+    };
+    CpuStorage::from_contiguous(buffer, shape)
+}
+
+/// `a_half_matmul_matches_the_f32_reference_within_half_tolerance`.
+fn check_half_matches_f32(dtype: DTypeId, ulp: f64) {
+    // Unbatched [4,16] @ [16,4]: K = 16 terms per output element.
+    let (m, k, n) = (4usize, 16usize, 4usize);
+    let lhs_values = parity_values(m * k);
+    let rhs_values = parity_values(k * n);
+    let tolerance = half_tolerance(ulp, k, max_abs_term(&lhs_values, &rhs_values));
+
+    let reference = matmul_impl(
+        &matrix(lhs_values.clone(), m, k),
+        &matrix(rhs_values.clone(), k, n),
+    )
+    .unwrap();
+    let candidate = matmul_impl(
+        &half_storage(&lhs_values, dtype, vec![m, k]),
+        &half_storage(&rhs_values, dtype, vec![k, n]),
+    )
+    .unwrap();
+    assert_eq!(candidate.shape, vec![m, n]);
+    assert_eq!(candidate.dtype, dtype.descriptor());
+    let (got, want) = (values_of(&candidate), values_of(&reference));
+    let worst = got
+        .iter()
+        .zip(&want)
+        .map(|(g, w)| (g - w).abs())
+        .fold(0.0f64, f64::max);
+    assert!(
+        worst <= tolerance,
+        "{dtype:?} unbatched matmul drifted {worst} from the f32 reference, past the {tolerance} half-rounding bound"
+    );
+
+    // Batched [2,4,16] @ [2,16,4]: the batched path splits on dtype
+    // separately (`batched_gemm`), so parity is asserted there too rather
+    // than assumed to follow the unbatched result.
+    let batch = 2usize;
+    let lhs_values = parity_values(batch * m * k);
+    let rhs_values = parity_values(batch * k * n);
+    let tolerance = half_tolerance(ulp, k, max_abs_term(&lhs_values, &rhs_values));
+
+    let reference = batched_matmul_impl(
+        &tensor(lhs_values.clone(), vec![batch, m, k]),
+        &tensor(rhs_values.clone(), vec![batch, k, n]),
+    )
+    .unwrap();
+    let candidate = batched_matmul_impl(
+        &half_storage(&lhs_values, dtype, vec![batch, m, k]),
+        &half_storage(&rhs_values, dtype, vec![batch, k, n]),
+    )
+    .unwrap();
+    assert_eq!(candidate.shape, vec![batch, m, n]);
+    assert_eq!(candidate.dtype, dtype.descriptor());
+    let (got, want) = (values_of(&candidate), values_of(&reference));
+    let worst = got
+        .iter()
+        .zip(&want)
+        .map(|(g, w)| (g - w).abs())
+        .fold(0.0f64, f64::max);
+    assert!(
+        worst <= tolerance,
+        "{dtype:?} batched matmul drifted {worst} from the f32 reference, past the {tolerance} half-rounding bound"
+    );
+}
+
+#[test]
+/// `an_f16_matmul_matches_the_f32_reference_within_half_tolerance`.
+fn an_f16_matmul_matches_the_f32_reference_within_half_tolerance() {
+    check_half_matches_f32(DTypeId::F16, 2f64.powi(-10));
+}
+
+#[test]
+/// `a_bf16_matmul_matches_the_f32_reference_within_half_tolerance`.
+fn a_bf16_matmul_matches_the_f32_reference_within_half_tolerance() {
+    check_half_matches_f32(DTypeId::BF16, 2f64.powi(-7));
+}
+
+// --- Issue #90: CPU matmul dtype parametrization ---
+
+/// `[[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]] = [[58,64],[139,154]]`.
+/// Every entry is an integer below 256, so both half formats round-trip it
+/// exactly (8-bit mantissa covers every integer up to 256) and the f16/bf16
+/// value assertions below need no tolerance.
+fn half_lhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 3],
+    )
+}
+
+fn half_rhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![3, 2],
+    )
+}
+
+fn bf16_lhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::BF16(
+            [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]
+                .iter()
+                .map(|&v| half::bf16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 3],
+    )
+}
+
+fn bf16_rhs() -> CpuStorage {
+    CpuStorage::from_contiguous(
+        CpuBuffer::BF16(
+            [7.0f32, 8.0, 9.0, 10.0, 11.0, 12.0]
+                .iter()
+                .map(|&v| half::bf16::from_f32(v))
+                .collect(),
+        ),
+        vec![3, 2],
+    )
+}
+
+fn values_of(out: &CpuStorage) -> Vec<f64> {
+    (0..out.shape.iter().product::<usize>())
+        .map(|i| {
+            let mut multi = vec![0usize; out.shape.len()];
+            let mut remaining = i;
+            for axis in (0..out.shape.len()).rev() {
+                multi[axis] = remaining % out.shape[axis];
+                remaining /= out.shape[axis];
+            }
+            out.get(&multi)
+        })
+        .collect()
+}
+
+#[test]
+/// `a_contiguous_f16_matmul_computes_values_and_keeps_its_dtype`.
+fn a_contiguous_f16_matmul_computes_values_and_keeps_its_dtype() {
+    let out = matmul_impl(&half_lhs(), &half_rhs()).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype, DTypeId::F16.descriptor());
+    assert_eq!(values_of(&out), vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+/// `a_contiguous_bf16_matmul_computes_values_and_keeps_its_dtype`.
+fn a_contiguous_bf16_matmul_computes_values_and_keeps_its_dtype() {
+    let out = matmul_impl(&bf16_lhs(), &bf16_rhs()).unwrap();
+    assert_eq!(out.shape, vec![2, 2]);
+    assert_eq!(out.dtype, DTypeId::BF16.descriptor());
+    assert_eq!(values_of(&out), vec![58.0, 64.0, 139.0, 154.0]);
+}
+
+#[test]
+/// `a_batched_f16_matmul_keeps_its_dtype`.
+///
+/// The batched path splits on dtype separately from the unbatched one
+/// (`batched_gemm`), so it is asserted separately rather than assumed to
+/// follow the unbatched half-precision result above.
+fn a_batched_f16_matmul_keeps_its_dtype() {
+    // Two batches, each multiplying by the identity, so the operand comes back.
+    let lhs = CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 2, 2],
+    );
+    let rhs = CpuStorage::from_contiguous(
+        CpuBuffer::F16(
+            [1.0f32, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]
+                .iter()
+                .map(|&v| half::f16::from_f32(v))
+                .collect(),
+        ),
+        vec![2, 2, 2],
+    );
+
+    let out = batched_matmul_impl(&lhs, &rhs).unwrap();
+    assert_eq!(out.shape, vec![2, 2, 2]);
+    assert_eq!(out.dtype, DTypeId::F16.descriptor());
+    assert_eq!(
+        values_of(&out),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+    );
+}
+
+#[test]
+/// `matmul_refuses_a_mixed_dtype_operand_pair`.
+///
+/// The capability row states FLOAT_DTYPES - a union across operands - so
+/// the real constraint (both sides the same float dtype) cannot live in the
+/// row. `ensure_matmul_dtypes` refuses a mixed pair host-side, before any
+/// kernel runs, with the same `DTypeMismatch` CUDA's `launch_matmul`
+/// raises.
+fn matmul_refuses_a_mixed_dtype_operand_pair() {
+    let f16 = half_lhs();
+    let f32 = matrix(vec![1.0, 0.0, 0.0, 1.0, 0.0, 1.0], 3, 2);
+    let error = matmul_impl(&f16, &f32).expect_err("a mixed pair must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::DTypeMismatch {
+                operation: "matmul",
+                ..
+            }
+        ),
+        "expected a DTypeMismatch naming matmul, got {error:?}"
+    );
+
+    // Same refusal on the batched path, which has its own entry.
+    let error = batched_matmul_impl(&f16, &f32).expect_err("a mixed pair must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::DTypeMismatch {
+                operation: "matmul",
+                ..
+            }
+        ),
+        "expected a DTypeMismatch naming matmul, got {error:?}"
+    );
+}
+
+#[test]
+/// `matmul_refuses_a_non_float_operand`.
+///
+/// FLOAT_DTYPES is the honest union the row can state; a non-float buffer
+/// must never reach `gemm`'s reinterpret-as-`f32` path or
+/// `from_f64_values`'s silent cast. `ensure_matmul_dtypes` answers with a
+/// typed `UnsupportedDType` before either runs.
+fn matmul_refuses_a_non_float_operand() {
+    let i64 = CpuStorage::from_contiguous(CpuBuffer::I64(vec![1, 2, 3, 4, 5, 6]), vec![2, 3]);
+    let other = CpuStorage::from_contiguous(CpuBuffer::I64(vec![7, 8, 9, 10, 11, 12]), vec![3, 2]);
+    let error = matmul_impl(&i64, &other).expect_err("an integer operand must be refused");
+    assert!(
+        matches!(
+            error,
+            Error::UnsupportedDType {
+                backend: "cpu",
+                op: "matmul",
+                ..
+            }
+        ),
+        "expected an UnsupportedDType naming cpu/matmul, got {error:?}"
+    );
+}
+
+#[test]
+/// `an_f16_matmul_backward_produces_f16_gradients`.
+///
+/// `tape::backward` seeds `loss.ones_like()`, which preserves dtype, so
+/// using the matmul output directly as the loss keeps the whole walk in
+/// f16: the seed is f16 ones, and the backward closures re-enter
+/// `matmul_forward` with matching f16 operands through the same
+/// `ensure_matmul_dtypes` gate. The expected gradients are integers below
+/// 256, so they round-trip f16 exactly.
+fn an_f16_matmul_backward_produces_f16_gradients() {
+    let lhs = half_lhs();
+    let rhs = half_rhs();
+    let (lhs_id, rhs_id) = (lhs.id, rhs.id);
+
+    let out = matmul_impl(&lhs, &rhs).unwrap();
+    let grads = tape::backward(&out).unwrap();
+
+    let lhs_grad = grads.get(lhs_id).expect("lhs should have a gradient");
+    let rhs_grad = grads.get(rhs_id).expect("rhs should have a gradient");
+    assert_eq!(lhs_grad.dtype, DTypeId::F16.descriptor());
+    assert_eq!(rhs_grad.dtype, DTypeId::F16.descriptor());
+
+    // grad_out = ones_like(out) = [2,2] all ones.
+    // grad_lhs = ones @ rhs^T: each row is a row-sum of rhs.
+    //   rhs rows: [7,8]→15, [9,10]→19, [11,12]→23
+    assert_eq!(lhs_grad.shape, vec![2, 3]);
+    assert_eq!(
+        values_of(lhs_grad),
+        vec![15.0, 19.0, 23.0, 15.0, 19.0, 23.0]
+    );
+
+    // grad_rhs = lhs^T @ ones: each column is a column-sum of lhs.
+    //   lhs cols: [1,4]→5, [2,5]→7, [3,6]→9
+    assert_eq!(rhs_grad.shape, vec![3, 2]);
+    assert_eq!(values_of(rhs_grad), vec![5.0, 5.0, 7.0, 7.0, 9.0, 9.0]);
 }

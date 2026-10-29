@@ -1,0 +1,28 @@
+error[E0277]: the trait bound `NotPod: TensorElement` is not satisfied
+  --> tests/compile_fail/tensor_element_requires_pod.rs:12:22
+   |
+12 |     assert_element::<NotPod>();
+   |                      ^^^^^^ unsatisfied trait bound
+   |
+help: the trait `bytemuck::pod::Pod` is not implemented for `NotPod`
+  --> tests/compile_fail/tensor_element_requires_pod.rs:7:1
+   |
+ 7 | struct NotPod(u8, bool);
+   | ^^^^^^^^^^^^^
+   = help: the following other types implement trait `bytemuck::pod::Pod`:
+             ()
+             ManuallyDrop<T>
+             Option<T>
+             PhantomData<T>
+             PhantomPinned
+             Wrapping<T>
+             [T; 0]
+             [T; 1024]
+           and $N others
+   = note: required for `NotPod` to implement `bytemuck::no_uninit::NoUninit`
+   = note: required for `NotPod` to implement `TensorElement`
+note: required by a bound in `assert_element`
+  --> tests/compile_fail/tensor_element_requires_pod.rs:9:22
+   |
+ 9 | fn assert_element<T: TensorElement>() {}
+   |                      ^^^^^^^^^^^^^ required by this bound in `assert_element`

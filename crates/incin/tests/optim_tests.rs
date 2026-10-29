@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use incin::backend_authoring::{HostInterop, VariableBackend};
 use incin::optim::ParameterGroup;
 use incin::prelude::*;
+use incin::state::{collect_state, load_state};
 use incin::{Adam, AdamW, SGD};
 
 /// Implementation of `CpuBackendImpl` for the respective backend.
@@ -109,58 +110,99 @@ fn test_adamw() -> Result<()> {
     Ok(())
 }
 
+/// A twin of `src` with bitwise-identical initial parameters, via the public
+/// model-state round trip. Lets a resumed run be compared against an
+/// uninterrupted one update-for-update.
+fn twin_linear(
+    src: &Linear<s![10, 5], CpuBackendImpl>,
+) -> Result<Linear<s![10, 5], CpuBackendImpl>> {
+    let mut twin = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let snapshot = collect_state::<CpuBackendImpl, _>(src)?;
+    load_state::<CpuBackendImpl, _>(&mut twin, &snapshot)?;
+    Ok(twin)
+}
+
 #[test]
 fn test_adam_optimizer_state_dict_checkpointing() -> Result<()> {
-    let (linear, grads) = get_linear_and_grads()?;
-    let mut optim1 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    let linear_a = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let linear_b = twin_linear(&linear_a)?;
+    let mut optim_a = Adam::<CpuBackendImpl>::from_module(&linear_a, 0.01)?;
+    let mut optim_b = Adam::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
 
-    // Step 1
-    optim1.step(&grads)?;
-    assert_eq!(optim1.step_count(), 1);
+    // Step 1 on both runs; identical inits and inputs give identical states.
+    optim_a.step(&grads_for(&linear_a)?)?;
+    optim_b.step(&grads_for(&linear_b)?)?;
+    assert_eq!(optim_a.step_count(), 1);
 
-    // Save optimizer state
+    // Save run A; the counter travels as a scalar `step` entry next to `m.*`
+    // and `v.*`, so no manual `set_step_count` is needed on resume.
     let mut state = BTreeMap::new();
-    optim1.state_dict("", &mut state)?;
-    assert!(!state.is_empty());
+    optim_a.state_dict("", &mut state)?;
+    assert!(state.contains_key("step"));
 
-    // Create a new optimizer instance and load state
-    let mut optim2 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
-    optim2.load_state_dict("", &state)?;
-    optim2.set_step_count(optim1.step_count());
+    // Resume run B from run A's state and step both a second time.
+    let mut resumed = Adam::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
+    resumed.load_state_dict("", &state)?;
+    assert_eq!(resumed.step_count(), 1);
+    optim_a.step(&grads_for(&linear_a)?)?;
+    resumed.step(&grads_for(&linear_b)?)?;
 
-    assert_eq!(optim2.step_count(), 1);
-    // Step again with restored momentum state, against gradients recorded after
-    // the first step replaced the parameter storage.
-    let grads = grads_for(&linear)?;
-    optim2.step(&grads)?;
-    assert_eq!(optim2.step_count(), 2);
+    // Same moments, same counter, same gradients: bitwise-identical updates.
+    // A counter restored wrong would mis-correct here and diverge.
+    assert_eq!(optim_a.step_count(), 2);
+    assert_eq!(resumed.step_count(), 2);
+    assert_eq!(parameter_bytes(&linear_a)?, parameter_bytes(&linear_b)?);
 
     Ok(())
 }
 
 #[test]
 fn test_adamw_optimizer_state_dict_checkpointing() -> Result<()> {
-    let (linear, grads) = get_linear_and_grads()?;
-    let mut optim1 = AdamW::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    let linear_a = Linear::<s![10, 5], CpuBackendImpl>::build(())?;
+    let linear_b = twin_linear(&linear_a)?;
+    let mut optim_a = AdamW::<CpuBackendImpl>::from_module(&linear_a, 0.01)?;
+    let mut optim_b = AdamW::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
 
-    optim1.step(&grads)?;
-    assert_eq!(optim1.step_count(), 1);
+    optim_a.step(&grads_for(&linear_a)?)?;
+    optim_b.step(&grads_for(&linear_b)?)?;
 
     let mut state = BTreeMap::new();
+    optim_a.state_dict("", &mut state)?;
+    assert!(state.contains_key("step"));
+
+    let mut resumed = AdamW::<CpuBackendImpl>::from_module(&linear_b, 0.01)?;
+    resumed.load_state_dict("", &state)?;
+    assert_eq!(resumed.step_count(), 1);
+    optim_a.step(&grads_for(&linear_a)?)?;
+    resumed.step(&grads_for(&linear_b)?)?;
+
+    assert_eq!(optim_a.step_count(), 2);
+    assert_eq!(resumed.step_count(), 2);
+    assert_eq!(parameter_bytes(&linear_a)?, parameter_bytes(&linear_b)?);
+
+    Ok(())
+}
+
+#[test]
+fn adam_state_without_step_entry_loads_moments_and_keeps_counter() -> Result<()> {
+    // Dictionaries predating the counter entry restore moments only and keep
+    // whatever counter the loader holds.
+    let (linear, grads) = get_linear_and_grads()?;
+    let mut optim1 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    optim1.step(&grads)?;
+    let mut state = BTreeMap::new();
     optim1.state_dict("", &mut state)?;
-    assert!(!state.is_empty());
+    state.remove("step");
 
-    let mut optim2 = AdamW::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    let mut optim2 = Adam::<CpuBackendImpl>::from_module(&linear, 0.01)?;
+    optim2.set_step_count(7);
     optim2.load_state_dict("", &state)?;
-    optim2.set_step_count(optim1.step_count());
+    assert_eq!(optim2.step_count(), 7);
 
-    assert_eq!(optim2.step_count(), 1);
-    // As above: fresh gradients, because the first step replaced the storage
-    // the previous ones were recorded against.
-    let grads = grads_for(&linear)?;
-    optim2.step(&grads)?;
-    assert_eq!(optim2.step_count(), 2);
-
+    // ...and the moments did restore: a step moves the parameters.
+    let before = parameter_bytes(&linear)?;
+    optim2.step(&grads_for(&linear)?)?;
+    assert_ne!(parameter_bytes(&linear)?, before);
     Ok(())
 }
 
@@ -214,7 +256,9 @@ fn adam_step_overflow_preserves_parameters_and_state() -> Result<()> {
     assert_eq!(optim.step_count(), usize::MAX);
     let mut state = BTreeMap::new();
     optim.state_dict("", &mut state)?;
-    assert!(state.is_empty());
+    // Moments were never produced, but the counter is still state: the only
+    // entry is the persisted step.
+    assert_eq!(state.keys().collect::<Vec<_>>(), ["step"]);
     Ok(())
 }
 
@@ -513,4 +557,123 @@ fn clip_grad_value_rejects_a_bound_that_is_not_positive_and_finite() {
     for bound in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         clip_grad_value(&group, &mut grads, bound).expect_err("a bound of {bound} must be refused");
     }
+}
+
+/// Builds an optimizer map covering two models plus gradients that reach
+/// only the first, i.e. a SOME-but-not-all step.
+fn partial_coverage_fixture() -> (
+    Linear<s![4, 2], CpuBackendImpl>,
+    Linear<s![4, 2], CpuBackendImpl>,
+    BTreeMap<String, <CpuBackendImpl as VariableBackend>::Var<f32>>,
+    incin::Gradients<CpuBackendImpl>,
+) {
+    let used = Linear::<s![4, 2], CpuBackendImpl>::build(()).unwrap();
+    let unused = Linear::<s![4, 2], CpuBackendImpl>::build(()).unwrap();
+    let mut map = BTreeMap::new();
+    for (name, var) in ParameterGroup::<CpuBackendImpl, f32>::from_module(&used)
+        .unwrap()
+        .iter()
+    {
+        map.insert(format!("used.{name}"), var.clone());
+    }
+    for (name, var) in ParameterGroup::<CpuBackendImpl, f32>::from_module(&unused)
+        .unwrap()
+        .iter()
+    {
+        map.insert(format!("unused.{name}"), var.clone());
+    }
+    assert_eq!(map.len(), 4);
+    let input = Tensor::<s![1, 4], CpuBackendImpl>::ones(())
+        .unwrap()
+        .require_grad();
+    let grads = used
+        .forward(input)
+        .unwrap()
+        .sum_all()
+        .unwrap()
+        .backward()
+        .unwrap();
+    (used, unused, map, grads)
+}
+
+/// `step` stays PyTorch-compatible and commits a partial step, while
+/// `step_strict` refuses SOME-but-not-all coverage. Zero-coverage stays
+/// refused by both spellings (covered by
+/// `a_step_that_reaches_no_parameter_is_refused_rather_than_committing_nothing`).
+#[test]
+fn step_strict_refuses_partial_coverage_while_step_commits() {
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut sgd = SGD::<CpuBackendImpl>::new(map.clone(), 0.01);
+    sgd.step(&grads)
+        .expect("lenient SGD step must commit a partial step");
+
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut sgd = SGD::<CpuBackendImpl>::new(map, 0.01);
+    let error = sgd
+        .step_strict(&grads)
+        .expect_err("strict SGD step must refuse partial coverage");
+    assert!(
+        error.to_string().contains("every parameter"),
+        "strict error must name full coverage, got: {error}"
+    );
+
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut adam = Adam::<CpuBackendImpl>::new(map, 1e-3);
+    adam.step_strict(&grads)
+        .expect_err("strict Adam step must refuse partial coverage");
+
+    let (_used, _unused, map, grads) = partial_coverage_fixture();
+    let mut adamw = AdamW::<CpuBackendImpl>::new(map, 1e-4);
+    adamw
+        .step_strict(&grads)
+        .expect_err("strict AdamW step must refuse partial coverage");
+}
+
+/// A strict step over full coverage succeeds and moves the parameters.
+#[test]
+fn step_strict_commits_full_coverage() {
+    let (linear, grads) = get_linear_and_grads().unwrap();
+    let before = parameter_bytes(&linear).unwrap();
+    let mut sgd = SGD::<CpuBackendImpl>::from_module(&linear, 0.01).unwrap();
+    sgd.step_strict(&grads)
+        .expect("strict step over full coverage must succeed");
+    assert_ne!(
+        parameter_bytes(&linear).unwrap(),
+        before,
+        "a strict step must move the parameters"
+    );
+
+    let (linear, grads) = get_linear_and_grads().unwrap();
+    let mut adam = Adam::<CpuBackendImpl>::from_module(&linear, 1e-3).unwrap();
+    adam.step_strict(&grads)
+        .expect("strict Adam step over full coverage must succeed");
+
+    let (linear, grads) = get_linear_and_grads().unwrap();
+    let mut adamw = AdamW::<CpuBackendImpl>::from_module(&linear, 1e-4).unwrap();
+    adamw
+        .step_strict(&grads)
+        .expect("strict AdamW step over full coverage must succeed");
+}
+
+/// A refused zero-coverage step commits nothing: the Adam counter stays put
+/// and every parameter keeps its bytes.
+#[test]
+fn refused_zero_coverage_step_leaves_counter_and_parameters_untouched() {
+    let model = Linear::<s![10, 5], CpuBackendImpl>::build(()).unwrap();
+    let before = parameter_bytes(&model).unwrap();
+
+    // Gradients from a graph that has nothing to do with `model`.
+    let unrelated = Tensor::<s![2], CpuBackendImpl>::ones(())
+        .unwrap()
+        .require_grad()
+        .sum_all()
+        .unwrap()
+        .backward()
+        .unwrap();
+
+    let mut adam = Adam::<CpuBackendImpl>::from_module(&model, 1e-3).unwrap();
+    adam.step(&unrelated)
+        .expect_err("a step that updates nothing must not report success");
+    assert_eq!(adam.step_count(), 0);
+    assert_eq!(parameter_bytes(&model).unwrap(), before);
 }

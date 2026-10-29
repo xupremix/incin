@@ -265,6 +265,75 @@ impl AttributeContract for RepeatAttributes {
         Some(ShapeTransform::Repeat(&self.repeats))
     }
 }
+impl AttributeContract for BincountAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        _inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        // A zero-bin histogram has nowhere to count into, so every index in
+        // the operand would be out of range. `one_hot` refuses a zero depth
+        // for the same reason.
+        if self.bins == 0 {
+            return Err(invalid(
+                operation,
+                "bins",
+                "bincount needs at least one bin to count into",
+            ));
+        }
+        Ok(())
+    }
+    fn bins(&self) -> Option<usize> {
+        Some(self.bins)
+    }
+}
+impl AttributeContract for RepeatInterleaveAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        // Zero repeats would empty the axis, which is the same tensor-with-no-
+        // values `one_hot` refuses a zero depth for. One repeat is the
+        // identity and is allowed: a caller computing the count refuses
+        // nothing when the count happens to be one.
+        if self.repeats == 0 {
+            return Err(invalid(
+                operation,
+                "repeats",
+                "repeat_interleave needs at least one repeat per element",
+            ));
+        }
+        if let Some(shape) = first_shape(inputs) {
+            if self.axis >= shape.len() {
+                return Err(invalid(
+                    operation,
+                    "axis",
+                    "repeat_interleave axis is outside the operand's rank",
+                ));
+            }
+            let mut output = shape.to_vec();
+            output[self.axis] = shape[self.axis].checked_mul(self.repeats).ok_or_else(|| {
+                invalid(
+                    operation,
+                    "repeats",
+                    "interleaved output dimension overflows usize",
+                )
+            })?;
+            validate_shape(operation, &output)?;
+        }
+        Ok(())
+    }
+    fn shape_transform(&self) -> Option<ShapeTransform<'_>> {
+        Some(ShapeTransform::RepeatInterleave {
+            axis: self.axis,
+            repeats: self.repeats,
+        })
+    }
+    fn axis(&self) -> Option<usize> {
+        Some(self.axis)
+    }
+}
 impl AttributeContract for AxisAttributes {
     fn validate(
         &self,
@@ -611,6 +680,109 @@ impl AttributeContract for AttentionAttributes {
         Ok(())
     }
 }
+/// Shared head-geometry check for [`FusedAttentionAttributes`]: query
+/// `[batch, heads_q, seq_q, head_dim]` against key/value
+/// `[batch, heads_kv, seq_kv, head_dim]` with `heads_q` a multiple of
+/// `heads_kv` (the GQA grouping, issue #104).
+fn validate_fused_attention_geometry(
+    operation: OperationKind,
+    inputs: &[LogicalTensorMeta],
+) -> Result<(), DescriptorError> {
+    if inputs.len() != 3 {
+        return Err(invalid(
+            operation,
+            "arity",
+            "fused attention takes exactly query, key and value: causal masking is an \
+             attribute, not a mask operand",
+        ));
+    }
+    let shapes: Vec<&[usize]> = inputs
+        .iter()
+        .filter_map(|input| input.shape.as_deref())
+        .collect();
+    // Unknown metadata stays unknown: inference reports `None` downstream.
+    if shapes.len() != inputs.len() {
+        return Ok(());
+    }
+    let [query, key, value] = shapes[..] else {
+        return Err(invalid(
+            operation,
+            "arity",
+            "fused attention takes exactly query, key and value: causal masking is an \
+             attribute, not a mask operand",
+        ));
+    };
+    for shape in [query, key, value] {
+        if shape.len() != 4 {
+            return Err(invalid(
+                operation,
+                "rank",
+                "fused attention operands must be rank-4 [batch, heads, seq, head_dim]",
+            ));
+        }
+    }
+    if query[0] != key[0] {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention query batch differs from the key/value batch",
+        ));
+    }
+    if key != value {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention key and value must share [batch, kv_heads, seq_kv, head_dim]",
+        ));
+    }
+    if query[3] != key[3] {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention query and key head widths differ",
+        ));
+    }
+    if query[3] == 0 {
+        return Err(invalid(
+            operation,
+            "shape",
+            "fused attention head_dim must be non-zero",
+        ));
+    }
+    let (heads_q, heads_kv) = (query[1], key[1]);
+    if heads_q == 0 || heads_kv == 0 || heads_q % heads_kv != 0 {
+        return Err(invalid(
+            operation,
+            "heads",
+            "fused attention needs a non-zero query head count that is a multiple of \
+             the key/value head count (one group per key/value head)",
+        ));
+    }
+    Ok(())
+}
+impl AttributeContract for FusedAttentionAttributes {
+    fn validate(
+        &self,
+        operation: OperationKind,
+        inputs: &[LogicalTensorMeta],
+    ) -> Result<(), DescriptorError> {
+        if self
+            .scale
+            .is_some_and(|scale| !scale.is_finite() || scale <= 0.0)
+        {
+            return Err(invalid(
+                operation,
+                "scale",
+                "attention scale must be positive and finite",
+            ));
+        }
+        // No mask operand exists on this row: causal masking is a property
+        // of the attributes, so unlike `AttentionAttributes` there is no
+        // `has_mask` arity to agree with. The generic arity gate already
+        // refused anything but exactly three inputs.
+        validate_fused_attention_geometry(operation, inputs)
+    }
+}
 impl AttributeContract for UnfoldAttributes {
     fn validate(
         &self,
@@ -703,11 +875,16 @@ impl AttributeContract for EpsilonAttributes {
         validate_epsilon(operation, self.epsilon)?;
         match operation {
             OperationKind::InstanceNorm => {
-                if first_shape(inputs).is_some_and(|shape| shape.len() != 4) {
+                // One group per channel, so the operand needs a channel
+                // axis - `[batch, channels, ...]` with rank ≥ 2 - but no
+                // spatial axes: every backend implements this as the
+                // rank-agnostic `group_norm(channels)` rewrite, and CPU
+                // parity holds down to rank two.
+                if first_shape(inputs).is_some_and(|shape| shape.len() < 2) {
                     return Err(invalid(
                         operation,
                         "rank",
-                        "instance norm requires [batch, channels, height, width]",
+                        "instance norm requires a channel axis [batch, channels, ...]",
                     ));
                 }
             }

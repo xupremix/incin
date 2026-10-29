@@ -37,6 +37,7 @@ pub fn detect_device() -> Option<DeviceId> {
 /// The families [`detect_device`] tries, most capable first.
 pub const PREFERENCE: &[DeviceKind] = &[
     DeviceKind::Cuda,
+    DeviceKind::Rocm,
     DeviceKind::Metal,
     DeviceKind::Wgpu,
     DeviceKind::Cpu,
@@ -67,6 +68,7 @@ pub fn probe(kind: DeviceKind) -> Option<DeviceId> {
     match kind {
         DeviceKind::Cpu => cfg!(feature = "cpu").then(DeviceId::cpu),
         DeviceKind::Cuda => probe_cuda(),
+        DeviceKind::Rocm => probe_rocm(),
         DeviceKind::Wgpu => probe_wgpu(),
         DeviceKind::Metal => probe_metal(),
         _ => None,
@@ -85,6 +87,7 @@ pub const fn is_compiled_in(kind: DeviceKind) -> bool {
     match kind {
         DeviceKind::Cpu => cfg!(feature = "cpu"),
         DeviceKind::Cuda => cfg!(feature = "cuda"),
+        DeviceKind::Rocm => cfg!(feature = "rocm"),
         DeviceKind::Wgpu => cfg!(feature = "wgpu"),
         DeviceKind::Metal => cfg!(feature = "metal"),
         _ => false,
@@ -125,6 +128,23 @@ fn probe_cuda() -> Option<DeviceId> {
 
 #[cfg(not(feature = "cuda"))]
 fn probe_cuda() -> Option<DeviceId> {
+    None
+}
+
+/// Ordinal-based ROCm probe stub (issue #6 scaffolding).
+///
+/// No HIP bindings are vendored, so there is no runtime to query and every
+/// ordinal reports absent — detection present, devices absent, never a
+/// fabricated device. When HIP bindings land, this becomes the per-ordinal
+/// walk (`hipGetDeviceCount` + per-device usability check) returning
+/// `DeviceId::rocm(first_usable)`, mirroring [`probe_cuda`]'s context check.
+#[cfg(feature = "rocm")]
+fn probe_rocm() -> Option<DeviceId> {
+    None
+}
+
+#[cfg(not(feature = "rocm"))]
+fn probe_rocm() -> Option<DeviceId> {
     None
 }
 
@@ -194,6 +214,7 @@ mod tests {
     fn a_family_that_is_not_compiled_in_is_never_detected() {
         for kind in [
             DeviceKind::Cuda,
+            DeviceKind::Rocm,
             DeviceKind::Metal,
             DeviceKind::Wgpu,
             DeviceKind::Cpu,
@@ -229,6 +250,7 @@ mod tests {
                         for kind in [
                             DeviceKind::Cpu,
                             DeviceKind::Cuda,
+                            DeviceKind::Rocm,
                             DeviceKind::Metal,
                             DeviceKind::Wgpu,
                         ] {
@@ -248,5 +270,18 @@ mod tests {
         // Nothing is cached, so two calls exercise the probe twice. They must
         // still agree, or a caller could get a different device per call.
         assert_eq!(detect_device(), detect_device());
+    }
+
+    /// The ROCm scaffolding reports its compile state honestly and never
+    /// fabricates a device: without HIP bindings the probe is always `None`,
+    /// with or without the feature.
+    #[test]
+    fn rocm_detection_is_present_but_reports_no_devices() {
+        assert_eq!(is_compiled_in(DeviceKind::Rocm), cfg!(feature = "rocm"));
+        assert_eq!(
+            probe(DeviceKind::Rocm),
+            None,
+            "no HIP bindings exist, so no ordinal may answer"
+        );
     }
 }

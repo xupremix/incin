@@ -223,6 +223,70 @@ mod tests {
         );
     }
 
+    /// The public core sweep reaches the same verdict as this module's own.
+    ///
+    /// Both are pointed at `sum(x^2)`, whose gradient is `2x` in closed form.
+    /// The point is not that either is right in isolation but that the
+    /// generic path, which an out-of-tree backend will use, agrees with the
+    /// in-tree one that every gradient test in this crate is written against.
+    #[test]
+    fn the_public_gradcheck_agrees_with_the_internal_one() {
+        use incin_core::exec::{GradCheckOptions, gradcheck as public_gradcheck};
+
+        let x = vector(vec![2.0, 3.0, -1.0]);
+        let op = |inputs: &[CpuStorage]| -> incin_core::error::Result<CpuStorage> {
+            let squared = crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0])?;
+            crate::cpu::ops::reduce::sum_all(&squared)
+        };
+
+        let report = public_gradcheck(op, &[x], GradCheckOptions::for_f32())
+            .expect("the sweep ran to completion");
+        assert!(report.passed(), "{report}");
+        assert_eq!(report.compared, 3);
+        assert!(report.worst_relative_error < GRAD_TOL);
+    }
+
+    /// A recipe that is wrong by a constant factor is caught and located.
+    ///
+    /// A check that has never failed a bad gradient says nothing when it
+    /// passes a good one. This records the deliberate defect: the recipe
+    /// halves every contribution, so every element disagrees by the same
+    /// factor, which is the shape the report tells the reader to look for.
+    #[test]
+    fn a_recipe_wrong_by_a_constant_factor_is_reported_on_every_element() {
+        use alloc::boxed::Box;
+        use incin_core::exec::{GradCheckOptions, TapeNode, gradcheck as public_gradcheck};
+
+        let x = vector(vec![2.0, 3.0, -1.0]);
+        let op = |inputs: &[CpuStorage]| -> incin_core::error::Result<CpuStorage> {
+            let squared = crate::cpu::ops::elementwise::mul_storage(&inputs[0], &inputs[0])?;
+            let out = crate::cpu::ops::reduce::sum_all(&squared)?;
+            // Half of `2x`. Recorded after the real chain, so it is the node
+            // the walk reaches first and the one whose contribution lands.
+            let saved = inputs[0].clone();
+            let (input_id, out_id) = (inputs[0].id, out.id);
+            tape::push(TapeNode {
+                output_id: out_id,
+                input_ids: alloc::vec![input_id],
+                backward: Box::new(move |_grad: &CpuStorage| {
+                    Ok(alloc::vec![crate::cpu::ops::elementwise::mul_storage(
+                        &saved,
+                        &saved.clone(),
+                    )?])
+                }),
+            });
+            Ok(out)
+        };
+
+        let report = public_gradcheck(op, &[x], GradCheckOptions::for_f32())
+            .expect("the sweep ran to completion");
+        assert!(!report.passed(), "a wrong recipe passed: {report}");
+        assert!(
+            !report.disagreements.is_empty(),
+            "the report named no element"
+        );
+    }
+
     /// Test 2: `numerical_grad` alone (independent of any op's analytic
     /// gradient / `tape::backward`) matches the closed-form derivative of
     /// `f(x) = x[0]^3`, i.e. `3*x[0]^2`, proving the central-difference

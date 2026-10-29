@@ -64,6 +64,32 @@ exactly the breakage the test exists to find.
 `xtask/src/hardware.rs` as either running on the CUDA runner or deliberately
 excluded. An unrecognised reason fails the gate on purpose.
 
+## Registering a hardware runner
+
+The scheduled hardware matrix (`.github/workflows/hardware.yml`) executes the
+CUDA, native-WGPU, and multi-rank suites only when a self-hosted runner is
+registered; while no runner exists those jobs skip with a stated reason rather
+than queueing on a label nothing carries. Standing one up is repository
+administration, not a workflow change:
+
+1. On the machine that has the device, add a runner from
+   **Settings -> Actions -> Runners -> New self-hosted runner** and give it a
+   label that names the device (`cuda` for NVIDIA, `gpu` for a native WGPU
+   adapter).
+2. Publish those labels as a repository variable holding a JSON array:
+
+```bash
+gh variable set HARDWARE_CUDA_RUNNER --body '["self-hosted","linux","x64","cuda"]'
+gh variable set HARDWARE_WGPU_RUNNER --body '["self-hosted","linux","x64","gpu"]'
+```
+
+With a variable unset, the corresponding jobs never run and the workflow's
+conclusion job reports the run *skipped, not success* instead of green. Setting
+the variable enables the job on the next schedule or dispatch with no workflow
+edit. `HARDWARE_METAL_RUNNER` needs no runner: the macOS fallback already is
+Apple Silicon. The current variable state is recorded in
+[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+
 ## Code of Conduct
 
 Participation in the Incin project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md)

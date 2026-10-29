@@ -303,10 +303,24 @@ impl MatMulShape<Dyn> for Dyn {
         };
         checked_contraction(lhs[lhs.len() - 1], rhs_k)?;
 
-        let mut out: alloc::vec::Vec<usize> = lhs[..lhs.len() - 1].to_vec();
-        if !vector_rhs {
-            out.push(rhs[rhs.len() - 1]);
-        }
+        // Batch axes (everything but the trailing matrix) go through the same
+        // NumPy right-aligned broadcast the structural impl and the catalog's
+        // `OutputRule::MatMul` both use, so `MatMulRule::agree` sees one
+        // answer. Taking `lhs[..len-1]` and appending `n` silently dropped
+        // `rhs`'s batch: `[1,3,4] x [5,4,6]` computed a frontend `[1,3,6]`
+        // against the catalog's `[5,3,6]` and failed the equality check.
+        let out: alloc::vec::Vec<usize> = if vector_rhs {
+            // No rhs batch: `lhs` batch + `[m]` is exactly `lhs[..len-1]`.
+            lhs[..lhs.len() - 1].to_vec()
+        } else {
+            let mut dims = crate::shapes::broadcast::broadcast_dim_slices(
+                &lhs[..lhs.len() - 2],
+                &rhs[..rhs.len() - 2],
+            )?;
+            dims.push(lhs[lhs.len() - 2]);
+            dims.push(rhs[rhs.len() - 1]);
+            dims
+        };
         Ok(ShapeBuf::from_slice(&out))
     }
 }
@@ -405,9 +419,9 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
     }
 
     /// Computes outer product of vectors `self` and `rhs`.
-    pub fn outer<S2: Shape + DynShape>(
+    pub fn outer<S2: Shape + DynShape, L2: Layout<S2>>(
         &self,
-        rhs: &Tensor<S2, B, K, G1>,
+        rhs: &Tensor<S2, B, K, G1, Local, L2>,
     ) -> Result<crate::shapes::Dense<Dyn, B, K, JoinedGrad<G1, G1>>>
     where
         S1: DynShape,
@@ -474,11 +488,12 @@ impl<S1: Shape, B: Backend, K: crate::tensor::dtype::DType, G1: RequiresGrad, TL
         L2: Layout<S2>,
         L3: Layout<S3>,
         L4: Layout<S4>,
+        G2: RequiresGrad,
     >(
         q: &Tensor<S1, B, K, G1, Local, TLayout>,
         k: &Tensor<S2, B, K, G1, Local, L2>,
         v: &Tensor<S3, B, K, G1, Local, L3>,
-        mask: Option<&Tensor<S4, B, K, G1, Local, L4>>,
+        mask: Option<&Tensor<S4, B, K, G2, Local, L4>>,
         scale: Option<f64>,
     ) -> Result<Tensor<Dyn, B, K, G1>>
     where

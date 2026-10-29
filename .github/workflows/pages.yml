@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - "docs/book/**"
+      - "docs/book-next/**"
       - "docs/api-site-data.json"
       - "docs/api-types.json"
       - "docs/api-usage.json"
@@ -43,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           mdbook build docs/book
+          mdbook build docs/book-next
           python3 tools/check-docs.py
           python3 tools/check-markdown-links.py
           # The capability payload is generated from docs/capabilities.md, which
@@ -50,7 +52,7 @@ jobs:
           # change that skipped the payload cannot ship a stale API reference.
           python3 tools/build-api-site-data.py
           git diff --exit-code -- docs/api-site-data.json docs/api-types.json docs/api-usage.json
-          python3 docs/book/build_site.py
+          python3 docs/book/build_site.py --all
           python3 tools/check-book-site.py
           python3 tools/test-book-site.py
           python3 tools/test-api-page.py

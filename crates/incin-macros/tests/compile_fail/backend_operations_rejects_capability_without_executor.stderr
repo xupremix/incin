@@ -1,0 +1,5 @@
+error: capability advertises operation `:: incin :: backend_authoring :: operations :: op :: Ones` without an executor entry; add `:: incin :: backend_authoring :: operations :: op :: Ones => <Output> = <handler>` to the executors list
+  --> tests/compile_fail/backend_operations_rejects_capability_without_executor.rs:43:9
+   |
+43 |         ::incin::backend_authoring::operations::op::Ones => support;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
