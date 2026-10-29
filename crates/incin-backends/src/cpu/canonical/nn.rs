@@ -580,13 +580,10 @@ impl<D: Device> Execute<op::ScaledDotProductAttention> for CpuBackendImpl<D> {
 /// geometry, head divisibility, positive-finite scale), so this arm binds
 /// them and hands them to the online-softmax kernel directly.
 ///
-/// Deliberately no `admitted()` re-check: no capability row advertises
-/// `FusedAttention` yet (adding one is out of this lane -- see the lane
-/// report), so re-checking would refuse every invocation including the
-/// past-admission equivalence probes. Dispatch admission stays the
-/// enforcement point: once the row lands, dispatched invocations are
-/// admitted there and this arm keeps serving them unchanged. Dtype and
-/// geometry enforcement live in the kernel itself.
+/// Deliberately no `admitted()` re-check: dispatch admission is the
+/// enforcement point, so this arm serves both normally dispatched calls and
+/// the past-admission equivalence probes without duplicating the policy.
+/// Dtype and geometry enforcement live in the kernel itself.
 impl<D: Device> Execute<op::FusedAttention> for CpuBackendImpl<D> {
     type Output = CpuStorage;
 

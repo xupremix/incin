@@ -8,9 +8,11 @@
 //! kernel's query/key block boundaries, which is what pins the causal
 //! block-skip as correct (its benchmark proof is device-bound and deferred).
 //!
-//! Selection is pinned too: with no capability row admitting fused on CPU,
-//! `Auto` must pick the composed row and say so (`FusedUnavailable`); the
-//! forced paths exist for benchmarking the crossover, not for production.
+//! Selection is pinned too: CPU now admits fused, but no crossover has been
+//! measured, so `Auto` still picks the composed row and says so
+//! (`BelowCrossover`). A backend without an admitting row reports
+//! `FusedUnavailable`; the forced paths exist for benchmarking the crossover,
+//! not for production.
 //!
 //! The last test is CPU-only supporting evidence for the memory AC, loudly
 //! labelled as such: total bytes allocated during one forward at three
